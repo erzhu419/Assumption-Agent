@@ -5,10 +5,10 @@ from setuptools import find_packages, setup
 
 setup(
     name="hegel-machine",
-    version="0.2.0",
+    version="0.85.0",
     description=(
-        "A bounded, auditable kernel for structural-law recognition "
-        "and conservative theory evolution."
+        "Executable hypothesis discovery, active experimentation, "
+        "and revisable cross-task knowledge."
     ),
     python_requires=">=3.10",
     package_dir={"": "src"},

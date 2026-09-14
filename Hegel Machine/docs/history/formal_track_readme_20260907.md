@@ -1,0 +1,609 @@
+# Hegel Machine
+
+这是 Assumption Agent 的独立 v3 工作区。v1 是已有效果的 Assumption Agent，
+v2 是广义对位/GSCL；本目录冻结它们中需要复用的对象与算法，但活动代码不
+反向 import 旧目录，也不继承旧实验的效果分数。
+
+当前已完成的 capability/effect 里程碑唯一名称是 **Phase-2A Controlled
+Typed-Selector Mechanics Qualification**。一般能力称为 **Explicit-Projection Typed Structural Selection**，
+其中 scale 子能力只能称为 **Scale-Indexed Candidate Projection Selection**。
+活动包版本仍是 v0.2.0；它不是“自动发明哲学”的演示，而是可运行的 Phase 1–2
+verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/Phase-3
+正式轨道合同：
+
+本项目把网页端 GPT 输出视为方向建议或审阅输入；具体 wire、实现和状态声明由仓库、
+双实现 replay 与测试裁决。完整优先级和 material override 留痕要求见
+[engineering decision authority](docs/engineering_decision_authority.md)。
+
+当前跨轨道状态以
+[Current-State Reconciliation v1](docs/Hegel_Machine_Current_State_Reconciliation_v1.md)
+为准。下文保留了按时间追加的历史 qualification 与“下一刀”记录；除非该状态文档明确
+采纳，它们不能当作当前队列、执行授权或 capability/effect 声明。
+[Bounded relation-invention mechanics v1](docs/Hegel_Machine_Bounded_Relation_Invention_Mechanics_v1.md)
+仅是 public synthetic、shadow-only、C2-locked mechanics；它不是正式 relation invention、
+C2/effect 证据、promotion 或 ACTIVE 授权，且不改变 C1=false。
+[Five-source coverage v1](references/five_source_coverage_v1.md) 是附加覆盖账本，
+明确不把两个外部本地 bundle 声称为仓内自包含归档，也不替代原 manifest/checksum。
+
+Phase-3A M2.5 的 purpose 1–4 采用 owner-accepted、purpose-separated、离线 Docker
+technical actors；这里的 “external actor” 指仓库构建/编排进程之外的冻结隔离 runtime，
+不要求不同真人或组织。该决定只接管 M2.5 actor eligibility，不改 Phase-2B sealed-holdout
+的 custodian 要求，也不改 formal CBOR、hash domain 或 Gate 15–24。所有 M2.5 publication
+必须完整披露：`same_admin_controller=true`、`organizational_independence=false`、
+`independent_human_actors=false`、`technical_role_independence=true`、
+`owner_accepted_threat_model=true`、`remote_attestation=false`、
+`hardware_key_nonexportability=false`。权威定义见
+[owner-accepted technical-actor amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)。
+
+```text
+L0 observations
+  → uniform verifier-ready synthetic witness bundle with anonymous labels
+  → frozen adapter replay of family / binding / scale projections
+  → frozen probe family / task geometry
+  → six known-law verifiers
+  → unique selection or deterministic policy-bound abstention
+  → contrastive falsification
+  → verified typed law match
+  → measured evidence receipts
+  → conservative theory patch gate
+  → immutable theory version
+
+Phase-2B formal track（精确协议已冻结，尚未资格化）：
+
+720 main + 240 semantic-conflict + 572 derived pairs
+  → trusted typed-evidence wire + independent covert-channel audit [尚未执行]
+  → internal role/scale hypothesis enumeration
+  → absolute-bound-only interval selector with admissible scale sets
+  → externally enforced untrusted OCI recognizer             [尚未可运行]
+  → prediction commitment before answer reveal
+  → one-shot independent-custodian scoring                    [目标，未实现]
+
+Phase-3A **Bounded Frozen-Closure Adequacy**（legacy syntactic M3 已
+`DSL_TOO_LARGE`；shrink-6 已耗尽；当前主路线为 C3 exact quotient）：
+
+hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
+  → strict canonical AST/CBOR + certificate bridge spec       [已冻结]
+  → Python/Rust shared strict vectors                          [48/48 PASS each]
+  → 64,680 strict capacity replay                             [64,680 unique each]
+  → bounded syntactic-budget status                            [DSL_TOO_LARGE]
+  → complete closure / extensional target verdict              [NOT AVAILABLE]
+  → formal archives + 3/3 certificate                          [未生成/未签发]
+  → hegel-old-dsl-v1.1.0 sparse/tombstone admission             [双实现 VERIFIED]
+  → shrink-1 25,872-source constructive subset                 [25,872 unique each]
+  → child closure state                                         [NOT_RUN; not COMPLETE]
+  → target/split/custodian bindings                             [source manifests emitted; custodian evidence missing]
+  → M2.5 v1.1.2 exact-wire registry                              [81 tags/schemas]
+  → Python/Rust/golden errata replay                             [21 objects + 8 trees + 15 guards; exact]
+  → detached Commit-A qualification                              [PASS; fresh replay required for use]
+  → owner-accepted technical-actor genesis                       [historically executed]
+  → legacy canonical M3 attempt 1                                [executed; DSL_TOO_LARGE]
+  → shrink-2 through shrink-6 diagnostics                        [exhausted; DSL_TOO_LARGE]
+  → post-shrink C3 exact-quotient direction                      [selected; target-blind]
+  → Q0 micro qualification                                       [14/14 PASS; not Q1/C1/C2]
+  → Q0.5b actual attempt 1                                       [Stage-7 fail-closed; 0/20; no artifact]
+  → Q0.5b actual attempt 2                                       [NOT_RUN; explicit authorization required]
+  → Q1 / outside / relation invention                            [0/20 NOT_RUN; formal gates closed]
+  → shadow-only conservative integration
+```
+
+Phase-3 父 DSL 的 M1/M2 证据见
+[dual strict gate artifact](artifacts/phase3_dual_strict_gate_v1.json) 与
+[dual strict capacity replay artifact](artifacts/phase3_dual_strict_capacity_replay_v1.json)。
+规范层决定见
+[v1.0.2 strict canonical/certificate freeze](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)，
+当前准入状态见
+[Phase-3 readiness resolution](docs/Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)。
+Shrink-step-1 的规范与执行证据见
+[v1.1.0 shrink decision](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)、
+[dual child gate](artifacts/phase3_shrink1_dual_strict_gate_v1.json)、
+[25,872 subset replay](artifacts/phase3_shrink1_dual_capacity_replay_v1.json) 与
+[child publication](artifacts/phase3_shrink1_publication_v1.json)。
+
+```text
+strict specification frozen = true
+strict implementation verified = true (Python 48/48; Rust 48/48)
+accepted strict canonical count = 64,680 unique on each implementation
+executed bounded status = DSL_TOO_LARGE
+complete closure enumerated = false
+extensional target verdict = null
+formal roots = null
+outside / MDL certificate issued = false
+```
+
+共同 diagnostic set commitment 是
+`sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930`；ordinal
+50,001 的 strict AST hash 是
+`sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。前者不是
+formal RFC6962 root，后者不是 closure cardinality 或 target-match 证据。
+
+已发布的 child diagnostic freeze 是 `hegel-old-dsl-v1.1.0` /
+`hegel-freeze-p2b-p3-v1.1.0`：AggregateMapId 保持 sparse，active IDs 为 `0,1,5`，
+`2,3,4` 永久 tombstone。Python/Rust 对 23 个 child vectors 与 25,872-source subset
+完全一致；subset commitment 是
+`sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`。
+它只满足 24 个 M3 gates 中前 14 个；仓库中没有可重放的旧 split seed commitment、
+parent binding manifest、custodian continuity attestation 或 hidden-access ledger，故
+bindings fail-closed，formal roots 继续为 `null`，child state 保持 `NOT_RUN`。
+
+`hegel-freeze-p2b-p3-v1.1.2` 已接管 **Phase-3A M2.5 — Formal Commitment,
+Seed Genesis and Bridge Qualification** 的 deterministic wire。E1–E12 已由
+[exact-wire resolution](docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)
+和 [implementation closure addendum](docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
+逐项解决；当前 registry 有 81 个唯一 numeric tags/schemas。Python 与 Rust 从冻结输入
+独立构造 21 个 candidate objects、8 个 candidate record trees 和 15 个 production-validator
+negative guards，compact report 完全一致，golden fixture SHA-256 为
+`a0e8ce77f3655d484fdc40506f81034fd4d103b458af3ce9f586fe42cc369ae1`；含 `ok/op`
+envelope 的 compact sorted response 为 20,308 bytes，SHA-256 为
+`9c855290ad9f9a6e3e523107e0162e6e3c363afec09224245c5e35075ad8ab4c`。
+
+Commit `d293507048d39323462e5c9033905b352ae07cb2` 的 private detached snapshot 曾完成
+fresh Python replay 与 fresh isolated Rust build；Cargo 只从 `Cargo.lock` 校验过的 `.crate`
+归档重新解包，caller 不能指定工具链，approved toolchain、source snapshot、同一 open binary
+inode 的 hash/exec 和前后输入稳定性均已核验。冻结 secret-policy 对 Commit A 及全部 ancestors
+扫描为零发现；该结论只覆盖项目冻结的 filename/header/non-null JSON-key classes，不是万能
+secret 检测证明。结果准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，artifact kind 为
+`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`；它现为历史资格化证据，不是后续 genesis
+的 implementation basis。
+
+在该历史节点，这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
+checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来由合格隔离 technical
+actor 生成的 live attestation。这里不要求独立真人/组织，但不能用同进程测试签名代替 actor evidence。
+当时真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态为
+`14/24 / NOT_RUN`；这不是当前状态。后续 legacy canonical M3 已真实执行并以
+`DSL_TOO_LARGE` 终止，随后 shrink-6 耗尽并转入 C3 quotient 路线；当前对账见
+[Current-State Reconciliation v1](docs/Hegel_Machine_Current_State_Reconciliation_v1.md)。历史 direct artifact 见
+[exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)；A2 提交后必须
+在 `artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json` 重新生成并绑定
+新的 implementation-basis commit，旧 artifact 不得作为执行输入。操作边界见
+[external-genesis runbook](docs/phase3_m25_external_genesis_operator_runbook.md) 与
+[owner amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)，较早的
+[v1.1.2 typed-row qualification](artifacts/phase3_m25_wire_completion_qualification_v112.json)
+仅保留为 caller-supplied/unattested candidate-row replay。原 v1.1.1 20-vector artifact 保留为
+commit `d772b844` 的历史 source-bound evidence，不再冒充当前状态。
+
+v2 commit `4861b2d8` 的 SCAR 结果是某个 frozen hard-selector operationalization 的
+protocol-valid negative，不是 22/13 条先验逐项失败，也不阻塞 M2.5 identity 或 M3 closure。
+它已作为 append-only counterevidence 归档；后续 Phase-3B 必须用 no-prior、frozen-v2、
+semantic-only 与 Hegel-invented matched arms 隔离 ontology、extractor、recognizer 和 hard
+integration failure，不能把 v2 hard eligibility 当成已验证正先验。
+
+已实现或已冻结：
+
+- 统一、不可变、内容寻址的 `TheoryState`；
+- observation / probe / scale / law / candidate / theory patch / evidence schema；
+- probe family 诱导的伪度量与 observational quotient；
+- symmetry、monotonicity、conservation、complementarity、negative feedback、
+  locality 六类确定性 verifier；
+- 固定的本体不足诊断阶梯，只有 `ONTOLOGY_DEFECT` 可以打开语言扩展；
+- Generator / Formalizer / Falsifier / Evaluator / Promoter 五权分离合同，
+  gate 会核验 actor、registered probe、split、cutoff、独立性和 evaluator epoch；
+- sealed holdout manifest 的分区、开启时间和独立 custodian 均受内容 hash 约束，
+  每条封存 observation 必须带来源 SHA-256 并以真实内容 ID 注册，不得跨 split
+  重用；manifest 还绑定 parent、patch、evaluator、probe registry 和 gate policy；
+- 不读取 semantic score 的保守晋升门；
+- 内容绑定 certificate、单坐标 scope compiler 和原子 promotion API，调用者
+  不能把手工构造的 certificate 当授权；当前没有外部签名可信根，因此
+  active promotion 明确 fail-closed；
+- robustification 与 idealization 的首版候选及合同；
+- 一个离线、确定性、含低语义正例和高语义负例的已知定律 verifier
+  qualification；
+- 一个不向 recognizer 提供 family、binding 或 scale answer key 的受控选择闭环：
+  43 个统一 outer-schema case，其中 24 个 answerable、19 个应 abstain；每例从
+  uniform verifier-ready synthetic witness bundle 经 frozen adapter 重放出 24 个
+  projections，
+  六个 family 都与两种 scale 完全交叉；严格策略要求目标的 binding 和 scale
+  counterfactual 都完成 verifier 计算，并以 tolerance-normalized boundary margin
+  决定唯一选择或 abstention；measurement 按 observable 的 witness-role footprint
+  绑定，未改变角色的底层值必须由相互竞争的 binding 共同复用；12 对跨 episode
+  preservation witness 覆盖 family × scale。
+- Phase-2B family-neutral-shaped public wire allowlist：公开 ID 具有 UUIDv4 语法，typed value /
+  interval、单位、时空 support、不确定性、来源 hash、aggregation graph、transform
+  catalog 和 missingness 全部规范化；oracle、candidate-private、family-specific 和
+  unknown fields 一律 fail-closed；这只证明字段形状，不证明允许字段没有编码答案；
+- 从 public bundle 内部枚举完整 role binding 与 scale hypothesis 的 adapter，超预算、
+  registry 漂移或非唯一 transform path 时不返回部分候选；
+- public API 从 evidence bundle + frozen registry 重新运行 adapter，并绑定其完整
+  candidate-grid commitment 的 interval selector core；缺任一 hypothesis、
+  candidate metadata 漂移或任一结构 competitor 区间不确定时均 abstain，并支持
+  unique structure + preregistered admissible scale set，而不是强迫 scale top-1；
+- `PublicTransformEvidenceBundleV2` 的八种 wire operation 已有各自 typed certificate、
+  exact sparse/discrete kernel 与原子 receipt；derived bridge 只接 authority/theory/registry，
+  内部重算 uncertainty/transform，重建完整 law × binding × scale × support-slice grid，并在
+  selector 前保守合并同 scale 的全部 slice hull。它仍是窄 mechanics：不是八类 formal
+  preservation taxonomy、不是 572-pair 执行证据，也不是 sealed C1 效果；
+- Phase-2B 精确冻结合同：720 个 main latent cases + 240 个独立 semantic-conflict
+  challenge，另有 496 个 legal preservation pairs + 76 个 invalid-transform controls
+  = 572 个 derived pairs；每 cell 的 positive 为 19 个 unique-scale + 1 个
+  admissible-scale-set，margin 为 21/18/12/9；family IDs、baseline config、10,000 次
+  paired-cluster bootstrap、footprint/importance、rerun 与 validation policy 均已固定。
+  overall freeze 已推进为 `hegel-freeze-p2b-p3-v1.0.2`；它继承 v1.0.1 对 v1.0.0
+  不可执行 sklearn 64-bit `random_state` 的修正，
+  `411876909552964556` 保留为 master/bootstrap seed，sklearn 使用冻结的
+  domain-separated SHA-256 → uint32 值 `2611585425`，并新增 Phase-3 strict
+  acceptance/certificate bridge 的完整规范冻结；
+- covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
+  FWER=0.01、32 次 consistent renaming 等规范已冻结；固定 65,536-byte envelope 的
+  prefix/suffix feature、NMI/LOO、10,000 permutation、单一全局 Holm 与 32/32/16
+  invariance mechanics 已实现，但恒为 non-authoritative。trusted-wire Stage A 已实现
+  schema-closed accepted-JCS profile、frozen-10 + V2-extension-6 显式 UUID path manifest，
+  以及使用公开 test padding 的 65,536-byte framing/hash replay；Stage B 又实现了三份
+  pairwise-distinct 32-byte IKM 的 purpose-separated HKDF、unbiased whole-batch shuffle、
+  case-local latent→public HMAC UUIDv4 分配（counter/碰撞集合为 batch-global）、rename 后
+  schema recanonicalization、public base provenance 与 shared exact-validator-native derived
+  provenance 的 framing 前编译、secret HMAC padding、原子 batch emission 与 supplied-secret
+  custodian replay。Stage C 另以 closed typed schema lossless decode/re-encode payload；每个实际
+  payload authority 都可直接得到 exact-transform `COMPLETE`，整批 replay 只有在 membership、
+  source order、Stage-B secret receipt 与每个 transform result 全部复算一致时才原子返回。在
+  exact top-level API types 合法的前提下，batch/custodian/typed semantic drift 只返回整批
+  `ABSTAIN` 且不泄露 partial rows；顶层 type-contract 违规在 replay 前抛 `TypeError`。
+  raw-envelope 入口只是 `NON_AUTHORITATIVE_MECHANICS_ONLY` diagnostic，
+  整批 receipt 也不升级其 evidence authority：IKM 独立性没有外部 attestation，raw decoder
+  不验证 batch membership 或 secret padding。post-Stage-C 的
+  `phase2b_recognizer_input_archive_v1.py` 在同一次 Stage-B live allocation 中只读投影
+  recognizer registry：六个 bridge family 使用固定公共 UUID alias 并另绑 F01..F06，15 个
+  role 与 35 个 observable 的 opaque ID 直接来自本次 HMAC renaming；source registry 必须
+  exact 重建 frozen theory，registry/envelope 必须与 typed authority 的完整 task scope 一致，
+  且全批 source/public UUID 集合必须不相交。公开 archive 不含 old ID、old→new map、source
+  index、permutation、key 或 source authority；任一 gate drift 都原子 `ABSTAIN` 且无 partial
+  archive，顶层 type-contract 违规在 gate 前抛 `TypeError`。
+
+  这个 issuer 即使成功也只返回所有 batch/source/secret/origin/formal claims 为 false 的
+  `DecodedRecognizerInputArchiveV1`。它没有可持久化的 trusted receipt，opaque receipt/registry
+  commitment 不等于公开可重证的 custodian authority。该 V1 路径及其 identities 保留为历史
+  合同。新增的 compact V2 路径使用独立 codec schema/policy、batch `/3` payload 与 V2 envelope
+  magic、public typed replay policy、registry/archive schema 和 content-ID domains；它不把 V2
+  对象适配回 V1 类型。V2 archive issuer 只在私有发行 gate 内观察一次 live allocation，并执行
+  全批 source UUID 与全部 public UUID（含 fixed aliases）互斥；公开 decoder 只重放结构、
+  registry-authority scope、compact authority、direct exact transform，以及跨行 unlinkable
+  public UUID（authority + registry
+  role/quantity，排除允许重复的 fixed aliases）互斥 mechanics，相关 source/allocation/
+  secret/origin/formal claims 仍为 false。其后的
+  `phase2b_recognizer_prediction_archive_v1.py` 冻结了绑定 input archive ID/SHA、当前 protocol、
+  exact execution-freeze manifest commitment 和总数 960 的 `PublicRunContextV1`，并把 960 个
+  prediction records 分别做 bounded accepted-JCS length framing，再绑定 ordered row/record roots。
+  issuer 内部以 frozen theory、每行 public registry 和 exact derived bridge 重跑
+  derived→prediction mapping 作为发行 gate；公开 raw decoder 只能重证 context/record/archive
+  的 closed schema、canonical framing 和 row-root coverage。recognizer-facing archive 的 decoded
+  semantic fields/values 不含 split、gold、index、ordinal 或 case-position labels；这不是对任意
+  binary hash substring 的声明。成功对象仍把 input membership、execution-manifest authority、
+  derived mapping、runtime、capacity、origin、sealed/formal audit、scoring、effect 与 C1 claims
+  全部固定为 false。
+
+  独立的 unsealed evaluator 只核 evaluator-side 720/240 manifest 与同一 960 row roots 是否
+  sorted、disjoint、exhaustive；成功 disposition 是
+  `STRUCTURALLY_COMPLETE_NOT_SCORED`，没有 scorer、metrics 或效果 claim。runner 只新增由 exact
+  freeze 导出的 total=960 contract，未提供 recognizer entrypoint，也没有执行 actual 960-case
+  run。历史 V1 verbose positive witness typed profile 是 125,582 bytes，超过 65,424-byte
+  payload cap；compact V2 已把同一 exact logical authority 编成 50,255-byte payload，保留
+  15,169-byte payload-cap headroom，并在 65,536-byte fixed envelope 中产生 15,201-byte
+  secret padding。单一 constructed positive regression 已重放 exact transform、V2
+  recognizer-input archive，并保持
+  derived-bridge compilation 与 decision parity。新增的
+  `phase2b_recognizer_prediction_v2.py` 直接消费 exact `TrustedRecognizerInputRowV2` 与当前
+  `ExecutionFreezeManifest`，重放 compact typed authority、投影 public registry、调用冻结的
+  exact derived bridge，并以封闭 reason map 产生 privately issued、process-local、ephemeral
+  V2 outcome 与通用 `PredictionBundle`；V1 input/prediction 类型被 fail-closed 拒绝。单一
+  constructed positive regression 进一步保持 decision、bundle identity、family/binding/scales
+  以及 input/protocol/freeze roots parity。独立的
+  `phase2b_recognizer_prediction_archive_v2.py` 现以 V2-only schema/policy/content domains 与
+  `HGP2PA2\0` magic，把 exact 960 个 V2 outcome 分别做 bounded accepted-JCS length framing，
+  并用封闭 16-field manifest 绑定 context、ordered input-row root 与 ordered record root。builder
+  保持 input archive wire order、逐行调用 committed V2 mapper，并在合同覆盖的 validation、
+  mapping、encoding 或 public-decoding 失败时整档 abstain；public
+  decoder 只重证 structural archive、canonical framing、closed record schema 与 ordered row-root
+  coverage。synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture 验证的是结构 codec，不是
+  actual run。因此旧的 V1 payload-size P0、V2 单行 mapping 和 exact-960 structural codec mechanics
+  已闭合，但这仍不是 prediction E2E 或 capacity evidence：input membership、execution-manifest
+  authority、derived mapping、recognizer runtime、actual 960、scoring 与 effect 仍未验证或未执行。
+  所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed holdout
+  或 C1 exit 证据。
+  origin authentication、完整 trusted RFC-8785
+  builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
+  worst-case wall-time/RSS 也尚未资格化。独立 V2 unsealed evaluator 只从 evaluator-side
+  manifest 接收 sorted-unique 720/240 labels，验证 disjoint 与 set-exhaustive coverage，并分别
+  绑定 partition roots 和 V2 archive 的 ordered root；每次成功路径只以一次 public V2 replay
+  的 canonical result 为权威。它只返回 `STRUCTURALLY_COMPLETE_NOT_SCORED`，synthetic replay
+  不是 actual 960、runtime、capacity、score 或效果证据。顶层
+  `phase2b-verify-v2-structure` 已实现为只读 structural verifier：它只接收两个 canonical
+  absolute、no-follow、single-link regular files，以 bounded stable FD read 在任何 decode 前读完
+  两档，然后分别且仅一次调用 public V2 input/prediction archive decoder，并绑定 context archive
+  ID/SHA/batch/policy、ordered row IDs 与七个逐位置 input roots。成功只输出一行 canonical compact
+  JSON，失败只输出 generic atomic JSON 并以 exit 2 结束；它不生成 output artifact，也不是
+  functional recognizer entrypoint。membership/authority/custody、derived mapping、recognizer/runtime、
+  actual 960、capacity、scoring、effect 与 C1 全部仍为 false。独立 formal unsealed V2 scoring
+  contract 现冻结 evaluator-side 用于预承诺的 exact 720 answer rows 与 case-type quota、九个 metric
+  definitions、main denominator 排除 240 challenge rows、调用方提供的 commitment opening，以及
+  strict receipt/evaluation/partition cross-binding。threshold、Wilson 与 paired bootstrap 仅被引用而
+  未执行；成功仍只是 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 均为空。
+  它不认证 answer authority 或 pre-reveal timing，不读取 predictions，也不执行 score、gate、runtime、
+  actual 960、effect 或 C1。独立 V2 unsealed-960 scoring mechanics 现在恰好各执行一次 fresh
+  public formal-contract validation 和 public prediction-archive replay，并独立闭合
+  context/input-row/prediction-content/record/archive roots；它按 `input_row_id` 以 main-partition
+  顺序 join exact 720 个 answer rows，物化恰好 9 个纯整数 metric results 和 720 个 main-row
+  comparison records。这 720 个不是 scored rows：仅 336 个 row 是 metric-eligible（240 个
+  answerable + 96 个 insufficient/nonidentifiable），384 个 controls 没有 frozen metric，240 个
+  semantic-conflict challenge rows 全部排除。成功 disposition 是
+  `MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`；`gate_results` 为空，scale-regret/bootstrap results
+  均缺失。这一 supplied/synthetic archive mechanics replay 不认证 answer authority 或 reveal timing，
+  也不建立 membership、custody、derived mapping、recognizer/runtime/actual-960/capacity、formal-gate、
+  actual scoring、effect 或 C1 evidence。新增的 V2 actual-unsealed-960 replay-input contract
+  仍只是 evaluator-side 的非权威输入包合同：它把 720 个 supplied gate-label rows 与 formal answer
+  manifest 逐行交叉绑定，冻结 12 个 family×opaque-scale-slice cells 的 60-row 配额、逐 cell
+  case/margin/nonunique composition、720 个唯一 supplied `latent_base_case_id`、10 个可用 overall
+  gate-input definitions、2 个显式不可用且 denominator 为 `None` 的 overall definitions，以及 6 个
+  slice definitions。这里的 “input available” 只表示 evaluator-label-side 输入定义齐备，不表示
+  numerator、metric、Wilson bound 或 gate 已执行。240 个 semantic-conflict rows 只绑定 root 并继续
+  排除 main denominator；没有 challenge descriptor rows。成功仅为
+  `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`。commitment opening 不证明预揭示时序或权威，
+  唯一 latent IDs 不证明 latent-case independence；18 项所需证据仍明确未供应，
+  metric/scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/
+  actual-960/scoring/formal-gate/effect/C1，也不供应 Q0.5b/Q1 证据。独立 V2 available-gate
+  mechanics 是只接受上述 scoring mechanics、replay-input contract 和 gate-input manifest
+  三个已物化图的纯 compositor；它不调用 decoder、scorer、runner、ledger 或签名验证器。对调用方
+  supplied/synthetic 图的成功路径会独立快照并重证三图、精确 join 720 行，计算 10 个 overall 与
+  24 个 family/opaque-scale slice 的 point/Wilson mechanics，并把缺失 attempt-event denominator
+  与 preservation pairs 的 2 个 gate 保持为 unavailable/`None`。成功仅为
+  `AVAILABLE_GATE_MECHANICS_COMPLETE_NOT_FORMAL_GATE_EVALUATION`，claim level 是
+  `NON_AUTHORITATIVE_AVAILABLE_GATE_MECHANICS_ONLY`；这些是 mechanics results，不是 formal gate
+  results，也不证明 upstream scoring、actual 960、authority/timing、effect 或 C1。preregistration
+  report 只发布该组件的静态 identity/capability/source SHA，不构造三图、不执行 compositor，因而
+  report 中 supplied-graph verification、720 join/result materialization 与 Wilson-evaluated flags
+  均保持 false。下一刀仍是
+  `actual_unsealed_960_case_prediction_scoring_replay_v2`；在完整
+  standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
+  The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue
+  of five upstream dependency identities, eighteen missing-evidence requirements,
+  and sixteen declarative ordering statements. It accepts no evidence and supplies
+  no event, signature, ledger, timing, runtime, scoring, gate, effect, or C1
+  verifier. Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`;
+  it is never an admission decision or execution authorization. The independent V2
+  signed-attempt-chain component adds only test-anchor mechanics: for a caller-supplied
+  in-memory chain it accepts exactly one `TEST_ONLY_SUPPLIED_ANCHOR` custodian public
+  key and verifies content addresses, Ed25519 signatures, predecessor links and the
+  exact ten-stage order through `TERMINAL_CONSUMED`. Its success disposition is
+  `SIGNED_ATTEMPT_CHAIN_MECHANICS_VERIFIED_NOT_DURABLE_AUTHORITY`, not authoritative
+  attempt evidence. It generates no key, anchor, event or signature and supplies no
+  external trust anchor, custodian identity, qualified backend, durable append-only
+  ledger, timestamp authority, one-shot/rerun enforcement, actual-960 execution,
+  scoring, formal gate, effect or C1 evidence. The preregistration report publishes
+  only static identity/count/capability/source-SHA fields; it does not construct any
+  signed-chain object or call the verifier, and all instance verification and broad
+  claims remain false. The next slice remains
+  `actual_unsealed_960_case_prediction_scoring_replay_v2`;
+  The independent V2 local-attempt-ledger component now supplies only
+  `NON_AUTHORITATIVE_LOCAL_FILESYSTEM_ATTEMPT_LEDGER_MECHANICS_ONLY` for attempt 0 in
+  one caller-owned POSIX directory. Its fixed four-name namespace implements the
+  `EMPTY -> OPEN -> TERMINAL_CONSUMED` source mechanics with componentwise no-follow
+  directory opens, a nonblocking cooperating-process directory lock, strict canonical
+  mode-0600 records, hard-link no-replace publication, file/directory `fsync`, bounded
+  crash-window recovery, parent-path identity recheck, and symlink/hardlink/FIFO/socket/
+  TOCTOU defenses. Terminalization internally re-verifies the supplied test-only signed
+  chain. This does not make the directory externally trusted, append-only, hostile-owner
+  tamper/rollback resistant, hardware/remote-filesystem durable, or cross-host globally
+  one-shot. `OPEN` is not execution authorization; an existing `OPEN` leaves execution
+  state unknown. The preregistration report imports only static identity constants and
+  hashes the source file: it constructs no anchor, chain, or ledger-state directory/
+  record path, calls none of the four ledger APIs, touches no ledger filesystem, and
+  exposes no runtime availability or invocation result. Its 15 identity/namespace
+  fields and 17 source-mechanics flags are
+  static; all 75 invocation, durability, authority, timeline, actual-960, scoring, gate,
+  effect, and C1 flags remain false. The next slice is unchanged;
+  The independent V2 external-custodian checkpoint verifier remains supplied-candidate
+  mechanics only. It checks a caller-supplied content-addressed checkpoint DAG with four
+  distinct candidate signer roles (`GOVERNANCE_ANCHOR`, `CUSTODIAN`, `STORE_RECEIPT`,
+  `TIME_ATTESTOR`), role/epoch/purpose-domain Ed25519 signatures, a declared
+  `IF_ABSENT` generation `0 -> 1` store transition, monotone declared time, terminal
+  subject binding, and checkpoint cross-bindings. Neither the supplied registry nor
+  signatures establish pretrusted identities, external store authority/durability,
+  rollback resistance, authoritative time, custodian independence, or global one-shot
+  use; the verifier performs no filesystem, clock, network, execution, or scoring
+  operation. Its authority-requirement ID states what a live ceremony would still need,
+  not that the requirements are met. The preregistration report reads only six static
+  identity constants and the source SHA: it constructs no candidate DTO, calls no
+  verifier, reads no external evidence or evidence path, and exposes neither backend
+  availability nor result IDs. Its 13 identity/expectation fields and 16 supplied-
+  candidate source-mechanics/test flags are static; all 76 invocation, authority,
+  store, time, actual-960, scoring, gate, effect, and C1 flags remain false. The next
+  slice is unchanged;
+  The owner-accepted Docker route is now explicit for Phase-2B C1 through the separate
+  six-role profile `phase2b_c1_container_actor_profile_v1`: governance, custodian,
+  store-receipt, time-attestor, recognizer, and scorer/evaluator are technically
+  separated containers under the same-admin-controller disclosure. This does not
+  assert organizational or human independence. A minimal recognizer image was built
+  locally from one pinned Python base and an exact 26-module package closure, with an
+  inert image-only `hegel_machine/__init__.py`. Image
+  `sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`
+  was inspected as UID/GID 65534, fixed entrypoint, no healthcheck and no declared
+  volumes; a network-none/read-only/cap-drop/no-new-privileges/custom-seccomp empty-
+  input smoke returned only the expected generic ABSTAIN and wrote no output. The
+  checked receipt is
+  `phase2b_recognizer_runtime_image_build_receipt_v2_cd9f15d2921bb670869bc4357efa6b6a05d4f22ba02a02efde06e384684898cd`.
+  This closes static profile and local image-readiness mechanics only. Fresh role
+  keys, the signed execution registry, owner-accepted ceremony, real input/freeze
+  material, actual-960 prediction, independent scoring, gates, effect and C1 all
+  remain false; the stronger supplied-external-candidate requirement is not silently
+  reinterpreted as the Docker authority profile. The next slice remains unchanged;
+  The checked-in `phase2b_recognizer_host_executor_v1.py` now supplies a fail-closed
+  local-Docker host-executor implementation and a 114/114 synthetic, no-Docker test
+  basis. Source mechanics cover exact run-spec/limit preflight, componentwise no-follow
+  host-path pinning, input/freeze/seccomp/image/isolation cross-binding, bounded process
+  groups and pipes, forced container cleanup, runtime-receipt/prediction replay, and
+  no-replace prediction publication. This is source/test capability, not a live run.
+  The preregistration report binds the exact source SHA as a literal and exposes only
+  8 static identity values and 17 source/test flags; it does not import the executor,
+  construct an OCI spec, limits, or executor path, call Docker, read input, write output,
+  or issue/expose a local receipt. All 42 invocation/environment/receipt/actual-960/
+  scoring/gate/effect/C1 fields remain false, and the next slice is unchanged;
+- seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
+  answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
+  input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；
+  这些不等于跨进程持久 one-shot custodian 或可运行 recognizer；
+- Phase-3 已冻结 `hegel-old-dsl-v1.0.0` 的有限 domains、catalogs、typing、bottom、
+  exact equivalence、limits、50,000 canonical / 5,000,000 raw budget 和 shrink order；
+  首个 generic odd-cardinality target 是 480 行，observed omitted-channel null control
+  是 85 行，MDL 使用 `hegel-mdl-prefix-v1.0.0` 与 Q32；M1 的 Python/Rust shared vectors
+  各 48/48 PASS，M2 两端都把 64,680 个 source candidates 接受为 64,680 个 unique strict
+  canonical AST，并给出相同 diagnostic commitment 与 ordinal-50,001 witness。因此
+  `hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下的 bounded status 已是
+  `DSL_TOO_LARGE`，但不是 `COMPLETE`，也没有 extensional target verdict。准确状态是
+  `surface_parameter_freeze_complete=true`、
+  `strict_acceptance_contract_complete=true`、`normative_parameter_freeze_complete=true`，
+  `strict_acceptance_implementation_verified=true`，formal roots 仍为 `null`；
+- untrusted closure receipt 已能结构绑定完整 `dsl_spec_id`、`operator_semantics_id` 与
+  equivalence contract，并按 `target_role` 分别绑定 outside target 的 480-row
+  diagnostic universe/truth content IDs 或 null control 的 85-row diagnostic IDs；v1.0.2
+  已冻结 diagnostic-to-formal bridge 与 canonical-CBOR/RFC6962 root schema；M1/M2 已完成
+  strict identity 与 bounded capacity 双 replay，但尚未生成正式 archive roots，正式 roots
+  仍为 `null`。实际 `DSL_TOO_LARGE` artifact 只授权 frozen shrink transition，不授权
+  target adequacy、certificate 或 ACTIVE。
+
+明确未实现或未宣称：
+
+- 开放世界新关系发明成功；
+- 自动 ontology / metric / evaluator 联合演化；
+- 真实科学发现、下游 efficacy 或人类水平对照；
+- 跨 evaluator epoch 的分数可比性；
+- 把语义相似、LLM 自评、旧 fixture PASS 当作结构证据；
+- 正式 Phase-2 exit：当前 API-blinded corpus 仍是 synthetic validation、未 sealed，
+  且只资格化 role-scoped witness 到 frozen-projection 的 replay 与候选选择；报告内
+  `controlled_api_selector_qualified` 只是机械闭环工程标签，不是正式里程碑声明；
+- open-world family discovery，或从 raw natural-language/table/trajectory 证据
+  抽取完整候选集合；
+- 对 source-aware 攻击者隐藏答案：当前生成器和 evaluator table 均可见，所谓
+  blinded 只指 recognizer API 不接收 answer key，且选择结果必须对所有公开 ID 的
+  一致重命名保持不变；ID 不是密码学保密边界；
+- independent raw-evidence projection 或不受信 recognizer 隔离：fixture 值由
+  evaluator case spec 反向构造，当前 accuracy 只测受控 selector mechanics；
+- 真实 semantic/embedding baseline 的效果比较。人工 semantic decoy 的 accuracy /
+  gap 不参与 exit gate；semantic metadata replacement invariance 是 anti-leak 硬检查；
+- 当前 controlled vertical slice 不是 sealed holdout；即使传入结构完整的
+  manifest，在独立 custodian 签名验证器实现前也只到
+  `candidate_framework`，不会写入 active theory graph；当前 lifecycle 只是
+  本地非权威 shadow ledger，writer 签名接入前不产生不可逆全局 REJECT。
+- Phase-2B typed evidence → executable verifier projection 的正式 compiler 和完整
+  unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
+  uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
+  non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
+  mechanics、Stage-B native-provenance keyed framing、Stage-C strict typed whole-batch replay、
+  compact V2 codec/batch/public replay/input archive one-case mechanics、post-rename public
+  recognizer-input archive、960-row V1 prediction archive structural codec、
+  unsealed 720/240 structural evaluator 以及 runner total/state-machine 合同，但这些窄
+  mechanics 尚未组成 formal pipeline 或效果证据；
+- 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
+  custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；
+- allowed UUID/provenance/role-candidate/missingness/transform 字段的 answer-correlation
+  与 covert-channel audit、随机并全局 shuffle 的 ID 分配证明；`standard_error` 在完整
+  语义和测试就绪前明确 unsupported，而不是可进入 formal selector 的待选模式；
+- 专用 recognizer CLI、formal scoring/sealed prediction evaluator、签名 SBOM /
+  runtime attestation 验证器和跨进程持久的 append-only CAS ledger；
+- Phase-3 M1/M2 已证明 strict identity 一致与 bounded syntactic overflow，但没有完整
+  canonical closure exhaustion、program/output archives、match set 或 extensional target
+  verdict；当前 `DSL_TOO_LARGE` 绝不能改写为 `COMPLETE`；
+- shrink-step-1 的 25,872 subset 已双实现验证且低于 budget，但它不是完整 grammar
+  closure，也没有 closure cardinality；在 split/custodian continuity 与 dual formal
+  roots 补齐前，`hegel-old-dsl-v1.1.0` 不能从 `NOT_RUN` 进入 M3；
+- 把结构合法的 caller-supplied closure receipt 当作可信执行证据；当前 receipt 即使携带
+  第 50,001 个 witness，也只能是 untrusted replay claim，不能自行签发状态或证书；
+- canonical-CBOR certificate 的 wire 已冻结，但正式 archives/roots、Python/Rust 双完整
+  closure replay、key-status trust chain、3/3 Ed25519 签名与从冻结 AST/partition/code table 重算
+  长度的双 MDL scorer 均未执行；调用者自报 receipt 不能产生
+  semantic certificate；正式 claim 必须完整写作
+  `OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
+  target_truth_table_root, equivalence = exact_extensional)`，禁止称
+  `OUTSIDE_LANGUAGE`；
+- 把“禁用 XOR/parity 名称”当作不可表达证明。v1.0.2 已决定 v1 不存在 implicit
+  Bit coercion；唯一合法 sanity witness 显式包含两个 `bit_to_scalar`，原 shorthand
+  type-reject。binary XOR 的 formal language verdict 仍为 `null`，最终 membership 必须
+  由 strict canonicalizer 与完整双 replay 决定。
+
+## 快速运行
+
+无需联网或模型权重：
+
+```bash
+cd "Hegel Machine"
+cargo fmt --manifest-path rust/strict_canonicalizer/Cargo.toml -- --check
+cargo test --locked --manifest-path rust/strict_canonicalizer/Cargo.toml
+cargo clippy --locked --manifest-path rust/strict_canonicalizer/Cargo.toml \
+  --all-targets -- -D warnings
+cargo build --locked --release \
+  --manifest-path rust/strict_canonicalizer/Cargo.toml
+PYTHONPATH=src python3 -m hegel_machine phase3-strict-gate \
+  --rust-binary rust/strict_canonicalizer/target/release/hegel-strict-canonicalizer \
+  --output artifacts/phase3_dual_strict_gate_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-strict-capacity-replay \
+  --rust-binary rust/strict_canonicalizer/target/release/hegel-strict-canonicalizer \
+  --output artifacts/phase3_dual_strict_capacity_replay_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
+  --output artifacts/phase3_preregistration_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-closure-preflight \
+  --output artifacts/phase3_closure_capacity_preflight_v1.json
+cargo fmt --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml -- --check
+cargo test --locked --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml
+cargo clippy --locked --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml \
+  --all-targets -- -D warnings
+cargo build --locked --release \
+  --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-strict-gate \
+  --rust-binary rust/strict_canonicalizer_shrink1/target/release/hegel-strict-canonicalizer-shrink1 \
+  --output artifacts/phase3_shrink1_dual_strict_gate_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-subset-replay \
+  --rust-binary rust/strict_canonicalizer_shrink1/target/release/hegel-strict-canonicalizer-shrink1 \
+  --output artifacts/phase3_shrink1_dual_capacity_replay_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-publish \
+  --output artifacts/phase3_shrink1_publication_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-transition \
+  --output artifacts/phase3_dsl_shrink_transition_v1.json
+cargo fmt --manifest-path rust/formal_bridge_m25/Cargo.toml -- --check
+cargo test --locked --manifest-path rust/formal_bridge_m25/Cargo.toml
+cargo clippy --locked --manifest-path rust/formal_bridge_m25/Cargo.toml \
+  --all-targets -- -D warnings
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-synthetic-replay \
+  --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-v112-qualify \
+  --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25 \
+  --output artifacts/phase3_m25_wire_completion_qualification_v112.json
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-errata-qualify \
+  --output artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-external-preflight \
+  --output artifacts/phase3_m25_external_preflight_v2.json
+PYTHONPATH=src python3 -m pytest -q -s
+PYTHONPATH=src python3 -m hegel_machine benchmark \
+  --output artifacts/phase2_benchmark.json
+PYTHONPATH=src python3 -m hegel_machine phase2-exit \
+  --output artifacts/phase2_exit_benchmark_v2.json
+PYTHONPATH=src python3 -m hegel_machine phase2b-preregister \
+  --output artifacts/phase2b_preregistration_v1.json
+PYTHONPATH=src python3 -m hegel_machine vertical-slice \
+  --output artifacts/controlled_vertical_slice_v1.json
+PYTHONPATH=src python3 -m hegel_machine demo
+```
+
+## 目录
+
+- `markdown/`：五份指定源文档，另含被《黑格尔机》直接引用的范畴/态射对话；
+- `references/`：文献、网页、元数据、固定 commit 的关联 repo 快照与校验和；
+- `legacy/`：v1/v2 最小冻结快照，仅作迁移与审计；
+- `src/hegel_machine/`：完全独立的 v3 活动代码；
+- `tests/`：单元、治理和纵向闭环验收；
+- `docs/`：架构、证据边界、迁移映射和来源说明。
+
+更严格的 claim 边界见
+[`docs/evidence_boundaries.md`](docs/evidence_boundaries.md)，Phase-2A development 协议见
+[`docs/phase2_exit_protocol.md`](docs/phase2_exit_protocol.md)。正式轨道施工边界见
+[`docs/phase2b_preregistration.md`](docs/phase2b_preregistration.md) 与
+[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)。v1.0.2 已解决的 strict
+canonicalization / CBOR / certificate bridge 决策见
+[`docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)；下一版 shrink
+step 1 决策已由
+[`docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md`](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)
+接管；M2.5 的新 wire/seed/state 决策稿见
+[`docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md`](docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md)。
+v1.1.2 completion amendment 见
+[`docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md`](docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md)；
+实现级定案、闭包补充和外部 actor 操作边界分别见
+[`docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
+[`docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
+与
+[`docs/phase3_m25_external_genesis_operator_runbook.md`](docs/phase3_m25_external_genesis_operator_runbook.md)。
+原 questions 文档只保留为历史审阅输入，不再是当前 normative 状态。

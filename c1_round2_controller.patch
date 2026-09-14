@@ -1,0 +1,127 @@
+diff --git a/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py b/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py
+--- a/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py
++++ b/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py
+@@ -105,11 +105,27 @@ class ControllerTerminalV2(ControllerErrorV2):
+-    def __init__(self, code: str, detail: str) -> None:
++    def __init__(self, code: str, detail: str, *, consumed: bool = False) -> None:
+         super().__init__(f"{code}: {detail}")
+         self.code = code
+         self.detail = detail
++        self.authorization_consumption_count = int(consumed)
++        self.logical_campaign_count = int(consumed)
+@@
+ def _terminal(code: str, detail: str) -> NoReturn:
+     raise ControllerTerminalV2(code, detail)
++
++
++def _terminal_consumed(code: str, detail: str) -> NoReturn:
++    raise ControllerTerminalV2(code, detail, consumed=True)
+@@ -579,24 +595,27 @@ def _ensure_trajectory_event(
+-    if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
+-        return
+     try:
+-        _append_trajectory(contract, event, capsule_digest=capsule_digest, **fields)
++        if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
++            return
++        try:
++            _append_trajectory(contract, event, capsule_digest=capsule_digest, **fields)
++        except ControllerPendingV2:
++            if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
++                return
++            raise
+     except ControllerPendingV2 as error:
+-        if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
+-            return
+         if finalization_condition is not None:
+             _finalization_pending(finalization_condition, str(error))
+         raise
+@@ -1105,6 +1124,35 @@ def _existing_terminal_result(
+     return checked
++
++
++def _finish_complete_terminal(contract, capsule, terminal, *, partial_finalization):
++    path = _contract_path(contract, "terminal_path")
++    payload = state.canonical_json_bytes(dict(terminal))
++    try:
++        _publish_new_or_exact(path, payload, "complete terminal")
++    except ControllerPendingV2 as error:
++        try:
++            observed = _optional_regular(path, state.MAXIMUM_JSON_BYTES_V2)
++        except ControllerPendingV2 as read_error:
++            _finalization_pending("KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", f"{error}; {read_error}")
++        if observed is None:
++            _finalization_pending("KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error))
++        if observed != payload:
++            _terminal_consumed("TERMINAL_STATE_DIFFERS", "complete terminal readback differs")
++    _ensure_trajectory_event(
++        contract, "TERMINAL_PUBLISHED",
++        capsule_digest=capsule["capsule_digest"],
++        identity_fields={"terminal_record_digest": terminal["record_digest"]},
++        finalization_condition="KNOWN_TERMINAL_AWAITING_TRAJECTORY_SUFFIX",
++        terminal_record_digest=terminal["record_digest"],
++        partial_finalization=partial_finalization,
++    )
+@@ -1183,25 +1231,8 @@ def _run_locked(
+-        try:
+-            _publish_new_or_exact(terminal_path, state.canonical_json_bytes(terminal), "complete terminal")
+-        except ControllerPendingV2 as error:
+-            _finalization_pending("KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error))
+-        _ensure_trajectory_event(
+-            contract, "TERMINAL_PUBLISHED",
+-            capsule_digest=capsule["capsule_digest"],
+-            identity_fields={"terminal_record_digest": terminal["record_digest"]},
+-            finalization_condition="KNOWN_TERMINAL_AWAITING_TRAJECTORY_SUFFIX",
+-            terminal_record_digest=terminal["record_digest"], partial_finalization=True,
+-        )
++        _finish_complete_terminal(contract, capsule, terminal, partial_finalization=True)
+         return terminal
+@@ -1391,19 +1422,30 @@ def _run_locked(
+-        if not artifact_created:
+-            raise ValueError("artifact appeared during one-shot replay")
+     except Exception as error:
+-        return _invalidate_after_consumption(
+-            contract, preregistration, capsule, authorization, consumption,
+-            failure_phase="SCORER_REPLAY", failure_code="POST_CONSUMPTION_REPLAY_FAILED",
+-            failure_detail=f"{type(error).__name__}: {error}",
+-        )
++        if "artifact" not in locals():
++            return _invalidate_after_consumption(
++                contract, preregistration, capsule, authorization, consumption,
++                failure_phase="SCORER_REPLAY", failure_code="POST_CONSUMPTION_REPLAY_FAILED",
++                failure_detail=f"{type(error).__name__}: {error}",
++            )
++        try:
++            observed = _optional_regular(artifact_path, state.MAXIMUM_SEALED_ARTIFACT_BYTES_V2)
++        except ControllerPendingV2 as read_error:
++            _terminal_consumed("ARTIFACT_PUBLICATION_OUTCOME_UNKNOWN", f"{error}; {read_error}")
++        if observed is None:
++            return _invalidate_after_consumption(
++                contract, preregistration, capsule, authorization, consumption,
++                failure_phase="ARTIFACT_PUBLICATION",
++                failure_code="SEALED_ARTIFACT_NOT_DURABLE_TERMINAL_NO_RESUME",
++                failure_detail=f"{type(error).__name__}: {error}",
++            )
++        if observed != artifact.canonical_bytes:
++            _terminal_consumed("ARTIFACT_STATE_DIFFERS", "artifact readback differs")
+@@ -1425,25 +1467,8 @@ def _run_locked(
+-    try:
+-        _publish_new_or_exact(terminal_path, state.canonical_json_bytes(terminal), "complete terminal")
+-    except ControllerPendingV2 as error:
+-        _finalization_pending("KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error))
+-    _ensure_trajectory_event(
+-        contract, "TERMINAL_PUBLISHED",
+-        capsule_digest=capsule["capsule_digest"],
+-        identity_fields={"terminal_record_digest": terminal["record_digest"]},
+-        finalization_condition="KNOWN_TERMINAL_AWAITING_TRAJECTORY_SUFFIX",
+-        terminal_record_digest=terminal["record_digest"], partial_finalization=False,
+-    )
++    _finish_complete_terminal(contract, capsule, terminal, partial_finalization=False)
+     return terminal
+@@ -1496,7 +1521,12 @@ def main(argv: Sequence[str] | None = None) -> int:
+-        result = {"status": error.code, "detail": error.detail}
++        result = {
++            "status": error.code,
++            "detail": error.detail,
++            "authorization_consumption_count": error.authorization_consumption_count,
++            "logical_campaign_count": error.logical_campaign_count,
++        }

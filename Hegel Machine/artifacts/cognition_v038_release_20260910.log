@@ -1,0 +1,60 @@
+........................................................................ [  9%]
+........................................................................ [ 19%]
+........................................................................ [ 28%]
+........................................................................ [ 38%]
+........................................................................ [ 48%]
+........................................................................ [ 57%]
+........................................................................ [ 67%]
+........................................................................ [ 77%]
+..................................................F..................... [ 86%]
+........................................................................ [ 96%]
+..........................                                               [100%]
+=================================== FAILURES ===================================
+___ test_actual_noisy_repeat_rejects_one_off_error_using_frozen_predictions ____
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+
+    def test_actual_noisy_repeat_rejects_one_off_error_using_frozen_predictions(project_root):
+        from hegel_machine.cognition.joint_model_revision import JointModelRevision
+        from hegel_machine.cognition.prior_adoption import PriorAdoption
+    
+        environment, config = _adoption_setup(project_root, seed=841000091, total=48)
+        adapter = compile_sc_kg_program(environment, Program("feature", name="x1"))
+        recovery = JointModelRevision(environment.spec, seed=841000091)
+        original_simulate = adapter.simulate
+        measurements = []
+    
+        def one_off_instrument_error(point, rng=None):
+            measured = original_simulate(point, rng)
+            measurements.append({"point": tuple(point), "output": measured.copy()})
+            # Four genuine new predictions establish the controller's reference.
+            # The fifth real instrument reading alone is corrupted; later calls
+            # still execute the original noisy simulator and preserve its RNG.
+            if adapter.simulator_calls == 5:
+                measured[1] += 1.
+            return measured
+    
+        adapter.simulate = one_off_instrument_error
+        algorithm = initialize_sc_kg_optimizer(adapter, config,
+            adoption_policy=PriorAdoption(), recovery=recovery)
+        result = algorithm.run()
+        assert result["n_simulations"] == len(algorithm.history) == 48
+        assert adapter.loaded_observation_count == adapter.research_simulator_calls == 32
+        assert adapter.simulator_calls == len(measurements) == 16
+        state = recovery.to_dict()
+        confirmation = state["confirmations"][0]
+        assert confirmation["anchor_index"] == 4 and confirmation["observation_index"] == 5
+        assert all(not item["confirmed"] for item in state["confirmations"])
+        assert not state["episodes"]
+        anchor = state["observations"][4]
+        repeat = state["observations"][5]
+>       assert anchor["context"]["purpose"] == "optimization"
+E       AssertionError: assert 'objective_exploration' == 'optimization'
+E         
+E         - optimization
+E         + objective_exploration
+
+tests/test_cognition_sc_kg_environment.py:479: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_sc_kg_environment.py::test_actual_noisy_repeat_rejects_one_off_error_using_frozen_predictions
+1 failed, 745 passed in 146.87s (0:02:26)

@@ -1,0 +1,51 @@
+........................................................................ [ 36%]
+..............................................................F......... [ 73%]
+.....................................................                    [100%]
+=================================== FAILURES ===================================
+__ test_retrieved_knowledge_executes_and_counterexamples_restrict_then_revoke __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72898f12d510>
+
+    def test_retrieved_knowledge_executes_and_counterexamples_restrict_then_revoke(monkeypatch):
+        library = KnowledgeLibrary()
+        known = Program("feature", name="x")
+        concept_id, _ = library.learn(Candidate("learned", known, "refit"), _LinearEnvironment("source").spec)
+        called = []
+        original_predict = Program.predict
+    
+        def traced_predict(program, observation):
+            if program is known:
+                called.append(observation.features["x"])
+            return original_predict(program, observation)
+    
+        monkeypatch.setattr(Program, "predict", traced_predict)
+        agent = CognitiveAgent(_small_config(strategy="fixed"), library)
+>       reused = agent.run(_LinearEnvironment("related", phase="transfer"))
+
+tests/test_cognition_runtime.py:94: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hegel_machine/cognition/controller.py:129: in run
+    initial_loss = loss(initial.program, observations, fallback, spec.risk_quantile)
+src/hegel_machine/cognition/evaluation.py:36: in loss
+    return mean(point_loss(predict(program, row, fallback), row.target, q) for row in observations)
+/usr/lib/python3.10/statistics.py:325: in mean
+    data = list(data)
+src/hegel_machine/cognition/evaluation.py:36: in <genexpr>
+    return mean(point_loss(predict(program, row, fallback), row.target, q) for row in observations)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+program = Program(op='const', value=0.1111111111111111, name=None, lag=0, children=(), definition=None)
+observation = Observation(features={'x': -1.0, 'z': 0.0}, target=-1.0, history=())
+fallback = 0.1111111111111111
+
+    def predict(program, observation: Observation, fallback: float, *, context=None) -> float:
+        # A trajectory starts before lagged measurements exist. Every such row is
+        # still scored, using the same data-fitted initial prediction for all arms.
+        try:
+>           value = float(program.predict(observation, context=context))
+E           TypeError: test_retrieved_knowledge_executes_and_counterexamples_restrict_then_revoke.<locals>.traced_predict() got an unexpected keyword argument 'context'
+
+src/hegel_machine/cognition/evaluation.py:17: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_runtime.py::test_retrieved_knowledge_executes_and_counterexamples_restrict_then_revoke
+1 failed, 196 passed in 15.96s

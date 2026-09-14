@@ -1,0 +1,26 @@
+........................................................................ [ 46%]
+.......................................F................................ [ 93%]
+..........                                                               [100%]
+=================================== FAILURES ===================================
+__ test_pause_json_load_resume_matches_continuous_learning_and_revises_memory __
+
+    def test_pause_json_load_resume_matches_continuous_learning_and_revises_memory():
+        factories = [lambda: MeasuredTask("source"), lambda: MeasuredTask("related"),
+                     lambda: MeasuredTask("source", slope=-1.)]
+        options = dict(observation_budget=120, compute_budget=24000, max_visits=1)
+        whole = ResearchSession(config(), factories, **options).run()
+        first = ResearchSession(config(), factories, **options).run(max_steps=1)
+        assert first["status"] == "paused" and first["completed_visits"] == 1
+        resumed = ResearchSession(config(), factories, state=json.loads(json.dumps(first)), **options).run()
+>       assert strip_times(resumed) == strip_times(whole)
+E       AssertionError: assert {'adequate_ta...00, ...}, ...} == {'adequate_ta...00, ...}, ...}
+E         
+E         Omitting 21 identical items, use -vv to show
+E         Differing items:
+E         {'episodes': [{'actions': [{'action': 'observe', 'compute_cost': 0, 'details': {'probe_id': 'initial', 'rows': 4, 'seq... 'observation_cost': 0, ...}, ...], 'compute_cost': 304, 'concepts_added': ['concept_0003'], 'episode_index': 2, ...}]} != {'episodes': [{'actions': [{'action': 'observe', 'compute_cost': 0, 'details': {'probe_id': 'initial', 'rows': 4, 'seq... 'observation_cost': 0, ...}, ...], 'compute_cost': 304, 'concepts_added': ['concept_0003'], 'episode_index': 2, ...}]}
+E         Use -v to get more diff
+
+tests/test_cognition_session.py:61: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_session.py::test_pause_json_load_resume_matches_continuous_learning_and_revises_memory
+1 failed, 153 passed in 9.87s

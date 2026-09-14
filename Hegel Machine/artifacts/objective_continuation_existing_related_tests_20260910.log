@@ -1,0 +1,101 @@
+F.....                                                                   [100%]
+=================================== FAILURES ===================================
+_ test_independent_objective_queries_share_the_paid_loop_and_yield_to_constraint_research[False] _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7cb72fb7e8c0>
+constraint_pending = False
+
+    @pytest.mark.parametrize("constraint_pending", [False, True])
+    def test_independent_objective_queries_share_the_paid_loop_and_yield_to_constraint_research(
+            project_root, monkeypatch, constraint_pending):
+        from hegel_machine.cognition import objective_research
+        from hegel_machine.cognition.joint_model_revision import JointModelRevision
+    
+        environment, config = _adoption_setup(project_root, seed=841000111, total=34)
+        observed, planning = [], []
+    
+        class GoalResearch:
+            accepted_revision = None
+    
+            def __init__(self, spec):
+                self.spec = spec
+                self.state = {"scope_research": None}
+    
+            def prepare_shared_control(self, rows, forecast, features, **context):
+                assert constraint_pending
+                assert len(rows) == len(algorithm.history) == context["stage"]
+                assert len(observed) == len(rows) - 32
+                assert context["purpose"] == "confirmation"
+                assert set(features.values()) == {.75}
+                return None
+    
+            def next_control(self, rows, forecast, **context):
+                assert not constraint_pending
+                assert len(rows) == context["stage"] == 32
+                assert context["remaining_calls"] == 2
+                assert context["scope_start"] == 0
+                assert rows[0]["context"]["objective"] == algorithm.history[0][1][0]
+                actual = forecast({name: .254 for name in self.spec.feature_names})
+                assert set(actual["features"].values()) == {.25}
+                assert actual["feasible"] == (actual["constraint_margin"] <= 0.)
+                planning.append(actual)
+                return {"features": actual["features"], "purpose": "objective_exploration",
+                        "reason": "measured_goal_opportunity"}
+    
+            def observe(self, features, output, *, context):
+                observed.append((features, output, context))
+                # Only the first paid query is prescribed; the second follows the
+                # ordinary SC proposal path without restarting mechanism research.
+                self.next_control = lambda *args, **kwargs: None
+    
+        class PendingConstraintResearch:
+            candidates = {}
+            candidate = accepted_revision = None
+            control_purpose = "confirmation"
+            state = {"phase": "confirming"}
+    
+            def next_control(self):
+                return {name: .754 for name in environment.spec.feature_names}
+    
+            def observe(self, *args, **kwargs):
+                pass
+    
+        monkeypatch.setattr(objective_research, "ObjectiveResearch", GoalResearch)
+        adapter = compile_sc_kg_program(environment, Program("feature", name="x1"))
+        recovery = (PendingConstraintResearch() if constraint_pending else
+                    JointModelRevision(environment.spec, seed=841000111))
+        algorithm = initialize_sc_kg_optimizer(adapter, config, recovery=recovery)
+>       result = algorithm.run()
+
+tests/test_cognition_sc_kg_environment.py:831: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../KG_op/SC-OLH-KG/algorithms/single_olhkg.py:14896: in run
+    candidates, candidate_sources = self._generate_candidates(iteration)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <hegel_machine.cognition.sc_kg_environment.initialize_sc_kg_optimizer.<locals>.ResearchInitializedSCAlgorithm object at 0x7cb68578e170>
+iteration = 0
+
+    def _generate_candidates(self, iteration):
+        self._recovery_control_purpose = "optimization"
+        self._terminal_goal_offers = {}
+        if self.recovery is not None:
+            started = perf_counter()
+            self._consider_constraint_applicability()
+            control = self.recovery.next_control()
+            self.recovery_diagnostics["controller_seconds"] += perf_counter() - started
+            if control is not None:
+                values = [control[name] for name in self.problem.basis.feature_names]
+                point = tuple(map(int, self.problem.continuous_to_int(values)))
+                purpose = self.recovery.control_purpose
+                self._recovery_control_purpose = purpose
+                self.recovery_diagnostics[f"{purpose}_requests"] += 1
+                return [point], {point: f"revision_{purpose}"}
+            research = self.objective_research.state["scope_research"]
+>           pending_goal = self.objective_research.state["pending"]
+E           KeyError: 'pending'
+
+src/hegel_machine/cognition/sc_kg_environment.py:380: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_sc_kg_environment.py::test_independent_objective_queries_share_the_paid_loop_and_yield_to_constraint_research[False]

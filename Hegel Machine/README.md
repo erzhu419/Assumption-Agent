@@ -1,609 +1,235 @@
 # Hegel Machine
 
-这是 Assumption Agent 的独立 v3 工作区。v1 是已有效果的 Assumption Agent，
-v2 是广义对位/GSCL；本目录冻结它们中需要复用的对象与算法，但活动代码不
-反向 import 旧目录，也不继承旧实验的效果分数。
+黑格尔机研究 Agent 如何主动提出、检验和修订假设，并把学到的表示、关系与模型积累为后续可调用、可修订的知识。
 
-当前已完成的 capability/effect 里程碑唯一名称是 **Phase-2A Controlled
-Typed-Selector Mechanics Qualification**。一般能力称为 **Explicit-Projection Typed Structural Selection**，
-其中 scale 子能力只能称为 **Scale-Indexed Candidate Projection Selection**。
-活动包版本仍是 v0.2.0；它不是“自动发明哲学”的演示，而是可运行的 Phase 1–2
-verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/Phase-3
-正式轨道合同：
+当前 **0.85.0** 将实测反例保存为可撤销的跨任务参数知识，并补齐等价概念写回与研究方法重放的实际消费路径；[结果与下一步](docs/hegel_machine_relation_trajectory_evidence_20260914.md)。一个已知装置的四阶段组件开发由3/4提升至4/4，观测、计算和学习耗时均增加。普通Code的执行、拟合和评估已共用所选测量视图，真实开发比较继续单列于[运行记录](docs/hegel_machine_instrument_relation_code_comparison_20260914.md)。
 
-本项目把网页端 GPT 输出视为方向建议或审阅输入；具体 wire、实现和状态声明由仓库、
-双实现 replay 与测试裁决。完整优先级和 material override 留痕要求见
-[engineering decision authority](docs/engineering_decision_authority.md)。
+此前 **0.84.0** 已接通输入/关系失配诊断、仪器条件主动检验和参数模板重绑定。12套新装置的三种情形中，0.83.1→0.84通过12/36→36/36，完整装置0/12→12/12；观测和测量增加53.04%、63.71%，计算与累计学习耗时减少2.49%、30.31%。原完整开发回归仍24/24，观测、测量和查询与0.83.1相同。实现、成本及范围见[输入与关系失配研究](docs/hegel_machine_instrument_relation_diagnosis_20260914.md)。
 
-当前跨轨道状态以
-[Current-State Reconciliation v1](docs/Hegel_Machine_Current_State_Reconciliation_v1.md)
-为准。下文保留了按时间追加的历史 qualification 与“下一刀”记录；除非该状态文档明确
-采纳，它们不能当作当前队列、执行授权或 capability/effect 声明。
-[Bounded relation-invention mechanics v1](docs/Hegel_Machine_Bounded_Relation_Invention_Mechanics_v1.md)
-仅是 public synthetic、shadow-only、C2-locked mechanics；它不是正式 relation invention、
-C2/effect 证据、promotion 或 ACTIVE 授权，且不改变 C1=false。
-[Five-source coverage v1](references/five_source_coverage_v1.md) 是附加覆盖账本，
-明确不把两个外部本地 bundle 声称为仓内自包含归档，也不替代原 manifest/checksum。
+此前 **0.83.1** 已让方法复用保留完整实验背景，三套完整开发回归24/24；0.83.0已接通残差驱动的关系条件合成、实测修订和后继复用。12套新独立装置中，0.82→0.83终测60/96→95/96、完整序列0/12→11/12；测量、记账计算和累计学习耗时分别减少57.02%、44.04%、47.39%，观测与查询增加1.97%、47.53%。唯一正式失败涉及复用背景丢失后的半径误修，正式结果保留，结果已知后的开发回归单列于[关系条件合成与复用](docs/hegel_machine_relation_condition_synthesis_20260914.md)。
 
-Phase-3A M2.5 的 purpose 1–4 采用 owner-accepted、purpose-separated、离线 Docker
-technical actors；这里的 “external actor” 指仓库构建/编排进程之外的冻结隔离 runtime，
-不要求不同真人或组织。该决定只接管 M2.5 actor eligibility，不改 Phase-2B sealed-holdout
-的 custodian 要求，也不改 formal CBOR、hash domain 或 Gate 15–24。所有 M2.5 publication
-必须完整披露：`same_admin_controller=true`、`organizational_independence=false`、
-`independent_human_actors=false`、`technical_role_independence=true`、
-`owner_accepted_threat_model=true`、`remote_attestation=false`、
-`hardware_key_nonexportability=false`。权威定义见
-[owner-accepted technical-actor amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)。
+此前 **0.82.0** 将修订推进到关系类型：已有关系解释不了残差时，比较守恒的左右单向输运，保留原事件和窗口上下文，通过定向实测修订并保存。12套新独立装置中，0.81→0.82终测60/96→96/96、完整序列0/12→12/12；观测减少5.29%、测量费用减少57.93%、记账计算减少59.56%，查询增加30.98%、累计学习耗时增加4.80%。开发另计16/16，43项相关检查通过，见[关系类型修订](docs/hegel_machine_relation_type_revision_20260914.md)。
 
-```text
-L0 observations
-  → uniform verifier-ready synthetic witness bundle with anonymous labels
-  → frozen adapter replay of family / binding / scale projections
-  → frozen probe family / task geometry
-  → six known-law verifiers
-  → unique selection or deterministic policy-bound abstention
-  → contrastive falsification
-  → verified typed law match
-  → measured evidence receipts
-  → conservative theory patch gate
-  → immutable theory version
+此前 **0.81.0** 让已保存的关系区间参与首次学习和后继概念调用：完整程序的竞争预测驱动实测，收窄后的可执行参数模板随派生知识保存、恢复并再次使用。旧定义保留，已有局部修正只替换相关参数。已知装置开发3/6→6/6，14项相关测试通过；12套新独立装置中两版均72/72、完整序列12/12，观测增加7.89%、仪器费用增加5.59%、计算增加16.43%，本批尚未显示新增终测收益，见[关系不确定性与后继调用](docs/hegel_machine_inherited_relation_intervals_20260914.md)。
 
-Phase-2B formal track（精确协议已冻结，尚未资格化）：
+此前 **0.80.2** 接通组合内部的关系修订，并让已买定向反例进入后续研究。离散候选只剩一个时，按仍有证据支持的连续区间重新提出候选与实验；实验须在完整组合中产生预测分歧。关系解释不了的反例可触发原轨迹的仪器重测与输入标定修订，旧知识继续保留。新六装置确认中通过数31/36→33/36，完整序列3/6→5/6，观测增加9.19%、搜索计算增加14.18%，仪器费用持平。固定版本的普通Code比较、开发修复和新六装置确认分列在[对象关系研究](docs/hegel_machine_object_relation_revision_20260913.md)。
 
-720 main + 240 semantic-conflict + 572 derived pairs
-  → trusted typed-evidence wire + independent covert-channel audit [尚未执行]
-  → internal role/scale hypothesis enumeration
-  → absolute-bound-only interval selector with admissible scale sets
-  → externally enforced untrusted OCI recognizer             [尚未可运行]
-  → prediction commitment before answer reveal
-  → one-shot independent-custodian scoring                    [目标，未实现]
+此前 **0.79.0** 在购买仪器读数前，先检验已有控制解释的系数与时序修订。六台独立装置的三臂比较已完成：新旧黑格尔机均30/30，真实Code为29/30；新版比旧版少15.52%观测、60%测量费用，六台均重复该收益。相对Code也节省观测和测量，查询更多（138对47）。实际结果、失败与范围见[研究修订与独立装置比较](docs/hegel_machine_dynamic_research_replication_20260913.md)；此前[0.78单装置结果](docs/hegel_machine_dynamic_code_comparison_20260913.md)单列。
 
-Phase-3A **Bounded Frozen-Closure Adequacy**（legacy syntactic M3 已
-`DSL_TOO_LARGE`；shrink-6 已耗尽；当前主路线为 C3 exact quotient）：
+此前0.77 接通时序实验准备步骤的修订：已有方法失效时，局部修改准备历史，实测后保存派生方法及其反例，原方法继续保留。正式三组受控序列与0.76均36/36，观测、测量和查询相同，计算减少11.35%；6个修订版本获实测支持，随后成功调用12次。结果及下一步见[准备步骤修订](docs/hegel_machine_preparation_revision_20260913.md)。
 
-hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
-  → strict canonical AST/CBOR + certificate bridge spec       [已冻结]
-  → Python/Rust shared strict vectors                          [48/48 PASS each]
-  → 64,680 strict capacity replay                             [64,680 unique each]
-  → bounded syntactic-budget status                            [DSL_TOO_LARGE]
-  → complete closure / extensional target verdict              [NOT AVAILABLE]
-  → formal archives + 3/3 certificate                          [未生成/未签发]
-  → hegel-old-dsl-v1.1.0 sparse/tombstone admission             [双实现 VERIFIED]
-  → shrink-1 25,872-source constructive subset                 [25,872 unique each]
-  → child closure state                                         [NOT_RUN; not COMPLETE]
-  → target/split/custodian bindings                             [source manifests emitted; custodian evidence missing]
-  → M2.5 v1.1.2 exact-wire registry                              [81 tags/schemas]
-  → Python/Rust/golden errata replay                             [21 objects + 8 trees + 15 guards; exact]
-  → detached Commit-A qualification                              [PASS; fresh replay required for use]
-  → owner-accepted technical-actor genesis                       [historically executed]
-  → legacy canonical M3 attempt 1                                [executed; DSL_TOO_LARGE]
-  → shrink-2 through shrink-6 diagnostics                        [exhausted; DSL_TOO_LARGE]
-  → post-shrink C3 exact-quotient direction                      [selected; target-blind]
-  → Q0 micro qualification                                       [14/14 PASS; not Q1/C1/C2]
-  → Q0.5b actual attempt 1                                       [Stage-7 fail-closed; 0/20; no artifact]
-  → Q0.5b actual attempt 2                                       [NOT_RUN; explicit authorization required]
-  → Q1 / outside / relation invention                            [0/20 NOT_RUN; formal gates closed]
-  → shadow-only conservative integration
+此前0.76 接通时序实验方法的跨任务积累：实测有效的准备历史与求解步骤进入知识库，按新字段、阈值和仪器延迟重绑定，反例限制失效映射。正式三组受控研究序列与0.75均30/30，观测、测量和查询相同，计算减少35.99%；18次跨任务复用获实测支持，6次标定反例触发修订。结果及范围见[时序方法研究](docs/hegel_machine_temporal_methods_20260913.md)。
+
+此前0.75 接通动态仪器的学习与修订：从实测学习控制历史对读数的影响，区分仪器变化和机制变化，重新绑定原机制后独立确认免测量预测。正式三组完整序列与0.74均15/15；新版最终预测全部免测量，学习测量减少14.29%，观测增加9.43%、计算增加2.09%。结果及下一步见[动态仪器研究](docs/hegel_machine_dynamic_instruments_20260913.md)。
+
+此前0.74多个调用版本共享拟合的正式60题结果见[共享拟合](docs/hegel_machine_shared_fitting_20260913.md)。
+
+此前 **0.70.0** 共同求解多控制耦合的实验边界，并将实测有效的求解与激励步骤迁移到新任务。三组新种子与0.69均15/15通过，观测、测量相同，总计算减少3.39%；47次跨任务方法调用获实测支持，失配可撤销方法。另4项窄边界实测确认联合求解及改名后继复用。实现、局部代价与范围见[联合实验与步骤迁移](docs/hegel_machine_joint_experiment_methods_20260913.md)。
+
+此前 **0.69.0** 从可执行程序的条件与关系边界直接生成定向实验，实测修订后重新规划，并调整重复无效搜索的投入。三组新装置与0.68均12/12通过，36次程序定向实测全部区分候选；整体计算减少37.59%，测量增加1.20%，后继复用的精度与成本相同。实现与范围见[程序分歧驱动的实验](docs/hegel_machine_program_disagreement_20260913.md)。
+
+此前 **0.68.0** 让非等价的对象解释参与预测与实验：分别拟合候选及未决关系边界，用真实观测区分并修订，反例和可调用程序进入后继知识。三组新装置完整序列12/12（旧0.67为6/12），学习观测、测量和计算减少13.75%、15.42%、20.00%；首次发现投入增加，后继实际复用带来节省。实现、完整比较和范围见[竞争解释与实测修订](docs/hegel_machine_object_competition_20260913.md)。
+
+此前 **0.67.0** 让未唯一确定的对象划分也能执行：保留证据许可的候选，代数一致的机制共享拟合并用于后继调用；直接作用改变后重新研究归属。三组新装置完整序列24/24（旧0.66为6/24），观测、测量和搜索计算减少22.92%、32.23%、63.20%；独立焦点起步3/3（旧版0/3）。实现、分阶段成本与保留的开发失败见[可执行对象等价](docs/hegel_machine_object_equivalence_20260913.md)。
+
+此前0.66的同组完整序列24/24（旧版19/24），观测、测量和搜索计算减少10.42%、9.33%、54.47%；独立起步3/3，见[部分对象知识与角色修订](docs/hegel_machine_partial_objects_20260913.md)。
+
+此前0.65三组新装置的完整序列中，默认27/27预测通过、27/27对象恢复正确，关闭对象归纳为3/27预测通过；学习观测、测量和搜索计算分别减少35.88%、33.39%和86.13%，默认最终预测全部免测量。另三题总量阴性保留归属歧义，首轮失败结果也保留于[对象发现报告](docs/hegel_machine_object_induction_20260913.md)。
+
+此前0.64的三种子15题序列中，默认与关闭输入依赖修订均通过45/45题；观测减少39.31%、测量减少11.87%、搜索计算减少55.96%，最终预测均免测量。3次纯校准与6次真实关系或联合变化均被正确区分、修复。见[输入依赖与机制修订](docs/hegel_machine_revisable_inputs_20260913.md)。
+
+此前0.62的记忆与程序组合消融、方法重用收益，以及同种子真实GPT-5.5普通Code的8题对照见[组合研究报告](docs/hegel_machine_composed_research_20260913.md)。真实vanilla比较尚不支持黑格尔机整体更优。
+
+[完成度与方向复核](docs/hegel_machine_advice_goal_status_20260909.md)记录原目标的进展；[0.61统一结构](docs/hegel_machine_unified_structure_20260913.md)与[0.59真实普通代码对照](docs/hegel_machine_unified_research_20260912.md)保留历史结果。当前匿名字段的归属可以学习，角色假设族与算子仍有限；残差驱动的先验扩展、研究程序改写和稳定长期收益仍需推进。原目标与实现子问题的区别、剩余六个方向见[范围复核](docs/hegel_machine_advice_scope_20260913.md)。
+
+- [能力地图](docs/hegel_machine_capability_map_20260909.md)与[系统架构](docs/architecture.md)：已实现的模块、入口和范围。
+- [部署知识的连续研究实验](artifacts/cognitive_direction_reset_20260912/summary.json)：此前运行结果；[原建议](markdown/GPT6_advice.md)与[具体方案](markdown/Hegel_Machine_Vision_Progress_and_Research_Critique.md)为方向依据。
+- [测量知识复用](docs/hegel_machine_measurement_acquisition_20260909.md)、[元先验研究](docs/hegel_machine_meta_prior_research_20260910.md)、[普通Agent比较](docs/hegel_machine_vanilla_and_completion_20260910.md)：此前跨任务与对照证据。
+- [0.57约束知识保留](docs/hegel_machine_constraint_knowledge_20260912.md)、[0.56实验投入](docs/hegel_machine_dual_value_20260912.md)、[历史施工记录](markdown/GPT6_advice_Implementation_20260907.md)：保留已有策略、结果及未采用实验。
+
+## 运行入口
+
+模拟器与结构研究可单独运行；普通代码比较使用[可编辑资源配置](config/cognition_code_session.json)，会调用当前配置的真实模型。以下检查点用于新运行，后续命令继续同一状态。
+
+```bash
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_dynamic_instrument_session.json --checkpoint artifacts/dynamic_instrument_session.json --memory artifacts/dynamic_instrument_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_joint_experiment_methods.json --checkpoint artifacts/joint_experiment_methods_session.json --memory artifacts/joint_experiment_methods_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_object_equivalence.json --checkpoint artifacts/object_equivalence_session.json --memory artifacts/object_equivalence_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_object_induction.json --checkpoint artifacts/object_induction_session.json --memory artifacts/object_induction_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_revisable_inputs.json --checkpoint artifacts/revisable_inputs_session.json --memory artifacts/revisable_inputs_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_unified_composition.json --checkpoint artifacts/composition_session.json --memory artifacts/composition_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_unified_structure.json --checkpoint artifacts/structure_session.json --memory artifacts/structure_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --request config/cognition_unified_state_risk.json --checkpoint artifacts/state_risk_session.json --memory artifacts/state_risk_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition unified --checkpoint artifacts/unified_session.json --request config/cognition_unified.json --memory artifacts/unified_knowledge.json --steps 4
+PYTHONPATH=src python3 -m hegel_machine cognition unified --checkpoint artifacts/unified_session.json --memory artifacts/unified_knowledge.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition prior --checkpoint artifacts/prior_session.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition prior --checkpoint artifacts/sc_prior_session.json --request config/cognition_sc_kg_prior.json --optimize --optimizer-config config/cognition_sc_kg_optimizer.json --optimizer-steps 1
+PYTHONPATH=src python3 -m hegel_machine cognition prior --checkpoint artifacts/sc_prior_session.json --evaluate
+PYTHONPATH=src python3 -m hegel_machine cognition simulator --checkpoint artifacts/simulator.json
+PYTHONPATH=src python3 -m hegel_machine cognition mechanism --family order --variant broken --output artifacts/order.json
+PYTHONPATH=src python3 -m hegel_machine cognition code-session --checkpoint artifacts/code_sequence.json --workspace artifacts/code_workspace --request config/cognition_code_session.json --steps 4
+PYTHONPATH=src python3 -m hegel_machine cognition code-session --checkpoint artifacts/code_sequence.json --workspace artifacts/code_workspace --evaluate
 ```
 
-Phase-3 父 DSL 的 M1/M2 证据见
-[dual strict gate artifact](artifacts/phase3_dual_strict_gate_v1.json) 与
-[dual strict capacity replay artifact](artifacts/phase3_dual_strict_capacity_replay_v1.json)。
-规范层决定见
-[v1.0.2 strict canonical/certificate freeze](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)，
-当前准入状态见
-[Phase-3 readiness resolution](docs/Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)。
-Shrink-step-1 的规范与执行证据见
-[v1.1.0 shrink decision](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)、
-[dual child gate](artifacts/phase3_shrink1_dual_strict_gate_v1.json)、
-[25,872 subset replay](artifacts/phase3_shrink1_dual_capacity_replay_v1.json) 与
-[child publication](artifacts/phase3_shrink1_publication_v1.json)。
+上述SC-KG第一条命令完成一题研究与部署后暂停，第二条继承保存的配置，逐题研究、部署并回收知识，最后评价。
+
+`mechanism` 的 `--family` 支持 `low_rank`、`modules`、`dynamics`、`topology`、`order`，`--memory PATH` 共享程序知识。`code-session` 的后续请求可以用 `new_tasks` 追加实例；总资源继续约束整条序列。
+
+## 核心研究问题
+
+> 当旧模型失配、解释尚不可区分，或重复求解成本过高时，Agent 能否在有限预算下选择实验，构造有效的表示、关系或不确定性修订，将有用内容积累为知识，并在后续未见任务中降低累计损失与学习成本？
 
 ```text
-strict specification frozen = true
-strict implementation verified = true (Python 48/48; Rust 48/48)
-accepted strict canonical count = 64,680 unique on each implementation
-executed bounded status = DSL_TOO_LARGE
-complete closure enumerated = false
-extensional target verdict = null
-formal roots = null
-outside / MDL certificate issued = false
+固定任务目标、公开能力和整场研究预算
+  → 观测、已有程序、抽象与研究经验
+  → 竞争解释及依赖子问题
+  → 单步或联合计划生成可执行候选
+  → 固定候选后获取新轨迹、比较预测与成本
+  → 构造阈值转换与任务价值 probe、检查定向反例
+  → 直接复用、参数重拟合或角色映射
+  → 条件作用域修订与反例撤销
+  → 保存会话、解决下一任务或重访未解决问题
 ```
 
-共同 diagnostic set commitment 是
-`sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930`；ordinal
-50,001 的 strict AST hash 是
-`sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。前者不是
-formal RFC6962 root，后者不是 closure cardinality 或 target-match 证据。
+## 当前实现
 
-已发布的 child diagnostic freeze 是 `hegel-old-dsl-v1.1.0` /
-`hegel-freeze-p2b-p3-v1.1.0`：AggregateMapId 保持 sparse，active IDs 为 `0,1,5`，
-`2,3,4` 永久 tombstone。Python/Rust 对 23 个 child vectors 与 25,872-source subset
-完全一致；subset commitment 是
-`sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`。
-它只满足 24 个 M3 gates 中前 14 个；仓库中没有可重放的旧 split seed commitment、
-parent binding manifest、custodian continuity attestation 或 hidden-access ledger，故
-bindings fail-closed，formal roots 继续为 `null`，child state 保持 `NOT_RUN`。
+控制器从残差和程序复杂度形成研究问题，执行带中间程序和依赖关系的修订计划。联合搜索保留多个变量组合，对系数共同拟合，并允许删除、替换早期选中的项；当前变量、平方项、交互项和不同历史深度分别比较。分轮预算在搜索和选实验前为后续候选比较留出计算，使新查询所得证据能够进入选择。
 
-`hegel-freeze-p2b-p3-v1.1.2` 已接管 **Phase-3A M2.5 — Formal Commitment,
-Seed Genesis and Bridge Qualification** 的 deterministic wire。E1–E12 已由
-[exact-wire resolution](docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)
-和 [implementation closure addendum](docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
-逐项解决；当前 registry 有 81 个唯一 numeric tags/schemas。Python 与 Rust 从冻结输入
-独立构造 21 个 candidate objects、8 个 candidate record trees 和 15 个 production-validator
-negative guards，compact report 完全一致，golden fixture SHA-256 为
-`a0e8ce77f3655d484fdc40506f81034fd4d103b458af3ce9f586fe42cc369ae1`；含 `ok/op`
-envelope 的 compact sorted response 为 20,308 bytes，SHA-256 为
-`9c855290ad9f9a6e3e523107e0162e6e3c363afec09224245c5e35075ad8ab4c`。
+历史尚不足时，程序通过 `available(k)` 分支使用从观测中学到的起始模型。各历史深度的基础起始拟合先轮流获得预算，再使用余量搜索更复杂分支。后续计划可以使用此前形成的表示或谓词，计划预算会按实际新观测上的收益调整。
 
-Commit `d293507048d39323462e5c9033905b352ae07cb2` 的 private detached snapshot 曾完成
-fresh Python replay 与 fresh isolated Rust build；Cargo 只从 `Cargo.lock` 校验过的 `.crate`
-归档重新解包，caller 不能指定工具链，approved toolchain、source snapshot、同一 open binary
-inode 的 hash/exec 和前后输入稳定性均已核验。冻结 secret-policy 对 Commit A 及全部 ancestors
-扫描为零发现；该结论只覆盖项目冻结的 filename/header/non-null JSON-key classes，不是万能
-secret 检测证明。结果准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，artifact kind 为
-`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`；它现为历史资格化证据，不是后续 genesis
-的 implementation basis。
+状态搜索从实际观测中的两个输出值提出历史状态解释。原始变量规则与数据拟合的联合坐标共同竞争，进入、退出及起始阈值分别学习。多输入实验在候选坐标附近改变控制组合，并在不同准备历史后比较相同输入，让表示变化带动观测变化。
 
-在该历史节点，这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
-checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来由合格隔离 technical
-actor 生成的 live attestation。这里不要求独立真人/组织，但不能用同进程测试签名代替 actor evidence。
-当时真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态为
-`14/24 / NOT_RUN`；这不是当前状态。后续 legacy canonical M3 已真实执行并以
-`DSL_TOO_LARGE` 终止，随后 shrink-6 耗尽并转入 C3 quotient 路线；当前对账见
-[Current-State Reconciliation v1](docs/Hegel_Machine_Current_State_Reconciliation_v1.md)。历史 direct artifact 见
-[exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)；A2 提交后必须
-在 `artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json` 重新生成并绑定
-新的 implementation-basis commit，旧 artifact 不得作为执行输入。操作边界见
-[external-genesis runbook](docs/phase3_m25_external_genesis_operator_runbook.md) 与
-[owner amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)，较早的
-[v1.1.2 typed-row qualification](artifacts/phase3_m25_wire_completion_qualification_v112.json)
-仅保留为 caller-supplied/unattested candidate-row replay。原 v1.1.1 20-vector artifact 保留为
-commit `d772b844` 的历史 source-bound evidence，不再冒充当前状态。
+主动观测在公布的连续控制范围内构造轨迹。候选先固定，在新参考轨迹上比较，再为剩余问题选择实验。转换 probe 从阈值区间构造相同输入、不同准备历史的测试，联合安排不同边界，并从实际响应判断准备状态是否达到；其他实验仍按任务风险下降和控制覆盖选择。定向反例会阻止提前结束，查询安排为下一轮参考观测保留额度。代表性轨迹长度随候选所需历史增长，受公开长度和剩余预算限制；新证据继续进入拟合与经验行为分组。
 
-v2 commit `4861b2d8` 的 SCAR 结果是某个 frozen hard-selector operationalization 的
-protocol-valid negative，不是 22/13 条先验逐项失败，也不阻塞 M2.5 identity 或 M3 closure。
-它已作为 append-only counterevidence 归档；后续 Phase-3B 必须用 no-prior、frozen-v2、
-semantic-only 与 Hegel-invented matched arms 隔离 ontology、extractor、recognizer 和 hard
-integration failure，不能把 v2 hard eligibility 当成已验证正先验。
+知识库同时保存具体程序、带参数槽和角色槽的抽象，以及可调用定义。定义可嵌套，实参按实际分支需要求值；同一观测的重复调用共享计算。学到的定义进入后续拟合与组合搜索，复杂度仍按展开语义衡量。后续任务可以直接执行程序，也可以按当前证据筛选结构、重拟合参数和映射变量角色；实际迁移结果反馈到后续结构搜索。观测支持区间与反例用于生成可执行的条件作用域；已支持情境内的新反例可以撤销程序。删除指定概念会连带删除依赖它的派生知识和抽象，供因果干预比较。
 
-已实现或已冻结：
+研究经验也跨任务保存。按实际观测的 binary、numeric、risk 及单输入/多输入条件组织新参考预测收益与支出，反馈到状态搜索、联合坐标和依赖计划的预算分配。候选筛选保留同等拟合但使用不同观测变量的解释；更复杂的候选若明确解释已有反例、收益超过新增复杂度且参考与新预测不退化，也能进入修订。
 
-- 统一、不可变、内容寻址的 `TheoryState`；
-- observation / probe / scale / law / candidate / theory patch / evidence schema；
-- probe family 诱导的伪度量与 observational quotient；
-- symmetry、monotonicity、conservation、complementarity、negative feedback、
-  locality 六类确定性 verifier；
-- 固定的本体不足诊断阶梯，只有 `ONTOLOGY_DEFECT` 可以打开语言扩展；
-- Generator / Formalizer / Falsifier / Evaluator / Promoter 五权分离合同，
-  gate 会核验 actor、registered probe、split、cutoff、独立性和 evaluator epoch；
-- sealed holdout manifest 的分区、开启时间和独立 custodian 均受内容 hash 约束，
-  每条封存 observation 必须带来源 SHA-256 并以真实内容 ID 注册，不得跨 split
-  重用；manifest 还绑定 parent、patch、evaluator、probe registry 和 gate policy；
-- 不读取 semantic score 的保守晋升门；
-- 内容绑定 certificate、单坐标 scope compiler 和原子 promotion API，调用者
-  不能把手工构造的 certificate 当授权；当前没有外部签名可信根，因此
-  active promotion 明确 fail-closed；
-- robustification 与 idealization 的首版候选及合同；
-- 一个离线、确定性、含低语义正例和高语义负例的已知定律 verifier
-  qualification；
-- 一个不向 recognizer 提供 family、binding 或 scale answer key 的受控选择闭环：
-  43 个统一 outer-schema case，其中 24 个 answerable、19 个应 abstain；每例从
-  uniform verifier-ready synthetic witness bundle 经 frozen adapter 重放出 24 个
-  projections，
-  六个 family 都与两种 scale 完全交叉；严格策略要求目标的 binding 和 scale
-  counterfactual 都完成 verifier 计算，并以 tolerance-normalized boundary margin
-  决定唯一选择或 abstention；measurement 按 observable 的 witness-role footprint
-  绑定，未改变角色的底层值必须由相互竞争的 binding 共同复用；12 对跨 episode
-  preservation witness 覆盖 family × scale。
-- Phase-2B family-neutral-shaped public wire allowlist：公开 ID 具有 UUIDv4 语法，typed value /
-  interval、单位、时空 support、不确定性、来源 hash、aggregation graph、transform
-  catalog 和 missingness 全部规范化；oracle、candidate-private、family-specific 和
-  unknown fields 一律 fail-closed；这只证明字段形状，不证明允许字段没有编码答案；
-- 从 public bundle 内部枚举完整 role binding 与 scale hypothesis 的 adapter，超预算、
-  registry 漂移或非唯一 transform path 时不返回部分候选；
-- public API 从 evidence bundle + frozen registry 重新运行 adapter，并绑定其完整
-  candidate-grid commitment 的 interval selector core；缺任一 hypothesis、
-  candidate metadata 漂移或任一结构 competitor 区间不确定时均 abstain，并支持
-  unique structure + preregistered admissible scale set，而不是强迫 scale top-1；
-- `PublicTransformEvidenceBundleV2` 的八种 wire operation 已有各自 typed certificate、
-  exact sparse/discrete kernel 与原子 receipt；derived bridge 只接 authority/theory/registry，
-  内部重算 uncertainty/transform，重建完整 law × binding × scale × support-slice grid，并在
-  selector 前保守合并同 scale 的全部 slice hull。它仍是窄 mechanics：不是八类 formal
-  preservation taxonomy、不是 572-pair 执行证据，也不是 sealed C1 效果；
-- Phase-2B 精确冻结合同：720 个 main latent cases + 240 个独立 semantic-conflict
-  challenge，另有 496 个 legal preservation pairs + 76 个 invalid-transform controls
-  = 572 个 derived pairs；每 cell 的 positive 为 19 个 unique-scale + 1 个
-  admissible-scale-set，margin 为 21/18/12/9；family IDs、baseline config、10,000 次
-  paired-cluster bootstrap、footprint/importance、rerun 与 validation policy 均已固定。
-  overall freeze 已推进为 `hegel-freeze-p2b-p3-v1.0.2`；它继承 v1.0.1 对 v1.0.0
-  不可执行 sklearn 64-bit `random_state` 的修正，
-  `411876909552964556` 保留为 master/bootstrap seed，sklearn 使用冻结的
-  domain-separated SHA-256 → uint32 值 `2611585425`，并新增 Phase-3 strict
-  acceptance/certificate bridge 的完整规范冻结；
-- covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
-  FWER=0.01、32 次 consistent renaming 等规范已冻结；固定 65,536-byte envelope 的
-  prefix/suffix feature、NMI/LOO、10,000 permutation、单一全局 Holm 与 32/32/16
-  invariance mechanics 已实现，但恒为 non-authoritative。trusted-wire Stage A 已实现
-  schema-closed accepted-JCS profile、frozen-10 + V2-extension-6 显式 UUID path manifest，
-  以及使用公开 test padding 的 65,536-byte framing/hash replay；Stage B 又实现了三份
-  pairwise-distinct 32-byte IKM 的 purpose-separated HKDF、unbiased whole-batch shuffle、
-  case-local latent→public HMAC UUIDv4 分配（counter/碰撞集合为 batch-global）、rename 后
-  schema recanonicalization、public base provenance 与 shared exact-validator-native derived
-  provenance 的 framing 前编译、secret HMAC padding、原子 batch emission 与 supplied-secret
-  custodian replay。Stage C 另以 closed typed schema lossless decode/re-encode payload；每个实际
-  payload authority 都可直接得到 exact-transform `COMPLETE`，整批 replay 只有在 membership、
-  source order、Stage-B secret receipt 与每个 transform result 全部复算一致时才原子返回。在
-  exact top-level API types 合法的前提下，batch/custodian/typed semantic drift 只返回整批
-  `ABSTAIN` 且不泄露 partial rows；顶层 type-contract 违规在 replay 前抛 `TypeError`。
-  raw-envelope 入口只是 `NON_AUTHORITATIVE_MECHANICS_ONLY` diagnostic，
-  整批 receipt 也不升级其 evidence authority：IKM 独立性没有外部 attestation，raw decoder
-  不验证 batch membership 或 secret padding。post-Stage-C 的
-  `phase2b_recognizer_input_archive_v1.py` 在同一次 Stage-B live allocation 中只读投影
-  recognizer registry：六个 bridge family 使用固定公共 UUID alias 并另绑 F01..F06，15 个
-  role 与 35 个 observable 的 opaque ID 直接来自本次 HMAC renaming；source registry 必须
-  exact 重建 frozen theory，registry/envelope 必须与 typed authority 的完整 task scope 一致，
-  且全批 source/public UUID 集合必须不相交。公开 archive 不含 old ID、old→new map、source
-  index、permutation、key 或 source authority；任一 gate drift 都原子 `ABSTAIN` 且无 partial
-  archive，顶层 type-contract 违规在 gate 前抛 `TypeError`。
+迁移调度共同测试保留原参数的结构和重新拟合的结构。既有证据与新参考轨迹均支持、且没有待探测转换区间的迁移可以早停；两类当前证据都较差的旧候选退出当前候选池。
 
-  这个 issuer 即使成功也只返回所有 batch/source/secret/origin/formal claims 为 false 的
-  `DecodedRecognizerInputArchiveV1`。它没有可持久化的 trusted receipt，opaque receipt/registry
-  commitment 不等于公开可重证的 custodian authority。该 V1 路径及其 identities 保留为历史
-  合同。新增的 compact V2 路径使用独立 codec schema/policy、batch `/3` payload 与 V2 envelope
-  magic、public typed replay policy、registry/archive schema 和 content-ID domains；它不把 V2
-  对象适配回 V1 类型。V2 archive issuer 只在私有发行 gate 内观察一次 live allocation，并执行
-  全批 source UUID 与全部 public UUID（含 fixed aliases）互斥；公开 decoder 只重放结构、
-  registry-authority scope、compact authority、direct exact transform，以及跨行 unlinkable
-  public UUID（authority + registry
-  role/quantity，排除允许重复的 fixed aliases）互斥 mechanics，相关 source/allocation/
-  secret/origin/formal claims 仍为 false。其后的
-  `phase2b_recognizer_prediction_archive_v1.py` 冻结了绑定 input archive ID/SHA、当前 protocol、
-  exact execution-freeze manifest commitment 和总数 960 的 `PublicRunContextV1`，并把 960 个
-  prediction records 分别做 bounded accepted-JCS length framing，再绑定 ordered row/record roots。
-  issuer 内部以 frozen theory、每行 public registry 和 exact derived bridge 重跑
-  derived→prediction mapping 作为发行 gate；公开 raw decoder 只能重证 context/record/archive
-  的 closed schema、canonical framing 和 row-root coverage。recognizer-facing archive 的 decoded
-  semantic fields/values 不含 split、gold、index、ordinal 或 case-position labels；这不是对任意
-  binary hash substring 的声明。成功对象仍把 input membership、execution-manifest authority、
-  derived mapping、runtime、capacity、origin、sealed/formal audit、scoring、effect 与 C1 claims
-  全部固定为 false。
+任务固定预测损失和行动成本。风险任务比较直接 pinball 拟合与位置、尺度共享尾部证据的程序，使用累计参考轨迹判断候选。继续研究时，旧程序和其已部署校准作为完整方案保留；新程序及其校准需要在两条未参与拟合的后续轨迹上取得支持，才能替换旧方案。程序改变时，即使没有选中单独校准方法，也会安排这次比较。轨迹收益相互冲突且仍有有用改善的可能时，系统给下一对代表轨迹报价，追加只计算新证据；未决时保存完整方案、校准和逐轨迹结果，进入后续短研究。报告分别测量预测损失、行动损失、区间覆盖、观测成本、程序计算单位、运行时间和模型用量。
 
-  独立的 unsealed evaluator 只核 evaluator-side 720/240 manifest 与同一 960 row roots 是否
-  sorted、disjoint、exhaustive；成功 disposition 是
-  `STRUCTURALLY_COMPLETE_NOT_SCORED`，没有 scorer、metrics 或效果 claim。runner 只新增由 exact
-  freeze 导出的 total=960 contract，未提供 recognizer entrypoint，也没有执行 actual 960-case
-  run。历史 V1 verbose positive witness typed profile 是 125,582 bytes，超过 65,424-byte
-  payload cap；compact V2 已把同一 exact logical authority 编成 50,255-byte payload，保留
-  15,169-byte payload-cap headroom，并在 65,536-byte fixed envelope 中产生 15,201-byte
-  secret padding。单一 constructed positive regression 已重放 exact transform、V2
-  recognizer-input archive，并保持
-  derived-bridge compilation 与 decision parity。新增的
-  `phase2b_recognizer_prediction_v2.py` 直接消费 exact `TrustedRecognizerInputRowV2` 与当前
-  `ExecutionFreezeManifest`，重放 compact typed authority、投影 public registry、调用冻结的
-  exact derived bridge，并以封闭 reason map 产生 privately issued、process-local、ephemeral
-  V2 outcome 与通用 `PredictionBundle`；V1 input/prediction 类型被 fail-closed 拒绝。单一
-  constructed positive regression 进一步保持 decision、bundle identity、family/binding/scales
-  以及 input/protocol/freeze roots parity。独立的
-  `phase2b_recognizer_prediction_archive_v2.py` 现以 V2-only schema/policy/content domains 与
-  `HGP2PA2\0` magic，把 exact 960 个 V2 outcome 分别做 bounded accepted-JCS length framing，
-  并用封闭 16-field manifest 绑定 context、ordered input-row root 与 ordered record root。builder
-  保持 input archive wire order、逐行调用 committed V2 mapper，并在合同覆盖的 validation、
-  mapping、encoding 或 public-decoding 失败时整档 abstain；public
-  decoder 只重证 structural archive、canonical framing、closed record schema 与 ordered row-root
-  coverage。synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture 验证的是结构 codec，不是
-  actual run。因此旧的 V1 payload-size P0、V2 单行 mapping 和 exact-960 structural codec mechanics
-  已闭合，但这仍不是 prediction E2E 或 capacity evidence：input membership、execution-manifest
-  authority、derived mapping、recognizer runtime、actual 960、scoring 与 effect 仍未验证或未执行。
-  所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed holdout
-  或 C1 exit 证据。
-  origin authentication、完整 trusted RFC-8785
-  builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
-  worst-case wall-time/RSS 也尚未资格化。独立 V2 unsealed evaluator 只从 evaluator-side
-  manifest 接收 sorted-unique 720/240 labels，验证 disjoint 与 set-exhaustive coverage，并分别
-  绑定 partition roots 和 V2 archive 的 ordered root；每次成功路径只以一次 public V2 replay
-  的 canonical result 为权威。它只返回 `STRUCTURALLY_COMPLETE_NOT_SCORED`，synthetic replay
-  不是 actual 960、runtime、capacity、score 或效果证据。顶层
-  `phase2b-verify-v2-structure` 已实现为只读 structural verifier：它只接收两个 canonical
-  absolute、no-follow、single-link regular files，以 bounded stable FD read 在任何 decode 前读完
-  两档，然后分别且仅一次调用 public V2 input/prediction archive decoder，并绑定 context archive
-  ID/SHA/batch/policy、ordered row IDs 与七个逐位置 input roots。成功只输出一行 canonical compact
-  JSON，失败只输出 generic atomic JSON 并以 exit 2 结束；它不生成 output artifact，也不是
-  functional recognizer entrypoint。membership/authority/custody、derived mapping、recognizer/runtime、
-  actual 960、capacity、scoring、effect 与 C1 全部仍为 false。独立 formal unsealed V2 scoring
-  contract 现冻结 evaluator-side 用于预承诺的 exact 720 answer rows 与 case-type quota、九个 metric
-  definitions、main denominator 排除 240 challenge rows、调用方提供的 commitment opening，以及
-  strict receipt/evaluation/partition cross-binding。threshold、Wilson 与 paired bootstrap 仅被引用而
-  未执行；成功仍只是 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 均为空。
-  它不认证 answer authority 或 pre-reveal timing，不读取 predictions，也不执行 score、gate、runtime、
-  actual 960、effect 或 C1。独立 V2 unsealed-960 scoring mechanics 现在恰好各执行一次 fresh
-  public formal-contract validation 和 public prediction-archive replay，并独立闭合
-  context/input-row/prediction-content/record/archive roots；它按 `input_row_id` 以 main-partition
-  顺序 join exact 720 个 answer rows，物化恰好 9 个纯整数 metric results 和 720 个 main-row
-  comparison records。这 720 个不是 scored rows：仅 336 个 row 是 metric-eligible（240 个
-  answerable + 96 个 insufficient/nonidentifiable），384 个 controls 没有 frozen metric，240 个
-  semantic-conflict challenge rows 全部排除。成功 disposition 是
-  `MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`；`gate_results` 为空，scale-regret/bootstrap results
-  均缺失。这一 supplied/synthetic archive mechanics replay 不认证 answer authority 或 reveal timing，
-  也不建立 membership、custody、derived mapping、recognizer/runtime/actual-960/capacity、formal-gate、
-  actual scoring、effect 或 C1 evidence。新增的 V2 actual-unsealed-960 replay-input contract
-  仍只是 evaluator-side 的非权威输入包合同：它把 720 个 supplied gate-label rows 与 formal answer
-  manifest 逐行交叉绑定，冻结 12 个 family×opaque-scale-slice cells 的 60-row 配额、逐 cell
-  case/margin/nonunique composition、720 个唯一 supplied `latent_base_case_id`、10 个可用 overall
-  gate-input definitions、2 个显式不可用且 denominator 为 `None` 的 overall definitions，以及 6 个
-  slice definitions。这里的 “input available” 只表示 evaluator-label-side 输入定义齐备，不表示
-  numerator、metric、Wilson bound 或 gate 已执行。240 个 semantic-conflict rows 只绑定 root 并继续
-  排除 main denominator；没有 challenge descriptor rows。成功仅为
-  `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`。commitment opening 不证明预揭示时序或权威，
-  唯一 latent IDs 不证明 latent-case independence；18 项所需证据仍明确未供应，
-  metric/scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/
-  actual-960/scoring/formal-gate/effect/C1，也不供应 Q0.5b/Q1 证据。独立 V2 available-gate
-  mechanics 是只接受上述 scoring mechanics、replay-input contract 和 gate-input manifest
-  三个已物化图的纯 compositor；它不调用 decoder、scorer、runner、ledger 或签名验证器。对调用方
-  supplied/synthetic 图的成功路径会独立快照并重证三图、精确 join 720 行，计算 10 个 overall 与
-  24 个 family/opaque-scale slice 的 point/Wilson mechanics，并把缺失 attempt-event denominator
-  与 preservation pairs 的 2 个 gate 保持为 unavailable/`None`。成功仅为
-  `AVAILABLE_GATE_MECHANICS_COMPLETE_NOT_FORMAL_GATE_EVALUATION`，claim level 是
-  `NON_AUTHORITATIVE_AVAILABLE_GATE_MECHANICS_ONLY`；这些是 mechanics results，不是 formal gate
-  results，也不证明 upstream scoring、actual 960、authority/timing、effect 或 C1。preregistration
-  report 只发布该组件的静态 identity/capability/source SHA，不构造三图、不执行 compositor，因而
-  report 中 supplied-graph verification、720 join/result materialization 与 Wilson-evaluated flags
-  均保持 false。下一刀仍是
-  `actual_unsealed_960_case_prediction_scoring_replay_v2`；在完整
-  standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
-  The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue
-  of five upstream dependency identities, eighteen missing-evidence requirements,
-  and sixteen declarative ordering statements. It accepts no evidence and supplies
-  no event, signature, ledger, timing, runtime, scoring, gate, effect, or C1
-  verifier. Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`;
-  it is never an admission decision or execution authorization. The independent V2
-  signed-attempt-chain component adds only test-anchor mechanics: for a caller-supplied
-  in-memory chain it accepts exactly one `TEST_ONLY_SUPPLIED_ANCHOR` custodian public
-  key and verifies content addresses, Ed25519 signatures, predecessor links and the
-  exact ten-stage order through `TERMINAL_CONSUMED`. Its success disposition is
-  `SIGNED_ATTEMPT_CHAIN_MECHANICS_VERIFIED_NOT_DURABLE_AUTHORITY`, not authoritative
-  attempt evidence. It generates no key, anchor, event or signature and supplies no
-  external trust anchor, custodian identity, qualified backend, durable append-only
-  ledger, timestamp authority, one-shot/rerun enforcement, actual-960 execution,
-  scoring, formal gate, effect or C1 evidence. The preregistration report publishes
-  only static identity/count/capability/source-SHA fields; it does not construct any
-  signed-chain object or call the verifier, and all instance verification and broad
-  claims remain false. The next slice remains
-  `actual_unsealed_960_case_prediction_scoring_replay_v2`;
-  The independent V2 local-attempt-ledger component now supplies only
-  `NON_AUTHORITATIVE_LOCAL_FILESYSTEM_ATTEMPT_LEDGER_MECHANICS_ONLY` for attempt 0 in
-  one caller-owned POSIX directory. Its fixed four-name namespace implements the
-  `EMPTY -> OPEN -> TERMINAL_CONSUMED` source mechanics with componentwise no-follow
-  directory opens, a nonblocking cooperating-process directory lock, strict canonical
-  mode-0600 records, hard-link no-replace publication, file/directory `fsync`, bounded
-  crash-window recovery, parent-path identity recheck, and symlink/hardlink/FIFO/socket/
-  TOCTOU defenses. Terminalization internally re-verifies the supplied test-only signed
-  chain. This does not make the directory externally trusted, append-only, hostile-owner
-  tamper/rollback resistant, hardware/remote-filesystem durable, or cross-host globally
-  one-shot. `OPEN` is not execution authorization; an existing `OPEN` leaves execution
-  state unknown. The preregistration report imports only static identity constants and
-  hashes the source file: it constructs no anchor, chain, or ledger-state directory/
-  record path, calls none of the four ledger APIs, touches no ledger filesystem, and
-  exposes no runtime availability or invocation result. Its 15 identity/namespace
-  fields and 17 source-mechanics flags are
-  static; all 75 invocation, durability, authority, timeline, actual-960, scoring, gate,
-  effect, and C1 flags remain false. The next slice is unchanged;
-  The independent V2 external-custodian checkpoint verifier remains supplied-candidate
-  mechanics only. It checks a caller-supplied content-addressed checkpoint DAG with four
-  distinct candidate signer roles (`GOVERNANCE_ANCHOR`, `CUSTODIAN`, `STORE_RECEIPT`,
-  `TIME_ATTESTOR`), role/epoch/purpose-domain Ed25519 signatures, a declared
-  `IF_ABSENT` generation `0 -> 1` store transition, monotone declared time, terminal
-  subject binding, and checkpoint cross-bindings. Neither the supplied registry nor
-  signatures establish pretrusted identities, external store authority/durability,
-  rollback resistance, authoritative time, custodian independence, or global one-shot
-  use; the verifier performs no filesystem, clock, network, execution, or scoring
-  operation. Its authority-requirement ID states what a live ceremony would still need,
-  not that the requirements are met. The preregistration report reads only six static
-  identity constants and the source SHA: it constructs no candidate DTO, calls no
-  verifier, reads no external evidence or evidence path, and exposes neither backend
-  availability nor result IDs. Its 13 identity/expectation fields and 16 supplied-
-  candidate source-mechanics/test flags are static; all 76 invocation, authority,
-  store, time, actual-960, scoring, gate, effect, and C1 flags remain false. The next
-  slice is unchanged;
-  The owner-accepted Docker route is now explicit for Phase-2B C1 through the separate
-  six-role profile `phase2b_c1_container_actor_profile_v1`: governance, custodian,
-  store-receipt, time-attestor, recognizer, and scorer/evaluator are technically
-  separated containers under the same-admin-controller disclosure. This does not
-  assert organizational or human independence. A minimal recognizer image was built
-  locally from one pinned Python base and an exact 26-module package closure, with an
-  inert image-only `hegel_machine/__init__.py`. Image
-  `sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`
-  was inspected as UID/GID 65534, fixed entrypoint, no healthcheck and no declared
-  volumes; a network-none/read-only/cap-drop/no-new-privileges/custom-seccomp empty-
-  input smoke returned only the expected generic ABSTAIN and wrote no output. The
-  checked receipt is
-  `phase2b_recognizer_runtime_image_build_receipt_v2_cd9f15d2921bb670869bc4357efa6b6a05d4f22ba02a02efde06e384684898cd`.
-  This closes static profile and local image-readiness mechanics only. Fresh role
-  keys, the signed execution registry, owner-accepted ceremony, real input/freeze
-  material, actual-960 prediction, independent scoring, gates, effect and C1 all
-  remain false; the stronger supplied-external-candidate requirement is not silently
-  reinterpreted as the Docker authority profile. The next slice remains unchanged;
-  The checked-in `phase2b_recognizer_host_executor_v1.py` now supplies a fail-closed
-  local-Docker host-executor implementation and a 114/114 synthetic, no-Docker test
-  basis. Source mechanics cover exact run-spec/limit preflight, componentwise no-follow
-  host-path pinning, input/freeze/seccomp/image/isolation cross-binding, bounded process
-  groups and pipes, forced container cleanup, runtime-receipt/prediction replay, and
-  no-replace prediction publication. This is source/test capability, not a live run.
-  The preregistration report binds the exact source SHA as a literal and exposes only
-  8 static identity values and 17 source/test flags; it does not import the executor,
-  construct an OCI spec, limits, or executor path, call Docker, read input, write output,
-  or issue/expose a local receipt. All 42 invocation/environment/receipt/actual-960/
-  scoring/gate/effect/C1 fields remain false, and the next slice is unchanged;
-- seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
-  answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
-  input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；
-  这些不等于跨进程持久 one-shot custodian 或可运行 recognizer；
-- Phase-3 已冻结 `hegel-old-dsl-v1.0.0` 的有限 domains、catalogs、typing、bottom、
-  exact equivalence、limits、50,000 canonical / 5,000,000 raw budget 和 shrink order；
-  首个 generic odd-cardinality target 是 480 行，observed omitted-channel null control
-  是 85 行，MDL 使用 `hegel-mdl-prefix-v1.0.0` 与 Q32；M1 的 Python/Rust shared vectors
-  各 48/48 PASS，M2 两端都把 64,680 个 source candidates 接受为 64,680 个 unique strict
-  canonical AST，并给出相同 diagnostic commitment 与 ordinal-50,001 witness。因此
-  `hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下的 bounded status 已是
-  `DSL_TOO_LARGE`，但不是 `COMPLETE`，也没有 extensional target verdict。准确状态是
-  `surface_parameter_freeze_complete=true`、
-  `strict_acceptance_contract_complete=true`、`normative_parameter_freeze_complete=true`，
-  `strict_acceptance_implementation_verified=true`，formal roots 仍为 `null`；
-- untrusted closure receipt 已能结构绑定完整 `dsl_spec_id`、`operator_semantics_id` 与
-  equivalence contract，并按 `target_role` 分别绑定 outside target 的 480-row
-  diagnostic universe/truth content IDs 或 null control 的 85-row diagnostic IDs；v1.0.2
-  已冻结 diagnostic-to-formal bridge 与 canonical-CBOR/RFC6962 root schema；M1/M2 已完成
-  strict identity 与 bounded capacity 双 replay，但尚未生成正式 archive roots，正式 roots
-  仍为 `null`。实际 `DSL_TOO_LARGE` artifact 只授权 frozen shrink transition，不授权
-  target adequacy、certificate 或 ACTIVE。
-
-明确未实现或未宣称：
-
-- 开放世界新关系发明成功；
-- 自动 ontology / metric / evaluator 联合演化；
-- 真实科学发现、下游 efficacy 或人类水平对照；
-- 跨 evaluator epoch 的分数可比性；
-- 把语义相似、LLM 自评、旧 fixture PASS 当作结构证据；
-- 正式 Phase-2 exit：当前 API-blinded corpus 仍是 synthetic validation、未 sealed，
-  且只资格化 role-scoped witness 到 frozen-projection 的 replay 与候选选择；报告内
-  `controlled_api_selector_qualified` 只是机械闭环工程标签，不是正式里程碑声明；
-- open-world family discovery，或从 raw natural-language/table/trajectory 证据
-  抽取完整候选集合；
-- 对 source-aware 攻击者隐藏答案：当前生成器和 evaluator table 均可见，所谓
-  blinded 只指 recognizer API 不接收 answer key，且选择结果必须对所有公开 ID 的
-  一致重命名保持不变；ID 不是密码学保密边界；
-- independent raw-evidence projection 或不受信 recognizer 隔离：fixture 值由
-  evaluator case spec 反向构造，当前 accuracy 只测受控 selector mechanics；
-- 真实 semantic/embedding baseline 的效果比较。人工 semantic decoy 的 accuracy /
-  gap 不参与 exit gate；semantic metadata replacement invariance 是 anti-leak 硬检查；
-- 当前 controlled vertical slice 不是 sealed holdout；即使传入结构完整的
-  manifest，在独立 custodian 签名验证器实现前也只到
-  `candidate_framework`，不会写入 active theory graph；当前 lifecycle 只是
-  本地非权威 shadow ledger，writer 签名接入前不产生不可逆全局 REJECT。
-- Phase-2B typed evidence → executable verifier projection 的正式 compiler 和完整
-  unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
-  uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
-  non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
-  mechanics、Stage-B native-provenance keyed framing、Stage-C strict typed whole-batch replay、
-  compact V2 codec/batch/public replay/input archive one-case mechanics、post-rename public
-  recognizer-input archive、960-row V1 prediction archive structural codec、
-  unsealed 720/240 structural evaluator 以及 runner total/state-machine 合同，但这些窄
-  mechanics 尚未组成 formal pipeline 或效果证据；
-- 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
-  custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；
-- allowed UUID/provenance/role-candidate/missingness/transform 字段的 answer-correlation
-  与 covert-channel audit、随机并全局 shuffle 的 ID 分配证明；`standard_error` 在完整
-  语义和测试就绪前明确 unsupported，而不是可进入 formal selector 的待选模式；
-- 专用 recognizer CLI、formal scoring/sealed prediction evaluator、签名 SBOM /
-  runtime attestation 验证器和跨进程持久的 append-only CAS ledger；
-- Phase-3 M1/M2 已证明 strict identity 一致与 bounded syntactic overflow，但没有完整
-  canonical closure exhaustion、program/output archives、match set 或 extensional target
-  verdict；当前 `DSL_TOO_LARGE` 绝不能改写为 `COMPLETE`；
-- shrink-step-1 的 25,872 subset 已双实现验证且低于 budget，但它不是完整 grammar
-  closure，也没有 closure cardinality；在 split/custodian continuity 与 dual formal
-  roots 补齐前，`hegel-old-dsl-v1.1.0` 不能从 `NOT_RUN` 进入 M3；
-- 把结构合法的 caller-supplied closure receipt 当作可信执行证据；当前 receipt 即使携带
-  第 50,001 个 witness，也只能是 untrusted replay claim，不能自行签发状态或证书；
-- canonical-CBOR certificate 的 wire 已冻结，但正式 archives/roots、Python/Rust 双完整
-  closure replay、key-status trust chain、3/3 Ed25519 签名与从冻结 AST/partition/code table 重算
-  长度的双 MDL scorer 均未执行；调用者自报 receipt 不能产生
-  semantic certificate；正式 claim 必须完整写作
-  `OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
-  target_truth_table_root, equivalence = exact_extensional)`，禁止称
-  `OUTSIDE_LANGUAGE`；
-- 把“禁用 XOR/parity 名称”当作不可表达证明。v1.0.2 已决定 v1 不存在 implicit
-  Bit coercion；唯一合法 sanity witness 显式包含两个 `bit_to_scalar`，原 shorthand
-  type-reject。binary XOR 的 formal language verdict 仍为 `null`，最终 membership 必须
-  由 strict canonicalizer 与完整双 replay 决定。
+连续状态可以从已见轨迹学习并保存为可执行递推程序。可选测量环境把控制与仪器读数分开，先按预测收益和费用选择通道，再进入同一实验、修订和知识循环；后续残差可重新打开仪器问题，实际购买新读数并更新原工作区。`continuous_state` 也参与普通控制器的研究动作选择。累计证据支持的解释会跨次研究保留，可调用搜索原子只在原始拟合仍有残差时按其实际贡献参与选择；完整程序和拟合模板仍参与启动检索。
 
 ## 快速运行
 
-无需联网或模型权重：
+在本目录先建立一场跨分区、共享知识的研究；第二条命令在新进程中加载并继续：
 
 ```bash
-cd "Hegel Machine"
-cargo fmt --manifest-path rust/strict_canonicalizer/Cargo.toml -- --check
-cargo test --locked --manifest-path rust/strict_canonicalizer/Cargo.toml
-cargo clippy --locked --manifest-path rust/strict_canonicalizer/Cargo.toml \
-  --all-targets -- -D warnings
-cargo build --locked --release \
-  --manifest-path rust/strict_canonicalizer/Cargo.toml
-PYTHONPATH=src python3 -m hegel_machine phase3-strict-gate \
-  --rust-binary rust/strict_canonicalizer/target/release/hegel-strict-canonicalizer \
-  --output artifacts/phase3_dual_strict_gate_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-strict-capacity-replay \
-  --rust-binary rust/strict_canonicalizer/target/release/hegel-strict-canonicalizer \
-  --output artifacts/phase3_dual_strict_capacity_replay_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
-  --output artifacts/phase3_preregistration_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-closure-preflight \
-  --output artifacts/phase3_closure_capacity_preflight_v1.json
-cargo fmt --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml -- --check
-cargo test --locked --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml
-cargo clippy --locked --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml \
-  --all-targets -- -D warnings
-cargo build --locked --release \
-  --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml
-PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-strict-gate \
-  --rust-binary rust/strict_canonicalizer_shrink1/target/release/hegel-strict-canonicalizer-shrink1 \
-  --output artifacts/phase3_shrink1_dual_strict_gate_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-subset-replay \
-  --rust-binary rust/strict_canonicalizer_shrink1/target/release/hegel-strict-canonicalizer-shrink1 \
-  --output artifacts/phase3_shrink1_dual_capacity_replay_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-publish \
-  --output artifacts/phase3_shrink1_publication_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-transition \
-  --output artifacts/phase3_dsl_shrink_transition_v1.json
-cargo fmt --manifest-path rust/formal_bridge_m25/Cargo.toml -- --check
-cargo test --locked --manifest-path rust/formal_bridge_m25/Cargo.toml
-cargo clippy --locked --manifest-path rust/formal_bridge_m25/Cargo.toml \
-  --all-targets -- -D warnings
-PYTHONPATH=src python3 -m hegel_machine phase3-m25-synthetic-replay \
-  --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25
-PYTHONPATH=src python3 -m hegel_machine phase3-m25-v112-qualify \
-  --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25 \
-  --output artifacts/phase3_m25_wire_completion_qualification_v112.json
-PYTHONPATH=src python3 -m hegel_machine phase3-m25-errata-qualify \
-  --output artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-m25-external-preflight \
-  --output artifacts/phase3_m25_external_preflight_v2.json
-PYTHONPATH=src python3 -m pytest -q -s
-PYTHONPATH=src python3 -m hegel_machine benchmark \
-  --output artifacts/phase2_benchmark.json
-PYTHONPATH=src python3 -m hegel_machine phase2-exit \
-  --output artifacts/phase2_exit_benchmark_v2.json
-PYTHONPATH=src python3 -m hegel_machine phase2b-preregister \
-  --output artifacts/phase2b_preregistration_v1.json
-PYTHONPATH=src python3 -m hegel_machine vertical-slice \
-  --output artifacts/controlled_vertical_slice_v1.json
-PYTHONPATH=src python3 -m hegel_machine demo
+PYTHONPATH=src python3 -m hegel_machine cognition session \
+  --partitions development confirmation forward continual stateful \
+  --seed 809 --checkpoint artifacts/hegel_session.json --steps 2
+
+PYTHONPATH=src python3 -m hegel_machine cognition session \
+  --checkpoint artifacts/hegel_session.json
 ```
 
-## 目录
+`--steps` 限制本次新增的完整任务访问数；每完成一次访问都会更新 checkpoint。`--total-observation-budget`、`--total-compute-budget` 控制整场研究资源，`--max-visits` 控制每个任务最多访问次数，默认 2。恢复时可以显式增大这些总额度，继续未解决的工作。
 
-- `markdown/`：五份指定源文档，另含被《黑格尔机》直接引用的范畴/态射对话；
-- `references/`：文献、网页、元数据、固定 commit 的关联 repo 快照与校验和；
-- `legacy/`：v1/v2 最小冻结快照，仅作迁移与审计；
-- `src/hegel_machine/`：完全独立的 v3 活动代码；
-- `tests/`：单元、治理和纵向闭环验收；
-- `docs/`：架构、证据边界、迁移映射和来源说明。
+会话先覆盖任务，再结合未解决误差、可执行的区分实验、新知识和条件方法经验安排重访。已付费观测与候选随工作区恢复；保存实验同时预留后续比较所需观测。风险任务还可保存当前完整决策与至多两个已有挑战方案，以两条新轨迹作一次有限比较；调度器按它的实际报价与普通修订、实验和方法共同选择，执行后的收益与费用决定后续投入。非零 pinball 损失继续保留。`completed` 表示允许的访问已经结束，`unresolved_tasks` 继续列出未解决任务；`budget_exhausted` 保留待办。Python 的 `ResearchSession` 同时接受环境对象或环境工厂，外部环境只需提供 `spec` 与 `observe`。
 
-更严格的 claim 边界见
-[`docs/evidence_boundaries.md`](docs/evidence_boundaries.md)，Phase-2A development 协议见
-[`docs/phase2_exit_protocol.md`](docs/phase2_exit_protocol.md)。正式轨道施工边界见
-[`docs/phase2b_preregistration.md`](docs/phase2b_preregistration.md) 与
-[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)。v1.0.2 已解决的 strict
-canonicalization / CBOR / certificate bridge 决策见
-[`docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)；下一版 shrink
-step 1 决策已由
-[`docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md`](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)
-接管；M2.5 的新 wire/seed/state 决策稿见
-[`docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md`](docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md)。
-v1.1.2 completion amendment 见
-[`docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md`](docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md)；
-实现级定案、闭包补充和外部 actor 操作边界分别见
-[`docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
-[`docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
-与
-[`docs/phase3_m25_external_genesis_operator_runbook.md`](docs/phase3_m25_external_genesis_operator_runbook.md)。
-原 questions 文档只保留为历史审阅输入，不再是当前 normative 状态。
+可调用概念的独立演示用观测学习基础规律，再在后续任务中组合并测量调用收益：
+
+```bash
+PYTHONPATH=src python3 scripts/run_callable_concept_demo.py --output artifacts/callable_concept_demo.json
+```
+
+可选测量与连续状态的进程环境使用独立入口；默认四题共享知识，支持任务边界恢复：
+
+```bash
+PYTHONPATH=src python3 -m hegel_machine cognition lab \
+  --checkpoint artifacts/lab_research.json --backend process --steps 1
+
+PYTHONPATH=src python3 -m hegel_machine cognition lab \
+  --checkpoint artifacts/lab_research.json --resume
+```
+
+`--strategy controls_only` 和 `--strategy all` 用各自 checkpoint 运行测量对照。实际观测、仪器费用和研究计算分别记录，独立评估计算另列。
+
+固定任务序列与算法对照继续使用以下入口：
+
+```bash
+PYTHONPATH=src python3 -m hegel_machine cognition run \
+  --output artifacts/cognition_run.json
+
+PYTHONPATH=src python3 -m hegel_machine cognition compare \
+  --output artifacts/cognition_comparison.json
+
+PYTHONPATH=src python3 -m hegel_machine cognition research \
+  --partition development --seeds 7 11 19 \
+  --output artifacts/cognition_research.json
+```
+
+`run` 输出任务序列和学习轨迹；`compare` 执行配置对照及知识删除干预；`research` 汇总多个种子的配对差值和置信区间。指定 `--output` 时还会生成 `_summary.json`，日常分析可先读该小型文件。`run --memory PATH` 可以加载并保存实验知识库。
+
+0.8.0 与保存于 `artifacts/cognition_v5_reference/` 的 0.7.0 算法包使用专门脚本比较。下面运行两个开发分区及九个对照臂：
+
+```bash
+python3 scripts/run_cognition_v6_research.py \
+  --partitions continual stateful \
+  --systems reference_v5 cognitive_v6 without_joint_state_coordinates \
+    without_joint_state_probes without_research_memory without_active_experiments \
+    without_knowledge fixed_model program_search \
+  --output-dir artifacts/my_v6_research
+```
+
+脚本默认运行 continual，种子为 401、503、607，并包含上述九臂。stateful 默认种子为 809、907、1009，多分区请求中它最后运行。五个分区均已提供开发依据。`--partitions`、`--systems` 和 `--seeds` 可以缩小范围；`--resume` 继续相同设计的保存结果。各臂共享环境、初始与目录实验、最终评测和预算上限，默认每任务 96 个观测、24000 个计算单位。
+
+输出目录保存每分区的 `*_runs.json`、`*_summary.json` 和总 `summary.json`，仅保留少量详细病例。报告保留实际查询长度，终局损失按历史长度 0–7、8–31、32 及以上分组；二值状态任务另计分类错误、转换行错误及各自分母。额外评测工作单列。该脚本使用本地程序搜索。
+
+默认使用本地程序搜索。显式选择 `--proposer codex` 或 `--proposer hybrid` 时，通过本机已配置的 Codex 调用模型提出程序和 probe：
+
+```bash
+PYTHONPATH=src python3 -m hegel_machine cognition run \
+  --proposer codex --llm-calls-per-task 1 --llm-token-budget 4000 \
+  --output artifacts/cognition_codex.json
+```
+
+比较时，`--include-llm` 增加模型生成对照；`--systems` 可以选择需要的配置，例如 `cognitive_agent without_knowledge single_step_planning`。调用数、耗时和可取得的 token 使用单独报告。全部选项见 `python3 -m hegel_machine cognition --help` 及相应子命令帮助。
+
+## 环境与测量
+
+development 有 17 个 episode，confirmation、forward 与 continual 各有 12 个，包含参数、非线性、历史、迟滞、风险、角色映射和机制变化。四个分区均已用于当前开发，保留原定义供版本回顾比较。
+
+stateful 有 12 个 episode，包含不同阈值、方向和控制角色的滞回、双变量组合、角色重命名、同上下文状态条件变化，以及线性、平方、交互、历史和偏斜风险任务。训练允许最长 32 步，最终独立评测使用八条 64 步轨迹。分区和机制标签只进入评测报告，控制器取得公开任务能力、训练观测与固定目标。
+
+最终评测在每个学习 episode 结束后执行。报告保留所有尝试任务的分母，分别统计失败、预测覆盖、修订、直接复用、抽象复用和作用域变化。fresh 检查说明当时证据与决定是否一致；独立最终评测另行比较被采纳、回退的程序与其父程序，计量错误接受和错误回退。多种子的区间以种子为重采样单位；知识价值按质量、采样、计算和时间分别比较。
+
+通用 `compare` 保留固定模型、普通程序搜索、主动实验、知识、计划、抽象、角色映射、构造 probe、候选选择等对照，以及全库和特定概念删除干预。当前版本脚本重点区分联合状态坐标、多输入实验、跨任务研究经验与知识的贡献。
+
+通用先验已有压缩、稀疏组合、局部历史、机制复用、分段状态和残差不确定性等执行路径。更一般的守恒、对称、低秩、拓扑和潜在状态发现仍需具体表示及环境操作，详见[整机完成路线](docs/hegel_machine_system_completion_20260908.md)。
+
+## 模块与职责
+
+| 模块 | 职责 |
+|---|---|
+| `session` | 持续研究、任务重访、共享资源、保存与恢复 |
+| `decision_frontier`、`decision_research`、`research_opportunities` | 保存完整决策问题、执行短比较，并按实际收益与其他续研机会竞争 |
+| `models`、`diagnosis`、`planning` | 任务、预算、竞争解释、依赖步骤与中间程序 |
+| `language`、`synthesis`、`sparse_search`、`state_search`、`risk_search`、`proposers` | 可执行语言、联合变量组合、状态转换、尾部拟合和模型生成接口 |
+| `continuous_state` | 从轨迹学习连续递推、驱动方向和有限读出 |
+| `measurement_lab`、`measurement_research`、`measurement_session` | 仪器操作、测量选择、进程装置及恢复会话 |
+| `probing`、`environments` | 连续实验构造、经验行为分组、实际观测 |
+| `abstractions`、`memory`、`concept_selection` | 参数与角色抽象、复用、研究经验、条件作用域和撤销 |
+| `uncertainty`、`evaluation` | 残差不确定性、完整程序与校准比较、行动选择及独立最终计分 |
+| `selection`、`controller` | 新轨迹比较、起始历史分支、计划分配与学习循环 |
+| `experiments`、`research_protocol`、`cli` | 对照、删除干预、多种子分析和运行入口 |
+
+代码位于 `src/hegel_machine/cognition/`。各模块的数据关系见[系统架构](docs/architecture.md)。
+
+## 正式验证轨道与历史
+
+已有结构定律验证、有限商闭包、membership、精确 wire 和证书工作保留为专门正式轨道，可为具体研究对象提供额外数学证据。对应冻结协议、产物和声明继续按各自身份读取。
+
+方向调整前的[原 README](docs/history/formal_track_readme_20260907.md)和[原 architecture](docs/history/formal_track_architecture_20260907.md)保留原文。[首轮运行](docs/cognitive_runtime_first_run.md)、[0.4.0 研究](docs/cognitive_runtime_v2_results.md)、[0.5.0 研究](docs/cognitive_runtime_v3_results.md)、[0.6.0 研究](docs/cognitive_runtime_v4_results.md)、[0.7.0 研究](docs/cognitive_runtime_v5_results.md)、[0.8.0 实现与结果](docs/cognitive_runtime_v6_results.md)与[0.11.0 功能进展](docs/hegel_machine_measurement_and_state_20260908.md)保留各自的历史结论。当前能力与结果入口见文首。历史副本中的相对链接按其原始文件位置解析。
+
+## Limitations
+
+- 当前语言由有限数值、Boolean、历史与组合 primitive 构成；抽象和模型生成输出仍在该语言中执行。任意新传感器、开放世界元算子和通用概念发明尚未得到验证。
+- 动作调度、依赖计划、probe 搜索和作用域学习采用有限启发式；代码贯通这些机制不等于它们已具备普遍认知优势。
+- 五个分区均使用公开 synthetic 生成器，也均已是开发依据。公开生成器不构成独立托管的隐藏基准。
+- 0.8.0 同时改变联合状态坐标、实验、候选保留及跨任务研究经验，版本总差值需要结合消融解释。会话完成与所有任务已经学会分别报告。
+- 二值状态分支依据可观测的两值输出学习条件阈值，连续状态分支学习有限递推族；这些能力尚不覆盖一般潜在状态恢复；分类错误按固定 0.5 阈值统计，也不等于恢复了真实机制。
+- continual 与 stateful 的 64 步评测超出最大 32 步训练轨迹，需要按历史长度解释时域外推。`worst_case_loss` 是所学区间端点损失的平均最大值，零宽名义区间会给出零，不能用于断言实际测试尾部风险更低。
+- 最终评测与自适应 validation 分开；少量种子的置信区间仍可能不稳定。预测误差口径的误扩展/误拒绝不代表最佳操作真值，也不包含复杂度收益。
+- 计算单位、实测时间与 token 分别报告。模型返回的未知 token 保留为未知；调用预算约束后续调用，实际模型消耗以返回用量为准。

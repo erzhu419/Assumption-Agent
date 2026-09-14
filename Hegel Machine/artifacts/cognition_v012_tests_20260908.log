@@ -1,0 +1,27 @@
+........................................................................ [ 24%]
+........................................................................ [ 49%]
+........................................................................ [ 73%]
+........................................................F............... [ 98%]
+....                                                                     [100%]
+=================================== FAILURES ===================================
+__ test_falsified_transfer_uses_a_short_next_action_and_revises_within_budget __
+
+    def test_falsified_transfer_uses_a_short_next_action_and_revises_within_budget():
+        config = ResearchConfig(seed=503, partition='continual')
+        library = KnowledgeLibrary()
+        agent = CognitiveAgent(config, library)
+        for env in make_suite(503, 'continual')[:8]:
+            agent.run(env)
+        env = make_suite(503, 'continual')[8]
+        result = agent.run(env)
+        assert loss(result.program, env.evaluation_rows(), result.fallback, .5) < 1e-12
+        deferred = [a for a in result.actions if a.action == 'plan_experiment'
+                    and a.details.get('action_policy', {}).get('context', '').endswith(':transfer_counterexample')]
+        assert deferred
+>       assert deferred[0].details['action_policy']['quoted_observation_cost'] <= 8
+E       KeyError: 'quoted_observation_cost'
+
+tests/test_cognition_transfer_scheduling.py:64: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_transfer_scheduling.py::test_falsified_transfer_uses_a_short_next_action_and_revises_within_budget
+1 failed, 291 passed in 61.49s (0:01:01)

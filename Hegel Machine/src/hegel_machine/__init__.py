@@ -1,4 +1,4 @@
-"""Hegel Machine: bounded structural recognition and theory evolution."""
+"""Hegel Machine: hypothesis discovery, active experiments and revisable knowledge."""
 
 import sys as _sys
 
@@ -73,7 +73,14 @@ from .schema import (
     TheoryState,
 )
 
+from .cognition.controller import CognitiveAgent
+from .cognition.memory import KnowledgeLibrary
+from .cognition.models import ResearchConfig
+
 __all__ = [
+    "CognitiveAgent",
+    "KnowledgeLibrary",
+    "ResearchConfig",
     "EvidenceReceipt",
     "LawKind",
     "PHASE2A",
@@ -118,4 +125,4 @@ __all__ = [
     "shrink1_publication_report",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.85.0"

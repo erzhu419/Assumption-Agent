@@ -1,0 +1,126 @@
+{
+  "experiment": "learned_callable_concept_composition",
+  "seed": 113,
+  "tasks": {
+    "A": "g(x,z) = x*x + x*z",
+    "B": "g*g + g",
+    "C": "h*h + h with h learned on B and controls renamed to u,v"
+  },
+  "source_concept_ids": {
+    "A": "concept_0001",
+    "B": "concept_0002",
+    "C": "concept_0003"
+  },
+  "results": {
+    "A": {
+      "training_rows": 40,
+      "evaluation_rows": 64,
+      "training_mse": 0.0,
+      "evaluation_mse": 0.0,
+      "candidate_row_budget": 3600,
+      "search_candidate_rows": 240,
+      "selection_candidate_rows": 40,
+      "total_candidate_rows": 280,
+      "candidates_compared": 1,
+      "expression": "add(mul(x, x), mul(x, z))",
+      "definition_ids": [],
+      "source_concept_ids": [],
+      "maximum_call_depth": 0,
+      "contains_call": false
+    },
+    "B_callable": {
+      "training_rows": 40,
+      "evaluation_rows": 64,
+      "training_mse": 0.0,
+      "evaluation_mse": 0.0,
+      "candidate_row_budget": 3600,
+      "search_candidate_rows": 1520,
+      "selection_candidate_rows": 240,
+      "total_candidate_rows": 1760,
+      "candidates_compared": 6,
+      "expression": "add(concept_0001:abstract:0:definition(x, z), mul(concept_0001:abstract:0:definition(x, z), concept_0001:abstract:0:definition(x, z)))",
+      "definition_ids": [
+        "concept_0001:abstract:0:definition"
+      ],
+      "source_concept_ids": [
+        "concept_0001"
+      ],
+      "maximum_call_depth": 1,
+      "contains_call": true
+    },
+    "B_raw": {
+      "training_rows": 40,
+      "evaluation_rows": 64,
+      "training_mse": 0.0332561569453972,
+      "evaluation_mse": 0.032366685621737626,
+      "candidate_row_budget": 3600,
+      "search_candidate_rows": 720,
+      "selection_candidate_rows": 80,
+      "total_candidate_rows": 800,
+      "candidates_compared": 2,
+      "expression": "add(add(add(add(-0.22498881, mul(2.2391167, mul(x, x))), mul(2.3193223, mul(x, z))), mul(0.36380068, mul(z, z))), mul(0.034120713, x))",
+      "definition_ids": [],
+      "source_concept_ids": [],
+      "maximum_call_depth": 0,
+      "contains_call": false
+    },
+    "C": {
+      "training_rows": 40,
+      "evaluation_rows": 64,
+      "training_mse": 0.0,
+      "evaluation_mse": 0.0,
+      "candidate_row_budget": 3600,
+      "search_candidate_rows": 1520,
+      "selection_candidate_rows": 240,
+      "total_candidate_rows": 1760,
+      "candidates_compared": 6,
+      "expression": "add(concept_0002:abstract:0:definition(u, v), mul(concept_0002:abstract:0:definition(u, v), concept_0002:abstract:0:definition(u, v)))",
+      "definition_ids": [
+        "concept_0001:abstract:0:definition",
+        "concept_0002:abstract:0:definition"
+      ],
+      "source_concept_ids": [
+        "concept_0001",
+        "concept_0002"
+      ],
+      "maximum_call_depth": 2,
+      "contains_call": true
+    }
+  },
+  "checkpoint_max_prediction_difference": 0.0,
+  "execution": {
+    "B_callable": {
+      "rows": 64,
+      "max_absolute_prediction_difference": 0.0,
+      "callable": {
+        "primitive_steps": 704,
+        "call_evaluations": 64,
+        "cache_hits": 128
+      },
+      "expanded": {
+        "primitive_steps": 1472,
+        "call_evaluations": 0,
+        "cache_hits": 0
+      }
+    },
+    "C": {
+      "rows": 64,
+      "max_absolute_prediction_difference": 0.0,
+      "callable": {
+        "primitive_steps": 960,
+        "call_evaluations": 128,
+        "cache_hits": 256
+      },
+      "expanded": {
+        "primitive_steps": 4544,
+        "call_evaluations": 0,
+        "cache_hits": 0
+      }
+    }
+  },
+  "interpretation": {
+    "comparison": "B arms share observations, candidate-row cap and final evaluation; A acquisition is reported separately.",
+    "execution_counts": "Primitive steps and call cache hits measure actual expression execution; they do not replace candidate-row accounting.",
+    "scope": "A local composition example: the raw sparse dictionary is quadratic, while the learned coordinate composes a fourth-degree law. This does not establish superiority over unrestricted program search or code agents."
+  }
+}

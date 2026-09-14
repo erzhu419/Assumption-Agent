@@ -1,0 +1,82 @@
+{
+  "experiment": "compound_experiment_methods_v071",
+  "development_seeds": [
+    137
+  ],
+  "formal_seeds": [
+    9060319511,
+    9060419527,
+    9060519541
+  ],
+  "arms": [
+    "v070",
+    "compound_methods"
+  ],
+  "cases": [
+    {
+      "name": "two_windows",
+      "gates": 2,
+      "expression": "product"
+    },
+    {
+      "name": "three_windows",
+      "gates": 3,
+      "expression": "nested_if"
+    }
+  ],
+  "stages": [
+    "first_research",
+    "calibration_revision",
+    "renamed_successor"
+  ],
+  "public_prior": {
+    "control_bounds": [
+      0.0,
+      1.0
+    ],
+    "instrument_family": "independent affine measurements, role correspondence supplied",
+    "law_family": "conjunction of narrow measured intervals; product or nested if supplied",
+    "centers": [
+      0.313271,
+      0.583119,
+      0.773441
+    ],
+    "center_seed_jitter": 0.03,
+    "stage_center_shift": 0.011,
+    "window_half_width": 1e-05,
+    "first_lower_edge_candidate_offsets": [
+      -2e-08,
+      -1e-08,
+      1e-08,
+      2e-08
+    ],
+    "other_gate_lower_edge": "center - window_half_width",
+    "upper_edges": "center + window_half_width",
+    "hidden_choice": "one of the middle two finite edge candidates, sampled independently per task"
+  },
+  "acquisition": {
+    "calibration_rows": 2,
+    "initial_gate_discrimination_rows": 3,
+    "max_competition_experiments": 12,
+    "probe_length": 4,
+    "observation_budget": 512,
+    "measurement_budget": 6144,
+    "compute_budget": 480000
+  },
+  "calibration_scope_challenge": "In stage 1, a saved method first predicts under its old instrument hypothesis; a purchased witness scopes any calibration failure. The actual current affine calibration is then adopted from paid endpoint readings, and the same method is retried. This is a controlled method applicability challenge, reported separately from prediction endpoints.",
+  "terminal": {
+    "trajectories": 4,
+    "length": 64,
+    "seed_offset": 1000003,
+    "solved_threshold": 1e-06,
+    "sampling_cycle": [
+      "uniform public controls",
+      "all known-prior window centers with jitter",
+      "one inactive gate",
+      "uniform unresolved first-edge interval with other gates active"
+    ],
+    "independent_lab": true,
+    "never_learning_feedback": true
+  },
+  "contract": "Freeze prior, task seeds, public parameter grid and budgets before development. Source may be corrected after development, but the fixed task distribution and failed results remain. Learners receive only public priors and purchased rows; terminal sampling uses public prior regions, never the hidden chosen edge. This benchmark tests experimental procedures within supplied finite gate grammar, not general structure discovery."
+}

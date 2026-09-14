@@ -1,0 +1,20 @@
+..................F
+=================================== FAILURES ===================================
+_ test_unidentified_endpoints_do_not_consume_the_four_calls_reserved_for_future_validation _
+
+    def test_unidentified_endpoints_do_not_consume_the_four_calls_reserved_for_future_validation():
+        controller, rows, scope_start = _endpoint_scope()
+        paid = deepcopy(rows)
+        before = controller.to_dict()
+>       assert controller.next_control(rows, _forecast, scope_start=0,
+            stage=len(rows), remaining_calls=4) is None
+E       AssertionError: assert {'candidate_mean': 1.9050000002423055, 'features': {'x1': 0.03, 'x2': 0.0}, 'objective_noise': 0.0, 'previous_mean': 0.0, ...} is None
+E        +  where {'candidate_mean': 1.9050000002423055, 'features': {'x1': 0.03, 'x2': 0.0}, 'objective_noise': 0.0, 'previous_mean': 0.0, ...} = next_control([{'context': {'global_index': 0, 'objective': 0.34, 'purpose': 'optimization', 'stage': 1}, 'observation': {'features'...ptimization', 'stage': 6}, 'observation': {'features': {'x1': 0.39, 'x2': 0.51}, 'target': -0.08999999999999998}}, ...], _forecast, scope_start=0, stage=37, remaining_calls=4)
+E        +    where next_control = <hegel_machine.cognition.objective_research.ObjectiveResearch object at 0x793d5caa2b30>.next_control
+E        +    and   37 = len([{'context': {'global_index': 0, 'objective': 0.34, 'purpose': 'optimization', 'stage': 1}, 'observation': {'features'...ptimization', 'stage': 6}, 'observation': {'features': {'x1': 0.39, 'x2': 0.51}, 'target': -0.08999999999999998}}, ...])
+
+tests/test_cognition_objective_identification.py:93: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_objective_identification.py::test_unidentified_endpoints_do_not_consume_the_four_calls_reserved_for_future_validation
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 18 passed in 0.40s

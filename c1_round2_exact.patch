@@ -1,0 +1,234 @@
+diff --git a/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py b/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py
+--- a/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py
++++ b/Hegel Machine/tools/phase2b_actual_unsealed_960_case_prediction_scoring_replay_v2.py
+@@ -126,13 +126,22 @@ class ControllerTerminalV2(ControllerErrorV2):
+-    def __init__(self, code: str, detail: str) -> None:
++    def __init__(self, code: str, detail: str, *, consumed: bool = False) -> None:
+         super().__init__(f"{code}: {detail}")
+         self.code = code
+         self.detail = detail
++        self.authorization_consumption_count = int(consumed)
++        self.logical_campaign_count = int(consumed)
+ 
+ 
+ def _terminal(code: str, detail: str) -> NoReturn:
+     raise ControllerTerminalV2(code, detail)
+ 
+ 
++def _terminal_consumed(code: str, detail: str) -> NoReturn:
++    raise ControllerTerminalV2(code, detail, consumed=True)
++
++
+ def _finalization_pending(condition: str, detail: str) -> NoReturn:
+@@ -587,19 +596,23 @@ def _ensure_trajectory_event(
+-    if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
+-        return
+     try:
+-        _append_trajectory(
+-            contract,
+-            event,
+-            capsule_digest=capsule_digest,
+-            **fields,
+-        )
++        if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
++            return
++        try:
++            _append_trajectory(
++                contract,
++                event,
++                capsule_digest=capsule_digest,
++                **fields,
++            )
++        except ControllerPendingV2:
++            if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
++                return
++            raise
+     except ControllerPendingV2 as error:
+-        if _trajectory_has_event(contract, event, capsule_digest, identity_fields):
+-            return
+         if finalization_condition is not None:
+             _finalization_pending(finalization_condition, str(error))
+         raise
+@@ -1028,11 +1041,27 @@ def _invalidate_after_consumption(
+-    _publish_new_or_exact(
+-        _contract_path(contract, "terminal_path"),
+-        state.canonical_json_bytes(terminal),
+-        "invalidated terminal",
+-    )
++    terminal_path = _contract_path(contract, "terminal_path")
++    terminal_bytes = state.canonical_json_bytes(terminal)
++    try:
++        _publish_new_or_exact(terminal_path, terminal_bytes, "invalidated terminal")
++    except ControllerPendingV2 as publication_error:
++        try:
++            observed = _optional_regular(terminal_path, state.MAXIMUM_JSON_BYTES_V2)
++        except ControllerPendingV2 as readback_error:
++            _terminal_consumed(
++                "INVALIDATED_TERMINAL_PUBLICATION_OUTCOME_UNKNOWN",
++                f"{publication_error}; readback: {readback_error}",
++            )
++        if observed is None:
++            _terminal_consumed(
++                "INVALIDATED_TERMINAL_PUBLICATION_FAILED_NO_RESUME",
++                str(publication_error),
++            )
++        if observed != terminal_bytes:
++            _terminal_consumed(
++                "INVALIDATED_TERMINAL_STATE_DIFFERS", "terminal readback differs"
++            )
+     _ensure_trajectory_event(
+@@ -1122,10 +1151,17 @@ def _run_locked(
+-    artifact_payload = _optional_regular(
+-        artifact_path, state.MAXIMUM_SEALED_ARTIFACT_BYTES_V2
+-    )
+     consumption_payload = _optional_regular(
+         consumption_path, state.MAXIMUM_JSON_BYTES_V2
+     )
+-    terminal_payload = _optional_regular(terminal_path, state.MAXIMUM_JSON_BYTES_V2)
++    try:
++        artifact_payload = _optional_regular(
++            artifact_path, state.MAXIMUM_SEALED_ARTIFACT_BYTES_V2
++        )
++        terminal_payload = _optional_regular(terminal_path, state.MAXIMUM_JSON_BYTES_V2)
++    except ControllerPendingV2 as error:
++        if consumption_payload is not None:
++            _terminal_consumed("POST_CONSUMPTION_STATE_REPLAY_UNAVAILABLE", str(error))
++        raise
+@@ -1186,12 +1222,24 @@ def _run_locked(
+         try:
+             _publish_new_or_exact(
+                 terminal_path,
+                 state.canonical_json_bytes(terminal),
+                 "complete terminal",
+             )
+         except ControllerPendingV2 as error:
+-            _finalization_pending(
+-                "KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error)
+-            )
++            terminal_bytes = state.canonical_json_bytes(terminal)
++            try:
++                observed = _optional_regular(terminal_path, state.MAXIMUM_JSON_BYTES_V2)
++            except ControllerPendingV2 as readback_error:
++                _finalization_pending(
++                    "KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL",
++                    f"{error}; readback: {readback_error}",
++                )
++            if observed is None:
++                _finalization_pending(
++                    "KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error)
++                )
++            if observed != terminal_bytes:
++                _terminal_consumed("TERMINAL_STATE_DIFFERS", "terminal readback differs")
+         _ensure_trajectory_event(
+@@ -1281,17 +1329,35 @@ def _run_locked(
+-    consumed_now = _publish_new_or_exact(
+-        consumption_path,
+-        state.canonical_json_bytes(consumption),
+-        "consumption",
+-    )
+-    if not consumed_now:
+-        _terminal(
+-            "CONSUMPTION_STATE_DIFFERS",
+-            "consumption appeared during the locked one-shot transition",
++    consumption_bytes = state.canonical_json_bytes(consumption)
++    try:
++        consumed_now = _publish_new_or_exact(
++            consumption_path, consumption_bytes, "consumption"
+         )
++    except ControllerPendingV2 as publication_error:
++        try:
++            observed = _optional_regular(consumption_path, state.MAXIMUM_JSON_BYTES_V2)
++        except ControllerPendingV2 as readback_error:
++            _terminal_consumed(
++                "CONSUMPTION_PUBLICATION_OUTCOME_UNKNOWN",
++                f"{publication_error}; readback: {readback_error}",
++            )
++        if observed is None:
++            raise publication_error
++        if observed != consumption_bytes:
++            _terminal_consumed("CONSUMPTION_STATE_DIFFERS", "consumption readback differs")
++        consumed_now = False
++    if not consumed_now:
++        return _invalidate_after_consumption(
++            contract, preregistration, capsule, authorization, consumption,
++            failure_phase="CONSUMPTION_PUBLICATION",
++            failure_code="CONSUMPTION_DURABLE_ACK_UNKNOWN_TERMINAL_NO_RESUME",
++            failure_detail="consumption exists but scorer replay was not started",
++        )
+ 
+     try:
+@@ -1394,16 +1460,34 @@ def _run_locked(
+-        if not artifact_created:
+-            raise ValueError("artifact appeared during one-shot replay")
+     except Exception as error:
+-        return _invalidate_after_consumption(
+-            contract,
+-            preregistration,
+-            capsule,
+-            authorization,
+-            consumption,
+-            failure_phase="SCORER_REPLAY",
+-            failure_code="POST_CONSUMPTION_REPLAY_FAILED",
+-            failure_detail=f"{type(error).__name__}: {error}",
+-        )
++        if "artifact" not in locals():
++            return _invalidate_after_consumption(
++                contract, preregistration, capsule, authorization, consumption,
++                failure_phase="SCORER_REPLAY",
++                failure_code="POST_CONSUMPTION_REPLAY_FAILED",
++                failure_detail=f"{type(error).__name__}: {error}",
++            )
++        try:
++            observed_artifact = _optional_regular(
++                artifact_path, state.MAXIMUM_SEALED_ARTIFACT_BYTES_V2
++            )
++        except ControllerPendingV2 as readback_error:
++            _terminal_consumed(
++                "ARTIFACT_PUBLICATION_OUTCOME_UNKNOWN",
++                f"{error}; readback: {readback_error}",
++            )
++        if observed_artifact is None:
++            return _invalidate_after_consumption(
++                contract, preregistration, capsule, authorization, consumption,
++                failure_phase="ARTIFACT_PUBLICATION",
++                failure_code="SEALED_ARTIFACT_NOT_DURABLE_TERMINAL_NO_RESUME",
++                failure_detail=f"{type(error).__name__}: {error}",
++            )
++        if observed_artifact != artifact.canonical_bytes:
++            _terminal_consumed("ARTIFACT_STATE_DIFFERS", "artifact readback differs")
+ 
+     _ensure_trajectory_event(
+@@ -1428,12 +1512,24 @@ def _run_locked(
+     try:
+         _publish_new_or_exact(
+             terminal_path,
+             state.canonical_json_bytes(terminal),
+             "complete terminal",
+         )
+     except ControllerPendingV2 as error:
+-        _finalization_pending(
+-            "KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error)
+-        )
++        terminal_bytes = state.canonical_json_bytes(terminal)
++        try:
++            observed = _optional_regular(terminal_path, state.MAXIMUM_JSON_BYTES_V2)
++        except ControllerPendingV2 as readback_error:
++            _finalization_pending(
++                "KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL",
++                f"{error}; readback: {readback_error}",
++            )
++        if observed is None:
++            _finalization_pending(
++                "KNOWN_SEALED_ARTIFACT_AWAITING_TERMINAL", str(error)
++            )
++        if observed != terminal_bytes:
++            _terminal_consumed("TERMINAL_STATE_DIFFERS", "terminal readback differs")
+     _ensure_trajectory_event(
+@@ -1499,7 +1595,12 @@ def main(argv: Sequence[str] | None = None) -> int:
+-        result = {"status": error.code, "detail": error.detail}
++        result = {
++            "status": error.code,
++            "detail": error.detail,
++            "authorization_consumption_count": error.authorization_consumption_count,
++            "logical_campaign_count": error.logical_campaign_count,
++        }

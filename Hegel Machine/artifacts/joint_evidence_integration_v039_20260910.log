@@ -1,0 +1,70 @@
+...........................................................F.......      [100%]
+=================================== FAILURES ===================================
+_ test_candidate_competition_predicts_every_quantized_point_before_real_simulation _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7e21a1f53a00>
+
+    def test_candidate_competition_predicts_every_quantized_point_before_real_simulation(project_root, monkeypatch):
+        environment, config = _adoption_setup(project_root, seed=841000081, total=36)
+        first = Program("feature", name="x1")
+        second = Program("mul", children=(Program("feature", name="x1"),) * 2)
+        forecasts = []
+        original_predict = Program.predict
+    
+        def record_prediction(program, observation, context=None):
+            result = original_predict(program, observation, context)
+            if program is first or program is second:
+                forecasts.append((program, dict(observation.features), result))
+            return result
+    
+        monkeypatch.setattr(Program, "predict", record_prediction)
+    
+        class MeasuredCompetition:
+            candidates = {"linear": first, "square": second}
+            candidate = first
+            accepted_revision = None
+            control_purpose = "coverage"
+    
+            def next_control(self):
+                return {name: .254 for name in environment.spec.feature_names}
+    
+            def observe(self, observation, default_mean, learned_mean, *, candidate_mean,
+                        candidate_predictions, noise_variance, context):
+                assert candidate_predictions == {"linear": .25, "square": .0625}
+                assert candidate_mean == .25
+                assert set(observation.features.values()) == {.25}
+                assert len(forecasts) == 2 * adapter.simulator_calls
+    
+        adapter = compile_sc_kg_program(environment, Program("feature", name="x1"))
+        original_simulate = adapter.simulate
+    
+        def check_before_measurement(point, rng=None):
+            assert len(forecasts) == 2 * (adapter.simulator_calls + 1)
+            assert tuple(point) == (25,) * 5
+            return original_simulate(point, rng)
+    
+        adapter.simulate = check_before_measurement
+        algorithm = initialize_sc_kg_optimizer(adapter, config, recovery=MeasuredCompetition())
+>       result = algorithm.run()
+
+tests/test_cognition_sc_kg_environment.py:437: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../KG_op/SC-OLH-KG/algorithms/single_olhkg.py:14896: in run
+    candidates, candidate_sources = self._generate_candidates(iteration)
+src/hegel_machine/cognition/sc_kg_environment.py:355: in _generate_candidates
+    self._consider_constraint_applicability()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <hegel_machine.cognition.sc_kg_environment.initialize_sc_kg_optimizer.<locals>.ResearchInitializedSCAlgorithm object at 0x7e21b08146a0>
+
+    def _consider_constraint_applicability(self):
+        """A goal counterexample makes the constraint scope worth testing."""
+        remaining = self.config.N - len(self.history)
+>       state = self.recovery.state
+E       AttributeError: 'MeasuredCompetition' object has no attribute 'state'
+
+src/hegel_machine/cognition/sc_kg_environment.py:398: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_sc_kg_environment.py::test_candidate_competition_predicts_every_quantized_point_before_real_simulation
+1 failed, 66 passed in 14.44s

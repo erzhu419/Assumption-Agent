@@ -1,0 +1,285 @@
+...........F..F.........F.                                               [100%]
+=================================== FAILURES ===================================
+_ test_real_joint_failure_validates_new_program_and_rebases_both_outputs_within_budget[12] _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+change_after = 12
+
+    @pytest.mark.parametrize("change_after", [12, 20])
+    def test_real_joint_failure_validates_new_program_and_rebases_both_outputs_within_budget(project_root, change_after):
+        from importlib.util import module_from_spec, spec_from_file_location
+        import numpy as np
+        from hegel_machine.cognition.joint_model_revision import JointModelRevision
+        from hegel_machine.cognition.memory import KnowledgeLibrary
+        from hegel_machine.cognition.meta_prior_research import MetaPriorResearch
+        from hegel_machine.cognition.models import ResearchConfig
+        from hegel_machine.cognition.prior_adoption import PriorAdoption
+        seed = 1043010067
+        environment = SCKGEnvironment(project_root, problem="state_policy_rzdt1", dimension=3, seed=seed)
+        from algorithms.single_olhkg import SingleOLHKGConfig
+        report = MetaPriorResearch(ResearchConfig(observation_budget=32, compute_budget=60000,
+            max_rounds=2, minimum_improvement=1e-7, seed=seed), KnowledgeLibrary()).run(environment)
+        assert report["status"] == "completed" and report["family_id"] == "T11"
+        script = Path(__file__).resolve().parents[1] / "scripts" / "run_sc_kg_prior_mechanism_change.py"
+        module_spec = spec_from_file_location("hegel_mechanism_change_case", script)
+        module = module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        adapter = module.MechanismChangeProblem(environment, Program.from_dict(report["program"]),
+                                                change_after=change_after)
+        recovery = JointModelRevision(environment.spec, seed=seed)
+        config = SingleOLHKGConfig(N=64, K1=6, K2=0, posterior_pool_size=32, posterior_keep=3,
+            axis_candidate_count=0, state_candidate_count=0, n_thr=2,
+            use_problem_initial_samples=False, use_boundary_initial_samples=False,
+            use_recommendation_refinement=False, recommendation_axis_oracle=False,
+            recommendation_axis_candidate_count=0, use_state_coupling=False,
+            use_state_basis=False, lambda_coupling=0., variance_mode="pooled",
+            acquisition_mode="exact_mc", exact_kg_mc_samples=1, exact_kg_jobs=1,
+            eval_pool_size=32, evaluate_interval=0, truth_pool_diagnostics=False,
+            checkpoint_interval=0, seed=seed + 4000009)
+        algorithm = initialize_sc_kg_optimizer(adapter, config,
+            adoption_policy=PriorAdoption(), recovery=recovery)
+        original_objective = algorithm.gpr[0]
+        singleton_rounds = {}
+        original_scores = algorithm._exact_posterior_update_scores
+        original_measure = adapter.simulate
+    
+        def score_singleton_with_native_actions(candidates, terminal_pool, *args, **kwargs):
+            offers = algorithm._terminal_goal_offers
+            if len(offers) == 1:
+                nominated = next(iter(offers))
+                paid = {point for point, _ in algorithm.history}
+                if nominated in paid:
+                    assert nominated in candidates and len(set(candidates)) > 1
+                    assert any(point not in paid for point in candidates)
+                    assert paid.issubset(set(terminal_pool))
+                    assert algorithm.objective_research.state["pending"] is None
+                    singleton_rounds[len(algorithm.history)] = {"nominated": nominated,
+                        "requests_before": len(algorithm.objective_research.state["requests"]),
+                        "candidates": list(candidates)}
+            return original_scores(candidates, terminal_pool, *args, **kwargs)
+    
+        def measure_singleton_or_native(point, rng=None):
+            check = singleton_rounds.get(len(algorithm.history))
+            if check is not None:
+                chosen = tuple(point) == check["nominated"]
+                check["selected_offer"] = chosen
+                assert tuple(point) in check["candidates"]
+                assert len(algorithm.objective_research.state["requests"]) == check["requests_before"] + int(chosen)
+                if chosen:
+                    assert algorithm.objective_research.state["pending"] is not None
+                else:
+                    assert algorithm.objective_research.state["pending"] is None
+                    assert algorithm._recovery_control_purpose == "optimization"
+            return original_measure(point, rng)
+    
+        algorithm._exact_posterior_update_scores = score_singleton_with_native_actions
+        adapter.simulate = measure_singleton_or_native
+>       result = algorithm.run()
+
+tests/test_cognition_sc_kg_environment.py:368: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../KG_op/SC-OLH-KG/algorithms/single_olhkg.py:15140: in run
+    exact_kg = self._exact_posterior_update_scores(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+candidates = [(0, 0, 0)]
+terminal_pool = [(17, 3, 5), (12, 34, 3), (13, 48, 71), (90, 57, 19), (50, 2, 71), (0, 61, 81), ...]
+args = (), kwargs = {}
+offers = {(0, 0, 0): {'certified_incumbent': {'x1': np.float64(0.0), 'x2': np.float64(0.66), 'x3': np.float64(0.0)}, 'completio...imated_calls': 1, 'must_complete_now': True, ...}, 'constraint_measured_mean': -0.21, 'constraint_replicates': 1, ...}}
+nominated = (0, 0, 0)
+@py_assert1 = ['(0, 0, 0) in [(0, 0, 0)]', '1\n{1 = len({(0, 0, 0)}\n{{(0, 0, 0)} = set([(0, 0, 0)])\n})\n} > 1']
+@py_assert3 = True, @py_assert0 = False, @py_assert11 = {(0, 0, 0)}
+@py_assert13 = 1, @py_assert16 = 1, @py_assert15 = False
+@py_format5 = '(0, 0, 0) in [(0, 0, 0)]'
+
+    def score_singleton_with_native_actions(candidates, terminal_pool, *args, **kwargs):
+        offers = algorithm._terminal_goal_offers
+        if len(offers) == 1:
+            nominated = next(iter(offers))
+            paid = {point for point, _ in algorithm.history}
+            if nominated in paid:
+>               assert nominated in candidates and len(set(candidates)) > 1
+E               assert ((0, 0, 0) in [(0, 0, 0)] and 1 > 1)
+E                +  where 1 = len({(0, 0, 0)})
+E                +    where {(0, 0, 0)} = set([(0, 0, 0)])
+
+tests/test_cognition_sc_kg_environment.py:343: AssertionError
+_ test_real_supported_uncertified_neighbor_uses_native_kg_and_paid_observation _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x743831de7f10>
+
+    def test_real_supported_uncertified_neighbor_uses_native_kg_and_paid_observation(project_root, monkeypatch):
+>       _check_uncertified_nomination(project_root, monkeypatch, "value_precision_1_objective_only_change_noise_0.03",
+            "supported_goal_with_uncertain_constraint", "sc_kg_value_precision_v041_20260910")
+
+tests/test_cognition_sc_kg_environment.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x743831de7f10>
+case_id = 'value_precision_1_objective_only_change_noise_0.03'
+reason = 'supported_goal_with_uncertain_constraint'
+frozen_directory = 'sc_kg_value_precision_v041_20260910'
+
+    def _check_uncertified_nomination(project_root, monkeypatch, case_id, reason, frozen_directory):
+        import numpy as np
+        algorithm, adapter, environment = _saved_terminal_failure_optimizer(project_root, monkeypatch,
+            case_id, frozen_directory=frozen_directory)
+        original_offers = algorithm.objective_research.terminal_offers
+        original_scores = algorithm._exact_posterior_update_scores
+        original_measure = adapter.simulate
+        nominations, purchased = {}, []
+    
+        def certificate(point):
+            return algorithm._terminal_certificate_components(algorithm.gpr, algorithm.variance_model,
+                [point], observations=algorithm.observations)
+    
+        def actual_offers(rows, forecast, **context):
+            request_count = len(algorithm.objective_research.state["requests"])
+            offers = original_offers(rows, forecast, **context)
+            repairs = [offer for offer in offers if offer["reason"] == reason]
+            assert len(repairs) <= 1 and len(offers) <= 4
+            if repairs:
+                offer = repairs[0]
+                point = environment.integer_point(offer["features"])
+                assert certificate(point)["margin"][0] > 0.
+                assert offer["feasible"] is False
+                if reason == "supported_goal_with_uncertain_constraint":
+                    anchor = environment.integer_point(offer["support_anchor"]["features"])
+                    assert all(point != control for control, _ in algorithm.history)
+                    differences = [abs(a - b) for a, b in zip(point, anchor) if a != b]
+                    assert len(differences) == 1 and differences[0] <= 4
+                    assert offer["prediction"]["constraint_mean"] <= 0.
+                    assert offer["prediction"]["predicted_gain"] > offer["prediction"]["gain_uncertainty"] + 1e-7
+                    assert offer["purpose"] == "objective_exploration"
+                else:
+                    anchor = point
+                    assert offer["purpose"] == "objective_confirmation"
+                actual = [float(output[1]) for index, (control, output) in enumerate(algorithm.history)
+                          if index >= algorithm.active_scope_start and control == anchor
+                          and index not in algorithm.rejected_constraint_indices]
+                assert actual and np.mean(actual) <= 0.
+                assert algorithm.objective_research.state["pending"] is None
+                assert len(algorithm.objective_research.state["requests"]) == request_count
+                nominations[len(algorithm.history)] = {"point": point, "request_count": request_count,
+                                                        "scored": False}
+            return offers
+    
+        def native_scores(candidates, terminal_pool, **kwargs):
+            check = nominations.get(len(algorithm.history))
+            if check is not None:
+                assert check["point"] in candidates
+                assert {point for point, _ in algorithm.history}.issubset(set(terminal_pool))
+                assert algorithm.objective_research.state["pending"] is None
+                margin_before = float(certificate(check["point"])["margin"][0])
+            scores = original_scores(candidates, terminal_pool, **kwargs)
+            if check is not None:
+                check["scored"] = True
+                # Nomination and native fantasies confer no actual certificate.
+                assert certificate(check["point"])["margin"][0] == margin_before > 0.
+            return scores
+    
+        def actual_measure(point, rng=None):
+            check = nominations.get(len(algorithm.history))
+            if check is not None and tuple(point) == check["point"]:
+                pending = algorithm.objective_research.state["pending"]
+                assert pending["reason"] == reason
+                assert len(algorithm.objective_research.state["requests"]) == check["request_count"] + 1
+                purchased.append(tuple(point))
+            return original_measure(point, rng)
+    
+        algorithm.objective_research.terminal_offers = actual_offers
+        algorithm._exact_posterior_update_scores = native_scores
+        adapter.simulate = actual_measure
+        result = algorithm.run()
+>       assert nominations and all(row["scored"] for row in nominations.values()), algorithm.objective_diagnostics["terminal_candidate_sets"]
+E       AssertionError: [{'offers': [{'certified_incumbent': {'x1': np.float64(0.25), 'x2': np.float64(0.41), 'x3': np.float64(0.74)}, 'comple...0.53)}, 'incumbent_measured_mean': 2.675265995449348, 'point': [19, 41, 53], ...}], 'remaining_calls': 1, 'stage': 64}]
+E       assert ({})
+
+tests/test_cognition_sc_kg_environment.py:530: AssertionError
+_ test_real_negative_mc1_terminal_comparison_uses_native_fantasies_and_keeps_measurement_rng _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7438316ffeb0>
+
+    def test_real_negative_mc1_terminal_comparison_uses_native_fantasies_and_keeps_measurement_rng(project_root, monkeypatch):
+        """Replay the existing all-negative failure; no GP or acquisition values are mocked."""
+        from copy import deepcopy
+        import numpy as np
+        algorithm, adapter, _ = _saved_terminal_failure_optimizer(project_root, monkeypatch,
+            "research_scope_3_objective_only_change_noise_0.03")
+        original_scores = algorithm._exact_posterior_update_scores
+        original_one = algorithm._exact_posterior_update_score_one
+        original_plan = algorithm._exact_kg_sample_plan
+        plans, extra_calls, checked = [], [], []
+        scoring = {}
+    
+        def sample_plan(count):
+            plans.append(count)
+            return original_plan(count)
+    
+        def native_draw(point, innovations, pool, current, *args, **kwargs):
+            if algorithm._value_precision_round is not None:
+                assert pool is scoring["pool"]
+                assert current == algorithm._last_exact_kg_current_value
+                assert len(innovations) == 1
+                extra_calls.append((len(algorithm.history) + 1, tuple(point)))
+            return original_one(point, innovations, pool, current, *args, **kwargs)
+    
+        def exact_scores(candidates, terminal_pool, **kwargs):
+            scoring["pool"] = terminal_pool
+            plan_count = len(plans)
+            expected_rng = np.random.default_rng()
+            expected_rng.bit_generator.state = deepcopy(algorithm.rng.bit_generator.state)
+            expected_rng.standard_normal((1, 2))
+            expected_rng.random(1)
+            parameters = [(model.a.copy(), model.C.copy()) for model in algorithm.gpr]
+            variance = {key: deepcopy(value) for key, value in algorithm.variance_model.__dict__.items()
+                        if isinstance(value, dict) and 0 in value and 1 in value}
+            history = deepcopy(algorithm.history)
+            previous = len(algorithm.objective_diagnostics["value_precision"]["rounds"])
+            result = original_scores(candidates, terminal_pool, **kwargs)
+            assert len(plans) == plan_count + 1 and plans[-1] == 1
+            assert algorithm.rng.bit_generator.state == expected_rng.bit_generator.state
+            rounds = algorithm.objective_diagnostics["value_precision"]["rounds"]
+            if len(rounds) > previous:
+                event = rounds[-1]
+                assert event["stage"] >= 61 and algorithm.objective_scope_revisions
+                assert len(algorithm._terminal_goal_offers) >= 1
+                assert {point for point, _ in history}.issubset(set(terminal_pool))
+                assert max(event["initial_raw"]) < 0. and set(event["initial_clipped"]) == {0.}
+                assert event["selection_semantics"] == "policy_indicator"
+                assert list(candidates[int(np.argmax(result))]) == event["selected_point"]
+                by_point = {tuple(row["point"]): row for row in event["action_statistics"]}
+                estimates = [by_point[tuple(point)]["mean_raw"] for point in candidates]
+                np.testing.assert_allclose(algorithm._last_exact_kg_raw_scores, estimates)
+                np.testing.assert_allclose(algorithm._last_exact_kg_expected_values,
+                                           event["current_terminal_value"] - np.asarray(estimates))
+                assert event["selected_raw_value"] == by_point[tuple(event["selected_point"])]["mean_raw"]
+                assert event["evaluations"] == event["score_one_calls"] == event["terminal_value_calls"]
+                assert event["terminal_pool_rows"] == event["evaluations"] * len(terminal_pool)
+                assert event["evaluations"] <= event["allowance"]
+                assert 8 <= event["draws_per_action"] <= 16
+                for model, (mean, covariance) in zip(algorithm.gpr, parameters):
+                    np.testing.assert_array_equal(model.a, mean)
+                    np.testing.assert_array_equal(model.C, covariance)
+                np.testing.assert_equal({key: algorithm.variance_model.__dict__[key] for key in variance}, variance)
+                np.testing.assert_equal(algorithm.history, history)
+                checked.append(event)
+            return result
+    
+        algorithm._exact_kg_sample_plan = sample_plan
+        algorithm._exact_posterior_update_score_one = native_draw
+        algorithm._exact_posterior_update_scores = exact_scores
+        algorithm.run()
+        costs = algorithm.objective_diagnostics["value_precision"]
+>       assert checked and checked[0]["stage"] == 63
+E       assert ([])
+
+tests/test_cognition_sc_kg_environment.py:1314: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_joint_failure_validates_new_program_and_rebases_both_outputs_within_budget[12]
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_supported_uncertified_neighbor_uses_native_kg_and_paid_observation
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_negative_mc1_terminal_comparison_uses_native_fantasies_and_keeps_measurement_rng
+3 failed, 23 passed in 21.35s

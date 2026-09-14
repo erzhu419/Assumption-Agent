@@ -1,0 +1,36 @@
+..........F.F..                                                          [100%]
+=================================== FAILURES ===================================
+__ test_a_learned_sequence_executes_on_another_task_and_receives_new_feedback __
+
+    def test_a_learned_sequence_executes_on_another_task_and_receives_new_feedback():
+        library = KnowledgeLibrary()
+        config = ResearchConfig(seed=503, partition="continual")
+        environments = make_suite(503, "continual")
+        for environment in environments[:2]:
+            CognitiveAgent(config, library).run(environment)
+        restored = KnowledgeLibrary.from_dict(library.to_dict())
+        result = CognitiveAgent(config, restored).run(environments[2])
+        choices = [action.details["learned_method"] for action in result.actions
+                   if action.details.get("learned_method")]
+>       assert choices
+E       assert []
+
+tests/test_cognition_method_runtime.py:19: AssertionError
+_ test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task _
+
+    def test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task():
+        library = KnowledgeLibrary()
+        prior = CognitiveAgent(ResearchConfig(seed=503, partition="continual"), library).run(make_suite(503, "continual")[0])
+        assert prior.validation_loss < 1e-10
+        report = run_method_allocation(library)
+        source = report["source_episode"]
+        feedback = [action["details"] for action in source["actions"] if action["action"] == "action_feedback"]
+>       assert any(row["action"] == "refit" and row["last_gain"] == 0. for row in feedback)
+E       assert False
+E        +  where False = any(<generator object test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task.<locals>.<genexpr> at 0x7866c03135a0>)
+
+tests/test_cognition_method_allocation_runtime.py:43: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_method_runtime.py::test_a_learned_sequence_executes_on_another_task_and_receives_new_feedback
+FAILED tests/test_cognition_method_allocation_runtime.py::test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task
+2 failed, 13 passed in 3.09s

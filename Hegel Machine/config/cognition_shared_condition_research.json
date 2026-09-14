@@ -1,0 +1,142 @@
+{
+  "experiment": "shared_condition_research_v073",
+  "arms": [
+    "v072",
+    "shared_conditions"
+  ],
+  "development_seeds": [
+    151
+  ],
+  "formal_seeds": [
+    10060319613,
+    10060419627,
+    10060519649
+  ],
+  "cases": [
+    "narrow_windows",
+    "ordinary_affine"
+  ],
+  "stages": [
+    "source",
+    "renamed_same_mechanism",
+    "gain_change",
+    "activation_or_offset_change",
+    "return_source"
+  ],
+  "public_prior": {
+    "control_bounds": [
+      0.0,
+      1.0
+    ],
+    "window_centers": [
+      0.271234,
+      0.683214
+    ],
+    "center_seed_jitter": 0.03,
+    "alternative_window_shift": [
+      0.071,
+      -0.057
+    ],
+    "window_half_width": 1e-05,
+    "gains": [
+      1.0,
+      2.0,
+      3.0
+    ],
+    "affine_offsets": [
+      0.0,
+      0.2
+    ],
+    "same_candidates_all_stages": true,
+    "window_grammar": "conjunction of two coordinate intervals with one of two shared public center pairs, gain in the finite table",
+    "ordinary_grammar": "gain times the first public coordinate plus a finite offset"
+  },
+  "task_generation": {
+    "names": [
+      [
+        "p",
+        "q"
+      ],
+      [
+        "renamed_u",
+        "renamed_v"
+      ],
+      [
+        "renamed_u",
+        "renamed_v"
+      ],
+      [
+        "renamed_u",
+        "renamed_v"
+      ],
+      [
+        "p",
+        "q"
+      ]
+    ],
+    "true_gains": [
+      2.0,
+      2.0,
+      3.0,
+      3.0,
+      2.0
+    ],
+    "true_window_location": [
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "true_affine_offset": [
+      0.0,
+      0.0,
+      0.0,
+      0.2,
+      0.0
+    ],
+    "config_seed_offset_per_stage": 10007,
+    "ordinary_seed_offset": 100003
+  },
+  "research_config": {
+    "observation_budget": 512,
+    "compute_budget": 480000,
+    "minimum_improvement": 1e-07,
+    "max_rounds": 6,
+    "active_probes": true
+  },
+  "measurement_budget": 6144,
+  "terminal": {
+    "trajectories": 4,
+    "length": 64,
+    "seed_offset": 1000003,
+    "solved_threshold": 1e-06,
+    "window_sampling_cycle": [
+      "uniform public controls",
+      "first public candidate activation region",
+      "second public candidate activation region",
+      "outside both candidate regions"
+    ],
+    "ordinary_sampling": "independent uniform public controls",
+    "independent_lab": true,
+    "after_complete_stream": true,
+    "never_learning_feedback": true
+  },
+  "contract": "Every task executes UnifiedResearchAgent.run in full. Only _research_view is adapted to supply the same finite hypothesis prior. No learned concepts, abstractions, methods, priors or definitions are discarded; the entire KnowledgeLibrary is serialized and restored between tasks. Source learning, transfer, recovery and return costs are counted. The ordinary affine stream tests whether meaningful pilot observations avoid needless directed procurement. This is a controlled finite-prior study, not general structure invention or a vanilla agent comparison.",
+  "cohorts": {
+    "development": [
+      151
+    ],
+    "replication": [
+      10060319613,
+      10060419627,
+      10060519649
+    ],
+    "generalization": [
+      10061319711,
+      10061419733,
+      10061519757
+    ]
+  },
+  "comparison_contract": "Reuse all completed 0.72 development and replication runs. Fresh generalization seeds are declared before either new-source runs or fresh baseline results. Both arms retain the exact prior task generation, full library restore, budgets, and terminal scoring. All stages count learning cost; terminal rows never enter learning. Per-stage actions separate conditional planning, full hypotheses, and evidence sharing from total cost."
+}

@@ -1,0 +1,42 @@
+...FF...............                                                     [100%]
+=================================== FAILURES ===================================
+_ test_source_episode_teaches_a_method_that_revisits_and_solves_the_earlier_question _
+
+    def test_source_episode_teaches_a_method_that_revisits_and_solves_the_earlier_question():
+        library = KnowledgeLibrary()
+        report = run_method_allocation(library)
+        summary = report["summary"]
+        assert summary["earlier_question_unresolved"]
+        assert summary["earlier_validation_loss"] > .5
+        assert summary["source_validation_loss"] < 1e-10
+>       assert summary["selection_reason"] == "learned_method_opportunity"
+E       AssertionError: assert 'initial_coverage' == 'learned_method_opportunity'
+E         
+E         - learned_method_opportunity
+E         + initial_coverage
+
+tests/test_cognition_method_allocation_runtime.py:19: AssertionError
+_ test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task _
+
+    def test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task():
+        library = KnowledgeLibrary()
+        prior = CognitiveAgent(ResearchConfig(seed=503, partition="continual"), library).run(make_suite(503, "continual")[0])
+        assert prior.validation_loss < 1e-10
+        report = run_method_allocation(library)
+        source = report["source_episode"]
+        feedback = [action["details"] for action in source["actions"] if action["action"] == "action_feedback"]
+        assert any(row["action"] == "refit" and row["last_gain"] == 0. for row in feedback)
+        assert any(row["action"] == "representation" and row["last_gain"] > .9 for row in feedback)
+        trace = source["research_state"]["method_trace"]
+        first = next(step for step in trace if step["action"] == "refit" and step["gain"] == 0.)
+        following = next(step for step in trace if step["method_id"] == first["method_id"] and step["action"] == "representation")
+        assert following["gain"] > .9
+        assert report["summary"]["source_validation_loss"] < 1e-10
+>       assert report["summary"]["continued_validation_loss"] < 1e-10
+E       assert 0.7517093475402703 < 1e-10
+
+tests/test_cognition_method_allocation_runtime.py:50: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_method_allocation_runtime.py::test_source_episode_teaches_a_method_that_revisits_and_solves_the_earlier_question
+FAILED tests/test_cognition_method_allocation_runtime.py::test_actual_prior_method_continues_past_a_neutral_preparation_in_the_next_source_task
+2 failed, 18 passed in 6.02s

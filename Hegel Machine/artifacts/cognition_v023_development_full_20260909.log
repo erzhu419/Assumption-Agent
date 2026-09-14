@@ -1,0 +1,543 @@
+........................................................................ [ 13%]
+..................................................FFFFFF................ [ 26%]
+........................................................................ [ 39%]
+........................................................................ [ 53%]
+............................................................FF.......... [ 66%]
+................F....................................................... [ 79%]
+.....................F...F.F............................................ [ 92%]
+.......................................                                  [100%]
+=================================== FAILURES ===================================
+_ test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[True-1.0-0.5] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73023e05f1c0>
+previous_offset = 1.0, proposed_offset = 0.5, calibration_available = True
+
+    @pytest.mark.parametrize("previous_offset,proposed_offset", [(1., .5), (1., 1.5), (.5, 1.)])
+    @pytest.mark.parametrize("calibration_available", [True, False])
+    def test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule(monkeypatch, previous_offset, proposed_offset, calibration_available):
+        predictor = Program("feature", name="x")
+        previous = {"kind": "global_interval", "action_rule": "empirical_cost_quantile",
+                    "action_offset": previous_offset, "residual_interval": [previous_offset] * 2, "status": "measured_selection"}
+        proposed = {**previous, "action_offset": proposed_offset, "residual_interval": [proposed_offset] * 2}
+    
+        class Environment:
+            spec = TaskSpec("continued_decisions", "Predict the reading", ("x",), (), (),
+                            feature_bounds={"x": (-1., 1.)}, risk_quantile=.9, decision_costs=(.9, .1))
+    
+            def observe(self, probe):
+                rows, history = [], []
+                for point in probe.sequence:
+                    target = point["x"] + 1.
+                    rows.append(Observation(point, target, tuple(history)))
+                    history.append({**point, "__target__": target})
+                return rows
+    
+        environment = Environment()
+        paid = Probe("paid", tuple({"x": x} for x in (-1., -.5, 0., .5, 1.)))
+        rows = environment.observe(paid)
+        candidate = Candidate("saved", predictor, "refit")
+        workspace = ResearchWorkspace(environment.spec.task_id, observations=rows, reference=rows,
+            incumbent=candidate, fallback=0., initial_loss=1., uncertainty_model=deepcopy(previous))
+        monkeypatch.setattr(controller, "synthesize", lambda *args, **kwargs: [])
+        received = {}
+    
+        if not calibration_available:
+            choose = controller.ResearchActionPolicy.choose
+    
+            def choose_without_calibration(self, options, **kwargs):
+                return None if all(option.name == "calibration" for option in options) else choose(self, options, **kwargs)
+    
+            monkeypatch.setattr(controller.ResearchActionPolicy, "choose", choose_without_calibration)
+    
+        def fit(program, train, validation, **kwargs):
+            assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+            received["fit_rows"] = [*train, *validation]
+            return deepcopy(proposed)
+    
+        monkeypatch.setattr(controller, "fit_decision_model", fit)
+        result = controller.CognitiveAgent(ResearchConfig(observation_budget=48, compute_budget=6000,
+            max_rounds=1, strategy="fixed", use_memory=False)).run(environment, research_state=workspace.to_dict())
+        assert result.program == predictor
+        improves = calibration_available and proposed_offset == 1.
+        expected = {**proposed, "calibration_source": "new_trajectory_after_program_selection"} if improves else previous
+        assert result.uncertainty_model == expected
+        assert result.research_state["uncertainty_model"] == expected
+        comparison = next(action.details for action in result.actions if action.action == "compare_calibration")
+        if not calibration_available:
+            assert comparison["compute_cost"] == 0
+            assert not received
+            return
+        assert comparison["before_loss"] == pytest.approx(.9 * (1. - previous_offset))
+        assert (comparison["gain"] > 0.) is improves
+        feedback = next(action.details for action in result.actions
+                        if action.action == "action_feedback" and action.details["action"] == "calibration")
+        if improves:
+            assert feedback["last_gain"] > 0.
+        else:
+            assert feedback["last_gain"] == pytest.approx(0.)
+        measured = [action for action in result.actions if action.action == "observe"
+                    and action.reason == "Measure subsequent decision performance"]
+>       assert len(measured) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+
+tests/test_cognition_decision_continuation.py:78: AssertionError
+_ test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[True-1.0-1.5] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73023ccd6b60>
+previous_offset = 1.0, proposed_offset = 1.5, calibration_available = True
+
+    @pytest.mark.parametrize("previous_offset,proposed_offset", [(1., .5), (1., 1.5), (.5, 1.)])
+    @pytest.mark.parametrize("calibration_available", [True, False])
+    def test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule(monkeypatch, previous_offset, proposed_offset, calibration_available):
+        predictor = Program("feature", name="x")
+        previous = {"kind": "global_interval", "action_rule": "empirical_cost_quantile",
+                    "action_offset": previous_offset, "residual_interval": [previous_offset] * 2, "status": "measured_selection"}
+        proposed = {**previous, "action_offset": proposed_offset, "residual_interval": [proposed_offset] * 2}
+    
+        class Environment:
+            spec = TaskSpec("continued_decisions", "Predict the reading", ("x",), (), (),
+                            feature_bounds={"x": (-1., 1.)}, risk_quantile=.9, decision_costs=(.9, .1))
+    
+            def observe(self, probe):
+                rows, history = [], []
+                for point in probe.sequence:
+                    target = point["x"] + 1.
+                    rows.append(Observation(point, target, tuple(history)))
+                    history.append({**point, "__target__": target})
+                return rows
+    
+        environment = Environment()
+        paid = Probe("paid", tuple({"x": x} for x in (-1., -.5, 0., .5, 1.)))
+        rows = environment.observe(paid)
+        candidate = Candidate("saved", predictor, "refit")
+        workspace = ResearchWorkspace(environment.spec.task_id, observations=rows, reference=rows,
+            incumbent=candidate, fallback=0., initial_loss=1., uncertainty_model=deepcopy(previous))
+        monkeypatch.setattr(controller, "synthesize", lambda *args, **kwargs: [])
+        received = {}
+    
+        if not calibration_available:
+            choose = controller.ResearchActionPolicy.choose
+    
+            def choose_without_calibration(self, options, **kwargs):
+                return None if all(option.name == "calibration" for option in options) else choose(self, options, **kwargs)
+    
+            monkeypatch.setattr(controller.ResearchActionPolicy, "choose", choose_without_calibration)
+    
+        def fit(program, train, validation, **kwargs):
+            assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+            received["fit_rows"] = [*train, *validation]
+            return deepcopy(proposed)
+    
+        monkeypatch.setattr(controller, "fit_decision_model", fit)
+        result = controller.CognitiveAgent(ResearchConfig(observation_budget=48, compute_budget=6000,
+            max_rounds=1, strategy="fixed", use_memory=False)).run(environment, research_state=workspace.to_dict())
+        assert result.program == predictor
+        improves = calibration_available and proposed_offset == 1.
+        expected = {**proposed, "calibration_source": "new_trajectory_after_program_selection"} if improves else previous
+        assert result.uncertainty_model == expected
+        assert result.research_state["uncertainty_model"] == expected
+        comparison = next(action.details for action in result.actions if action.action == "compare_calibration")
+        if not calibration_available:
+            assert comparison["compute_cost"] == 0
+            assert not received
+            return
+        assert comparison["before_loss"] == pytest.approx(.9 * (1. - previous_offset))
+        assert (comparison["gain"] > 0.) is improves
+        feedback = next(action.details for action in result.actions
+                        if action.action == "action_feedback" and action.details["action"] == "calibration")
+        if improves:
+            assert feedback["last_gain"] > 0.
+        else:
+            assert feedback["last_gain"] == pytest.approx(0.)
+        measured = [action for action in result.actions if action.action == "observe"
+                    and action.reason == "Measure subsequent decision performance"]
+>       assert len(measured) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+
+tests/test_cognition_decision_continuation.py:78: AssertionError
+_ test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[True-0.5-1.0] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73023e2d9330>
+previous_offset = 0.5, proposed_offset = 1.0, calibration_available = True
+
+    @pytest.mark.parametrize("previous_offset,proposed_offset", [(1., .5), (1., 1.5), (.5, 1.)])
+    @pytest.mark.parametrize("calibration_available", [True, False])
+    def test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule(monkeypatch, previous_offset, proposed_offset, calibration_available):
+        predictor = Program("feature", name="x")
+        previous = {"kind": "global_interval", "action_rule": "empirical_cost_quantile",
+                    "action_offset": previous_offset, "residual_interval": [previous_offset] * 2, "status": "measured_selection"}
+        proposed = {**previous, "action_offset": proposed_offset, "residual_interval": [proposed_offset] * 2}
+    
+        class Environment:
+            spec = TaskSpec("continued_decisions", "Predict the reading", ("x",), (), (),
+                            feature_bounds={"x": (-1., 1.)}, risk_quantile=.9, decision_costs=(.9, .1))
+    
+            def observe(self, probe):
+                rows, history = [], []
+                for point in probe.sequence:
+                    target = point["x"] + 1.
+                    rows.append(Observation(point, target, tuple(history)))
+                    history.append({**point, "__target__": target})
+                return rows
+    
+        environment = Environment()
+        paid = Probe("paid", tuple({"x": x} for x in (-1., -.5, 0., .5, 1.)))
+        rows = environment.observe(paid)
+        candidate = Candidate("saved", predictor, "refit")
+        workspace = ResearchWorkspace(environment.spec.task_id, observations=rows, reference=rows,
+            incumbent=candidate, fallback=0., initial_loss=1., uncertainty_model=deepcopy(previous))
+        monkeypatch.setattr(controller, "synthesize", lambda *args, **kwargs: [])
+        received = {}
+    
+        if not calibration_available:
+            choose = controller.ResearchActionPolicy.choose
+    
+            def choose_without_calibration(self, options, **kwargs):
+                return None if all(option.name == "calibration" for option in options) else choose(self, options, **kwargs)
+    
+            monkeypatch.setattr(controller.ResearchActionPolicy, "choose", choose_without_calibration)
+    
+        def fit(program, train, validation, **kwargs):
+            assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+            received["fit_rows"] = [*train, *validation]
+            return deepcopy(proposed)
+    
+        monkeypatch.setattr(controller, "fit_decision_model", fit)
+        result = controller.CognitiveAgent(ResearchConfig(observation_budget=48, compute_budget=6000,
+            max_rounds=1, strategy="fixed", use_memory=False)).run(environment, research_state=workspace.to_dict())
+        assert result.program == predictor
+        improves = calibration_available and proposed_offset == 1.
+        expected = {**proposed, "calibration_source": "new_trajectory_after_program_selection"} if improves else previous
+>       assert result.uncertainty_model == expected
+E       AssertionError: assert {'action_offs....0, 1.0], ...} == {'action_offs...nterval', ...}
+E         
+E         Omitting 5 identical items, use -vv to show
+E         Right contains 1 more item:
+E         {'calibration_source': 'new_trajectory_after_program_selection'}
+E         Use -v to get more diff
+
+tests/test_cognition_decision_continuation.py:61: AssertionError
+_ test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[False-1.0-0.5] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73023e828c10>
+previous_offset = 1.0, proposed_offset = 0.5, calibration_available = False
+
+    @pytest.mark.parametrize("previous_offset,proposed_offset", [(1., .5), (1., 1.5), (.5, 1.)])
+    @pytest.mark.parametrize("calibration_available", [True, False])
+    def test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule(monkeypatch, previous_offset, proposed_offset, calibration_available):
+        predictor = Program("feature", name="x")
+        previous = {"kind": "global_interval", "action_rule": "empirical_cost_quantile",
+                    "action_offset": previous_offset, "residual_interval": [previous_offset] * 2, "status": "measured_selection"}
+        proposed = {**previous, "action_offset": proposed_offset, "residual_interval": [proposed_offset] * 2}
+    
+        class Environment:
+            spec = TaskSpec("continued_decisions", "Predict the reading", ("x",), (), (),
+                            feature_bounds={"x": (-1., 1.)}, risk_quantile=.9, decision_costs=(.9, .1))
+    
+            def observe(self, probe):
+                rows, history = [], []
+                for point in probe.sequence:
+                    target = point["x"] + 1.
+                    rows.append(Observation(point, target, tuple(history)))
+                    history.append({**point, "__target__": target})
+                return rows
+    
+        environment = Environment()
+        paid = Probe("paid", tuple({"x": x} for x in (-1., -.5, 0., .5, 1.)))
+        rows = environment.observe(paid)
+        candidate = Candidate("saved", predictor, "refit")
+        workspace = ResearchWorkspace(environment.spec.task_id, observations=rows, reference=rows,
+            incumbent=candidate, fallback=0., initial_loss=1., uncertainty_model=deepcopy(previous))
+        monkeypatch.setattr(controller, "synthesize", lambda *args, **kwargs: [])
+        received = {}
+    
+        if not calibration_available:
+            choose = controller.ResearchActionPolicy.choose
+    
+            def choose_without_calibration(self, options, **kwargs):
+                return None if all(option.name == "calibration" for option in options) else choose(self, options, **kwargs)
+    
+            monkeypatch.setattr(controller.ResearchActionPolicy, "choose", choose_without_calibration)
+    
+        def fit(program, train, validation, **kwargs):
+            assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+            received["fit_rows"] = [*train, *validation]
+            return deepcopy(proposed)
+    
+        monkeypatch.setattr(controller, "fit_decision_model", fit)
+>       result = controller.CognitiveAgent(ResearchConfig(observation_budget=48, compute_budget=6000,
+            max_rounds=1, strategy="fixed", use_memory=False)).run(environment, research_state=workspace.to_dict())
+
+tests/test_cognition_decision_continuation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hegel_machine/cognition/controller.py:1250: in run
+    decision_model = fit_decision_model(incumbent.program, train, validation, fallback=fallback,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+program = Program(op='feature', value=None, name='x', lag=0, children=(), definition=None)
+train = [Observation(features={'x': -1.0}, target=0.0, history=()), Observation(features={'x': -0.5}, target=0.5, history=({'x...0.5, '__target__': 1.5})), Observation(features={'x': 0.2924211985935852}, target=1.2924211985935852, history=()), ...]
+validation = [Observation(features={'x': -1.0}, target=0.0, history=()), Observation(features={'x': -1.0}, target=0.0, history=({'x..., '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}))]
+kwargs = {'adaptive': True, 'budget': SearchBudget(limit=5844, spent=0), 'costs': (0.9, 0.1), 'fallback': 0.0, ...}
+@py_format1 = 'No research should refit a retained calibration without subsequent evidence.\n>assert False'
+
+    def fit(program, train, validation, **kwargs):
+>       assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+E       AssertionError: No research should refit a retained calibration without subsequent evidence.
+E       assert False
+
+tests/test_cognition_decision_continuation.py:51: AssertionError
+_ test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[False-1.0-1.5] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73023cd637f0>
+previous_offset = 1.0, proposed_offset = 1.5, calibration_available = False
+
+    @pytest.mark.parametrize("previous_offset,proposed_offset", [(1., .5), (1., 1.5), (.5, 1.)])
+    @pytest.mark.parametrize("calibration_available", [True, False])
+    def test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule(monkeypatch, previous_offset, proposed_offset, calibration_available):
+        predictor = Program("feature", name="x")
+        previous = {"kind": "global_interval", "action_rule": "empirical_cost_quantile",
+                    "action_offset": previous_offset, "residual_interval": [previous_offset] * 2, "status": "measured_selection"}
+        proposed = {**previous, "action_offset": proposed_offset, "residual_interval": [proposed_offset] * 2}
+    
+        class Environment:
+            spec = TaskSpec("continued_decisions", "Predict the reading", ("x",), (), (),
+                            feature_bounds={"x": (-1., 1.)}, risk_quantile=.9, decision_costs=(.9, .1))
+    
+            def observe(self, probe):
+                rows, history = [], []
+                for point in probe.sequence:
+                    target = point["x"] + 1.
+                    rows.append(Observation(point, target, tuple(history)))
+                    history.append({**point, "__target__": target})
+                return rows
+    
+        environment = Environment()
+        paid = Probe("paid", tuple({"x": x} for x in (-1., -.5, 0., .5, 1.)))
+        rows = environment.observe(paid)
+        candidate = Candidate("saved", predictor, "refit")
+        workspace = ResearchWorkspace(environment.spec.task_id, observations=rows, reference=rows,
+            incumbent=candidate, fallback=0., initial_loss=1., uncertainty_model=deepcopy(previous))
+        monkeypatch.setattr(controller, "synthesize", lambda *args, **kwargs: [])
+        received = {}
+    
+        if not calibration_available:
+            choose = controller.ResearchActionPolicy.choose
+    
+            def choose_without_calibration(self, options, **kwargs):
+                return None if all(option.name == "calibration" for option in options) else choose(self, options, **kwargs)
+    
+            monkeypatch.setattr(controller.ResearchActionPolicy, "choose", choose_without_calibration)
+    
+        def fit(program, train, validation, **kwargs):
+            assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+            received["fit_rows"] = [*train, *validation]
+            return deepcopy(proposed)
+    
+        monkeypatch.setattr(controller, "fit_decision_model", fit)
+>       result = controller.CognitiveAgent(ResearchConfig(observation_budget=48, compute_budget=6000,
+            max_rounds=1, strategy="fixed", use_memory=False)).run(environment, research_state=workspace.to_dict())
+
+tests/test_cognition_decision_continuation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hegel_machine/cognition/controller.py:1250: in run
+    decision_model = fit_decision_model(incumbent.program, train, validation, fallback=fallback,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+program = Program(op='feature', value=None, name='x', lag=0, children=(), definition=None)
+train = [Observation(features={'x': -1.0}, target=0.0, history=()), Observation(features={'x': -0.5}, target=0.5, history=({'x...0.5, '__target__': 1.5})), Observation(features={'x': 0.2924211985935852}, target=1.2924211985935852, history=()), ...]
+validation = [Observation(features={'x': -1.0}, target=0.0, history=()), Observation(features={'x': -1.0}, target=0.0, history=({'x..., '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}))]
+kwargs = {'adaptive': True, 'budget': SearchBudget(limit=5844, spent=0), 'costs': (0.9, 0.1), 'fallback': 0.0, ...}
+@py_format1 = 'No research should refit a retained calibration without subsequent evidence.\n>assert False'
+
+    def fit(program, train, validation, **kwargs):
+>       assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+E       AssertionError: No research should refit a retained calibration without subsequent evidence.
+E       assert False
+
+tests/test_cognition_decision_continuation.py:51: AssertionError
+_ test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[False-0.5-1.0] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73023c9dbfa0>
+previous_offset = 0.5, proposed_offset = 1.0, calibration_available = False
+
+    @pytest.mark.parametrize("previous_offset,proposed_offset", [(1., .5), (1., 1.5), (.5, 1.)])
+    @pytest.mark.parametrize("calibration_available", [True, False])
+    def test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule(monkeypatch, previous_offset, proposed_offset, calibration_available):
+        predictor = Program("feature", name="x")
+        previous = {"kind": "global_interval", "action_rule": "empirical_cost_quantile",
+                    "action_offset": previous_offset, "residual_interval": [previous_offset] * 2, "status": "measured_selection"}
+        proposed = {**previous, "action_offset": proposed_offset, "residual_interval": [proposed_offset] * 2}
+    
+        class Environment:
+            spec = TaskSpec("continued_decisions", "Predict the reading", ("x",), (), (),
+                            feature_bounds={"x": (-1., 1.)}, risk_quantile=.9, decision_costs=(.9, .1))
+    
+            def observe(self, probe):
+                rows, history = [], []
+                for point in probe.sequence:
+                    target = point["x"] + 1.
+                    rows.append(Observation(point, target, tuple(history)))
+                    history.append({**point, "__target__": target})
+                return rows
+    
+        environment = Environment()
+        paid = Probe("paid", tuple({"x": x} for x in (-1., -.5, 0., .5, 1.)))
+        rows = environment.observe(paid)
+        candidate = Candidate("saved", predictor, "refit")
+        workspace = ResearchWorkspace(environment.spec.task_id, observations=rows, reference=rows,
+            incumbent=candidate, fallback=0., initial_loss=1., uncertainty_model=deepcopy(previous))
+        monkeypatch.setattr(controller, "synthesize", lambda *args, **kwargs: [])
+        received = {}
+    
+        if not calibration_available:
+            choose = controller.ResearchActionPolicy.choose
+    
+            def choose_without_calibration(self, options, **kwargs):
+                return None if all(option.name == "calibration" for option in options) else choose(self, options, **kwargs)
+    
+            monkeypatch.setattr(controller.ResearchActionPolicy, "choose", choose_without_calibration)
+    
+        def fit(program, train, validation, **kwargs):
+            assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+            received["fit_rows"] = [*train, *validation]
+            return deepcopy(proposed)
+    
+        monkeypatch.setattr(controller, "fit_decision_model", fit)
+>       result = controller.CognitiveAgent(ResearchConfig(observation_budget=48, compute_budget=6000,
+            max_rounds=1, strategy="fixed", use_memory=False)).run(environment, research_state=workspace.to_dict())
+
+tests/test_cognition_decision_continuation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hegel_machine/cognition/controller.py:1250: in run
+    decision_model = fit_decision_model(incumbent.program, train, validation, fallback=fallback,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+program = Program(op='feature', value=None, name='x', lag=0, children=(), definition=None)
+train = [Observation(features={'x': -1.0}, target=0.0, history=()), Observation(features={'x': -0.5}, target=0.5, history=({'x...0.5, '__target__': 1.5})), Observation(features={'x': 0.2924211985935852}, target=1.2924211985935852, history=()), ...]
+validation = [Observation(features={'x': -1.0}, target=0.0, history=()), Observation(features={'x': -1.0}, target=0.0, history=({'x..., '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}, {'x': -1.0, '__target__': 0.0}))]
+kwargs = {'adaptive': True, 'budget': SearchBudget(limit=5844, spent=0), 'costs': (0.9, 0.1), 'fallback': 0.0, ...}
+@py_format1 = 'No research should refit a retained calibration without subsequent evidence.\n>assert False'
+
+    def fit(program, train, validation, **kwargs):
+>       assert calibration_available, "No research should refit a retained calibration without subsequent evidence."
+E       AssertionError: No research should refit a retained calibration without subsequent evidence.
+E       assert False
+
+tests/test_cognition_decision_continuation.py:51: AssertionError
+__ test_a_learned_sequence_executes_on_another_task_and_receives_new_feedback __
+
+    def test_a_learned_sequence_executes_on_another_task_and_receives_new_feedback():
+        library = KnowledgeLibrary()
+        config = ResearchConfig(seed=503, partition="continual")
+        environments = make_suite(503, "continual")
+        for environment in environments[:2]:
+            CognitiveAgent(config, library).run(environment)
+        restored = KnowledgeLibrary.from_dict(library.to_dict())
+        # A source-only suggestion need not displace the third task's own plan.
+        # Continue the actual sequence until a compatible action earns transfer
+        # feedback, retaining all preceding tasks as the method's learning history.
+        results = [CognitiveAgent(config, restored).run(environment) for environment in environments[2:]]
+>       result = next(result for result in results if any(
+            step.get("method_id") and step["gain"] > 0 for step in result.research_state["method_trace"]))
+E       StopIteration
+
+tests/test_cognition_method_runtime.py:20: StopIteration
+_ test_paid_new_knowledge_reopens_a_stopped_question_but_numeric_redelivery_does_not _
+
+    def test_paid_new_knowledge_reopens_a_stopped_question_but_numeric_redelivery_does_not():
+        target = MeasuredTask("unresolved", nonlinear=True)
+        session = ResearchSession(config(learn_research_policy=False), [target],
+            observation_budget=500, compute_budget=100000, max_visits=6)
+        stopped = session.run()
+>       assert stopped["tasks"][0]["visits"] == 2
+E       assert 1 == 2
+
+tests/test_cognition_new_knowledge_opportunities.py:15: AssertionError
+_____ test_risk_calibration_trajectory_is_acquired_after_program_selection _____
+
+    def test_risk_calibration_trajectory_is_acquired_after_program_selection():
+        result = CognitiveAgent(ResearchConfig(compute_budget=12000, max_rounds=3)).run(make_suite()[3])
+        allocation = next(i for i,a in enumerate(result.actions) if a.action == 'plan_calibration')
+        calibration = [i for i,a in enumerate(result.actions) if a.action == 'observe' and i > allocation]
+>       assert len(calibration) == 3
+E       assert 4 == 3
+E        +  where 4 = len([69, 70, 73, 74])
+
+tests/test_cognition_research_allocation.py:72: AssertionError
+______ test_all_tasks_are_seen_before_revisiting_the_unresolved_question _______
+
+    def test_all_tasks_are_seen_before_revisiting_the_unresolved_question():
+        factories = [lambda: MeasuredTask("unresolved", nonlinear=True), lambda: MeasuredTask("linear")]
+        result = ResearchSession(config(), factories, observation_budget=160,
+                                 compute_budget=30000, max_visits=2).run()
+>       assert [row["task_index"] for row in result["episodes"]] == [0, 1, 0]
+E       assert [0, 1] == [0, 1, 0]
+E         
+E         Right contains one more item: 0
+E         Use -v to get more diff
+
+tests/test_cognition_session.py:71: AssertionError
+__________ test_more_resources_continue_an_unresolved_saved_question ___________
+
+    def test_more_resources_continue_an_unresolved_saved_question():
+        factories = [lambda: MeasuredTask("hard", nonlinear=True)]
+        first = ResearchSession(config(), factories, observation_budget=32,
+                                compute_budget=6000, max_visits=1).run()
+        assert first["unresolved_tasks"] == [0]
+        restored = ResearchSession(config(), factories, observation_budget=96,
+                                   compute_budget=18000, max_visits=3, state=first).run(max_steps=1)
+>       assert restored["completed_visits"] == 2
+E       assert 1 == 2
+
+tests/test_cognition_session.py:121: AssertionError
+__ test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit __
+
+    def test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit():
+        def risk_task():
+            task = MeasuredTask("risk", nonlinear=True)
+            task.spec = replace(task.spec, risk_quantile=.8, decision_costs=(4., 1.))
+            return task
+    
+        options = dict(observation_budget=96, compute_budget=18000, max_visits=2)
+        first = ResearchSession(config(), [risk_task], **options).run(max_steps=1)
+        assert first["tasks"][0]["unresolved"]
+        last = next(action["details"] for action in reversed(first["episodes"][0]["actions"])
+                    if action["action"] == "compare")
+        last.update(evidence_gain=0., dispersion_margin=.02)
+        for residual_loss in (.1, 10., 1000.):
+            state = deepcopy(first)
+            # Isolate the claim that a large residual alone cannot create value.
+            # A separately retained fitted decision alternative is an executable
+            # question and is covered by the decision-research runtime tests.
+            state["workspaces"]["0"]["decision_frontier"] = {}
+            state["tasks"][0].update(validation_loss=residual_loss, normalized_excess_loss=residual_loss)
+            resumed = ResearchSession(config(), [risk_task], state=state, **options).run()
+            assert resumed["completed_visits"] == 1
+            assert resumed["total_observation_cost"] == first["total_observation_cost"]
+            assert resumed["tasks"][0]["revisit_basis"] == "no_observed_revision_gain"
+            assert resumed["unresolved_tasks"] == [0]
+        last.update(evidence_gain=.1, dispersion_margin=.02)
+        resumed = ResearchSession(config(), [risk_task], state=first, **options).run()
+        assert resumed["completed_visits"] == 2
+>       assert resumed["scheduler_events"][-1]["reason"] == "recent_supported_risk_improvement"
+E       AssertionError: assert 'unresolved_decision_question' == 'recent_suppo...k_improvement'
+E         
+E         - recent_supported_risk_improvement
+E         + unresolved_decision_question
+
+tests/test_cognition_session.py:163: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_decision_continuation.py::test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[True-1.0-0.5]
+FAILED tests/test_cognition_decision_continuation.py::test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[True-1.0-1.5]
+FAILED tests/test_cognition_decision_continuation.py::test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[True-0.5-1.0]
+FAILED tests/test_cognition_decision_continuation.py::test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[False-1.0-0.5]
+FAILED tests/test_cognition_decision_continuation.py::test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[False-1.0-1.5]
+FAILED tests/test_cognition_decision_continuation.py::test_continued_calibration_compares_actual_old_actions_and_saves_the_selected_rule[False-0.5-1.0]
+FAILED tests/test_cognition_method_runtime.py::test_a_learned_sequence_executes_on_another_task_and_receives_new_feedback
+FAILED tests/test_cognition_new_knowledge_opportunities.py::test_paid_new_knowledge_reopens_a_stopped_question_but_numeric_redelivery_does_not
+FAILED tests/test_cognition_research_allocation.py::test_risk_calibration_trajectory_is_acquired_after_program_selection
+FAILED tests/test_cognition_session.py::test_all_tasks_are_seen_before_revisiting_the_unresolved_question
+FAILED tests/test_cognition_session.py::test_more_resources_continue_an_unresolved_saved_question
+FAILED tests/test_cognition_session.py::test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit

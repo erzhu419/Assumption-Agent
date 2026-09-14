@@ -1,0 +1,281 @@
+.............FF......F...                                                [100%]
+=================================== FAILURES ===================================
+_ test_real_promising_uncertified_control_can_compete_for_a_repeat_without_relaxing_recommendation _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d0a31812bc0>
+
+    def test_real_promising_uncertified_control_can_compete_for_a_repeat_without_relaxing_recommendation(project_root, monkeypatch):
+        """An actual noisy winner loses certification and may buy evidence to recover it."""
+>       _check_uncertified_nomination(project_root, monkeypatch, "objective_only_change_1_noise_0.03",
+            "research_promising_constraint_certificate", "sc_kg_terminal_value_v040_20260910")
+
+tests/test_cognition_sc_kg_environment.py:450: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d0a31812bc0>
+case_id = 'objective_only_change_1_noise_0.03'
+reason = 'research_promising_constraint_certificate'
+frozen_directory = 'sc_kg_terminal_value_v040_20260910'
+
+    def _check_uncertified_nomination(project_root, monkeypatch, case_id, reason, frozen_directory):
+        import numpy as np
+        algorithm, adapter, environment = _saved_terminal_failure_optimizer(project_root, monkeypatch,
+            case_id, frozen_directory=frozen_directory)
+        original_offers = algorithm.objective_research.terminal_offers
+        original_scores = algorithm._exact_posterior_update_scores
+        original_measure = adapter.simulate
+        nominations, purchased = {}, []
+    
+        def certificate(point):
+            return algorithm._terminal_certificate_components(algorithm.gpr, algorithm.variance_model,
+                [point], observations=algorithm.observations)
+    
+        def actual_offers(rows, forecast, **context):
+            request_count = len(algorithm.objective_research.state["requests"])
+            offers = original_offers(rows, forecast, **context)
+            repairs = [offer for offer in offers if offer["reason"] == reason]
+            assert len(repairs) <= 1 and len(offers) <= 4
+            if repairs:
+                offer = repairs[0]
+                point = environment.integer_point(offer["features"])
+                assert certificate(point)["margin"][0] > 0.
+                assert offer["feasible"] is False
+                if reason == "supported_goal_with_uncertain_constraint":
+                    anchor = environment.integer_point(offer["support_anchor"]["features"])
+                    assert all(point != control for control, _ in algorithm.history)
+                    differences = [abs(a - b) for a, b in zip(point, anchor) if a != b]
+                    assert len(differences) == 1 and differences[0] <= 4
+                    assert offer["prediction"]["constraint_mean"] <= 0.
+                    assert offer["prediction"]["predicted_gain"] > offer["prediction"]["gain_uncertainty"] + 1e-7
+                    assert offer["purpose"] == "objective_exploration"
+                else:
+                    anchor = point
+                    assert offer["purpose"] == "objective_confirmation"
+                actual = [float(output[1]) for index, (control, output) in enumerate(algorithm.history)
+                          if index >= algorithm.active_scope_start and control == anchor
+                          and index not in algorithm.rejected_constraint_indices]
+                assert actual and np.mean(actual) <= 0.
+                assert algorithm.objective_research.state["pending"] is None
+                assert len(algorithm.objective_research.state["requests"]) == request_count
+                nominations[len(algorithm.history)] = {"point": point, "request_count": request_count,
+                                                        "scored": False}
+            return offers
+    
+        def native_scores(candidates, terminal_pool, **kwargs):
+            check = nominations.get(len(algorithm.history))
+            if check is not None:
+                assert check["point"] in candidates
+                assert {point for point, _ in algorithm.history}.issubset(set(terminal_pool))
+                assert algorithm.objective_research.state["pending"] is None
+                margin_before = float(certificate(check["point"])["margin"][0])
+            scores = original_scores(candidates, terminal_pool, **kwargs)
+            if check is not None:
+                check["scored"] = True
+                # Nomination and native fantasies confer no actual certificate.
+                assert certificate(check["point"])["margin"][0] == margin_before > 0.
+            return scores
+    
+        def actual_measure(point, rng=None):
+            check = nominations.get(len(algorithm.history))
+            if check is not None and tuple(point) == check["point"]:
+                pending = algorithm.objective_research.state["pending"]
+                assert pending["reason"] == reason
+                assert len(algorithm.objective_research.state["requests"]) == check["request_count"] + 1
+                purchased.append(tuple(point))
+            return original_measure(point, rng)
+    
+        algorithm.objective_research.terminal_offers = actual_offers
+        algorithm._exact_posterior_update_scores = native_scores
+        adapter.simulate = actual_measure
+        result = algorithm.run()
+        assert nominations and all(row["scored"] for row in nominations.values()), algorithm.objective_diagnostics["terminal_candidate_sets"]
+>       assert purchased, {"nominations": nominations, "choices": algorithm.objective_diagnostics["terminal_choices"]}
+E       AssertionError: {'choices': [{'action_kind': 'new', 'offered_candidate_count': 2, 'point': [19, 62, 34], 'purpose': 'objective_explora... (19, 62, 34), 'request_count': 14, 'scored': True}, 63: {'point': (19, 59, 34), 'request_count': 15, 'scored': True}}}
+E       assert []
+
+tests/test_cognition_sc_kg_environment.py:531: AssertionError
+_ test_real_supported_uncertified_neighbor_uses_native_kg_and_paid_observation _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d0a313be020>
+
+    def test_real_supported_uncertified_neighbor_uses_native_kg_and_paid_observation(project_root, monkeypatch):
+>       _check_uncertified_nomination(project_root, monkeypatch, "value_precision_1_objective_only_change_noise_0.03",
+            "supported_goal_with_uncertain_constraint", "sc_kg_value_precision_v041_20260910")
+
+tests/test_cognition_sc_kg_environment.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_cognition_sc_kg_environment.py:529: in _check_uncertified_nomination
+    result = algorithm.run()
+../../KG_op/SC-OLH-KG/algorithms/single_olhkg.py:14896: in run
+    candidates, candidate_sources = self._generate_candidates(iteration)
+src/hegel_machine/cognition/sc_kg_environment.py:485: in _generate_candidates
+    candidates, sources = self._research_candidates(iteration)
+src/hegel_machine/cognition/sc_kg_environment.py:540: in _research_candidates
+    offers = self.objective_research.terminal_offers(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'context': {'global_index': 0, 'objective': 1.687878554243491, 'point': [85, 24, 64], 'stage': 1}, 'observation': {'...res': {'x1': np.float64(0.02), 'x2': np.float64(0.96), 'x3': np.float64(0.87)}, 'target': -0.001548423770231927}}, ...]
+forecast = <bound method initialize_sc_kg_optimizer.<locals>.ResearchInitializedSCAlgorithm._objective_forecast of <hegel_machine.cognition.sc_kg_environment.initialize_sc_kg_optimizer.<locals>.ResearchInitializedSCAlgorithm object at 0x7d0a313bcac0>>
+context = {'remaining_calls': 4, 'scope_start': 0, 'stage': 60}
+request_count = 12
+offers = [{'features': {'x1': np.float64(0.2), 'x2': np.float64(0.39), 'x3': np.float64(0.59)}, 'incumbent_measured_mean': 2.81....06404388382390092, 'constraint_noise': 0.001419997648031746, 'constraint_variance': 0.0019177194176278846, ...}, ...}]
+repairs = [{'feasible': False, 'features': {'x1': np.float64(0.2), 'x2': np.float64(0.34), 'x3': np.float64(0.59)}, 'incumbent_m....06404388382390092, 'constraint_noise': 0.001419997648031746, 'constraint_variance': 0.0019177194176278846, ...}, ...}]
+@py_assert1 = ['1\n{1 = len([5])\n} == 1', '5 <= 4'], @py_assert4 = 1
+@py_assert7 = 1, @py_assert6 = True
+
+    def actual_offers(rows, forecast, **context):
+        request_count = len(algorithm.objective_research.state["requests"])
+        offers = original_offers(rows, forecast, **context)
+        repairs = [offer for offer in offers if offer["reason"] == reason]
+        assert len(repairs) <= 1 and len(offers) <= 4
+        if repairs:
+            offer = repairs[0]
+            point = environment.integer_point(offer["features"])
+            assert certificate(point)["margin"][0] > 0.
+            assert offer["feasible"] is False
+            if reason == "supported_goal_with_uncertain_constraint":
+                anchor = environment.integer_point(offer["support_anchor"]["features"])
+                assert all(point != control for control, _ in algorithm.history)
+                differences = [abs(a - b) for a, b in zip(point, anchor) if a != b]
+>               assert len(differences) == 1 and differences[0] <= 4
+E               assert (1 == 1 and 5 <= 4)
+E                +  where 1 = len([5])
+
+tests/test_cognition_sc_kg_environment.py:486: AssertionError
+__ test_real_objective_only_change_validates_and_rebuilds_only_the_goal_head ___
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+
+    def test_real_objective_only_change_validates_and_rebuilds_only_the_goal_head(project_root):
+        from copy import deepcopy
+        import numpy as np
+        from hegel_machine.cognition.joint_model_revision import JointModelRevision
+        environment = SCKGEnvironment(project_root, problem="rzdt2", dimension=3, seed=841000131)
+        from algorithms.single_olhkg import SingleOLHKGConfig
+        simulate = environment._problem.simulate
+        calls = []
+    
+        def instrument(point, rng=None):
+            vector = np.asarray(simulate(point, rng), dtype=float)
+            x1, x2 = point[0] / 100., point[1] / 100.
+            value = .5 + x1 if len(calls) < 44 else .5 + (1 - x1) ** 2 + .5 * (1 - x2)
+            vector[:2] = value
+            calls.append((tuple(point), vector.copy()))
+            return vector
+    
+        environment._problem.simulate = instrument
+        for probe in (*environment.spec.initial_probes, *environment.spec.available_probes[:2]):
+            environment.observe(probe)
+        config = SingleOLHKGConfig(N=64, K1=3, K2=0, posterior_pool_size=8, posterior_keep=1,
+            axis_candidate_count=0, state_candidate_count=0, use_state_coupling=False,
+            use_state_basis=False, lambda_coupling=0., variance_mode="pooled",
+            exact_kg_mc_samples=1, eval_pool_size=8, evaluate_interval=0,
+            truth_pool_diagnostics=False, checkpoint_interval=0,
+            use_recommendation_refinement=False, recommendation_axis_oracle=False, seed=841000132)
+        adapter = compile_sc_kg_program(environment, Program("feature", name="x1"))
+        recovery = JointModelRevision(environment.spec, seed=841000131)
+        algorithm = initialize_sc_kg_optimizer(adapter, config, recovery=recovery)
+        original_rebase = algorithm._rebase_objective_scope
+        checks = []
+        terminal_rounds = {}
+        original_offers = algorithm.objective_research.terminal_offers
+        original_scores = algorithm._exact_posterior_update_scores
+        original_measure = adapter.simulate
+    
+        def three_actual_actions(rows, forecast, **context):
+            offered = original_offers(rows, forecast, **context)
+            if algorithm.objective_research.state["scope_research"] is not None:
+                return offered
+            # Fix only the proposal list for this routing test. The installed goal
+            # head earned its real four future observations, and all GP/HVD, KG
+            # scores, selection and subsequent simulator outputs remain real.
+            observed = list(dict.fromkeys(point for point, output in
+                algorithm.history[algorithm.active_objective_scope_start:] if output[1] <= 0.))
+            assert len(observed) >= 2
+            paid = {point for point, _ in algorithm.history}
+            new = next((100, 100, coordinate) for coordinate in range(100, -1, -1)
+                       if (100, 100, coordinate) not in paid)
+            points = [new, *observed[:2]]
+            offers = [{"features": dict(zip(environment.spec.feature_names, (value / 100. for value in point))),
+                       "purpose": "objective_exploration" if index == 0 else "objective_confirmation",
+                       "reason": "integration_terminal_alternative", "stage": context["stage"],
+                       "scope_start": context["scope_start"]}
+                      for index, point in enumerate(points)]
+            terminal_rounds[len(algorithm.history)] = {"points": points, "paid": paid,
+                "request_count": len(algorithm.objective_research.state["requests"]), "score_calls": 0}
+            assert algorithm.objective_research.state["pending"] is None
+            return offers
+    
+        def score_actual_actions(candidates, terminal_pool, *args, **kwargs):
+            check = terminal_rounds.get(len(algorithm.history))
+            if check is not None:
+                assert list(candidates) == check["points"]
+                assert len(candidates) == 3
+                assert candidates[0] not in check["paid"] and all(point in check["paid"] for point in candidates[1:])
+                assert check["paid"].issubset(set(terminal_pool)) and len(terminal_pool) > 3
+                assert algorithm.objective_research.state["pending"] is None
+                assert len(algorithm.objective_research.state["requests"]) == check["request_count"]
+                check["score_calls"] += 1
+            return original_scores(candidates, terminal_pool, *args, **kwargs)
+    
+        def measure_selected(point, rng=None):
+            check = terminal_rounds.get(len(algorithm.history))
+            if check is not None:
+                pending = algorithm.objective_research.state["pending"]
+                assert tuple(point) in check["points"] and pending is not None
+                assert environment.integer_point(pending["features"]) == tuple(point)
+                assert len(algorithm.objective_research.state["requests"]) == check["request_count"] + 1
+            return original_measure(point, rng)
+    
+        algorithm.objective_research.terminal_offers = three_actual_actions
+        algorithm._exact_posterior_update_scores = score_actual_actions
+        adapter.simulate = measure_selected
+    
+        def apply_goal_only(revision, stage):
+            models = dict(algorithm.constraint_models)
+            state = {name: (model.a.copy(), model.C.copy()) for name, model in models.items()}
+            variances = {name: deepcopy(value.records[1]) for name, value in algorithm.constraint_variances.items()}
+            prior, scope = adapter.basis.program, algorithm.active_scope_start
+            original_rebase(revision, stage)
+            for name, model in algorithm.constraint_models.items():
+                assert model is models[name]
+                np.testing.assert_array_equal(model.a, state[name][0])
+                np.testing.assert_array_equal(model.C, state[name][1])
+                assert algorithm.constraint_variances[name].records[1] == variances[name]
+            assert adapter.basis.program == prior and algorithm.active_scope_start == scope
+            checks.append(stage)
+    
+        algorithm._rebase_objective_scope = apply_goal_only
+>       result = algorithm.run()
+
+tests/test_cognition_sc_kg_environment.py:981: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../KG_op/SC-OLH-KG/algorithms/single_olhkg.py:15140: in run
+    exact_kg = self._exact_posterior_update_scores(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+candidates = [(100, 100, 100), (98, 12, 28), (0, 100, 42), (100, 100, 69)]
+terminal_pool = [(80, 73, 62), (32, 78, 29), (98, 12, 28), (69, 73, 21), (0, 34, 0), (48, 31, 87), ...]
+args = (), kwargs = {}
+@py_assert2 = [(100, 100, 100), (98, 12, 28), (0, 100, 42), (100, 100, 69)]
+@py_assert5 = [(100, 100, 100), (98, 12, 28), (0, 100, 42)], @py_assert4 = False
+@py_format7 = '[(100, 100, 1...100, 100, 69)] == [(100, 100, 1... (0, 100, 42)]\n~\n~Left contains one more item: (100, 100, 69)\n~Use -v to get more diff'
+@py_format9 = 'assert [(100, 100, 1...100, 100, 69)] == [(100, 100, 1... (0, 100, 42)]\n~\n~Left contains one more item: (100, 100, 69)\n~Use -v to get more diff'
+
+    def score_actual_actions(candidates, terminal_pool, *args, **kwargs):
+        check = terminal_rounds.get(len(algorithm.history))
+        if check is not None:
+>           assert list(candidates) == check["points"]
+E           assert [(100, 100, 1...100, 100, 69)] == [(100, 100, 1... (0, 100, 42)]
+E             
+E             Left contains one more item: (100, 100, 69)
+E             Use -v to get more diff
+
+tests/test_cognition_sc_kg_environment.py:944: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_promising_uncertified_control_can_compete_for_a_repeat_without_relaxing_recommendation
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_supported_uncertified_neighbor_uses_native_kg_and_paid_observation
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_objective_only_change_validates_and_rebuilds_only_the_goal_head

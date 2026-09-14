@@ -1,0 +1,268 @@
+"""Turn competing object programs into purchased, prospective experiments.
+
+Only public controls and learned calibrations produce forecasts. The caller
+purchases the selected probe with instruments; measured fields then distinguish
+a failed calibration from a failed response law. The frozen hypotheses are
+evaluated before any refitting on that new evidence.
+"""
+
+from math import isfinite
+from random import Random
+
+from .language import MissingHistory, Program
+from .equivalent_object_programs import canonical_object_program
+from .models import Observation, Probe, SearchBudget
+from .scale_bindings import bind_measurement_arguments, control_history_depth
+
+
+def _forecast(program, sequence):
+    history, values = [], []
+    for point in sequence:
+        try:
+            value = program.predict(Observation(point, 0., tuple(history)))
+            value = value if isfinite(value) else None
+        except MissingHistory:
+            value = None
+        except KeyError as error:
+            if error.args[0] != "__target__":
+                raise
+            value = None
+        values.append(value)
+        history.append({**point, **({"__target__": value} if value is not None else {})})
+    return values
+
+
+def _probe_pool(spec, serial, length):
+    bounds = spec.feature_bounds
+    center = {name: (low + high) / 2 for name, (low, high) in bounds.items()}
+    # Each sequence starts a fresh experiment. Coordinate interventions expose
+    # asymmetric membership effects; random contexts expose joint interactions.
+    yield tuple(dict(center) for _ in range(length))
+    for name, interval in bounds.items():
+        for value in interval:
+            yield tuple({**center, name: value if step % 2 else center[name]}
+                        for step in range(length)) if length > 1 else ({**center, name: value},)
+    rng = Random(7919 + 1009 * serial)
+    for _ in range(12):
+        yield tuple({name: rng.uniform(*interval) for name, interval in bounds.items()}
+                    for _ in range(length))
+
+
+def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
+                                serial=0, length=4, tolerance=1e-7, methods=None,
+                                task_id=None, questions=()):
+    """Return a probe and frozen alternative predictions, without observing it.
+
+    ``binding`` maps measured fields to already learned command programs. When
+    it cannot forecast every hypothesis, request paired measurements without
+    claiming a simulated separation. The result's ``probe`` is a normal Probe;
+    all other fields are JSON data suitable for the research action record.
+    """
+    start = budget.spent
+    hypotheses = [{"hypothesis_id": entry.get("hypothesis_id", entry["candidate"].candidate_id),
+                   "candidate_id": entry["candidate"].candidate_id,
+                   "program": entry["candidate"].program.to_dict(),
+                   "training_loss": entry.get("training_loss"),
+                   "predictions": None}
+                  for entry in entries]
+    result = {"probe": None, "hypotheses": hypotheses, "predicted_fields": {},
+              "forecast_status": "insufficient_competition", "predicted_separation": None,
+              "compute_cost": 0, "proposal_source": None,
+              "directed_candidates": 0, "method_candidates": 0,
+              "generic_candidates": 0, "generation_cost": 0,
+              "method_search_cost": 0, "fresh_synthesis_skipped": False}
+    if len(hypotheses) < 2 or not command_spec.feature_bounds:
+        return result
+    programs = [entry["candidate"].program for entry in entries]
+    if len({canonical_object_program(program) for program in programs}) < 2:
+        result["forecast_status"] = "algebraically_shared"
+        return result
+    controls = set(command_spec.feature_bounds)
+    required = {name for program in programs for name, _ in program.observed_variables()
+                if name != "__target__"} - controls
+    binding = {name: program for name, program in (binding or {}).items()
+               if name in required and {field for field, _ in program.observed_variables()} <= controls}
+    length = min(command_spec.max_probe_length, max(1, length,
+                 max(program.minimum_history_depth for program in programs) + 1))
+    generic_pool = list(_probe_pool(command_spec, serial, length))
+    if required - set(binding):
+        result.update(probe=Probe(f"competing_object_calibration:{serial}", generic_pool[-12 + serial % 12]),
+                      forecast_status="requires_paired_measurements",
+                      proposal_source="calibration",
+                      missing_fields=sorted(required - set(binding)))
+        return result
+    executable = [bind_measurement_arguments(program, binding) for program in programs]
+    if questions:
+        # A local revision already identifies its unresolved predicates. Solve
+        # those questions once, then require actual complete response separation.
+        from .condition_questions import plan_condition_questions
+        generation = SearchBudget(min(6000, budget.remaining // 8))
+        pending, skipped, method_cost, recall = list(questions), [], 0, methods
+        while pending:
+            plan = plan_condition_questions(command_spec, pending, budget, binding=binding,
+                methods=recall, serial=serial, length=length, tolerance=tolerance,
+                task_id=task_id, generation_budget=generation, response_programs=programs)
+            method_cost += plan.get("method_search_cost", 0)
+            plan["hypotheses"] = hypotheses
+            if plan["probe"] is None or plan["forecast_status"] != "predicted_distinction":
+                break
+            sequence, predictions = plan["probe"].sequence, []
+            for program, hypothesis in zip(executable, hypotheses):
+                if not budget.spend(len(sequence)):
+                    plan.update(probe=None, forecast_status="compute_exhausted")
+                    break
+                prediction = _forecast(program, sequence)
+                predictions.append(prediction)
+                hypothesis["predictions"] = prediction
+            if plan["probe"] is None:
+                break
+            common = [row for row in zip(*predictions) if all(value is not None for value in row)]
+            separation = sum((max(row) - min(row)) ** 2 for row in common) / len(common) if common else 0.
+            plan["predicted_separation"] = separation
+            if separation > tolerance:
+                for name, program in binding.items():
+                    if not budget.spend(len(sequence)):
+                        plan.update(probe=None, forecast_status="compute_exhausted")
+                        break
+                    plan["predicted_fields"][name] = _forecast(program, sequence)
+                break
+            question_id = plan["question"]["question_id"]
+            if plan["proposal_source"] == "learned_method":
+                # A recalled setup can activate the condition while leaving
+                # every response zero. Spend the remaining allowance on a new
+                # setup for this same question before abandoning it.
+                pending.sort(key=lambda question: question["question_id"] != question_id)
+                recall = None
+                continue
+            skipped.append(question_id)
+            pending = [question for question in pending if question["question_id"] != question_id]
+            recall = methods
+            plan.update(probe=None, forecast_status="no_predicted_distinction")
+        plan.update(generation_cost=generation.spent, method_search_cost=method_cost,
+                    compute_cost=budget.spent - start)
+        if skipped:
+            plan["questions_without_response_distinction"] = skipped
+        return plan
+    if any(control_history_depth(program) for program in binding.values()):
+        length = min(command_spec.max_probe_length,
+                     max(length, *(control_history_depth(program) + 2 for program in executable)))
+        generic_pool = list(_probe_pool(command_spec, serial, length))
+    from .program_disagreement_probes import propose_program_disagreement_probes
+    generation = SearchBudget(min(6000, budget.remaining // 8))
+    learned = (methods.propose(command_spec, programs, generation, binding=binding,
+        serial=serial, length=length, tolerance=tolerance, task_id=task_id)
+        if methods is not None else [])
+    learned = [item for item in learned if item["predicted_separation"] > tolerance]
+    result.update(method_candidates=len(learned), method_search_cost=generation.spent,
+                  fresh_synthesis_skipped=bool(learned))
+    method_scope = methods.last_proposal if methods is not None else {}
+    if method_scope.get("status") == "blocked_calibration":
+        budget.spend(generation.spent)
+        result.update(probe=Probe(f"competing_object_recalibration:{serial}", generic_pool[-12 + serial % 12]),
+                      forecast_status="requires_paired_measurements", proposal_source="calibration",
+                      reason="previous_measurements_refuted_current_calibration",
+                      method_scope=method_scope, generation_cost=generation.spent,
+                      compute_cost=budget.spent - start)
+        return result
+    if method_scope.get("blocked_scopes"):
+        result["method_scope"] = method_scope
+    directed = ([] if learned else propose_program_disagreement_probes(
+        command_spec, programs, generation, binding=binding, serial=serial, length=length))
+    budget.spend(generation.spent)
+    result.update(directed_candidates=len(directed), generation_cost=generation.spent)
+    pool = [(item["probe"].sequence, item["predictions"], source,
+             {key: value for key, value in item.items() if key not in ("probe", "predictions")})
+            for source, proposals in (("learned_method", learned), ("program_disagreement", directed))
+            for item in proposals]
+    pool.extend((sequence, None, "generic", {}) for sequence in generic_pool)
+    best = None
+    for sequence, predictions, source, proposal in pool:
+        if predictions is None:
+            if not budget.spend(len(sequence) * len(executable)):
+                break
+            predictions = [_forecast(program, sequence) for program in executable]
+            result["generic_candidates"] += 1
+        common = [values for values in zip(*predictions) if all(value is not None for value in values)]
+        separation = sum((max(values) - min(values)) ** 2 for values in common) / len(common) if common else 0.
+        if best is None or separation > best[0]:
+            best = separation, sequence, predictions, source, proposal
+    result["compute_cost"] = budget.spent - start
+    if best is None:
+        result["forecast_status"] = "compute_exhausted"
+        return result
+    separation, sequence, predictions, source, proposal = best
+    if separation <= tolerance:
+        result.update(forecast_status="no_predicted_distinction", predicted_separation=separation)
+        return result
+    # Forecasting the instrument readings is itself paid computation. If it
+    # cannot finish, the existing response forecasts still request real fields.
+    fields = {}
+    for name, program in binding.items():
+        if not budget.spend(len(sequence)):
+            break
+        fields[name] = _forecast(program, sequence)
+    for hypothesis, prediction in zip(hypotheses, predictions):
+        hypothesis["predictions"] = prediction
+    result.update(probe=Probe(f"competing_object_prediction:{serial}", sequence),
+                  predicted_fields=fields, forecast_status="predicted_distinction",
+                  proposal_source=source, proposal=proposal,
+                  predicted_separation=separation, compute_cost=budget.spent - start)
+    return result
+
+
+def assess_competing_object_probe(plan, paired_rows, budget, *, tolerance=1e-7):
+    """Compare the frozen forecasts and laws against new paired measurements.
+
+    A calibration error invalidates its forecast, not a law that remains right
+    on the actually measured fields. Conversely, a law that fails on those
+    fields receives its own counterexample even when calibration also failed.
+    No parameters or object assignments are changed by this function.
+    """
+    pairs, start = list(paired_rows), budget.spent
+    result = {"status": "no_observations", "hypotheses": [], "field_losses": {},
+              "calibration_status": "not_forecast", "observation_rows": len(pairs),
+              "compute_cost": 0}
+    if not pairs:
+        return result
+    for name, predictions in plan.get("predicted_fields", {}).items():
+        values = [(value, measured.features[name])
+                  for value, (_, measured) in zip(predictions, pairs)
+                  if value is not None and name in measured.features]
+        if values and budget.spend(len(values)):
+            result["field_losses"][name] = sum((left - right) ** 2 for left, right in values) / len(values)
+    if result["field_losses"]:
+        result["calibration_status"] = ("counterexample" if any(
+            value > tolerance for value in result["field_losses"].values()) else "supported_on_probe")
+    for hypothesis in plan["hypotheses"]:
+        item = {"hypothesis_id": hypothesis["hypothesis_id"], "candidate_id": hypothesis["candidate_id"],
+                "status": "unresolved", "measured_loss": None, "forecast_loss": None, "rows": 0}
+        program = Program.from_dict(hypothesis["program"])
+        if not budget.spend(len(pairs)):
+            result["hypotheses"].append(item)
+            continue
+        predictions = hypothesis.get("predictions") or [None] * len(pairs)
+        measured_errors, forecast_errors, counterexamples = [], [], []
+        for index, (forecast, (_, measured)) in enumerate(zip(predictions, pairs)):
+            if forecast is not None:
+                forecast_errors.append((forecast - measured.target) ** 2)
+            try:
+                prediction = program.predict(measured)
+            except MissingHistory:
+                continue
+            error = (prediction - measured.target) ** 2
+            measured_errors.append(error)
+            if error > tolerance:
+                counterexamples.append({"position": index, "prediction": prediction,
+                                        "target": measured.target, "squared_error": error})
+        if measured_errors:
+            value = sum(measured_errors) / len(measured_errors)
+            item.update(status="supported_on_probe" if value <= tolerance else "counterexample",
+                        measured_loss=value, rows=len(measured_errors), counterexamples=counterexamples)
+        if forecast_errors:
+            item["forecast_loss"] = sum(forecast_errors) / len(forecast_errors)
+        result["hypotheses"].append(item)
+    statuses = [item["status"] for item in result["hypotheses"]]
+    result.update(status=("distinguished" if "counterexample" in statuses and "supported_on_probe" in statuses
+                          else "all_refuted" if statuses and all(value == "counterexample" for value in statuses)
+                          else "unresolved"), compute_cost=budget.spent - start)
+    return result

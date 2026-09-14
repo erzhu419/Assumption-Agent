@@ -1,0 +1,27 @@
+.......................F..............                                   [100%]
+=================================== FAILURES ===================================
+__ test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit __
+
+    def test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit():
+        def risk_task():
+            task = MeasuredTask("risk", nonlinear=True)
+            task.spec = replace(task.spec, risk_quantile=.8, decision_costs=(4., 1.))
+            return task
+    
+        options = dict(observation_budget=96, compute_budget=18000, max_visits=2)
+        first = ResearchSession(config(), [risk_task], **options).run(max_steps=1)
+        assert first["tasks"][0]["unresolved"]
+        last = next(action["details"] for action in reversed(first["episodes"][0]["actions"])
+                    if action["action"] == "compare")
+        last.update(evidence_gain=0., dispersion_margin=.02)
+        for residual_loss in (.1, 10., 1000.):
+            state = deepcopy(first)
+            state["tasks"][0].update(validation_loss=residual_loss, normalized_excess_loss=residual_loss)
+            resumed = ResearchSession(config(), [risk_task], state=state, **options).run()
+>           assert resumed["completed_visits"] == 1
+E           assert 2 == 1
+
+tests/test_cognition_session.py:152: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_session.py::test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit
+1 failed, 37 passed in 2.26s

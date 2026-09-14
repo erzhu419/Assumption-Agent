@@ -1,0 +1,76 @@
+...........FFFF..                                                        [100%]
+=================================== FAILURES ===================================
+_ test_actual_prior_method_continues_past_a_neutral_preparation_on_the_revisited_target _
+
+    def test_actual_prior_method_continues_past_a_neutral_preparation_on_the_revisited_target():
+        library = KnowledgeLibrary()
+        prior = CognitiveAgent(ResearchConfig(seed=503, partition="continual"), library).run(make_suite(503, "continual")[0])
+        assert prior.validation_loss < 1e-10
+        report = run_method_allocation(library)
+        trace = report["summary"]["measured_method_returns"]
+        first = next(step for step in trace if step["action"] == "refit" and step["gain"] == 0.)
+>       following = next(step for step in trace if step["method_id"] == first["method_id"] and step["action"] == "representation")
+E       StopIteration
+
+tests/test_cognition_method_allocation_runtime.py:46: StopIteration
+_ test_learned_returns_select_different_actual_experiments_on_the_same_task[transition] _
+
+favored = 'transition'
+
+    @pytest.mark.parametrize("favored", ["transition", "task_value", "representative"])
+    def test_learned_returns_select_different_actual_experiments_on_the_same_task(favored):
+        environment, _, result = state_experiment(favored)
+        index, planning = next((index, action) for index, action in enumerate(result.actions)
+                               if action.action == "plan_experiment" and "action_policy" in action.details)
+        decision = planning.details["action_policy"]
+        assert set(decision["eligible_actions"]) >= {"transition", "task_value", "representative"}
+        assert decision["selected_action"] == favored
+>       assert decision["reason"] == "measured_improvement_per_resource"
+E       AssertionError: assert 'resolve_observed_boundary' == 'measured_imp..._per_resource'
+E         
+E         - measured_improvement_per_resource
+E         + resolve_observed_boundary
+
+tests/test_cognition_action_runtime.py:80: AssertionError
+_ test_learned_returns_select_different_actual_experiments_on_the_same_task[task_value] _
+
+favored = 'task_value'
+
+    @pytest.mark.parametrize("favored", ["transition", "task_value", "representative"])
+    def test_learned_returns_select_different_actual_experiments_on_the_same_task(favored):
+        environment, _, result = state_experiment(favored)
+        index, planning = next((index, action) for index, action in enumerate(result.actions)
+                               if action.action == "plan_experiment" and "action_policy" in action.details)
+        decision = planning.details["action_policy"]
+        assert set(decision["eligible_actions"]) >= {"transition", "task_value", "representative"}
+>       assert decision["selected_action"] == favored
+E       AssertionError: assert 'transition' == 'task_value'
+E         
+E         - task_value
+E         + transition
+
+tests/test_cognition_action_runtime.py:79: AssertionError
+_ test_learned_returns_select_different_actual_experiments_on_the_same_task[representative] _
+
+favored = 'representative'
+
+    @pytest.mark.parametrize("favored", ["transition", "task_value", "representative"])
+    def test_learned_returns_select_different_actual_experiments_on_the_same_task(favored):
+        environment, _, result = state_experiment(favored)
+        index, planning = next((index, action) for index, action in enumerate(result.actions)
+                               if action.action == "plan_experiment" and "action_policy" in action.details)
+        decision = planning.details["action_policy"]
+        assert set(decision["eligible_actions"]) >= {"transition", "task_value", "representative"}
+>       assert decision["selected_action"] == favored
+E       AssertionError: assert 'transition' == 'representative'
+E         
+E         - representative
+E         + transition
+
+tests/test_cognition_action_runtime.py:79: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_method_allocation_runtime.py::test_actual_prior_method_continues_past_a_neutral_preparation_on_the_revisited_target
+FAILED tests/test_cognition_action_runtime.py::test_learned_returns_select_different_actual_experiments_on_the_same_task[transition]
+FAILED tests/test_cognition_action_runtime.py::test_learned_returns_select_different_actual_experiments_on_the_same_task[task_value]
+FAILED tests/test_cognition_action_runtime.py::test_learned_returns_select_different_actual_experiments_on_the_same_task[representative]
+4 failed, 13 passed in 3.76s

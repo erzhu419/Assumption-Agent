@@ -1,0 +1,54 @@
+........................................................................ [ 22%]
+........................................................................ [ 44%]
+........................................................................ [ 66%]
+.............F.......................................................... [ 89%]
+...................................                                      [100%]
+=================================== FAILURES ===================================
+_ test_json_retained_champion_is_compared_even_when_the_next_screening_sample_misses_its_support _
+
+    def test_json_retained_champion_is_compared_even_when_the_next_screening_sample_misses_its_support():
+        original = MeasuredResponse()
+        # After the first three-row experiment, the real 12-row screening sample
+        # contains only the agreement region. Other acquired rows and representative
+        # trajectories support the joint explanation, which still has residual .1.
+        sampled = set(Random(39 + 9301).sample(range(39), 12))
+        points = [(float(index % 5 - 2), 0. if index in sampled else (-2. if index % 2 else 2.))
+                  for index in range(36)]
+        saved = checkpoint(original, acquired(original, points, "past_training"))
+        changed = MeasuredResponse(changed=True)
+        first = CognitiveAgent(config()).run(changed, research_state=saved)
+        assert first.program == OLD.program
+        state = json.loads(json.dumps(first.research_state))
+        restored = ResearchWorkspace.from_dict(state)
+        assert restored.evidence_champion.program == JOINT.program
+    
+        screened = screen_candidates([restored.incumbent, *restored.bank, restored.evidence_champion],
+            restored.observations, restored.reference, fallback=restored.fallback, q=.5,
+            budget=SearchBudget(700), complexity_weight=config().complexity_weight, maximum=2)
+        assert all(row.candidate.program != JOINT.program for row in screened)
+    
+        continued = CognitiveAgent(config(max_candidates=2)).run(MeasuredResponse(), research_state=state)
+        assert continued.program == JOINT.program
+        assert comparisons(continued)[0]["candidates_scored"] >= 3
+        assert comparisons(continued)[0]["cumulative_prediction_support"]
+        assert continued.observation_cost == 3
+    
+        state["evidence_champion"] = None
+        unretained = CognitiveAgent(config(max_candidates=2)).run(MeasuredResponse(), research_state=state)
+        # The current screener also keeps acquired counterexamples. In this case
+        # it can now recover the joint explanation from the bank even without the
+        # separately retained champion that the uniform sample above missed.
+        assert unretained.program == JOINT.program
+>       assert loss(continued.program, restored.reference, 2., .5) < loss(unretained.program, restored.reference, 2., .5)
+E       AssertionError: assert 0.16999999999999996 < 0.16999999999999996
+E        +  where 0.16999999999999996 = loss(Program(op='add', value=None, name=None, lag=0, children=(Program(op='mul', value=None, name=None, lag=0, children=(Pr... Program(op='feature', value=None, name='z', lag=0, children=(), definition=None)), definition=None)), definition=None), [Observation(features={'x': -1.5, 'z': -2.0}, target=6.35, history=()), Observation(features={'x': -1.5, 'z': 0.0}, ta...2.0, '__target__': 6.35}, {'x': -0.5, 'z': -2.0, '__target__': 4.35}, {'x': -0.5, 'z': 0.0, '__target__': 0.35})), ...], 2.0, 0.5)
+E        +    where Program(op='add', value=None, name=None, lag=0, children=(Program(op='mul', value=None, name=None, lag=0, children=(Pr... Program(op='feature', value=None, name='z', lag=0, children=(), definition=None)), definition=None)), definition=None) = EpisodeResult(task_id='retained_explanation', program=Program(op='add', value=None, name=None, lag=0, children=(Progra...ion': 0, 'history': []}}}, 'pending_actions': [], 'method_trace': [], 'requested_method': {}, 'uncertainty_model': {}}).program
+E        +    and   [Observation(features={'x': -1.5, 'z': -2.0}, target=6.35, history=()), Observation(features={'x': -1.5, 'z': 0.0}, ta...2.0, '__target__': 6.35}, {'x': -0.5, 'z': -2.0, '__target__': 4.35}, {'x': -0.5, 'z': 0.0, '__target__': 0.35})), ...] = ResearchWorkspace(task_id='retained_explanation', observations=[Observation(features={'x': -2.0, 'z': 2.0}, target=8.1... 36, 'generation': 0, 'history': []}}}, pending_actions=[], method_trace=[], requested_method={}, uncertainty_model={}).reference
+E        +  and   0.16999999999999996 = loss(Program(op='add', value=None, name=None, lag=0, children=(Program(op='mul', value=None, name=None, lag=0, children=(Pr... Program(op='feature', value=None, name='z', lag=0, children=(), definition=None)), definition=None)), definition=None), [Observation(features={'x': -1.5, 'z': -2.0}, target=6.35, history=()), Observation(features={'x': -1.5, 'z': 0.0}, ta...2.0, '__target__': 6.35}, {'x': -0.5, 'z': -2.0, '__target__': 4.35}, {'x': -0.5, 'z': 0.0, '__target__': 0.35})), ...], 2.0, 0.5)
+E        +    where Program(op='add', value=None, name=None, lag=0, children=(Program(op='mul', value=None, name=None, lag=0, children=(Pr... Program(op='feature', value=None, name='z', lag=0, children=(), definition=None)), definition=None)), definition=None) = EpisodeResult(task_id='retained_explanation', program=Program(op='add', value=None, name=None, lag=0, children=(Progra...ion': 0, 'history': []}}}, 'pending_actions': [], 'method_trace': [], 'requested_method': {}, 'uncertainty_model': {}}).program
+E        +    and   [Observation(features={'x': -1.5, 'z': -2.0}, target=6.35, history=()), Observation(features={'x': -1.5, 'z': 0.0}, ta...2.0, '__target__': 6.35}, {'x': -0.5, 'z': -2.0, '__target__': 4.35}, {'x': -0.5, 'z': 0.0, '__target__': 0.35})), ...] = ResearchWorkspace(task_id='retained_explanation', observations=[Observation(features={'x': -2.0, 'z': 2.0}, target=8.1... 36, 'generation': 0, 'history': []}}}, pending_actions=[], method_trace=[], requested_method={}, uncertainty_model={}).reference
+
+tests/test_cognition_retained_explanation.py:150: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_retained_explanation.py::test_json_retained_champion_is_compared_even_when_the_next_screening_sample_misses_its_support
+1 failed, 322 passed in 58.49s

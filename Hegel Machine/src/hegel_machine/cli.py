@@ -1,4 +1,4 @@
-"""CLI for Phase-2A replay and Phase-2B/Phase-3 preregistration artifacts."""
+"""Cognitive research commands and retained formal-track tools."""
 
 from __future__ import annotations
 
@@ -317,11 +317,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hegel-machine",
         description=(
-            "Offline Phase-2A replay plus fail-closed Phase-2B/Phase-3 "
-            "preregistration; no raw-extraction or formal exit claim."
+            "Discover and revise executable hypotheses, choose experiments, "
+            "and learn reusable knowledge across tasks."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    from .cognition.cli import add_parser as add_cognition_parser
+
+    add_cognition_parser(subparsers)
     benchmark = subparsers.add_parser(
         "benchmark", help="run the provided-binding verifier qualification"
     )
@@ -467,7 +470,7 @@ def build_parser() -> argparse.ArgumentParser:
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
     vertical.add_argument("--output", type=Path)
-    subparsers.add_parser("demo", help="print the frozen initial theory")
+    subparsers.add_parser("demo", help="print the historical formal-track initial theory")
     return parser
 
 
@@ -482,6 +485,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return strict_v2_main(raw_argv[1:])
     args = build_parser().parse_args(raw_argv)
+    if args.command == "cognition":
+        from .cognition.cli import dispatch
+
+        return dispatch(args)
     if args.command == "benchmark":
         return command_benchmark(args.output)
     if args.command == "demo":

@@ -1,0 +1,23 @@
+........................................................................ [ 15%]
+........................................................................ [ 31%]
+........................................................................ [ 47%]
+...............................F........................................ [ 63%]
+........................................................................ [ 79%]
+........................................................................ [ 94%]
+.......................                                                  [100%]
+=================================== FAILURES ===================================
+_ test_actual_prior_method_continues_past_a_neutral_preparation_on_the_revisited_target _
+
+    def test_actual_prior_method_continues_past_a_neutral_preparation_on_the_revisited_target():
+        library = KnowledgeLibrary()
+        prior = CognitiveAgent(ResearchConfig(seed=503, partition="continual"), library).run(make_suite(503, "continual")[0])
+        assert prior.validation_loss < 1e-10
+        report = run_method_allocation(library)
+        trace = report["summary"]["measured_method_returns"]
+>       first = next(step for step in trace if step["action"] == "refit" and step["gain"] == 0.)
+E       StopIteration
+
+tests/test_cognition_method_allocation_runtime.py:45: StopIteration
+=========================== short test summary info ============================
+FAILED tests/test_cognition_method_allocation_runtime.py::test_actual_prior_method_continues_past_a_neutral_preparation_on_the_revisited_target
+1 failed, 454 passed in 67.79s (0:01:07)

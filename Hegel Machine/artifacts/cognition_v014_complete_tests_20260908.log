@@ -1,0 +1,50 @@
+............F........................................................... [ 20%]
+........................................................................ [ 41%]
+........................................................................ [ 61%]
+.........F.............................................................. [ 82%]
+......................................F......................            [100%]
+=================================== FAILURES ===================================
+__ test_a_real_transition_counterexample_changes_theory_and_action_experience __
+
+    def test_a_real_transition_counterexample_changes_theory_and_action_experience():
+        environment, library, result = state_experiment("transition")
+        experiment_index = next(index for index, action in enumerate(result.actions)
+                                if action.action == "plan_experiment"
+                                and action.details.get("action_policy", {}).get("selected_action") == "transition")
+        counterexample = next(action for action in result.actions[experiment_index + 1:]
+                              if action.action == "targeted_prediction_check")
+>       assert counterexample.details["further_revision_needed"]
+E       assert False
+
+tests/test_cognition_action_runtime.py:133: AssertionError
+_____ test_risk_calibration_trajectory_is_acquired_after_program_selection _____
+
+    def test_risk_calibration_trajectory_is_acquired_after_program_selection():
+        result = CognitiveAgent(ResearchConfig(compute_budget=12000, max_rounds=3)).run(make_suite()[3])
+        allocation = next(i for i,a in enumerate(result.actions) if a.action == 'plan_calibration')
+        calibration = [i for i,a in enumerate(result.actions) if a.action == 'observe' and i > allocation]
+>       assert len(calibration) == 2
+E       assert 3 == 2
+E        +  where 3 = len([61, 62, 63])
+
+tests/test_cognition_research_allocation.py:72: AssertionError
+______ test_state_revision_stays_accurate_with_adaptive_experiment_choice ______
+
+    def test_state_revision_stays_accurate_with_adaptive_experiment_choice():
+        config = ResearchConfig(seed=401, partition='continual', use_memory=False)
+        env = make_suite(401, 'continual')[9]
+        result = CognitiveAgent(config).run(env)
+>       assert loss(result.program, env.evaluation_rows(), result.fallback, .5) < .03
+E       AssertionError: assert 0.14453125 < 0.03
+E        +  where 0.14453125 = loss(Program(op='ge', value=None, name=None, lag=0, children=(Program(op='feature', value=None, name='x', lag=0, children=(...None), Program(op='const', value=1.1189983585408743, name=None, lag=0, children=(), definition=None)), definition=None), (Observation(features={'x': 1.0155296530906646, 'z': 0.18973037338932164}, target=0.0, history=()), Observation(featur...-1.3926979263834165, '__target__': 1.0}, {'x': -1.6129377708943173, 'z': 2.3220477803771042, '__target__': 0.0})), ...), 0.16666666666666666, 0.5)
+E        +    where Program(op='ge', value=None, name=None, lag=0, children=(Program(op='feature', value=None, name='x', lag=0, children=(...None), Program(op='const', value=1.1189983585408743, name=None, lag=0, children=(), definition=None)), definition=None) = EpisodeResult(task_id='n10', program=Program(op='ge', value=None, name=None, lag=0, children=(Program(op='feature', va...um_improvement': 0.002}, 'recent_actions': []}}], 'method_trace': [], 'requested_method': {}, 'uncertainty_model': {}}).program
+E        +    and   (Observation(features={'x': 1.0155296530906646, 'z': 0.18973037338932164}, target=0.0, history=()), Observation(featur...-1.3926979263834165, '__target__': 1.0}, {'x': -1.6129377708943173, 'z': 2.3220477803771042, '__target__': 0.0})), ...) = evaluation_rows()
+E        +      where evaluation_rows = <hegel_machine.cognition.environments.TemporalEnvironment object at 0x73505b820400>.evaluation_rows
+E        +    and   0.16666666666666666 = EpisodeResult(task_id='n10', program=Program(op='ge', value=None, name=None, lag=0, children=(Program(op='feature', va...um_improvement': 0.002}, 'recent_actions': []}}], 'method_trace': [], 'requested_method': {}, 'uncertainty_model': {}}).fallback
+
+tests/test_cognition_transfer_scheduling.py:43: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_action_runtime.py::test_a_real_transition_counterexample_changes_theory_and_action_experience
+FAILED tests/test_cognition_research_allocation.py::test_risk_calibration_trajectory_is_acquired_after_program_selection
+FAILED tests/test_cognition_transfer_scheduling.py::test_state_revision_stays_accurate_with_adaptive_experiment_choice
+3 failed, 346 passed in 60.94s (0:01:00)

@@ -1,0 +1,284 @@
+........................................................................ [ 17%]
+........................................................................ [ 35%]
+........................................................................ [ 53%]
+....................F................................................... [ 71%]
+.........................F.............................................. [ 89%]
+.........................................                                [100%]
+=================================== FAILURES ===================================
+_ test_retrospective_selection_still_measures_and_updates_plan_and_transfer_feedback _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73502e638b50>
+
+    def test_retrospective_selection_still_measures_and_updates_plan_and_transfer_feedback(monkeypatch):
+        class Environment:
+            spec = TaskSpec("feedback", "Predict the reading", ("x",),
+                            (Probe("initial", tuple({"x": x} for x in (-1.0, 0.0, 1.0))),), (),
+                            feature_bounds={"x": (-2.0, 2.0)})
+    
+            def observe(self, probe):
+                return [Observation(dict(point), point["x"]) for point in probe.sequence]
+    
+            def evaluation_rows(self):
+                raise AssertionError("Learning must not use final evaluation")
+    
+        memory = KnowledgeLibrary()
+        reused = Candidate("remembered", Program("const", value=0.5), "abstract_reuse", memory_id="source")
+        monkeypatch.setattr(memory, "retrieve", lambda spec: [reused])
+        feedback = []
+        monkeypatch.setattr(memory, "record_transfer_result", lambda candidate, spec, **values: feedback.append(values))
+        allocation = PlanAllocation()
+        monkeypatch.setattr(controller, "PlanAllocation", lambda: allocation)
+    
+        def execute(plan, observations, *, budget, **kwargs):
+            assert budget.spend(3)
+            plan.steps.append({"compute_cost": 3, "operation": "refit"})
+            return [Candidate(f"{plan.plan_id}:0:refit:3:0", Program("feature", name="x"), "refit")]
+    
+        monkeypatch.setattr(controller, "execute_revision_plan", execute)
+        monkeypatch.setattr(controller, "sparse_candidates", lambda *args, **kwargs: [])
+        measured = []
+        rank = controller.rank_candidates
+    
+        def record_rank(*args, **kwargs):
+            result = rank(*args, **kwargs)
+            if kwargs.get("fresh"):
+                assert kwargs["fresh_weight"] == 0.0
+                for row in result:
+                    assert row.fresh_loss is not None
+                    assert row.score == pytest.approx(
+                        row.evidence_loss + kwargs["complexity_weight"] * row.candidate.program.size)
+                measured.extend(result)
+            return result
+    
+        monkeypatch.setattr(controller, "rank_candidates", record_rank)
+        result = controller.CognitiveAgent(ResearchConfig(
+            observation_budget=16, compute_budget=4000, max_rounds=1,
+            selection_policy="retrospective", use_abstractions=False,
+>           use_warm_start=False, synthesize_probes=False), memory).run(Environment())
+
+tests/test_cognition_policy_feedback.py:58: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <hegel_machine.cognition.controller.CognitiveAgent object at 0x734fd91c3a90>
+environment = <test_cognition_policy_feedback.test_retrospective_selection_still_measures_and_updates_plan_and_transfer_feedback.<locals>.Environment object at 0x734fd91c1ff0>
+
+    def run(self, environment: LearningEnvironment, *, research_state=None):
+        config, spec = self.config, environment.spec
+        workspace = (ResearchWorkspace.from_dict(research_state) if research_state is not None
+                     else ResearchWorkspace(spec.task_id))
+        if workspace.task_id != spec.task_id:
+            raise ValueError("research evidence belongs to a different task")
+        resumed = workspace.incumbent is not None
+        graph = ResearchGraph.from_dict(workspace.graph)
+        evidence_champion = workspace.evidence_champion
+        started = perf_counter()
+        reserve = min(config.compute_budget // 4, config.observation_budget * (4 + len(spec.feature_names)))
+        if resumed:
+            reserve = min(config.compute_budget // 3, max(reserve,
+                2 * len(workspace.reference) + 4 * config.observation_budget))
+        if spec.decision_costs is not None and config.risk_learning:
+            reserve = min(config.compute_budget // 3, 3000)
+        compute = SearchBudget(config.compute_budget - reserve)
+        learning_limit = compute.limit
+        observations, reference, queried = workspace.observations, workspace.reference, workspace.queried
+        actions, questions, plan_records, llm_records = [], [], [], []
+        llm_probes, observation_cost = [], 0
+        calibration_reserve = min(16, config.observation_budget // 4) if spec.decision_costs is not None and config.risk_learning else 0
+        observation_limit = config.observation_budget - calibration_reserve
+        rng, allocation = Random(config.seed), PlanAllocation()
+        proposer = self.proposer
+        if proposer is None and config.proposer in {"codex", "hybrid"}:
+            from .proposers import CodexProposer
+            proposer = CodexProposer(timeout_seconds=config.llm_timeout_seconds, token_budget=config.llm_token_budget,
+                                     max_calls=config.llm_calls_per_task, max_history=config.max_history)
+    
+        def acquire(probe, turn, reason):
+            nonlocal observation_cost
+            if probe is None or probe.cost > observation_limit - observation_cost:
+                return []
+            rows = environment.observe(probe)
+            observation_cost += probe.cost
+            queried.append(probe)
+            actions.append(ActionRecord(turn, "observe", reason, observation_cost=probe.cost,
+                                        details={"probe_id": probe.probe_id, "rows": len(rows), "sequence": list(probe.sequence)}))
+            resolved = graph.supply_measurements(rows)
+            if resolved:
+                actions.append(ActionRecord(turn, "supply_research_measurements", "Deliver acquired measurements to their dependent questions",
+                    details={"questions": resolved, "rows": len(rows)}))
+            return rows
+    
+        if observations:
+            actions.append(ActionRecord(workspace.rounds_completed, "resume_research",
+                "Continue the saved question using its acquired evidence and executable alternatives",
+                details={"restored_observations": len(observations), "restored_reference_rows": len(reference),
+                         "restored_candidates": len(workspace.bank), "initial_queries_repeated": False}))
+        else:
+            for probe in spec.initial_probes:
+                observations.extend(acquire(probe, 0, "Initial observations under the common task interface"))
+        if len(observations) < 3:
+            raise ValueError("observation budget must fund at least three initial observations")
+        if config.use_memory and config.learn_research_policy:
+            allocation.remember(observations, spec, self.library.research_experience)
+            actions.append(ActionRecord(0, "recall_research", "Recall observed returns from earlier research plans",
+                                        details={"context": allocation.context,
+                                                 "experience": dict(allocation.experience)}))
+        fallback = workspace.fallback if resumed else initial_prediction(observations, spec.risk_quantile)
+        initial = Candidate("initial", Program("const", value=fallback), "refit")
+        incumbent, parent = (workspace.incumbent, workspace.parent) if resumed else (initial, None)
+        visit_incumbent = incumbent.program
+        visit_reference_start = len(reference)
+        visit_uncertainty = workspace.uncertainty_model
+        if resumed:
+            initial_loss = workspace.initial_loss
+        else:
+            if not compute.spend(len(observations)):
+                raise ValueError("compute budget cannot fund the initial candidate comparison")
+            initial_loss = loss(initial.program, observations, fallback, spec.risk_quantile)
+        action_policy = ResearchActionPolicy(observations, spec,
+            self.library.action_experience if config.use_memory and config.learn_research_policy else {})
+        pending_actions = workspace.pending_actions
+        method_trace = workspace.method_trace
+        for pending in pending_actions:
+            pending["start_compute"], pending["start_observations"] = 0, 0
+    
+        def objective_loss(program, rows, model=None):
+            if spec.decision_costs is None:
+                return loss(program, rows, fallback, spec.risk_quantile)
+            return mean(decision_loss(action_and_interval(program, row, fallback, model or {}, spec.decision_costs)[0],
+                                      row.target, spec.decision_costs) for row in rows)
+    
+        def retained_decision_model(program):
+            return visit_uncertainty if program == visit_incumbent else {}
+    
+        def credit_actions(rows, turn, names=None):
+            for pending in list(pending_actions):
+                if names is not None and pending["name"] not in names:
+                    continue
+                if not rows or not compute.spend(3 * len(rows)):
+                    break
+                prior = Program.from_dict(pending["program"])
+                after = Program.from_dict(pending["after_program"]) if "after_program" in pending else incumbent.program
+                before_loss = objective_loss(prior, rows, pending.get("before_model"))
+                after_loss = objective_loss(after, rows, pending.get("after_model", retained_decision_model(after)))
+                normalizer = objective_loss(initial.program, rows) if spec.decision_costs else initial_loss
+                feedback = action_policy.update(pending["name"], before_loss=before_loss, after_loss=after_loss,
+                    observation_cost=pending["observation_cost"] + observation_cost - pending["start_observations"],
+                    compute_cost=pending["compute_cost"] + compute.spent - pending["start_compute"], baseline_loss=normalizer,
+                    context=pending.get("context"))
+                state_steps = [action.details for action in actions if action.round == turn and action.action == "state_search"]
+                needs_state_fit = (len({row.target for row in observations}) == 2 and
+                                   pending["name"] in {"transition", "representative", "task_value", "state_transition"})
+                execution_complete = not needs_state_fit or any(step.get("basic_fit_funded") for step in state_steps)
+                actions.append(ActionRecord(turn, "action_feedback", "Measure the previous research action on a subsequent common trajectory",
+                    compute_cost=3 * len(rows), details={"action": pending["name"], "context": pending.get("context", action_policy.context),
+                                                       "reference_rows": len(rows), "execution_complete": execution_complete, **feedback}))
+                if config.use_memory and config.learn_research_policy:
+                    step = {"action": pending["name"], "context": pending.get("context", action_policy.context),
+                            "gain": feedback["last_gain"], "compute_cost":
+                                pending["compute_cost"] + compute.spent - pending["start_compute"],
+                            "observation_cost": pending["observation_cost"] + observation_cost - pending["start_observations"],
+                            "method_id": pending.get("method_id"), "profile": pending.get("profile"),
+                            "after_program": after.to_dict(), "before_loss": before_loss, "after_loss": after_loss,
+                            "execution_complete": execution_complete}
+                    method_trace.append(step)
+                    method_id = self.library.methods.observe(step["context"], method_trace,
+                        condition=pending.get("method_condition", research_context(spec, observations)), source_task=spec.task_id)
+                    if method_id:
+                        actions.append(ActionRecord(turn, "revise_method", "Revise a research sequence using its measured subsequent return",
+                            details={"method_id": method_id, "revision": self.library.methods.revisions[-1]}))
+                pending_actions.remove(pending)
+    
+        def begin_action(name, *, start_compute, start_observations, before_model=None,
+                         after_model=None, method_id=None, profile=None):
+            pending = {"name": name, "context": action_policy.context, "program": incumbent.program.to_dict(),
+                       "before_model": retained_decision_model(incumbent.program) if before_model is None else before_model,
+                       "compute_cost": 0, "observation_cost": 0,
+                       "start_compute": start_compute, "start_observations": start_observations}
+            pending.update(method_id=method_id, method_condition=research_context(spec, observations))
+            pending["profile"] = profile or method_profile(spec, observations, incumbent, method_trace,
+                baseline_loss=initial_loss, minimum_improvement=config.minimum_improvement)
+            if after_model is not None:
+                pending.update(after_program=incumbent.program.to_dict(), after_model=after_model)
+            pending_actions.append(pending)
+    
+        request = workspace.requested_method
+        if request and request["name"] in {"refit", "representation", "continuous_state", "state_transition"}:
+            pending = next((item for item in pending_actions if item["name"] == request["name"]), None)
+            if pending is None:
+                begin_action(request["name"], start_compute=compute.spent, start_observations=observation_cost,
+                             method_id=request["method_id"])
+                pending = pending_actions[-1]
+            pending.update(method_id=request["method_id"], context=request["context"],
+                           method_condition=request["condition"])
+            if request.get("profile"):
+                pending["profile"] = request["profile"]
+            actions.append(ActionRecord(workspace.rounds_completed, "execute_method_step",
+                "Execute the concrete research step selected across tasks", details=dict(request)))
+            workspace.requested_method = {}
+        elif request and request["name"] in {"representative", "transition", "task_value"}:
+            # A resumed method can acquire its planned evidence before fitting.
+            # One research round still leaves a new common comparison afterward.
+            remaining = max(0, observation_limit-observation_cost-min(8, spec.max_probe_length))
+            work = SearchBudget(min(500, compute.remaining // 10))
+            alternatives = list(dict.fromkeys([incumbent, *workspace.bank]))[:8]
+            probe, details = None, {}
+            if request["name"] == "representative":
+                probe = representative_probe(spec, seed=config.seed, index=workspace.rounds_completed + 2000,
+                    remaining=remaining, used=queried, candidates=alternatives, adaptive_horizon=config.adaptive_horizon)
+            elif request["name"] == "transition":
+                probe, details = transition_probe(spec, alternatives, observations, budget=work,
+                    remaining=remaining, round_number=workspace.rounds_completed, used=queried,
+                    joint_controls=config.joint_state_probes)
+            else:
+                offers = self.library.experiments.propose(spec, alternatives, observations,
+                    fallback=fallback, budget=work, remaining=remaining, used=queried)
+                offers = [probe for probe in [*offers, *spec.available_probes,
+                    *construct_probes(spec, alternatives, round_number=workspace.rounds_completed, seed=config.seed,
+                                      max_history=config.max_history)] if probe.cost <= remaining]
+                probe, details = choose_valuable_probe(offers, alternatives, fallback, work,
+                    observations=observations, spec=spec, queried_probes=queried, max_compute=work.remaining)
+            start_compute = compute.spent
+            compute.spend(work.spent)
+            if probe is not None:
+                begin_action(request["name"], start_compute=start_compute, start_observations=observation_cost,
+                             method_id=request["method_id"])
+                pending_actions[-1].update(context=request["context"], method_condition=request["condition"])
+                actions.append(ActionRecord(workspace.rounds_completed, "execute_method_step",
+                    "Acquire the scheduled method's evidence before continuing its fit",
+                    compute_cost=work.spent, details={**request, "probe_id": probe.probe_id, "experiment": details}))
+                observations.extend(acquire(probe, workspace.rounds_completed, "Execute the experiment selected across tasks"))
+                workspace.requested_method = {}
+        if config.use_memory:
+            self.library.begin_transfer_episode(spec, observations)
+>       retrieved = self.library.retrieve(spec, observations=observations) if config.use_memory else []
+E       TypeError: test_retrospective_selection_still_measures_and_updates_plan_and_transfer_feedback.<locals>.<lambda>() got an unexpected keyword argument 'observations'
+
+src/hegel_machine/cognition/controller.py:276: TypeError
+__ test_pause_json_load_resume_matches_continuous_learning_and_revises_memory __
+
+    def test_pause_json_load_resume_matches_continuous_learning_and_revises_memory():
+        factories = [lambda: MeasuredTask("source"), lambda: MeasuredTask("related"),
+                     lambda: MeasuredTask("source", slope=-1.)]
+        options = dict(observation_budget=120, compute_budget=24000, max_visits=1)
+        whole = ResearchSession(config(), factories, **options).run()
+        first = ResearchSession(config(), factories, **options).run(max_steps=1)
+        assert first["status"] == "paused" and first["completed_visits"] == 1
+        resumed = ResearchSession(config(), factories, state=json.loads(json.dumps(first)), **options).run()
+        # Candidate proposal serials are run-local. Resume must preserve learning
+        # behavior, the knowledge used next, and actual resource expenditure.
+        for key in ("knowledge", "tasks", "total_observation_cost", "total_compute_cost", "scheduler_events"):
+>           assert json.loads(json.dumps(resumed[key])) == json.loads(json.dumps(whole[key]))
+E           AssertionError: assert {'abstracts':...act:0'}], ...} == {'abstracts':...act:0'}], ...}
+E             
+E             Omitting 9 identical items, use -vv to show
+E             Differing items:
+E             {'concepts': [{'concept_id': 'concept_0001', 'counterexamples': [{'concept_loss': 1.3105813571088936, 'condition_compu...neration': 1, ...}, {'concept_id': 'concept_0003', 'counterexamples': [], 'excluded_tasks': [], 'generation': 1, ...}]} != {'concepts': [{'concept_id': 'concept_0001', 'counterexamples': [{'concept_loss': 1.3105813571088936, 'condition_compu...neration': 1, ...}, {'concept_id': 'concept_0003', 'counterexamples': [], 'excluded_tasks': [], 'generation': 1, ...}]}
+E             {'abstracts': [{'kind': 'theory',...
+E             
+E             ...Full output truncated (2 lines hidden), use '-vv' to show
+
+tests/test_cognition_session.py:56: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_policy_feedback.py::test_retrospective_selection_still_measures_and_updates_plan_and_transfer_feedback
+FAILED tests/test_cognition_session.py::test_pause_json_load_resume_matches_continuous_learning_and_revises_memory
+2 failed, 399 passed in 60.40s (0:01:00)

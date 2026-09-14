@@ -1,0 +1,17 @@
+....F                                                                    [100%]
+=================================== FAILURES ===================================
+_____ test_unfunded_validation_does_not_promote_an_unverified_world_claim ______
+
+    def test_unfunded_validation_does_not_promote_an_unverified_world_claim():
+        environment = apparatus.sequence(71001)[0]
+        library = KnowledgeLibrary()
+        result = MetaPriorResearch(config(observation_budget=16), library).run(environment)
+        assert result["costs"]["observation_cost"] <= 16
+        assert result["costs"]["compute_cost"] <= 60000
+>       assert not library.meta_priors
+E       AssertionError: assert not [{'claim': 'The response depends only on a lower-dimensional projection of the measured coordinates', 'counter_predict..., 'null_directions': [[0.8252408016402789, 0.5647810366045499]], ...}, 'counterexamples': [], 'family_id': 'T03', ...}]
+E        +  where [{'claim': 'The response depends only on a lower-dimensional projection of the measured coordinates', 'counter_predict..., 'null_directions': [[0.8252408016402789, 0.5647810366045499]], ...}, 'counterexamples': [], 'family_id': 'T03', ...}] = <hegel_machine.cognition.memory.KnowledgeLibrary object at 0x75be13a1fee0>.meta_priors
+
+tests/test_cognition_meta_prior_research.py:112: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_meta_prior_research.py::test_unfunded_validation_does_not_promote_an_unverified_world_claim

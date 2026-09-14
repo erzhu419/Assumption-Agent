@@ -1,0 +1,88 @@
+.......................F................................................ [ 85%]
+............                                                             [100%]
+=================================== FAILURES ===================================
+_ test_real_negative_mc1_terminal_comparison_uses_native_fantasies_and_keeps_measurement_rng _
+
+project_root = PosixPath('/home/erzhu419/mine_code/KG_op/SC-OLH-KG')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x772005b982b0>
+
+    def test_real_negative_mc1_terminal_comparison_uses_native_fantasies_and_keeps_measurement_rng(project_root, monkeypatch):
+        """Replay the existing all-negative failure; no GP or acquisition values are mocked."""
+        from copy import deepcopy
+        import numpy as np
+        algorithm, adapter, _ = _saved_terminal_failure_optimizer(project_root, monkeypatch,
+            "research_scope_3_objective_only_change_noise_0.03")
+        original_scores = algorithm._exact_posterior_update_scores
+        original_one = algorithm._exact_posterior_update_score_one
+        original_plan = algorithm._exact_kg_sample_plan
+        plans, extra_calls, checked = [], [], []
+        scoring = {}
+    
+        def sample_plan(count):
+            plans.append(count)
+            return original_plan(count)
+    
+        def native_draw(point, innovations, pool, current, *args, **kwargs):
+            if algorithm._value_precision_round is not None:
+                assert pool is scoring["pool"]
+                assert current == algorithm._last_exact_kg_current_value
+                assert len(innovations) == 1
+                extra_calls.append((len(algorithm.history) + 1, tuple(point)))
+            return original_one(point, innovations, pool, current, *args, **kwargs)
+    
+        def exact_scores(candidates, terminal_pool, **kwargs):
+            scoring["pool"] = terminal_pool
+            plan_count = len(plans)
+            expected_rng = np.random.default_rng()
+            expected_rng.bit_generator.state = deepcopy(algorithm.rng.bit_generator.state)
+            expected_rng.standard_normal((1, 2))
+            expected_rng.random(1)
+            parameters = [(model.a.copy(), model.C.copy()) for model in algorithm.gpr]
+            variance = {key: deepcopy(value) for key, value in algorithm.variance_model.__dict__.items()
+                        if isinstance(value, dict) and 0 in value and 1 in value}
+            history = deepcopy(algorithm.history)
+            previous = len(algorithm.objective_diagnostics["value_precision"]["rounds"])
+            result = original_scores(candidates, terminal_pool, **kwargs)
+            assert len(plans) == plan_count + 1 and plans[-1] == 1
+            assert algorithm.rng.bit_generator.state == expected_rng.bit_generator.state
+            rounds = algorithm.objective_diagnostics["value_precision"]["rounds"]
+            if len(rounds) > previous:
+                event = rounds[-1]
+                assert event["stage"] >= 61 and algorithm.objective_scope_revisions
+                assert len(algorithm._terminal_goal_offers) >= 1
+                assert {point for point, _ in history}.issubset(set(terminal_pool))
+                assert max(event["initial_raw"]) < 0. and set(event["initial_clipped"]) == {0.}
+                assert event["selection_semantics"] == "policy_indicator"
+                assert list(candidates[int(np.argmax(result))]) == event["selected_point"]
+                by_point = {tuple(row["point"]): row for row in event["action_statistics"]}
+                estimates = [by_point[tuple(point)]["mean_raw"] for point in candidates]
+                np.testing.assert_allclose(algorithm._last_exact_kg_raw_scores, estimates)
+                np.testing.assert_allclose(algorithm._last_exact_kg_expected_values,
+                                           event["current_terminal_value"] - np.asarray(estimates))
+                assert event["selected_raw_value"] == by_point[tuple(event["selected_point"])]["mean_raw"]
+                assert event["evaluations"] == event["score_one_calls"] == event["terminal_value_calls"]
+                assert event["terminal_pool_rows"] == event["evaluations"] * len(terminal_pool)
+                assert event["evaluations"] <= event["allowance"]
+                assert 8 <= event["draws_per_action"] <= 16
+                for model, (mean, covariance) in zip(algorithm.gpr, parameters):
+                    np.testing.assert_array_equal(model.a, mean)
+                    np.testing.assert_array_equal(model.C, covariance)
+                np.testing.assert_equal({key: algorithm.variance_model.__dict__[key] for key in variance}, variance)
+                np.testing.assert_equal(algorithm.history, history)
+                checked.append(event)
+            return result
+    
+        algorithm._exact_kg_sample_plan = sample_plan
+        algorithm._exact_posterior_update_score_one = native_draw
+        algorithm._exact_posterior_update_scores = exact_scores
+        algorithm.run()
+        costs = algorithm.objective_diagnostics["value_precision"]
+        assert checked and checked[0]["stage"] == 63
+>       assert 0 < costs["evaluations"] == len(extra_calls) <= 512
+E       assert 350 == 30
+E        +  where 30 = len([(63, (22, 56, 31)), (63, (22, 56, 31)), (63, (22, 59, 28)), (63, (22, 59, 28)), (63, (22, 59, 31)), (63, (22, 59, 31)), ...])
+
+tests/test_cognition_sc_kg_environment.py:1251: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_sc_kg_environment.py::test_real_negative_mc1_terminal_comparison_uses_native_fantasies_and_keeps_measurement_rng
+1 failed, 83 passed in 39.21s

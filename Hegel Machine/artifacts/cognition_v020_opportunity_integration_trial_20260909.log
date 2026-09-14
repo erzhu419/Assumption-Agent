@@ -1,0 +1,69 @@
+.......F....F.........F.......                                           [100%]
+=================================== FAILURES ===================================
+___ test_total_observation_budget_stops_work_without_dropping_pending_tasks ____
+
+    def test_total_observation_budget_stops_work_without_dropping_pending_tasks():
+        environments = [MeasuredTask("first", nonlinear=True), MeasuredTask("second", nonlinear=True)]
+        result = ResearchSession(config(), environments, observation_budget=32,
+                                 compute_budget=12000, max_visits=2).run()
+        assert result["total_observation_cost"] == sum(env.observed for env in environments)
+        assert 0 < result["total_observation_cost"] <= 32
+        assert result["total_compute_cost"] <= 12000
+>       assert result["status"] == "budget_exhausted"
+E       AssertionError: assert 'completed' == 'budget_exhausted'
+E         
+E         - budget_exhausted
+E         + completed
+
+tests/test_cognition_session.py:90: AssertionError
+__ test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit __
+
+    def test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit():
+        def risk_task():
+            task = MeasuredTask("risk", nonlinear=True)
+            task.spec = replace(task.spec, risk_quantile=.8, decision_costs=(4., 1.))
+            return task
+    
+        options = dict(observation_budget=96, compute_budget=18000, max_visits=2)
+        first = ResearchSession(config(), [risk_task], **options).run(max_steps=1)
+        assert first["tasks"][0]["unresolved"]
+        last = next(action["details"] for action in reversed(first["episodes"][0]["actions"])
+                    if action["action"] == "compare")
+        last.update(evidence_gain=0., dispersion_margin=.02)
+        for residual_loss in (.1, 10., 1000.):
+            state = deepcopy(first)
+            state["tasks"][0].update(validation_loss=residual_loss, normalized_excess_loss=residual_loss)
+            resumed = ResearchSession(config(), [risk_task], state=state, **options).run()
+            assert resumed["completed_visits"] == 1
+            assert resumed["total_observation_cost"] == first["total_observation_cost"]
+>           assert resumed["tasks"][0]["revisit_basis"] == "no_observed_revision_gain"
+E           AssertionError: assert 'no_affordabl...ntried_return' == 'no_observed_revision_gain'
+E             
+E             - no_observed_revision_gain
+E             + no_affordable_positive_or_untried_return
+
+tests/test_cognition_session.py:154: AssertionError
+_ test_complete_unproductive_revisit_stops_old_residual_until_new_evidence_arrives _
+
+    def test_complete_unproductive_revisit_stops_old_residual_until_new_evidence_arrives():
+        config = session_config(use_memory=False, learn_research_policy=False)
+        task = MeasuredTask("hard", nonlinear=True)
+        limits = {"observation_budget": 128, "compute_budget": 24000, "max_visits": 4}
+        session = ResearchSession(config, [task], **limits)
+        finished = session.run()
+        current = finished["tasks"][0]
+        assert finished["completed_visits"] == 2
+        assert current["continuation_return"]["gain"] <= 0.
+        assert current["validation_loss"] > config.minimum_improvement
+        assert current["normalized_excess_loss"] > 1.
+>       assert current["revisit_basis"] == "no_observed_continuation_gain"
+E       AssertionError: assert 'no_affordabl...ntried_return' == 'no_observed_...inuation_gain'
+E         
+E         - no_observed_continuation_gain
+E         + no_affordable_positive_or_untried_return
+
+tests/test_cognition_method_returns.py:198: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_session.py::test_total_observation_budget_stops_work_without_dropping_pending_tasks
+FAILED tests/test_cognition_session.py::test_nonzero_risk_loss_needs_revision_evidence_before_buying_another_visit
+FAILED tests/test_cognition_method_returns.py::test_complete_unproductive_revisit_stops_old_residual_until_new_evidence_arrives

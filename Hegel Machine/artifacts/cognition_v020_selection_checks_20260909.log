@@ -1,0 +1,27 @@
+.....F............................................                       [100%]
+=================================== FAILURES ===================================
+________ test_each_completed_task_is_saved_before_next_apparatus_opens _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73b4de6f4fa0>
+
+    def test_each_completed_task_is_saved_before_next_apparatus_opens(monkeypatch):
+        saved = []
+        factory = measurement_session.make_lab
+    
+        def fail_second(task_index, seed, *, backend):
+            if task_index == 2:
+                raise RuntimeError("apparatus unavailable for the next task")
+            return factory(task_index, seed, backend=backend)
+    
+        monkeypatch.setattr(measurement_session, "make_lab", fail_second)
+        session = MeasurementSession(small_config(), tasks=[0, 2], backend="local", measurement_budget=160)
+        with pytest.raises(RuntimeError, match="next task"):
+            session.run(on_checkpoint=saved.append)
+>       assert len(saved) == 1 and saved[0]["completed_tasks"] == [0]
+E       AssertionError: assert (3 == 1)
+E        +  where 3 = len([{'active_task': {'result': {'costs': {'compute_cost': 4693, 'measurement_cost': 80, 'observation_cost': 16, 'queries'..., ...}, {'active_task': None, 'backend': 'local', 'checkpoint_boundary': 'research_step', 'completed_tasks': [0], ...}])
+
+tests/test_cognition_measurement_session.py:106: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cognition_measurement_session.py::test_each_completed_task_is_saved_before_next_apparatus_opens
+1 failed, 49 passed in 7.23s
