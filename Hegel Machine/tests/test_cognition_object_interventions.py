@@ -113,3 +113,58 @@ def test_response_probe_repeats_a_known_setup_at_a_matching_reset():
             model = infer_object_model(lab.spec, records, budget, prior=model)
         else:
             pytest.fail("membership research never reached a response comparison")
+
+
+def test_paid_control_scan_progresses_with_twenty_rows_and_resumes_missing_contrasts():
+    settings = dict(objects=4, readout="window_total_event", apparatus_seed=96012004,
+        name_seed=96089862, wiring_seed=96030714, variant="exchange",
+        profile="confirmation", actuator_curvature=.31, relation_radius=.9687842617019095)
+    with AnonymousObjectLab(**settings) as lab:
+        records, budget = [], SearchBudget(30000)
+        acquire_records(lab, lab.random_probe(96023011, length=12), records)
+        model = infer_object_model(lab.spec, records, budget)
+        full, _ = propose_object_probe(lab.spec, model, records, 0)
+        assert full.cost == 27
+        first, meta = propose_object_probe(lab.spec, model, records, 0, remaining_rows=20)
+        assert first.cost == meta["observation_rows"] == 20
+        acquire_records(lab, first, records)
+        partial = infer_object_model(lab.spec, records, budget)
+        assert partial["quantity_controls"]
+        assert any(group.get("controls") for group in partial["groups"])
+        # Old code declined the entire 27-row scan, leaving only four anonymous
+        # quantities. The remaining seven setups now keep their measured value.
+        following, _ = propose_object_probe(lab.spec, partial, records, 1, remaining_rows=20)
+        assert following.cost == 7
+        assert list(first.sequence) + list(following.sequence) == list(full.sequence)
+        acquire_records(lab, following, records)
+        split = infer_object_model(lab.spec, records, budget)
+        with AnonymousObjectLab(**settings) as unsplit_lab:
+            unsplit_records = []
+            acquire_records(unsplit_lab, unsplit_lab.random_probe(96023011, length=12), unsplit_records)
+            acquire_records(unsplit_lab, full, unsplit_records)
+            unsplit = infer_object_model(unsplit_lab.spec, unsplit_records, SearchBudget(30000))
+        assert split["quantity_controls"] == unsplit["quantity_controls"]
+        assert {key: value["before_fields"] for key, value in split["control_effects"].items()} == {
+            key: value["before_fields"] for key, value in unsplit["control_effects"].items()}
+
+
+def test_membership_history_is_deferred_when_only_its_prefix_is_affordable():
+    with AnonymousObjectLab(objects=3, readout="event", apparatus_seed=9013,
+                            name_seed=5177, wiring_seed=313) as lab:
+        records, model, budget = [], None, SearchBudget(100000)
+        for serial in range(100):
+            probe, meta = propose_object_probe(lab.spec, model, records, serial)
+            assert probe is not None
+            if meta.get("matched_prefix_rows") == 1:
+                assert probe.cost == 2
+                deferred, decision = propose_object_probe(lab.spec, model, records, serial,
+                    remaining_rows=1)
+                assert deferred is None and decision["required_rows"] == 2
+                assert decision["purpose"] == "distinguish_membership_dependency"
+                funded, _ = propose_object_probe(lab.spec, model, records, serial, remaining_rows=2)
+                assert funded == probe
+                break
+            acquire_records(lab, probe, records)
+            model = infer_object_model(lab.spec, records, budget, prior=model)
+        else:
+            pytest.fail("event research never reached a matched-history comparison")

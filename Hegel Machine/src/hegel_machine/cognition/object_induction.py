@@ -57,19 +57,27 @@ def _pairs(records, controls, fields, histories, budget):
             reference = values[ordered[0]]
             for value in ordered[1:]:
                 following = values[value]
-                matching = next(((left, right) for left in reference for right in following
-                                 if histories[left] is not None and histories[left] == histories[right]), None)
-                left, right = matching or (reference[0], following[0])
-                if not budget.spend(2 * len(fields) + 1):
-                    break
-                a, b = records[left], records[right]
-                delta_before = {name: b["before"][name] - a["before"][name] for name in fields}
-                delta_after = {name: b["after"][name] - a["after"][name] for name in fields}
-                before = [name for name in fields if _different(a["before"][name], b["before"][name])]
-                after = [name for name in fields if _different(a["after"][name], b["after"][name])]
-                pairs.append({"left": left, "right": right, "before_fields": before,
-                    "after_fields": after, "delta_before": delta_before, "delta_after": delta_after,
-                    "target_delta": b["target"] - a["target"] if matching else None})
+                matching = {}
+                for left in reference:
+                    history = histories[left]
+                    if history is None or history in matching:
+                        continue
+                    right = next((index for index in following if histories[index] == history), None)
+                    if right is not None:
+                        matching[history] = (left, right)
+                # Retain each measured response context. Choosing one arbitrary
+                # match can let a reset erase an already purchased history test.
+                for left, right in matching.values() or [(reference[0], following[0])]:
+                    if not budget.spend(2 * len(fields) + 1):
+                        break
+                    a, b = records[left], records[right]
+                    delta_before = {name: b["before"][name] - a["before"][name] for name in fields}
+                    delta_after = {name: b["after"][name] - a["after"][name] for name in fields}
+                    before = [name for name in fields if _different(a["before"][name], b["before"][name])]
+                    after = [name for name in fields if _different(a["after"][name], b["after"][name])]
+                    pairs.append({"left": left, "right": right, "before_fields": before,
+                        "after_fields": after, "delta_before": delta_before, "delta_after": delta_after,
+                        "target_delta": b["target"] - a["target"] if matching else None})
         effects[control] = {"before_fields": sorted({name for pair in pairs for name in pair["before_fields"]}),
                             "after_fields": sorted({name for pair in pairs for name in pair["after_fields"]}),
                             "pairs": pairs}
@@ -426,23 +434,41 @@ def infer_object_model(spec, records, budget, prior=None):
                 if left["before"][selector] == right["before"][selector] == 1.:
                     samples.append(pair)
                     coverage.add(quantity)
-        accepted, losses = set(dynamic), {}
-        if contrasts[selector] and coverage == quantities and samples and dynamic:
-            targets = [sample["target_delta"] for sample in samples]
+        accepted, losses, response_contexts = set(dynamic), {}, []
+        informative_depths = sorted({len(histories[item["pairs"][0][0]])
+                                    for item in contrasts[selector]})
+        for depth in informative_depths:
+            contextual = [sample for sample in samples if len(histories[sample["left"]]) == depth]
+            if not contextual or not dynamic:
+                continue
+            targets = [sample["target_delta"] for sample in contextual]
+            context_losses = {}
             tolerance = 1e-10 * max(1., sum(value * value for value in targets) / len(targets))
             for quantity in dynamic:
-                columns = [[sample[side].get(field, 0.) for sample in samples]
+                columns = [[sample[side].get(field, 0.) for sample in contextual]
                            for side, field in (("delta_after", quantity), ("delta_before", quantity),
                                ("delta_before", drive_fields.get(quantity, "")))]
-                if not budget.spend((len(columns) + 2) * len(samples)):
+                if not budget.spend(2 * (len(columns) + 2) * len(contextual)):
                     break
-                coefficients = _linear_fit(columns, targets)
-                predictions = [coefficients[0] + sum(value * column[index]
-                    for value, column in zip(coefficients[1:], columns)) for index in range(len(samples))]
-                losses[quantity] = sum((value - target) ** 2 for value, target in zip(predictions, targets)) / len(targets)
-            supported = {quantity for quantity, error in losses.items() if error <= tolerance}
-            if len(losses) == len(dynamic) and supported:
-                accepted = supported
+                # Reversing a purchased contrast reverses both its measured
+                # inputs and response. Fit both orientations of those same
+                # pairs, so a free intercept cannot explain missing effects.
+                # Incomplete coverage can rule out a candidate already; any
+                # observationally equivalent assignments remain in the set.
+                coefficients = _linear_fit([[*column, *(-value for value in column)]
+                                             for column in columns],
+                                           [*targets, *(-value for value in targets)])
+                predictions = [sum(value * column[index]
+                    for value, column in zip(coefficients[1:], columns)) for index in range(len(contextual))]
+                context_losses[quantity] = sum((value - target) ** 2 for value, target in zip(predictions, targets)) / len(targets)
+            supported = {quantity for quantity, error in context_losses.items() if error <= tolerance}
+            response_contexts.append({"history_rows": depth, "support_pairs": len(contextual),
+                "fit_losses": context_losses, "quantities": sorted(supported),
+                "fully_assessed": len(context_losses) == len(dynamic)})
+            if len(context_losses) == len(dynamic) and supported:
+                accepted &= supported
+                for quantity, error in context_losses.items():
+                    losses[quantity] = max(losses.get(quantity, 0.), error)
         direct_membership = _selective_direct_membership(rows, selector, contrasts[selector], drives, quantities)
         if direct_membership["status"] == "supported":
             accepted &= set(direct_membership["quantities"])
@@ -450,6 +476,7 @@ def infer_object_model(spec, records, budget, prior=None):
             "kind": "selective_direct_response", **direct_membership})
         focus_candidates[selector] = {"quantities": sorted(accepted), "support_pairs": len(samples),
             "covered_quantities": sorted(coverage), "fit_losses": losses,
+            "response_contexts": response_contexts,
             "distinguishing_contrasts": contrasts[selector], "direct_response": direct_membership}
     propagated = _propagate({name: item["quantities"] for name, item in focus_candidates.items()}, quantities)
     for name, values in propagated.items():

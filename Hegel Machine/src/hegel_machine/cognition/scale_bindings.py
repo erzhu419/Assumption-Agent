@@ -67,6 +67,12 @@ def _shift_time(program, lag):
         return replace(program, lag=program.lag + lag)
     if program.op == "call":
         return _shift_time(program.expanded(), lag)
+    if program.op == "accumulate":
+        # Shifting the drive would replay extra reset steps and decay the
+        # initial state again. The temporal difference evaluates the whole
+        # state on its actual earlier prefix, including that prefix's reset.
+        return Program("sub", children=(program,
+            Program("event_delta", lag=lag, children=(program,))))
     if program.op == "event_delta":
         return Program("if", children=(Program("available", lag=program.lag + lag),
             Program("sub", children=(_shift_time(program.children[0], lag),

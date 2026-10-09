@@ -60,10 +60,13 @@ def test_changed_delay_and_mechanism_use_control_evidence_and_preserve_old_instr
     assert {name: library.definitions[name].to_dict() for name in old_definitions} == old_definitions
     for report in (changed, revised):
         trial = next(action for action in report["actions"]
-            if action["action"] == "compare_control_revision_before_measurement" and action["supported"])
-        assert trial["training_rows"] >= 16 and trial["validation_rows"] > 0
-        assert report["actions"].index(trial) < next(index for index, action in enumerate(report["actions"])
-            if action["action"] == "validate_frozen_program")
+            if action["action"] == "confirm_observation_research"
+            and action["research_action"] == "revise_mechanism" and action["accepted"])
+        assert trial["observation_rows"] > 0 and trial["after_loss"] < 1e-7
+        choice = next(action for action in report["actions"]
+                      if action["action"] == "choose_observation_research")
+        assert choice["selected_action"] == "revise_mechanism"
+        assert choice["control_revision_applicability"]["observation_rows"] >= 16
 
 
 class AbsoluteInstrument(DynamicInstrumentLab):
@@ -91,8 +94,9 @@ def test_unexplained_control_response_returns_to_real_meter_and_keeps_the_failed
     library = KnowledgeLibrary.from_dict(source[0])
     report = run_task(library, 2, laboratory=AbsoluteInstrument)
     comparisons = [action for action in report["actions"]
-                   if action["action"] == "compare_control_revision_before_measurement"]
-    assert comparisons and not any(action["supported"] for action in comparisons)
+                   if action["action"] == "confirm_observation_research"
+                   and action["research_action"] == "revise_mechanism"]
+    assert comparisons and not any(action["accepted"] for action in comparisons)
     assert report["costs"]["observation_cost"] <= CONFIG.observation_budget
     assert report["costs"]["compute_cost"] <= CONFIG.compute_budget
     assert report["costs"]["measurement_cost"] > 0 and report["selected_channels"] == ["meter"]
@@ -120,3 +124,10 @@ def test_polynomial_coordinates_preserve_startup_gates_and_do_not_reinvent_unsup
         assert budget.spent == 0
         nonlinear = Program("abs", children=(program,))
         assert not RetainedControlRevisions([nonlinear], lab.spec, SearchBudget(4000), max_history=4).coordinates
+        recurrent = Program("accumulate", value=.48, children=(u, Program("const", value=0.)))
+        retired = Program("add", children=(Program("mul", children=(Program("const", value=0.), recurrent)), program))
+        active = Program("add", children=(Program("mul", children=(Program("const", value=1.), recurrent)), program))
+        assert _polynomial(retired, SearchBudget(4000)) == terms
+        assert RetainedControlRevisions([retired], lab.spec, SearchBudget(4000), max_history=4).coordinates
+        assert _polynomial(active, SearchBudget(4000)) is None
+        assert not RetainedControlRevisions([active], lab.spec, SearchBudget(4000), max_history=4).coordinates

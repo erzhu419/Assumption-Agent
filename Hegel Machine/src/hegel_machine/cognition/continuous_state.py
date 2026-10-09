@@ -116,6 +116,29 @@ def _states(program):
         *(_states(child) for child in program.children))
 
 
+def state_identification_cost(observations):
+    """Fund first- and second-order identification and their executable fits.
+
+    Each order includes a cold fit, so shared columns can only reduce its bill.
+    The caller separately funds scoring at most six returned candidates.
+    """
+    rows = list(observations)
+    if len(rows) < 6 or all(row.target in (0., 1.) for row in rows):
+        return 0
+    names = set.intersection(*(set(row.features) for row in rows)) - {"__target__"}
+    names = {name for name in names if all(name in past for row in rows for past in row.history)}
+    if not names or max((len(row.history) for row in rows), default=0) < 2:
+        return 0
+    total = 0
+    for order in (1, 2):
+        applicable = sum(len(row.history) >= order
+            and all("__target__" in past for past in row.history[-order:]) for row in rows)
+        width = order + len(names) * (order + 1)
+        if applicable >= max(6, width + 1):
+            total += (width + 2) * (applicable + len(rows))
+    return total
+
+
 def continuous_state_candidates(observations, *, budget, max_states=2, seed_programs=()):
     """Fit one or two continuous states without an environment or task label.
 

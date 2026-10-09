@@ -19,12 +19,15 @@ class UnifiedCodeSession:
     """
 
     def __init__(self, workspace, *, tasks=None, config=None, state=None,
-                 provider_factory=None, lab_factory=None):
+                 provider_factory=None, lab_factory=None, use_memory=None):
         self.workspace = Path(workspace).resolve()
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.provider_factory = provider_factory or (lambda path: CodexCodeProvider(path))
         self.lab_factory = lab_factory or laboratory_for
         saved = state or {}
+        self.use_memory = saved.get("use_memory", True) if use_memory is None else use_memory
+        if saved and self.use_memory != saved.get("use_memory", True):
+            raise ValueError("resume uses the saved knowledge condition")
         self.config = config or CodeAgentConfig(**saved.get("config", {}))
         if isinstance(self.config, dict):
             self.config = CodeAgentConfig(**self.config)
@@ -39,6 +42,7 @@ class UnifiedCodeSession:
                 "tasks": deepcopy(list(tasks or [])), "config": asdict(self.config),
                 "results": [], "active": None, "knowledge": {"files": {}, "lessons": []},
                 "evaluation": None, "costs": {}}
+        self.state["use_memory"] = self.use_memory
         self._costs()
 
     def _costs(self):
@@ -65,10 +69,11 @@ class UnifiedCodeSession:
             index = len(self.state["results"])
             item = self.state["tasks"][index]
             active = self.state["active"]
-            inherited = deepcopy(self.state["knowledge"])
+            inherited = (deepcopy(self.state["knowledge"]) if self.use_memory
+                         else {"files": {}, "lessons": []})
             inherited.update(task_position=index, tasks_remaining=len(self.state["tasks"])-index)
             task_workspace = self.workspace / f"task_{index:03d}"
-            if index and not active:
+            if self.use_memory and index and not active:
                 previous_shared = Path(self.state["results"][-1]["research_workspace"]) / "shared"
                 if previous_shared.is_dir():
                     shutil.copytree(previous_shared, task_workspace / "shared", dirs_exist_ok=True)

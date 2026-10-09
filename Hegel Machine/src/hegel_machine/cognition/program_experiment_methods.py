@@ -90,14 +90,16 @@ class ProgramExperimentMethods:
         return deepcopy(self.records)
 
     def propose(self, command_spec, programs, budget, *, binding=None, serial=0,
-                length=4, tolerance=1e-7, task_id=None, contexts=None):
+                length=4, tolerance=1e-7, task_id=None, contexts=None, response_programs=None):
         """Execute a matching learned procedure before searching for a new one."""
         from .program_disagreement_probes import (
             _experiment_sequence, _forecast, predicate_boundary_groups, solve_joint_boundary,
         )
         programs = list(programs)
+        response_programs = list(response_programs) if response_programs is not None else programs
         self.last_proposal = {"status": "no_match", "blocked_scopes": []}
-        supported = [method for method in self.records if method["status"] == "supported"]
+        supported = [method for method in self.records if method["status"] == "supported"
+                     and method["solver_strategy"] != "instrument_sequence"]
         if len(programs) < 2 or not supported or not command_spec.feature_bounds:
             return []
         start = budget.spent
@@ -107,8 +109,10 @@ class ProgramExperimentMethods:
             return budget.spent - start + units <= allowance and budget.spend(units)
 
         bounds = command_spec.feature_bounds
-        required = {name for program in programs for name, _ in program.observed_variables()
-                    if name != "__target__"} - set(bounds)
+        predicate_required = {name for program in programs for name, _ in program.observed_variables()
+                              if name != "__target__"} - set(bounds)
+        required = predicate_required | {name for program in response_programs
+            for name, _ in program.observed_variables() if name != "__target__"} - set(bounds)
         binding = {name: program for name, program in (binding or {}).items()
                    if {field for field, _ in program.observed_variables()} <= set(bounds)}
         if required - set(binding):
@@ -126,7 +130,9 @@ class ProgramExperimentMethods:
             self.last_proposal["status"] = "blocked_calibration"
             return []
         executable = [bind_measurement_arguments(program.expanded(), binding) for program in programs]
-        dynamic = any(control_history_depth(program) for name, program in binding.items() if name in required)
+        responses = [bind_measurement_arguments(program.expanded(), binding) for program in response_programs]
+        dynamic = any(control_history_depth(program) for name, program in binding.items()
+                      if name in predicate_required)
         length = min(command_spec.max_probe_length, max(2, length,
                      max(program.history_depth for program in executable) + 2))
         roles = _control_roles(programs, binding, bounds)
@@ -134,7 +140,7 @@ class ProgramExperimentMethods:
         condition = _current_condition(programs, binding, bounds, task_id)
         regions = None
 
-        def propose_solved(method, context, solved, boundary):
+        def propose_solved(method, context, solved, boundary, revision=None):
             if solved is None:
                 return []
             sequence = _experiment_sequence(context, solved, length, method["sequence_mode"],
@@ -149,9 +155,41 @@ class ProgramExperimentMethods:
             separation = sum((max(row) - min(row)) ** 2 for row in common) / len(common) if common else 0.
             if separation <= tolerance:
                 return []
+            if response_programs != programs and method.get("response_context"):
+                response_predictions = [_forecast(program, sequence, spend) for program in responses]
+                if any(prediction is None for prediction in response_predictions):
+                    return []
+                common = [row for row in zip(*response_predictions) if all(value is not None for value in row)]
+                response_separation = (sum((max(row) - min(row)) ** 2 for row in common) / len(common)
+                                       if common else 0.)
+                if response_separation <= tolerance:
+                    if revision is not None or "measured_expression" not in boundary:
+                        return []
+                    from .method_response_context import rebind_response_context
+                    for revised_context, details in rebind_response_context(method,
+                            Program.from_dict(boundary["measured_expression"]), response_programs,
+                            binding, context, bounds, spend):
+                        if any(item.get("parent_method_id") == method["method_id"]
+                               and item.get("response_context_revision") == details
+                               and any(scope.get("condition") == condition
+                                       for scope in item.get("failure_scopes", []))
+                               for item in self.records):
+                            continue
+                        revised, solve_details = solve_joint_boundary(
+                            Program.from_dict(boundary["expression"]), boundary["target"],
+                            revised_context, bounds, spend, strategy=method["solver_strategy"],
+                            control=(roles[method["coordinate_role"]]
+                                     if method["coordinate_role"] is not None else None))
+                        proposal = propose_solved(method, revised_context, revised,
+                            {**boundary, **solve_details}, revision=details)
+                        if proposal:
+                            return proposal
+                    return []
             self.last_proposal["status"] = "proposed"
             return [{"probe": Probe(f"program_method:{method['method_id']}:{serial}", sequence),
-                "reason": "learned_program_experiment_method", "method_id": method["method_id"],
+                "reason": "learned_program_experiment_method",
+                **({"parent_method_id": method["method_id"], "response_context_revision": revision}
+                   if revision is not None else {"method_id": method["method_id"]}),
                 "source_task_id": method["source_task_id"], "source_probe": method["source_probe"],
                 "sequence_mode": method["sequence_mode"], "predictions": predictions,
                 "predicted_separation": separation, "compute_cost": budget.spent - start,
@@ -327,7 +365,8 @@ class ProgramExperimentMethods:
                     **({"parent_method_id": proposal["parent_method_id"],
                         "preparation_revision": deepcopy(proposal["preparation_revision"])}
                        if proposal.get("parent_method_id") else {})}
-        if not success or "context" not in boundary:
+        failed_revision = bool(proposal.get("response_context_revision") and measured_failure and not success)
+        if (not success and not failed_revision) or "context" not in boundary:
             return None
         compound = boundary.get("solver_strategy") == "compound_conditions"
         if compound and not boundary.get("constraints"):
@@ -347,7 +386,7 @@ class ProgramExperimentMethods:
             if control not in roles:
                 return None
         method_id = f"program_experiment_{len(self.records) + 1}"
-        method = {"method_id": method_id, "status": "supported",
+        method = {"method_id": method_id, "status": "supported" if success else "counterexample",
             "source_task_id": task_id, "source_probe": probe_id,
             "solver_strategy": strategy, "coordinate_role": roles.index(control) if strategy == "coordinate" else None,
             "sequence_mode": proposal.get("sequence_mode", "maintain"), "context_fractions": fractions,
@@ -355,7 +394,16 @@ class ProgramExperimentMethods:
                       "excite_supported_context", strategy, "forecast_current_programs",
                       "purchase_and_compare"],
             "source_boundary": deepcopy(boundary), "source_control_roles": roles,
-            "support": [evidence], "counterexamples": [], "failure_scopes": []}
+            "support": [evidence] if success else [], "counterexamples": [], "failure_scopes": []}
+        if not compound:
+            from .method_response_context import learn_response_context
+            response_context = learn_response_context(_programs(plan),
+                Program.from_dict(boundary["measured_expression"]), binding or {}, boundary["context"])
+            if response_context is not None:
+                method["response_context"] = response_context
+        if proposal.get("response_context_revision"):
+            method.update(parent_method_id=proposal["parent_method_id"],
+                          response_context_revision=deepcopy(proposal["response_context_revision"]))
         if compound:
             method["condition_patterns"] = _predicate_patterns([
                 Program.from_dict(item["measured_expression"]) for item in boundary["constraints"]])
@@ -366,5 +414,15 @@ class ProgramExperimentMethods:
             method["target_strategy"] = ("between_adjacent" if len(boundary["thresholds"]) > 1 else
                 "below" if boundary["target"] < threshold else "above" if boundary["target"] > threshold else "at")
         self.records.append(method)
+        if failed_revision:
+            scope = _failure_scope(plan, assessment, binding or {}, command_spec, task_id, tolerance)
+            method["failure_scopes"].append(scope)
+            method["counterexamples"].append(evidence)
+            return {"action": "revise_program_experiment_method", "method_id": method_id,
+                    "parent_method_id": proposal["parent_method_id"], "task_id": task_id,
+                    "reason": scope["reason"], "status": "condition_restricted", "scope": deepcopy(scope)}
         return {"action": "learn_program_experiment_method", "method_id": method_id,
-                "task_id": task_id, "solver_strategy": strategy}
+                "task_id": task_id, "solver_strategy": strategy,
+                **({"parent_method_id": proposal["parent_method_id"],
+                    "response_context_revision": deepcopy(proposal["response_context_revision"])}
+                   if proposal.get("response_context_revision") else {})}

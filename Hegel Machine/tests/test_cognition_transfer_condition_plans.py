@@ -6,7 +6,10 @@ from hegel_machine.cognition.competing_object_experiments import assess_competin
 from hegel_machine.cognition.language import Definition, Program
 from hegel_machine.cognition.models import Observation, Probe, SearchBudget, TaskSpec
 from hegel_machine.cognition.program_experiment_methods import ProgramExperimentMethods
-from hegel_machine.cognition.transfer_condition_research import plan_transfer_condition_probe
+from hegel_machine.cognition.transfer_condition_research import (
+    TransferConditionResearch, covered_call_ids, plan_transfer_condition_probe,
+    record_condition_coverages,
+)
 
 
 def field(name):
@@ -105,6 +108,45 @@ def test_observed_trial_failure_requests_revision_without_rebuying_the_counterex
     result = plan_transfer_condition_probe(bounds(), const(0.), [original], SearchBudget(64000), paid_rows=[row])
     assert result["forecast_status"] == "trial_refuted_on_paid_conditions"
     assert result["probe"] is None and result["transfer_scope"]["trial_counterexamples"]
+
+
+def test_prior_condition_coverage_does_not_hide_a_new_paid_counterexample():
+    original = call()
+    point = {"x": .2312 + 2e-8, "y": -.4117 + 2e-8}
+    prior = plan_transfer_condition_probe(bounds(), original, [original],
+        SearchBudget(64000), paid_rows=[Observation(point, 7.)])
+    coverages = []
+    record_condition_coverages(prior["transfer_scope"], [original], coverages)
+    prevalidated = covered_call_ids([original], coverages)
+    assert prevalidated == {0}
+
+    # The same source and interface now have a measured changed response.
+    # Retaining the old law must expose it, even if a later short validation
+    # batch saw only the inactive region.
+    changed = [Observation(point, 3.), Observation({"x": 0., "y": 0.}, 0.)]
+    result = TransferConditionResearch([original], prevalidated_call_ids=prevalidated).plan(
+        bounds(), original, SearchBudget(64000), paid_rows=changed,
+        prior_coverages=coverages)
+    assert result["forecast_status"] == "trial_refuted_on_paid_conditions"
+    assert result["probe"] is None
+    assert result["transfer_scope"]["trial_counterexamples"][0]["squared_error"] == 16.
+    assert not result["transfer_scope"]["all_conditions_covered"]
+
+
+def test_prevalidated_renamed_call_reuses_coverage_after_checking_current_responses():
+    renamed = call(("renamed_x", "renamed_y"))
+    paid = [Observation({"renamed_x": 0., "renamed_y": 0.}, 0.)]
+    result = TransferConditionResearch([renamed], prevalidated_call_ids={0}).plan(
+        bounds(("renamed_x", "renamed_y")), renamed, SearchBudget(64000), paid_rows=paid)
+    assert result["forecast_status"] == "covered_by_paid_evidence"
+    assert result["probe"] is None
+    assert result["transfer_scope"]["covered_call_ids"] == ["transfer_call_0"]
+    assert result["transfer_scope"]["all_conditions_covered"]
+    assert result["transfer_scope"]["sharing"]["new_prediction_evaluations"] > 0
+    # Reusing old support is not a new observed activation witness.
+    coverages = []
+    record_condition_coverages(result["transfer_scope"], [renamed], coverages)
+    assert coverages == []
 
 
 def test_missing_calibration_requests_actual_paired_readings_and_known_binding_can_activate():

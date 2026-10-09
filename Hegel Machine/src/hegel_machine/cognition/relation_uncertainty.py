@@ -5,9 +5,11 @@ from dataclasses import asdict, replace
 from itertools import combinations
 
 from .language import Program
-from .relation_revisions import ZERO, _distances, _expose, _relations, _replacement_call, _substitute
+from .relation_revisions import _distances, _expose, _relations, _replacement_call, _substitute
 from .relation_conditions import TRUE
 from .models import Observation
+from .relation_kernel_priors import (
+    recall_relation_kernels, interval_union, kernel_key, parameter_relations as _parameter_relations)
 
 
 def _bind(program, values):
@@ -33,23 +35,6 @@ def _mark_relations(program, relations, symbol):
     return replace(program, children=children)
 
 
-def _delta(program, before, after):
-    old, new = _bind(program, before), _bind(program, after)
-    if old == new:
-        return ZERO
-    if program.op in {"add", "sub", "object_sum", "event_delta", "window_sum", "accumulate"}:
-        return replace(program, children=tuple(_delta(child, before, after)
-                                               for child in program.children)).simplified()
-    if program.op == "mul":
-        left, right = program.children
-        dl, dr = _delta(left, before, after), _delta(right, before, after)
-        return Program("add", children=(Program("add", children=(
-            Program("mul", children=(dl, _bind(right, before))),
-            Program("mul", children=(_bind(left, before), dr)))),
-            Program("mul", children=(dl, dr)))).simplified()
-    return Program("sub", children=(new, old)).simplified()
-
-
 def _match(pattern, actual, bindings):
     if pattern.op in {"feature", "lag", "available"}:
         if pattern in bindings:
@@ -68,12 +53,6 @@ def _replace_leaves(program, bindings):
     return replace(program, children=tuple(_replace_leaves(child, bindings) for child in program.children))
 
 
-def _parameter_relations(program, symbol):
-    result = [program] if (program.op in {"neighbor_sum", "relation_sum"} and
-        program.children[0] == Program("arg", name=symbol)) else []
-    return [*result, *(item for child in program.children for item in _parameter_relations(child, symbol))]
-
-
 class RelationIntervalResearch:
     """Keep the original call executable while testing its unresolved parameters."""
 
@@ -84,6 +63,7 @@ class RelationIntervalResearch:
         self.evidence_contexts, self.evidence_updates = [], []
         self._inherited_contexts = []
         self._inherited_domains = {}
+        self._expanded_domains = {}
         self._local_context = None
         self.status = "no_relation_interval"
         prior_by_source = {prior["source_concept_id"]: prior for prior in priors
@@ -109,7 +89,8 @@ class RelationIntervalResearch:
                 for item in saved["parameters"]:
                     symbol = f"relation_parameter_{len(self.parameters)}"
                     rename[item["symbol"]] = Program("arg", name=symbol)
-                    self.parameters.append({**deepcopy(item), "symbol": symbol})
+                    self.parameters.append({**deepcopy(item), "symbol": symbol,
+                        "source_concept_id": item.get("source_concept_id") or source})
                     if item.get("prior_radius_intervals") != item["radius_intervals"] and item.get("prior_radius_intervals"):
                         self._inherited_domains[symbol] = deepcopy(item["prior_radius_intervals"])
                 for context in saved.get("evidence_contexts", []):
@@ -173,11 +154,57 @@ class RelationIntervalResearch:
         self.template = stored(program, own, None) if structure or research_program else None
         if self.template is None:
             self.template = visit(program)
+        # Repeated uses of the same source relation in the same measured
+        # coordinates share one parameter even inside different time operators.
+        # Otherwise changing one copy cannot repair the other copies, and each
+        # coordinate-wise trial incorrectly refutes a valid shared revision.
+        shared, rename, parameters = {}, {}, []
+        for item in self.parameters:
+            relations = _parameter_relations(self.template, item["symbol"])
+            key = (item.get("source_concept_id"), item["radius"],
+                   frozenset(kernel_key(node) for node in relations),
+                   tuple(map(tuple, item["radius_intervals"])))
+            if item.get("source_concept_id") is not None and key in shared:
+                rename[item["symbol"]] = Program("arg", name=shared[key])
+                self._inherited_domains.pop(item["symbol"], None)
+            else:
+                shared[key] = item["symbol"]
+                parameters.append(item)
+        if rename:
+            self.parameters = parameters
+            self.template = _bind(self.template, rename)
+            contexts = []
+            for context in self.evidence_contexts:
+                context["parameter_template"] = _bind(
+                    Program.from_dict(context["parameter_template"]), rename).to_dict()
+                context["parameters"] = {rename[key].name if key in rename else key: value
+                    for key, value in context["parameters"].items()}
+                if context not in contexts:
+                    contexts.append(context)
+            self.evidence_contexts = contexts
+            self._inherited_contexts = list(contexts)
         self.retained_calls = _calls(program) <= _calls(self.template)
+        # Opening a parameter-bearing call produces its complete new response.
+        # Save that body under a distinct definition; adding a delta to the
+        # old response repeats whole windows and nonlinear consumers. The old
+        # callable remains in the research record and knowledge library.
+        self.compact_replacement |= not self.retained_calls
         self.values = {item["symbol"]: item["radius"] for item in self.parameters}
         for parameter in self.parameters:
             parameter.setdefault("prior_radius_intervals", deepcopy(parameter["radius_intervals"]))
         self.original = dict(self.values)
+        kernels = recall_relation_kernels(self.template, self.parameters, priors, budget)
+        for parameter in self.parameters:
+            sources = kernels.get(parameter["symbol"], [])
+            if not sources:
+                continue
+            parameter["kernel_priors"] = sources
+            parameter["kernel_prior_status"] = "pending"
+            parameter["kernel_origin_source_concept_id"] = parameter.get("source_concept_id")
+            parameter["prior_radius_intervals"] = deepcopy(parameter["radius_intervals"])
+            self._inherited_domains[parameter["symbol"]] = deepcopy(parameter["radius_intervals"])
+            parameter["radius_intervals"] = interval_union(
+                interval for source in sources for interval in source["radius_intervals"])
         if self.parameters:
             self.status = "unresolved"
 
@@ -187,41 +214,47 @@ class RelationIntervalResearch:
                 for item in self.parameters for interval in item["radius_intervals"]]
 
     def _program(self, values):
-        old = {key: Program("const", value=value) for key, value in self.original.items()}
+        if values == self.original:
+            return self.program, None
         new = {key: Program("const", value=value) for key, value in values.items()}
+        body = _bind(self.template, new).simplified()
         if self.compact_replacement:
-            return _replacement_call(self.program, _bind(self.template, new).simplified(),
-                                     f"parameter_{self.candidate_serial}"), None
-        if self.retained_calls:
-            return _bind(self.template, new).simplified(), None
-        correction = _delta(self.template, old, new)
-        return Program("add", children=(self.program, correction)).simplified(), correction
+            return _replacement_call(self.program, body, f"parameter_{self.candidate_serial}"), None
+        return body, None
 
     def _entry(self, values, interval, index, error, rows, cost):
         from .research_programs import _entry
-        program, correction = self._program(values)
-        original = {key: Program("const", value=value) for key, value in self.original.items()}
-        symbolic = {key: Program("arg", name=key) for key in values}
-        template = (self.template if correction is None else
-            Program("add", children=(self.program, _delta(self.template, original, symbolic))).simplified())
+        program, _ = self._program(values)
         parameters = [{**deepcopy(item), "radius": values[item["symbol"]]} for item in self.parameters]
-        parameter_terms = ([template] if correction is None else
-            [self.program, _delta(self.template, original, symbolic)])
+        kernel_sources = []
+        for item in parameters:
+            if item.get("kernel_prior_status") not in {"pending", "supported"}:
+                continue
+            sources = list(dict.fromkeys(source["source_concept_id"] for source in item["kernel_priors"]
+                if any(low <= item["radius"] <= high for low, high in source["radius_intervals"])))
+            if not sources:
+                continue
+            item["kernel_prior_status"] = "supported"
+            item["kernel_source_ids"] = sources
+            if len(sources) == 1:
+                item["source_concept_id"] = sources[0]
+            kernel_sources.extend(sources)
         steps = [{"operation": "retain_composed_call", "question": "Retain the complete existing computation",
                   "program": self.program, "loss": error},
                  {"operation": "resolve_relation_intervals", "question": "Resolve a parameter inside its actual consuming context",
-                  "program": program, "loss": error, "parameter_template": template.to_dict(),
+                  "program": program, "loss": error, "parameter_template": self.template.to_dict(),
                   "parameters": parameters, "parameter_index": index, "radius_interval": list(interval),
                   "evidence_contexts": deepcopy(self.evidence_contexts),
-                  "parameter_terms": [term.to_dict() for term in parameter_terms],
+                  "parameter_terms": [self.template.to_dict()],
                   "compact_replacement": self.compact_replacement}]
-        terms = [program] if correction is None else [self.program, correction]
-        fit = {"program": program, "terms": terms, "fit_terms": terms,
-               "coefficients": [0., *([1.] * len(terms))], "loss": error}
+        fit = {"program": program, "terms": [program], "fit_terms": [program],
+               "coefficients": [0., 1.], "loss": error}
         entry = _entry(fit, steps, rows, cost, self.candidate_serial)
         self.candidate_serial += 1
         entry.update(parameter_index=index, parameter_values=dict(values),
                      validation_loss=error, selection_basis="all_acquired_evidence")
+        if kernel_sources:
+            entry["method_source_ids"] = list(dict.fromkeys(kernel_sources))
         return entry
 
     def _retain_experiments(self, experiments, tolerance):
@@ -247,6 +280,10 @@ class RelationIntervalResearch:
         for parameter in parameters:
             parameter["radius_intervals"] = deepcopy(parameter["prior_radius_intervals"])
             self._inherited_domains.pop(parameter["symbol"], None)
+            if parameter.get("kernel_priors"):
+                parameter["kernel_prior_status"] = "withdrawn"
+                parameter["source_concept_id"] = parameter.get("kernel_origin_source_concept_id")
+                parameter.pop("kernel_source_ids", None)
         self.evidence_contexts = [context for context in self.evidence_contexts
                                  if not any(context is old for old in withdrawn)]
         self._inherited_contexts = [context for context in self._inherited_contexts
@@ -297,7 +334,8 @@ class RelationIntervalResearch:
             domains = parameter["radius_intervals"]
             if not domains:
                 continue
-            if all(high - low <= 1e-6 for low, high in domains):
+            if (len(domains) == 1 and domains[0][1] - domains[0][0] <= 1e-6
+                    and parameter.get("kernel_prior_status") != "pending"):
                 if self._inherited_contexts or parameter["symbol"] in self._inherited_domains:
                     if not budget.spend(len(evaluated_rows)):
                         self.status = "compute_exhausted"
@@ -311,7 +349,22 @@ class RelationIntervalResearch:
                         return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
                 continue
             relations = _parameter_relations(self.template, parameter["symbol"])
-            distances = _distances(relations, paid_rows, budget)
+            # Sparse paid rows still carry measured preparation frames used by
+            # their temporal consumers. Those frames can expose a boundary
+            # even when every selected current frame has zero interaction.
+            geometry_depth = max((node.history_depth for node in relations), default=0)
+            geometry_fields = sorted({name for node in relations for name, _ in node.observed_variables()})
+            frames = {}
+            for row in paid_rows:
+                history = row.history
+                for position in range(max(0, len(history) - self.program.history_depth), len(history) + 1):
+                    point = row.features if position == len(history) else history[position]
+                    past = history[:position]
+                    key = (tuple(point.get(name) for name in geometry_fields),
+                        tuple(tuple(frame.get(name) for name in geometry_fields)
+                        for frame in past[-geometry_depth:]) if geometry_depth else ())
+                    frames.setdefault(key, Observation(point, 0., past))
+            distances = _distances(relations, frames.values(), budget)
             supported, candidates = [], []
             for low, high in domains:
                 cuts = [low, *(value for value in distances if low < value < high), high]
@@ -338,11 +391,41 @@ class RelationIntervalResearch:
                         candidates.extend((values, (left, right), error) for values, error in fitted)
             parameter["radius_intervals"] = supported
             if candidates:
+                # A still-supported existing explanation must not disappear
+                # merely because the sampled representatives are different.
+                # Keep its exact parameter value; only observed counterexamples
+                # justify replacing it. It cannot rescue a refuted open cell.
+                retained = next((interval for interval in supported
+                    if interval[0] <= self.original[parameter["symbol"]] <= interval[1]), None)
+                original_in_domains = all(any(low <= self.original[item["symbol"]] <= high
+                    for low, high in item["radius_intervals"]) for item in self.parameters)
+                if retained is not None and original_in_domains and budget.spend(len(evaluated_rows)):
+                    errors = {id(row): (self.program.predict(row) - row.target) ** 2 for row in evaluated_rows}
+                    error = sum(errors[id(row)] for row in paid_rows) / len(paid_rows)
+                    if (error <= tolerance and all(sum(errors[key] for key in trajectory) / len(trajectory)
+                            <= tolerance for trajectory in trajectory_ids) and
+                            self._supports_inherited_evidence(self.original, budget, tolerance)):
+                        candidates = [item for item in candidates if item[0] != self.original]
+                        candidates.insert(0, (dict(self.original), tuple(retained), error))
                 self.status = "unresolved"
                 return [self._entry(values, interval, index, error, len(paid_rows), budget.spent - start)
                         for values, interval, error in candidates]
             if self.reopen("current_relation_counterexample", parameter_index=index):
                 return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
+            # A source search range is not a physical limit. Once all of its
+            # cells fail current measurements, keep the consuming computation
+            # and test the range exposed by the current measured geometry.
+            if distances:
+                upper = distances[-1] + max(1., abs(distances[-1])) * 1e-6
+                expanded = [0., upper]
+                previous = self._expanded_domains.get(parameter["symbol"])
+                if previous is None or upper > previous[1]:
+                    self._expanded_domains[parameter["symbol"]] = expanded
+                    parameter["radius_intervals"] = [expanded]
+                    self.evidence_updates.append({"reason": "current_geometry_expands_refuted_domain",
+                        "parameters": [parameter["symbol"]], "previous_intervals": deepcopy(domains),
+                        "reopened_intervals": deepcopy(self.intervals), "evidence_rows": len(paid_rows)})
+                    return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
             self.status = "refuted"
             return []
         self.status = "resolved_to_precision" if self.parameters else "no_relation_interval"
@@ -350,6 +433,8 @@ class RelationIntervalResearch:
 
     def adopt(self, entry):
         self.values = dict(entry["parameter_values"])
+        saved = entry["research_program"]["selection_steps"][-1]
+        self.parameters = deepcopy(saved["parameters"])
 
     def questions(self, entries):
         from .relation_language import instantiate_predicate, relation_objects

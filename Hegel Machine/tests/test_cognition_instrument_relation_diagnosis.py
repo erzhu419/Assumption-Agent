@@ -69,12 +69,44 @@ def binding_error(binding, pairs):
                for command, measured in pairs for name, program in binding.items())
 
 
+def legacy_source_model(fitted):
+    """Restore a pre-0.91 single-explanation source from genuinely paid fitting."""
+    stored = deepcopy(fitted)
+    for field in stored["fields"].values():
+        # Historical files stored only the selected program. Revised models
+        # retain their competing hypotheses and must purchase distinguishing data.
+        field.pop("hypotheses", None)
+    return json.loads(json.dumps(stored))
+
+
+def resolve_current_model(lab, model, budget):
+    """Use the actual controller and acquired readings to settle revised inputs."""
+    agent = UnifiedResearchAgent(ResearchConfig(minimum_improvement=1e-7))
+    agent._learn_instruments = agent._revise_inputs = True
+    model["model_id"] = "revised_instrument"
+    batches, actions = [], []
+
+    def purchase(channels, purpose, *, probe):
+        assert channels == ("fine",)
+        assert purpose == "distinguish_instrument_hypotheses"
+        pairs, batch = acquire(lab, probe)
+        batches.append(pairs)
+        return batch.observations
+
+    resolved = agent._distinguish_instruments(lab, model, ("fine",), purchase,
+        lambda channels: batches, budget, actions)
+    assert resolved is model
+    assert all(len([item for item in field["hypotheses"] if item["status"] != "refuted"]) == 1
+               for field in model["fields"].values())
+    return sum(map(len, batches))
+
+
 def test_purchased_same_trajectory_repairs_overlapping_selector_cuts_and_rebinds_after_json():
     with UnifiedObjectLab(**SETTINGS, relation_condition="source_less") as lab:
         spec = lab.spec_for(("fine",))
         random_pairs, _ = acquire(lab, lab.random_probe(183, length=48))
         budget = SearchBudget(30000)
-        original = fit_instrument_model(lab.spec, spec, random_pairs, budget)
+        original = legacy_source_model(fit_instrument_model(lab.spec, spec, random_pairs, budget))
         old = instrument_binding(original)
         old_payload = deepcopy(original)
         probe = edge_probe("existing_counterexample")
@@ -94,6 +126,8 @@ def test_purchased_same_trajectory_repairs_overlapping_selector_cuts_and_rebinds
         assert assessment["hypotheses"][0]["forecast_loss"] > 1e-5
 
         repaired = fit_instrument_model(lab.spec, spec, [*random_pairs, *pairs], budget)
+        assert repaired["status"] == "requires_fresh_validation"
+        extra_rows = resolve_current_model(lab, repaired, budget)
         binding = instrument_binding(repaired)
         assert set(binding) == set(spec.feature_names)
         assert binding_error(binding, pairs) < 1e-10
@@ -101,10 +135,10 @@ def test_purchased_same_trajectory_repairs_overlapping_selector_cuts_and_rebinds
         fresh, _ = acquire(lab, lab.random_probe(885, length=32))
         assert binding_error(binding, fresh) < 1e-10
         assert original == old_payload
-        assert repaired["status"] == "requires_fresh_validation"
+        assert repaired["status"] == "supported_on_measured_trajectory"
         assert 0 < budget.spent <= budget.limit
-        assert lab.costs["observation_cost"] == 89
-        assert lab.costs["measurement_cost"] == 12 * 89
+        assert lab.costs["observation_cost"] == 89 + extra_rows
+        assert lab.costs["measurement_cost"] == 12 * (89 + extra_rows)
 
     saved = json.loads(json.dumps(repaired))
     with UnifiedObjectLab(**SETTINGS, relation_condition="source_less", rename_prefix="later_") as renamed:
@@ -128,7 +162,8 @@ def test_changed_relation_refutes_the_response_without_refuting_correct_input_ca
         transition = batch.transitions[1]
         coupling = (transition["before"]["measured_q_o0"] - transition["after"]["measured_q_o0"]) / \
             transition["before"]["measured_q_o0"]
-        model = fit_instrument_model(source.spec, spec, [*pairs, *source_pairs], SearchBudget(20000))
+        fitted = fit_instrument_model(source.spec, spec, [*pairs, *source_pairs], SearchBudget(20000))
+        model = legacy_source_model(fitted)
         original = deepcopy(model)
         binding = instrument_binding(model)
         current, _ = acquire(changed, probe)
@@ -141,7 +176,9 @@ def test_changed_relation_refutes_the_response_without_refuting_correct_input_ca
         assert assessment["hypotheses"][0]["forecast_loss"] > 1e-5
         repeated = fit_instrument_model(changed.spec, changed.spec_for(("fine",)),
             [*pairs, *current], SearchBudget(20000))
-        assert instrument_binding(repeated) == binding
+        # The changed response does not change any instrument hypothesis fitted
+        # to the identical paid fields; new ambiguity is not force-bound.
+        assert repeated["fields"] == fitted["fields"]
         assert model == original
 
 
@@ -149,7 +186,7 @@ def inherited_boundary_case(lab):
     """Learn a real measured source, then purchase its faulty selector endpoint."""
     spec = lab.spec_for(("fine",))
     random_pairs, _ = acquire(lab, lab.random_probe(183, length=48))
-    old_model = fit_instrument_model(lab.spec, spec, random_pairs, SearchBudget(20000))
+    old_model = legacy_source_model(fit_instrument_model(lab.spec, spec, random_pairs, SearchBudget(20000)))
     probe = edge_probe("paid_selector_endpoint")
     # Keep these already-paid positions outside the open radius interval.
     # Changing the selector calibration therefore must not resolve that interval.
@@ -180,6 +217,7 @@ def inherited_boundary_case(lab):
             "family": "event_change", "radius_interval": [.7, .9]}]}})
     call = next(call for call in agent._recall(lab.spec) if call.definition.source_concept_id == source)
     repaired = fit_instrument_model(lab.spec, spec, [*random_pairs, *paired], SearchBudget(20000))
+    resolve_current_model(lab, repaired, SearchBudget(20000))
     binding = instrument_binding(repaired)
     old = instrument_binding(old_model)
     assert old["measured_f_o1"] != binding["measured_f_o1"]

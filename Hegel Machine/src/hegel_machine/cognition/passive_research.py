@@ -14,14 +14,18 @@ from .unified_research import UnifiedResearchAgent
 class FixedExperimentResearchAgent(UnifiedResearchAgent):
     """Learn representations and reuse knowledge under a fixed paid design.
 
-    All instruments and all four control trajectories are committed before the
-    first response is observed. A learned hypothesis cannot shorten the design,
-    change an instrument, or request another trajectory after confirmation.
+    The fullest legal instrument view and all four control trajectories are
+    committed before the first response is observed. A learned hypothesis cannot
+    shorten the design, change an instrument, or request another trajectory after
+    confirmation.
     """
 
     def run(self, laboratory):
-        channels = tuple(channel.name for channel in laboratory.channels)
-        rate = sum(channel.cost_per_row for channel in laboratory.channels)
+        alternative_views = getattr(laboratory, "measurement_views", None)
+        channels = (tuple(alternative_views[-1]) if alternative_views else
+                    tuple(channel.name for channel in laboratory.channels))
+        rate = sum(channel.cost_per_row for channel in laboratory.channels
+                   if channel.name in channels)
         length = min(24, laboratory.spec.max_probe_length,
                      self.config.observation_budget // 4)
         if rate:

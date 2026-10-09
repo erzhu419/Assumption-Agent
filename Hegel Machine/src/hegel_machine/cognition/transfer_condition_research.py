@@ -1,10 +1,12 @@
 """Retain learned branch questions when a short transfer fit becomes constant."""
 
+import json
 from math import isfinite, sqrt
 
 from .competing_object_experiments import _forecast, plan_competing_object_probe
 from .equivalent_object_programs import canonical_object_program
 from .language import MissingHistory, Program
+from .meta_prior_research import _sources
 from .models import Candidate, Observation, SearchBudget
 from .program_condition_sets import _active_paths
 from .scale_bindings import bind_measurement_arguments
@@ -59,10 +61,11 @@ def _evidence_rows(paid_rows, paired_rows):
 class TransferConditionResearch:
     """One task's callable questions and computations on already paid rows."""
 
-    def __init__(self, retained_calls):
+    def __init__(self, retained_calls, *, prevalidated_call_ids=()):
         self.retained_calls = tuple(retained_calls)
         self.calls = [(index, program, program.expanded()) for index, program in enumerate(self.retained_calls)]
         self.calls = [item for item in self.calls if _conditional(item[2])]
+        self.prevalidated_call_ids = set(prevalidated_call_ids)
         self.compiled, self.predictions, self.phases = {}, {}, {}
         self.rows = []
         self.counts = dict.fromkeys(("new_prediction_evaluations", "reused_prediction_evaluations",
@@ -71,6 +74,7 @@ class TransferConditionResearch:
     def plan(self, command_spec, trial, budget, **kwargs):
         return plan_transfer_condition_probe(command_spec, trial, self.retained_calls,
                                              budget, _research=self, **kwargs)
+
 
     def sync_rows(self, rows):
         # Paired observations may enrich actual fields and histories.
@@ -162,9 +166,75 @@ class TransferConditionResearch:
         return self.phases[key]
 
 
+def _condition_program_key(program):
+    return program.expanded().simplified().to_dict()
+
+
+def _retained_call(retained_calls, call_index):
+    """Resolve a call by its original index after conditional filtering."""
+    if retained_calls and isinstance(retained_calls[0], tuple):
+        indexed = {item[0]: item[1] for item in retained_calls}
+        return indexed[call_index]
+    return retained_calls[call_index]
+
+
+def record_condition_coverages(scope, retained_calls, coverages, *, task_id=None):
+    """Persist condition coverage established by paired paid rows."""
+    def key(source_ids, program, predicate, history_depth):
+        return (tuple(source_ids), json.dumps(program, sort_keys=True),
+                json.dumps(predicate, sort_keys=True), history_depth)
+
+    existing = {key(item.get("source_ids", ()), item.get("program"),
+                    item.get("predicate"), item.get("history_depth"))
+                for item in coverages}
+    for item in scope.get("calls", ()):
+        if item.get("status") != "covered_by_paid_evidence":
+            continue
+        call = _retained_call(retained_calls, item["call_index"])
+        source_ids = tuple(sorted(_sources(call)))
+        program = _condition_program_key(call)
+        for condition in item.get("conditions", ()):
+            if not condition.get("covered"):
+                continue
+            record = {"source_ids": list(source_ids), "program": program,
+                      "predicate": condition["predicate"],
+                      "history_depth": item.get("history_depth", 0),
+                      "task_id": task_id,
+                      "paid_witnesses": list(condition.get("paid_witnesses", ())),
+                      "coverage_source": "paid_paired_rows"}
+            record_key = key(source_ids, program, record["predicate"], record["history_depth"])
+            if record_key not in existing:
+                coverages.append(record)
+                existing.add(record_key)
+
+
+def covered_call_ids(retained_calls, coverages):
+    """Return call indexes whose every executable branch is already covered."""
+    result = set()
+    for index, call in enumerate(retained_calls):
+        expanded = call.expanded()
+        if not _conditional(expanded):
+            continue
+        paths, complete = _active_paths(expanded)
+        if not complete:
+            continue
+        predicates = list(dict.fromkeys(_conjunction(path) for path in paths if path))
+        source_ids = tuple(sorted(_sources(call)))
+        program = _condition_program_key(call)
+        depth = expanded.history_depth
+        if predicates and all(any(tuple(sorted(receipt.get("source_ids", ()))) == source_ids
+                and receipt.get("program") == program
+                and receipt.get("predicate") == predicate.to_dict()
+                and receipt.get("history_depth", 0) == depth for receipt in coverages)
+                for predicate in predicates):
+            result.add(index)
+    return result
+
+
 def plan_transfer_condition_probe(command_spec, trial, retained_calls, budget, *,
                                   paid_rows=(), paired_rows=(), binding=None, methods=None,
-                                  serial=0, length=4, tolerance=1e-7, task_id=None, _research=None):
+                                  serial=0, length=4, tolerance=1e-7, task_id=None, _research=None,
+                                  prior_coverages=()):
     """Ask about untested learned conditions; return no simulated support.
 
     Conditions are inspected in the original current-field-bound calls, even
@@ -177,6 +247,7 @@ def plan_transfer_condition_probe(command_spec, trial, retained_calls, budget, *
     start = budget.spent
     research = _research if _research is not None else TransferConditionResearch(retained_calls)
     calls = research.calls
+    calls_by_index = {index: program for index, program, _ in calls}
     before = dict(research.counts)
     scope = {"has_conditional_calls": bool(calls), "calls": [], "evidence_rows": 0,
              "covered_call_ids": [], "uncovered_call_ids": [], "all_conditions_covered": False,
@@ -216,6 +287,22 @@ def plan_transfer_condition_probe(command_spec, trial, retained_calls, budget, *
         trial_values.append(value)
 
     for index, program, expanded in calls:
+        if index in research.prevalidated_call_ids:
+            # Prior coverage saves a new condition experiment, not the check
+            # against responses already bought on this task. Short validation
+            # can miss a branch that was active in an earlier paid batch.
+            counterexamples = [{"hypothesis_id": f"transfer_call_{index}",
+                "position": position, "prediction": fitted, "target": row.target,
+                "squared_error": (fitted - row.target) ** 2}
+                for position, (row, fitted) in enumerate(zip(rows, trial_values))
+                if fitted is not None and (fitted - row.target) ** 2 > tolerance]
+            scope["trial_counterexamples"].extend(counterexamples)
+            scope["calls"].append({"hypothesis_id": f"transfer_call_{index}",
+                "call_index": index, "history_depth": expanded.history_depth,
+                "status": "trial_refuted_on_paid_conditions" if counterexamples
+                    else "covered_by_paid_evidence",
+                "coverage_source": "prior_supported_condition", "conditions": []})
+            continue
         if index not in research.compiled:
             if not budget.spend(expanded.size):
                 result.update(forecast_status="compute_exhausted")
@@ -276,7 +363,8 @@ def plan_transfer_condition_probe(command_spec, trial, retained_calls, budget, *
         covered_call = bool(predicates) and complete and all(covered)
         item = {"hypothesis_id": call_id, "call_index": index,
             "status": "covered_by_paid_evidence" if covered_call else "uncovered_condition",
-            "scope_complete": complete, "active_paid_rows": len(active_positions),
+            "scope_complete": complete, "history_depth": history_depth,
+            "active_paid_rows": len(active_positions),
             "active_positions": sorted(active_positions),
             "original_call_loss": sum(original_errors) / len(original_errors) if original_errors else None,
             "active_original_call_loss": sum(active_original_errors) / len(active_original_errors)
@@ -301,6 +389,34 @@ def plan_transfer_condition_probe(command_spec, trial, retained_calls, budget, *
                 if not evidence and phase not in question["uncovered_phases"]:
                     question["uncovered_phases"].append(phase)
 
+    # A later task can keep the source call and predicate while changing only
+    # measured field names. Reuse an exact paid coverage receipt in that case;
+    # no new probe is justified by a naming change alone.
+    for item in scope["calls"]:
+        if item.get("coverage_source") == "prior_supported_condition":
+            continue
+        call = calls_by_index[item["call_index"]]
+        source_ids = tuple(sorted(_sources(call)))
+        program = _condition_program_key(call)
+        for condition in item["conditions"]:
+            if condition.get("covered"):
+                continue
+            matching = next((receipt for receipt in prior_coverages
+                if tuple(sorted(receipt.get("source_ids", ()))) == source_ids
+                and receipt.get("program") == program
+                and receipt.get("predicate") == condition.get("predicate")
+                and receipt.get("history_depth", 0) == item.get("history_depth", 0)), None)
+            if matching is not None:
+                condition["covered"] = True
+                condition["coverage_source"] = "prior_paid_condition"
+                condition["paid_witnesses"] = list(matching.get("paid_witnesses", ()))
+        item["status"] = ("covered_by_paid_evidence" if item.get("scope_complete") and item["conditions"]
+                           and all(condition.get("covered") for condition in item["conditions"])
+                           else "uncovered_condition")
+    scope["covered_call_ids"] = [item["hypothesis_id"] for item in scope["calls"]
+                                  if item["status"] == "covered_by_paid_evidence"]
+    scope["uncovered_call_ids"] = [item["hypothesis_id"] for item in scope["calls"]
+                                    if item["status"] != "covered_by_paid_evidence"]
     scope["questions"] = [{**question, "predicate": question["predicate"].to_dict()}
                           for question in shared_questions.values()]
     if scope["trial_counterexamples"]:

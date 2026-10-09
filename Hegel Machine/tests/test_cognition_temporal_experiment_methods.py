@@ -188,7 +188,18 @@ def test_same_sensor_at_different_times_remains_two_constraints_during_recall():
     programs = [predicate, binary("mul", const(2.), predicate)]
     binding = {"reading": previous("u", 1)}
     methods, _ = learn(spec, programs, binding)
-    assert methods.records[0]["temporal_recipe"]["predicate_offsets"] == [0, 1]
+    recipe = methods.records[0]["temporal_recipe"]
+    assert sorted(recipe["predicate_offsets"]) == [0, 1]
+    # Canonical expression order can put the earlier time first. Each offset
+    # must still keep its own target interval and actual control dependency.
+    constraints = methods.records[0]["source_boundary"]["solve"]["constraints"]
+    by_offset = dict(zip(recipe["predicate_offsets"], constraints))
+    assert by_offset[0]["lower"] == pytest.approx(.231234)
+    assert by_offset[1]["lower"] == pytest.approx(-.41173)
+    assert {(offset, tuple((item["control_role"], item["lag"]) for item in dependencies))
+            for offset, dependencies in zip(recipe["predicate_offsets"],
+                                             recipe["control_time_dependencies"])} == {
+                (0, ((0, 1),)), (1, ((0, 2),))}
     replay = methods.propose(spec, programs, SearchBudget(4000), binding=binding)
     assert replay
     assert _measure(_plan(replay[0], programs, binding), programs[-1], binding)["status"] == "distinguished"

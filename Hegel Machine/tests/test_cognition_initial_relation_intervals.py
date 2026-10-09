@@ -42,18 +42,30 @@ def test_first_structure_binds_its_radius_without_copying_an_unneeded_old_expres
     later = inherited.alternatives(observations(composition(.7, "later_"),
         (.1, .58, 1.2) * 5, prefix="later_"), SearchBudget(30000))
     assert len(later) > 1
-    assert all(item["candidate"].program == call or
-               call in item["candidate"].program.children for item in later)
+    # Keep the source callable available as research lineage; running the old
+    # full response again is unnecessary when the radius has been substituted.
+    for item in later:
+        retained = item["research_program"]["selection_steps"][0]
+        assert Program.from_dict(retained["program"]) == call
+        held = observations(composition(item["parameter_values"]["relation_parameter_0"], "later_"),
+                            (.1, .6, .68, 1.2, .1), prefix="later_")
+        assert mse(item["candidate"].program, held) < 1e-22
+    assert parent.to_dict() == original
 
 
-def test_new_paid_response_can_refute_the_entire_inherited_interval():
+def test_new_paid_response_reopens_a_refuted_interval_using_current_distances():
     parent = composition(.6).expanded()
     actual = composition(1.2).expanded()
     structure = prior()["structure"]
     research = RelationIntervalResearch(parent, [], SearchBudget(3000), structure=structure)
     paid = observations(actual, (.1, .9, 1.3, .9, .1) * 3)
-    assert research.alternatives(paid, SearchBudget(30000)) == []
-    assert research.status == "refuted"
+    candidates = research.alternatives(paid, SearchBudget(30000))
+    assert candidates and research.evidence_updates
+    assert all(.9 < item["parameter_values"]["relation_parameter_0"] < 1.3
+               for item in candidates)
+    assert all(mse(item["candidate"].program, paid) < 1e-24 for item in candidates)
+    fresh = observations(actual, (.1, .8, 1.4, .8, .1) * 3)
+    assert all(mse(item["candidate"].program, fresh) < 1e-24 for item in candidates)
     assert structure["radius_interval"] == [.5, .7]
 
 
@@ -68,7 +80,8 @@ def test_refining_an_existing_local_correction_keeps_its_exact_old_call_without_
                               "radius_interval": [1.1, 1.3]}]})
     paid = observations(composition(1.25), (.1, 1.7) * 6)
     candidates = research.alternatives(paid, SearchBudget(30000))
-    assert len(candidates) == 3
+    assert any(item["candidate"].program == current for item in candidates)
+    assert len({item["parameter_values"]["relation_parameter_0"] for item in candidates}) >= 3
     assert all(item["candidate"].program.size == current.size for item in candidates)
     assert all(old in item["candidate"].program.children for item in candidates)
     assert old.to_dict() == original

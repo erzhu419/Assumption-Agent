@@ -216,9 +216,9 @@ def plan_condition_questions(command_spec, questions, budget, *, binding=None,
                 missing_fields=sorted(required - set(current_binding)))
             return finish()
         before = generation.spent
-        learned = recall.propose(command_spec, programs, generation, binding=current_binding,
+        learned = recall.propose(command_spec, programs, generation, binding=bindings,
             serial=serial, length=probe_length, tolerance=tolerance, task_id=task_id,
-            contexts=contexts) if recall else []
+            contexts=contexts, response_programs=response_programs) if recall else []
         result["method_search_cost"] += generation.spent - before
         result["method_candidates"] += len(learned)
         if recall is not None:

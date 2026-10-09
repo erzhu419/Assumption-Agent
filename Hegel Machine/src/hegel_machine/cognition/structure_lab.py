@@ -66,7 +66,7 @@ class StructureLab:
     """
 
     def __init__(self, *, objects=4, readout="focus", variant="exchange", seed=71,
-                 relation_direction="symmetric", relation_condition="always"):
+                 relation_direction="symmetric", relation_condition="always", total_weight=1.0):
         if objects < 2:
             raise ValueError("the exchange apparatus needs at least two objects")
         if readout not in {"focus", "position_focus", "total", "window", "event", "total_event",
@@ -80,6 +80,7 @@ class StructureLab:
             raise ValueError("unknown relation condition")
         self.object_ids = tuple(f"o{index}" for index in range(objects))
         self._readout, self._variant = readout, variant
+        self._total_weight = float(total_weight)
         self._relation_direction = relation_direction
         self._relation_condition = relation_condition
         rng = Random(seed)
@@ -187,8 +188,9 @@ class StructureLab:
             after_features = self._view(schema, after, position, drive, focus)
             flows.append(after[focus] - quantity[focus] - drive[focus])
             event = flows[-1] - flows[-2] if len(flows) > 1 else 0.0
+            total = self._total_weight * sum(after)
             if self._readout == "total":
-                target = sum(after)
+                target = total
             elif self._readout == "position_focus":
                 # A local observation can depend on position even when the
                 # physical exchange does not identify position membership.
@@ -198,14 +200,14 @@ class StructureLab:
             elif self._readout == "event":
                 target = event
             elif self._readout == "total_event":
-                target = sum(after) + .7 * event
+                target = total + .7 * event
             elif self._readout == "focus_window":
                 target = after[focus] + .6 * sum(flows[-self._window:])
             elif self._readout == "filtered_total":
-                filtered_total = .8 * filtered_total + sum(after)
+                filtered_total = .8 * filtered_total + total
                 target = filtered_total
             elif self._readout == "window_total_event":
-                combined_events.append(sum(after) + .7 * event)
+                combined_events.append(total + .7 * event)
                 target = sum(combined_events[-self._window:])
             else:
                 target = after[focus]

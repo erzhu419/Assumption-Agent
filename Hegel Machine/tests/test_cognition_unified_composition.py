@@ -5,8 +5,10 @@ import json
 import pytest
 
 from hegel_machine.cognition.language import Program
+from hegel_machine.cognition.evaluation import initial_prediction, loss
 from hegel_machine.cognition.meta_prior_research import _sources
-from hegel_machine.cognition.models import ResearchConfig
+from hegel_machine.cognition.memory import KnowledgeLibrary
+from hegel_machine.cognition.models import Observation, ResearchConfig
 from hegel_machine.cognition.unified_session import UnifiedResearchSession
 
 
@@ -80,3 +82,51 @@ def test_joint_and_temporal_research_save_executable_programs_and_actual_source_
             assert set(procedure["source_ids"]) <= set(concepts[source_id]["parents"])
     assert set(combined["concepts_added"]) & set(_sources(Program.from_dict(window["program"])))
     assert set(window["concepts_added"]) & set(_sources(Program.from_dict(renamed["program"])))
+
+
+def test_losing_retained_call_returns_its_already_paid_validation_failure(composition_sequence):
+    report = composition_sequence
+    combined, changed = [report["results"][index]["research"] for index in (2, 3)]
+    source = combined["concepts_added"][0]
+    failures = [event for event in changed["transfer"]
+                if event.get("kind") == "failed_retained_call" and source in event["source_ids"]]
+    assert failures
+    training, validation = [[Observation(row["features"], row["target"], tuple(row["history"]))
+                            for row in batch["observations"]] for batch in changed["batches"][:2]]
+    event = failures[0]
+    program = Program.from_dict(event["program"])
+    assert program.op == "call"
+    assert event["status"] == "counterexample" and not event["accepted"]
+    assert event["validation_rows"] == len(validation)
+    assert event["validation_loss"] == pytest.approx(
+        loss(program, validation, initial_prediction(training, .5), .5))
+    prior = next(item for item in report["knowledge"]["meta_priors"] if item["source_concept_id"] == source)
+    assert prior["status"] == "conditional"
+    assert any(item["kind"] == "failed_retained_call" and item["program"] == event["program"]
+               for item in prior["counterexamples"])
+    concept = next(item for item in report["knowledge"]["concepts"] if item["concept_id"] == source)
+    assert concept["status"] != "revoked"
+
+
+def test_conditional_source_keeps_earlier_coverage_when_original_response_returns(composition_sequence):
+    report = composition_sequence
+    source = report["results"][2]["research"]["concepts_added"][0]
+    library = KnowledgeLibrary.from_dict(report["knowledge"])
+    prior = next(item for item in library.meta_priors if item["source_concept_id"] == source)
+    assert prior["status"] == "conditional" and prior["counterexamples"]
+    prior_failures = len(prior["counterexamples"])
+    returning = UnifiedResearchSession(ResearchConfig(**report["config"]),
+        tasks=[{"environment": "objects", "apparatus_seed": 9013,
+                "readout": "total_event", "seed": 80127}],
+        library=library, measurement_budget=report["measurement_budget"])
+    completed = returning.run()
+    result = completed["results"][0]["research"]
+    assert result["status"] == "completed"
+    assert result["selected_kind"] == "retained_calibrated_call"
+    assert source in _sources(Program.from_dict(result["program"]))
+    assert result["costs"]["observation_cost"] == 24
+    assert not result["concepts_added"]
+    assert result["confirmation_loss"] < 1e-7
+    assert returning.evaluate(length=48, trajectories=3)["evaluation"][0]["loss"] < 1e-7
+    assert prior["status"] == "conditional"
+    assert len(prior["counterexamples"]) >= prior_failures

@@ -142,3 +142,32 @@ def test_agent_written_shared_binary_artifact_is_available_to_successor(tmp_path
         provider_factory=lambda _: BinaryKnowledge())
     result = control.run()
     assert result["results"][1]["events"][1]["feedback"]["stdout"] == "[173, 0, 255]\n"
+
+
+def test_memory_ablation_restores_without_exposing_prior_text_or_shared_files(tmp_path):
+    class EmptySuccessor(SharedProvider):
+        def __init__(self, path):
+            self.path = path
+
+        def next_action(self, request):
+            if not request['events']:
+                assert request['session_knowledge']['files'] == {}
+                assert request['session_knowledge']['lessons'] == []
+                assert request['files'] == {}
+                assert not (self.path / 'shared').exists()
+            return super().next_action(request)
+
+    control = UnifiedCodeSession(tmp_path, use_memory=False,
+        tasks=[{'task_index': 0, 'seed': seed} for seed in (557, 571)],
+        config=CodeAgentConfig(observation_budget=2, measurement_budget=2, max_model_calls=3),
+        provider_factory=EmptySuccessor)
+    state = control.run(max_tasks=1)
+    assert (tmp_path / 'task_000' / 'shared' / 'model.py').exists()
+    restored = UnifiedCodeSession(tmp_path, state=json.loads(json.dumps(state)),
+                                  provider_factory=EmptySuccessor)
+    result = restored.run()
+    assert not result['use_memory']
+    assert result['results'][1]['inherited_files'] == []
+    assert result['results'][1]['inherited_lessons'] == 0
+    assert result['results'][1]['status'] == 'completed'
+    assert (tmp_path / 'task_000' / 'shared' / 'model.py').exists()

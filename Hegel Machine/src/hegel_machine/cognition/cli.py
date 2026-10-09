@@ -15,6 +15,21 @@ from .models import ResearchConfig
 def add_parser(subparsers):
     parser = subparsers.add_parser("cognition", help="Run discovery, revision and cross-task knowledge experiments")
     commands = parser.add_subparsers(dest="cognition_command", required=True)
+    historical = commands.add_parser("historical", help="Use current implementations of the 181 historical versions")
+    historical.add_argument("--version", help="Historical version, for example 0.93 or 0.181.0")
+    historical.add_argument("--group", help="Capability group from the historical catalogue")
+    historical.add_argument("--query", help="Find a problem or implementation using whitespace-separated terms")
+    historical.add_argument("--compact", action="store_true", help="Show concise history entries with current reuse routes")
+    historical.add_argument("--execute", nargs=argparse.REMAINDER,
+                            help="Run the selected capability's native command and its task arguments")
+    growth = commands.add_parser("growth", help="Run joint explanation, measurement and research-method growth")
+    growth.add_argument("--checkpoint", type=Path, required=True)
+    growth.add_argument("--tasks", nargs="+", type=int, choices=range(8), default=list(range(8)))
+    growth.add_argument("--seed", type=int, default=8601)
+    growth.add_argument("--observation-budget", type=int, default=384)
+    growth.add_argument("--compute-budget", type=int, default=200000)
+    growth.add_argument("--measurement-budget", type=int, default=1024)
+    growth.add_argument("--rounds", type=int, default=6)
     for name in ("run", "compare", "research", "session"):
         descriptions = {"run": "Run a task sequence with persistent knowledge",
                         "compare": "Compare discovery, planning, memory and observation strategies",
@@ -136,6 +151,28 @@ def add_parser(subparsers):
 
 
 def dispatch(args):
+    if args.cognition_command == "historical":
+        from .historical_capabilities import dispatch_historical
+        return dispatch_historical(args)
+    if args.cognition_command == "growth":
+        from dataclasses import replace
+        from .growth_lab import GrowthLab
+        from .research_growth import GrowthResearcher
+        state = (json.loads(args.checkpoint.read_text(encoding="utf-8"))
+                 if args.checkpoint.exists() else None)
+        config = ResearchConfig(observation_budget=args.observation_budget,
+                                compute_budget=args.compute_budget, max_rounds=args.rounds,
+                                seed=args.seed)
+        researcher = GrowthResearcher(config, state=state,
+                                      measurement_budget=args.measurement_budget)
+        args.checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        for stage in args.tasks:
+            researcher.config = replace(config, seed=args.seed + stage * 10007)
+            report = researcher.run(GrowthLab(seed=args.seed, stage=stage))
+            args.checkpoint.write_text(json.dumps(researcher.to_dict(), indent=2) + "\n", encoding="utf-8")
+            print(json.dumps({"stage": stage, **{key: report[key] for key in
+                ("status", "expression", "costs", "selected_channels", "uncertainty")}}))
+        return 0
     if args.cognition_command in {"structure", "mechanism", "simulator", "prior", "frontier", "agenda", "agenda-demo", "experiment", "code-compare", "code-session", "unified"}:
         return _dispatch_extended(args)
     if args.cognition_command == "lab":

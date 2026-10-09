@@ -26,6 +26,9 @@ def test_calibration_uses_old_residuals_and_new_confirmation_can_reject_it(
     agent = UnifiedResearchAgent(CONFIG)
     spec = UnknownTaskLab(12).spec
     original = claim(Program("const", value=0.))
+    original["research_action_origin"] = {"context": "pinball:0.9:multiple:unified:coordinates:unexplained",
+        "action": "program_revision", "trial": 1, "credited_gain": .4,
+        "baseline_program": Program("const", value=-1.).to_dict(), "fallback": -1., "risk_quantile": .9}
     validation = [Observation({"u": 0.}, float(i)) for i in range(10)]
     confirmation = [Observation({"u": 0.}, confirmation_target) for _ in range(10)]
     budget, actions = SearchBudget(100), []
@@ -40,6 +43,7 @@ def test_calibration_uses_old_residuals_and_new_confirmation_can_reject_it(
 
     assert (chosen is calibrated) == accepted
     assert chosen is (calibrated if accepted else original)
+    assert chosen["research_action_origin"] == original["research_action_origin"]
     assert fixed_loss == 0.
     if accepted:
         assert chosen["validation_loss"] == fixed_loss
@@ -139,7 +143,8 @@ def test_supported_short_trial_compares_both_frozen_tails_on_its_new_confirmatio
                                  library=source.library)
     # Isolate the short-trial wiring from the separate noisy-adequacy decision.
     # This forced support is not evidence that this noisy task merits adoption.
-    monkeypatch.setattr(agent, "_support", lambda *args: {"adequate": True})
+    monkeypatch.setattr(agent, "_support", lambda *args: {
+        "adequate": True, "reason": "isolated_short_trial_wiring"})
     result = agent.run(UnknownTaskLab(12, 7908))
     actions = result["actions"]
     proposal_index = next(index for index, action in enumerate(actions)

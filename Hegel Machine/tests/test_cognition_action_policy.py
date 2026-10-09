@@ -135,3 +135,25 @@ def test_observed_conditions_change_actions_and_delayed_feedback_credits_its_ori
     assert choose(restored) is None
     restored.set_condition("new_counterexample")
     assert choose(restored).name == "transition"
+
+
+def test_instrument_scarcity_changes_choice_from_paid_followup_after_json_restore():
+    experience = {}
+    policy = ResearchActionPolicy(ROWS, specification(), experience)
+    outcome(policy, "instrument", .5, observations=0, compute=10)
+    outcome(policy, "program", .5, observations=0, compute=100)
+    ResearchActionPolicy.charge_followup(experience,
+        {"context": policy.context, "action": "instrument", "trial": 1},
+        observation_cost=0, measurement_cost=100, compute_cost=0)
+    restored = ResearchActionPolicy(ROWS, specification(), json.loads(json.dumps(experience)))
+    options = [ActionOption("instrument", 0, 10, measurement_cost=5),
+               ActionOption("program", 0, 100)]
+    assert restored.choose(options, observation_remaining=100, compute_remaining=1000,
+                           measurement_remaining=100).name == "program"
+    assert restored.choose(options, observation_remaining=100, compute_remaining=1000,
+                           measurement_remaining=10000).name == "instrument"
+    assert restored.choose(options, observation_remaining=100, compute_remaining=1000,
+                           measurement_remaining=4).name == "program"
+    assert restored.last_decision["eligible_actions"] == ["program"]
+    assert restored.experience["instrument"]["trials"] == 1
+    assert restored.experience["instrument"]["expected_gain"] == .5

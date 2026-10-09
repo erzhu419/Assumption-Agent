@@ -11,9 +11,9 @@ from copy import deepcopy
 import json
 from math import ceil, floor
 
-from .continuous_state import _linear_fit, _sum_terms
+from .continuous_state import _linear_fit, _sum_terms, continuous_state_candidates
 from .language import Program
-from .models import Observation
+from .models import Observation, SearchBudget
 from .structure_lab import ObjectSchema
 
 
@@ -113,6 +113,38 @@ def _fit_dynamic(rows, target, names, budget, max_history):
     return best
 
 
+def _fit_stateful(rows, targets, budget):
+    """Identify a recurrent instrument from paid readings, not response labels."""
+    observations, prefix, measured_history = [], [], []
+    for row, target in zip(rows, targets):
+        if not row.history:
+            prefix, measured_history = [], []
+        # A complete purchased prefix permits identifying the instrument's
+        # dynamics using its own past readings. Partial prefixes still support
+        # direct simulation from controls, without inventing past measurements.
+        history = (tuple({**past, "__target__": value}
+                         for past, value in zip(row.history, measured_history))
+                   if list(row.history) == prefix else row.history)
+        observations.append(Observation(row.features, target, history))
+        prefix.append(row.features)
+        measured_history.append(target)
+    local = SearchBudget(max(0, budget.remaining - 6 * len(rows)))
+    candidates = continuous_state_candidates(observations, budget=local)
+    budget.spend(local.spent)
+    tolerance = 1e-10 * max(1., sum(value * value for value in targets) / len(rows))
+    proposals = []
+    for candidate in candidates:
+        if not budget.spend(len(rows)):
+            break
+        error = sum((candidate.program.predict(row) - target) ** 2
+                    for row, target in zip(rows, targets)) / len(rows)
+        proposal = {"program": candidate.program, "fit_loss": error,
+                    "kind": "continuous_state", "history_depth": candidate.program.history_depth,
+                    "tolerance": tolerance}
+        proposals.append(proposal)
+    return proposals
+
+
 def _cut_options(left, right, grid, *, lower):
     """Both open and closed cuts are hypotheses; observed endpoints choose them."""
     if left is None or right is None:
@@ -155,10 +187,10 @@ def _interval(term, low, high):
 def _fit_membership(rows, targets, control, bounds, budget):
     count = len(rows)
     if not set(targets) <= {0., 1.} or not budget.spend(count):
-        return None
+        return []
     ordered = sorted(zip((row.features[control] for row in rows), targets))
     if any(left[0] == right[0] and left[1] != right[1] for left, right in zip(ordered, ordered[1:])):
-        return None
+        return []
     groups, start = [], None
     for index, (_, positive) in enumerate(ordered):
         if positive and start is None:
@@ -191,24 +223,25 @@ def _fit_membership(rows, targets, control, bounds, budget):
             for part in parts[1:]:
                 program = Program("or", children=(program, part))
             candidates.append(program)
-    best = None
+    proposals = []
     for program in dict.fromkeys(candidates):
         if not budget.spend(count):
             break
         error = sum((program.predict(row) - value) ** 2 for row, value in zip(rows, targets)) / count
         proposal = {"program": program, "fit_loss": error, "kind": "interval_membership",
                     "intervals": len(groups), "tolerance": 1e-10}
-        if best is None or (error, program.size) < (best["fit_loss"], best["program"].size):
-            best = proposal
-    return best
+        proposals.append(proposal)
+    return proposals
 
 
-def fit_instrument_model(command_spec, measured_spec, paired_rows, budget, *, max_history=4):
+def fit_instrument_model(command_spec, measured_spec, paired_rows, budget, *, max_history=4,
+                         field_names=None):
     """Fit each available measured field, returning a possibly partial JSON model.
 
     Every evaluated column, complete fit, prediction comparison and membership
     diagnosis consumes one row pass. No response targets or evaluation rows are
     read. Missing or unexplained fields are excluded from the executable binding.
+    ``field_names`` restricts and orders fitting without truncating the schema.
     """
     pairs = list(paired_rows)
     schema, start = _schema(measured_spec), budget.spent
@@ -218,7 +251,8 @@ def fit_instrument_model(command_spec, measured_spec, paired_rows, budget, *, ma
         "source_schema": schema.to_dict() if schema else None,
         "command_features": list(command_spec.feature_names),
         "command_bounds": {name: list(bounds) for name, bounds in command_spec.feature_bounds.items()},
-        "fields": {}, "unmodeled_fields": {}, "support_rows": len(pairs)}
+        "fields": {}, "unmodeled_fields": {}, "support_rows": len(pairs),
+        "observed_history_depth": max((len(command.history) for command, _ in pairs), default=0)}
     roles = {name: (group, role) for group in schema.objects
              for role, name in schema.fields[group].items()} if schema else {}
     partial_controls = {}
@@ -243,7 +277,10 @@ def fit_instrument_model(command_spec, measured_spec, paired_rows, budget, *, ma
             "groups": deepcopy(object_model.get("groups", [])), "focus_control": focus,
             "field_controls": deepcopy(partial_controls),
             "unresolved": list(object_model.get("unresolved", []))}
-    for name in measured_spec.feature_names:
+    requested = measured_spec.feature_names if field_names is None else field_names
+    for name in dict.fromkeys(requested):
+        if name not in measured_spec.feature_names:
+            continue
         group, role = roles.get(name, (None, None))
         if schema and role == "f":
             controls = [schema.focus_control]
@@ -274,18 +311,42 @@ def fit_instrument_model(command_spec, measured_spec, paired_rows, budget, *, ma
         targets = [measured.features[name] for _, measured in applicable]
         if role == "f":
             limits = command_spec.feature_bounds.get(controls[0])
-            fitted = _fit_membership(rows, targets, controls[0], limits, budget) if limits else None
+            proposals = _fit_membership(rows, targets, controls[0], limits, budget) if limits else []
         else:
             fitted = _fit_numeric(rows, targets, controls, budget)
+            proposals = [fitted] if fitted is not None else []
+        fitted = min(proposals, key=lambda item: (item["fit_loss"], item["program"].size), default=None)
+        dynamic = None
         if fitted is None or fitted["fit_loss"] > fitted["tolerance"]:
-            dynamic = _fit_dynamic(rows, targets, controls, budget, max_history)
-            if dynamic is not None and (fitted is None or dynamic["fit_loss"] < fitted["fit_loss"]):
-                fitted = dynamic
+            # A finite polynomial cannot express a genuine recurrent state.
+            # Keep ordinary short-memory fits first, while leaving an actual
+            # state search executable if their measured error remains high.
+            dynamic_budget = SearchBudget(budget.remaining // 2)
+            dynamic = _fit_dynamic(rows, targets, controls, dynamic_budget, max_history)
+            budget.spend(dynamic_budget.spent)
+            if dynamic is not None:
+                proposals.append(dynamic)
+        # A short reset trajectory can fit both a truncated finite response
+        # and a genuine recurrent state exactly. Keep both explanations until
+        # purchased readings distinguish their later predictions.
+        if max_history > 0 and (dynamic is not None or fitted is None or fitted["fit_loss"] > fitted["tolerance"]):
+            proposals.extend(_fit_stateful(rows, targets, budget))
+        fitted = min(proposals, key=lambda item: (item["fit_loss"], item["program"].size), default=None)
         cost = budget.spent - before
         metadata = {"role": role, "members": list(schema.members[group]) if schema else [],
-                    "support_rows": len(rows), "compute_cost": cost}
+                    "support_rows": len(rows), "compute_cost": cost,
+                    "observed_history_depth": max((len(row.history) for row in rows), default=0)}
         if fitted is not None and fitted["fit_loss"] <= fitted["tolerance"]:
-            payload["fields"][name] = {**metadata, **fitted, "program": fitted["program"].to_dict()}
+            hypotheses, seen = [], set()
+            for proposal in proposals:
+                program = proposal["program"]
+                if proposal["fit_loss"] > proposal["tolerance"] or program in seen:
+                    continue
+                seen.add(program)
+                hypotheses.append({**proposal, "program": program.to_dict(),
+                    "hypothesis_id": f"{name}:hypothesis:{len(hypotheses)}", "status": "training_candidate"})
+            payload["fields"][name] = {**metadata, **fitted, "program": fitted["program"].to_dict(),
+                                       "hypotheses": hypotheses}
         else:
             payload["unmodeled_fields"][name] = {**metadata,
                 "reason": "unexplained_with_available_budget",
@@ -295,8 +356,17 @@ def fit_instrument_model(command_spec, measured_spec, paired_rows, budget, *, ma
 
 
 def instrument_binding(payload):
-    """Return only fields whose calibration explained their purchased values."""
-    return {name: Program.from_dict(field["program"]) for name, field in payload["fields"].items()}
+    """An unresolved choice of observed-field explanations is not a binding."""
+    result = {}
+    for name, field in payload["fields"].items():
+        if "hypotheses" not in field:
+            result[name] = Program.from_dict(field["program"])
+            continue
+        surviving = [item for item in field["hypotheses"]
+                     if item["status"] not in {"refuted", "counterexample"}]
+        if len(surviving) == 1:
+            result[name] = Program.from_dict(surviving[0]["program"])
+    return result
 
 
 def rebind_instrument_model(payload, current_measured_spec):
@@ -335,5 +405,94 @@ def rebind_instrument_model(payload, current_measured_spec):
                 parts.append(program)
                 covered.update(members)
             if covered == wanted and parts:
-                rebound[name] = _sum(parts).simplified()
+                program = _sum(parts).simplified()
+                if len(parts) > 1 and any(item.get("field") == name
+                        and item.get("program") == program.to_dict()
+                        for item in payload.get("refuted_projections", [])):
+                    continue
+                rebound[name] = program
     return rebound
+
+
+def rebind_instrument_fields(payload, current_measured_spec):
+    """Keep surviving field explanations in the current measured coordinates.
+
+    Direct role matches preserve competing hypotheses and their evidence IDs.
+    Fine-to-coarse reuse requires a complete, uniquely executable aggregation;
+    its constituent records retain the provenance of the combined field.
+    """
+    fields = {}
+    for name, original in payload.get("fields", {}).items():
+        field = deepcopy(original)
+        hypotheses = field.get("hypotheses")
+        if hypotheses is None:
+            if field.get("status") in {"refuted", "counterexample"}:
+                continue
+        else:
+            hypotheses = [item for item in hypotheses
+                          if item.get("status") not in {"refuted", "counterexample"}]
+            if not hypotheses:
+                continue
+            field["hypotheses"] = hypotheses
+            field.update({key: value for key, value in hypotheses[0].items()
+                          if key not in {"hypothesis_id", "status"}})
+        fields[name] = field
+    current, previous = _schema(current_measured_spec), payload.get("source_schema")
+    if previous is None or current is None:
+        return {name: field for name, field in fields.items()
+                if name in current_measured_spec.feature_names}
+    source = ObjectSchema.from_dict(previous)
+    if source.to_dict() == current.to_dict():
+        return {name: field for name, field in fields.items()
+                if name in current_measured_spec.feature_names}
+    controls = {old: current.controls[member][role]
+                for member, roles in source.controls.items() if member in current.controls
+                for role, old in roles.items() if role in current.controls[member]}
+    controls[source.focus_control] = current.focus_control
+    complete = rebind_instrument_model({**payload, "fields": fields}, current_measured_spec)
+    result = {}
+    for group in current.objects:
+        wanted = set(current.members[group])
+        for role, name in current.fields[group].items():
+            direct = next((source.fields[old].get(role) for old in source.objects
+                           if set(source.members[old]) == wanted
+                           and source.fields[old].get(role) in fields), None)
+            if direct is not None:
+                field = deepcopy(fields[direct])
+                choices = field.get("hypotheses", [field])
+                for choice in choices:
+                    program = Program.from_dict(choice["program"]).remap_features(controls)
+                    if not {key for key, _ in program.observed_variables()} <= set(current_measured_spec.feature_bounds):
+                        break
+                    choice["program"] = program.to_dict()
+                else:
+                    field["program"] = choices[0]["program"]
+                    field["members"] = list(current.members[group])
+                    result[name] = field
+                continue
+            if name not in complete:
+                continue
+            covered, records = set(), {}
+            for old in sorted(source.objects, key=lambda item: -len(source.members[item])):
+                members, old_name = set(source.members[old]), source.fields[old].get(role)
+                if old_name not in fields or not members <= wanted or members & covered:
+                    continue
+                field = fields[old_name]
+                if len(field.get("hypotheses", [field])) != 1:
+                    continue
+                records[old_name] = deepcopy(field)
+                covered.update(members)
+            if covered != wanted:
+                continue
+            hypothesis_ids = [choice["hypothesis_id"] for field in records.values()
+                              for choice in field.get("hypotheses", [])]
+            program = complete[name].to_dict()
+            result[name] = {"program": program, "kind": "aggregate_instrument_fields",
+                "role": role, "members": list(current.members[group]),
+                "source_field_records": records, "source_hypothesis_ids": hypothesis_ids,
+                "support_rows": min(field.get("support_rows", 0) for field in records.values()),
+                "observed_history_depth": max(field.get("observed_history_depth", 0)
+                                              for field in records.values()),
+                "hypotheses": [{"program": program, "kind": "aggregate_instrument_fields",
+                    "hypothesis_id": f"{name}:aggregate", "status": "training_candidate"}]}
+    return result

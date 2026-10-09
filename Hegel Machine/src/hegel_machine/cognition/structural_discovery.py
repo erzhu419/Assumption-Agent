@@ -1,6 +1,7 @@
 """Fit structural explanations, design discriminating setups, and apply them."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from bisect import bisect_left, bisect_right
 from itertools import combinations
 from random import Random
 
@@ -28,6 +29,24 @@ def _focused(schema, role):
 def _neighbors(schema, radius):
     return Program("neighbor_sum", children=(Program("const", value=radius), *(
         _feature(schema, item, role) for item in schema.objects for role in ("f", "x", "q"))))
+
+
+def _relation_distances(rows, schema, budget):
+    # Sparse selected rows retain the preparation frames of temporal responses.
+    names = tuple(schema.feature_names)
+    frames = {tuple(frame[name] for name in names): frame
+              for row in rows for frame in (row.features, *row.history[-4:])}
+    distances, complete = [], True
+    for left, right in combinations(schema.objects, 2):
+        if not budget.spend(len(frames)):
+            complete = False
+            break
+        # An edge with equal focus or equal quantity contributes no response.
+        distances.extend(abs(frame[schema.fields[left]["x"]] - frame[schema.fields[right]["x"]])
+                         for frame in frames.values() if
+                         (frame[schema.fields[left]["f"]] - frame[schema.fields[right]["f"]]) *
+                         (frame[schema.fields[left]["q"]] - frame[schema.fields[right]["q"]]) != 0.)
+    return sorted(set(distances)), complete
 
 
 def _conservation(transitions, schema, budget):
@@ -78,7 +97,95 @@ class StructuralDiscovery:
                    payload.get("search_complete", True))
 
 
-def discover_structure(observations, schema, *, budget, transitions=(), radius_candidates=None, families=None):
+def _canonical_response(term):
+    children = tuple(_canonical_response(child) for child in term.children)
+    if term.op == "object_sum":
+        children = tuple(sorted(children, key=lambda child: child.describe()))
+    return replace(term, children=children)
+
+
+def _response_blocks(rows, schema, response_terms=()):
+    groups, reductions = [], []
+    if response_terms:
+        # Reopen the timing of the retained measured reductions. A range
+        # residual does not by itself justify adding unrelated sensor fields.
+        current = []
+        for term in response_terms:
+            while term.op in {"window_sum", "event_delta"}:
+                term = term.children[0]
+            term = _canonical_response(term)
+            if term not in current:
+                current.append(term)
+        # The ordinary conservation candidate already proposes measured
+        # quantity and drive totals; retain them when a source omitted one.
+        for role in ("q", "u"):
+            total = _canonical_response(_sum(_feature(schema, item, role) for item in schema.objects))
+            if total not in current:
+                current.append(total)
+        reductions.append(current)
+    else:
+        for focused in (False, True):
+            reductions.append([(_focused(schema, role) if focused else
+                _sum(_feature(schema, item, role) for item in schema.objects)) for role in ("q", "u", "x")])
+    for current in reductions:
+        blocks = [current]
+        if any(row.history for row in rows):
+            events = [Program("event_delta", lag=1, children=(term,)) for term in current]
+            blocks.extend((events, [*current, *events]))
+            if response_terms:
+                blocks.extend([Program("window_sum", lag=width, children=(term,))
+                               for term in terms] for width in (2, 3, 4)
+                              for terms in (current, events))
+            else:
+                blocks.extend([Program("window_sum", lag=width, children=(term,))
+                               for term in [*current, *events]] for width in (2, 3, 4))
+        groups.append(blocks)
+    return groups
+
+
+def discover_structure(observations, schema, *, budget, transitions=(), radius_candidates=None,
+                       families=None, response_terms=None):
+    """Jointly revise a measured response basis and the range of its missing interaction."""
+    rows, start = list(observations), budget.spent
+    discovery = _discover_structure(rows, schema, budget=budget, transitions=transitions,
+        radius_candidates=radius_candidates, families=families, response_terms=response_terms,
+        response_blocks=_response_blocks(rows, schema, response_terms)
+                        if response_terms and families is None else ())
+    if (response_terms or families is not None or not rows or
+            any(fit["training_loss"] < 1e-8 for fit in discovery.fits)):
+        return discovery
+    # An unexplained response can combine measured reductions and a relation.
+    # Select the reductions from paid data before fitting them jointly with
+    # each candidate range; an instantaneous range winner is not a prerequisite.
+    from .research_programs import _Fitter, _rank
+    fitter, seeds = _Fitter(rows, budget, .5), []
+    for blocks in _response_blocks(rows, schema):
+        fitted = [value for terms in blocks if (value := fitter.fit(terms)) is not None]
+        if fitted:
+            seeds.append(min(fitted, key=_rank))
+    seeds.sort(key=_rank)
+    alternatives = [discovery]
+    for seed in seeds:
+        revised = _discover_structure(rows, schema, budget=budget, transitions=transitions,
+            radius_candidates=radius_candidates, response_terms=seed["terms"])
+        alternatives.append(revised)
+        if any(fit["training_loss"] < 1e-8 for fit in revised.fits):
+            break
+    ranked = sorted(((candidate, fit, result) for result in alternatives
+        for candidate, fit in zip(result.candidates, result.fits)),
+        key=lambda item: (0. if item[1]["training_loss"] < 1e-8 else item[1]["training_loss"],
+                          item[1]["effective_dimension"], item[0].program.size))[:8]
+    if ranked:
+        discovery = ranked[0][2]
+        discovery = StructuralDiscovery([item[0] for item in ranked], [item[1] for item in ranked],
+            discovery.hypotheses, schema, budget.spent - start, ranked[0][1]["radius_interval"],
+            all(result.search_complete for result in alternatives))
+    discovery.compute_cost = budget.spent - start
+    return discovery
+
+
+def _discover_structure(observations, schema, *, budget, transitions=(), radius_candidates=None,
+                        families=None, response_terms=None, response_blocks=()):
     """Return executable scalar candidates and falsifiable structural proposals.
 
     All column construction, fitting and candidate prediction passes spend the
@@ -89,6 +196,8 @@ def discover_structure(observations, schema, *, budget, transitions=(), radius_c
     if not rows or not schema.objects:
         return StructuralDiscovery([], [], [], schema, 0)
     count, cache, records, complete = len(rows), {}, [], True
+    response_bases = [tuple(response_terms)] if response_terms else []
+    covering_range = False
     targets = [row.target for row in rows]
     target_mean = sum(targets) / count
     tolerance = max(1e-10, sum((value - target_mean) ** 2 for value in targets) / count * 1e-8)
@@ -98,52 +207,48 @@ def discover_structure(observations, schema, *, budget, transitions=(), radius_c
     labeled = [Program("mul", children=(_feature(schema, item, "f"), _feature(schema, item, role)))
                for item in schema.objects for role in ("q", "x")]
 
-    def fit(terms, family, radius=None, window=None):
+    def fit(terms, family, radius=None, window=None, response_basis=None):
         nonlocal complete
         if families is not None and family not in families:
             return None
         terms = tuple(dict.fromkeys(terms))
-        missing = [term for term in terms if term not in cache]
+        keys = {term: _canonical_response(term) if response_blocks else term for term in terms}
+        missing = [term for term in terms if keys[term] not in cache]
         if (len(missing) + 2) * count > budget.remaining:
             complete = False
             return None
         for term in missing:
             budget.spend(count)
-            cache[term] = [term.predict(row) for row in rows]
+            cache[keys[term]] = [term.predict(row) for row in rows]
         budget.spend(count)
-        coefficients = _linear_fit([cache[term] for term in terms], targets)
+        coefficients = _linear_fit([cache[keys[term]] for term in terms], targets)
         program = _sum_terms(terms, coefficients[1:], coefficients[0])
         budget.spend(count)
         error = loss(program, rows, 0., .5)
         dimension = sum(abs(coefficient) > 1e-7 for coefficient in coefficients[1:])
         record = {"family": family, "training_loss": error, "effective_dimension": dimension,
                   "raw_dimension": len(schema.feature_names), "radius": radius, "window": window,
+                  "response_basis": response_basis,
                   "candidate_id": f"structure:{family}:{len(records)}", "program": program}
+        if response_basis is not None:
+            record["response_terms"] = [term.to_dict() for term in response_bases[response_basis]]
+        elif response_terms:
+            record["response_terms"] = [term.to_dict() for term in response_terms]
         records.append(record)
         return record
 
-    fit((total_q, total_u), "conserved_total")
-    fit((focal_q, focal_u, focal_x), "focal_coordinates")
-    fit((*labeled, focal_u, total_q), "object_specific")
+    if not response_terms:
+        fit((total_q, total_u), "conserved_total")
+        fit((focal_q, focal_u, focal_x), "focal_coordinates")
+        fit((*labeled, focal_u, total_q), "object_specific")
     if transitions and len(transitions) * (len(schema.objects) + 2) > budget.remaining:
         complete = False
-    conservation = _conservation(transitions, schema, budget)
+    conservation = _conservation(transitions, schema, budget) if not response_terms else None
     if conservation and conservation["status"] == "proposed":
         fit((Program.from_dict(conservation["program"]), Program.from_dict(conservation["drive_program"])),
             "conserved_combination")
-    distances = []
-    for left, right in combinations(schema.objects, 2):
-        if not budget.spend(count):
-            complete = False
-            break
-        # An edge between equally selected objects cancels in neighbor_sum;
-        # equal quantities also contribute zero. Such distances cannot bound
-        # the graph radius from this response, even when instruments saw them.
-        distances.extend(abs(row.features[schema.fields[left]["x"]] - row.features[schema.fields[right]["x"]])
-                         for row in rows if
-                         (row.features[schema.fields[left]["f"]] - row.features[schema.fields[right]["f"]]) *
-                         (row.features[schema.fields[left]["q"]] - row.features[schema.fields[right]["q"]]) != 0.)
-    distances = sorted(set(distances))
+    distances, distance_complete = _relation_distances(rows, schema, budget)
+    complete = complete and distance_complete
     boundaries = [(left + right) / 2 for left, right in zip(distances, distances[1:])]
     if radius_candidates is not None:
         proposed = sorted(set(radius_candidates))
@@ -153,39 +258,127 @@ def discover_structure(observations, schema, *, budget, transitions=(), radius_c
     else:
         proposed = []
 
-    def fit_radius(radius, leading=None):
+    def fit_radius(radius, leading=None, response_indices=None):
         neighbor = _neighbors(schema, radius)
-        models = [((focal_q, focal_u, neighbor), "local_exchange", None),
-                  ((focal_q, focal_u, neighbor, total_q), "local_and_global", None),
-                  ((*labeled, focal_u, neighbor, total_q), "object_specific_exchange", None),
-                  ((Program("event_delta", lag=1, children=(neighbor,)),), "event_change", None)]
+        models = [((focal_q, focal_u, neighbor), "local_exchange", None, None),
+                  ((focal_q, focal_u, neighbor, total_q), "local_and_global", None, None),
+                  ((*labeled, focal_u, neighbor, total_q), "object_specific_exchange", None, None),
+                  ((Program("event_delta", lag=1, children=(neighbor,)),), "event_change", None, None)]
         models.extend(((Program("window_sum", lag=window, children=(neighbor,)),),
-                       "window_exchange", window) for window in (2, 3, 4))
+                       "window_exchange", window, None) for window in (2, 3, 4))
+
+        def joint_models(basis):
+            terms = response_bases[basis]
+            event = Program("event_delta", lag=1, children=(neighbor,))
+            joint = [((*terms, neighbor), "joint_current", None, basis)]
+            if any(row.history for row in rows):
+                joint.append(((*terms, neighbor, event), "joint_event", None, basis))
+                for width in (2, 3, 4):
+                    for term, family in ((neighbor, "joint_window"), (event, "joint_window_event")):
+                        joint.append(((*terms, neighbor, Program("window_sum", lag=width, children=(term,))),
+                                      family, width, basis))
+            return joint
+
+        # With a measured response basis, coarse coverage asks which range
+        # completes that response. Compare simpler standalone explanations
+        # at the first edge and again at a successful edge, rather than
+        # relearning all seven unconditioned families at every coarse point.
+        if response_indices is not None or (covering_range and response_blocks):
+            models = []
+        models.extend(model for basis in (range(len(response_bases)) if response_indices is None
+                                         else response_indices) for model in joint_models(basis))
         fitted = []
-        for terms, family, window in models:
-            if leading is not None and (family, window) != leading:
-                continue
-            record = fit(terms, family, radius, window)
-            if record is not None:
-                fitted.append(record)
+        def compare(proposals):
+            for terms, family, window, basis in proposals:
+                if leading is not None and (family, window, basis) != leading:
+                    continue
+                record = fit(terms, family, radius, window, basis)
+                if record is not None:
+                    fitted.append(record)
+        compare(models)
         return fitted
 
-    for radius in proposed:
-        fit_radius(radius)
+    if radius_candidates is None and proposed:
+        # Cover the range before spending on its resolution. A fixed ascending
+        # grid used to exhaust small budgets on low radii, leaving no compute
+        # for the boundary suggested by the observed response.
+        probe_models = fit_radius(proposed[len(proposed) // 2])
+        broad_start = budget.spent
+        broad_limit = budget.remaining // 2
+        remaining = [radius for radius in proposed
+                     if not probe_models or radius != probe_models[0]["radius"]]
+        visited = [record["radius"] for record in probe_models]
+        covering_range = True
+        while remaining and budget.spent - broad_start < broad_limit:
+            radius = max(remaining, key=lambda value: min(
+                abs(value - previous) for previous in visited)) if visited else remaining[0]
+            remaining.remove(radius)
+            before_fit = budget.spent
+            fit_radius(radius)
+            visited.append(radius)
+            if budget.spent == before_fit:
+                break
+        covering_range = False
+        complete = complete and not remaining
+    else:
+        for radius in proposed:
+            fit_radius(radius)
     local_records = [record for record in records if record["radius"] is not None]
+    if response_blocks and local_records:
+        prior = min(local_records, key=lambda record: record["training_loss"])
+        if prior["training_loss"] > tolerance:
+            # A midpoint mismatch can be a range error. Cover the measured
+            # range first, then compare changed responses at its best paid
+            # edge before spending the remaining work on finer boundaries.
+            from .research_programs import _Fitter, _rank
+            fitter = _Fitter(rows, budget, .5)
+            fitter.columns = cache
+            seeds, first_new = [], len(response_bases)
+            for blocks in response_blocks:
+                fits = [result for block in blocks if (result := fitter.fit(block)) is not None]
+                if fits:
+                    seeds.append(min(fits, key=_rank))
+            for seed in sorted(seeds, key=_rank):
+                terms = tuple(seed["terms"])
+                if terms and not any(set(terms) == {_canonical_response(term) for term in known}
+                                     for known in response_bases):
+                    response_bases.append(terms)
+            if len(response_bases) > first_new:
+                local_records.extend(fit_radius(prior["radius"],
+                    response_indices=range(first_new, len(response_bases))))
     if local_records and radius_candidates is None:
         best = min(local_records, key=lambda record: record["training_loss"])
-        near = sorted(boundaries, key=lambda boundary: abs(boundary - best["radius"]))
-        # All families already competed on the broad radius grid. Spend the
-        # remaining local search on the leading explanation's unresolved edge,
-        # instead of refitting six unrelated alternatives at each nearby edge.
-        # Earlier competitors remain candidates if this refinement falls short.
-        for radius in near[:16]:
+        # Refine the two untested cells adjoining the best observed response.
+        # Walking sixteen consecutive distances can miss a boundary when a
+        # long trajectory put hundreds of distinct distances in a coarse cell.
+        for _ in range(32):
             if best["training_loss"] <= tolerance:
                 break
-            if radius in proposed:
-                continue
-            refined = fit_radius(radius, leading=(best["family"], best["window"]))
+            # Refitting coefficients makes range loss non-monotonic. Once the
+            # best cell is exhausted, continue another measured neighborhood;
+            # its slightly worse edge may precede the consistent explanation.
+            selected_family = (best["family"], best["window"], best["response_basis"])
+            neighbors = sorted((record for record in records
+                if (record["family"], record["window"], record["response_basis"]) == selected_family),
+                key=lambda record: record["training_loss"])
+            # Another response's fit did not test this response at that edge.
+            tested = {record["radius"] for record in neighbors}
+            cell = None
+            for record in neighbors:
+                center = record["radius"]
+                low = max((value for value in tested if value < center), default=0.)
+                high = min((value for value in tested if value > center), default=distances[-1] + 1e-6)
+                cells = [(bisect_right(boundaries, low), bisect_left(boundaries, center)),
+                         (bisect_right(boundaries, center), bisect_left(boundaries, high))]
+                left, right = max(cells, key=lambda item: item[1] - item[0])
+                if left < right:
+                    cell = (left, right)
+                    break
+            if cell is None:
+                break
+            left, right = cell
+            radius = boundaries[(left + right - 1) // 2]
+            refined = fit_radius(radius, leading=selected_family)
             if not refined:
                 break
             best = min([best, *refined], key=lambda record: record["training_loss"])
@@ -194,6 +387,19 @@ def discover_structure(observations, schema, *, budget, transitions=(), radius_c
                 # does. Compare their dimensions once at that successful edge.
                 fit_radius(best["radius"])
                 break
+        if best["training_loss"] <= tolerance:
+            # Meeting the response error goal does not identify its relation
+            # cell. A weak observed edge can be diluted by many inactive rows.
+            # Compare its immediate neighboring cells with the same response
+            # before turning the selected cell into a later search domain.
+            family = (best["family"], best["window"], best["response_basis"])
+            cell = bisect_left(distances, best["radius"])
+            tested = {bisect_left(distances, record["radius"]) for record in records
+                if record["radius"] is not None and
+                (record["family"], record["window"], record["response_basis"]) == family}
+            for index in (cell - 2, cell):
+                if 0 <= index < len(boundaries) and index + 1 not in tested:
+                    fit_radius(boundaries[index], leading=family)
     if not records:
         return StructuralDiscovery([], [], [conservation] if conservation else [], schema,
                                    budget.spent - start, search_complete=complete)
@@ -218,6 +424,12 @@ def discover_structure(observations, schema, *, budget, transitions=(), radius_c
             break
     hypotheses = ([conservation] if conservation else []) + [
         {"kind": kind, "status": "proposed", "counterexamples": []} for kind in ("permutation", "translation")]
+    if len(response_bases) > 1:
+        previous_loss = min(record["training_loss"] for record in records if record["response_basis"] in (None, 0))
+        hypotheses.append({"kind": "response_basis_revision", "source": "inherited",
+            "reason": "response_candidates_compared_at_shared_ranges",
+            "previous_loss": previous_loss, "best_loss": best_loss, "counterexamples": [],
+            "status": "fit_improved" if best_loss < previous_loss else "proposed"})
     radius = selected[0]["radius"]
     interval = None
     if radius is not None:
@@ -478,7 +690,8 @@ def run_structural_research(laboratory, *, config=None, library=None, measuremen
     if radius is not None:
         local = SearchBudget(min(preparation.remaining, len(rows) * 400))
         consolidated = discover_structure(rows, schema, budget=local, transitions=transitions,
-                                           families=(chosen["fit"]["family"],))
+            families=(chosen["fit"]["family"],),
+            response_terms=[Program.from_dict(term) for term in chosen["fit"].get("response_terms", [])])
         preparation.spend(local.spent)
         if consolidated.candidates:
             discovery = consolidated
@@ -566,7 +779,8 @@ def run_structural_research(laboratory, *, config=None, library=None, measuremen
         local = SearchBudget(local_limit)
         radii = [left + fraction * (right - left) for fraction in (.25, .5, .75)]
         revised = discover_structure(rows, schema, budget=local, transitions=transitions,
-                                     radius_candidates=radii, families=(family,))
+            radius_candidates=radii, families=(family,),
+            response_terms=[Program.from_dict(term) for term in discovery.fits[0].get("response_terms", [])])
         preparation.spend(local.spent)
         if not revised.candidates:
             break
@@ -583,7 +797,8 @@ def run_structural_research(laboratory, *, config=None, library=None, measuremen
     if not refinements and len(rows) > 2 * pilot_length and residual_loss is not None and residual_loss > 1e-8:
         local = SearchBudget(min(preparation.remaining, max(0, len(rows) * 120)))
         radii = [radius] if radius is not None else []
-        revised = discover_structure(rows, schema, budget=local, transitions=transitions, radius_candidates=radii)
+        revised = discover_structure(rows, schema, budget=local, transitions=transitions, radius_candidates=radii,
+            response_terms=[Program.from_dict(term) for term in discovery.fits[0].get("response_terms", [])])
         preparation.spend(local.spent)
         if revised.candidates:
             revised.hypotheses = confirmed_hypotheses

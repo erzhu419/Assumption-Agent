@@ -14,7 +14,7 @@ from .abstractions import (AbstractTemplate, extract_templates, fit_template,
 from .language import Definition, Program
 from .models import Candidate, Observation, SearchBudget, TaskSpec
 from .condition_learning import learn_condition, prediction_matches
-from .knowledge_returns import transfer_condition, return_priority
+from .knowledge_returns import transfer_condition, return_priority, return_scope_matches
 
 
 def _object_schema(spec):
@@ -167,7 +167,11 @@ class KnowledgeLibrary:
                  measurements: list[dict] | None = None, meta_priors: list[dict] | None = None,
                  instrument_models: list[dict] | None = None,
                  object_models: list[dict] | None = None,
-                 program_experiment_methods: list[dict] | None = None):
+                 program_experiment_methods: list[dict] | None = None,
+                 research_drafts: list[dict] | None = None,
+                 transfer_serial: int | None = None,
+                 condition_coverages: list[dict] | None = None,
+                 research_workflows: dict | None = None):
         self.concepts = list(concepts or [])
         self.abstracts = list(abstracts) if abstracts is not None else [
             template for concept in self.concepts for template in extract_templates(concept.program, concept.concept_id)]
@@ -179,8 +183,10 @@ class KnowledgeLibrary:
         self.action_experience = deepcopy(action_experience or {})
         from .experiment_knowledge import ExperimentKnowledge
         from .research_methods import ResearchMethods
+        from .growth_methods import ResearchMethodBook
         self.experiments = ExperimentKnowledge(experiments or [])
         self.methods = ResearchMethods(methods)
+        self.research_workflows = ResearchMethodBook.from_dict(research_workflows or {})
         from .measurement_acquisition import MeasurementAcquisitionMemory
         self.measurements = MeasurementAcquisitionMemory(self, measurements or [])
         from .research_opportunities import ResearchOpportunities
@@ -189,6 +195,8 @@ class KnowledgeLibrary:
         self.evolution = KnowledgeEvolution.from_dict(evolution)
         self.structural_priors = deepcopy(structural_priors or [])
         self.meta_priors = deepcopy(meta_priors or [])
+        self.research_drafts = deepcopy(research_drafts or [])
+        self.condition_coverages = deepcopy(condition_coverages or [])
         self.instrument_models = deepcopy(instrument_models or [])
         self.object_models = deepcopy(object_models or [])
         from .program_experiment_methods import ProgramExperimentMethods
@@ -197,6 +205,19 @@ class KnowledgeLibrary:
         self.last_callable_selection: dict[str, Any] = {}
         self._pending_transfers: dict[str, dict[str, Any]] = {}
         self._search_serial = 0
+        # Visit identifiers must remain unique after a library is restored.
+        # Older payloads do not carry a counter, so recover the largest
+        # persisted ``transfer:N`` identifier from source histories.
+        persisted_serials = []
+        for concept in self.concepts:
+            for item in concept.reuse_history:
+                identifier = item.get("episode_id")
+                if isinstance(identifier, str) and identifier.startswith("transfer:"):
+                    suffix = identifier.removeprefix("transfer:")
+                    if suffix.isdigit():
+                        persisted_serials.append(int(suffix))
+        self._transfer_serial = (int(transfer_serial) if transfer_serial is not None
+                                 else max(persisted_serials, default=0))
         self._transfer_episode: dict[str, Any] | None = None
         self.definitions: dict[str, Definition] = {}
         self.definition_bindings: dict[str, dict] = {}
@@ -409,6 +430,91 @@ class KnowledgeLibrary:
         system_id = spec.context.get("system_id")
         return next((scope for scope in concept.scopes if system_id and scope.system_id == system_id), None)
 
+    @staticmethod
+    def _transfer_target(spec: TaskSpec) -> dict:
+        """Identify this public target and observation view, not a task family."""
+        return {"task_id": spec.task_id, "feature_names": list(spec.feature_names),
+                "feature_bounds": {name: list(bounds) for name, bounds in spec.feature_bounds.items()},
+                "risk_quantile": spec.risk_quantile,
+                "decision_costs": list(spec.decision_costs) if spec.decision_costs is not None else None,
+                "context": deepcopy(spec.context)}
+
+    def draft_transfer_refuted(self, spec: TaskSpec, program: Program, *, fallback=None) -> bool:
+        """A failed draft binding leaves its reusable procedure available."""
+        target = self._transfer_target(spec)
+        records = [item for draft in self.research_drafts for item in draft.get("outcomes", [])
+                   if item.get("kind") == "transfer_counterexample" and item["target"] == target]
+        if not records:
+            return False
+        canonical = program.expanded().simplified().to_dict()
+        return any(item["program"] == canonical and (not program.minimum_history_depth
+            or item.get("fallback") == fallback) for item in records)
+
+    def transfer_refuted(self, spec: TaskSpec, program: Program, *, fallback=None) -> bool:
+        """A target's counterexample withdraws its complete bound program only."""
+        if self.draft_transfer_refuted(spec, program, fallback=fallback):
+            return True
+        target = self._transfer_target(spec)
+        records = [record for concept in self.concepts for record in concept.reuse_history
+                   if record.get("kind") == "transfer_counterexample" and record["target"] == target]
+        excluded = [concept for concept in self.concepts if spec.task_id in concept.excluded_tasks]
+        if not records and not excluded:
+            return False
+        canonical = program.expanded().simplified().to_dict()
+        return (any(record["program"] == canonical for record in records)
+                or any(concept.program.expanded().simplified().to_dict() == canonical for concept in excluded))
+
+    def record_transfer_counterexample(self, spec: TaskSpec, program: Program | Candidate, source_ids, *,
+                                      evidence: dict, probe_id: str, source_draft_ids=(),
+                                      fallback=None) -> dict | None:
+        """Record a measured failure without blaming its reusable components.
+
+        Deterministic outcomes may refute directly. Once response replication
+        participates, only its repeatable error can withdraw a program. Source
+        associations identify actual consumption; they are not causal credit.
+        A fitted Candidate retains consumed parents after calls are expanded.
+        """
+        replication = evidence.get("noise_replication")
+        if (evidence.get("status") != "counterexample" or (replication is not None
+                and (not replication.get("repeatable_error") or replication.get("noise_supported")))):
+            return None
+        consumed = set()
+        if isinstance(program, Candidate):
+            consumed.update(program.parents)
+            if program.memory_id is not None:
+                consumed.add(program.memory_id)
+            program = program.program
+        canonical = program.expanded().simplified().to_dict()
+        called = {definition.source_concept_id for definition in _called_definitions(program)}
+        sources = [concept for concept in self.concepts if concept.concept_id in source_ids
+                   and (concept.concept_id in called | consumed
+                        or concept.program.expanded().simplified().to_dict() == canonical)]
+        drafts = [draft for draft in self.research_drafts
+                  if draft["draft_id"] in source_draft_ids]
+        if not sources and not drafts:
+            return None
+        record = {"kind": "transfer_counterexample", "target": self._transfer_target(spec),
+                  "program": canonical, "probe_id": probe_id, "evidence": deepcopy(evidence)}
+        recorded = []
+        for source in sources:
+            if any(item.get("kind") == record["kind"] and item["target"] == record["target"]
+                   and item["program"] == canonical for item in source.reuse_history):
+                continue
+            source.reuse_history.append(deepcopy(record))
+            recorded.append(source.concept_id)
+        recorded_drafts = []
+        for draft in drafts:
+            outcomes = draft.setdefault("outcomes", [])
+            if any(item.get("kind") == record["kind"] and item["target"] == record["target"]
+                   and item["program"] == canonical and item.get("fallback") == fallback
+                   for item in outcomes):
+                continue
+            outcomes.append({**deepcopy(record), "fallback": fallback})
+            recorded_drafts.append(draft["draft_id"])
+        return ({"action": "withdraw_target_transfer", "source_ids": recorded,
+                 "source_draft_ids": recorded_drafts, "fallback": fallback, **deepcopy(record)}
+                if recorded or recorded_drafts else None)
+
     def retrieve(self, spec: TaskSpec, *, observations: Sequence[Observation] = ()) -> list[Candidate]:
         condition = transfer_condition(spec, observations)
         eligible = [c for c in self.concepts
@@ -422,7 +528,8 @@ class KnowledgeLibrary:
             -len(set(c.successful_tasks)), len(c.counterexamples), c.program.size, c.concept_id))
         return [Candidate(c.concept_id, _guard(c.program, self._scope_for(c, spec)), "reuse",
                           "Execute a previously learned program within its measured context", (c.concept_id,), c.concept_id)
-                for c in eligible if _guard(c.program, self._scope_for(c, spec)).required_features().issubset(spec.feature_names)]
+                for c in eligible if _guard(c.program, self._scope_for(c, spec)).required_features().issubset(spec.feature_names)
+                and not self.transfer_refuted(spec, _guard(c.program, self._scope_for(c, spec)))]
 
     @staticmethod
     def _transfer_priority(template: AbstractTemplate, mapping: dict[str, str], condition=None,
@@ -539,6 +646,8 @@ class KnowledgeLibrary:
                         continue
                     template, mapping = queues[shape].pop(0)
                     program = template.instantiate(mapping)
+                    if self.transfer_refuted(spec, program):
+                        continue
                     if program not in measured:
                         if not parameter_budget.spend(len(observations)):
                             break
@@ -625,6 +734,8 @@ class KnowledgeLibrary:
                         programs.append(ranked[0])
             for origin, origin_mapping in groups[shape]:
                 for program in programs:
+                    if self.transfer_refuted(spec, program):
+                        continue
                     key = (origin.source_concept_id, program)
                     if key in seen:
                         continue
@@ -641,6 +752,18 @@ class KnowledgeLibrary:
         self.last_search.update(fit_compute=budget.spent - before_fit, candidates=len(candidates),
                                 distinct_programs=len({candidate.program for candidate in candidates}),
                                 compute_cost=budget.spent - started)
+        # Screening and execution can belong to different restored sessions.
+        # Carry only this fit group's actual work with its executable offer.
+        for candidate in candidates:
+            origin = self._pending_transfers[candidate.candidate_id]
+            shape = origin["work_id"][1]
+            origin["adaptation_work"] = [{
+                "work_id": f"adapt:{spec.task_id}:{self._search_serial}:{ordered.index(shape)}",
+                "compute_cost": work.get(shape, 0),
+                "preserved_work": [{"compute_cost": item["compute_cost"], "source_ids": list(item["source_ids"])}
+                                   for item in preserved_work.values() if item["shape"] == shape],
+                "source_ids": list(dict.fromkeys(template.source_concept_id for template, _ in groups[shape])),
+                "template_ids": list(dict.fromkeys(template.template_id for template, _ in groups[shape]))}]
         if self._transfer_episode is not None:
             for shape, cost in work.items():
                 work_id = (self._search_serial, shape)
@@ -650,33 +773,82 @@ class KnowledgeLibrary:
                                        for item in preserved_work.values() if item["shape"] == shape],
                     "source_ids": list(dict.fromkeys(template.source_concept_id for template, _ in groups[shape])),
                     "template_ids": list(dict.fromkeys(template.template_id for template, _ in groups[shape]))}
-                for template, mapping in groups[shape]:
-                    attempt = self._transfer_episode["attempts"].setdefault(
-                        (template.source_concept_id, template.template_id, tuple(sorted(mapping_roles(mapping).items()))), {
-                            "source_id": template.source_concept_id, "template_id": template.template_id,
-                            "condition": deepcopy(condition), "mapping": dict(mapping), "mapping_roles": mapping_roles(mapping),
-                            "work_ids": set(), "comparisons": {}})
-                    attempt["work_ids"].add(work_id)
+            # Keep unmeasured proposals visible, but key them by the same
+            # executable program identity used when a comparison is recorded.
+            # Otherwise a later measured standalone refit would be attached to
+            # a legacy source/template bucket and lose its attribution scope.
+            for candidate in candidates:
+                origin = self._pending_transfers[candidate.candidate_id]
+                source = candidate.memory_id
+                if source is None:
+                    continue
+                canonical = candidate.program.expanded().simplified()
+                canonical_key = json.dumps(canonical.to_dict(), sort_keys=True, separators=(",", ":"))
+                joint_sources = tuple(sorted(set(origin.get("joint_source_ids", [source]))))
+                key = (source, origin.get("template_id"),
+                       tuple(sorted(origin.get("mapping_roles", {}).items())),
+                       joint_sources, canonical_key)
+                attempt = self._transfer_episode["attempts"].setdefault(key, {
+                    "source_id": source, "template_id": origin.get("template_id"),
+                    "condition": deepcopy(origin.get("condition", condition)),
+                    "mapping": dict(origin.get("mapping", {})),
+                    "mapping_roles": origin.get("mapping_roles", {}),
+                    "work_ids": set(), "comparisons": {},
+                    "lineage_id": origin.get("lineage_id"),
+                    "joint_source_ids": list(joint_sources)})
+                if origin.get("work_id") in self._transfer_episode["work"]:
+                    attempt["work_ids"].add(origin["work_id"])
+                for work in origin.get("adaptation_work", ()):
+                    if work.get("work_id") in self._transfer_episode["work"]:
+                        attempt["work_ids"].add(work["work_id"])
         return candidates
+
+    def transfer_evidence(self, candidate: Candidate) -> list[dict]:
+        """Export the measured preparation of an offer, without opening a visit."""
+        origin = self._pending_transfers.get(candidate.candidate_id.removeprefix("startup:"))
+        if origin is None or candidate.memory_id is None:
+            return []
+        return [{"source_id": candidate.memory_id, **{key: deepcopy(origin[key]) for key in (
+            "template_id", "mapping", "mapping_roles", "condition", "adaptation_work")}}]
 
     def record_transfer_result(self, candidate: Candidate, spec: TaskSpec, *, accepted: bool,
                                loss: float, baseline_loss: float, evidence_rows: int = 0,
                                comparison_compute: int = 0, comparison_id=None,
-                               observations: Sequence[Observation] | None = None) -> None:
+                               observations: Sequence[Observation] | None = None,
+                               origin: dict | None = None) -> None:
         """Remember an actually tested adaptation without validating its source law."""
-        origin = self._pending_transfers.get(candidate.candidate_id.removeprefix("startup:"), {})
+        prepared_origin = origin is not None
+        origin = (origin if origin is not None else
+                  self._pending_transfers.get(candidate.candidate_id.removeprefix("startup:"), {}))
         episode = self._transfer_episode
         if episode is not None and episode["task_id"] == spec.task_id and candidate.memory_id:
             source = candidate.memory_id
             template_id = origin.get("template_id")
             key = (source, template_id, tuple(sorted(origin.get("mapping_roles", {}).items())))
+            canonical = candidate.program.expanded().simplified()
+            joint_sources = tuple(sorted(set(origin.get("joint_source_ids", [source]))))
+            # A source/template can yield several standalone executable
+            # programs during one visit (for example, two parameter refits).
+            # Their measured outcomes are different trials and must not be
+            # averaged into one source return. The same binding also remains
+            # distinct when the call participates in a joint lineage.
+            canonical_key = json.dumps(canonical.to_dict(), sort_keys=True, separators=(",", ":"))
+            key = (*key, joint_sources, canonical_key)
             attempt = episode["attempts"].setdefault(key, {"source_id": source,
                 "template_id": template_id, "condition": deepcopy(origin.get("condition", episode["condition"])),
                 "mapping": dict(origin.get("mapping", {})), "mapping_roles": origin.get("mapping_roles", {}),
-                "work_ids": set(), "comparisons": {}})
+                "work_ids": set(), "comparisons": {},
+                "lineage_id": origin.get("lineage_id"),
+                "joint_source_ids": list(origin.get("joint_source_ids", [source]))})
+            if origin.get("lineage_id") is not None:
+                attempt["lineage_id"] = origin["lineage_id"]
+                attempt["joint_source_ids"] = list(origin.get("joint_source_ids", [source]))
             if origin.get("work_id") in episode["work"]:
                 attempt["work_ids"].add(origin["work_id"])
-            canonical = candidate.program.expanded().simplified()
+            for work in (origin.get("adaptation_work", []) if prepared_origin else ()):
+                work_id = work["work_id"]
+                episode["work"].setdefault(work_id, deepcopy(work))
+                attempt["work_ids"].add(work_id)
             comparison_key = (comparison_id, canonical)
             attempt["comparisons"][comparison_key] = {
                 "program": candidate.program.to_dict(),
@@ -698,7 +870,9 @@ class KnowledgeLibrary:
 
     def begin_transfer_episode(self, spec: TaskSpec, observations: Sequence[Observation]) -> None:
         """Start attribution of this visit's actual transfer fits and comparisons."""
+        self._transfer_serial += 1
         self._transfer_episode = {"task_id": spec.task_id, "condition": transfer_condition(spec, observations),
+                                  "episode_id": f"transfer:{self._transfer_serial}",
                                   "work": {}, "attempts": {}, "production_methods": {
                                       concept.concept_id: deepcopy(concept.production_methods) for concept in self.concepts}}
 
@@ -728,7 +902,8 @@ class KnowledgeLibrary:
 
     def finish_transfer_episode(self, spec: TaskSpec, *, final_candidate: Candidate,
                                 final_loss: float | None, baseline_loss: float | None,
-                                compute_cost: int, observation_cost: int, validation_rows: int = 0) -> dict:
+                                compute_cost: int, observation_cost: int, validation_rows: int = 0,
+                                final_status: str | None = None) -> dict:
         """Save source-local returns; the full visit bill is contextual, never attributed."""
         episode = self._transfer_episode
         self._transfer_episode = None
@@ -747,11 +922,18 @@ class KnowledgeLibrary:
         records = []
         sources = {concept.concept_id: concept for concept in self.concepts}
         templates = {template.template_id: template for template in self.abstracts}
+        # Attempts in one visit are alternatives on the same paid response.
+        # They must not confirm each other merely because the first record has
+        # already been appended to the source history.
+        prior_histories = {source_id: deepcopy(source.reuse_history)
+                           for source_id, source in sources.items()}
         for attempt in episode["attempts"].values():
             comparisons = list(attempt["comparisons"].values())
             surviving = [item for item in comparisons if (
                 Program.from_dict(item["program"]).expanded().simplified() in retained_programs)]
             retained = bool(surviving)
+            retained_program = (Program.from_dict(surviving[0]["program"]).expanded().simplified()
+                                if surviving else None)
             rows = sum(max(1, item["evidence_rows"]) for item in comparisons)
             paired_gain = sum((item["baseline_loss"] - item["loss"]) * max(1, item["evidence_rows"])
                               for item in comparisons) / rows if rows else None
@@ -763,15 +945,76 @@ class KnowledgeLibrary:
                 for item in comparisons) / rows if rows else 0.
             work_items = [item for identifier, item in episode["work"].items() if identifier in attempt["work_ids"]]
             comparison_cost = sum(item["compute_cost"] for item in comparisons)
+            # A positive paired comparison from a successor that is still
+            # unresolved is useful evidence, but it has not confirmed the
+            # source as an executable reusable explanation. Keep that result
+            # visible while preventing it from acting like confirmed value in
+            # the source scheduler. Older callers omit ``final_status``;
+            # positive records retain their historical confirmed semantics.
+            # A candidate surviving as the final program is not by itself
+            # transferable value: the fresh comparison must improve on the
+            # incumbent. Keep neutral fits visible without letting them enter
+            # the confirmed-return scheduler.
+            # Do not turn floating-point residue into a reusable gain or a
+            # negative source signal. The scheduler's meaningful gains are
+            # much larger than this numerical resolution.
+            value_epsilon = 1e-12
+            value_status = ("positive" if retained and normalized > value_epsilon
+                            else "negative" if normalized < -value_epsilon
+                            else "neutral")
+            confirmation_status = ("confirmed" if value_status == "positive"
+                                    and final_status in (None, "completed")
+                                    else "provisional" if value_status == "positive" and retained
+                                    else "neutral" if value_status == "neutral"
+                                    else "rejected")
+            confirmation_replicates = 0
+            signature = attempt["condition"].get("response_signature") or {}
+            repeat_required = (value_status == "positive" and final_status == "completed"
+                               and signature.get("residual_bin", 0) > 0)
+            if repeat_required:
+                scope_program = retained_program or final_program
+                prior = [item for item in prior_histories.get(attempt["source_id"], [])
+                         if item.get("kind") == "research_return"
+                         and item.get("condition") == attempt["condition"]
+                         and item.get("retained") and item.get("retained_normalized_gain", 0.) > value_epsilon
+                         and return_scope_matches(item, program=scope_program,
+                             source_ids=attempt.get("joint_source_ids", [attempt["source_id"]]))
+                         and item.get("final_status") in (None, "completed")]
+                unique_prior = []
+                seen_episodes = set()
+                for item in prior:
+                    episode_id = item.get("episode_id")
+                    if episode_id in seen_episodes:
+                        continue
+                    seen_episodes.add(episode_id)
+                    unique_prior.append(item)
+                confirmation_replicates = len(unique_prior) + 1
+                confirmation_status = "confirmed" if confirmation_replicates >= 2 else "provisional"
+                if confirmation_status == "confirmed":
+                    for item in sources[attempt["source_id"]].reuse_history:
+                        if any(item == previous for previous in unique_prior):
+                            item["confirmation_status"] = "confirmed"
+                            item["confirmation_replicates"] = confirmation_replicates
+            elif value_status == "positive" and final_status in (None, "completed"):
+                confirmation_replicates = 1
             record = {"kind": "research_return", "task_id": spec.task_id,
                 "source_id": attempt["source_id"], "template_id": attempt["template_id"],
                 "condition": attempt["condition"], "mapping": attempt["mapping"], "mapping_roles": attempt["mapping_roles"],
                 "accepted": retained, "retained": retained, "paired_gain": paired_gain,
+                "final_status": final_status,
+                "value_status": value_status,
+                "confirmation_status": confirmation_status,
+                "confirmation_replicates": confirmation_replicates,
                 "evidence_status": "measured" if comparisons else "proposal_not_compared",
-                "retained_normalized_gain": normalized if retained else min(0., normalized),
+                "retained_normalized_gain": (normalized if value_status == "positive"
+                    else 0. if value_status == "neutral" else min(0., normalized)),
                 "adaptation_compute": sum(item["compute_cost"] for item in work_items),
                 "comparison_compute": comparison_cost, "shared_adaptation_work": work_items,
                 "comparisons": comparisons,
+                "lineage_id": attempt.get("lineage_id"),
+                "joint_source_ids": list(attempt.get("joint_source_ids", [attempt["source_id"]])),
+                "episode_id": episode["episode_id"],
+                "retained_program": retained_program.to_dict() if retained_program is not None else None,
                 "visit_context": {"compute_cost": compute_cost, "observation_cost": observation_cost,
                     "final_loss": final_loss, "baseline_loss": baseline_loss, "validation_rows": validation_rows}}
             if attempt["source_id"] in sources:
@@ -779,6 +1022,43 @@ class KnowledgeLibrary:
             if attempt["template_id"] in templates:
                 templates[attempt["template_id"]].transfer_history.append(deepcopy(record))
             records.append(record)
+        joint_returns = []
+        grouped = {}
+        for record in records:
+            lineage_id = record.get("lineage_id")
+            if lineage_id is not None and record.get("comparisons"):
+                canonical = Program.from_dict(record["comparisons"][0]["program"]).expanded().simplified()
+                grouped.setdefault((lineage_id, canonical), []).append(record)
+        for (lineage_id, canonical), group in grouped.items():
+            comparisons = {}
+            work = {}
+            for record in group:
+                for comparison in record["comparisons"]:
+                    key = (comparison.get("comparison_id"),
+                           Program.from_dict(comparison["program"]).expanded().simplified())
+                    comparisons[key] = comparison
+                for item in record["shared_adaptation_work"]:
+                    work[item["work_id"]] = item
+            comparison_rows = list(comparisons.values())
+            rows = sum(max(1, item["evidence_rows"]) for item in comparison_rows)
+            gain = (sum((item["baseline_loss"] - item["loss"]) * max(1, item["evidence_rows"])
+                        for item in comparison_rows) / rows if rows else None)
+            normalized_gain = (sum((item["baseline_loss"] - item["loss"]) /
+                max(abs(item["baseline_loss"]), abs(item["loss"]), 1e-8) * max(1, item["evidence_rows"])
+                for item in comparison_rows) / rows if rows else 0.)
+            joint_returns.append({"kind": "joint_research_return", "task_id": spec.task_id,
+                "lineage_id": lineage_id,
+                "program": canonical.to_dict(),
+                "source_ids": sorted({source for record in group
+                    for source in record.get("joint_source_ids", [record["source_id"]])}),
+                "retained": any(record["retained"] for record in group),
+                "paired_gain": gain, "retained_normalized_gain": (normalized_gain
+                    if any(record["retained"] for record in group) else min(0., normalized_gain)),
+                "adaptation_compute": sum(item["compute_cost"] for item in work.values()),
+                "comparison_compute": sum(item["compute_cost"] for item in comparison_rows),
+                "comparisons": comparison_rows,
+                "source_local_records": [record["source_id"] for record in group],
+                "shared_cost_accounted_once": True})
         from .knowledge_returns import producer_outcomes
         method_returns = []
         for source_id, outcome in producer_outcomes(episode, retained_programs):
@@ -786,12 +1066,21 @@ class KnowledgeLibrary:
             if source is None:
                 continue
             for production in episode["production_methods"].get(source_id, []):
-                if production["source_task"] == spec.task_id:
-                    continue
-                measured = self.methods.observe_knowledge_transfer(production, outcome)
+                if production.get("kind") == "research_workflow":
+                    # A reopened visit can share the producer's public task
+                    # label. The episode snapshot already excludes links
+                    # formed by the current consumer itself.
+                    measured = self.research_workflows.observe_knowledge_transfer(production,
+                        {**outcome, "episode_id": episode["episode_id"]},
+                        return_history=source.reuse_history)
+                else:
+                    if production["source_task"] == spec.task_id:
+                        continue
+                    measured = self.methods.observe_knowledge_transfer(production, outcome)
                 if measured is not None:
                     method_returns.append(measured)
-        return {"returns": records, "unique_adaptation_compute": sum(
+        return {"returns": records, "joint_returns": joint_returns,
+                "unique_adaptation_compute": sum(
                     item["compute_cost"] for item in episode["work"].values()),
                 "method_returns": method_returns,
                 "comparison_compute_is_shared_by_equal_program_origins": True,
@@ -822,6 +1111,39 @@ class KnowledgeLibrary:
             return {"action": concept.status, "scope_change": "outside_learned_condition",
                     "status": concept.status, "concept_id": concept_id,
                     "condition_compute_cost": 0, **event}
+        if (concept.status != "revoked" and same_context and local is not None
+                and local.support_examples and spec.risk_quantile == 0.5 and spec.decision_costs is None
+                and max([len(row.history), *(len(observed.history) for observed in supporting_observations)])
+                    > max(len(item.get("history", ())) for item in local.support_examples)):
+            # A short reset trajectory can support a law which fails only once
+            # more history is available. Learn this observable condition from
+            # measured successes/failures, even outside the old feature box.
+            allowance = budget if budget is not None else SearchBudget(2000)
+            history_start = allowance.spent
+            evidence = [*[_as_observation(item) for item in local.support_examples],
+                        *[_as_observation(item) for item in local.counter_examples],
+                        *supporting_observations, row]
+            if allowance.spend(len(evidence)):
+                labels = [(observed, prediction_matches(concept.program, observed)) for observed in evidence]
+                positives = [observed for observed, correct in labels if correct]
+                negatives = [observed for observed, correct in labels if not correct]
+                if (positives and negatives and max(len(observed.history) for observed in positives)
+                        < min(len(observed.history) for observed in negatives)):
+                    boundary = min(len(observed.history) for observed in negatives)
+                    condition = Program("lt", children=(Program("available", lag=boundary),
+                                                       Program("const", value=1.)))
+                    local.predicate = condition.to_dict()
+                    local.support_examples = [_row_payload(observed) for observed in positives]
+                    local.counter_examples = [_row_payload(observed) for observed in negatives]
+                    concept.status = "restricted"
+                    self._refresh_condition_templates(concept, local)
+                    event.update(condition_fit={"condition": condition.to_dict(), "status": "separated_history",
+                        "support_rows": len(positives), "counterexample_rows": len(negatives),
+                        "maximum_supported_history": max(len(observed.history) for observed in positives),
+                        "first_counterexample_history": boundary}, condition_compute_cost=allowance.spent - history_start)
+                    return {"action": "restricted", "scope_change": "restricted_history",
+                            "status": concept.status, "concept_id": concept_id, **event}
+            event["condition_compute_cost"] = allowance.spent - history_start
         if (concept.status != "revoked" and same_context and inside and local is not None
                 and spec.risk_quantile == 0.5 and spec.decision_costs is None):
             allowance = budget if budget is not None else SearchBudget(2000)
@@ -842,7 +1164,7 @@ class KnowledgeLibrary:
                                        [_as_observation(item) for item in negatives], allowance)
                        if classified else {"condition": None, "status": "insufficient_budget", "compute_cost": 0})
             event["condition_fit"] = learned
-            event["condition_compute_cost"] = allowance.spent - condition_start
+            event["condition_compute_cost"] = event.get("condition_compute_cost", 0) + allowance.spent - condition_start
             if learned["condition"] is not None:
                 local.predicate = learned["condition"]
                 # The exception estimate is only a candidate. Direct retrieval
@@ -1018,7 +1340,14 @@ class KnowledgeLibrary:
             if descendants.issubset(removed):
                 break
             removed.update(descendants)
+        measurements = []
+        for record in self.measurements.to_dict():
+            record["source_ids"] = [source for source in record["source_ids"] if source not in removed]
+            record["successful"] = bool(record["successful"] and record["source_ids"])
+            if record["source_ids"] or record["conflicts"]:
+                measurements.append(record)
         return self.from_dict({
+            **self.to_dict(),
             "concepts": [c.to_dict() for c in self.concepts if c.concept_id not in removed],
             "abstracts": [a.to_dict() for a in self.abstracts if a.template_id not in removed],
             "next_concept_index": self.next_concept_index,
@@ -1028,7 +1357,17 @@ class KnowledgeLibrary:
             "experiments": [record for record in self.experiments.to_dict()
                             if not removed.intersection(record["source_concepts"])],
             "methods": self.methods.to_dict(),
+            "measurements": measurements,
+            "meta_priors": [prior for prior in self.meta_priors
+                            if prior["source_concept_id"] not in removed
+                            and not removed.intersection(prior.get("parent_concept_ids", ()))],
             "program_experiment_methods": self.program_experiment_methods.to_dict(),
+            "research_drafts": [record for record in self.research_drafts
+                                if not removed.intersection(record["source_ids"])],
+            "condition_coverages": [record for record in self.condition_coverages
+                                    if not removed.intersection(record.get("source_ids", ()))],
+            "instrument_models": self.instrument_models,
+            "object_models": self.object_models,
             "structural_priors": deepcopy(self.structural_priors),
             "evolution": {"merges": [record for record in self.evolution.to_dict()["merges"]
                 if not removed.intersection(definition.source_concept_id for definition in
@@ -1066,13 +1405,17 @@ class KnowledgeLibrary:
                 "research_experience": deepcopy(self.research_experience),
                 "action_experience": deepcopy(self.action_experience),
                 "experiments": self.experiments.to_dict(), "methods": self.methods.to_dict(),
+                "research_workflows": self.research_workflows.to_dict(),
                 "measurements": self.measurements.to_dict(), "meta_priors": deepcopy(self.meta_priors),
                 "instrument_models": deepcopy(self.instrument_models),
                 "object_models": deepcopy(self.object_models),
+                "research_drafts": deepcopy(self.research_drafts),
                 "program_experiment_methods": self.program_experiment_methods.to_dict(),
                 "evolution": self.evolution.to_dict(), "structural_priors": deepcopy(self.structural_priors),
                 "research_opportunities": self.research_opportunities.to_dict(),
-                "definitions": self._definition_records()}
+                "definitions": self._definition_records(),
+                "transfer_serial": self._transfer_serial,
+                "condition_coverages": deepcopy(self.condition_coverages)}
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "KnowledgeLibrary":
@@ -1091,4 +1434,8 @@ class KnowledgeLibrary:
                    measurements=payload.get("measurements", []), meta_priors=payload.get("meta_priors", []),
                    instrument_models=payload.get("instrument_models", []),
                    object_models=payload.get("object_models", []),
-                   program_experiment_methods=payload.get("program_experiment_methods", []))
+                   research_drafts=payload.get("research_drafts", []),
+                   program_experiment_methods=payload.get("program_experiment_methods", []),
+                   transfer_serial=payload.get("transfer_serial"),
+                   condition_coverages=payload.get("condition_coverages", []),
+                   research_workflows=payload.get("research_workflows"))

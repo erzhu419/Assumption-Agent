@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="5" time="64.331" timestamp="2026-09-30T07:24:28.286470+08:00" hostname="FATHERSUCKERMSI"><testcase classname="tests.test_cognition_reuse_noise_costs" name="test_saved_response_reopens_renamed_paid_evidence_without_rediscovering_parameters" file="tests/test_cognition_reuse_noise_costs.py" line="141" time="0.619"><properties><property name="successor_replay_compute_cost" value="864" /></properties></testcase><testcase classname="tests.test_cognition_noise_research_reopening" name="test_reproducible_sub_ten_tolerance_error_reopens_research_and_gets_fresh_confirmation" file="tests/test_cognition_noise_research_reopening.py" line="75" time="19.091"><failure message="StopIteration">record_property = &lt;function record_property.&lt;locals&gt;.append_property at 0x73278c9c0700&gt;
+
+    def test_reproducible_sub_ten_tolerance_error_reopens_research_and_gets_fresh_confirmation(record_property):
+        report, _, payload = _root02(4)
+&gt;       compared = next(action for action in report['actions']
+                        if action['action'] == 'compare_noise_replication')
+E       StopIteration
+
+tests/test_cognition_noise_research_reopening.py:78: StopIteration</failure></testcase><testcase classname="tests.test_cognition_noise_research_reopening" name="test_repeat_counterexample_remains_unresolved_when_no_research_round_remains" file="tests/test_cognition_noise_research_reopening.py" line="113" time="27.015"><failure message="StopIteration">def test_repeat_counterexample_remains_unresolved_when_no_research_round_remains():
+        report, _, _ = _root02(1)
+&gt;       compared = next(action for action in report['actions']
+                        if action['action'] == 'compare_noise_replication')
+E       StopIteration
+
+tests/test_cognition_noise_research_reopening.py:116: StopIteration</failure></testcase><testcase classname="tests.test_cognition_noise_research_reopening" name="test_independent_response_noise_can_complete_with_paid_instrument_repetition" file="tests/test_cognition_noise_research_reopening.py" line="147" time="9.209"><properties><property name="noisy_status" value="unresolved" /><property name="noisy_costs" value="{&quot;observation_cost&quot;: 216, &quot;measurement_cost&quot;: 432, &quot;compute_cost&quot;: 159991, &quot;queries&quot;: 8}" /></properties><failure message="AssertionError: assert ('unresolved' == 'completed'&#10;  &#10;  - completed&#10;  + unresolved)">record_property = &lt;function record_property.&lt;locals&gt;.append_property at 0x73278de4d3f0&gt;
+
+    def test_independent_response_noise_can_complete_with_paid_instrument_repetition(record_property):
+        config = ResearchConfig(observation_budget=240, compute_budget=160000,
+            max_rounds=4, max_candidates=8, minimum_improvement=1e-7, seed=70120)
+        lab, library = NoisyInstrumentLab(seed=9013), KnowledgeLibrary()
+        assert not library.concepts and not library.meta_priors
+        report = UnifiedResearchAgent(config, measurement_budget=768, library=library).run(lab)
+        _paid_costs(report, lab, config, 768)
+        record_property('noisy_status', report['status'])
+        record_property('noisy_costs', json.dumps(report['costs']))
+&gt;       assert report['status'] == 'completed' and report['concepts_added']
+E       AssertionError: assert ('unresolved' == 'completed'
+E         
+E         - completed
+E         + unresolved)
+
+tests/test_cognition_noise_research_reopening.py:157: AssertionError</failure></testcase><testcase classname="tests.test_cognition_noise_research_reopening" name="test_changing_instrument_inputs_leave_noisy_replication_inconclusive" file="tests/test_cognition_noise_research_reopening.py" line="171" time="8.003"><failure message="assert []">def test_changing_instrument_inputs_leave_noisy_replication_inconclusive():
+        config = ResearchConfig(observation_budget=240, compute_budget=160000,
+            max_rounds=2, max_candidates=8, minimum_improvement=1e-7, seed=70120)
+        lab = VaryingInstrumentLab(seed=9013)
+        report = UnifiedResearchAgent(config, measurement_budget=768, library=KnowledgeLibrary()).run(lab)
+        _paid_costs(report, lab, config, 768)
+        comparisons = [action for action in report['actions']
+                       if action['action'] == 'compare_noise_replication']
+&gt;       assert comparisons
+E       assert []
+
+tests/test_cognition_noise_research_reopening.py:180: AssertionError</failure></testcase></testsuite></testsuites>

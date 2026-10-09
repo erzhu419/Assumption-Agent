@@ -6,6 +6,7 @@ a failed calibration from a failed response law. The frozen hypotheses are
 evaluated before any refitting on that new evidence.
 """
 
+from itertools import combinations
 from math import isfinite
 from random import Random
 
@@ -210,13 +211,71 @@ def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
     return result
 
 
-def assess_competing_object_probe(plan, paired_rows, budget, *, tolerance=1e-7):
+def shorten_discriminating_probe(plan, budget, *, tolerance=1e-7):
+    """Buy a prefix that keeps every forecast distinction of a relation probe.
+
+    Only the already frozen response predictions choose the length. Each pair
+    distinguishable on the full trajectory must be at least as far apart in
+    prefix mean squared prediction distance. Preparation history is retained;
+    calibration-only experiments and unresolved forecasts keep their length.
+    """
+    probe = plan.get("probe")
+    hypotheses = plan.get("hypotheses", [])
+    if (probe is None or plan.get("forecast_status") != "predicted_distinction"
+            or len(hypotheses) < 2):
+        return plan
+    count = probe.cost
+    predictions = [item.get("predictions") for item in hypotheses]
+    if any(values is None or len(values) != count for values in predictions):
+        return plan
+    start = budget.spent
+    pairs = []
+    for left, right in combinations(predictions, 2):
+        if not budget.spend(count):
+            return {**plan, "compute_cost": plan.get("compute_cost", 0) + budget.spent - start}
+        total, observed, prefixes = 0., 0, []
+        for a, b in zip(left, right):
+            if a is not None and b is not None:
+                total += (a - b) ** 2
+                observed += 1
+            prefixes.append(total / observed if observed else 0.)
+        if prefixes[-1] > tolerance:
+            pairs.append(prefixes)
+    result = {**plan, "compute_cost": plan.get("compute_cost", 0) + budget.spent - start}
+    if not pairs:
+        return result
+    minimum = max(Program.from_dict(item["program"]).minimum_history_depth + 1 for item in hypotheses)
+    length = next((size for size in range(max(1, minimum), count)
+                   if all(pair[size - 1] >= pair[-1] for pair in pairs)), count)
+    if length == count:
+        return result
+    result.update(probe=Probe(probe.probe_id, probe.sequence[:length]),
+        hypotheses=[{**item, "predictions": item["predictions"][:length]} for item in hypotheses],
+        predicted_fields={name: values[:length] for name, values in plan.get("predicted_fields", {}).items()},
+        prefix_design={"planned_rows": count, "purchased_rows": length,
+                       "retained_distinctions": len(pairs)})
+    if "question_hypotheses" in plan:
+        result["question_hypotheses"] = [{**item, "predictions": item["predictions"][:length]}
+                                         for item in plan["question_hypotheses"]]
+    # A truncated cycle has not bought every advertised phase of the original.
+    result.pop("predicted_question_phases", None)
+    common = [row for row in zip(*(item["predictions"] for item in result["hypotheses"]))
+              if all(value is not None for value in row)]
+    result["predicted_separation"] = (sum((max(row) - min(row)) ** 2 for row in common) / len(common)
+                                      if common else 0.)
+    return result
+
+
+def assess_competing_object_probe(plan, paired_rows, budget, *, tolerance=1e-7,
+                                  repeated_rows=None):
     """Compare the frozen forecasts and laws against new paired measurements.
 
     A calibration error invalidates its forecast, not a law that remains right
     on the actually measured fields. Conversely, a law that fails on those
     fields receives its own counterexample even when calibration also failed.
-    No parameters or object assignments are changed by this function.
+    An independently repeated response can distinguish random observation
+    error from a reproducible failure of a frozen law. No parameters or object
+    assignments are changed by this function.
     """
     pairs, start = list(paired_rows), budget.spent
     result = {"status": "no_observations", "hypotheses": [], "field_losses": {},
@@ -224,6 +283,8 @@ def assess_competing_object_probe(plan, paired_rows, budget, *, tolerance=1e-7):
               "compute_cost": 0}
     if not pairs:
         return result
+    repeated = list(repeated_rows) if repeated_rows is not None else None
+    measured_rows = [measured for _, measured in pairs]
     for name, predictions in plan.get("predicted_fields", {}).items():
         values = [(value, measured.features[name])
                   for value, (_, measured) in zip(predictions, pairs)
@@ -236,6 +297,9 @@ def assess_competing_object_probe(plan, paired_rows, budget, *, tolerance=1e-7):
     for hypothesis in plan["hypotheses"]:
         item = {"hypothesis_id": hypothesis["hypothesis_id"], "candidate_id": hypothesis["candidate_id"],
                 "status": "unresolved", "measured_loss": None, "forecast_loss": None, "rows": 0}
+        if repeated is not None:
+            item.update(deterministic_status="unresolved", deterministic_counterexamples=[],
+                        noise_replication=None)
         program = Program.from_dict(hypothesis["program"])
         if not budget.spend(len(pairs)):
             result["hypotheses"].append(item)
@@ -260,6 +324,22 @@ def assess_competing_object_probe(plan, paired_rows, budget, *, tolerance=1e-7):
                         measured_loss=value, rows=len(measured_errors), counterexamples=counterexamples)
         if forecast_errors:
             item["forecast_loss"] = sum(forecast_errors) / len(forecast_errors)
+        if repeated is not None:
+            from .noise_replication import assess_noise_replication
+
+            item["deterministic_status"] = item["status"]
+            item["deterministic_counterexamples"] = counterexamples
+            replication = assess_noise_replication(program, measured_rows, repeated, budget,
+                minimum_improvement=tolerance)
+            item["noise_replication"] = replication
+            supported = ((replication["noise_supported"]
+                          or replication["reason"] == "no_material_repeatable_error")
+                and max(replication["original_model_loss"], replication["repeated_model_loss"])
+                    <= replication["repeatable_loss_limit"])
+            item["status"] = ("counterexample" if replication["repeatable_error"]
+                              else "supported_on_probe" if supported else "unresolved")
+            if item["status"] != "counterexample":
+                item["counterexamples"] = []
         result["hypotheses"].append(item)
     statuses = [item["status"] for item in result["hypotheses"]]
     result.update(status=("distinguished" if "counterexample" in statuses and "supported_on_probe" in statuses

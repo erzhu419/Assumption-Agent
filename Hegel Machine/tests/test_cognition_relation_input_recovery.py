@@ -7,15 +7,21 @@ import json
 import pytest
 
 from hegel_machine.cognition.competing_object_experiments import _forecast, assess_competing_object_probe
+from hegel_machine.cognition.evaluation import loss
 from hegel_machine.cognition.language import Program
 from hegel_machine.cognition.memory import KnowledgeLibrary
 from hegel_machine.cognition.models import Candidate, Observation, Probe, ResearchConfig, SearchBudget
+from hegel_machine.cognition.object_research_actions import ObjectResearchActions
 from hegel_machine.cognition.relation_input_diagnosis import diagnose_relation_inputs
 from hegel_machine.cognition.relation_uncertainty import RelationIntervalResearch
 from hegel_machine.cognition.research_programs import _entry
 from hegel_machine.cognition.unified_research import UnifiedResearchAgent
 from hegel_machine.cognition.unified_object_lab import UnifiedObjectLab
-from test_cognition_instrument_relation_diagnosis import SETTINGS, acquire as measured_pairs, law
+from hegel_machine.cognition.unified_structure import _research_response_terms
+from test_cognition_instrument_relation_diagnosis import (
+    SETTINGS, acquire as measured_pairs, binding_error, law, legacy_source_model,
+)
+from hegel_machine.cognition.instrument_models import instrument_binding
 
 
 def joint_probe(name, focus=1.5):
@@ -64,6 +70,13 @@ def setup_source(source):
     agent._learn_instruments = agent._revise_inputs = True
     budget = SearchBudget(120000)
     agent._fit_instruments(source.spec, spec, [random, active], budget, [])
+    # Restore a genuinely paid pre-0.91 source: it retained one selected mapping
+    # that passed these source readings, before the unseen selector boundary.
+    old = legacy_source_model(agent.library.instrument_models[-1])
+    assert set(instrument_binding(old)) == set(spec.feature_names)
+    assert binding_error(instrument_binding(old), active) < 1e-7
+    old["status"] = "supported_on_measured_trajectory"
+    agent.library.instrument_models[-1] = old
     concept, _ = agent.library.learn(Candidate("measured_law", program, "law"), spec,
                                      [row for _, row in [*random, *active]])
     def entry(program):
@@ -74,7 +87,7 @@ def setup_source(source):
         return _entry(fit, [{"operation": "revise_relation_condition", "question": "Retest the local relation",
             "program": program, "loss": 0., "relation": "right", "predicate": predicate.to_dict(),
             "radius": .8, "radius_interval": [.35, 1.2]}], len(random) + len(active), 0)
-    agent.library.meta_priors.append({"source_concept_id": concept,
+    agent.library.meta_priors.append({"source_concept_id": concept, "uses": 0, "counterexamples": [],
         "source_features": list(spec.feature_names), "control_features": list(source.spec.feature_bounds),
         "object_schema": json.loads(spec.context["object_schema"]), "research_program": entry(program)["research_program"]})
     call = next(call for call in agent._recall(source.spec)
@@ -119,6 +132,7 @@ def test_same_trajectory_diagnosis_restores_initial_prior_and_keeps_true_relatio
             # A wrong radius masks the wrong selector, so all_refuted is false.
             assert evidence["status"] == "distinguished"
         paid = PaidInputs(target, batches)
+        observations_before = target.costs["observation_cost"]
         budget, actions = SearchBudget(60000), []
         result = diagnose_relation_inputs(agent, target, selected, origin, plan, evidence,
             paid.acquire, paid.paired_for, budget, actions)
@@ -126,15 +140,22 @@ def test_same_trajectory_diagnosis_restores_initial_prior_and_keeps_true_relatio
         assert result["evidence"]["calibration_status"] == "counterexample"
         assert result["entry"]["research_program"]["selection_steps"][-1]["radius_interval"] == [.35, 1.2]
         assert origin == initial and agent.library.definitions == definitions
-        assert len(result["command_rows"]) == paid.rows == 35
+        # Additional actual readings resolve the revised candidate pool.
+        assert len(result["command_rows"]) == paid.rows == sum(
+            len(batch) for batch in paid.batches[len(batches):])
+        assert paid.rows == target.costs["observation_cost"] - observations_before
         assert paid.purposes == ["remeasure_relation_counterexample", "resolve_instrument_conditions",
-                                 "compare_relation_input_mapping"]
+                                 "compare_relation_input_mapping", "distinguish_instrument_hypotheses"]
         revised = result["entry"]["candidate"].program
         same_trace = result["command_rows"][:9]
         error = max(abs(revised.predict(row) - row.target) for row in same_trace)
         measured_loss = result["evidence"]["hypotheses"][0]["measured_loss"]
+        assert result["response_loss"] == pytest.approx(
+            loss(revised, result["command_rows"], 0., target.spec.risk_quantile))
         if condition == "source_less":
             assert error < 1e-8 and measured_loss < 1e-12
+            assert result["response_status"] == "supported_on_paid_rows"
+            assert result["response_loss"] < 1e-7
             # Other learned membership endpoints were not in the initial
             # counterexample. Their actual full responses must also recover.
             for focus in (.5, 2.5):
@@ -142,6 +163,8 @@ def test_same_trajectory_diagnosis_restores_initial_prior_and_keeps_true_relatio
                 assert max(abs(revised.predict(row) - row.target) for row in fresh.observations) < 1e-8
         else:
             assert error > .01 and measured_loss > 1e-5
+            assert result["response_status"] == "counterexample"
+            assert result["response_loss"] > 1e-7
         restored = RelationIntervalResearch(revised, agent.library.meta_priors, budget,
                                            research_program=result["entry"]["research_program"])
         assert restored.intervals[0]["radius_interval"] == [.35, 1.2]
@@ -164,6 +187,55 @@ def test_correct_measured_inputs_do_not_refit_or_buy_random_validation_for_a_cha
         assert len(result["command_rows"]) == paid.rows == 9
 
 
+def test_structure_research_preserves_rebound_response_when_projecting_a_bare_command_parent(monkeypatch):
+    with UnifiedObjectLab(**SETTINGS, relation_condition="source_less") as lab:
+        agent, origin, batches = setup_source(lab)
+        definitions = deepcopy(agent.library.definitions)
+        plan, evidence = command_evidence(lab, origin, joint_probe("rebind_before_projection"))
+        paid, budget, actions = PaidInputs(lab, batches), SearchBudget(60000), []
+        diagnosis = diagnose_relation_inputs(agent, lab, origin, origin, plan, evidence,
+            paid.acquire, paid.paired_for, budget, actions)
+        assert diagnosis["response_status"] == "supported_on_paid_rows"
+        # A retained callable can arrive without a recorded research procedure.
+        parent = {"candidate": diagnosis["entry"]["candidate"]}
+        before = deepcopy(parent)
+        received = []
+
+        def capture_parent(spec, training, validation, *args, parent=None, **kwargs):
+            received.append(parent)
+            return []
+
+        monkeypatch.setattr(agent, "_research_view", capture_parent)
+        controller = ObjectResearchActions(agent, lab, acquire=paid.acquire,
+            paired_for=paid.paired_for,
+            command_batches=lambda: [[command for command, _ in batch] for batch in paid.batches],
+            view_rows=None, transitions_for=lambda channels, rows: (), budget=budget,
+            actions=actions, transfer=[], graph=None,
+            remaining=lambda: {"observation_remaining": 0, "measurement_remaining": 0,
+                               "compute_remaining": budget.remaining}, length=24)
+        controller._structure_view(("fine",), parent, ())
+        projected, = received
+        assert projected is not None and "research_program" not in projected
+        program = projected["candidate"].program
+        command_program = parent["candidate"].program
+        assert program.definition == command_program.definition
+        assert program.definition.source_concept_id is not None
+        current_pairs = [pair for batch in paid.batches[len(batches):] for pair in batch]
+        assert len(current_pairs) == paid.rows > 0
+        for command, measured in current_pairs:
+            assert program.predict(measured) == pytest.approx(command_program.predict(command), abs=1e-8)
+
+        response = _research_response_terms(projected, budget)
+        assert len(response) == 1
+        schema = json.loads(lab.spec_for(("fine",)).context["object_schema"])
+        total_fields = [fields[role] for fields in schema["fields"].values() for role in ("q", "u")]
+        for _, measured in current_pairs:
+            expected = sum(point[name] for point in [*measured.history[-2:], measured.features]
+                           for name in total_fields)
+            assert response[0].predict(measured) == pytest.approx(expected, abs=1e-8)
+        assert parent == before and agent.library.definitions == definitions
+
+
 def test_unfinished_diagnosis_preserves_paid_counterexample_without_claiming_a_revised_model():
     with UnifiedObjectLab(**SETTINGS, relation_condition="source_less") as lab:
         agent, origin, batches = setup_source(lab)
@@ -173,6 +245,7 @@ def test_unfinished_diagnosis_preserves_paid_counterexample_without_claiming_a_r
         result = diagnose_relation_inputs(agent, lab, origin, origin, plan, evidence,
             paid.acquire, paid.paired_for, SearchBudget(60000), actions)
         assert result["status"] == "unresolved_inputs" and result["entry"] is None
+        assert result["response_status"] == "unassessed" and result["response_loss"] is None
         assert len(result["command_rows"]) == paid.rows == 9
         assert result["evidence"]["calibration_status"] == "counterexample"
         assert agent.library.instrument_models == models
@@ -193,6 +266,7 @@ def test_supported_radius_only_buys_inputs_when_the_probe_touches_an_unmeasured_
         assert evidence["hypotheses"][0]["status"] == "counterexample"
         before = deepcopy(agent.library.instrument_models)
         paid, actions = PaidInputs(lab, batches), []
+        observations_before = lab.costs["observation_cost"]
         result = diagnose_relation_inputs(agent, lab, selected, origin, plan, evidence,
             paid.acquire, paid.paired_for, SearchBudget(60000), actions)
         if focus == 2.:
@@ -201,6 +275,8 @@ def test_supported_radius_only_buys_inputs_when_the_probe_touches_an_unmeasured_
             assert agent.library.instrument_models == before
         else:
             assert result["status"] == "inputs_revised"
-            assert paid.rows == 35
+            assert len(result["command_rows"]) == paid.rows == sum(
+                len(batch) for batch in paid.batches[len(batches):])
+            assert paid.rows == lab.costs["observation_cost"] - observations_before
             assert max(abs(result["entry"]["candidate"].program.predict(row) - row.target)
                        for row in result["command_rows"][:9]) < 1e-8

@@ -46,7 +46,9 @@ def test_real_joint_knowledge_survives_pause_and_is_called_with_renamed_measurem
     resumed = UnifiedResearchSession(state=persisted, lab_factory=factory)
     completed = resumed.run()
     assert completed["status"] == "completed" and completed["pending_tasks"] == []
-    assert opened == [0, 2, 3] and evaluated == []
+    # New concepts can open old public interfaces for paid-evidence screening;
+    # this is not an acquisition or independent terminal evaluation.
+    assert list(dict.fromkeys(opened)) == [0, 2, 3] and evaluated == []
     assert completed["results"][0] == persisted["results"][0]
     assert completed["config"] == first["config"]
     assert {row["concept_id"] for row in first["knowledge"]["concepts"]} <= {
@@ -59,11 +61,14 @@ def test_real_joint_knowledge_survives_pause_and_is_called_with_renamed_measurem
     assert set(_sources(Program.from_dict(renamed["program"]))) & set(joint["concepts_added"])
     assert set(renamed["used_sources"]) <= set(completed["results"][2]["available_concepts"])
     for key in ("observation_cost", "measurement_cost", "compute_cost"):
-        assert completed["costs"][key] == sum(row["research"]["costs"][key]
-                                             for row in completed["results"])
+        expected = sum(row["research"]["costs"][key] for row in completed["results"])
+        if key == "compute_cost":
+            expected += completed["screening_compute_cost"]
+        assert completed["costs"][key] == expected
 
+    opened_before_resume = list(opened)
     unchanged = resumed.run()
-    assert unchanged == completed and opened == [0, 2, 3]
+    assert unchanged == completed and opened == opened_before_resume
     scored = resumed.evaluate(length=32, trajectories=2)
     assert evaluated == [0, 2, 3]
     assert all(row["mse"] < 1e-6 and row["rows"] == 64 for row in scored["evaluation"])

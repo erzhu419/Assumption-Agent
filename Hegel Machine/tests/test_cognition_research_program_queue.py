@@ -1,10 +1,11 @@
 """A newer procedure's extra binding must not hide an older useful procedure."""
 
+from dataclasses import replace
 from random import Random
 
 from hegel_machine.cognition.language import Definition, Program
 from hegel_machine.cognition.memory import KnowledgeLibrary
-from hegel_machine.cognition.models import Observation, ResearchConfig, SearchBudget, TaskSpec
+from hegel_machine.cognition.models import Candidate, Observation, ResearchConfig, SearchBudget, TaskSpec
 from hegel_machine.cognition.research_programs import propose_research_programs
 from hegel_machine.cognition.unified_research import UnifiedResearchAgent
 
@@ -29,12 +30,20 @@ def observations(seed, mode, *, coefficients=(1.2, -.4)):
 
 def test_main_controller_compares_distinct_methods_before_second_role_bindings():
     spec = TaskSpec("measured_process", "Predict the measured response", ("x", "y"), (), ())
+    library = KnowledgeLibrary()
     calls = []
     for name in spec.feature_names:
-        definition = Definition(f"source_{name}", ("input",), Program("arg", name="input"), f"atom_{name}")
+        # Register actual learned sources before composing their callable
+        # definitions; unknown nested source IDs correctly prevent recall.
+        source_rows = [replace(row, target=row.features[name]) for row in observations(64, "combined")]
+        source_id, added = library.learn(Candidate(f"atom_{name}", Program("feature", name=name),
+            "observed_coordinate"), spec, source_rows)
+        assert added
+        definition = Definition(f"source_{name}", ("input",),
+            Program("arg", name="input"), source_id)
         calls.append(Program("call", name=definition.definition_id, definition=definition,
                              children=(Program("feature", name=name),)))
-    library = KnowledgeLibrary()
+    assert all(library._calls_available(call, spec) for call in calls)
     source_ids = []
     for mode in ("combined", "window", "state"):
         source_rows = observations(64, mode)

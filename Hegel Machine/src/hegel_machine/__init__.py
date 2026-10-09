@@ -125,4 +125,4 @@ __all__ = [
     "shrink1_publication_report",
 ]
 
-__version__ = "0.85.0"
+__version__ = "0.181.0"

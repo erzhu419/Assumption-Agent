@@ -1541,7 +1541,9 @@ class CognitiveAgent:
         if config.use_memory:
             knowledge_returns = self.library.finish_transfer_episode(spec, final_candidate=incumbent,
                 final_loss=final_loss, baseline_loss=baseline_loss, compute_cost=compute.spent,
-                observation_cost=observation_cost, validation_rows=len(final_rows) if measured else 0)
+                observation_cost=observation_cost, validation_rows=len(final_rows) if measured else 0,
+                final_status=("completed" if stop_reason in {"knowledge_reused", "adequate_and_compact"}
+                              else "unresolved"))
             if knowledge_returns.get("returns"):
                 actions.append(ActionRecord(completed_rounds, "knowledge_return",
                     "Update knowledge and its producing methods from measured downstream returns and costs",

@@ -30,7 +30,7 @@ def _observed_response(sequence, records):
     return False
 
 
-def propose_object_probe(spec, model, records, serial):
+def propose_object_probe(spec, model, records, serial, *, methods=None, remaining_rows=None):
     """Return the next unfunded distinction as ``(Probe | None, metadata)``.
 
     A centered single-control scan supplies causal sensor bindings. Thereafter
@@ -46,7 +46,16 @@ def propose_object_probe(spec, model, records, serial):
     def proposal(points, purpose, **details):
         if not points:
             return None
-        sequence = tuple(points[:spec.max_probe_length])
+        limit = spec.max_probe_length
+        if remaining_rows is not None:
+            limit = min(limit, remaining_rows)
+        # Sensor contrasts can accumulate across purchased setups. A response
+        # contrast needs its entire matched prefix: truncating it would ask a
+        # different question and could turn a history effect into a silent reset.
+        if limit <= 0 or (purpose == "distinguish_membership_dependency" and len(points) > limit):
+            return None, {"purpose": purpose, "observation_rows": 0,
+                "required_rows": len(points), **details}
+        sequence = tuple(points[:limit])
         return Probe(f"object_intervention:{serial}", sequence), {
             "purpose": purpose, "observation_rows": len(sequence), **details}
 
@@ -126,6 +135,9 @@ def propose_object_probe(spec, model, records, serial):
         if missing:
             return proposal(missing, "observe_missing_membership_states", selector_control=selector,
                             unresolved_fields=[field for field in focus if field not in selected_values])
+
+    if methods is not None:
+        return methods.propose(spec, model, records, serial, selected_values, remaining_rows=remaining_rows)
 
     drives = {link["quantity"]: control for control, link in model.get("drive_links", {}).items()
               if link.get("quantity") is not None}

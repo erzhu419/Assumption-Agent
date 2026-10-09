@@ -3,6 +3,7 @@
 import json
 
 from .evaluation import loss
+from .language import Program
 from .models import Candidate
 from .structural_discovery import StructuralDiscovery, discover_structure
 from .structure_lab import ObjectSchema
@@ -27,8 +28,17 @@ def transfer_structure(spec, training, budget, source_prior, *, tolerance=1e-8,
         return []
     family = source["fits"][0]["family"]
     source_id = source_prior["source_concept_id"]
+    source_schema = ObjectSchema.from_dict(source["schema"])
+    if (source["fits"][0].get("response_terms")
+            and len(source_schema.objects) != len(schema.objects)):
+        return []
+    mapping = {source_schema.fields[left][role]: schema.fields[right][role]
+               for left, right in zip(source_schema.objects, schema.objects)
+               for role in ("q", "x", "u", "f")}
+    response_terms = [Program.from_dict(term).remap_features(mapping)
+                      for term in source["fits"][0].get("response_terms", [])]
     discovery = discover_structure(training, schema, budget=budget, transitions=transitions,
-                                   families=(family,))
+                                   families=(family,), response_terms=response_terms)
     entries = []
     for fitted, fit in zip(discovery.candidates, discovery.fits):
         if fit["training_loss"] > tolerance:

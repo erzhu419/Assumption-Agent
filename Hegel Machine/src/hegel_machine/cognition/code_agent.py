@@ -7,12 +7,14 @@ import json
 from pathlib import Path
 import shutil
 import sys
+from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Protocol
 
 from .models import Observation, Probe
 from .evaluation import point_loss
 from .proposers import _events, _run
+from .code_provider_context import prepare_code_context
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,9 @@ _ACTION_SCHEMA = {
 
 _INSTRUCTIONS = """You are a scientific coding agent. Infer the numerical process from paid observations.
 Use the supplied query/write/run/evaluate/finish tools through one JSON action per turn.
+Put the chosen action only in your final message. Only that final response is executed;
+intermediate write/practice text does not change files or run a practice. Wait for the next
+request's actual events and feedback before choosing a subsequent action.
 You may write and execute unrestricted ordinary Python in your own working directory, fit parameters,
 import available scientific libraries, inspect your own outputs, and repair programs after errors.
 The environment is accessible through query only. Its implementation and final evaluation rows are not
@@ -89,6 +94,24 @@ identify history dependence. All statistical fitting must use acquired observati
 private coefficients. A bad execution is returned as feedback so you can repair it.
 """
 
+_TASK_INTERFACE_INSTRUCTIONS = """You are a scientific coding agent. Infer the numerical process from paid observations.
+Follow the supplied task_interface and capabilities for the exact action arguments, prediction inputs,
+measurements, confirmation procedure, and knowledge persistence. They define this task's contract.
+Return one JSON action per turn, with its argument object encoded in arguments_json.
+Put the chosen action only in your final message. Only that final response is executed;
+intermediate write/practice text does not change files or run a practice. Wait for the next
+request's actual events and feedback before choosing a subsequent action.
+Write and run ordinary Python in your working directory, use available scientific libraries, inspect
+your outputs, and revise programs after errors. Access the environment through the supplied actions.
+Its implementation, private settings, and final evaluation targets are outside this task. Do not inspect
+other directories or call external tools directly; return an action for the supplied execution loop.
+Fit and assess hypotheses using purchased evidence. Respect the public bounds and remaining budgets.
+The request contains compact evidence previews and action feedback. research_context.json retains the
+full request; the files named in evidence and task_interface retain the complete paid observations.
+Read those files through a run action when needed. Print concise results instead of complete datasets.
+Choose experiments, repair errors, and finish within the available calls and resources.
+"""
+
 
 class CodexCodeProvider:
     """Use the currently configured Codex model as the code-agent decision maker."""
@@ -107,10 +130,278 @@ class CodexCodeProvider:
             raise RuntimeError("Codex CLI was not found on PATH")
         self.calls += 1
         schema = self.workspace / "code_action_schema.json"
-        instructions = self.workspace / "code_agent_instructions.txt"
         response = self.workspace / f"code_action_{self.calls:03d}.json"
-        schema.write_text(json.dumps(_ACTION_SCHEMA), encoding="utf-8")
-        instructions.write_text(_INSTRUCTIONS, encoding="utf-8")
+        instructions = self.workspace / "code_agent_instructions.txt"
+        action_schema = deepcopy(_ACTION_SCHEMA)
+        instruction_text = _TASK_INTERFACE_INSTRUCTIONS if "task_interface" in request else _INSTRUCTIONS
+        if "research_notes" in request:
+            action_schema["properties"]["research_notes"] = {
+                "type": "string", "description": "Complete concise current research notebook: observed evidence, "
+                "working explanation, unresolved alternatives, predictions and next experiment."}
+            action_schema["required"].append("research_notes")
+            instruction_text += """\nInclude research_notes in every final JSON response alongside action and arguments_json.
+Each decision starts a fresh model session. Carry forward a concise COMPLETE current notebook,
+not merely a change log: preserve useful observed results and their evidence indices, working
+explanations, unresolved alternatives, predictions and the next experiment. Update it from the
+actual feedback. Distinguish observations from hypotheses and planned actions; the action you
+are now proposing has not happened yet. This authored text replaces research_notes.md and is
+shown on the next turn. Ordinary task actions and tools are otherwise unchanged.
+Put notebook text only in this top-level research_notes field, never in
+arguments_json. Keep arguments_json limited to the chosen action's tool arguments.
+"""
+        if "research_root" in request:
+            action_schema["properties"]["research_question"] = {"anyOf": [
+                {"type": "null"},
+                {"type": "object", "additionalProperties": False,
+                 "properties": {"id": {"type": "string"}, "question": {"type": "string"},
+                                "parent_id": {"type": ["string", "null"]},
+                                "depends_on": {"type": "array", "items": {"type": "string"}}},
+                 "required": ["id", "question", "parent_id", "depends_on"]}]}
+            action_schema["required"].append("research_question")
+            instruction_text += "\nReturn research_question for the live question advanced by this action, or null for routine actions. " \
+                "Use the supplied task root and stable question IDs. A child is an unresolved inquiry informing " \
+                "its parent; a negative answer can change the next experiment. Use depends_on only for premises " \
+                "that must be supported. Registering an inquiry grants no scientific support.\n"
+        if "research_focus" in request:
+            if request["research_focus"].get("kind") == "analysis" and "llm_inquiry" not in request:
+                action_schema["properties"]["action"]["enum"] = ["write", "run", "evaluate", "finish"]
+            elif request["research_focus"].get("kind") not in {"parent_research", "analysis"}:
+                action_schema["properties"]["action"]["enum"] = ["write", "run", "finish"]
+            instruction_text += """\nYou may use ordinary run for calculations or code debugging before answering.
+When task_interface supplies run operator:'inquire', you may instead delegate the
+current research_focus.question to that continuing local LLM loop, with its ID,
+parent_id and depends_on. Its tool feedback and local notebook persist; it returns
+to this parent after analysis or local finish. Use the existing evidence and
+execution tools; delegating a question does not establish its answer.
+"""
+            if request["research_focus"].get("kind") == "parent_research":
+                if request["research_focus"].get("stage") == "contrast":
+                    instruction_text += """\nA child answer has returned for comparison in an existing parent research program.
+Choose how to resolve research_focus.comparison_question. Available registered methods
+and their separate prior execution records appear in method_decision. You may invoke a
+method's execute_action with your own question, analyze existing local evidence, or design
+a new contrast. A supplied control procedure can acquire reference evidence directly;
+replicating a known result requires no invented pair of opposing scientific predictions.
+research_focus.available_designs lists retained comparison programs. An empty prior_trials
+means no frozen contrast execution is recorded for this child: its draft is still a proposal,
+and its returned answer may come from ordinary query/evaluate. Use answer_observations to
+interpret that answer's actual scope, then revise the retained design or author a new one.
+The failed tested setting does not automatically reject an entire relation or support
+the other draft hypothesis. Before testing a newly fitted or extrapolated numerical
+prediction, execute its calculation from cited public readings. You can return
+run {code:'Python source'} to fit/compare candidates and print their coefficients,
+reference residuals and target predictions, then author a contrast from those results.
+Alternatively run {operator:'research',path:'binding.py',code:'Python source',
+question:{id:'...',question:'...',parent_id:'...',depends_on:[]}} invokes the existing
+bind/rows/probes researcher under task_interface. Choose the measured variables
+yourself. A requested setting or its readback is not a measurement of the correct
+setting: use actual physical outcomes to test the numerical prediction. Ordinary
+Python calculation is sufficient when the intervention yields a Boolean outcome;
+you need not invent a numeric target or force a numerical binding.
+Compute each revised explanation's predictions and choose
+an experiment that distinguishes them, rather than treating another setting as informative
+merely because it has not been tried. The existing selector consumes your actual design.
+To design a new contrast, return write {path:research_focus.path,code:'Python source'} defining design and answer
+under the shared contrast contract. You may instead revise a retained comparison in
+research_focus.available_designs by writing to that program's path. Writing either the
+scheduled path or one of those retained comparison paths runs the revised experiment.
+The host runs the existing disagreement selector,
+executes the selected experiment's actions or existing feedback procedure, and analyzes
+its ACTUAL outcome. For live controls, return procedure:{path:research_focus.path,max_steps:12}
+instead of actions and define select_actions in the same file. It reads each returned
+setting/state before choosing the next step; frozen predictions stay in experiment_choice.
+For an ordered condition, adapt the phase-tracking pattern from an existing registered
+feedback procedure in method_decision. Use this invocation's successful observations
+(memory.program_arguments.procedure_start) to establish which phases actually finished.
+Current inventory alone cannot distinguish before and after a completed phase: a
+remove/replace controller can otherwise repeat those actions forever. Advance only
+when the phase's required action and outcome occurred; inspect the current controls
+to choose the next action. Reading an existing setting and changing a setting are
+different interventions. Keep the hypothesis, selected experiment and executed phase
+sequence consistent. If you change the tested condition, state that narrower question
+explicitly; its result does not adjudicate the original stronger condition.
+The parent program is preserved. This is a comparison step, not a replacement parent procedure.
+If the returned status is refuted, revise the comparison using that specific
+counterexample and research_focus.prior_trials. A failed conditional prediction
+does not disprove its whole formula family or confirm every alternative. Identify
+which claimed conditions actually held, which prediction failed, and what the
+revised explanations predict differently. Existing measurement_history includes
+earlier paid USE/READ results; consider alternative measured variables or conditions
+before repeating a nearby setting under the same untested assumptions. Use ordinary
+Python to calculate candidate predictions from those readings. No variable or law
+is selected for you. To revise the comparison's scope, include question:{id:...,
+question:'...',parent_id:research_focus.question.id,depends_on:[...]} in the write
+arguments, or explicitly run contrast with your authored question and design.
+Define competing testable claims and their predictions for the SAME observable outcome.
+Use the returned uncertainty, paid evidence and reference_history to choose the comparison.
+When an additional condition could explain failure, a reversible test on a known working
+configuration can distinguish the condition from a wrong response law. State what can
+transfer to the failed target; success elsewhere alone does not establish shared conditions.
+Build actions from CURRENT public controls. Parse complete numeric readouts, including
+decimals, and identify the actual object before reusing a controller from a different one.
+Compute adjustments in Python, and have answer
+check the actually achieved conditions and physical response before accepting or rejecting
+a prediction. A mismatched applied setting does not test the intended numerical prediction.
+answer returns supported/refuted/inconclusive with actual observation indices for the
+comparison_question, not the entire parent task. It must read the observed records and
+the frozen experiment_choice. A setting readback is not physical confirmation; an explicitly
+negative physical outcome is not missing data. No task formula or verdict is supplied.
+If your current explanations predict all available experiments identically, return that
+design honestly; the selector reports ambiguity without buying evidence or granting support.
+finish can end unresolved research. Existing programs, evidence and answers remain available.
+"""
+                elif request["research_focus"].get("stage") == "review":
+                    instruction_text += """\nThe host is returning an existing parent program's actual execution for review.
+research_focus.previous_execution contains its returned proposal and real feedback.
+When available, procedure_status and procedure_steps describe the entire invocation;
+a successful final action may still belong to a procedure that hit its step limit.
+Inspect that program and compare what it actually did with its intended experiment.
+Use the stop reason, acquired observations, actual physical outcomes and current state
+to decide whether to revise the program, continue it, analyze paid evidence, or stop.
+Comments describing hypotheses do not execute an experiment. Separate an operation
+failure from a failed physical prediction, and choose which explanation to test next.
+This review is offered once for this execution; any chosen action returns control.
+The old program remains available. A stop is not automatically a scientific refutation.
+Before further operational repairs, examine whether the assumed operation is actually
+necessary to answer the parent question, or is itself an untested explanation.
+Use an explicit child inquiry for that distinction. Paid evidence may already answer
+it; otherwise contrast competing explanations on the same observable physical outcome.
+The shared contrast operator accepts your design and answer functions, selects among
+your executable experiments using the existing disagreement chooser, and returns actual
+analysis to the parent. An experiment all explanations predict identically cannot
+resolve their disagreement. You choose the explanations and experimental controls.
+"""
+                elif request["research_focus"].get("stage") == "child_return":
+                    instruction_text += """\nNew child analysis has returned to a parent with an existing research program.
+research_focus.changed_child_ids identifies the answers not yet considered by this parent.
+Use their actual scope and evidence to decide the next experiment. The existing program
+is available; its previous review does not settle these new answers. A refuted or
+inconclusive child can change the parent's question, conditions, or experiment without
+requiring the rejected assumption to become true. Choose an action; rewriting is optional.
+When a child cannot distinguish a wrong response law from an unmet condition, inspect
+the shared reference_history and design a matched control to resolve that uncertainty.
+"""
+                else:
+                    instruction_text += """\nThe host is returning from answered child research to its reopened parent.
+The parent has no executable research program yet. Use the paid records, computed
+results and current notebook to author its next scientific experiment.
+"""
+                if request["research_focus"].get("stage") != "contrast":
+                    instruction_text += """
+research_focus.returned_children contains the actual answers; preserve their valid scope.
+Choose the next research action before deciding whether a program needs rewriting:
+run contrast to compare explanations by their predicted physical outcomes, evaluate paid
+evidence that already answers the question, query an existing experiment, or write a
+procedure when its execution needs changing. Existing programs and analyses remain usable.
+If authoring or revising a procedure, return
+"""
+                    instruction_text += "write {path:research_focus.path,code:'Python source'} "
+                    instruction_text += ("to save the repair, and define\n" if request.get("procedure_repair")
+                                         else "to run it immediately, and define\n")
+                    instruction_text += """
+select_actions(public_spec, observations, memory). The existing procedure executor
+will call it repeatedly, with fresh public state and previous method_results at each step
+(up to 12 steps per invocation, charging ordinary action/Python costs).
+State your competing explanations and their DIFFERENT physical predictions for the SAME
+intervention in the returned proposal, e.g. hypotheses and predicted_outcomes alongside
+actions. Select actions that distinguish those predictions using public controls; observe
+the actual response before choosing the next step. Your Python can calculate candidate
+predictions without translating arbitrary formulas into a new language.
+For existing numerical search, bind candidate residuals or predictions as features and
+use the research operator with executable probes and actual outcome targets. Boolean
+abs/sub/lt relations are already supported. A chosen setting is not the target truth.
+You can instead use query actions plus after_observation evaluate in this procedure.
+Define answer in the same file if using it, register the scientific question before its
+experiment, and read actual outcome fields in answer. Cite observed conditions and
+physical results, rather than command success alone. A failed prediction may revise the
+response model or open a specific condition question; your program chooses the branch.
+If the chosen experiment uses a dialog, use its live menu: navigate/open it, select a
+currently listed option, then inspect its returned setting/state. Keep the candidate
+fixed during its test. memory.method_results contains ALL programs' results, including
+inherited history. Filter records by path before interpreting this program's progress;
+len(memory.method_results) is not a local step counter. Branch on recorded outcomes.
+Inside your program, memory.program_path identifies this file and memory.program_results
+already selects its own history, including earlier executions. A failed action does not
+advance an intended preparation step; inspect its feedback and current public state.
+Return {stop:'reason and unresolved question'} when evidence or controls are insufficient;
+do not manufacture confirmation or loop on already-paid analysis. The parent is not marked
+supported merely because this program runs. Its path is retained for continuation/revision.
+The host supplies neither candidate formulas nor a device-specific experiment.
+"""
+            elif request["research_focus"].get("kind") == "analysis":
+                instruction_text += """\nThe host is continuing analysis of a child you already declared and measured.
+research_focus lists its unreviewed observation indices and question. Reuse an existing
+analysis with evaluate {path:'analysis.py',question_id:'q'}, optionally including corrected
+code, or author one with write {path: research_focus.path, code: 'Python source'}. Define
+answer(public_spec, observations, memory), returning {status:'supported'|'refuted'|'inconclusive',
+answer: your explanation and remaining uncertainty, evidence:[actual record indices]}.
+The host executes this answer with the existing evaluate tool on the paid records;
+no select_actions function or additional acquisition is needed for this decision.
+The original design/experiment path remains in the question; this analysis file is
+separate so a later experiment revision can still reuse the actual research program.
+Inspect the actual public feedback and object state. An API action succeeding or a control
+value matching your chosen setting alone does not demonstrate a physical prediction.
+An absent measurement/outcome is missing evidence. Judge the declared child, not the whole task.
+Inconclusive and refuted analyses also return control so you can choose the next experiment.
+You may first evaluate a correction to an earlier answer on its paid evidence. That
+updates its formal status; noting an error alone does not. The pending child's analysis
+remains available until you address its evidence.
+Do not keep collecting unrelated evidence before interpreting this child's existing experiment.
+If the analysis program failed, repair it from the feedback. finish may end the unresolved task.
+"""
+            elif request["research_focus"].get("kind") == "intervention":
+                instruction_text += """\nThe host is continuing the parent investigation after repeated failures
+following an already supported operational answer. Preserve research_focus.known_operation;
+it answers how to use the object, not whether the current scientific intervention is correct.
+research_focus.intervention_history includes successful interventions, readbacks and
+contemporaneous public object descriptions as well as errors. Use these conditions and
+physical states to investigate the parent_question, rather than retesting only whether
+the already rejected command is supported. Distinguish three questions: was the operation
+accepted, was the intended setting/condition established, and did the physical prediction
+hold? An explicitly observed contrary state is not the same as an absent outcome.
+Return write with arguments {path: research_focus.path, code: 'Python source'} defining:
+select_actions(public_spec, observations, memory): return {hypothesis: your specific testable
+claim, predicted_outcome: the public state it predicts, actions:[official actions, if needed]}.
+answer(public_spec, observations, memory): return {status:'supported'|'refuted'|'inconclusive',
+answer: your interpretation and remaining uncertainty, evidence:[actual observation indices]}.
+The host executes these through the existing query and after_observation evaluate tools.
+Use actions:[] when the paid observations already test the claim. Inspect observations and
+actual public object states in answer, not just command success or the chosen setpoint.
+Compare the predicted state with the observed state under the actually observed conditions.
+If several explanations remain (for example a response model versus an unmet condition),
+state their different predicted observations and the experiment that separates them.
+Your answer should cite the actual physical-state and condition records it used; an
+inconclusive result should identify what observation would resolve that uncertainty.
+An unsupported command alone does not refute a scientific law. A failed tested setting does
+not by itself refute its whole approximate relation family; identify the scope of your verdict.
+Missing physical outcomes remain inconclusive. Existing evidence is retrospective analysis,
+not new independent confirmation. All three valid verdicts return control to the parent;
+repair a failed program using its feedback. The host supplies neither a formula nor an answer.
+"""
+            else:
+                instruction_text += """\nThe host has paused the parent task after repeated unsupported operations.
+research_focus contains the actual failures and the unresolved operational child question.
+This decision designs an executable test, rather than repeating a log scan or the failed action.
+Return write with arguments {path: research_focus.path, code: 'Python source'}.
+Define TWO functions in that file:
+select_actions(public_spec, observations, memory): return an official action list, or {actions:[...]}.
+answer(public_spec, observations, memory): return {status:'supported'|'refuted'|'inconclusive',
+ answer: an explanation of the operation and its conditions, evidence:[actual record indices]}.
+The host immediately executes select_actions, buys its observations, then executes answer against
+the new feedback. Your answer must inspect what actually happened, not assume the plan succeeded.
+If research_focus.successful_interactions already resolves the question, select_actions may
+return [] so answer reuses that actual paid evidence instead of buying a duplicate test.
+Use the exact public capabilities, accessible objects, observed roles and dialog state to choose
+an as-yet untested explanation of how to interact with the object. Missing access and unsupported
+operations are different failures. A device may have a public agent role; use roles, not names,
+to interpret applicable actions. You supply the hypothesis and experiment, not just a new label.
+If the previous program failed, revise it using that feedback. Support returns control to the
+parent task with this executable child answer. finish may end an unresolved task if appropriate.
+Notebook and question metadata still follow the same output schema; no source files change until
+this final write action is executed.
+"""
+        context = prepare_code_context(self.workspace, request, schema=action_schema,
+                                       instructions=instruction_text)
         command = [self.executable, "-a", "never", "exec", "--sandbox", "read-only",
                    "--cd", str(self.workspace), "--skip-git-repo-check", "--ephemeral", "--json",
                    "--color", "never", "--output-schema", str(schema), "--output-last-message", str(response),
@@ -132,32 +423,6 @@ class CodexCodeProvider:
         command.append("-")
         # Preserve the full research record for ordinary Python inspection;
         # repeated raw trajectories and old stdout exhausted real runs in 3 calls.
-        (self.workspace / "research_context.json").write_text(json.dumps(request), encoding="utf-8")
-        context = deepcopy(request)
-        observations = context.get("observations", [])
-        offset = max(0, len(observations) - 12)
-        context["observations"] = [{**row, "row_index": offset + index}
-                                   for index, row in enumerate(observations[offset:])]
-        context["evidence"] = {"observations_file": "observations.json", "observation_count": len(observations),
-                               "preview_start": offset, "full_context_file": "research_context.json"}
-        events = context.get("events", [])
-        for index, event in enumerate(events):
-            arguments = event.get("arguments", {})
-            compact_arguments = {key: value for key, value in arguments.items() if key not in ("sequence", "code")}
-            if "sequence" in arguments:
-                compact_arguments["sequence_rows"] = len(arguments["sequence"])
-            if "code" in arguments:
-                compact_arguments["path"] = arguments.get("path", f"scratch_{index:03d}.py")
-            feedback = event.get("feedback", {})
-            if index < len(events) - 1:
-                feedback = {key: value for key, value in feedback.items() if key not in ("stdout", "stderr")}
-            events[index] = {key: value for key, value in event.items() if key not in ("arguments", "feedback", "usage")}
-            events[index].update(arguments=compact_arguments, feedback=feedback)
-        knowledge = context.get("session_knowledge", {})
-        if "files" in knowledge:
-            knowledge["shared_files"] = list(knowledge["files"])
-            knowledge["files"] = {name: code for name, code in knowledge["files"].items()
-                                  if context.get("files", {}).get(name) != code}
         started = monotonic()
         code, stdout, stderr, timed_out = _run(command, json.dumps(context), self.timeout_seconds, str(self.workspace))
         (self.workspace / f"code_call_{self.calls:03d}.jsonl").write_text(stdout, encoding="utf-8")
@@ -192,6 +457,10 @@ class CodexCodeProvider:
             # Actual CLI completions sometimes retain literal line breaks in
             # this nested string. Preserve the authored code for execution.
             arguments = json.loads(payload["arguments_json"], strict=False)
+            if payload.get("research_question") is not None:
+                arguments["research_question"] = payload["research_question"]
+            if "research_notes" in request:
+                arguments["notes"] = payload["research_notes"]
         except (ValueError, KeyError, TypeError) as error:
             return {"action": "provider_error", "arguments": {}, "usage": usage,
                     "error": {"decode_error": f"{type(error).__name__}: {error}"}}
@@ -200,18 +469,35 @@ class CodexCodeProvider:
 
 _MODEL_RUNNER = """import contextlib, json, runpy, sys
 payload = json.load(sys.stdin)
+require_fit = sys.argv[3] == '1'
 with contextlib.redirect_stdout(sys.stderr):
     model = runpy.run_path(sys.argv[1])
-    if callable(model.get('fit')):
+    fit_available = callable(model.get('fit'))
+    if fit_available:
         model['fit'](json.load(open(sys.argv[2])))
-    predictions = [float(model['predict'](row)) for row in payload]
-print(json.dumps(predictions, allow_nan=False))
+    predictions = ([float(model['predict'](row)) for row in payload]
+                   if not require_fit or fit_available else None)
+print(json.dumps({'fit_available': fit_available, 'predictions': predictions}
+                 if require_fit else predictions, allow_nan=False))
 """
 
 
-def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30, risk_quantile=.5):
-    """Run a Python model on input rows; current evaluation targets stay outside."""
+def python_model_context(workspace, model):
+    """Resolve a retained model's original working directory and fitting view."""
     workspace = Path(workspace).resolve()
+    model = Path(model)
+    snapshots = [index for index, part in enumerate(model.parts) if part == "_evaluated_model"]
+    if snapshots:
+        boundary = snapshots[-1] + 1
+        workspace = workspace / Path(*model.parts[:boundary])
+        model = Path(*model.parts[boundary:])
+    return workspace, str(model)
+
+
+def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30, risk_quantile=.5,
+                          require_fit=False):
+    """Run a Python model on input rows; current evaluation targets stay outside."""
+    workspace, model = python_model_context(workspace, model)
     payload = [{"features": row.features, "history": row.history} if hasattr(row, "features")
                else {"features": row["features"], "history": row.get("history", [])} for row in observations]
     # A retained candidate carries its selected paid training view to terminal
@@ -219,12 +505,18 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
     training = workspace / "model_observations.json"
     if not training.exists():
         training = workspace / "observations.json"
-    code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training)],
+    code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training),
+                                         "1" if require_fit else "0"],
                                          json.dumps(payload), timeout_seconds, str(workspace))
     result = {"returncode": code, "stderr": stderr, "timeout": timed_out,
               "risk_quantile": risk_quantile, "loss_kind": "mse" if risk_quantile == .5 else "pinball"}
     if code == 0:
         predictions = json.loads(stdout)
+        if require_fit:
+            result["fit_available"] = predictions["fit_available"]
+            predictions = predictions["predictions"]
+            if predictions is None:
+                return result
         if len(predictions) != len(observations):
             raise ValueError("model returned a different number of predictions")
         targets = [row.target if hasattr(row, "target") else row["target"] for row in observations]
@@ -235,27 +527,78 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
     return result
 
 
+def _copy_model_context(workspace, model, destination):
+    source, model = python_model_context(workspace, model)
+    destination = Path(destination).resolve()
+    if source == destination:
+        return model
+    # Archives can live inside the source workspace. Stage outside that source
+    # before installing the copy, so it never recursively copies itself.
+    with TemporaryDirectory(prefix="hegel-model-", dir=source.parent) as temporary:
+        staged = Path(temporary) / "snapshot"
+        staged.mkdir()
+        for path in source.iterdir():
+            if (path.name in {"_evaluated_model", "__pycache__", "code_agent_instructions.txt"}
+                    or path.name.startswith(("code_action_", "code_call_"))):
+                continue
+            target = staged / path.name
+            if path.is_dir():
+                shutil.copytree(path, target)
+            else:
+                shutil.copy2(path, target)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.move(str(staged), str(destination))
+    return model
+
+
 def retain_evaluated_python_model(workspace, model, channels, training_mse, *,
                                   training_loss=None, loss_kind="mse", risk_quantile=.5):
     """Keep a successfully executed candidate while ordinary work continues."""
-    workspace = Path(workspace).resolve()
-    retained = workspace / "_evaluated_model"
-    if retained.exists():
-        shutil.rmtree(retained)
-    retained.mkdir()
-    for path in workspace.iterdir():
-        if (path.name in {"_evaluated_model", "__pycache__", "code_agent_instructions.txt"}
-                or path.name.startswith(("code_action_", "code_call_"))):
-            continue
-        target = retained / path.name
-        if path.is_dir():
-            shutil.copytree(path, target)
-        else:
-            shutil.copy2(path, target)
-    return {"workspace": str(retained), "model": model, "selected_channels": list(channels),
+    retained = Path(workspace).resolve() / "_evaluated_model"
+    source_model = str(model)
+    model = _copy_model_context(workspace, model, retained)
+    return {"workspace": str(retained), "model": model, "source_model": source_model,
+            "selected_channels": list(channels),
             "training_mse": training_mse, "model_source": (retained / model).read_text(),
             "training_loss": training_mse if training_loss is None else training_loss,
             "loss_kind": loss_kind, "risk_quantile": risk_quantile}
+
+
+def archive_confirmed_python_model(agent, destination):
+    """Archive the submitted predictor and fitting view, without host conversation state."""
+    if not agent.model or not agent.confirmations or not agent.confirmations[-1].get("passed"):
+        raise ValueError("archive a submitted model only after fresh confirmation passed")
+    destination = Path(destination).resolve()
+    model = _copy_model_context(agent.workspace, agent.model, destination)
+    for filename in ("research_context.json", "research_state.json"):
+        (destination / filename).unlink(missing_ok=True)
+    training = destination / "model_observations.json"
+    if not training.exists():
+        training = destination / "observations.json"
+    return {"snapshot_workspace": str(destination), "inner_model": model,
+            "model": str(Path("_evaluated_model") / model), "source_model": agent.model,
+            "training_rows": len(json.loads(training.read_text()))}
+
+
+def python_model_context_matches(workspace, model, snapshot_workspace, inner_model):
+    """Decide whether a submitted archive still contains the original predictor context."""
+    current, model = python_model_context(workspace, model)
+    if model != inner_model:
+        return False
+
+    def context_files(directory):
+        directory = Path(directory)
+        return {path.relative_to(directory): path for path in directory.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+            and path.name not in {"research_context.json", "research_state.json",
+                                  "code_agent_instructions.txt"}
+            and not path.name.startswith(("code_action_", "code_call_"))}
+
+    submitted, original = context_files(current), context_files(snapshot_workspace)
+    return (submitted.keys() == original.keys()
+        and all(submitted[path].read_bytes() == original[path].read_bytes() for path in original))
 
 
 class CodeAgent:

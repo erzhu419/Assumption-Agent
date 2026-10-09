@@ -25,6 +25,10 @@ def _polynomial(program, budget):
         return {_key(((program.name, program.lag if program.op == "lag" else 0),)): 1.}
     if program.op == "available":
         return {_key((), program.lag): 1.}
+    if program.op == "mul" and any(child.op == "const" and child.value == 0. for child in program.children):
+        # A retired parent's representation supplies no revision coordinates.
+        # The stored program remains intact; fresh observations test the fit.
+        return {}
     if program.op == "if":
         condition, body, otherwise = program.children
         if condition.op != "available" or otherwise.op != "const" or otherwise.value:
@@ -114,6 +118,19 @@ class RetainedControlRevisions:
                         continue
                     seen.add(combined)
                     self.coordinates.append({"keys": combined, "sources": sources, "lag_mapping": mapping})
+
+    def applicability(self, rows):
+        """Describe executable preparation and available evidence, not its gain."""
+        history_depth = max((len(row.history) for row in rows), default=0)
+        ready = sum(len(item["keys"]) + 1 <= len(rows) and
+                    all(max(gate, *(lag for _, lag in factors), 0) <= history_depth
+                        for factors, gate in item["keys"])
+                    for item in self.coordinates)
+        status = ("ready" if ready else "needs_observations" if self.coordinates
+                  else "no_retained_coordinates")
+        return {"status": status, "coordinate_count": len(self.coordinates),
+                "ready_coordinates": ready, "observation_rows": len(rows),
+                "history_depth": history_depth}
 
     def propose(self, rows, budget, *, temporal=False):
         results = []

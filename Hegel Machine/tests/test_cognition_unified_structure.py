@@ -76,9 +76,11 @@ def test_old_family_reopens_when_new_observations_refute_it():
     changed = StructureLab(readout="window", seed=71)
     new_rows = changed.acquire(changed.random_probe(89, length=24)).observations
     entries = propose_structures(changed.spec, new_rows, SearchBudget(80000), parent=parent)
-    assert entries[0]["structure_search"] == "full"
-    assert entries[0]["kind"] == "structural:window_exchange"
-    assert entries[0]["training_loss"] < 1e-8
+    assert any(entry["structure_search"] == "family_revision" for entry in entries)
+    selected = min(entries, key=lambda entry: entry["training_loss"])
+    assert selected["structure_search"] == "full"
+    assert selected["kind"] == "structural:window_exchange"
+    assert selected["training_loss"] < 1e-8
 
 
 def test_no_structural_evidence_adds_no_search_or_boundary():

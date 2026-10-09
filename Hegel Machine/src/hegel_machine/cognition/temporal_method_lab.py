@@ -1,6 +1,7 @@
 """Controlled temporal predicates measured through an unknown delayed instrument."""
 
 from random import Random
+from math import sqrt
 
 from .measurement_lab import MeasurementBatch, MeasurementChannel
 from .models import Observation, Probe, TaskSpec
@@ -90,6 +91,22 @@ class TemporalMethodLab:
                 index = delay + 1
                 past = controls[index - delay]
                 controls[index] = (self._center - gain * past - .15 * past ** 2) / .4
+                if not -1. <= controls[index] <= 1.:
+                    # A legal random prefix need not allow this activation.
+                    # Change its delayed control and solve the same reading;
+                    # clipping the final control would erase the test event.
+                    for current in (0., -1., 1.):
+                        discriminant = gain * gain + .6 * (self._center - .4 * current)
+                        if discriminant < 0.:
+                            continue
+                        roots = [(-gain + sign * sqrt(discriminant)) / .3 for sign in (-1., 1.)]
+                        feasible = [value for value in roots if -1. <= value <= 1.]
+                        if feasible:
+                            controls[index - delay] = min(feasible, key=lambda value: abs(value - past))
+                            controls[index] = current
+                            break
+                    else:
+                        raise ValueError("activation center is unreachable with public bounded controls")
                 controls[index + 1] = 0.
             sequence = tuple({self.control_name: value} for value in controls)
             rows.extend(separate.acquire(Probe(f"terminal:{trajectory}", sequence), (self.sensor_name,)).observations)

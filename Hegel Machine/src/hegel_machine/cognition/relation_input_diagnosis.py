@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 
 from .competing_object_experiments import _forecast, assess_competing_object_probe
+from .evaluation import loss
 from .language import Program
 from .models import Probe
 from .relocatable_programs import abstract_measurements, instantiate_measurements
@@ -60,18 +61,21 @@ def diagnose_relation_inputs(agent, laboratory, selected, origin, plan, evidence
     """
     failed = any(item["candidate_id"] == selected["candidate"].candidate_id and
                  item["status"] == "counterexample" for item in evidence["hypotheses"])
-    if (channels or not failed or evidence["calibration_status"] != "not_forecast" or
-            not agent._learn_instruments or not agent._revise_inputs):
+    measured_failure = bool(channels and evidence["calibration_status"] == "counterexample")
+    if (not agent._learn_instruments or not agent._revise_inputs or
+            not measured_failure and (channels or not failed or
+                evidence["calibration_status"] != "not_forecast")):
         return None
     views = getattr(laboratory, "measurement_views", ())
-    measured_channels = tuple(views[-1]) if views else tuple(channel.name for channel in laboratory.channels)
+    measured_channels = tuple(channels) if measured_failure else (
+        tuple(views[-1]) if views else tuple(channel.name for channel in laboratory.channels))
     if not measured_channels:
         return None
     command_spec, spec = agent._spec(laboratory, ()), agent._spec(laboratory, measured_channels)
     if not spec.context.get("object_schema"):
         return None
     old_binding = agent._instrument_binding(spec, command_spec)
-    if any(item["status"] == "supported_on_probe" for item in evidence["hypotheses"]):
+    if not measured_failure and any(item["status"] == "supported_on_probe" for item in evidence["hypotheses"]):
         from .instrument_condition_probes import unmeasured_instrument_conditions
         before = budget.spent
         questions = unmeasured_instrument_conditions(old_binding, command_spec,
@@ -83,29 +87,47 @@ def diagnose_relation_inputs(agent, laboratory, selected, origin, plan, evidence
             "compute_cost": budget.spent - before})
         if not touched:
             return None
-    prepared = measured_relation_entry(origin, spec, agent.library)
+    prepared = None if measured_failure else measured_relation_entry(origin, spec, agent.library)
     result = {"status": "unresolved_inputs", "entry": None, "command_rows": [],
-              "plan": plan, "evidence": evidence, "binding": old_binding}
+              "response_rows": [],
+              "plan": plan, "evidence": evidence, "binding": old_binding,
+              "response_loss": None, "response_status": "unassessed"}
     previous_batches = len(paired_for(measured_channels))
 
     def finish():
-        result["command_rows"] = [command for batch in paired_for(measured_channels)[previous_batches:]
-                                  for command, _ in batch]
+        new_pairs = [pair for batch in paired_for(measured_channels)[previous_batches:] for pair in batch]
+        result["command_rows"] = [command for command, _ in new_pairs]
+        result["response_rows"] = [measured if measured_failure else command for command, measured in new_pairs]
+        # Correct inputs do not imply a correct response. Test the rebound law
+        # on these already purchased trajectories before reopening its range.
+        rows = [*result["response_rows"], *([measured for _, measured in measured_pairs]
+                                         if measured_failure else [])]
+        result["response_evidence"] = rows
+        if result["entry"] is not None and rows and budget.spend(len(rows)):
+            result["response_loss"] = loss(result["entry"]["candidate"].program,
+                rows, 0., command_spec.risk_quantile)
+            result["response_status"] = ("supported_on_paid_rows"
+                if result["response_loss"] <= agent.config.minimum_improvement else "counterexample")
         actions.append({"action": "diagnose_relation_experiment_inputs", "probe_id": plan["probe"].probe_id,
-            "measurement_probe_id": f"measure_relation:{plan['probe'].probe_id}",
+            "measurement_probe_id": plan["probe"].probe_id if measured_failure else
+                f"measure_relation:{plan['probe'].probe_id}",
             "status": result["status"], "field_losses": result["evidence"]["field_losses"],
             "measured_response_status": result["evidence"]["status"],
+            "rebound_response_status": result["response_status"],
+            "rebound_response_loss": result["response_loss"],
             "restored_relation_parameters": bool(result["entry"]),
-            "observation_rows": len(result["command_rows"])})
+            "observation_rows": len(result["command_rows"]),
+            "reused_measured_rows": len(measured_pairs) if measured_failure else 0})
         return result
 
     # Replay first: a pure relation counterexample needs no new instrument fit.
     # If inputs fail, varied background and independent validation follow; the
     # exact counterexample remains among the fitting rows.
-    measured = acquire(measured_channels, "remeasure_relation_counterexample", probe=Probe(
-        f"measure_relation:{plan['probe'].probe_id}", plan["probe"].sequence))
-    if measured is None:
-        return finish()
+    if not measured_failure:
+        measured = acquire(measured_channels, "remeasure_relation_counterexample", probe=Probe(
+            f"measure_relation:{plan['probe'].probe_id}", plan["probe"].sequence))
+        if measured is None:
+            return finish()
     measured_pairs = paired_for(measured_channels)[-1]
     rechecked = deepcopy(plan)
     rechecked["predicted_fields"] = {}
@@ -115,7 +137,8 @@ def diagnose_relation_inputs(agent, laboratory, selected, origin, plan, evidence
         rechecked["predicted_fields"][name] = _forecast(program, plan["probe"].sequence)
     hypotheses = []
     for hypothesis in plan["hypotheses"]:
-        payload = abstract_measurements(Program.from_dict(hypothesis["program"]), spec, agent.library)
+        payload = ({"complete": True, "program": hypothesis["program"]} if measured_failure else
+            abstract_measurements(Program.from_dict(hypothesis["program"]), spec, agent.library))
         if not payload["complete"]:
             break
         hypotheses.append({**hypothesis, "program": payload["program"]})
@@ -149,12 +172,46 @@ def diagnose_relation_inputs(agent, laboratory, selected, origin, plan, evidence
             return finish()
     if not previous_batches and acquire(measured_channels, "diagnose_relation_input_mapping") is None:
         return finish()
-    checked = acquire(measured_channels, "compare_relation_input_mapping")
+    # The just-purchased condition endpoints are already an independent
+    # calibration comparison. Fit on the earlier trajectories and test these
+    # informative readings before buying another generic trajectory.
+    checked = (paired_for(measured_channels)[-1] if measured_failure and endpoint_probe is not None
+               else acquire(measured_channels, "compare_relation_input_mapping"))
     if checked is not None:
         model = agent._fit_instruments(command_spec, spec, paired_for(measured_channels), budget, actions)
         if model is not None:
+            agent._distinguish_instruments(laboratory, model, measured_channels, acquire,
+                                           paired_for, budget, actions)
             binding = agent._instrument_binding(spec, command_spec)
-            result["entry"] = bind_relation_entry(prepared, binding) if prepared else None
+            result["entry"] = deepcopy(selected) if measured_failure else (
+                bind_relation_entry(prepared, binding) if prepared else None)
             if result["entry"] is not None:
                 result["status"] = "inputs_revised"
+            if measured_failure:
+                # These response/range hypotheses already use actual measured
+                # coordinates. Repair only the command forecasts, then test the
+                # new mapping on the trajectory which refuted the old one.
+                repaired = deepcopy(rechecked)
+                repaired["predicted_fields"] = {}
+                for name, program in binding.items():
+                    if not budget.spend(len(measured_pairs)):
+                        result.update(status="unresolved_inputs", entry=None)
+                        return finish()
+                    repaired["predicted_fields"][name] = _forecast(program, plan["probe"].sequence)
+                for hypothesis in repaired["hypotheses"]:
+                    response = Program.from_dict(hypothesis["program"])
+                    required = response.required_features() - set(command_spec.feature_names) - {"__target__"}
+                    if required - set(binding):
+                        result.update(status="unresolved_inputs", entry=None)
+                        return finish()
+                    if not budget.spend(len(measured_pairs)):
+                        result.update(status="unresolved_inputs", entry=None)
+                        return finish()
+                    command_program = bind_measurement_arguments(response, binding)
+                    hypothesis["predictions"] = _forecast(command_program, plan["probe"].sequence)
+                repaired_evidence = assess_competing_object_probe(repaired, measured_pairs, budget,
+                    tolerance=agent.config.minimum_improvement)
+                result.update(repaired_plan=repaired, repaired_evidence=repaired_evidence, binding=binding)
+                if repaired_evidence["calibration_status"] != "supported_on_probe":
+                    result.update(status="unresolved_inputs", entry=None)
     return finish()

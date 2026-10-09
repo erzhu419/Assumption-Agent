@@ -7,6 +7,7 @@ track's publication or admission lifecycle.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import math
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -48,10 +49,25 @@ class TaskSpec:
 class SearchBudget:
     limit: int
     spent: int = 0
+    # A caller may hold back a small amount for an already identified final
+    # confirmation.  Search actions see this amount as unavailable until the
+    # caller explicitly releases it; the total limit and accounting remain
+    # unchanged.
+    reserve: int = 0
 
     @property
     def remaining(self) -> int:
+        return max(0, self.limit - self.spent - self.reserve)
+
+    @property
+    def total_remaining(self) -> int:
+        """Return unspent units, including any held confirmation reserve."""
         return max(0, self.limit - self.spent)
+
+    def release_reserve(self) -> int:
+        held = max(0, self.reserve)
+        self.reserve = 0
+        return held
 
     def spend(self, units: int = 1) -> bool:
         if units < 0:
@@ -128,6 +144,10 @@ class ResearchConfig:
     learn_research_policy: bool = True
     joint_state_coordinates: bool = True
     joint_state_probes: bool = True
+    # Expected loss reductions are forecasts, so differences below this
+    # relative resolution are treated as the same measured opportunity. A
+    # confirmed source return may then break the tie without fabricating gain.
+    knowledge_tie_tolerance: float = 1e-8
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:
@@ -150,6 +170,9 @@ class ResearchConfig:
             raise ValueError("proposer must be search, codex or hybrid")
         if self.max_history < 1 or self.planning_depth < 1:
             raise ValueError("history and planning depth must be positive")
+        if (not math.isfinite(self.knowledge_tie_tolerance)
+                or self.knowledge_tie_tolerance < 0.):
+            raise ValueError("knowledge_tie_tolerance must be finite and nonnegative")
 
 
 @dataclass

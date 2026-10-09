@@ -1,5 +1,7 @@
 """Instrument substitution and experiment solving retain real prefix time."""
 
+import json
+
 import pytest
 
 from hegel_machine.cognition.language import Definition, MissingHistory, Program
@@ -70,6 +72,57 @@ def test_previous_temporal_instrument_uses_its_own_earlier_reset_boundary(operat
     commands, measured = history_rows((.2, .6, -.4, .8, -.3), sensor)
     assert [rebound.predict(row) for row in commands] == pytest.approx(
         [original.predict(row) for row in measured])
+
+
+def accumulated_measurements(values, decay, initial):
+    """Observe a reset state by direct recurrence, independently of Program."""
+    state, commands, measurements, command_history, measured_history = initial, [], [], [], []
+    for value in values:
+        state = decay * state + value
+        command, measured = {"u": value}, {"reading": state}
+        commands.append(Observation(command, 0., tuple(command_history)))
+        measurements.append(Observation(measured, 0., tuple(measured_history)))
+        command_history.append(command)
+        measured_history.append(measured)
+    return commands, measurements
+
+
+@pytest.mark.parametrize('decay', [0., .5, -.7])
+@pytest.mark.parametrize('initial', [0., 2.4])
+def test_lagged_accumulated_reading_replays_only_its_actual_past_prefix(decay, initial):
+    sensor = Program('accumulate', value=decay, children=(field('u'), const(initial)))
+    for values in ((.3,), (-.2, .8), (.3, -.2, .8, -.5, .1, .9, -.4, .6)):
+        commands, measured = accumulated_measurements(values, decay, initial)
+        for lag in (1, 3):
+            previous = Program('lag', name='reading', lag=lag)
+            rebound = bind_measurement_arguments(previous, {'reading': sensor})
+            for index, (command, reading) in enumerate(zip(commands, measured)):
+                if index < lag:
+                    with pytest.raises(MissingHistory):
+                        rebound.predict(command)
+                else:
+                    assert rebound.predict(command) == pytest.approx(previous.predict(reading), abs=1e-12)
+
+
+def test_lagged_state_inside_nested_temporal_response_survives_json_and_control_rename():
+    sensor = Program('accumulate', value=.81, children=(field('u'), const(1.7)))
+    previous = Program('if', children=(Program('available', lag=2),
+        Program('lag', name='reading', lag=2), const(0.)))
+    definition = Definition('measured_temporal_response', ('reading_now', 'reading_before'),
+        Program('window_sum', lag=3, children=(Program('event_delta', lag=1, children=(
+            binary('add', Program('arg', name='reading_now'),
+                binary('mul', const(.3), Program('arg', name='reading_before'))),)),)))
+    original = Program('call', name=definition.definition_id, definition=definition,
+        children=(field('reading'), previous))
+    bound = bind_measurement_arguments(original, {'reading': sensor})
+    assert bound.definition is definition
+    restored = Program.from_dict(json.loads(json.dumps(bound.to_dict()))).remap_features({'u': 'voltage'})
+    for values in ((.8,), (.3, -.2, .8), tuple((index % 7 - 3) / 4. for index in range(43))):
+        commands, measured = accumulated_measurements(values, .81, 1.7)
+        renamed = [Observation({'voltage': row.features['u']}, row.target,
+                     tuple({'voltage': past['u']} for past in row.history)) for row in commands]
+        assert [restored.predict(row) for row in renamed] == pytest.approx(
+            [original.predict(row) for row in measured], abs=1e-10)
 
 
 def window(name, center):

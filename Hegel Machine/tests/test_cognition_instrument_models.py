@@ -8,6 +8,9 @@ import pytest
 from hegel_machine.cognition.instrument_models import (
     fit_instrument_model, instrument_binding, rebind_instrument_model,
 )
+from hegel_machine.cognition.instrument_hypotheses import (
+    assess_instrument_hypotheses, plan_instrument_disagreement,
+)
 from hegel_machine.cognition.models import Observation, Probe, SearchBudget
 from hegel_machine.cognition.unified_object_lab import UnifiedObjectLab
 
@@ -29,19 +32,42 @@ def error(binding, pairs):
                for command, measured in pairs for name, program in binding.items())
 
 
+def resolve_purchased_hypotheses(lab, channel, model):
+    """Purchase independent readings and actual cuts before relying on a field."""
+    budget, spec = SearchBudget(20000), lab.spec_for(channel)
+    result = assess_instrument_hypotheses(model, lab.spec, spec,
+        paired(lab, channel, 719), budget, 1e-7)
+    alternatives = sum(len(field['hypotheses']) for field in model['fields'].values())
+    for serial in range(alternatives):
+        if not result['ambiguous_fields']:
+            break
+        plan = plan_instrument_disagreement(model, lab.spec, spec, budget, serial=serial)
+        assert plan['probe'] is not None, result
+        observed = lab.acquire(plan['probe'], channel).observations
+        history, purchased = [], []
+        for point, measured in zip(plan['probe'].sequence, observed):
+            purchased.append((Observation(point, 0., tuple(history)), measured))
+            history.append(point)
+        result = assess_instrument_hypotheses(model, lab.spec, spec, purchased, budget, 1e-7)
+    assert not result['ambiguous_fields'] and not result['refuted_fields'], result
+    assert set(rebind_instrument_model(model, spec)) == set(spec.feature_names)
+    assert 0 < budget.spent <= budget.limit
+
+
 @pytest.mark.parametrize("channel", [("fine",), ("coarse",)])
 def test_purchased_data_learns_polynomial_controls_and_focus_membership(channel):
     with UnifiedObjectLab(apparatus_seed=9013) as lab:
         training = paired(lab, channel, 183)
         budget = SearchBudget(20000)
         model = fit_instrument_model(lab.spec, lab.spec_for(channel), training, budget)
+        assert model["status"] == "requires_fresh_validation"
+        resolve_purchased_hypotheses(lab, channel, model)
         binding = instrument_binding(model)
         assert set(binding) == set(lab.spec_for(channel).feature_names), model["unmodeled_fields"]
         assert error(binding, paired(lab, channel, 885)) < 1e-10
         assert any(field.get("degree") == 3 for field in model["fields"].values())
         assert any(field["kind"] == "interval_membership" for field in model["fields"].values())
         assert 0 < budget.spent == model["compute_cost"] <= budget.limit
-        assert model["status"] == "requires_fresh_validation"
 
 
 def test_json_model_rebinds_renamed_measurements_and_coarsens_learned_fine_fields():
@@ -50,6 +76,7 @@ def test_json_model_rebinds_renamed_measurements_and_coarsens_learned_fine_field
             paired(original, ("fine",), 183), SearchBudget(20000))
     model = json.loads(json.dumps(model))
     with UnifiedObjectLab(apparatus_seed=9013, rename_prefix="new_") as changed:
+        resolve_purchased_hypotheses(changed, ("fine",), model)
         for channel in (("fine",), ("coarse",)):
             binding = rebind_instrument_model(model, changed.spec_for(channel))
             assert set(binding) == set(changed.spec_for(channel).feature_names)
@@ -68,6 +95,7 @@ def test_public_control_role_renaming_rebinds_executable_arguments():
     with UnifiedObjectLab(apparatus_seed=9013) as lab:
         spec = lab.spec_for(("fine",))
         model = fit_instrument_model(lab.spec, spec, paired(lab, ("fine",), 183), SearchBudget(20000))
+        resolve_purchased_hypotheses(lab, ("fine",), model)
         schema = json.loads(spec.context["object_schema"])
         names = {name: f"command_{name}" for name in spec.feature_bounds}
         schema["controls"] = {member: {role: names[name] for role, name in fields.items()}

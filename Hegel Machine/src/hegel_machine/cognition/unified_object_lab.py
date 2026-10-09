@@ -31,7 +31,7 @@ class UnifiedObjectLab:
     def __init__(self, *, seed=71, objects=4, readout="focus", variant="exchange",
                  profile="development", rename_prefix="", apparatus_seed=None,
                  actuator_curvature=None, relation_radius=None, relation_direction="symmetric",
-                 relation_condition="always"):
+                 relation_condition="always", total_weight=1.0):
         if profile not in {"development", "confirmation"}:
             raise ValueError("profile must be development or confirmation")
         self.seed = seed
@@ -39,11 +39,12 @@ class UnifiedObjectLab:
                               variant=variant, profile=profile, rename_prefix=rename_prefix,
                               apparatus_seed=apparatus_seed, actuator_curvature=actuator_curvature,
                               relation_radius=relation_radius, relation_direction=relation_direction,
-                              relation_condition=relation_condition)
+                              relation_condition=relation_condition, total_weight=total_weight)
         plant_seed = seed if apparatus_seed is None else apparatus_seed
         self._lab = StructureLab(objects=objects, readout=readout, variant=variant,
                                  seed=plant_seed + (7919 if profile == "confirmation" else 0),
-                                 relation_direction=relation_direction, relation_condition=relation_condition)
+                                 relation_direction=relation_direction, relation_condition=relation_condition,
+                                 total_weight=total_weight)
         if actuator_curvature is not None:
             self._lab._actuator_curvature = float(actuator_curvature)
         if relation_radius is not None:

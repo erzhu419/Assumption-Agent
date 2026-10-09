@@ -7,7 +7,7 @@ select a proposal. A saved procedure can refit its chosen intermediate terms on
 new observations without repeating the entire grammar search.
 """
 
-from itertools import combinations
+from itertools import combinations, combinations_with_replacement
 from copy import deepcopy
 import json
 from math import isfinite
@@ -147,6 +147,119 @@ def _entry(fit, steps, count, compute_cost, index=0):
             "research_program": plan}
 
 
+def coordinate_search_allowance(feature_count, row_count, history_length=0):
+    """Quote a bounded attempt using the constructor's two multiplication rounds."""
+    first = min(feature_count, 8)
+    first_columns = first + first * (first + 1) // 2
+    second = min(first_columns, 8)
+    second_columns = second + second * (second + 1) // 2
+    # Single-column fits, four residual passes and four joint alternatives per
+    # pass. Cached columns/duplicate products usually make execution cheaper.
+    allowance = row_count * (3 * feature_count + 7 * (first_columns + second_columns) + 72)
+    if history_length >= 2:
+        # Joint temporal fits need fresh columns for each scale. They consume
+        # the same research budget as coordinate composition, not a free pass.
+        allowance += row_count * (min(second_columns, 24) + 3) * 16
+    return allowance
+
+
+def propose_coordinate_programs(spec, training, budget, *, max_candidates=8):
+    """Build a sparse arithmetic explanation from measured coordinates alone.
+
+    Two rounds of multiplication include self-composition. Residual evidence
+    chooses the coordinates retained for the next round; no learned definition
+    or task-specific polynomial is needed to open this research direction.
+    """
+    rows = list(training)
+    if len(rows) < 6 or max_candidates < 1:
+        return []
+    names = set.intersection(*(set(row.features) for row in rows))
+    fitter = _Fitter(rows, budget, spec.risk_quantile)
+    start = budget.spent
+    raw = [fit for name in spec.feature_names if name in names
+           if (fit := fitter.fit((Program("feature", name=name),))) is not None]
+    if not raw:
+        return []
+    raw.sort(key=_rank)
+    best = raw[0]
+    tolerance = max(1e-10, abs(best["loss"]) * 1e-7)
+    initial_loss = best["loss"]
+    pool = list(dict.fromkeys(term for fit in raw for term in fit["terms"]))[:8]
+    path = [{"operation": "fit_measured_coordinate",
+        "question": "Explain the response with the currently observed coordinates",
+        "program": best["program"], "loss": best["loss"]}]
+    found, basis = [], list(pool)
+
+    def product(left, right):
+        # Multiplication is commutative for these scalar current coordinates.
+        # Canonical factors avoid fitting duplicate columns at the next depth.
+        def factors(term):
+            return ([part for child in term.children for part in factors(child)]
+                    if term.op == "mul" else [term])
+        terms = sorted([*factors(left), *factors(right)], key=lambda term: term.name)
+        result = terms[0]
+        for term in terms[1:]:
+            result = Program("mul", children=(result, term))
+        return result
+
+    for depth in range(2):
+        candidates = list(dict.fromkeys([*pool,
+            *(product(left, right) for left, right in combinations_with_replacement(pool, 2))]))
+        basis = list(dict.fromkeys([*basis, *candidates]))
+        singles = [fit for term in candidates if (fit := fitter.fit((term,))) is not None]
+        if not singles:
+            break
+        singles.sort(key=_rank)
+        if _rank(singles[0]) < _rank(best):
+            best = singles[0]
+        # Current-coordinate expressions are small enough to compare several
+        # residual additions jointly; each correlation pass is budgeted.
+        for _ in range(4):
+            if best["loss"] <= tolerance:
+                break
+            eligible = [(term, fitter.columns[term]) for term in candidates
+                        if term not in best["terms"] and fitter.columns.get(term) is not None]
+            if not budget.spend(len(rows) * (len(eligible) + 1)):
+                break
+            residual = [row.target - best["program"].predict(row) for row in rows]
+            residual_center = sum(residual) / len(rows)
+            ranked = []
+            for term, column in eligible:
+                center = sum(column) / len(rows)
+                norm = sum((value - center) ** 2 for value in column)
+                if norm <= 1e-12:
+                    continue
+                covariance = sum((value - center) * (error - residual_center)
+                                 for value, error in zip(column, residual))
+                ranked.append((covariance * covariance / norm, term))
+            alternatives = [fit for _, term in sorted(ranked, key=lambda item: item[0], reverse=True)[:4]
+                            if (fit := fitter.fit((*best["terms"], term))) is not None]
+            if not alternatives:
+                break
+            revised = min(alternatives, key=_rank)
+            if revised["loss"] + tolerance >= best["loss"]:
+                break
+            best = revised
+        path = [*path, {"operation": "compose_measured_coordinates",
+            "question": "Multiply observed computations and jointly explain the remaining response",
+            "program": best["program"], "loss": best["loss"], "composition_depth": depth + 1}]
+        if best["loss"] + tolerance < initial_loss:
+            found.append((best, path))
+        if best["loss"] <= tolerance:
+            break
+        pool = list(dict.fromkeys([*best["terms"],
+            *(term for fit in singles for term in fit["terms"]), *pool]))[:8]
+    ranked = sorted(found, key=lambda item: _rank(item[0]))[:max_candidates]
+    claims = [_entry(fit, steps, len(rows), budget.spent - start, index)
+              for index, (fit, steps) in enumerate(ranked)]
+    if best["loss"] > tolerance and max(len(row.history) for row in rows) >= 2:
+        from .temporal_coordinates import propose_temporal_coordinates
+        claims.extend(propose_temporal_coordinates(spec, rows, budget,
+            basis=basis, max_candidates=max_candidates))
+    return sorted(claims, key=lambda item: (0. if item["training_loss"] < 1e-12 else item["training_loss"],
+                  item["candidate"].program.size))[:max_candidates]
+
+
 def _role_coordinates(spec):
     """Public roles propose reductions; response evidence must select their use."""
     payload = spec.context.get("object_schema")
@@ -171,6 +284,11 @@ def _role_coordinates(spec):
     return coordinates
 
 
+def _retains_atom(program, atoms):
+    """A joint revision must still use one of the computations it received."""
+    return program in atoms or any(_retains_atom(child, atoms) for child in program.children)
+
+
 def _joint_role_revisions(spec, fitter, raw, tolerance):
     """Retain callable mechanisms while jointly explaining a changed local law.
 
@@ -186,10 +304,18 @@ def _joint_role_revisions(spec, fitter, raw, tolerance):
     parent = fitter.fit(anchors)
     if parent is None:
         return []
-    first = {"operation": "joint_callable_refit",
+    # The raw callable fits are the first paid step; the joint refit is a
+    # separate step even when it reaches zero residual immediately. Keeping
+    # both steps makes the saved procedure describe the actual distinction
+    # between fitting components and confirming their combination.
+    first = {"operation": "fit_component",
+             "question": "Fit the previously learned components before combining them",
+             "program": raw[0]["program"], "loss": raw[0]["loss"]}
+    joint = {"operation": "joint_callable_refit",
              "question": "Jointly refit the contributions of previously learned mechanisms",
-             "program": parent["program"], "loss": parent["loss"]}
-    proposals = [(parent, [first])]
+             "program": parent["program"], "loss": parent["loss"],
+             "parent_loss": raw[0]["loss"], "joint_terms": len(parent["terms"])}
+    proposals = [(parent, [first, joint])]
     if parent["loss"] <= tolerance:
         return proposals
     temporal = max(len(row.history) for row in fitter.rows) >= 2
@@ -210,7 +336,7 @@ def _joint_role_revisions(spec, fitter, raw, tolerance):
                 continue
             # A role-only model is not evidence that a previous mechanism was
             # locally repaired. The ordinary structural proposer handles those.
-            if not _sources(fit["program"]):
+            if not _retains_atom(fit["program"], anchors):
                 continue
             step = {"operation": "joint_role_residual",
                 "question": "Explain the residual through measured group and focal roles",
@@ -238,8 +364,8 @@ def _joint_temporal_roles(spec, fitter, raw, tolerance):
     anchors, sources = [], set()
     for fitted in raw:
         for term in fitted["terms"]:
-            source = tuple(_sources(term))
-            if source and source not in sources:
+            source = tuple(_sources(term)) or term
+            if source not in sources:
                 anchors.append(term)
                 sources.add(source)
         if len(anchors) >= 4:
@@ -261,7 +387,7 @@ def _joint_temporal_roles(spec, fitter, raw, tolerance):
     for terms, operation in alternatives:
         fitted = fitter.fit(terms)
         if (fitted is None or fitted["loss"] + tolerance >= parent["loss"]
-                or not _sources(fitted["program"])):
+                or not _retains_atom(fitted["program"], anchors)):
             continue
         step = {"operation": "derive_temporal_mechanism",
             "question": "Jointly separate measured state contributions from the change of a learned mechanism",
@@ -484,6 +610,21 @@ def replay_research_program(payload, training, budget, *, risk_quantile=.5,
     rows = list(training)
     if len(rows) < 6:
         return None
+    if any(step["operation"] == "discover_decoded_conditional_coordinates"
+           for step in payload.get("selection_steps", [])):
+        from .decoded_conditional_coordinates import replay_decoded_conditional_coordinates
+        return replay_decoded_conditional_coordinates(payload, rows, budget,
+            risk_quantile=risk_quantile, feature_mapping=feature_mapping)
+    if any(step["operation"] == "discover_composed_conditions"
+           for step in payload.get("selection_steps", [])):
+        from .composed_conditions import replay_composed_conditions
+        return replay_composed_conditions(payload, rows, budget,
+            risk_quantile=risk_quantile, feature_mapping=feature_mapping)
+    if any(step["operation"] == "discover_conditional_coordinates"
+           for step in payload.get("selection_steps", [])):
+        from .conditional_coordinates import replay_conditional_coordinates
+        return replay_conditional_coordinates(payload, rows, budget,
+            risk_quantile=risk_quantile, feature_mapping=feature_mapping)
     graph = ResearchGraph.from_dict(payload["graph"])
     terms = [graph.nodes[key].answer for key in payload["term_nodes"]]
     if not terms or any(term is None for term in terms):

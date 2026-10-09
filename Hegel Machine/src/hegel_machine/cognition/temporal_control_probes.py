@@ -1,4 +1,4 @@
-"""Solve finite measured-history predicates over actual command prefixes."""
+"""Solve measured-history and recurrent predicates over actual command prefixes."""
 
 from dataclasses import replace
 from random import Random
@@ -49,8 +49,14 @@ class _Prefix:
                 result = Program("add", children=(result, part))
             return result
         if program.op == "accumulate":
-            # Recursive state is not a finite-lag instrument mapping.
-            raise KeyError("recursive_state")
+            state = self.program(program.children[1], step)
+            for prior in range(step + 1):
+                if not self.spend(2):
+                    raise _BudgetEnded
+                state = Program("add", children=(Program("mul", children=(
+                    Program("const", value=program.value), state)),
+                    self.program(program.children[0], prior)))
+            return state
         return replace(program, children=tuple(self.program(child, step) for child in program.children))
 
     def sequence(self, solution):
@@ -74,6 +80,12 @@ def propose_temporal_control_probes(command_spec, executable, spend, *, serial=0
     from .program_condition_sets import compound_predicate_regions, solve_compound_region
 
     depth = max(control_history_depth(program) for program in executable)
+    def recurrent(program):
+        return program.op == "accumulate" or any(recurrent(child) for child in program.children)
+    if any(recurrent(program.expanded()) for program in executable):
+        # A recurrent model's history_depth marks dependence, not a memory
+        # cutoff. Solve over the requested real experiment, including buildup.
+        depth = max(depth, min(length, command_spec.max_probe_length) - 1)
     if depth + 1 > command_spec.max_probe_length:
         return []
     prefix = _Prefix(command_spec.feature_bounds, depth, spend)
