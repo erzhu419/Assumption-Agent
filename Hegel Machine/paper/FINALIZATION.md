@@ -1,6 +1,6 @@
-# Manuscript release: paper-2026-10-11-v2
+# Manuscript release: paper-2026-10-12-v3
 
-The paper is a framework contribution with controlled evidence for finite research operations. Its experimental record is frozen on 11 October 2026. The main text presents mechanism-level results; Appendices A–H retain development failures, complete cohorts and detailed costs in the same manuscript and PDF.
+The paper is a framework contribution with controlled evidence for finite research operations. This revision incorporates completed evidence through 12 October 2026. The main text presents mechanism-level results; Appendices A–I retain development failures, complete cohorts and detailed costs in the same manuscript and PDF.
 
 ## Authors and presentation
 
@@ -14,9 +14,9 @@ The complete paper uses the same JMLR preprint template as RE-SAC. The reference
 
 ## Fixed materials
 
-The local release is `releases/hegel_machine_paper_2026-10-11_v2.zip`, distinct from the historical software version 0.181.0. It contains the combined English Markdown, editable TeX and PDF, the JMLR style, selected protocols and results, source snapshots, and an executable frozen numerical study. The previous v1 release remains unchanged. [README.md](README.md) gives the build and replay commands; [ARTIFACT_INDEX.md](ARTIFACT_INDEX.md) gives study-specific scope. The archive records its file inventory and source roles in `paper/BUNDLE_CONTENTS.json`.
+The local release is `releases/hegel_machine_paper_2026-10-12_v3.zip`, distinct from the historical software version 0.181.0. It contains the combined English Markdown, editable TeX and PDF, the JMLR style, selected protocols and results, source snapshots, and an executable frozen numerical study. The previous v1 and v2 releases remain unchanged. [README.md](README.md) gives the build and replay commands; [ARTIFACT_INDEX.md](ARTIFACT_INDEX.md) gives study-specific scope. The archive records its file inventory and source roles in `paper/BUNDLE_CONTENTS.json`.
 
-The final source-condition comparison contains 24 executions over 12 paired successor conditions from three related development branches. Both arms complete 12/12; C5 requested-point confirmations increase from eight to nine, while C4 has one gain and one loss. Changed-parameter cases cost more. These outcomes are included together in the main paper and Appendix F.17. This release introduces no new scientific cohort or model calls.
+The final source-condition comparison contains 24 executions over 12 paired successor conditions from three related development branches. Both arms complete 12/12; C5 requested-point confirmations increase from eight to nine, while C4 has one gain and one loss. Changed-parameter cases cost more. These outcomes are included together in the main paper and Appendix F.17. Section 5.5 and Appendix I additionally integrate the completed recurrent source, method-learning and live-continuation cohorts. The unchanged learned procedure passes six new-parameter targets; Hegel passes both repeated live tasks after a method-information repair. The original live Hegel failure, Code timeout and full incremental costs remain reported. Preparing this revision makes no new model calls or experimental runs.
 
 ## Publication status
 

@@ -152,20 +152,57 @@ class MethodConsolidationAgent(InquiryLLMAgent):
                 "costs": deepcopy(self.costs), "events": deepcopy(self.events), "limits": asdict(self.config)}
 
 
-def method_memory_pair(original_knowledge, consolidation_result):
-    """Retain/delete only the learned procedure while sharing its verbal lesson."""
-    result = consolidation_result
+def register_published_method(original_knowledge, result, *, max_steps=None):
+    """Bind an actual publication to its executable archive and source support.
+
+    A practiced author may replace an inherited placeholder or earlier draft at
+    the same path. This registers that publication; it does not run or select it.
+    """
     if result.get("status") != "completed" or not result.get("method_source") or not result.get("method_entry"):
         raise ValueError("a published consolidated method is required; no fallback is generated")
     path = result["method_path"]
+    retained = deepcopy(original_knowledge)
+    retained.setdefault("lessons", []).append(result.get("lesson", ""))
+    retained.setdefault("files", {})[path] = result["method_source"]
+    retained.setdefault("research_roles", {})["method"] = path
+    entry = {**deepcopy(result["method_entry"]), "path": path}
+    if max_steps is not None:
+        entry["max_steps"] = max_steps
+    # Coverage belongs to this exact source, not every draft the author tried.
+    latest = {trial["case"]: trial for trial in result.get("practice_trials", [])
+              if trial["method_source"] == result["method_source"]}
+    if latest:
+        entry["prior_execution"] = {
+            "scope": "Source paid practice; these are not current-task observation indices.",
+            "cases": [{key: deepcopy(trial[key]) for key in
+                       ("case", "status", "fresh_confirmation", "selected_prior_predictor", "costs")
+                       if key in trial} for trial in latest.values()],
+        }
+    manifest = retained.setdefault("manifest", {})
+    programs = manifest.setdefault("research_programs", [])
+    programs[:] = [old for old in programs
+                   if old.get("path") != path and old.get("id") != entry["id"]]
+    programs.append(entry)
+    if "shared/knowledge.json" in retained["files"]:
+        retained["files"]["shared/knowledge.json"] = json.dumps(manifest, indent=2)
+    return retained
+
+
+def method_memory_pair(original_knowledge, consolidation_result):
+    """Retain/delete only the learned procedure while sharing its verbal lesson."""
+    result = consolidation_result
+    retained = register_published_method(original_knowledge, result)
+    path = result["method_path"]
     if path in original_knowledge.get("files", {}):
         raise ValueError("the learned method must be a new file")
+    # Keep the historical intervention limited to source and manifest: the
+    # deleted arm must not carry a role pointing to the removed procedure.
+    if "research_roles" in original_knowledge:
+        retained["research_roles"] = deepcopy(original_knowledge["research_roles"])
+    else:
+        retained.pop("research_roles", None)
     deleted = deepcopy(original_knowledge)
     deleted.setdefault("lessons", []).append(result.get("lesson", ""))
-    retained = deepcopy(deleted)
-    retained.setdefault("files", {})[path] = result["method_source"]
-    retained.setdefault("manifest", {}).setdefault("research_programs", []).append(deepcopy(result["method_entry"]))
-    for memory in (retained, deleted):
-        if "shared/knowledge.json" in memory.get("files", {}):
-            memory["files"]["shared/knowledge.json"] = json.dumps(memory.get("manifest", {}), indent=2)
+    if "shared/knowledge.json" in deleted.get("files", {}):
+        deleted["files"]["shared/knowledge.json"] = json.dumps(deleted.get("manifest", {}), indent=2)
     return retained, deleted

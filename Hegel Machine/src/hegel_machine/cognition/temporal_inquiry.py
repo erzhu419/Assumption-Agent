@@ -98,6 +98,28 @@ class TemporalInquiryLab:
                 raise ValueError("control u must be a number in [-1, 1]")
         return len(sequence)
 
+    def prediction_rows(self, action):
+        """Construct prospective inputs from the public action, without observing."""
+        self.action_cost(action)
+        history, rows = [], []
+        for point in action["sequence"]:
+            control = {"u": point["u"]}
+            rows.append(Observation(dict(control), 0., tuple(dict(past) for past in history)))
+            history.append(control)
+        return rows
+
+    def confirmation_precondition(self, score, *, mse_threshold):
+        """A fixed apparatus cannot confirm a model already refuted by paid data."""
+        # Calibration-change protocols deliberately retain pre-change evidence:
+        # a settled model need not explain the earlier physical calibration.
+        if self._settings["calibration_change"] is not None:
+            return None
+        mse = score.get("mse")
+        if mse is not None and mse > mse_threshold:
+            return (f"paid evidence contradicts this model (mse={mse}, "
+                    f"threshold={mse_threshold}); revise it before fresh confirmation")
+        return None
+
     def execute(self, action):
         count = self.action_cost(action)
         first = self.costs["observation_cost"]
@@ -120,6 +142,22 @@ class TemporalInquiryLab:
     def observation_rows(self, record):
         return [Observation(row["features"], row["target"], tuple(row["history"]))
                 for row in record["rows"]]
+
+    def target_rows(self, records, target="response"):
+        """Select an observed response or purchased channel as the prediction target."""
+        if target == "response":
+            return [row for record in records for row in self.observation_rows(record)]
+        if target not in {channel["name"] for channel in self.public_spec()["channels"]}:
+            raise ValueError(f"unknown public observation target: {target}")
+        rows = []
+        for record in records:
+            readings = {reading["observation_index"]: reading["values"][target]
+                        for reading in record["measurements"] if target in reading["values"]}
+            for index, row in zip(record["row_indices"], record["rows"]):
+                if index in readings:
+                    rows.append(Observation(dict(row["features"]), readings[index],
+                                tuple(dict(point) for point in row["history"])))
+        return rows
 
     def confirmation_actions(self, n, rng):
         """Spend exactly n rows on full legal horizons and one optional remainder."""

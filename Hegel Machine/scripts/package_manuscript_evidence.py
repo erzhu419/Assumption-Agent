@@ -11,7 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "paper-2026-10-11-v2"
+RELEASE = "paper-2026-10-12-v3"
 DOCUMENTS = tuple(f"paper/manuscript.{extension}" for extension in ("md", "tex", "pdf"))
 SEEDS = (*DOCUMENTS, "paper/ARTIFACT_INDEX.md", "paper/README.md", "paper/FINALIZATION.md",
          "paper/jmlr_style", "scripts/package_manuscript_evidence.py",
@@ -137,7 +137,7 @@ def collect():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "paper/releases/hegel_machine_paper_2026-10-11_v2.zip")
+    parser.add_argument("--output", type=Path, default=ROOT / "paper/releases/hegel_machine_paper_2026-10-12_v3.zip")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list", action="store_true", help="Print included paths during preview or packaging")
     args = parser.parse_args()

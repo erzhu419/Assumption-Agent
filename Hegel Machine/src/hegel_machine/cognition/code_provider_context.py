@@ -485,6 +485,16 @@ def prepare_code_context(workspace, request, *, schema, instructions):
              if request.get("files", {}).get(name) != code}, ["session_knowledge", "files"])
     if "files" in context:
         context["files"] = _file_contents_preview(context["files"], ["files"])
+    if knowledge.get('source_catalog'):
+        # Complete archived studies include repeated snapshots, observations
+        # and scripts. Keep the existing catalog as their index, with every
+        # actual file accessible on disk instead of reprinting the whole bank.
+        archive_paths = {name for name in request.get('files', {})
+            if any(name.startswith(entry['directory'] + '/') or name == entry.get('paid_trace')
+                   for entry in knowledge['source_catalog'])}
+        for name in archive_paths:
+            context['files'][name] = {'full_content_file': name,
+                'characters': len(request['files'][name])}
     if "method_decision.json" in request.get("files", {}):
         context = {"method_decision": json.loads(request["files"]["method_decision.json"]), **context}
         for name in ("method_decision.json", "method_candidates.json", "resume_context.json"):

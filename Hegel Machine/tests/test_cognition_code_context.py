@@ -48,7 +48,8 @@ def test_context_preview_keeps_full_evidence_retrievable_and_latest_error_visibl
     transmitted = []
 
     def completion(command, payload, timeout, cwd):
-        assert (Path(cwd) / 'code_agent_instructions.txt').read_text() == code_agent._INSTRUCTIONS
+        assert (Path(cwd) / 'code_agent_instructions.txt').read_text() == (
+            code_agent._INSTRUCTIONS + code_agent._CODEX_SOURCE_INSTRUCTIONS)
         disabled = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--disable"]
         enabled = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--enable"]
         assert "code_mode_host" not in disabled and "code_mode_host" in enabled
@@ -95,7 +96,7 @@ def test_task_interface_provider_instructions_defer_action_and_predictor_contrac
         setting = next(item for item in command if item.startswith("model_instructions_file="))
         instructions_path = Path(json.loads(setting.split("=", 1)[1]))
         instructions = instructions_path.read_text()
-        assert instructions == code_agent._TASK_INTERFACE_INSTRUCTIONS
+        assert instructions == code_agent._TASK_INTERFACE_INSTRUCTIONS + code_agent._CODEX_SOURCE_INSTRUCTIONS
         assert "task_interface" in instructions and "capabilities" in instructions
         assert "__target__" not in instructions
         assert "query: {sequence" not in instructions

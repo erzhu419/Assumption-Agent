@@ -119,7 +119,8 @@ def test_resume_reuses_paid_practice_and_deducts_actual_original_author_budget(t
     learning = old / "learning"
     paid = learning / "trials/trial_000"
     paid.mkdir(parents=True)
-    (paid / "result.json").write_text('{"status":"method_stopped","paid_rows":72}')
+    (paid / "result.json").write_text(
+        '{"status":"method_stopped","paid_rows":72,"fresh_confirmation":null}')
     current_source = "def select_actions(spec, records, memory):\n    return {'stop':'current revision'}\n"
     prior = {"status": "provider_failed", "workspace": str(learning),
         "costs": {"model_calls": 5, "reported_tokens": None, "observation_cost": 72,
@@ -129,7 +130,8 @@ def test_resume_reuses_paid_practice_and_deducts_actual_original_author_budget(t
                    {"action": "provider_error", "usage": {"total_tokens": None}}],
         "outgoing_knowledge": {"files": {METHOD_PATH: current_source}},
         "practice_trials": [{"case": "case_0", "directory": "trials/trial_000",
-            "method_source": SEED_PYTHON_METHOD, "status": "method_stopped", "selected_prior_predictor": False}]}
+            "method_source": SEED_PYTHON_METHOD, "status": "method_stopped",
+            "selected_prior_predictor": False, "fresh_confirmation": None}]}
     (learning / "result.json").write_text(json.dumps(prior))
     (old / "protocol.json").write_text(json.dumps(original))
     (old / "existing_source_outcomes.json").write_text(json.dumps({"sources": sources}))
@@ -182,14 +184,16 @@ def test_development_continuation_adds_allowance_and_retains_paid_coverage(tmp_p
     current_source = "def select_actions(spec, records, memory): return {'model': 'prior.py'}\n"
     trials = [
         {"case": "case_0", "directory": "trials/trial_000", "method_source": SEED_PYTHON_METHOD,
-         "status": "method_stopped", "selected_prior_predictor": False},
+         "status": "method_stopped", "selected_prior_predictor": False, "fresh_confirmation": None},
         {"case": "case_0", "directory": "trials/trial_001", "method_source": current_source,
-         "status": "completed", "selected_prior_predictor": True},
+         "status": "completed", "selected_prior_predictor": True,
+         "fresh_confirmation": {"passed": True, "mse": 0., "rows": 24}},
     ]
     for trial in trials:
         directory = learning / trial["directory"]
         directory.mkdir(parents=True)
-        (directory / "result.json").write_text(json.dumps({"status": trial["status"], "paid_rows": 96}))
+        (directory / "result.json").write_text(json.dumps({"status": trial["status"], "paid_rows": 96,
+            "fresh_confirmation": trial["fresh_confirmation"]}))
     first = {"result": str(tmp_path / "original/learning/result.json"), "status": "provider_failed",
         "costs": {"observation_cost": 72, "measurement_cost": 0, "compute_cost": 2208,
                   "python_execution_seconds": .25, "model_calls": 5, "reported_tokens": None},

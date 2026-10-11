@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, dataclass
 from copy import deepcopy
+from contextlib import nullcontext
 import importlib.util
 import json
 from pathlib import Path
@@ -113,6 +114,19 @@ Choose experiments, repair errors, and finish within the available calls and res
 """
 
 
+_CODEX_SOURCE_INSTRUCTIONS = """\nJSON RESPONSE FORMAT:
+Include source_code in every final JSON response. When write or run supplies code,
+put the exact source text in the top-level source_code string, not arguments_json.
+The same applies to another action whose task interface explicitly accepts code.
+arguments_json encodes only the remaining argument object (path, operator, etc.).
+The executor maps source_code to that action's code argument without changing it.
+Use source_code:null for actions without inline code, including run with a path.
+The earlier tool examples describe execution arguments, not a second code encoding.
+Source text, backslashes and line breaks need only the normal outer JSON encoding;
+do not JSON-encode the source again or duplicate it inside arguments_json.
+"""
+
+
 class CodexCodeProvider:
     """Use the currently configured Codex model as the code-agent decision maker."""
 
@@ -133,6 +147,10 @@ class CodexCodeProvider:
         response = self.workspace / f"code_action_{self.calls:03d}.json"
         instructions = self.workspace / "code_agent_instructions.txt"
         action_schema = deepcopy(_ACTION_SCHEMA)
+        action_schema["properties"]["source_code"] = {
+            "type": ["string", "null"],
+            "description": "Exact inline source text for the action's code argument; null when absent."}
+        action_schema["required"].append("source_code")
         instruction_text = _TASK_INTERFACE_INSTRUCTIONS if "task_interface" in request else _INSTRUCTIONS
         if "research_notes" in request:
             action_schema["properties"]["research_notes"] = {
@@ -400,6 +418,7 @@ parent task with this executable child answer. finish may end an unresolved task
 Notebook and question metadata still follow the same output schema; no source files change until
 this final write action is executed.
 """
+        instruction_text += _CODEX_SOURCE_INSTRUCTIONS
         context = prepare_code_context(self.workspace, request, schema=action_schema,
                                        instructions=instruction_text)
         command = [self.executable, "-a", "never", "exec", "--sandbox", "read-only",
@@ -457,6 +476,13 @@ this final write action is executed.
             # Actual CLI completions sometimes retain literal line breaks in
             # this nested string. Preserve the authored code for execution.
             arguments = json.loads(payload["arguments_json"], strict=False)
+            source = payload.get("source_code")
+            if source is not None:
+                if not isinstance(source, str):
+                    raise ValueError("source_code must be a string or null")
+                if "code" in arguments and arguments["code"] != source:
+                    raise ValueError("source_code conflicts with arguments_json.code")
+                arguments["code"] = source
             if payload.get("research_question") is not None:
                 arguments["research_question"] = payload["research_question"]
             if "research_notes" in request:
@@ -467,18 +493,64 @@ this final write action is executed.
         return {"action": payload["action"], "arguments": arguments, "usage": usage}
 
 
-_MODEL_RUNNER = """import contextlib, json, runpy, sys
+_MODEL_RUNNER = """import contextlib, json, os, runpy, sys
+from pathlib import Path
 payload = json.load(sys.stdin)
 require_fit = sys.argv[3] == '1'
+dependencies = []
+
+@contextlib.contextmanager
+def working_directory(directory):
+    previous = Path.cwd()
+    os.chdir(directory)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
+
+def model_context(directory, model):
+    model = Path(model)
+    snapshots = [index for index, part in enumerate(model.parts) if part == '_evaluated_model']
+    if snapshots:
+        boundary = snapshots[-1] + 1
+        directory = directory / Path(*model.parts[:boundary])
+        model = Path(*model.parts[boundary:])
+    return directory, str(model)
+
+def load_model(directory, path, training=None):
+    directory, path = model_context(directory, path)
+    with working_directory(directory):
+        model = runpy.run_path(str(directory / path))
+        bindings_file = directory / 'model_bindings.json'
+        bindings = json.loads(bindings_file.read_text()).get(path, {}) if bindings_file.exists() else {}
+        predictors = {}
+        for slot, child_path in bindings.items():
+            child, child_directory = load_model(directory, child_path)
+            record = {'parent': path, 'slot': slot, 'model': child_path, 'calls': 0}
+            dependencies.append(record)
+            def predict_child(row, child=child, child_directory=child_directory, record=record):
+                record['calls'] += 1
+                with working_directory(child_directory):
+                    return child['predict'](row)
+            predictors[slot] = predict_child
+        if bindings:
+            model['bind_models'](predictors)
+        if callable(model.get('fit')):
+            fitting_path = training or directory / 'model_observations.json'
+            if not fitting_path.exists():
+                fitting_path = directory / 'observations.json'
+            model['fit'](json.loads(fitting_path.read_text()))
+    return model, directory
+
 with contextlib.redirect_stdout(sys.stderr):
-    model = runpy.run_path(sys.argv[1])
+    root = Path.cwd()
+    model, directory = load_model(root, str(Path(sys.argv[1]).relative_to(root)), Path(sys.argv[2]))
     fit_available = callable(model.get('fit'))
-    if fit_available:
-        model['fit'](json.load(open(sys.argv[2])))
-    predictions = ([float(model['predict'](row)) for row in payload]
-                   if not require_fit or fit_available else None)
-print(json.dumps({'fit_available': fit_available, 'predictions': predictions}
-                 if require_fit else predictions, allow_nan=False))
+    with working_directory(directory):
+        predictions = ([float(model['predict'](row)) for row in payload]
+                       if not require_fit or fit_available else None)
+print(json.dumps({'fit_available': fit_available, 'predictions': predictions,
+                  'model_dependencies': dependencies}, allow_nan=False))
 """
 
 
@@ -495,7 +567,7 @@ def python_model_context(workspace, model):
 
 
 def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30, risk_quantile=.5,
-                          require_fit=False):
+                          require_fit=False, training_observations=None):
     """Run a Python model on input rows; current evaluation targets stay outside."""
     workspace, model = python_model_context(workspace, model)
     payload = [{"features": row.features, "history": row.history} if hasattr(row, "features")
@@ -505,16 +577,23 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
     training = workspace / "model_observations.json"
     if not training.exists():
         training = workspace / "observations.json"
-    code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training),
-                                         "1" if require_fit else "0"],
-                                         json.dumps(payload), timeout_seconds, str(workspace))
+    with (TemporaryDirectory(prefix="hegel-target-fit-") if training_observations is not None
+          else nullcontext(None)) as fitting_directory:
+        if fitting_directory is not None:
+            training = Path(fitting_directory) / "model_observations.json"
+            training.write_text(json.dumps([asdict(row) if hasattr(row, "features") else row
+                                            for row in training_observations]), encoding="utf-8")
+        code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training),
+                                             "1" if require_fit else "0"],
+                                             json.dumps(payload), timeout_seconds, str(workspace))
     result = {"returncode": code, "stderr": stderr, "timeout": timed_out,
               "risk_quantile": risk_quantile, "loss_kind": "mse" if risk_quantile == .5 else "pinball"}
     if code == 0:
-        predictions = json.loads(stdout)
+        execution = json.loads(stdout)
+        predictions = execution["predictions"]
+        result["model_dependencies"] = execution["model_dependencies"]
         if require_fit:
-            result["fit_available"] = predictions["fit_available"]
-            predictions = predictions["predictions"]
+            result["fit_available"] = execution["fit_available"]
             if predictions is None:
                 return result
         if len(predictions) != len(observations):
@@ -538,7 +617,10 @@ def _copy_model_context(workspace, model, destination):
         staged = Path(temporary) / "snapshot"
         staged.mkdir()
         for path in source.iterdir():
-            if (path.name in {"_evaluated_model", "__pycache__", "code_agent_instructions.txt"}
+            if (path.name in {"_evaluated_model", "_target_work", "__pycache__", "code_agent_instructions.txt",
+                              "active.json", "training.json", "archive.json", "evaluation.json",
+                              "result.json", "protocol.json", "summary.json"}
+                    or (path.name == "_observable_models" and destination.is_relative_to(path))
                     or path.name.startswith(("code_action_", "code_call_"))):
                 continue
             target = staged / path.name
@@ -546,6 +628,18 @@ def _copy_model_context(workspace, model, destination):
                 shutil.copytree(path, target)
             else:
                 shutil.copy2(path, target)
+        # Target revisions can call an earlier retained target. Copy only
+        # their declared contexts when the enclosing archive was skipped.
+        bindings_file = source / "model_bindings.json"
+        bindings = json.loads(bindings_file.read_text()).get(model, {}) if bindings_file.exists() else {}
+        for child_path in bindings.values():
+            child_context, _ = python_model_context(source, child_path)
+            if child_context == source:
+                continue
+            target = staged / child_context.relative_to(source)
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(child_context, target)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             shutil.rmtree(destination)
@@ -554,11 +648,17 @@ def _copy_model_context(workspace, model, destination):
 
 
 def retain_evaluated_python_model(workspace, model, channels, training_mse, *,
-                                  training_loss=None, loss_kind="mse", risk_quantile=.5):
+                                  training_loss=None, loss_kind="mse", risk_quantile=.5,
+                                  destination=None, training_observations=None):
     """Keep a successfully executed candidate while ordinary work continues."""
-    retained = Path(workspace).resolve() / "_evaluated_model"
+    retained = Path(workspace).resolve() / (destination or "_evaluated_model")
     source_model = str(model)
     model = _copy_model_context(workspace, model, retained)
+    if training_observations is not None:
+        training_text = json.dumps([asdict(row) if hasattr(row, "features") else row
+                                    for row in training_observations])
+        for filename in ("model_observations.json", "observations.json"):
+            (retained / filename).write_text(training_text, encoding="utf-8")
     return {"workspace": str(retained), "model": model, "source_model": source_model,
             "selected_channels": list(channels),
             "training_mse": training_mse, "model_source": (retained / model).read_text(),

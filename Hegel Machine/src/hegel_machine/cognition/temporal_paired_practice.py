@@ -117,11 +117,16 @@ class PairedMethodLearner(InquiryLLMAgent):
         return super().run(self.interface, on_checkpoint=on_checkpoint)
 
     def restore_practice(self, previous_result):
-        """Retain paid trials from an unfinished phase; charge new work separately."""
-        if previous_result["status"] not in {
+        """Retain paid trials for further research; charge new work separately."""
+        published = (previous_result["status"] == "completed"
+                     and isinstance(previous_result.get("method_source"), str)
+                     and bool(previous_result["method_source"]))
+        if not published and previous_result["status"] not in {
                 "provider_failed", "token_budget_exhausted", "model_call_budget_exhausted"}:
-            raise ValueError("practice restoration expects an unpublished interrupted or budget-exhausted result")
-        source = previous_result["outgoing_knowledge"]["files"][METHOD_PATH]
+            raise ValueError("practice restoration expects an interrupted author or an actually published method")
+        source = (previous_result["method_source"] if published
+                  else previous_result["outgoing_knowledge"]["files"][METHOD_PATH])
+        self.model, self.published_source = None, None
         (self.workspace / METHOD_PATH).write_text(source)
         self.files[METHOD_PATH] = source
         self.practice_trials = deepcopy(previous_result["practice_trials"])

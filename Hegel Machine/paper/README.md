@@ -1,13 +1,14 @@
 # Hegel Machine review materials
 
-Local release: **paper-2026-10-11-v2** (11 October 2026).
-The manuscript experimental evidence is frozen for this release.
+Local release: **paper-2026-10-12-v3** (12 October 2026).
+This revision adds the completed recurrent representation, method-transfer and
+live-continuation studies; the earlier v2 archive remains unchanged.
 This release identifier is separate from the research package version 0.181.0.
 The paper uses the included JMLR preprint style. Author and affiliation details
 follow the supplied RE-SAC manuscript; preparation status is recorded in
 `paper/FINALIZATION.md`.
 
-Open `paper/manuscript.pdf` for the complete paper, including Appendices A–H.
+Open `paper/manuscript.pdf` for the complete paper, including Appendices A–I.
 `paper/ARTIFACT_INDEX.md` maps studies to their protocols,
 results, available source snapshots and replay commands. Extract this archive
 as one directory so that relative Markdown links keep their project layout.
@@ -27,8 +28,8 @@ links point to an internal index of readable paths in this extracted bundle.
 
 Reading saved results, numerical replay and new language-model authorship
 are separate operations; consult `paper/ARTIFACT_INDEX.md` before replay.
-Use Python 3.10 or later. Tables 4–7 can be regenerated from included results
-without external dependencies:
+Use Python 3.10 or later. Tables 4–8 can be regenerated from included results
+without model calls or third-party Python dependencies:
 
 ```bash
 python3 scripts/regenerate_manuscript_tables.py --output /tmp/hegel-tables.md

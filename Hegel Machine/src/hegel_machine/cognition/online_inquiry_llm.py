@@ -16,6 +16,7 @@ from time import monotonic
 from .code_agent import evaluate_python_model, retain_evaluated_python_model
 from .models import Observation
 from .proposers import _run
+from .inquiry_revision import REVISION_INTERFACE, prepare_revision, complete_revision
 
 
 ARMS = ("code_react", "textual_memory", "hegel")
@@ -152,6 +153,7 @@ class InquiryLLMAgent:
         self.evaluated_model = None
         self.confirmations = []
         self.questions, self.source_task = [], source_task
+        self.revisions = []
         self.confirmation_rng = Random(confirmation_seed)
         self.costs = {"observation_cost": 0, "measurement_cost": 0, "compute_cost": 0,
                       "python_execution_seconds": 0.0, "model_calls": 0,
@@ -176,6 +178,10 @@ class InquiryLLMAgent:
 
     def _prepare_program_state(self):
         """Specialized research interfaces may expose their current feedback."""
+        state = {'questions': self.questions, 'revisions': self.revisions,
+                 'limits': asdict(self.config), 'costs': self.costs,
+                 'evaluated_model': self._evaluated_summary()}
+        (self.workspace / 'research_state.json').write_text(json.dumps(state), encoding='utf-8')
 
     def _allows_analysis_only_query(self, continuation):
         return False
@@ -184,10 +190,17 @@ class InquiryLLMAgent:
         """Specialized executors may handle an explicit program submission."""
         return None
 
+    def _open_question(self, question, experiment_path=None):
+        record = {**deepcopy(question), "opened_before_observation": self.costs["observation_cost"],
+                  "evidence": [], "status": "open", "experiment_path": experiment_path}
+        self.questions.append(record)
+        return record
+
     def _query(self, arguments, laboratory):
         path = arguments.get("path")
         executed, sources = None, list(arguments.get("knowledge_sources", []))
         question = arguments.get("question")
+        revision = deepcopy(arguments.get('revision'))
         continuation = deepcopy(arguments.get("after_observation", []))
         continuation_origin = "arguments" if "after_observation" in arguments else None
         if path:
@@ -207,6 +220,8 @@ class InquiryLLMAgent:
             if isinstance(proposed, dict):
                 sources.extend(proposed.get("knowledge_sources", []))
                 question = question or proposed.get("question")
+                if 'revision' in proposed and 'revision' not in arguments:
+                    revision = deepcopy(proposed['revision'])
                 if "after_observation" in proposed and "after_observation" not in arguments:
                     continuation = deepcopy(proposed["after_observation"])
                     continuation_origin = path
@@ -230,26 +245,36 @@ class InquiryLLMAgent:
             return {"error": "observation budget exhausted", "requested": requested,
                     "executed_path": executed, "inherited_program": executed in self.inherited_files,
                     "knowledge_sources": sources}
+        revision_record = None
+        if revision is not None:
+            revision_record = prepare_revision(self, revision, actions, laboratory, experiment_path=executed)
+            if revision_record.get('error'):
+                self._prepare_program_state()
+                return {'error': revision_record['error'], 'revision': deepcopy(revision_record),
+                        'executed_path': executed}
         acquired, record_indices = [], []
         question_record = None
         if question:
-            question_record = {**deepcopy(question), "opened_before_observation": self.costs["observation_cost"],
-                               "evidence": [], "status": "open", "experiment_path": executed}
+            question_record = self._open_question(question, executed)
             if continuation_origin is not None:
                 question_record.update(after_observation=deepcopy(continuation),
                                        continuation_origin=continuation_origin)
-            self.questions.append(question_record)
         # Record each successful acquisition immediately, even if a later action
         # in the same requested batch is invalid.
         for action in actions:
             try:
                 record = laboratory.execute(action)
             except (ValueError, KeyError, TypeError) as error:
-                return {"observations": acquired, "error": str(error),
+                feedback = {"observations": acquired, "error": str(error),
                         "executed_path": executed, "inherited_program": executed in self.inherited_files,
                         "knowledge_sources": sources, "record_indices": record_indices,
                         "after_observation": continuation, "continuation_origin": continuation_origin,
                         "question": deepcopy(question_record)}
+                if revision_record is not None:
+                    feedback['revision'] = complete_revision(self, revision_record, acquired, record_indices,
+                        laboratory, question_record, error=str(error))
+                    feedback['question'] = deepcopy(question_record)
+                return feedback
             record_indices.append(len(self.observations))
             self.observations.append(record)
             acquired.append(record)
@@ -260,12 +285,17 @@ class InquiryLLMAgent:
                 question_record["status"] = "observed"
             self.rows.extend(laboratory.observation_rows(record))
             self._write_evidence()
-        return {"observations": acquired, "observation_cost": requested,
+        feedback = {"observations": acquired, "observation_cost": requested,
                 "executed_path": executed, **self._provenance(executed),
                 "question": deepcopy(question_record),
                 "record_indices": record_indices, "after_observation": continuation,
                 "continuation_origin": continuation_origin,
                 "knowledge_sources": sources}
+        if revision_record is not None:
+            feedback['revision'] = complete_revision(self, revision_record, acquired, record_indices,
+                laboratory, question_record)
+            feedback['question'] = deepcopy(question_record)
+        return feedback
 
     def _provenance(self, path):
         inherited = path in self.inherited_files
@@ -364,6 +394,12 @@ class InquiryLLMAgent:
                 self._retain_evaluation(model, result)
                 result["evaluated_model"] = self._evaluated_summary()
             if action == "finish" and result["returncode"] == 0:
+                precondition = getattr(laboratory, "confirmation_precondition", None)
+                if callable(precondition):
+                    error = precondition(result, mse_threshold=CONFIRMATION_MSE_THRESHOLD)
+                    if error:
+                        result["error"] = error
+                        return result
                 manifest_path = self.workspace / (arguments.get("manifest") or "shared/knowledge.json")
                 manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
                 if self.arm == "hegel":
@@ -405,7 +441,10 @@ class InquiryLLMAgent:
                     self.model, self.lesson, self.manifest = model, arguments.get("lesson", ""), manifest
                 else:
                     self._write_evidence()
-                    result["error"] = "fresh confirmation failed; new counterexamples are now paid evidence"
+                    result["error"] = (
+                        "fresh confirmation failed; new counterexamples are now paid evidence"
+                        if fresh.get("returncode") == 0 and fresh.get("mse") is not None else
+                        "fresh confirmation could not be scored; acquired observations are now paid evidence")
             return result
         raise ValueError(f"unknown action: {action}")
 
@@ -426,24 +465,33 @@ class InquiryLLMAgent:
             return "source learning must actually execute a retained select_actions program under a live question"
         return None
 
+    def _request(self, laboratory):
+        """Expose the current executable research state to the next model turn."""
+        self._prepare_program_state()
+        interface = getattr(laboratory, "task_interface", POINT_LAB_INTERFACE) + self.common_interface
+        if callable(getattr(laboratory, 'prediction_rows', None)):
+            interface += REVISION_INTERFACE
+        return {"capabilities": laboratory.public_spec(), "task_interface": interface,
+                "knowledge_condition": self.arm, "limits": asdict(self.config),
+                "costs": deepcopy(self.costs), "observations": [asdict(row) for row in self.rows],
+                "laboratory_observations": self.observations, "files": self.files,
+                "session_knowledge": self.knowledge, "events": self.events,
+                "evaluated_model": self._evaluated_summary()}
+
     def run(self, laboratory, *, on_checkpoint=None):
         status = "model_call_budget_exhausted"
-        for step in range(self.config.max_model_calls):
+        for step in range(self.costs["model_calls"], self.config.max_model_calls):
             if (not self.model and self.config.observation_budget - self.costs["observation_cost"]
                     < self.config.confirmation_rows):
                 status = "confirmation_budget_exhausted"
                 break
+            if self.costs["python_execution_seconds"] >= self.config.execution_seconds:
+                status = "python_execution_budget_exhausted"
+                break
             if self.costs["reported_tokens"] >= self.config.token_budget:
                 status = "token_budget_exhausted"
                 break
-            self._prepare_program_state()
-            interface = getattr(laboratory, "task_interface", POINT_LAB_INTERFACE) + self.common_interface
-            request = {"capabilities": laboratory.public_spec(), "task_interface": interface,
-                       "knowledge_condition": self.arm, "limits": asdict(self.config),
-                       "costs": deepcopy(self.costs), "observations": [asdict(row) for row in self.rows],
-                       "laboratory_observations": self.observations, "files": self.files,
-                       "session_knowledge": self.knowledge, "events": self.events,
-                       "evaluated_model": self._evaluated_summary()}
+            request = self._request(laboratory)
             self.costs["model_calls"] += 1
             decision = self.provider.next_action(request)
             usage = decision.get("usage", {})
@@ -507,6 +555,7 @@ class InquiryLLMAgent:
                 "fresh_confirmation": deepcopy(self.confirmations[-1]) if self.confirmations else None,
                 "paid_observations": deepcopy(self.observations),
                 "online_questions": deepcopy(self.questions),
+                "revision_proposals": deepcopy(self.revisions),
                 "limits": asdict(self.config), "token_limit_kind": "reported_usage_between_calls",
                 "compute_limit_kind": "host_candidate_row_scoring; agent Python bounded by execution_seconds"}
 

@@ -538,8 +538,10 @@ def select_actions(spec, observations, memory):
         assert (agent.workspace / "shared/adapt.py").read_text() == source
         state = json.loads((agent.workspace / "research_state.json").read_text())
         required_keys = {"operator_results", "limits", "costs",
-                         "exported_candidate_paths", "evaluated_model"}
+                         "exported_candidate_paths", "evaluated_model", "questions", "revisions"}
         assert set(state) in (required_keys, required_keys | {"research_advice"})
+        assert state['revisions'] == []
+        assert len(state['questions']) == index
         if "research_advice" in state:
             assert state["research_advice"]["paid_rows"] == len(agent.rows)
             assert state["research_advice"]["evaluated_model"] == state["evaluated_model"]

@@ -16,6 +16,8 @@ RESULT_FILES = {
     "preservation": "temporal_selective_preservation_luna_20261006/summary.json",
     "retention": "paper_scoped_retention_20261005/summary.json",
     "sc_kg": "sc_kg_structural_prior_comparison_20261007/summary.json",
+    "recurrent_method": "recurrent_method_learning_luna_20261012/summary.json",
+    "recurrent_continuation": "recurrent_method_continuation_luna_20261012/summary.json",
 }
 
 
@@ -38,6 +40,17 @@ def fraction(numerator, denominator):
 
 def method_fraction(method):
     return fraction(method["confirmed_and_correct"], len(method["cases"]))
+
+
+def recurrent_execution_row(execution, agent, trials):
+    """Include failed executions in costs; require both confirmations for success."""
+    passed = sum(bool(trial.get("fresh_confirmation_passed"))
+                 and bool((trial.get("terminal") or {}).get("passed"))
+                 for trial in trials)
+    totals = {key: sum(trial["costs"][key] for trial in trials)
+              for key in ("model_calls", "observation_cost", "python_execution_seconds")}
+    return (execution, agent, fraction(passed, len(trials)), totals["model_calls"],
+            f"{totals['observation_cost']:,}", f"{totals['python_execution_seconds']:,.1f}")
 
 
 def generate_tables(root=ROOT):
@@ -105,6 +118,16 @@ def generate_tables(root=ROOT):
                      "—" if wins is None else fraction(wins.get("win", 0), values["cases"])))
     tables["7"] = markdown_table(["Optimizer prior system", "Mean terminal regret",
                                    "Feasible recommendations", "Hegel paired wins"], rows)
+
+    recurrent = data["recurrent_method"]
+    rows = [recurrent_execution_row("Frozen targets", "Published procedure", recurrent["frozen"])]
+    for execution, trials in (("Original live", recurrent["live_controls"]["trials"]),
+                              ("Development rerun", data["recurrent_continuation"]["trials"])):
+        rows.extend(recurrent_execution_row(execution, label,
+                    [trial for trial in trials if trial["arm"] == arm])
+                    for arm, label in (("code_react", "Code"), ("hegel", "Hegel")))
+    tables["8"] = markdown_table(["Execution", "Agent", "Passed", "LLM calls",
+                                   "Response rows", "Python seconds"], rows, text_columns=2)
     return tables
 
 

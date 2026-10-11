@@ -341,7 +341,8 @@ class TemporalOperatorAgent(InquiryLLMAgent):
     def _prepare_program_state(self):
         state = {"operator_results": self.operator_results, "limits": asdict(self.config),
                  "costs": self.costs, "exported_candidate_paths": self.candidate_paths,
-                 "evaluated_model": self._evaluated_summary()}
+                 "evaluated_model": self._evaluated_summary(),
+                 "questions": self.questions, "revisions": self.revisions}
         advice = self._state_research_advice()
         if advice is not None:
             state["research_advice"] = advice

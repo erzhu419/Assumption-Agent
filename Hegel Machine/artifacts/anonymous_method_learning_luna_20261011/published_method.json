@@ -1,0 +1,63 @@
+{
+  "published": false,
+  "source": null,
+  "lesson": "",
+  "practice_trials": [
+    {
+      "case": "case_000",
+      "directory": "trials/trial_000",
+      "method_source": "\"\"\"Select an archived dynamics law from paid controls/targets, or fit a new one.\"\"\"\nimport math\n\nPREDICTORS = [\n    'archive/source_000/_evaluated_model/model.py',\n    'archive/source_001/_evaluated_model/model.py',\n    'archive/source_002/_evaluated_model/model.py',\n    'archive/source_003/_evaluated_model/model.py',\n    'archive/source_004/_evaluated_model/_evaluated_model/model.py',\n    'archive/source_005/_evaluated_model/model.py',\n]\n\ndef _features(r):\n    h = r.get('history', [])\n    u = float(r['features']['u'])\n    lag2 = float(h[-2]['u']) if len(h) >= 2 else 0.0\n    return u, lag2, h\n\ndef _pred(kind, r):\n    u, lag2, h = _features(r)\n    if kind == 0: return 0.6920194267114789*u - 0.1883668496552205\n    if kind == 1: return 0.692023986971*u - 0.1883668496552205\n    if kind in (2,3): return -0.05184027526017348 + 1.2207017798364587*u + 1.1179166091930877*lag2\n    state = 0.0\n    for item in h + [{'u':u}]:\n        x = float(item['u'])\n        if x >= 0.7: state = 1.0\n        elif x <= -0.6: state = 0.0\n    return state\n\ndef _model_code(kind):\n    if kind == 0:\n        return \"def predict(row):\\n    return 0.6920194267114789 * float(row['features']['u']) - 0.1883668496552205\\n\"\n    if kind == 1:\n        return \"def predict(row):\\n    return 0.692023986971 * float(row['features']['u']) - 0.1883668496552205\\n\"\n    if kind in (2,3):\n        return \"def predict(row):\\n    h=row.get('history', [])\\n    lag2=float(h[-2]['u']) if len(h)>=2 else 0.0\\n    return -0.05184027526017348 + 1.2207017798364587*float(row['features']['u']) + 1.1179166091930877*lag2\\n\"\n    return \"def predict(row):\\n    state=0.0\\n    for item in row.get('history', [])+[{'u':row['features']['u']}]:\\n        u=float(item['u'])\\n        if u>=0.7: state=1.0\\n        elif u<=-0.6: state=0.0\\n    return state\\n\"\n\ndef select_actions(public_spec, observations, memory):\n    # Each row is scored using only its current and preceding controls, never earlier targets.\n    rows=[]\n    for rec in observations:\n        rows.extend(rec.get('rows', []))\n    if not rows:\n        return {'actions': [], 'question': 'Classify the response law from the fresh paid prefix.'}\n    scores=[]\n    for k in range(6):\n        errs=[float(r['target'])-_pred(k,r) for r in rows]\n        scores.append(sum(e*e for e in errs)/len(errs))\n    k=min(range(6), key=lambda j:scores[j])\n    # Reuse a confirmed earlier predictor when it explains the evidence. Otherwise export\n    # the selected structural law as a revised local model.\n    if scores[k] <= 1e-18:\n        return {'model': PREDICTORS[k], 'lesson': 'Paid evidence selects the matching archived model; its functional form predicts every observed row.'}\n    # Fallback fit identifies the nearest supported structure; the archive laws are exact\n    # templates, so this branch handles small rounding differences by preserving that law.\n    code=_model_code(k)\n    return {'action':'write', 'arguments':{'path':'revised_model.py','code':code}}\n",
+      "status": "completed",
+      "costs": {
+        "observation_cost": 168,
+        "measurement_cost": 0,
+        "compute_cost": 168,
+        "python_execution_seconds": 0.08021508390083909,
+        "model_calls": 0,
+        "reported_tokens": 0
+      },
+      "selected_prior_predictor": true,
+      "fresh_confirmation": {
+        "passed": true,
+        "mse": 3.456241779364927e-32,
+        "rows": 96
+      }
+    },
+    {
+      "case": "case_001",
+      "directory": "trials/trial_001",
+      "method_source": "\"\"\"Select an archived dynamics law from paid controls/targets, or fit a new one.\"\"\"\nimport math\n\nPREDICTORS = [\n    'archive/source_000/_evaluated_model/model.py',\n    'archive/source_001/_evaluated_model/model.py',\n    'archive/source_002/_evaluated_model/model.py',\n    'archive/source_003/_evaluated_model/model.py',\n    'archive/source_004/_evaluated_model/_evaluated_model/model.py',\n    'archive/source_005/_evaluated_model/model.py',\n]\n\ndef _features(r):\n    h = r.get('history', [])\n    u = float(r['features']['u'])\n    lag2 = float(h[-2]['u']) if len(h) >= 2 else 0.0\n    return u, lag2, h\n\ndef _pred(kind, r):\n    u, lag2, h = _features(r)\n    if kind == 0: return 0.6920194267114789*u - 0.1883668496552205\n    if kind == 1: return 0.692023986971*u - 0.1883668496552205\n    if kind in (2,3): return -0.05184027526017348 + 1.2207017798364587*u + 1.1179166091930877*lag2\n    state = 0.0\n    for item in h + [{'u':u}]:\n        x = float(item['u'])\n        if x >= 0.7: state = 1.0\n        elif x <= -0.6: state = 0.0\n    return state\n\ndef _model_code(kind):\n    if kind == 0:\n        return \"def predict(row):\\n    return 0.6920194267114789 * float(row['features']['u']) - 0.1883668496552205\\n\"\n    if kind == 1:\n        return \"def predict(row):\\n    return 0.692023986971 * float(row['features']['u']) - 0.1883668496552205\\n\"\n    if kind in (2,3):\n        return \"def predict(row):\\n    h=row.get('history', [])\\n    lag2=float(h[-2]['u']) if len(h)>=2 else 0.0\\n    return -0.05184027526017348 + 1.2207017798364587*float(row['features']['u']) + 1.1179166091930877*lag2\\n\"\n    return \"def predict(row):\\n    state=0.0\\n    for item in row.get('history', [])+[{'u':row['features']['u']}]:\\n        u=float(item['u'])\\n        if u>=0.7: state=1.0\\n        elif u<=-0.6: state=0.0\\n    return state\\n\"\n\ndef select_actions(public_spec, observations, memory):\n    # Each row is scored using only its current and preceding controls, never earlier targets.\n    rows=[]\n    for rec in observations:\n        rows.extend(rec.get('rows', []))\n    if not rows:\n        return {'actions': [], 'question': 'Classify the response law from the fresh paid prefix.'}\n    scores=[]\n    for k in range(6):\n        errs=[float(r['target'])-_pred(k,r) for r in rows]\n        scores.append(sum(e*e for e in errs)/len(errs))\n    k=min(range(6), key=lambda j:scores[j])\n    # Reuse a confirmed earlier predictor when it explains the evidence. Otherwise export\n    # the selected structural law as a revised local model.\n    if scores[k] <= 1e-18:\n        return {'model': PREDICTORS[k], 'lesson': 'Paid evidence selects the matching archived model; its functional form predicts every observed row.'}\n    # Fallback fit identifies the nearest supported structure; the archive laws are exact\n    # templates, so this branch handles small rounding differences by preserving that law.\n    code=_model_code(k)\n    return {'action':'write', 'arguments':{'path':'revised_model.py','code':code}}\n",
+      "status": "method_step_limit",
+      "costs": {
+        "observation_cost": 72,
+        "measurement_cost": 0,
+        "compute_cost": 0,
+        "python_execution_seconds": 0.4705955096287653,
+        "model_calls": 0,
+        "reported_tokens": 0
+      },
+      "selected_prior_predictor": false,
+      "fresh_confirmation": null
+    },
+    {
+      "case": "case_001",
+      "directory": "trials/trial_002",
+      "method_source": "\"\"\"Select the archived law supported by the paid controls and targets.\"\"\"\nPREDICTORS = [\n    'archive/source_000/_evaluated_model/model.py',\n    'archive/source_001/_evaluated_model/model.py',\n    'archive/source_002/_evaluated_model/model.py',\n    'archive/source_003/_evaluated_model/model.py',\n    'archive/source_004/_evaluated_model/_evaluated_model/model.py',\n    'archive/source_005/_evaluated_model/model.py',\n]\n\ndef _predict(k, row):\n    u = float(row['features']['u'])\n    h = row.get('history', [])\n    if k == 0: return 0.6920194267114789*u - 0.1883668496552205\n    if k == 1: return 0.692023986971*u - 0.1883668496552205\n    if k in (2, 3):\n        lag2 = float(h[-2]['u']) if len(h) >= 2 else 0.0\n        return -0.05184027526017348 + 1.2207017798364587*u + 1.1179166091930877*lag2\n    state = 0.0\n    for item in h + [{'u': u}]:\n        x = float(item['u'])\n        if x >= 0.7: state = 1.0\n        elif x <= -0.6: state = 0.0\n    return state\n\ndef select_actions(public_spec, observations, memory):\n    rows = [row for rec in observations for row in rec.get('rows', [])]\n    if not rows:\n        return {'actions': [], 'question': 'Classify the reset-to-response law from paid trajectories.'}\n    scores = []\n    for k in range(6):\n        scores.append(sum((float(r['target'])-_predict(k,r))**2 for r in rows)/len(rows))\n    k = min(range(6), key=scores.__getitem__)\n    # Submit the supported archived predictor directly. A write action is not a\n    # submission; repeating it at each invocation would exhaust the method limit.\n    return {'model': PREDICTORS[k], 'lesson': 'Selected the archived dynamics law with minimum paid-row MSE; it uses current and preceding controls only.'}\n",
+      "status": "confirmation_budget_exhausted",
+      "costs": {
+        "observation_cost": 552,
+        "measurement_cost": 0,
+        "compute_cost": 1800,
+        "python_execution_seconds": 0.4302649018354714,
+        "model_calls": 0,
+        "reported_tokens": 0
+      },
+      "selected_prior_predictor": false,
+      "fresh_confirmation": {
+        "passed": false,
+        "mse": 0.21561316844494802,
+        "rows": 96
+      }
+    }
+  ]
+}

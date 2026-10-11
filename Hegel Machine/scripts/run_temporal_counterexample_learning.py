@@ -77,6 +77,38 @@ def protocol():
             "compares old versus newly authored research, not a new live-LLM retention/deletion benchmark."}
 
 
+def _paid_research_events(prior):
+    """Join recorded procedure declarations to their actual query events."""
+    methods = {(step["step"], step["path"]): step
+               for step in prior.get("method_results", [])}
+    events = deepcopy(prior["events"])
+    for event in events:
+        if "proposal" in event:
+            continue
+        declared = event.get("feedback", {}).get("program_action")
+        if declared is not None:
+            event["proposal"] = deepcopy(declared)
+        elif event.get("action") == "query":
+            invocation = methods.get((event.get("step"), event.get("arguments", {}).get("path")))
+            if invocation is not None and "proposal" in invocation:
+                event["proposal"] = deepcopy(invocation["proposal"])
+    return events
+
+
+def _ledger_declaration(value, location):
+    """Show decisions inline, and refer to the already saved acquisition inputs."""
+    if not isinstance(value, dict):
+        return deepcopy(value)
+    result = deepcopy(value)
+    for key in ("actions", "sequence"):
+        if isinstance(result.get(key), list):
+            result[key] = {"full_content_file": "counterexample_trace.json",
+                           "json_path": [*location, key], "count": len(result[key])}
+    if isinstance(result.get("arguments"), dict):
+        result["arguments"] = _ledger_declaration(result["arguments"], [*location, "arguments"])
+    return result
+
+
 def _paid_evidence_ledger(prior):
     records = []
     for index, record in enumerate(prior["paid_observations"]):
@@ -85,10 +117,11 @@ def _paid_evidence_ledger(prior):
             "rows": len(indices), "meter_rows": sum("meter" in item["values"]
                 for item in record.get("measurements", []))})
     steps = []
-    for index, event in enumerate(prior["events"]):
+    for index, event in enumerate(_paid_research_events(prior)):
         feedback = event.get("feedback", {})
         summary = {key: deepcopy(feedback[key]) for key in (
-            "error", "method_submission", "mse", "observation_cost", "record_indices")
+            "error", "method_submission", "mse", "observation_cost", "record_indices",
+            "written", "returncode", "timeout", "status")
             if key in feedback}
         confirmation = feedback.get("fresh_confirmation")
         if isinstance(confirmation, dict):
@@ -126,13 +159,16 @@ def _paid_evidence_ledger(prior):
         if operators:
             summary["operators"] = operators
         steps.append({"step": event.get("step", index), "action": event["action"],
+                      **{key: _ledger_declaration(event[key], [index, key])
+                         for key in ("arguments", "proposal") if key in event},
                       "feedback": summary})
     return records, steps
 
 
 def supply_counterexample(learner, path, *, case_label="case_c"):
-    """Expose paid research feedback, never terminal evaluation or hidden settings."""
-    prior = json.loads(Path(path).read_text())["tasks"][0]
+    """Supply a paid single-task result or an existing tasks-envelope file."""
+    payload = deepcopy(path) if isinstance(path, dict) else json.loads(Path(path).read_text())
+    prior = payload["tasks"][0] if "tasks" in payload else payload
     records, steps = _paid_evidence_ledger(prior)
     trace = {"practice_case": case_label, "status": prior["status"], "costs": prior["costs"],
         "paid_records": records, "steps": steps,
@@ -140,18 +176,30 @@ def supply_counterexample(learner, path, *, case_label="case_c"):
         "paid_records_file": "counterexample_observations.json",
         "use": "An earlier paid execution on this case. Investigate its rejected predictions, "
                "repair choices and costs. These earlier trials do not confirm your new source."}
-    source = prior.get("outgoing_knowledge", {}).get("files", {}).get(METHOD_PATH)
+    source = prior.get("method_source")
+    method_path = prior.get("method_path") or METHOD_PATH
+    source_record = "Earlier trial method_source."
+    if source is None:
+        source = prior.get("outgoing_knowledge", {}).get("files", {}).get(method_path)
+        source_record = "Earlier trial outgoing_knowledge.files; this may differ from the inherited starting method."
     if source is not None:
-        trace["executed_method"] = {"path": METHOD_PATH, "source": source,
-            "source_record": "Earlier trial outgoing_knowledge.files; this may differ from the inherited starting method."}
+        trace["executed_method"] = {"path": method_path, "source": source,
+            "source_record": source_record}
     text = json.dumps(trace, indent=2)
+    if source is not None and len(text) > 12000:
+        source_file = "counterexample_method.py"
+        (learner.workspace / source_file).write_text(source)
+        trace["executed_method"].pop("source")
+        trace["executed_method"]["source_file"] = source_file
+        text = json.dumps(trace, indent=2)
     (learner.workspace / "counterexample.json").write_text(text)
     learner.files["counterexample.json"] = text
     write_json(learner.workspace / "counterexample_trace.json",
-               _compact_trajectory_payload(prior["events"]))
+               _compact_trajectory_payload(_paid_research_events(prior)))
     write_json(learner.workspace / "counterexample_observations.json", prior["paid_observations"])
     learner.common_interface += ("\nAn earlier paid execution and its compact record/operation chronology are in "
-        "counterexample.json; its executed_method, when present, identifies the program used in that trace. Complete paid records "
+        "counterexample.json; its executed_method, when present, identifies the program used in that trace, "
+        "with complete source inline or at source_file. Complete paid records "
         "are in counterexample_observations.json. They are available to author inspection, not automatically "
         "copied into new practice tasks. Learn a reusable revision from this evidence and test it through "
         "your program. Keep original prior files intact; the final source must work on fresh task data.\n")

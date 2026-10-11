@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 
 from .code_agent import python_model_context_matches
+from .online_inquiry_llm import InquiryLLMConfig
 from .temporal_method_learning import METHOD_PATH
 from .temporal_paired_method import FrozenMethodAgent, ProcedureConsumerAgent
 from .temporal_paired_practice import PAIRED_INTERFACE, PairedMethodLearner
@@ -110,11 +111,19 @@ class PreparedPythonMethodAgent(FrozenMethodAgent):
 class PythonArchiveMethodLearner(PairedMethodLearner):
     """Keep the existing authoring/publication loop with the current paid prefix."""
 
-    def __init__(self, provider, workspace, *, knowledge, cases, lab_factory, config, prepare_trial):
+    def __init__(self, provider, workspace, *, knowledge, cases, lab_factory, config, prepare_trial,
+                 practice_limits=None):
         super().__init__(provider, workspace, knowledge=knowledge, cases=cases,
                          lab_factory=lab_factory, config=config)
         self.prepare_trial = prepare_trial
+        self.practice_limits = practice_limits or InquiryLLMConfig(
+            observation_budget=384, confirmation_rows=24, compute_budget=360000,
+            execution_seconds=120., max_model_calls=0, token_budget=0)
         self.common_interface = PYTHON_PRACTICE_INTERFACE.replace('CASE_LABEL', repr(next(iter(cases))))
+        self.common_interface = self.common_interface.replace(
+            'Confirmation costs 24 fresh rows.',
+            f'Confirmation costs {self.practice_limits.confirmation_rows} fresh rows.').replace(
+            '24 new confirmation rows.', f'{self.practice_limits.confirmation_rows} new confirmation rows.')
 
     def _prepare_program_state(self):
         """Put existing paid support beside the author's available source choices."""
@@ -237,10 +246,15 @@ class PythonArchiveMethodLearner(PairedMethodLearner):
         remaining = self.config.observation_budget - self.costs['observation_cost']
         compute = self.config.compute_budget - self.costs['compute_cost']
         seconds = self.config.execution_seconds - self.costs['python_execution_seconds']
-        if remaining < 96 or compute < 96 or seconds <= 0:
+        limit = self.practice_limits
+        observations = min(limit.observation_budget, remaining)
+        compute = min(limit.compute_budget, compute)
+        seconds = min(limit.execution_seconds, seconds)
+        required = 72 + limit.confirmation_rows
+        if observations < required or compute < required or seconds <= 0:
             return {'error': 'remaining resources cannot cover the paid prefix and fresh confirmation'}
-        limits = replace(self.config, observation_budget=min(384, remaining), confirmation_rows=24,
-            compute_budget=min(360000, compute), execution_seconds=min(120., seconds),
+        limits = replace(limit, observation_budget=observations,
+            compute_budget=compute, execution_seconds=seconds,
             max_model_calls=0, token_budget=0)
         source = (self.workspace / METHOD_PATH).read_text()
         directory = f'trials/trial_{len(self.practice_trials):03d}'

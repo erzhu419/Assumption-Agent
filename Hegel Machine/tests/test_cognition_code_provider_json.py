@@ -1,7 +1,10 @@
-"""The real CLI can put literal line breaks inside its nested arguments JSON."""
+"""Decode authored source exactly, without a second nested source serialization."""
 
+from copy import deepcopy
 import json
 from pathlib import Path
+
+import pytest
 
 from hegel_machine.cognition import code_agent
 from hegel_machine.cognition.unknown_task_lab import UnknownTaskLab
@@ -15,6 +18,61 @@ def returned_action(monkeypatch, payload):
             "input_tokens": 31, "output_tokens": 7}}) + "\n"
         return 0, stdout, "", False
     monkeypatch.setattr(code_agent, "_run", run)
+
+
+def assert_codex_source_schema(schema):
+    ordinary = deepcopy(schema)
+    source = ordinary["properties"].pop("source_code")
+    assert source["type"] == ["string", "null"]
+    ordinary["required"].remove("source_code")
+    assert ordinary == code_agent._ACTION_SCHEMA
+    assert "source_code" not in code_agent._ACTION_SCHEMA["properties"]
+
+
+@pytest.mark.parametrize("action", ["write", "run"])
+def test_native_source_keeps_regex_backslashes_and_generated_python_exactly(tmp_path, monkeypatch, action):
+    generated = "import re\ndef predict(row):\n    return re.search(r'\\d+\\.\\d+', row['text']).group()\n"
+    source = ("from pathlib import Path\nimport re\n"
+              "pattern = re.compile(r'\\d+(?:\\.\\d+)?\\s*units')\n"
+              f"Path('model.py').write_text({generated!r})\n"
+              "literal = r'alpha\\beta\\gamma'\n")
+    returned_action(monkeypatch, {"action": action, "arguments_json": '{"path":"author.py"}',
+                                  "source_code": source})
+    result = code_agent.CodexCodeProvider(tmp_path, executable="protocol-test").next_action({})
+    assert result["action"] == action
+    assert result["arguments"] == {"path": "author.py", "code": source}
+    assert result["usage"]["total_tokens"] == 38
+    assert not (tmp_path / "author.py").exists()
+    assert not (tmp_path / "model.py").exists()
+    schema = json.loads((tmp_path / "code_action_schema.json").read_text())
+    assert_codex_source_schema(schema)
+    assert "top-level source_code" in (tmp_path / "code_agent_instructions.txt").read_text()
+
+
+@pytest.mark.parametrize("source", [None, "print(1)"])
+def test_null_or_identical_native_source_does_not_change_existing_arguments(tmp_path, monkeypatch, source):
+    returned_action(monkeypatch, {"action": "run", "arguments_json": '{"code":"print(1)"}',
+                                  "source_code": source})
+    result = code_agent.CodexCodeProvider(tmp_path, executable="protocol-test").next_action({})
+    assert result["arguments"] == {"code": "print(1)"}
+
+
+def test_conflicting_source_is_returned_for_author_revision_without_guessing(tmp_path, monkeypatch):
+    returned_action(monkeypatch, {"action": "run", "arguments_json": '{"code":"print(1)"}',
+                                  "source_code": "print(2)"})
+    result = code_agent.CodexCodeProvider(tmp_path, executable="protocol-test").next_action({})
+    assert result["action"] == "provider_error" and result["arguments"] == {}
+    assert "source_code conflicts" in result["error"]["decode_error"]
+    assert result["usage"]["total_tokens"] == 38
+
+
+def test_invalid_nested_escape_remains_an_error_even_with_native_source(tmp_path, monkeypatch):
+    returned_action(monkeypatch, {"action": "run", "arguments_json": r'{"path":"bad\q.py"}',
+                                  "source_code": "print(1)"})
+    result = code_agent.CodexCodeProvider(tmp_path, executable="protocol-test").next_action({})
+    assert result["action"] == "provider_error"
+    assert "JSONDecodeError" in result["error"]["decode_error"]
+    assert result["usage"]["total_tokens"] == 38
 
 
 def test_literal_line_breaks_in_nested_code_reach_executor_unchanged(tmp_path, monkeypatch):
@@ -54,9 +112,9 @@ def test_notebook_contract_requires_authored_memory_without_changing_numerical_c
             assert "has not happened yet" in instructions
             payload["research_notes"] = revised
         else:
-            assert schema == code_agent._ACTION_SCHEMA
+            assert_codex_source_schema(schema)
             assert "research_notes" not in schema["properties"]
-            assert instructions == code_agent._INSTRUCTIONS
+            assert instructions == code_agent._INSTRUCTIONS + code_agent._CODEX_SOURCE_INSTRUCTIONS
         calls.append(context)
         Path(command[command.index("--output-last-message") + 1]).write_text(json.dumps(payload))
         return 0, json.dumps({"type": "turn.completed", "usage": {
@@ -103,9 +161,9 @@ def test_research_root_accepts_an_authored_child_or_null_without_changing_ordina
                 payload["arguments_json"] = json.dumps({"code": "print('inspect evidence')",
                                                          "question": acquisition})
         else:
-            assert schema == code_agent._ACTION_SCHEMA
+            assert_codex_source_schema(schema)
             assert "research_question" not in schema["properties"]
-            assert instructions == code_agent._INSTRUCTIONS
+            assert instructions == code_agent._INSTRUCTIONS + code_agent._CODEX_SOURCE_INSTRUCTIONS
         contexts.append(context)
         Path(command[command.index("--output-last-message") + 1]).write_text(json.dumps(payload))
         return 0, json.dumps({"type": "turn.completed", "usage": {
