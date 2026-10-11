@@ -1,0 +1,9 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) = (1,1,1), (1,1,2), (3,3,3), (4,5,4), with successful settings 15.8, 20, 31.4, 54 Hz (records 10–24, 63; crystal 1 reconfirmed at 191). Crystal 5 measures (5,4,19.8872) (records 14, 19, 25). Many tested settings were inactive, including 4746, 666, 729, 222, 563, 363, 577–584, 758, and 777 Hz (e.g. records 350, 395, 422, 430, 434, 449, 511–523, 536, 539, 550–561, 503). The latest test was inactive at 584 Hz (561). These are pointwise negatives, not proof of universal inactivity.
+
+**Model evidence:** The earlier `log_signal` alias was raw signal, not a logarithm (21–25, 117, 119). A corrected natural-log-signal cubic remains SAT-compatible on 350 paid responses only under deterministic activation and a shared connected residual-band assumption; compatibility is not confirmation. A particular fixed band witness conflicted with the 577-Hz negative (511), while other parameter searches are branch-limited or incomplete. The non-exhaustive finite condition pool supplies no activating legal-grid setting for crystal 5; this does not prove physical impossibility.
+
+**Conclusion / alternatives:** No unique measured variable, functional form, coefficient set, or shared-response premise explains crystal 5. Common-band transfer is conditional; object-specific response, unmeasured features, and other functional forms remain possible. Universal inactivity and a confirmed calibration law are unsupported.
+
+**Unresolved prerequisite:** No specific next frequency is justified by grounded, distinct predictions for a reachable test. A new informative measurement or quantitative competing models with different predictions are needed before further intervention. Calibration remains unresolved.

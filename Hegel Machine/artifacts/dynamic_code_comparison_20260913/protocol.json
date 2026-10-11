@@ -1,0 +1,51 @@
+{
+  "experiment": "dynamic_instruments_real_code_vs_hegel",
+  "paired_seeds": [
+    10065320211
+  ],
+  "stages": [
+    "source",
+    "same_apparatus",
+    "instrument_change",
+    "mechanism_only_change",
+    "return_source"
+  ],
+  "stage_seed_offset": 10007,
+  "hegel_config": {
+    "observation_budget": 384,
+    "compute_budget": 360000,
+    "minimum_improvement": 1e-07,
+    "max_rounds": 5,
+    "max_history": 4,
+    "active_probes": true
+  },
+  "code_config": {
+    "observation_budget": 384,
+    "measurement_budget": 1536,
+    "compute_budget": 360000,
+    "execution_seconds": 60.0,
+    "max_steps": 12,
+    "max_model_calls": 12,
+    "token_budget": 240000
+  },
+  "provider": {
+    "executable": "/home/erzhu419/.local/bin/codex",
+    "timeout_seconds": 300,
+    "model": null
+  },
+  "provider_runtime": {
+    "version": "codex-cli 0.153.3",
+    "configured_model": "gpt-5.5",
+    "configured_reasoning_effort": "xhigh",
+    "model_override": null
+  },
+  "runtime_source": "artifacts/dynamic_code_comparison_20260913/runtime/src",
+  "terminal": {
+    "trajectories": 4,
+    "length": 64,
+    "seed_offset": 1000003,
+    "solved_threshold": 1e-06
+  },
+  "compute_note": "The same numeric compute cap bounds each arm, but Code scored prediction rows and Hegel search operations are different resources. Report them separately alongside actual provider tokens, provider wall time, Python execution seconds and total learning wall time. No equivalent-compute claim.",
+  "contract": "Both arms start with empty knowledge and receive the same public dynamic instrument interface, paid channel costs and observation limits. Code uses the actual CodexCodeProvider action loop and ordinary Python; Hegel uses the complete UnifiedResearchAgent, without supplied candidate overrides. Neither receives the private sensor formula, delay, mechanism labels or final evaluation observations. Full task state and each arm own accumulated knowledge are restored through JSON at task boundaries. All five tasks in both arms must stop learning before independent evaluation on identical seeded trajectories using each model selected channels. An unfinished Code task with a last_successful_evaluation model retains that model for terminal evaluation while reporting its actual status and model origin. Missing or failed models remain explicit. Initial learning, failed attempts and mechanism/instrument revisions count toward learning costs; terminal measurement cost remains separate. No resource extensions or additional seeds are included."
+}

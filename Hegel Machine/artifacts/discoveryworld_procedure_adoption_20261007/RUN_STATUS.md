@@ -1,0 +1,9 @@
+# Historical procedure integration
+
+Previously solved: real Luna used instrument subresearch, discriminating measurements and parent response revision in `python_research_advice_ablation_luna_20261006/trial_003` (independent MSE 1.09e-18). Persistent reminders later tied 4/6; offered complete programs were selected 0/24 times. Those results are retained.
+
+The DiscoveryWorld port had discarded program-returned questions and after_observation, rejected analysis-only steps, and omitted the existing procedure loop. These now run through the original execute_procedure with world budget/termination hooks. Both arms share execution tools and complete stdout files. Model-authored child evidence can update the next parent step within one invocation; focused regressions pass, including the old numerical execution path. Hegel declares a nullable current question in its decision output; the task root comes from the public task. Neither declaration counts as research success.
+
+One fresh Normal seed-0 Luna check ended at 24 calls/52 world actions. It found dialogue controls and proposed a density-frequency hypothesis, but authored 0 children and executed 0 analysis programs; the task remained unfinished. Input cache: 28.57%. The saved trace is an adoption diagnostic, not an algorithm comparison. No long batch was restarted.
+
+Remaining work is open-environment selection and authoring of executable research, not reimplementing recursion. The old successful route supplied numerical diagnosis/fitting operators; this environment requires evidence interpretation and program construction. During this diagnostic the unused program path also received two regression fixes (substep scratch files kept distinct; decision metadata separated from acquisition questions); those branches were never invoked in the model trace. [Details](brief.json).

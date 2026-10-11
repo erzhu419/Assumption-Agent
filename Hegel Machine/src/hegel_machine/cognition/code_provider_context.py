@@ -98,6 +98,158 @@ def _world_answer_observation_preview(row, field_path, full_content_file):
             'full_content_file': full_content_file, 'json_path': field_path}
 
 
+def _reference_world_response_answers(value, questions):
+    """Keep one complete answer when response execution repeats that question."""
+    if isinstance(value, list):
+        for item in value:
+            _reference_world_response_answers(item, questions)
+    elif isinstance(value, dict):
+        if value.get('operator') == 'reference_response' and isinstance(value.get('family_research'), dict):
+            position, question = questions.get(value.get('question_id'), (None, {}))
+            answer = question.get('answer', {})
+            if position is not None and isinstance(answer, dict):
+                for field in ('family_research', 'conditional_simplification'):
+                    if isinstance(value.get(field), dict) and value[field] == answer.get(field):
+                        value[field] = {'full_content_file': 'method_decision.json',
+                                        'json_path': ['questions', position, 'answer', field]}
+        for key, item in value.items():
+            if key == 'question' and isinstance(item, dict):
+                position, question = questions.get(item.get('id'), (None, {}))
+                if position is not None:
+                    # A program repair can update the question's wording while
+                    # returning the exact same large scientific answer. Share
+                    # that answer without hiding the changed question or result.
+                    answer = item.get('answer')
+                    if (isinstance(answer, dict) and answer == question.get('answer')
+                            and len(json.dumps(answer)) > 12000):
+                        item['answer'] = {'full_content_file': 'method_decision.json',
+                                          'json_path': ['questions', position, 'answer']}
+            rows = (item if key == 'response_research_history' and isinstance(item, list)
+                    else [item] if key == 'response_research' and isinstance(item, dict) else [])
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                position, question = questions.get(row.get('question_id'), (None, {}))
+                answer = question.get('answer')
+                if position is None or not isinstance(answer, dict):
+                    continue
+                for field in ('family_research', 'conditional_simplification'):
+                    if isinstance(row.get(field), dict) and row[field] == answer.get(field):
+                        row[field] = {'full_content_file': 'method_decision.json',
+                                      'json_path': ['questions', position, 'answer', field]}
+            _reference_world_response_answers(item, questions)
+
+
+def _preview_past_response_answers(questions):
+    """Keep past response decisions inline and their complete snapshots readable."""
+    responses = [(index, question['answer']) for index, question in enumerate(questions)
+                 if isinstance(question.get('answer'), dict)
+                 and isinstance(question['answer'].get('family_research'), dict)]
+    prior_families = []
+    for index, answer in responses[:-1]:
+        path = ['questions', index, 'answer', 'family_research']
+        research = answer['family_research']
+        summary = {key: research[key] for key in (
+            'scope', 'response_count', 'nonlocal_progress', 'no_progress_cycles',
+            'selected_role', 'selected_test', 'research_obligation') if key in research}
+        if 'families' in research:
+            repeated = next((earlier for earlier, families in prior_families
+                             if families == research['families']), None)
+            if repeated is not None:
+                # Later experiments often change the question's response count
+                # and obligation while leaving every family verdict identical.
+                # Keep those changes inline, sharing only the equal family body.
+                summary['families'] = {
+                    'count': len(research['families']), 'full_content_file': 'method_decision.json',
+                    'json_path': ['questions', repeated, 'answer', 'family_research', 'families']}
+            else:
+                prior_families.append((index, research['families']))
+                summary['families'] = [{**family, **({'basis': {
+                    'full_content_file': 'method_decision.json',
+                    'json_path': [*path, 'families', position, 'basis']}}
+                    if 'basis' in family else {})}
+                    for position, family in enumerate(research['families'])]
+        summary.update(full_content_file='method_decision.json', json_path=path)
+        answer['family_research'] = summary
+        conditional = answer.get('conditional_simplification')
+        if isinstance(conditional, dict):
+            answer['conditional_simplification'] = {
+                **{key: conditional[key] for key in ('adopted', 'status', 'assumption')
+                   if key in conditional},
+                'full_content_file': 'method_decision.json',
+                'json_path': ['questions', index, 'answer', 'conditional_simplification']}
+
+
+def _preview_past_response_comparisons(events):
+    """Keep prior author verdicts and new evidence, with full search pools on disk."""
+    comparisons = []
+    for index, event in enumerate(events):
+        feedback = event.get('feedback', {})
+        path = ['events', index, 'feedback']
+        if (feedback.get('operator') == 'reference_response'
+                and isinstance(feedback.get('family_research'), dict)):
+            comparisons.append((event, 'feedback', feedback, path))
+        elif isinstance(feedback.get('response_comparison'), dict):
+            comparisons.append((feedback, 'response_comparison', feedback['response_comparison'],
+                                [*path, 'response_comparison']))
+        elif isinstance(feedback.get('proposal', {}).get('comparison_result'), dict):
+            # Ordinary inquiries receive an author's comparison inside its
+            # proposal return. Include it in the same chronological history.
+            proposal = feedback['proposal']
+            comparisons.append((proposal, 'comparison_result', proposal['comparison_result'],
+                                [*path, 'proposal', 'comparison_result']))
+    for container, key, comparison, path in comparisons[:-1]:
+        if len(json.dumps(comparison)) <= 12000:
+            continue
+        summary = {key: comparison[key] for key in (
+            'operator', 'status', 'comparison_status', 'binding_path', 'question_id', 'response_count',
+            'estimators', 'family_research', 'new_responses', 'evidence',
+            'experiment_action', 'revision_action', 'premise_design_action') if key in comparison}
+        summary.update(full_content_file='research_context.json', json_path=path)
+        container[key] = summary
+
+
+def _condition_research_preview(value, field_path, full_content_file, previews):
+    """Keep current condition decisions readable without copying executable ASTs."""
+    summary = {key: deepcopy(item) for key, item in value.items()
+               if key not in ('inputs', 'candidates')}
+    fields = ('id', 'claim', 'origin', 'authored_id', 'status', 'checked_response_count', 'conflict_count',
+              'conflicting_responses')
+    candidates = value.get('candidates', [])
+    candidate_summaries = [{key: deepcopy(candidate[key]) for key in fields if key in candidate}
+                          for candidate in candidates]
+    summary['candidates'] = candidate_summaries
+    if len(json.dumps(candidate_summaries)) > 12000:
+        # Growing pools repeat in the author, its return, and the parent view.
+        # Show actual early/latest examples of each verdict and proposed outcome,
+        # retaining the complete pool through the same saved-request interface.
+        pools = previews.setdefault('condition_candidate_pools', [])
+        predictions = (value.get('selected_experiment') or {}).get('predictions', {})
+        repeated = next((reference for pool, outcomes, reference in pools
+                         if pool == candidates and outcomes == predictions), None)
+        reference = {'full_content_file': full_content_file, 'json_path': [*field_path, 'candidates']}
+        groups = {}
+        for index, candidate in enumerate(candidates):
+            group = (candidate.get('origin'), candidate.get('status'), predictions.get(candidate.get('id')))
+            groups.setdefault(group, []).append(index)
+        indices = sorted({index for group in groups.values() for index in (group[0], group[-1])})
+        summary['candidates'] = {
+            'count': len(candidates),
+            'status_counts': dict(Counter(candidate.get('status') for candidate in candidates)),
+            **(repeated or reference)}
+        if repeated is None:
+            pools.append((candidates, predictions, reference))
+            summary['candidates'].update(
+                preview_selection='first and last per origin, status and selected-experiment outcome',
+                preview=[{**candidate_summaries[index], 'full_content_file': full_content_file,
+                          'json_path': [*field_path, 'candidates', index]} for index in indices])
+    summary.update(candidate_count=len(candidates), full_content_file=full_content_file,
+                   json_path=field_path)
+    # selected_experiment retains its whole actual forecast table. In particular
+    # do not replace the latest decision's predictions with a past-vector link.
+    return summary
+
+
 def _compact_world_execution(value, field_path, full_content_file='research_context.json', *, previews=None):
     """Keep research outcomes inline; refer repeated world trajectories to disk."""
     if previews is None:
@@ -109,7 +261,41 @@ def _compact_world_execution(value, field_path, full_content_file='research_cont
         return value
     result = {}
     for key, item in value.items():
-        if key == 'answer_observations' and (value.get('binding_path') or len(item) > 12
+        if key == 'condition_research' and isinstance(item, dict):
+            result[key] = _condition_research_preview(item, [*field_path, key], full_content_file, previews)
+        elif key == 'condition_extension_context' and isinstance(item, dict):
+            # This is the previously attempted input snapshot for dispatch
+            # deduplication, not the current author's evidence or assignment.
+            result[key] = {'response_count': len(item.get('responses', [])),
+                           'controller_path': item.get('controller_path'),
+                           'targets': item.get('targets', []),
+                           'full_content_file': full_content_file, 'json_path': [*field_path, key]}
+        elif (key in ('response_comparison', 'comparison_result') and isinstance(item, dict)
+              and len(json.dumps(item)) > 12000):
+            comparisons = previews.setdefault('response_comparisons', [])
+            repeated = next((reference for comparison, reference in comparisons if comparison == item), None)
+            if repeated is None:
+                comparisons.append((item, {'full_content_file': full_content_file,
+                                           'json_path': [*field_path, key]}))
+                result[key] = _compact_world_execution(
+                    item, [*field_path, key], full_content_file, previews=previews)
+            else:
+                # An author return and the parent proposal mirror the same paid
+                # comparison. Share that body while retaining its live verdict,
+                # evidence update and callable next steps in each decision view.
+                fields = ('operator', 'status', 'comparison_status', 'binding_path',
+                          'question_id', 'response_count', 'target_number', 'selection',
+                          'selected_setting', 'selected_number', 'experiment_action',
+                          'revision_action', 'premise_design_action', 'new_responses',
+                          'new_observation_indices', 'assumptions', 'family_research')
+                result[key] = {**{name: item[name] for name in fields if name in item}, **repeated}
+        elif (key == 'proposal' and isinstance(item, dict)
+              and isinstance(item.get('condition_research'), dict)):
+            # The generic source preview below would hide the actionable new
+            # hypotheses and experiment after the first 800 characters.
+            result[key] = _compact_world_execution(item, [*field_path, key],
+                                                  full_content_file, previews=previews)
+        elif key == 'answer_observations' and (value.get('binding_path') or len(item) > 12
                                             or len(json.dumps(item)) > 12000):
             # Numerical rows already live in relation_research. Cumulative
             # physical answers also repeat the paid trajectory across questions.
@@ -130,6 +316,69 @@ def _compact_world_execution(value, field_path, full_content_file='research_cont
             result[key] = [_world_answer_observation_preview(
                 row, [*field_path, key, index], full_content_file)
                 for index, row in enumerate(item)]
+        elif (key in ('candidates', 'response_candidates') and (
+              (key == 'response_candidates' and field_path and field_path[-1] == 'proposal_inputs')
+              or (field_path and field_path[-1] in ('response_comparison', 'comparison_result'))
+              or (value.get('operator') == 'reference_response'
+                  and isinstance(value.get('family_research'), dict)))
+              and isinstance(item, list)
+              and len(json.dumps(item)) > 12000):
+            # Computed response proposals repeat large fitted AST pools in
+            # author feedback and the parent's decision view. Keep every
+            # candidate's prediction and counterexamples inline, with executable
+            # details in the existing complete request rather than repeating it.
+            fields = ('id', 'family', 'origin', 'authored_id', 'status', 'target_prediction', 'fit_mse',
+                      'reason', 'conflicting_responses')
+            pools = previews.setdefault('response_candidate_pools', [])
+            repeated = next((reference for pool, reference in pools if pool == item), None)
+            reference = {'full_content_file': full_content_file, 'json_path': [*field_path, key]}
+            result[key] = {'count': len(item), **(repeated or reference)}
+            if repeated is None:
+                pools.append((item, reference))
+                result[key]['preview'] = []
+                conflicts_seen = previews.setdefault('response_candidate_conflicts', [])
+                for index, row in enumerate(item):
+                    summary = {name: row[name] for name in fields if name in row}
+                    conflicts = row.get('conflicting_responses', [])
+                    if len(conflicts) > 1:
+                        shared = next((ref for prior, ref in conflicts_seen if prior == conflicts), None)
+                        if shared is None:
+                            conflicts_seen.append((conflicts, {
+                                'full_content_file': full_content_file,
+                                'json_path': [*field_path, key, index, 'conflicting_responses']}))
+                        else:
+                            # A new paid comparison can update the member's
+                            # fit/count while retaining exactly the old failures.
+                            summary['conflicting_responses'] = {'count': len(conflicts), **shared}
+                    result[key]['preview'].append(summary)
+            else:
+                # The same pool can survive a new comparison verdict or be
+                # mirrored under differently referenced family answers. Share
+                # its exact body independently of those surrounding decisions.
+                result[key]['status_counts'] = dict(Counter(row.get('status') for row in item))
+        elif (key == 'hypotheses' and (
+              (len(field_path) >= 2 and field_path[-2] == 'response_research_history')
+              or (value.get('operator') == 'reference_response'
+                  and isinstance(value.get('family_research'), dict)))
+              and isinstance(item, list) and len(json.dumps(item)) > 12000):
+            # Every past response search retains its full fitted member pool.
+            # Keep the history's decisions, family constraints and evidence
+            # inline; retrieve its large numerical pool from the saved request.
+            result[key] = {'count': len(item), 'full_content_file': full_content_file,
+                           'json_path': [*field_path, key]}
+        elif (key == 'operational_fallback' and value.get('operator') == 'reference_response'
+              and isinstance(value.get('family_research'), dict) and isinstance(item, dict)
+              and isinstance(item.get('hypotheses'), list)
+              and len(json.dumps(item['hypotheses'])) > 12000):
+            # Ordinary response research exposes its search pool twice: once
+            # beside the candidates and again inside the operational fallback.
+            # Preserve the fallback's selected experiment and separation, using
+            # the existing complete-pool reference for its executable members.
+            result[key] = _compact_world_execution(
+                {**item, 'hypotheses': {
+                    'count': len(item['hypotheses']), 'full_content_file': full_content_file,
+                    'json_path': [*field_path, key, 'hypotheses']}},
+                [*field_path, key], full_content_file, previews=previews)
         elif key == 'joint_parameter_search' and len(json.dumps(item)) > 12000:
             # These are solver diagnostics, not hypothesis programs or measured
             # predictions. Repeated refits retain their outcomes without inlining
@@ -158,6 +407,19 @@ def _compact_world_execution(value, field_path, full_content_file='research_cont
             # each round. Use the same preview size as other generated sources.
             result[key] = {'characters': len(source), 'preview': source[:800],
                            'full_content_file': full_content_file, 'json_path': [*field_path, key]}
+        elif (key == 'predictions' and isinstance(item, dict) and len(item) > 12
+              and all(isinstance(prediction, bool) for prediction in item.values())):
+            # Many proposed settings have exactly the same finite hypothesis
+            # outcome vector. Show every unique vector once, keeping each
+            # experiment and its complete prediction map separately retrievable.
+            vectors = previews.setdefault('response_prediction_vectors', [])
+            repeated = next((reference for predictions, reference in vectors if predictions == item), None)
+            if repeated is None:
+                result[key] = item
+                vectors.append((item, {'full_content_file': full_content_file,
+                                       'json_path': [*field_path, key]}))
+            else:
+                result[key] = dict(repeated)
         else:
             result[key] = _compact_world_execution(item, [*field_path, key], full_content_file, previews=previews)
     return result
@@ -253,6 +515,13 @@ def prepare_code_context(workspace, request, *, schema, instructions):
                         context[view][key][index] = {
                             'id': question['id'], 'status': question['status'],
                             'full_content_file': 'method_decision.json', 'json_path': ['questions', position]}
+            question = request.get('research_focus', {}).get('question')
+            if isinstance(question, dict):
+                position, detailed = by_id.get(question.get('id'), (None, {}))
+                if position is not None and all(detailed.get(name) == value for name, value in question.items()):
+                    context['research_focus']['question'] = {
+                        'id': question['id'], 'status': question['status'],
+                        'full_content_file': 'method_decision.json', 'json_path': ['questions', position]}
             for question_id, answer in request.get('research', {}).get('answers', {}).items():
                 position, detailed = by_id.get(question_id, (None, {}))
                 if position is not None and all(detailed.get(key) == value for key, value in answer.items()):
@@ -267,6 +536,15 @@ def prepare_code_context(workspace, request, *, schema, instructions):
                     if isinstance(view, dict) and view.get(key) == trials:
                         view[key] = {'full_content_file': 'research_context.json',
                                      'json_path': ['research', 'experiment_trials']}
+            for name in ('events', 'research', 'research_focus', 'llm_inquiry', 'procedure_repair'):
+                if name in context:
+                    _reference_world_response_answers(context[name], by_id)
+            # Returned source proposals mirror the same family answers as the
+            # inquiry state. Normalize both before comparing whole bodies, or
+            # one raw family versus one reference defeats exact deduplication.
+            _reference_world_response_answers(
+                context['method_decision'].get('explanation_proposals', []), by_id)
+            _preview_past_response_answers(context['method_decision'].get('questions', []))
         previews = {}
         if 'research' in context:
             if 'method_results' in context['research']:
@@ -288,6 +566,7 @@ def prepare_code_context(workspace, request, *, schema, instructions):
                      'json_path': ['research', 'method_results', index]}
                     for index, item in enumerate(results[start:], start=start)]
             context['research'] = _compact_world_execution(context['research'], ['research'], previews=previews)
+        _preview_past_response_comparisons(context.get('events', []))
         context['events'] = _compact_world_execution(context.get('events', []), ['events'], previews=previews)
         for name in ('research_focus', 'llm_inquiry', 'procedure_repair'):
             if name in context:

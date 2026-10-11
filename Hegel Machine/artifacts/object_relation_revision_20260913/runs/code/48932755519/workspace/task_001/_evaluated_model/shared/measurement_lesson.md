@@ -1,0 +1,3 @@
+Current task: the response equals measured total quantity plus measured total impulse. The 48 fine observations matched within 2.23e-16, including varied positions, focus, repeated inputs, impulses and resets; eight coarse observations independently supported the same relation. Choose the coarse view: individual quantities, positions, focus and history are unnecessary for this response.
+
+The helper measured_totals.py extracts totals from either supported measurement view; it does not assert that totals predict every future task. Refit and test the response relation on each new task. Commanded quantities differ nonlinearly from measured quantities, so do not substitute raw command totals. Coarse measurements cannot identify individual-object interactions.

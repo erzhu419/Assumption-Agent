@@ -1,0 +1,5 @@
+Observed calibration evidence: reference gap/frequency pairs are 27.47 nm/3880.56 Hz and 36.56 nm/2239.92 Hz (gap readings 120, 122; frequency readings 107, 110). Target gaps are 47.52 and 58.2 nm (30, 35). Inverse-square estimates (~1296/884 Hz) and a two-point power-law alternative (~1353/916 Hz) are hypotheses only. Microscope readings worked, and reactor TALK menus adjust frequency. Crystals 3 and 4 are installed (267, 380).
+
+Crystal 4 remained publicly uncalibrated at 916 Hz with crystal installed (390–400), after setting empty at 886 Hz and reinserting (370–380), and at 874 Hz (409–411). Crystal 3 remained uncalibrated at 1286, 1296, 1353 and 1350 Hz (413–420, 421–436, 437–450, 471–472). ACTIVATE is unsupported on uncalibrated reactors (295). These outcomes do not identify the correct settings; readback is not validation. Completion was last reported false.
+
+Next experiment: reduce crystal 3's current 1350-Hz setting by five 10-Hz menu steps to 1300 Hz and exit. This tests a nearby candidate after the prior tested values failed. The proposed setting and its physical outcome are not yet observed.

@@ -3,7 +3,7 @@
 from copy import deepcopy
 import json
 
-from test_discoveryworld_contrast import QUESTION, SOURCE, prepared as physical_agent
+from test_discoveryworld_contrast import QUESTION, SOURCE as CONTRAST_SOURCE, prepared as physical_agent
 from test_discoveryworld_llm_inquiry import CHILD, Provider, inquire, prepared
 from test_discoveryworld_recovery import USAGE
 from test_discoveryworld_research import BINDING, RelationLab
@@ -11,6 +11,9 @@ from test_discoveryworld_research import BINDING, RelationLab
 
 PATH = "shared/new_design.py"
 SESSION = "proposal:" + PATH
+SOURCE = CONTRAST_SOURCE.replace(
+    "    assert memory['answers']['operation']['status'] == 'supported'\n", ""
+)
 RELATION_QUESTION = {"id": "response_law", "question": "Which response law explains the measured conditions?",
                      "parent_id": "task", "depends_on": []}
 
@@ -312,4 +315,121 @@ def test_combined_bind_and_design_draft_returns_both_parent_choices_without_exec
     assert all(proposal[key]["arguments"]["path"] == PATH
                for key in ("comparison_action", "research_action", "contrast_action"))
     assert agent.questions == questions and not agent.relation_research
-    assert not lab.actions and not agent.observations and agent.program_executions == 0
+    assert not lab.actions and not agent.observations and agent.program_executions == 1
+
+
+def test_proposal_child_observation_and_calculation_return_to_author_without_reopening_old_answer(tmp_path):
+    prerequisite = {'id': 'proposal_measurement',
+                    'question': 'Read the current public response before revising the draft.',
+                    'depends_on': []}
+    author_notes = 'Author: use the prerequisite result when drafting the contrast.'
+    child_notes = 'Child: computed five and read the actual public response.'
+    agent, provider, lab = prepared(tmp_path, [
+        ('run', {'operator': 'inquire', 'question': prerequisite,
+                 'max_model_calls': 3, 'notes': author_notes}),
+        ('run', {'code': 'print(2 + 3)', 'notes': 'Child: calculate before selecting a reading.'}),
+        ('query', {'actions': [{'action': 'TALK', 'arg1': 7}], 'notes': child_notes}),
+        ('finish', {'lesson': 'Return the calculation and the acquired response without a general-law claim.'}),
+        ('write', {'path': PATH, 'code': SOURCE}),
+        ('finish', {'lesson': 'Return the computed draft after its prerequisite research.'}),
+    ])
+    old = agent._question(CHILD)
+    agent._execute('query', {'question': CHILD, 'actions': [{'action': 'TALK', 'arg1': 7}]}, lab)
+    agent._record_answer(old, {'status': 'supported', 'answer': {'observed_active': True}, 'evidence': [0]})
+    old_answer = deepcopy(old)
+    parent_notes = (tmp_path / 'research_notes.md').read_text()
+    parent_focus = {'kind': 'parent_research', 'question': {'id': 'task'}, 'purpose': 'Retain the old result.'}
+    agent.research_focus = deepcopy(parent_focus)
+    paid = len(agent.observations)
+
+    result = propose(agent, lab, question={**CHILD, 'question': 'Does another condition require a revised design?'})
+
+    assert result['model_calls'] == agent.costs['model_calls'] == len(provider.requests) == 6
+    assert [request['llm_inquiry']['question_id'] for request in provider.requests] == [
+        CHILD['id'], prerequisite['id'], prerequisite['id'], prerequisite['id'], CHILD['id'], CHILD['id']]
+    assert provider.requests[0]['llm_inquiry']['stage'] == provider.requests[4]['llm_inquiry']['stage'] == 'proposal'
+    assert all(request['llm_inquiry'].get('stage') != 'proposal' for request in provider.requests[1:4])
+    child = scientific_question(agent, prerequisite['id'])
+    assert child['parent_id'] == SESSION
+    assert provider.requests[1]['llm_inquiry']['parent_id'] == SESSION
+    assert provider.requests[2]['events'][-1]['feedback']['stdout'].strip() == '5'
+    assert len(agent.observations) == paid + 1
+    assert lab.actions[-1] == {'action': 'TALK', 'arg1': 7}
+    returned = provider.requests[4]['events'][-1]['feedback']
+    assert returned['operator'] == 'inquire' and returned['status'] == 'inquiry_finished'
+    assert returned['question']['id'] == prerequisite['id']
+    assert returned['model_calls'] == 3 and returned['notes'] == child_notes
+    assert provider.requests[4]['research_notes'] == author_notes
+    assert agent.llm_inquiries[SESSION]['model_calls'] == 3
+    assert agent.llm_inquiries[prerequisite['id']]['model_calls'] == 3
+    assert agent.costs['reported_tokens'] == 6 * USAGE['total_tokens']
+    assert result['proposal']['deferred_actions'] == []
+    assert result['proposal']['draft_changed'] is True
+    assert result['proposal']['author_work_attempted'] is True
+    assert result['proposal']['contrast_action']['arguments']['path'] == PATH
+    assert (tmp_path / PATH).read_text() == SOURCE
+    assert scientific_question(agent, CHILD['id']) == old_answer
+    assert agent.research_focus == parent_focus
+    assert (tmp_path / 'research_notes.md').read_text() == parent_notes
+    assert agent._inquiry_stack == []
+
+
+def test_proposal_child_shared_ceiling_reserves_author_and_parent_decisions(tmp_path):
+    prerequisite = {'id': 'proposal_calculation', 'question': 'Compute the proposed prerequisite.'}
+    author_notes = 'Author: retain one decision for the returned calculation.'
+    agent, provider, lab = prepared(tmp_path, [
+        ('run', {'operator': 'inquire', 'question': prerequisite,
+                 'max_model_calls': 99, 'notes': author_notes}),
+        ('run', {'code': "print('first calculation')"}),
+        ('run', {'code': "print('second calculation')"}),
+        ('run', {'code': "print('third calculation')"}),
+        ('write', {'path': PATH, 'code': SOURCE}),
+        ('finish', {'lesson': 'Parent received the draft after bounded prerequisite work.'}),
+    ], limits={'max_model_calls': 6})
+
+    result = propose(agent, lab, calls=20)
+
+    assert result['status'] == 'model_call_budget_exhausted'
+    assert result['model_calls'] == len(provider.requests) == 5
+    assert provider.requests[1]['llm_inquiry']['remaining_model_calls'] == 3
+    assert provider.requests[4]['llm_inquiry']['stage'] == 'proposal'
+    assert provider.requests[4]['llm_inquiry']['remaining_model_calls'] == 1
+    assert provider.requests[4]['research_notes'] == author_notes
+    returned = provider.requests[4]['events'][-1]['feedback']
+    assert returned['operator'] == 'inquire'
+    assert returned['status'] == 'model_call_budget_exhausted' and returned['model_calls'] == 3
+    assert agent.llm_inquiries[SESSION]['model_calls'] == 2
+    assert agent.llm_inquiries[prerequisite['id']]['model_calls'] == 3
+    assert result['proposal']['draft_changed'] and result['proposal']['author_work_attempted']
+    assert agent.status == 'running' and not lab.actions
+
+    completed = agent.run(lab)
+
+    assert len(provider.requests) == completed['costs']['model_calls'] == 6
+    assert 'llm_inquiry' not in provider.requests[-1]
+    assert completed['status'] == 'agent_finished'
+    assert completed['costs']['reported_tokens'] == 6 * USAGE['total_tokens']
+
+
+def test_finish_only_resume_reports_no_new_work_despite_existing_draft(tmp_path):
+    agent, provider, lab = prepared(tmp_path, [
+        ('write', {'path': PATH, 'code': SOURCE}),
+        ('finish', {'lesson': 'Return this first draft.'}),
+        ('finish', {'lesson': 'No new construction was attempted on this resume.'}),
+    ])
+
+    first = propose(agent, lab)
+
+    assert first['proposal']['draft_changed'] is True
+    assert first['proposal']['author_work_attempted'] is True
+    original = (tmp_path / PATH).read_text()
+
+    second = propose(agent, lab)
+
+    assert second['model_calls'] == 1 and len(provider.requests) == 3
+    assert agent.llm_inquiries[SESSION]['invocations'] == 2
+    assert second['proposal']['draft_changed'] is False
+    assert second['proposal']['author_work_attempted'] is False
+    assert second['proposal']['contrast_action'] == first['proposal']['contrast_action']
+    assert (tmp_path / PATH).read_text() == original
+    assert not agent.observations and not lab.actions

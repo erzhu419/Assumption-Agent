@@ -17,8 +17,8 @@ from hegel_machine.cognition.synthesis import _fit_linear
 from test_world_reference_hypothesis import PATH, ReferenceLab, prepared, square, submit
 
 
-def _incidental_success(tmp_path):
-    agent, lab = prepared(tmp_path)
+def _incidental_success(tmp_path, *, source=None):
+    agent, lab = prepared(tmp_path, source=source)
     # A gap-squared law fits all three original references, but predicts 250
     # for C4. The physical controller passes through the successful setting
     # 260 and then correctly refutes that law at its final prediction, 250.

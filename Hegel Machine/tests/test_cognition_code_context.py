@@ -449,6 +449,76 @@ def _read_context_reference(workspace, descriptor):
     return stored
 
 
+def test_large_response_history_members_are_retrievable_without_hiding_research_decisions(tmp_path):
+    hypotheses = [{"id": f"member_{index}", "lower": -.5, "upper": .5,
+        "program": {"op": "add", "children": [
+            {"op": "const", "value": index + term / 100.} for term in range(32)]},
+        "predictions_by_crystal": {"1": 10., "2": 20., "3": 30.}}
+        for index in range(24)]
+    assert len(json.dumps(hypotheses)) > 12000
+    trial = {"number": 3, "prediction": 31., "procedure": {"path": "shared/research.py"}}
+    obligation = {"reason": "stagnation", "conditional_operational_search": {
+        "remaining_settings": 19, "suggested_trial": {"selected_experiment": trial}}}
+    row = {"hypotheses": hypotheses, "selected_experiment": trial,
+        "selection": {"selected_experiment": trial}, "evidence": [17, 18],
+        "response_settings": [{"crystal": 3, "frequency": 30., "activated": False,
+                               "evidence": [18]}],
+        "family_research": {"families": [{"id": "cubic", "status": "SAT_WITNESS"}],
+                            "admitted_signatures": [[False]], "research_obligation": obligation},
+        "conditional_simplification": {"adopted": False, "status": "family_research_needed",
+            "assumption": {"supports": [{"id": "cubic_term"}]},
+            "family_research": {"research_obligation": obligation}},
+        "research_obligation": obligation}
+    decision = {"questions": [{"id": "response", "status": "inconclusive",
+        "answer": {"response_research_history": [deepcopy(row)]}}]}
+    decision_file = tmp_path / "method_decision.json"
+    decision_file.write_text(json.dumps(decision))
+    decision_bytes = decision_file.read_bytes()
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "research": {"response_research_history": [deepcopy(row)]},
+        "files": {"method_decision.json": json.dumps(decision)}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    histories = [(context["research"]["response_research_history"], "research_context.json"),
+        (context["method_decision"]["questions"][0]["answer"]["response_research_history"],
+         "method_decision.json")]
+    for history, filename in histories:
+        compact = history[0]
+        descriptor = compact["hypotheses"]
+        assert descriptor["count"] == len(hypotheses)
+        assert descriptor["full_content_file"] == filename
+        assert _read_context_reference(tmp_path, descriptor) == hypotheses
+        assert {key: value for key, value in compact.items() if key != "hypotheses"} == {
+            key: value for key, value in row.items() if key != "hypotheses"}
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+    assert decision_file.read_bytes() == decision_bytes
+
+
+def test_small_history_and_large_current_or_authored_hypotheses_stay_inline(tmp_path):
+    small = [{"id": "linear", "program": {"op": "feature", "name": "x"}}]
+    authored = [{"id": "new_abstraction", "claim": "A testable research hypothesis. " * 500}]
+    assert len(json.dumps(authored)) > 12000
+    research = {"response_research_history": [{"hypotheses": small, "evidence": [1]}],
+                "response_research": {"hypotheses": authored},
+                "authored_analysis": {"hypotheses": authored}}
+    decision = {"questions": [{"id": "authored", "answer": {
+        "hypotheses": authored, "response_research_history": [{"hypotheses": small}]}}]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+               "research": research, "files": {"method_decision.json": json.dumps(decision)}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    assert context["research"] == research
+    assert context["method_decision"] == decision
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+
+
 def _assert_world_snapshot_reference(workspace, preview, original):
     assert not {"public_objects", "public_relations", "dialog_box"} & preview.keys()
     assert {key: value for key, value in preview.items()
@@ -541,8 +611,8 @@ def test_short_large_world_evidence_compacts_local_research_views_but_keeps_smal
 
     context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
 
-    references = [context["research_focus"]["question"]["answer_observations"],
-                  context["llm_inquiry"]["question"]["answer_observations"],
+    assert _read_context_reference(tmp_path, context["research_focus"]["question"]) == question
+    references = [context["llm_inquiry"]["question"]["answer_observations"],
                   context["procedure_repair"]["latest_execution"]["question"]["answer_observations"],
                   context["method_decision"]["questions"][0]["answer_observations"]]
     for index, reference in enumerate(references):
@@ -578,14 +648,13 @@ def test_physical_preview_deduplicates_equal_records_without_merging_changed_con
 
     original = context["research"]["answers"]["old"]["answer_observations"]
     repeated = context["events"][0]["feedback"]["question"]["answer_observations"]
-    revision = context["research_focus"]["question"]["answer_observations"]
-    repeated_revision = context["method_decision"]["questions"][0]["answer_observations"]
+    assert _read_context_reference(tmp_path, context["research_focus"]["question"]) == revised_question
+    revision = context["method_decision"]["questions"][0]["answer_observations"]
     assert original["observations_preview"] == [rows[i] for i in (0, 1, 11, 12)]
     assert repeated["observations_preview"] == []
     assert revision["observations_preview"] == [changed[0]]
-    assert repeated_revision["observations_preview"] == []
     for reference, expected in ((original, rows), (repeated, rows),
-                                (revision, changed), (repeated_revision, changed)):
+                                (revision, changed)):
         assert reference["observation_indices"] == list(range(13))
         assert _read_context_reference(tmp_path, reference) == expected
 
@@ -674,6 +743,134 @@ def test_returned_child_mirrors_reuse_decision_answers_without_hiding_changed_re
     assert context["events"] == original["events"]
     assert request == original
     assert json.loads((tmp_path / "research_context.json").read_text()) == original
+
+
+def test_response_research_mirrors_reference_exact_canonical_answer_fields(tmp_path):
+    answer = {"family_research": {
+        "families": [{"id": "cubic", "status": "SAT_WITNESS"}],
+        "possible_signatures": [[True], [False]], "evidence": [3, 7]},
+        "conditional_simplification": {"adopted": False, "assumption": {"basis": ["x3"]},
+            "family_research": {"research_obligation": {"remaining_settings": 31}}}}
+    row = {"question_id": "response", "status": "family_research_needed", **deepcopy(answer),
+           "selected_experiment": {"number": 5, "prediction": 6171.},
+           "hypotheses": [{"id": "author_explanation", "claim": "Preserve this separate claim"}],
+           "evidence": [3, 7]}
+    decision = {"questions": [{"id": "other", "answer": {}},
+        {"id": "response", "status": "inconclusive", "answer": deepcopy(answer)}]}
+    decision_file = tmp_path / "method_decision.json"
+    decision_file.write_text(json.dumps(decision))
+    original_bytes = decision_file.read_bytes()
+    view = {"response_research_history": [deepcopy(row)], "response_research": deepcopy(row)}
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "events": [{"feedback": deepcopy(view)}],
+        **{name: deepcopy(view) for name in ("research", "research_focus", "procedure_repair", "llm_inquiry")},
+        "files": {"method_decision.json": json.dumps(decision)}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    for compact_view in (context["events"][0]["feedback"], *(context[name] for name in
+                         ("research", "research_focus", "procedure_repair", "llm_inquiry"))):
+        for compact in (*compact_view["response_research_history"], compact_view["response_research"]):
+            for field in answer:
+                assert compact[field] == {"full_content_file": "method_decision.json",
+                    "json_path": ["questions", 1, "answer", field]}
+                assert _read_context_reference(tmp_path, compact[field]) == answer[field]
+            assert {key: value for key, value in compact.items() if key not in answer} == {
+                key: value for key, value in row.items() if key not in answer}
+    assert context["method_decision"] == decision
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+    assert decision_file.read_bytes() == original_bytes
+
+
+def test_response_research_mirrors_preserve_changed_fields_and_unmatched_questions(tmp_path):
+    answer = {"family_research": {"families": [{"id": "cubic", "status": "SAT_WITNESS"}]},
+              "conditional_simplification": {"adopted": False, "evidence": [7]}}
+    changed_family = {"question_id": "response", **deepcopy(answer)}
+    changed_family["family_research"]["families"][0]["status"] = "UNSAT_VERIFIED"
+    changed_condition = {"question_id": "response", **deepcopy(answer)}
+    changed_condition["conditional_simplification"]["evidence"].append(8)
+    absent = {"question_id": "new_question", **deepcopy(answer)}
+    unbound = deepcopy(answer)
+    decision = {"questions": [{"id": "response", "answer": deepcopy(answer)}]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "research": {"response_research_history": [changed_family, absent, unbound],
+                     "response_research": changed_condition,
+                     "hypotheses": [{"id": "unrelated_author_hypothesis", "claim": "Retain me"}]},
+        "files": {"method_decision.json": json.dumps(decision)}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    history = context["research"]["response_research_history"]
+    assert history[0]["family_research"] == changed_family["family_research"]
+    assert _read_context_reference(tmp_path, history[0]["conditional_simplification"]) == answer["conditional_simplification"]
+    assert history[1:] == [absent, unbound]
+    current = context["research"]["response_research"]
+    assert current["conditional_simplification"] == changed_condition["conditional_simplification"]
+    assert _read_context_reference(tmp_path, current["family_research"]) == answer["family_research"]
+    assert context["research"]["hypotheses"] == request["research"]["hypotheses"]
+    assert context["method_decision"] == decision
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+
+
+def test_past_response_answers_keep_decisions_and_raw_differences_while_latest_stays_complete(tmp_path):
+    family = {"id": "cubic", "status": "SAT_WITNESS",
+              "basis": [{"op": "feature", "name": "signal"}], "source_ids": ["authored"]}
+    research = {"scope": "shared_response_family", "response_count": 31,
+        "nonlocal_progress": 0, "no_progress_cycles": 2, "selected_role": "shared_premise_research",
+        "selected_test": None, "research_obligation": {"question": "Revise the shared band?"},
+        "families": [family], "admitted_signatures": [[True, False]],
+        "old_only_diagnostic": {"counterexample": {"crystal": 4, "frequency": 1012.}}}
+    conditional = {"status": "family_research_needed", "adopted": False,
+        "assumption": {"supports": ["cubic_only"]},
+        "family_research": {"old_only_bound": [-1., 3.]}}
+    old = {"id": "response_old", "question": "Which response mechanism survives?",
+        "status": "inconclusive", "evidence": [2, 7],
+        "answer": {"family_research": research, "conditional_simplification": conditional,
+                   "activated": False, "selected_setting": 1012.}}
+    latest = {"id": "response_latest", "status": "inconclusive", "evidence": [2, 7, 9],
+        "answer": {"family_research": {**deepcopy(research), "response_count": 32,
+                                       "admitted_signatures": [[False, False]]},
+                   "conditional_simplification": deepcopy(conditional)}}
+    ordinary = {"id": "instrument", "status": "supported", "evidence": [9],
+                "answer": {"instrument_name": "spectrometer"}}
+    decision = {"questions": [old, latest, ordinary]}
+    decision_file = tmp_path / "method_decision.json"
+    decision_file.write_text(json.dumps(decision))
+    original_bytes = decision_file.read_bytes()
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+               "files": {"method_decision.json": json.dumps(decision)}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    shown_old, shown_latest, shown_ordinary = context["method_decision"]["questions"]
+    assert shown_latest == latest
+    assert shown_ordinary == ordinary
+    assert {key: value for key, value in shown_old.items() if key != "answer"} == {
+        key: value for key, value in old.items() if key != "answer"}
+    assert shown_old["answer"]["activated"] is False
+    assert shown_old["answer"]["selected_setting"] == 1012.
+    summary = shown_old["answer"]["family_research"]
+    assert _read_context_reference(tmp_path, summary) == research
+    assert "old_only_diagnostic" not in summary
+    for key in ("scope", "response_count", "nonlocal_progress", "no_progress_cycles",
+                "selected_role", "selected_test", "research_obligation"):
+        assert summary[key] == research[key]
+    assert _read_context_reference(tmp_path, summary["families"][0]["basis"]) == family["basis"]
+    assert {key: value for key, value in summary["families"][0].items() if key != "basis"} == {
+        key: value for key, value in family.items() if key != "basis"}
+    child = shown_old["answer"]["conditional_simplification"]
+    assert _read_context_reference(tmp_path, child) == conditional
+    for key in ("status", "adopted", "assumption"):
+        assert child[key] == conditional[key]
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+    assert decision_file.read_bytes() == original_bytes
 
 
 def test_long_response_research_keeps_predictions_and_retrievable_solver_and_world_evidence(tmp_path):
@@ -770,3 +967,433 @@ def test_short_world_answer_references_snapshots_but_keeps_small_diagnostics_and
     assert kept == plain
     assert context["research_focus"]["answer"]["joint_parameter_search"] == diagnostics
     assert context["current_observation"] == physical
+
+
+def test_computed_response_pool_keeps_predictions_conflicts_and_executable_source(tmp_path):
+    candidates = [{"id": str(i), "family": "cubic", "status": "rejected",
+        "target_prediction": 666., "reason": "paid_negative", "conflicting_responses": [
+            {"crystal": 5, "frequency": 666., "activated": False, "evidence": [350]}],
+        "program": {"op": "add", "children": [{"op": "const", "value": j} for j in range(100)]}}
+        for i in range(20)]
+    comparison = {"candidates": candidates, "family_research": {"families": [
+        {"id": "cubic", "status": "SAT_WITNESS"}]}, "new_responses": [
+        {"crystal": 5, "frequency": 666., "activated": False, "evidence": [350]}],
+        "experiment_action": {"action": "run", "arguments": {"experiment": {"setting": 777}}}}
+    decision = {"explanation_proposals": [{"comparison_result": deepcopy(comparison)}]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "files": {"method_decision.json": json.dumps(decision)},
+        "events": [{"action": "response_return", "feedback": {"response_comparison": deepcopy(comparison)}}]}
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+    copies = [context["events"][0]["feedback"]["response_comparison"],
+              context["method_decision"]["explanation_proposals"][0]["comparison_result"]]
+    for compact in copies[:1]:
+        pool = compact["candidates"]
+        assert pool["count"] == len(pool["preview"]) == len(candidates)
+        assert _read_context_reference(tmp_path, pool) == candidates
+        for original, preview in zip(candidates, pool["preview"]):
+            assert preview == {k: v for k, v in original.items() if k != "program"}
+        assert {k: v for k, v in compact.items() if k != "candidates"} == {
+            k: v for k, v in comparison.items() if k != "candidates"}
+    repeated = copies[1]
+    assert 'candidates' not in repeated
+    assert _read_context_reference(tmp_path, repeated) == comparison
+    for key in ('family_research', 'new_responses', 'experiment_action'):
+        assert repeated[key] == comparison[key]
+    assert json.loads((tmp_path / "research_context.json").read_text()) == request
+
+
+def test_author_comparison_history_retains_counterexamples_and_latest_search(tmp_path):
+    old = {"binding_path": "shared/proposal.py", "status": "experiment_selected",
+        "comparison_status": "inconclusive", "response_count": 32,
+        "family_research": {"families": [{"id": "cubic", "status": "SAT_WITNESS"}]},
+        "new_responses": [{"frequency": 666., "activated": False, "evidence": [350]}],
+        "experiment_action": {"action": "run", "arguments": {"experiment": {"setting": 777.}}},
+        "selection": {"details": "solver output " * 1500}}
+    current = {**deepcopy(old), "comparison_status": "refuted", "response_count": 33,
+        "family_research": {"families": [{"id": "cubic", "status": "UNSAT_VERIFIED"}]},
+        "new_responses": [{"frequency": 777., "activated": False, "evidence": [360]}]}
+    physical = {"prediction_status": "refuted", "question_id": "point_666"}
+    request = {"evidence": {"observations_file": "laboratory_observations.json"}, "events": [
+        {"action": "response_return", "feedback": {"response_comparison": old, "physical_test": physical}},
+        {"action": "response_return", "feedback": {"response_comparison": current}}]}
+    original = deepcopy(request)
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+    older, latest = context['events']
+    summary = older['feedback']['response_comparison']
+    assert _read_context_reference(tmp_path, summary) == old
+    assert {k: v for k, v in summary.items() if k not in ('full_content_file', 'json_path')} == {
+        k: v for k, v in old.items() if k != 'selection'}
+    assert older['feedback']['physical_test'] == physical
+    assert latest['feedback']['response_comparison'] == current
+    assert request == original
+    assert json.loads((tmp_path / 'research_context.json').read_text()) == original
+
+
+@pytest.mark.parametrize("latest_kind", ["direct", "nested"])
+@pytest.mark.parametrize("binding_path", ["shared/proposal.py", None])
+def test_mixed_response_history_keeps_latest_comparison_and_retrievable_past_verdicts(
+        tmp_path, latest_kind, binding_path):
+    candidates = [{"id": f"member_{i}", "family": "authored", "status": "rejected",
+        "target_prediction": 700. + i, "fit_mse": .2,
+        "reason": "paid_negative", "conflicting_responses": [
+            {"crystal": 5, "frequency": 700. + i, "activated": False, "evidence": [350 + i]}],
+        "program": {"op": "add", "children": [
+            {"op": "const", "value": j} for j in range(100)]}}
+        for i in range(20)]
+    assert len(json.dumps(candidates)) > 12000
+
+    def comparison(index):
+        return {"operator": "reference_response", **({"binding_path": binding_path} if binding_path else {}),
+            "status": "family_research_needed", "comparison_status": "inconclusive",
+            "question_id": "same_representation", "response_count": 247 + index,
+            "family_research": {"families": [{"id": "authored", "status": "SAT_WITNESS"}],
+                "no_progress_cycles": 2 + index, "selected_role": "shared_premise_research",
+                "research_obligation": {"reason": "no_nonlocal_progress"}},
+            "new_responses": [{"crystal": 5, "frequency": 727. + index,
+                               "activated": False, "evidence": [390 + index]}],
+            "evidence": [350, 390 + index], "experiment_action": None,
+            "revision_action": {"action": "run", "arguments": {
+                "operator": "propose_explanations", "path": "shared/proposal.py"}},
+            "premise_design_action": {"action": "run", "arguments": {
+                "operator": "propose_explanations", "purpose": "design premise test"}},
+            "candidates": deepcopy(candidates),
+            "selection": {"detail": f"comparison {index} retained search"}}
+
+    comparisons = [comparison(i) for i in range(3)]
+    physical = {"prediction_status": "refuted", "question_id": "actual_point",
+                "observed_responses": comparisons[1]["new_responses"]}
+    unrelated = {"operator": "ordinary_diagnostic", "binding_path": "shared/other.py",
+                 "status": "calculated", "candidates": deepcopy(candidates)}
+    events = [
+        {"action": "run", "feedback": deepcopy(comparisons[0])},
+        {"action": "response_return", "feedback": {"operator": "reference_response",
+            "response_comparison": deepcopy(comparisons[1]), "physical_test": physical}},
+        {"action": "run", "feedback": unrelated},
+        {"action": "run" if latest_kind == "direct" else "response_return",
+         "feedback": (deepcopy(comparisons[2]) if latest_kind == "direct" else
+                      {"response_comparison": deepcopy(comparisons[2])})}]
+    request = {"evidence": {"observations_file": "laboratory_observations.json"}, "events": events}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    older = [context["events"][0]["feedback"],
+             context["events"][1]["feedback"]["response_comparison"]]
+    for summary, full in zip(older, comparisons):
+        assert _read_context_reference(tmp_path, summary) == full
+        for key in ("status", "comparison_status", "binding_path", "question_id", "response_count",
+                    "family_research", "new_responses", "evidence", "experiment_action", "revision_action",
+                    "premise_design_action"):
+            assert summary.get(key) == full.get(key)
+        assert "candidates" not in summary and "selection" not in summary
+    assert context["events"][1]["feedback"]["physical_test"] == physical
+    assert context["events"][2]["feedback"] == unrelated
+    latest = context["events"][3]["feedback"]
+    if latest_kind == "nested":
+        latest = latest["response_comparison"]
+    pool = latest["candidates"]
+    assert pool["count"] == len(pool["preview"]) == len(candidates)
+    assert _read_context_reference(tmp_path, pool) == candidates
+    for preview, full in zip(pool["preview"], candidates):
+        assert preview == {key: value for key, value in full.items() if key != "program"}
+    assert {key: value for key, value in latest.items() if key != "candidates"} == {
+        key: value for key, value in comparisons[2].items() if key != "candidates"}
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+
+
+@pytest.mark.parametrize("latest_kind", ["direct", "proposal"])
+def test_proposal_returns_share_chronological_response_history(tmp_path, latest_kind):
+    comparisons = [{"operator": "reference_response", "status": "family_research_needed",
+        "comparison_status": "inconclusive", "response_count": 350 + index,
+        "family_research": {"families": [{"id": "cubic", "status": "SAT_WITNESS"}]},
+        "new_responses": [{"frequency": 589. + index, "activated": False,
+                           "evidence": [568 + index]}],
+        "evidence": [568 + index],
+        "experiment_action": {"action": "run", "arguments": {"experiment": {"setting": 590. + index}}},
+        "revision_action": {"action": "run", "arguments": {"operator": "propose_explanations"}},
+        "experiments": [{"id": f"next_{index}", "predictions": {"a": True, "b": False}}],
+        "selection": {"details": f"retained comparison {index} " * 1000}}
+        for index in range(3)]
+
+    def event(comparison, kind):
+        return {"action": "run", "feedback": deepcopy(comparison) if kind == "direct" else {
+            "operator": "propose_explanations", "model_calls": 1,
+            "proposal": {"comparison_result": deepcopy(comparison), "condition_research": {},
+                         "draft_changed": False, "author_work_attempted": False}}}
+
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+               "events": [event(comparisons[0], "proposal"), event(comparisons[1], "direct"),
+                          event(comparisons[2], latest_kind)]}
+    original = deepcopy(request)
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+    shown = [item["feedback"].get("proposal", {}).get("comparison_result", item["feedback"])
+             for item in context["events"]]
+    for summary, full in zip(shown[:-1], comparisons[:-1]):
+        assert _read_context_reference(tmp_path, summary) == full
+        for key in ("status", "comparison_status", "response_count", "family_research",
+                    "new_responses", "evidence", "experiment_action", "revision_action"):
+            assert summary[key] == full[key]
+        assert "selection" not in summary
+    assert shown[0]["json_path"] == ["events", 0, "feedback", "proposal", "comparison_result"]
+    assert shown[-1] == comparisons[-1]
+    assert context["events"][0]["feedback"]["proposal"]["draft_changed"] is False
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+
+
+def test_ordinary_response_search_references_duplicate_pools_and_answers_without_losing_decisions(tmp_path):
+    program = {"op": "add", "children": [{"op": "const", "value": i} for i in range(120)]}
+    candidates = [{"id": f"member_{i}", "family": "authored", "status": "rejected",
+        "target_prediction": 700. + i, "reason": "paid_negative", "conflicting_responses": [
+            {"frequency": 700. + i, "activated": False, "evidence": [390 + i]}],
+        "program": deepcopy(program)} for i in range(20)]
+    hypotheses = [{"id": f"response_{i}", "candidate_id": f"member_{i}",
+        "lower": -1., "upper": 1., "target_prediction": 700. + i,
+        "predictions_by_crystal": {"1": 20., "5": 700. + i}, "program": deepcopy(program)}
+        for i in range(20)]
+    selected = {"number": 5, "prediction": 711.,
+                "predictions": {row["id"]: False for row in hypotheses}}
+    answer = {"family_research": {"selected_role": "shared_premise_research",
+                                  "no_progress_cycles": 3},
+              "conditional_simplification": {"status": "not_adopted"}}
+    feedback = {"operator": "reference_response", "question_id": "ordinary_response",
+        "status": "family_research_needed", **deepcopy(answer),
+        "candidates": candidates, "hypotheses": hypotheses,
+        "operational_fallback": {"diagnosis": "finite_search", "selected_experiment": selected,
+            "predicted_separation": .25, "hypotheses": deepcopy(hypotheses)},
+        "premise_design_action": {"action": "run", "arguments": {
+            "operator": "propose_explanations", "purpose": "design premise test"}}}
+    decision = {"questions": [{"id": "ordinary_response", "status": "answered", "answer": answer}]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "files": {"method_decision.json": json.dumps(decision)},
+        "events": [{"action": "run", "feedback": feedback}]}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    compact = context["events"][0]["feedback"]
+    for key, full in answer.items():
+        assert _read_context_reference(tmp_path, compact[key]) == full
+    pool = compact["candidates"]
+    assert _read_context_reference(tmp_path, pool) == candidates
+    assert pool["preview"] == [{k: v for k, v in row.items() if k != "program"} for row in candidates]
+    assert _read_context_reference(tmp_path, compact["hypotheses"]) == hypotheses
+    fallback = compact["operational_fallback"]
+    assert _read_context_reference(tmp_path, fallback["hypotheses"]) == hypotheses
+    assert {k: v for k, v in fallback.items() if k != "hypotheses"} == {
+        k: v for k, v in feedback["operational_fallback"].items() if k != "hypotheses"}
+    assert compact["premise_design_action"] == feedback["premise_design_action"]
+    assert request == original
+    assert json.loads((tmp_path / "research_context.json").read_text()) == original
+
+
+@pytest.mark.parametrize("focus_changed", [False, True])
+def test_unchanged_past_families_share_full_reference_but_new_verdicts_and_focus_changes_remain(
+        tmp_path, focus_changed):
+    family = {"id": "authored_cubic", "status": "SAT_WITNESS", "reason": "compatible",
+              "basis": [{"op": "feature", "name": "signal"}]}
+    questions = [{"id": f"response_{i}", "question": "Which response mechanism survives?",
+        "status": "inconclusive", "evidence": [20, 30 + i], "answer": {
+            "family_research": {"response_count": 31 + i, "no_progress_cycles": i,
+                "selected_role": "shared_premise_research",
+                "research_obligation": {"question": f"Research obligation {i}"},
+                "families": [deepcopy(family)]}}} for i in range(4)]
+    questions[2]["answer"]["family_research"]["families"][0].update(
+        status="UNSAT_VERIFIED", reason="measured_counterexample")
+    decision = {"questions": questions}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    focus = deepcopy(questions[1])
+    if focus_changed:
+        focus["answer"]["family_research"]["research_obligation"]["question"] = "New unsaved premise test"
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "files": {"method_decision.json": json.dumps(decision)}, "research_focus": {"question": focus}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    shown = context["method_decision"]["questions"]
+    repeated = shown[1]["answer"]["family_research"]
+    assert _read_context_reference(tmp_path, repeated["families"]) == [family]
+    assert repeated["families"]["json_path"] == ["questions", 0, "answer", "family_research", "families"]
+    for key in ("response_count", "no_progress_cycles", "selected_role", "research_obligation"):
+        assert repeated[key] == questions[1]["answer"]["family_research"][key]
+    changed = shown[2]["answer"]["family_research"]["families"][0]
+    assert changed["status"] == "UNSAT_VERIFIED"
+    assert changed["reason"] == "measured_counterexample"
+    assert _read_context_reference(tmp_path, changed["basis"]) == family["basis"]
+    assert shown[3] == questions[3]
+    shown_focus = context["research_focus"]["question"]
+    if focus_changed:
+        assert shown_focus == focus
+    else:
+        assert _read_context_reference(tmp_path, shown_focus) == questions[1]
+        assert shown_focus["id"] == focus["id"]
+        assert shown_focus["status"] == focus["status"]
+    assert request == original
+
+
+def test_program_repairs_share_unchanged_answer_without_merging_changed_question_or_new_answer(tmp_path):
+    answer = {"family_research": {"status": "shared_premise_research",
+                                  "diagnostic": "complete retained result " * 700}}
+    current = {"id": "response_15", "status": "inconclusive", "question": "Revised question",
+               "answer": deepcopy(answer), "evidence": [21, 30]}
+    previous = {**deepcopy(current), "question": "Original question"}
+    changed = deepcopy(current)
+    changed["answer"]["family_research"]["status"] = "new_contradiction"
+    decision = {"questions": [current]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "files": {"method_decision.json": json.dumps(decision)}, "events": [
+            {"feedback": {"question": previous, "procedure": {"error": "parse_error"}}},
+            {"feedback": {"question": deepcopy(current), "procedure": {"status": "repaired"}}},
+            {"feedback": {"question": changed, "procedure": {"status": "new_evidence"}}}]}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    for index in (0, 1):
+        feedback = context["events"][index]["feedback"]
+        assert _read_context_reference(tmp_path, feedback["question"]["answer"]) == answer
+        assert {k: v for k, v in feedback["question"].items() if k != "answer"} == {
+            k: v for k, v in request["events"][index]["feedback"]["question"].items() if k != "answer"}
+        assert feedback["procedure"] == request["events"][index]["feedback"]["procedure"]
+    assert context["events"][2]["feedback"] == request["events"][2]["feedback"]
+    assert request == original
+
+
+def test_equal_experiment_prediction_vectors_are_shared_but_changed_outcomes_stay_inline(tmp_path):
+    predictions = {f"response_{i}": False for i in range(30)}
+    changed = {**predictions, "response_7": True}
+    experiments = [{"id": f"setting_{i}", "number": 5, "prediction": 200. + i,
+                    "predictions": deepcopy(vector)}
+                   for i, vector in enumerate((predictions, predictions, changed, changed))]
+    small = {"response_0": False}
+    numerical = {f"response_{i}": float(i) for i in range(30)}
+    request = {"evidence": {"observations_file": "laboratory_observations.json"}, "events": [
+        {"feedback": {"operator": "reference_response", "experiments": experiments,
+                      "small_predictions": {"predictions": small},
+                      "numerical_predictions": {"predictions": numerical}}}]}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    feedback = context["events"][0]["feedback"]
+    shown = feedback["experiments"]
+    assert shown[0]["predictions"] == predictions
+    assert shown[2]["predictions"] == changed
+    for index in (1, 3):
+        assert _read_context_reference(tmp_path, shown[index]["predictions"]) == experiments[index]["predictions"]
+    for actual, expected in zip(shown, experiments):
+        assert {k: v for k, v in actual.items() if k != "predictions"} == {
+            k: v for k, v in expected.items() if k != "predictions"}
+    assert feedback["small_predictions"]["predictions"] == small
+    assert feedback["numerical_predictions"]["predictions"] == numerical
+    assert request == original
+
+
+def test_source_and_decision_comparisons_share_pool_after_canonical_family_references(tmp_path):
+    candidates = [{"id": f"member_{index}", "family": "conditional", "origin": "authored",
+        "authored_id": "regime_rule", "status": "rejected", "target_prediction": 577. + index,
+        "conflicting_responses": [{"crystal": 5, "frequency": 577., "activated": False,
+                                    "evidence": [510]}],
+        "program": {"op": "add", "children": [{"op": "const", "value": j}
+                                                for j in range(100)]}}
+        for index in range(20)]
+    family = {"families": [{"id": "conditional", "status": "SAT_WITNESS"}],
+              "selected_role": "shared_premise_research"}
+    comparison = {"operator": "reference_response", "question_id": "response",
+        "candidates": candidates, "family_research": family,
+        "new_responses": [{"crystal": 5, "frequency": 577., "activated": False, "evidence": [510]}],
+        "revision_action": {"action": "run", "arguments": {"operator": "propose_explanations",
+                                                            "path": "shared/response.py"}}}
+    decision = {"questions": [{"id": "response", "status": "inconclusive",
+                               "answer": {"family_research": deepcopy(family)}}],
+                "explanation_proposals": [{"comparison_result": deepcopy(comparison)}]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "files": {"method_decision.json": json.dumps(decision)},
+        "research": {"llm_inquiries": {"source": {"comparison_result": comparison}}}}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    source = context['research']['llm_inquiries']['source']['comparison_result']
+    repeated = context['method_decision']['explanation_proposals'][0]['comparison_result']
+    assert _read_context_reference(tmp_path, source['family_research']) == family
+    assert 'candidates' not in repeated
+    assert _read_context_reference(tmp_path, repeated) == comparison
+    assert repeated['new_responses'] == comparison['new_responses']
+    assert repeated['revision_action'] == comparison['revision_action']
+    for row in source['candidates']['preview']:
+        assert row['origin'] == 'authored' and row['authored_id'] == 'regime_rule'
+        assert row['status'] == 'rejected' and row['conflicting_responses'][0]['activated'] is False
+    assert request == original
+
+
+def test_changed_response_comparisons_share_only_identical_pools_and_counterexamples(tmp_path):
+    conflicts = [{"crystal": 5, "frequency": 570. + i, "activated": False, "evidence": [510 + i]}
+                 for i in range(8)]
+    candidates = [{"id": f"member_{index}", "family": "conditional", "origin": "authored",
+        "status": "rejected", "target_prediction": 577. + index, "response_count": 332,
+        "conflicting_responses": deepcopy(conflicts),
+        "program": {"op": "add", "children": [{"op": "const", "value": j}
+                                                for j in range(100)]}}
+        for index in range(20)]
+    original = {"operator": "reference_response", "candidates": candidates, "response_count": 332,
+                "family_research": {}, "experiment_action": None}
+    same_pool = {**deepcopy(original), "response_count": 333,
+        "experiment_action": {"action": "run", "arguments": {"experiment": {"setting": 612.}}}}
+    changed = deepcopy(same_pool)
+    changed['candidates'][0]['response_count'] = 333
+    changed['candidates'][1]['conflicting_responses'].append(
+        {"crystal": 5, "frequency": 612., "activated": False, "evidence": [530]})
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+        "research": {"llm_inquiries": {name: {"comparison_result": value}
+                     for name, value in [('first', original), ('same', same_pool), ('changed', changed)]}}}
+    before = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    first, same, revised = [context['research']['llm_inquiries'][name]['comparison_result']
+                            for name in ('first', 'same', 'changed')]
+    assert first['candidates']['preview'][0]['conflicting_responses'] == conflicts
+    assert 'preview' not in same['candidates']
+    assert _read_context_reference(tmp_path, same['candidates']) == candidates
+    assert same['response_count'] == 333
+    assert same['experiment_action'] == same_pool['experiment_action']
+    assert _read_context_reference(tmp_path, revised['candidates']) == changed['candidates']
+    reused = revised['candidates']['preview'][0]['conflicting_responses']
+    assert _read_context_reference(tmp_path, reused) == conflicts
+    assert revised['candidates']['preview'][1]['conflicting_responses'] == changed['candidates'][1]['conflicting_responses']
+    assert revised['experiment_action'] == changed['experiment_action']
+    assert request == before
+
+
+@pytest.mark.parametrize("answer", [
+    "The latest target trial was negative; no activating setting is established.",
+    {"family_research": {"status": "SAT_WITNESS"}},
+])
+def test_text_analysis_answer_keeps_prior_structured_response_feedback(tmp_path, answer):
+    family = {"status": "SAT_WITNESS"}
+    feedback = {"operator": "reference_response", "question_id": "extension",
+                "family_research": deepcopy(family)}
+    decision = {"questions": [{"id": "extension", "status": "inconclusive",
+                               "answer": deepcopy(answer)}]}
+    (tmp_path / "method_decision.json").write_text(json.dumps(decision))
+    request = {"evidence": {"observations_file": "laboratory_observations.json"},
+               "files": {"method_decision.json": json.dumps(decision)},
+               "events": [{"action": "run", "feedback": feedback}]}
+    original = deepcopy(request)
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
+
+    assert context["method_decision"]["questions"][0]["answer"] == answer
+    retained = context["events"][0]["feedback"]["family_research"]
+    if isinstance(answer, dict):
+        assert _read_context_reference(tmp_path, retained) == family
+    else:
+        assert retained == family
+    assert request == original

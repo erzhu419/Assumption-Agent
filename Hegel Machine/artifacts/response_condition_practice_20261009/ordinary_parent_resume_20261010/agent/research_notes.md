@@ -1,0 +1,9 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) = (1,1,1), (1,1,2), (3,3,3), (4,5,4), with operational successful settings 15.8, 20, 31.4, and 54 Hz (records 10–24, 63; crystal 1 repeat 191). Crystal 5 measures (5,4,19.8872) (records 14, 19, 25). Numerous crystal-5 settings are inactive, including 4746, 666, 729, 222, 563, 363, 577–590, and 758 Hz (e.g. records 350, 395, 422, 430, 434, 449, 511–523, 550–561, 568, 571). These are pointwise negatives, not proof of universal inactivity.
+
+**Model evidence:** Earlier `log_signal` aliases were raw signal, not logarithmic (21–25, 117, 119). A genuine natural-log-signal cubic/shared-connected-band comparison remains SAT-compatible on 352 paid responses, not confirmed. Inactivity at 589 and 590 Hz (568, 571) contradicts particular witnesses predicting activation at those settings, not the whole family. On the currently reported 591/748-Hz panel, admitted outcome signatures are [false,false], [false,true], and [true,false]; [true,true] is excluded. This panel can distinguish remaining conditional witnesses but cannot establish a general law. The finite Boolean-rule search is non-exhaustive; its empty target support is not proof of physical impossibility.
+
+**Working explanation and alternatives:** No unique measured feature, coefficient set, functional form, or shared-response premise explains crystal 5. Common connected-band transfer is conditional; object-specific response, unmeasured features, and other forms remain possible.
+
+**Planned action (not yet done):** Test crystal 5 at 591 Hz, a reachable setting on the current comparison panel, and use its actual outcome to update the retained witnesses. Treat it as pointwise evidence only; afterward, reassess whether a justified next intervention exists.

@@ -230,6 +230,55 @@ def test_invalid_contrast_keeps_unconsumed_return_for_repair(tmp_path, bad_sourc
     assert repaired["experiment"]["question"]["status"] == "supported"
 
 
+def test_missing_parent_procedure_retains_its_return_until_repaired_before_next_parent(tmp_path):
+    from test_discoveryworld_parent_research import prepared
+
+    agent, lab = prepared(tmp_path)
+    agent._question({"id": "later", "question": "What follows from the next returned measurement?"})
+    later_child = agent._question({"id": "later_measurement", "parent_id": "later",
+                                   "question": "What was measured?"})
+    agent._record_answer(later_child, {"status": "supported", "evidence": [0],
+                                      "answer": {"measured": True}})
+    focus = agent._request()["research_focus"]
+    assert focus["question"]["id"] == "task"
+    assert not (tmp_path / focus["path"]).exists()
+    old_markers = deepcopy(question(agent).get("reviewed_child_answers", {}))
+    old_evidence, old_actions = deepcopy(agent.observations), deepcopy(lab.actions)
+
+    with pytest.raises(FileNotFoundError):
+        agent._execute("run", {"operator": "procedure", "path": focus["path"]}, lab)
+
+    retry = agent._request()["research_focus"]
+    assert retry["question"]["id"] == focus["question"]["id"]
+    assert retry["path"] == focus["path"]
+    assert question(agent).get("reviewed_child_answers", {}) == old_markers
+    assert agent.observations == old_evidence and lab.actions == old_actions
+    source = f"""def select_actions(spec, observations, memory):
+    if spec['current_observation']['dialog_box']['is_in_dialog']:
+        return {{'stop': 'The live controls have been observed and analyzed'}}
+    return {{'actions': [{{'action': 'TALK', 'arg1': 7}}],
+            'research_question': {{'id': 'task'}},
+            'after_observation': [{{'action': 'evaluate', 'arguments': {{
+                'path': {focus['path']!r}, 'question_id': 'task'}}}}]}}
+
+def answer(spec, observations, memory):
+    record = observations[-1]
+    return {{'status': 'inconclusive', 'evidence': [record['index']],
+            'answer': {{'menu_open': record['observation']['dialog_box']['is_in_dialog'],
+                       'remaining': 'Observing controls does not establish activation'}}}}
+"""
+
+    repaired = agent._execute("write", {"path": retry["path"], "code": source}, lab)
+
+    assert repaired["procedure"]["status"] == "method_stopped"
+    assert lab.actions[len(old_actions):] == [{"action": "TALK", "arg1": 7}]
+    assert question(agent)["answer"]["menu_open"] is True
+    assert question(agent)["evidence"] == [len(old_evidence)]
+    assert question(agent)["reviewed_child_answers"]["instrument"]["status"] == "supported"
+    assert agent._request()["research_focus"]["question"]["id"] == "later"
+    assert agent.provider.requests == []
+
+
 def test_valid_contrast_with_failed_answer_uses_existing_analysis_repair(tmp_path):
     agent, lab, focus = contrast_return(tmp_path)
     bad_analysis = CONTRAST.replace("    record = observations[-1]", "    raise ValueError('Interpret actual response')\n    record = observations[-1]")

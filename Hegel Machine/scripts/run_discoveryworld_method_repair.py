@@ -32,7 +32,7 @@ def restore_repair(agent, laboratory, previous, previous_workspace):
         "environment_steps": previous["costs"]["environment_steps"]})
     agent.observations = deepcopy(records)
     for path in (previous_workspace / "shared").rglob("*"):
-        if path.is_file():
+        if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
             agent._execute("write", {"path": str(path.relative_to(previous_workspace)),
                 "code": path.read_text()}, laboratory)
     notes = previous_workspace / "research_notes.md"

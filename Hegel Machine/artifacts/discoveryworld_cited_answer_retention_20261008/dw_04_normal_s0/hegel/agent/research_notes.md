@@ -1,0 +1,5 @@
+Evidence: Reference crystal gaps and frequencies are 27.47 nm/3880.56 Hz and 36.56 nm/2239.92 Hz (gap measurements 120, 122; frequency records 107, 110). Crystal 3 and 4 gaps are 47.52 nm and 58.2 nm (30, 35). Inverse-square extrapolation suggested roughly 1310 Hz and 870 Hz, but it is not validated.
+
+Crystal 3 is installed in reactor 10581 (267). Its public state was uncalibrated at 1296 (428), 1297 (429), and 1310 Hz (448); the erroneous 1296 answer was corrected using record 428. Crystal 4 is installed in reactor 34810 (380) and remained uncalibrated at 870 (441), 884 (433), 916 (400), and 886 after empty-setting then reinsertion (370–380). ACTIVATE on uncalibrated reactors is unsupported (295). Reactor 1 changed activated→uncalibrated→activated through a reversible frequency perturbation (422–424), confirming this readout only for that reference.
+
+Current live state: reactor 3 dialog open at 1310 Hz with crystal 3 inside. Proposed test (not yet observed): decrease 10 Hz to 1300 and inspect the public reactor state, not only its readback. Exact target settings and task completion remain unresolved.

@@ -1,0 +1,9 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) = (1,1,1), (1,1,2), (3,3,3), (4,5,4), with operational successful settings 15.8, 20, 31.4, 54 Hz (records 10–24, 63; crystal 1 reconfirmed at 191). Crystal 5 measures (5,4,19.8872) (records 14, 19, 25). It was inactive at numerous tested frequencies, including 666, 729, 222, 563, 363, and 4746 Hz (records 350, 395, 422, 430, 434, 449). These are pointwise negatives only. The interrupted 197-Hz trial reached 165 and 175 Hz, both inactive; 197 Hz was not reached (360–361).
+
+**Model evidence:** The earlier `log_signal` alias was raw signal and inadequate (21–25, 117, 119). A distinct genuine natural-log-signal cubic remains conditionally compatible under deterministic activation and a shared connected residual-band assumption; compatibility is not confirmation. Several fitted settings failed physically. Branch-limited/incomplete searches remain unresolved, not refuted.
+
+**Conclusion and alternatives:** No unique measured variable, coefficient family, functional form, or shared-response premise explains crystal 5. Common-band transfer remains an assumption; object-specific response and missing features remain possible. Universal inactivity and a confirmed calibration law are unsupported.
+
+**Next prerequisite:** The fixed-panel premise comparison found no executable discrimination (zero predicted separation). Object-specific/missing-feature alternatives currently lack quantitative forecasts. Progress requires quantitative competing models with distinct predictions for the same reachable controlled measurement, or a measurement enabling such predictions; another frequency guess is not justified.

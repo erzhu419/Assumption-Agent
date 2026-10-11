@@ -1,0 +1,9 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal)=(1,1,1),(1,1,2),(3,3,3),(4,5,4), with successful settings 15.8, 20, 31.4, 54 Hz (evidence 10–24, 63; crystal 1 reconfirmed at 191). Crystal 5 measures (5,4,19.8872) (14,19,25). Many crystal-5 settings were inactive, including 666 Hz (350), 727–729 Hz (389, 391–392, 394–395), and fitted predictions at 4784, 4721, 16.8, 4735, 4839, 4787, 4759, 4862, 4808, 4671, 4862, and 729 Hz (176, 186, 189, 218, 225, 283, 288, 296, 302, 339, 350, 395); each is a pointwise negative.
+
+**Model evidence:** The purported earlier `log_signal` path used raw signal; its ~249-Hz prediction failed (117,119). A separate genuine natural-log-signal cubic remains SAT_WITNESS under deterministic activation and a shared connected residual-band premise: compatible, not confirmed. Its ~665.6-Hz prediction failed at 666 (350). Its coefficient search was incomplete (128/130 branches), an unresolved computation rather than refutation. Other family exclusions are limited to their declared bases and scopes. The latest log-cubic comparison found no new target response; repeated candidate-setting tests have not established a law.
+
+**Working explanation / alternatives:** No unique measured variable, functional form, or shared-response premise explains crystal 5. A genuine log-signal cubic/common-band model remains compatible with paid responses, but alternative models and failure of cross-crystal transfer remain open. Inactivity at tested points does not establish universal inactivity.
+
+**Next action proposed:** Recompute the existing response-family analysis on all current paid observations, then use its actual surviving hypotheses and experiment predictions to decide whether a discriminating setting is justified. No new physical comparison has yet been selected or performed.

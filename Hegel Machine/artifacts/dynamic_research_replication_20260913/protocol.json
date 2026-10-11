@@ -1,0 +1,108 @@
+{
+  "experiment": "dynamic_research_independent_apparatus_replication",
+  "paired_seeds": [
+    23041027299,
+    41046487852,
+    28961486863,
+    91267201675,
+    57481239395,
+    33131365067
+  ],
+  "stages": [
+    "source",
+    "same_apparatus",
+    "instrument_change",
+    "mechanism_only_change",
+    "return_source"
+  ],
+  "stage_seed_offset": 10007,
+  "hegel_config": {
+    "observation_budget": 384,
+    "compute_budget": 360000,
+    "minimum_improvement": 1e-07,
+    "max_rounds": 5,
+    "max_history": 4,
+    "active_probes": true
+  },
+  "code_config": {
+    "observation_budget": 384,
+    "measurement_budget": 1536,
+    "compute_budget": 360000,
+    "execution_seconds": 60.0,
+    "max_steps": 12,
+    "max_model_calls": 12,
+    "token_budget": 240000
+  },
+  "provider": {
+    "executable": "/home/erzhu419/.local/bin/codex",
+    "timeout_seconds": 300,
+    "model": null
+  },
+  "provider_runtime": {
+    "version": "codex-cli 0.153.3",
+    "configured_model": "gpt-5.5",
+    "configured_reasoning_effort": "xhigh",
+    "model_override": null
+  },
+  "terminal": {
+    "trajectories": 4,
+    "length": 64,
+    "seed_offset": 1000003,
+    "solved_threshold": 1e-06
+  },
+  "compute_note": "The same numeric compute cap bounds each arm, but Code scored prediction rows and Hegel search operations are different resources. Report them separately alongside actual provider tokens, provider wall time, Python execution seconds and total learning wall time. No equivalent-compute claim.",
+  "contract": "All arms start with empty knowledge and receive the same public dynamic instrument interface, paid channel costs and observation limits. Code uses the actual CodexCodeProvider action loop and ordinary Python; Hegel uses the complete UnifiedResearchAgent, without supplied candidate overrides. Neither receives the private sensor formula, delay, mechanism labels or final evaluation observations. Full task state and each arm own accumulated knowledge are restored through JSON at task boundaries. All five tasks in all arms must stop learning before independent evaluation on identical seeded trajectories using each model selected channels. An unfinished Code task with a last_successful_evaluation model retains that model for terminal evaluation while reporting its actual status and model origin. Missing or failed models remain explicit. Initial learning, failed attempts and mechanism/instrument revisions count toward learning costs; terminal measurement cost remains separate. Six independent apparatus instances each run five sequential tasks. Stages are not independent samples. The original one-apparatus five-task result is development evidence kept separate. No resource extensions are included. Terminal evaluation and aggregation are owned by the root task after all learning; this driver runs learning only.",
+  "task_profile": "confirmation",
+  "statistical_unit": "one independent apparatus and its full five-stage sequence",
+  "seed_generation": {
+    "algorithm": "random.Random(20260913079).sample(range(10000000000,99999999999),6)",
+    "fixed_before_any_replication_result": true
+  },
+  "maximum_concurrent_code_processes": 3,
+  "development_evidence": "artifacts/dynamic_code_comparison_20260913/10065320211/comparison.json",
+  "arms": {
+    "code": {
+      "session": "code",
+      "runtime_source": "artifacts/dynamic_research_replication_20260913/v078_runtime/src"
+    },
+    "hegel_v078": {
+      "session": "hegel",
+      "runtime_source": "artifacts/dynamic_research_replication_20260913/v078_runtime/src"
+    },
+    "hegel_revised": {
+      "session": "hegel",
+      "runtime_source": "artifacts/dynamic_research_replication_20260913/v079_runtime/src"
+    }
+  },
+  "laboratory_contract": "The same confirmation apparatus implementation is loaded by all three arms. Before outcomes are observed, confirmation samples source and changed instrument delays and instrument/response coefficients from the shared declared finite-history polynomial family. Source, same-apparatus and return use the same source parameters. Instrument-only and mechanism-only changes retain their intended causal separation. Learners only receive the public interface and purchased observations, never these private settings. Exact family ranges live in the shared frozen laboratory implementation.",
+  "confirmation_parameter_ranges": {
+    "instrument_delays": "sample two distinct values from [1,2,3]",
+    "instrument_current_gain": [
+      0.25,
+      0.65
+    ],
+    "instrument_delayed_gain": "independent sign +/-1 times uniform[0.45,1.05]",
+    "instrument_delayed_square_gain": [
+      0.08,
+      0.28
+    ],
+    "response_offset": [
+      -0.25,
+      0.25
+    ],
+    "response_current_control_gain": [
+      -0.6,
+      0.6
+    ],
+    "response_sensor_square_gain": [
+      0.6,
+      1.5
+    ],
+    "response_previous_sensor_gain": "independent sign +/-1 times uniform[0.2,0.65]"
+  },
+  "shared_laboratory_source": "artifacts/dynamic_research_replication_20260913/dynamic_instrument_lab.py",
+  "runtime_lineage": {
+    "v078_runtime": "original frozen 0.78 implementation, only the shared confirmation laboratory file replaced",
+    "v079_runtime": "revised cognitive implementation to be frozen separately by root before terminal observations"
+  }
+}

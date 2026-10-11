@@ -1,0 +1,5 @@
+Observed evidence: reference gap/frequency pairs are 27.47 nm/3880.56 Hz and 36.56 nm/2239.92 Hz (gap records 120, 122; frequency records 107, 110); target gaps are 47.52 and 58.2 nm (30, 35). Inverse-square scaling estimates approximately 1296 Hz for crystal 3 and 884 Hz for crystal 4; the two-point power-law alternative estimates about 1353/916 Hz. Neither law is established. Both crystals are installed (crystal 3: 267; crystal 4: 380).
+
+Reactor 4 remained publicly uncalibrated at 870 Hz (388), 886 Hz with crystal present (404), 916 Hz with crystal present (400), and after being set empty at 886 Hz then reinserting crystal 4 (370–380). ACTIVATE is unsupported on the uncalibrated reactor (295). Latest trial changed reactor 4 to 874 Hz and exited (410–411); no physical confirmation was observed, and completion remains false.
+
+Next proposed trial: target reactor 3, believed set to 1320 Hz, and adjust to the inverse-square estimate 1296 Hz (−20 then −4), exit, and check actual public reactor/task state. This is a hypothesis test, not yet observed; readback by itself will not establish correctness.

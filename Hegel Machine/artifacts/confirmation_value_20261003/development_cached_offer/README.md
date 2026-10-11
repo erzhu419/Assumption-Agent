@@ -1,0 +1,1 @@
+These completed local runs used the historically paid offer. They demonstrate executable local repair, but do not test the new screen/value decision. The subsequent comparison rescreens the identical historic report and pays the new screen within its original allowance. No source or threshold was changed in response to these outputs.

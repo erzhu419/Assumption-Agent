@@ -1,0 +1,9 @@
+## Crystal 5 calibration notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) = (1,1,1), (1,1,2), (3,3,3), (4,5,4), with operational successful settings 15.8, 20, 31.4, 54 Hz (records 10–24, 63; crystal 1 reconfirmed at 191). Crystal 5 measures (5,4,19.8872) (14, 19, 25). It was inactive at many tested settings, including 4746, 666, 222, 574–576, 747, and 541 Hz (449, 350, 422, 486, 490, 498, 474); negatives are pointwise. Crystal 2 was inactive at 19 and active at 20 Hz (477–478).
+
+**Model evidence:** The earlier `log_signal` alias was raw signal and inadequate (21–25, 117, 119). A genuine natural-log-signal cubic remains a scoped SAT_WITNESS against paid responses, conditional on deterministic activation and a shared connected residual band; this is compatibility, not confirmation. Bounded coefficient search is incomplete (128/164 branches). The 576-Hz negative contradicts the frozen activation-predicting witness but not the inactivity-predicting alternative. At 747 Hz crystal 5 was inactive (498); this too is pointwise.
+
+**Working explanation / alternatives:** No unique measured feature, coefficient family, functional form, or shared-response premise is established. Common-band transfer remains assumed; object-specific response, missing features and other forms remain possible. Universal inactivity is unsupported.
+
+**Proposed experiment (not yet observed):** Test crystal 5 at 777 Hz. The surviving joint natural-log-signal cubic witness previously predicted activation there, while another retained witness predicted inactivity. The setting is near current 747 Hz; treat either result as a pointwise outcome, not confirmation of a general law.

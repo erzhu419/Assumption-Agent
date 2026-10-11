@@ -214,17 +214,112 @@ def _control_grids(observations, responses, reference_ids):
     return grids
 
 
-def _tune(view, prediction):
+def _tune(view, prediction, after_observation=None):
     _, frequency = _dialog(view)
     delta = prediction - frequency
-    choices = []
+    choices, steps = [], {}
     for key, label in view['dialog_box'].get('dialogOptions', {}).items():
         match = re.search(r'(increase|decrease) frequency by (\d+) hz', label, re.I)
         if match:
             step = int(match[2]) * (1 if match[1].lower() == 'increase' else -1)
+            steps[int(key)] = step
             if abs(delta - step) < abs(delta):
                 choices.append((abs(delta - step), int(key)))
-    return {'actions': [{'chosen_dialog_option_int': min(choices)[1]}]} if choices else None
+    if not choices:
+        return None
+    _, choice = min(choices)
+    result = {'actions': [{'chosen_dialog_option_int': choice}]}
+    remaining = delta - steps[choice]
+    # Schedule the existing physical answer on the final adjustment. Its actual
+    # readout, not this planned control step, decides support or refutation.
+    if (after_observation and abs(remaining) <= .51
+            and not any(abs(remaining - step) < abs(remaining) for step in steps.values())):
+        result['after_observation'] = after_observation
+    return result
+
+
+def _prepared_reference_recovery(state, test):
+    preparation = test['control_preparation']
+    responses = [r for r in state['response_settings'] if r['crystal'] == test['number']]
+    grid = preparation['grid']
+    positives = [r['frequency'] for r in responses if r['activated'] and
+        abs((r['frequency'] - grid['origin']) / grid['step'] -
+            round((r['frequency'] - grid['origin']) / grid['step'])) < 1e-6]
+    negatives = {r['frequency'] for r in responses if not r['activated']}
+    settings = list(dict.fromkeys(sorted(positives, key=lambda f: abs(f - test['restore_frequency']))
+        + [f for f in preparation['restore_settings'] if f not in negatives]))
+    return {'number': test['number'], 'crystal': test['crystal'], 'reactor': test['reactor'],
+        'original_frequency': test['restore_frequency'], 'settings': settings,
+        'response_question': test.get('response_question', test['question']),
+        'control_preparation': preparation}
+
+
+def _prepared_reference_step(state, view, observations, questions):
+    """Prepare a different control lattice, then restore an actually active reference.
+
+    Boundary saturation and the adjacent recovery points are predictions to test.
+    The original fractional setting may cease to be reachable after preparation.
+    """
+    test = state.get('test')
+    if test and test.get('control_preparation'):
+        status = questions.get(test['question'], {}).get('status')
+        if status in ('supported', 'refuted') or (test.get('tuning_finished') and status == 'inconclusive'):
+            state['prepared_recovery'] = _prepared_reference_recovery(state, test)
+            state.setdefault('tests', []).append({**test, 'status': status})
+            state.pop('test')
+            _save(state)
+        elif not test.get('preparation_evidence') and view.get('dialog_box', {}).get('is_in_dialog'):
+            number, frequency = _dialog(view)
+            if number is None:
+                return {'stop': 'Cannot read the control after the proposed boundary preparation'}
+            if number != test['number']:
+                return None
+            boundary = test['control_preparation']['boundary']
+            grid = test['control_preparation']['grid']
+            if abs(frequency - boundary) < 1e-6:
+                test['preparation_evidence'] = [observations[-1]['index']]
+                _save(state)
+            elif not grid['lower'] <= frequency <= grid['upper']:
+                return {'stop': 'The proposed bounded control did not saturate as predicted'}
+            else:
+                choices = []
+                for key, label in view['dialog_box'].get('dialogOptions', {}).items():
+                    match = re.search(r'(increase|decrease) frequency by (\d+) hz', label, re.I)
+                    if match:
+                        step = int(match[2]) * (1 if match[1].lower() == 'increase' else -1)
+                        predicted = min(grid['upper'], max(grid['lower'], frequency + step))
+                        if abs(predicted - boundary) < abs(frequency - boundary):
+                            choices.append((abs(predicted - boundary), int(key)))
+                if choices:
+                    return {'actions': [{'chosen_dialog_option_int': min(choices)[1]}]}
+                return {'stop': 'No offered control reaches the proposed preparation boundary'}
+    recovery = state.get('prepared_recovery')
+    if recovery is None:
+        return None
+    if not recovery['settings']:
+        return {'stop': 'New control lattice has no confirmed reference recovery; retain its failed tests'}
+    number, frequency = _dialog(view)
+    if not view.get('dialog_box', {}).get('is_in_dialog') or number != recovery['number']:
+        if view.get('dialog_box', {}).get('is_in_dialog'):
+            return _exit(view)
+        accessible = {obj['uuid'] for obj in view.get('accessibleEnvironmentObjects', [])}
+        return (_action('TALK', recovery['reactor']) if recovery['reactor'] in accessible
+                else _approach(recovery['reactor'], view))
+    tuning = _tune(view, recovery['settings'][0])
+    if tuning:
+        return tuning
+    supported = (_installed(_objects(view), recovery['crystal'], recovery['reactor'])
+                 and _activated(_objects(view), recovery['reactor']))
+    state.setdefault('setting_recoveries', []).append({**recovery,
+        'settings': list(recovery['settings']),
+        'requested_frequency': recovery['settings'][0], 'actual_frequency': frequency,
+        'restored': supported, 'evidence': [observations[-1]['index']]})
+    if supported:
+        state.pop('prepared_recovery')
+    else:
+        recovery['settings'].pop(0)
+    _save(state)
+    return _exit(view)
 
 
 def _location(public_spec, part):
@@ -258,13 +353,13 @@ def answer(public_spec, observations, memory):
     state = json.loads(STATE.read_text())
     test = state['test']
     response_feedback = None
-    if test.get('response_question'):
+    if test.get('response_question') or test.get('authored_experiment'):
         _, crystals, reactors, _, _ = _scan(observations, public_spec['current_observation'])
         state['response_settings'] = _response_settings(observations, crystals, reactors)
         measured = [{**item, 'evidence': [i for i in item['evidence'] if i >= test['started']]}
                     for item in state['response_settings'] if item['crystal'] == test['number']
                     and any(i >= test['started'] for i in item['evidence'])]
-        hypotheses = state['response_research']['hypotheses']
+        hypotheses = ([] if test.get('authored_experiment') else state['response_research']['hypotheses'])
         refuted = [item['id'] for item in hypotheses if any(
             (item['lower'] <= response['frequency'] -
                 item['predictions_by_crystal'][str(test['number'])] <= item['upper'])
@@ -275,6 +370,15 @@ def answer(public_spec, observations, memory):
             'refuted_hypotheses': refuted,
             'scope': 'Fixed response hypotheses compared with actual intermediate settings; '
                      'a successful intermediate setting does not confirm the requested setting'}
+        if test.get('band_revision'):
+            revised = test['band_revision']['hypotheses']
+            contradicted = [item['id'] for item in revised if any(
+                (item['lower'] <= response['frequency'] -
+                    item['predictions_by_crystal'][str(test['number'])] <= item['upper'])
+                    != response['activated'] for response in measured)]
+            response_feedback['band_revision'] = {
+                'remaining_hypotheses': [h['id'] for h in revised if h['id'] not in contradicted],
+                'refuted_hypotheses': contradicted}
         state['response_feedback'] = response_feedback
         _save(state)
     for record in reversed(observations):
@@ -282,7 +386,7 @@ def answer(public_spec, observations, memory):
             break
         view = _view(record)
         number, frequency = _dialog(view)
-        tolerance = 1e-6 if 'restore_frequency' in test else .51
+        tolerance = 1e-6 if 'restore_frequency' in test or test.get('authored_experiment') else .51
         if number != test['number'] or abs(frequency - test['prediction']) > tolerance:
             continue
         objects = _objects(view)
@@ -306,14 +410,94 @@ def answer(public_spec, observations, memory):
             'evidence': []}
 
 
+def _point_needs_response(state, number):
+    """Use acquired target responses after a new target's point failure."""
+    if Path('shared/frozen_response_knowledge.json').exists():
+        transfer = state.get('response_research', {}).get('frozen_transfer', {})
+        if transfer.get('status') not in ('refuted', 'unavailable', 'exhausted'):
+            return True
+    other_targets = [test for test in state.get('tests', [])
+                     if test['number'] != number
+                     and test['number'] in state.get('target_numbers', [])
+                     and not test.get('authored_experiment')]
+    supported = {test['family'] for test in other_targets if test['status'] == 'supported'}
+    # Tuning can solve a target without confirming the requested point or
+    # naming a winning formula. completed is refreshed from paid responses
+    # and current installed/activated observations before this decision.
+    completed_target = any(target != number and target in state.get('target_numbers', [])
+                           for target in state.get('completed', []))
+    response_progress = any(test.get('response_question')
+        and 'restore_frequency' not in test
+        and (test['status'] == 'supported' or test['number'] in state.get('completed', []))
+        for test in other_targets)
+    return any(test['number'] == number and test['status'] == 'refuted'
+               and not test.get('response_question')
+               and not test.get('authored_experiment')
+               and (test['family'] in supported or response_progress or completed_target)
+               for test in state.get('tests', []))
+
+
+def _acquire_declared_measurements(readings, measurements, known, crystals, public_spec, view):
+    """Use the existing instrument actions before querying a newly declared basis."""
+    accessible = {obj['uuid'] for obj in view.get('accessibleEnvironmentObjects', [])}
+    inventory = {obj['uuid'] for obj in view.get('inventoryObjects', [])}
+    for feature, measurement in measurements.items():
+        if all(feature + '_' + str(n) in readings for n in map(int, crystals)):
+            continue
+        instrument = next((obj['uuid'] for obj in known.values()
+                           if obj.get('name', '').lower() == measurement['instrument'].lower()), None)
+        if instrument is None:
+            return _location(public_spec, 'instruments')
+        if instrument not in inventory:
+            return _action('PICKUP', instrument) if instrument in accessible else _approach(instrument, view)
+        for n in sorted(map(int, crystals)):
+            if feature + '_' + str(n) not in readings:
+                crystal = crystals[str(n)]
+                return (_action('USE', instrument, crystal) if crystal in accessible | inventory
+                        else _approach(crystal, view))
+    return None
+
+
+def reference_research_question(number, failure_file, path='shared/consolidated_method.py'):
+    """Return an executable revision assignment with the current evidence location."""
+    return ('Which shared response premise, measured variable or functional form explains the current crystal '
+            + str(number) + ' after the inherited prediction attempts did not complete calibration? Inspect ' + failure_file +
+            ' and the current public records. Returned refutations rule out their tested predictions; '
+            'use them to revise the next explanation rather than ending the entire search. '
+            'Distinguish current-reference fit failures, out-of-range predictions and physical '
+            'refutations. Submit a measured-variable/basis hypothesis through run '
+            "{operator:'reference_hypothesis',path:" + repr(path) +
+            ",hypothesis:{id:YOUR_ID,basis:[PROGRAM_AST,...]}}. "
+            'The existing fitter estimates the intercept and basis coefficients from current references; '
+            'the existing controller installs, tunes and physically tests targets, returning results here. '
+            'Choose the basis and revise it using physical counterexamples. Each distinct basis gets a '
+            'new id and is retained in the reusable parent source. Existing measured features and their '
+            'actual control responses constrain subsequent research. Declared bases also fit one '
+            'observed successful setting per previously solved target. These are operational control '
+            'labels, not exact latent resonance values; fit_tolerance is the declared MSE in Hz squared '
+            '(default 1e-4). Reusing or fitting a success is not an independent confirmation. '
+            'Strict fit failures remain in the numerical record, but approximate bases can still '
+            'propose physical tests. Available declared bases are compared by leave-one-crystal-out '
+            'error; this is a reuse diagnostic, not a noise estimate or an activation-width model. '
+            'Additional measurements may be declared by public instrument name and response pattern. '
+            'If the present variables cannot explain the evidence, select a new measurement or return '
+            'the specific missing information. The current task_interface describes available research '
+            'methods. Current observations and returned answers are in evidence and method_decision; '
+            'shared/reference_recalibration.json contains the latest calibration and response state. '
+            + failure_file + ' is the historical snapshot that opened this inquiry, not the latest '
+            'measurement table. Distinguish an unattempted comparison from an unresolved computation '
+            'and an actually refuted explanation. Return what the evidence establishes and what '
+            'remains open; a completed control procedure alone does not answer this scientific question.')
+
+
 def _extend_hypotheses(state, memory, number, path):
     """Return an exhausted scientific search to the existing local researcher."""
-    if memory.get('program_arguments', {}).get('estimator_trial'):
-        return {'stop': 'Declared estimators are exhausted for this target; return their measured outcomes to the researcher'}
+    estimator_trial = memory.get('program_arguments', {}).get('estimator_trial', False)
     table = state.get('research_table', {})
     rows = table.get('references', []) + table.get('targets', [])
     features = set.intersection(*(set(row['measurements']) for row in rows)) if rows else set()
-    if features - set(state.get('expanded_features', [])):
+    unexpanded = features - set(state.get('expanded_features', []))
+    if not estimator_trial and unexpanded and not _point_needs_response(state, number):
         _save(state)
         return {'action': 'run', 'arguments': {'operator': 'reference_expansion', 'path': path}}
     context = {'number': number, 'estimators': list(ESTIMATORS),
@@ -329,36 +513,150 @@ def _extend_hypotheses(state, memory, number, path):
     untried_constraints = (response.get('status') in
         ('no_compatible_response_hypotheses', 'no_untried_supported_setting')
         and 'joint_parameter_search' not in response and state.get('control_grid'))
+    # If local fitting exhausts on unchanged observations, archive screening
+    # is not a completed family comparison. The full researcher is still owed.
+    untried_constraints = untried_constraints or (
+        response.get('frozen_transfer', {}).get('research_stage') in
+        ('initial_recall', 'withdrawal_recall', 'continuation_recall')
+        and response.get('selection') is None)
     if ESTIMATORS and (state.get('response_context') != context or untried_constraints):
-        return {'action': 'run', 'arguments': {'operator': 'reference_response',
-                                             'path': path, 'context': context}}
-    experiment = (response.get('selection') or {}).get('selected_experiment')
-    if experiment is not None:
-        return {'response_trial': {'family': experiment['family'],
-            'prediction': experiment['prediction'],
-            'response_question': response['question_id'],
-            'response_forecasts': experiment['predictions'],
-            **{key: experiment[key] for key in ('number', 'restore_frequency') if key in experiment},
-            'question_id': response['question_id'] + '_physical'}}
+        arguments = {'operator': 'reference_response', 'path': path, 'context': context}
+        # A returned frozen trial may leave compatible members with no usable
+        # experiment. Screen once before enlarging the search; those members
+        # stay retained while the parent tries its existing local fits.
+        last_test = (state.get('tests') or [{}])[-1]
+        returned_trial = (response.get('frozen_transfer', {}).get('status') == 'selected'
+            and response.get('question_id')
+            and last_test.get('response_question') == response['question_id']
+            and response.get('hypotheses'))
+        if (Path('shared/frozen_response_knowledge.json').exists()
+                and (returned_trial or (not response
+                    and not state.get('fit_bindings') and not state.get('tests')))):
+            arguments['stage'] = 'frozen_recall'
+        return {'action': 'run', 'arguments': arguments}
+    if not estimator_trial and response.get('basis_expansion_action'):
+        # The existing generator can continue the retained intermediate bases
+        # after their raw-coordinate search stalls. Its paid comparison, not
+        # another point scan, decides what this finite extension contributes.
+        return response['basis_expansion_action']
     remaining = memory['limits']['max_model_calls'] - memory['costs']['model_calls']
-    if not memory.get('model_available', True) or remaining <= 0:
-        return {'stop': 'Inherited hypotheses are exhausted; new research needs a live model and remaining calls'}
     suffix, attempt, returned = str(number), 1, []
     questions = {item['id']: item for item in memory.get('questions', [])}
     question_id = 'reference_extension_' + suffix
+    unresolved_return = None
     while memory.get('llm_inquiries', {}).get(question_id, {}).get('invocations', 0):
         question = questions.get(question_id, {})
         fresh_refutation = question.get('status') == 'refuted' and any(
             index >= question.get('opened_before_observation', float('inf'))
             for index in question.get('evidence', []))
         if not fresh_refutation:
-            return {'stop': 'Local research returned without a usable extension for this crystal; '
-                            'its notebook and rejected predictions remain available'}
+            unresolved_return = memory['llm_inquiries'][question_id]
+            break
         returned.append({**question,
             'notes': memory['llm_inquiries'][question_id].get('notes', '')})
         attempt += 1
         suffix = str(number) + '_' + str(attempt)
         question_id = 'reference_extension_' + suffix
+    parent_resumed = (unresolved_return is not None
+        and unresolved_return.get('status') == 'inquiry_finished'
+        and questions.get(question_id, {}).get('parent_program_path') == path)
+    research = response.get('family_research', {})
+    if (not estimator_trial and parent_resumed and memory.get('model_available', True)
+            and remaining > 0 and response.get('status') == 'family_research_needed'
+            and research.get('selected_role') == 'shared_premise_research'
+            and research.get('research_obligation')):
+        # A returned author permits the parent to try its experiment, not to
+        # ignore a renewed research obligation indefinitely. Reuse completed
+        # inquiry returns and paid acquisitions already in this program's log.
+        results = memory.get('program_results', [])
+        returns = [(i, item['feedback']) for i, item in enumerate(results)
+            if item.get('feedback', {}).get('operator') == 'inquire'
+            and item['feedback'].get('question', {}).get('id') == question_id]
+        # Session status remains inquiry_finished during a resumed invocation.
+        # Its return is not logged until it exits, so do not recursively reopen
+        # that still-running author on the preceding invocation's evidence.
+        if returns and len(returns) == unresolved_return['invocations']:
+            returned_at, previous = returns[-1]
+            decision = next((step for step in reversed(previous.get('steps', []))
+                             if 'model_call' in step), {})
+            feedback = decision.get('feedback', {})
+            prior_research = feedback.get('response_research', {}).get('family_research', {})
+            measured_after_return = any(item.get('feedback', {}).get('observation_indices')
+                                        for item in results[returned_at + 1:])
+            if (decision.get('action') == 'run'
+                    and decision.get('arguments', {}).get('operator') == 'reference_hypothesis'
+                    and decision['arguments'].get('path') == path
+                    and feedback.get('new_observation_count', 0) > 0
+                    and measured_after_return
+                    and research.get('response_count', 0) > prior_research.get(
+                        'response_count', research.get('response_count', 0))):
+                # Continue the same scientific question, notes and history;
+                # neither mark it refuted nor replace its original snapshot.
+                question = questions[question_id]
+                return {'action': 'run', 'arguments': {'operator': 'inquire',
+                    'assignment': reference_research_question(number,
+                        'shared/reference_extension_' + suffix + '.json', path),
+                    'max_model_calls': min(32, remaining), 'question': {
+                        key: question[key] for key in (
+                            'id', 'question', 'parent_id', 'depends_on', 'parent_program_path')}}}
+    selection = response.get('selection')
+    fallback = False
+    deferred_reason = None
+    if not estimator_trial and response.get('status') == 'family_research_needed' and (
+            parent_resumed or not memory.get('model_available', True) or remaining <= 0):
+        # A returned local researcher leaves the parent free to execute the
+        # current experiment. New observations re-enter this same comparison;
+        # fresh refutations above still open another research assignment.
+        selection = response.get('operational_fallback')
+        conditional = response.get('conditional_simplification', {})
+        revision_trial = conditional.get('joint_revision', {}).get('experiment')
+        failed_revision = revision_trial and any(
+            row['crystal'] == revision_trial['number']
+            and row['frequency'] == revision_trial['prediction'] and not row['activated']
+            for row in state.get('response_settings', []))
+        if (failed_revision and conditional.get('status') == 'family_research_needed'
+                and not (selection or {}).get('guaranteed_nonlocal_eliminations', 0)):
+            # The conditional branch has already compared available controls.
+            # A refuted joint revision must not restart member-only exploration
+            # merely because the live researcher is unavailable.
+            selection = None
+            deferred_reason = ('The joint prediction was refuted; the remaining search needs '
+                               'a new research decision before further member-only exploration')
+        fallback = selection is not None
+    experiment = (selection or {}).get('selected_experiment')
+    if experiment is not None:
+        research = response.get('family_research')
+        if research is not None:
+            # The operational fallback is selected here, after family assessment.
+            # Record the experiment actually sent to the physical controller so
+            # its next response participates in the existing progress logic.
+            research['selected_test'] = {'crystal': experiment.get('number', number),
+                                         'frequency': experiment['prediction']}
+            if fallback:
+                research['selected_role'] = 'operational_fallback'
+            _save(state)
+        return {'response_trial': {'family': experiment['family'],
+            'prediction': experiment['prediction'],
+            'response_question': response['question_id'],
+            'response_forecasts': experiment['predictions'],
+            **{key: experiment[key] for key in ('number', 'restore_frequency', 'control_preparation')
+               if key in experiment},
+            'question_id': response['question_id'] + '_physical'}}
+    if not estimator_trial and unexpanded:
+        _save(state)
+        return {'action': 'run', 'arguments': {'operator': 'reference_expansion', 'path': path}}
+    if estimator_trial:
+        obligation = response.get('family_research', {}).get('research_obligation', {})
+        return {'stop': 'Declared estimators need further research after ' +
+                response.get('status', 'exhausted prediction trials') + ': ' +
+                obligation.get('question', 'no remaining experiment selected from the declared response families') +
+                '; return the acquired outcomes to the proposing researcher'}
+    if not memory.get('model_available', True) or remaining <= 0:
+        return {'stop': deferred_reason or
+                'Inherited hypotheses are exhausted; new research needs a live model and remaining calls'}
+    if unresolved_return is not None:
+        return {'stop': 'Local research returned without a usable extension for this crystal; '
+                        'its notebook and rejected predictions remain available'}
     previous = 'shared/reference_before_extension_' + suffix + '.py'
     Path(previous).write_text(Path(path).read_text())
     failure_file = 'shared/reference_extension_' + suffix + '.json'
@@ -370,34 +668,39 @@ def _extend_hypotheses(state, memory, number, path):
         'out_of_range_predictions': state.get('out_of_range', []),
         'prediction_selection': state.get('prediction_selection'),
         'research_table': state.get('research_table', {}), 'estimators': list(ESTIMATORS),
+        'family_research': response.get('family_research'),
+        'operational_fallback': response.get('operational_fallback'),
         'prior_program': previous, 'current_program': path}, indent=2))
     _save(state)
     return {'action': 'run', 'arguments': {'operator': 'inquire',
         'max_model_calls': min(32, remaining), 'question': {
             'id': question_id, 'parent_id': 'task', 'depends_on': [],
-            'question': 'Which new measured variable or functional form explains the current crystal ' +
-                str(number) + ' after the inherited hypotheses failed? Inspect ' + failure_file +
-                ' and the current public records. Returned refutations rule out their tested predictions; '
-                'use them to revise the next explanation rather than ending the entire search. '
-                'Distinguish current-reference fit failures, out-of-range predictions and physical '
-                'refutations. Submit a measured-variable/basis hypothesis through run '
-                "{operator:'reference_hypothesis',path:'" + path + "',hypothesis:{id:YOUR_ID,basis:[PROGRAM_AST,...]}}. "
-                'The existing fitter estimates the intercept and basis coefficients from current references; '
-                'the existing controller installs, tunes and physically tests targets, returning results here. '
-                'Choose the basis and revise it using physical counterexamples. Each distinct basis gets a '
-                'new id and is retained in the reusable parent source. Existing measured features and their '
-                'actual control responses constrain subsequent research. Declared bases also fit one '
-                'observed successful setting per previously solved target. These are operational control '
-                'labels, not exact latent resonance values; fit_tolerance is the declared MSE in Hz squared '
-                '(default 1e-4). Reusing or fitting a success is not an independent confirmation. '
-                'Strict fit failures remain in the numerical record, but approximate bases can still '
-                'propose physical tests. Available declared bases are compared by leave-one-crystal-out '
-                'error; this is a reuse diagnostic, not a noise estimate or an activation-width model. '
-                'The last prediction comparison and actual outcomes are in the failure file. '
-                'Additional measurements may be declared by public instrument '
-                'name and response pattern. If the present variables cannot explain the evidence, select '
-                'a new measurement or return the specific missing information. Current measured table: ' +
-                json.dumps(state.get('research_table', {}))}}}
+            'question': reference_research_question(number, failure_file, path)}}}
+
+
+def _response_trial_lost_support(state, test, question):
+    """Return a frozen member trial to research after intermediate refutation.
+
+    Family-level experiments can remain useful beyond their finite witnesses.
+    Explicit experiments and reference restoration retain their existing scope.
+    """
+    response = state.get('response_research', {})
+    if (test.get('authored_experiment') or 'restore_frequency' in test
+            or test.get('control_preparation')
+            or test.get('number') not in state.get('target_numbers', [])
+            or question.get('status') != 'inconclusive'
+            or not test.get('response_question')
+            or test['response_question'] != response.get('question_id')
+            or (response.get('selection') or {}).get('consequence_scope')
+                != 'frozen_numeric_response_members'):
+        return False
+    feedback = question.get('answer') or {}
+    if (feedback.get('requested_setting') != test['prediction']
+            or not feedback.get('observed_responses')
+            or 'remaining_hypotheses' not in feedback):
+        return False
+    supporters = {key for key, positive in test.get('response_forecasts', {}).items() if positive}
+    return bool(supporters) and supporters.isdisjoint(feedback['remaining_hypotheses'])
 
 
 def select_actions(public_spec, observations, memory):
@@ -411,19 +714,47 @@ def select_actions(public_spec, observations, memory):
     inventory = {obj['uuid'] for obj in view.get('inventoryObjects', [])}
     path = memory['program_path']
     questions = {item['id']: item for item in memory.get('questions', [])}
+    authored = memory.get('program_arguments', {}).get('response_experiment')
     test = state.get('test')
+    prepared_step = _prepared_reference_step(state, view, observations, questions)
+    if prepared_step is not None:
+        return prepared_step
+    lost_support = bool(test) and _response_trial_lost_support(
+        state, test, questions.get(test['question'], {}))
+    if lost_support:
+        revision = test.get('band_revision')
+        active = (_installed(_objects(view), test['crystal'], test['reactor'])
+                  and _activated(_objects(view), test['reactor']))
+        if revision is None and not active:
+            _save(state)
+            return {'action': 'run', 'arguments': {'operator': 'reference_response',
+                'path': path, 'stage': 'pending_band_revision'}}
+        if revision and not active:
+            feedback = questions[test['question']]['answer'].get('band_revision')
+            remaining = (feedback['remaining_hypotheses'] if feedback is not None
+                         else [h['id'] for h in revision['hypotheses']])
+            lost_support = not bool(set(remaining) & set(revision['positive_supporters']))
     if test and (questions.get(test['question'], {}).get('status') in ('supported', 'refuted')
                  or (test.get('tuning_finished')
-                     and questions.get(test['question'], {}).get('status') == 'inconclusive')):
+                     and questions.get(test['question'], {}).get('status') == 'inconclusive')
+                 or lost_support):
         status = questions[test['question']]['status']
+        if lost_support:
+            question = questions[test['question']]
+            test['retirement'] = {
+                'reason': 'intermediate_responses_refuted_all_requested_members',
+                'evidence': question['evidence'],
+                'remaining_hypotheses': question['answer']['remaining_hypotheses'],
+                'requested_supporters': [key for key, positive in test['response_forecasts'].items() if positive]}
         if 'restore_frequency' in test:
             state['recovery'] = {'number': test['number'], 'frequency': test['restore_frequency'],
                 'crystal': test['crystal'], 'reactor': test['reactor'],
-                'response_question': test['response_question']}
+                'response_question': test.get('response_question', test['question'])}
         elif status == 'supported':
             state['completed'].append(test['number'])
-            state['survivor'] = test['family']
-        else:
+            if not test.get('authored_experiment'):
+                state['survivor'] = test['family']
+        elif not test.get('authored_experiment') and not lost_support:
             # Retire this family's point-fit branch. Response research below
             # can still test other coefficient/window hypotheses in that basis.
             state['rejected'].setdefault(str(test['number']), []).append(test['family'])
@@ -441,13 +772,14 @@ def select_actions(public_spec, observations, memory):
     if view.get('dialog_box', {}).get('is_in_dialog'):
         number, frequency = _dialog(view)
         if test and number == test['number']:
-            tuning = _tune(view, test['prediction'])
+            analysis = [{'action': 'evaluate', 'arguments': {
+                'path': path, 'question_id': test['question']}}]
+            tuning = _tune(view, test['prediction'], after_observation=analysis)
             if tuning:
-                if test.get('response_question'):
-                    tuning['after_observation'] = [{'action': 'evaluate', 'arguments': {
-                        'path': path, 'question_id': test['question']}}]
+                if test.get('response_question') or test.get('authored_experiment'):
+                    tuning['after_observation'] = analysis
                 return tuning
-            if 'restore_frequency' in test:
+            if 'restore_frequency' in test or test.get('authored_experiment'):
                 test['tuning_finished'] = True
                 _save(state)
             result = _exit(view)
@@ -470,6 +802,20 @@ def select_actions(public_spec, observations, memory):
             if not supported:
                 return {'stop': 'Previously successful setting did not restore activation; revise its conditions'}
         return _exit(view)
+
+    if authored:
+        if any(item['question'] == authored['question_id'] for item in state.get('tests', [])):
+            return {'stop': 'Requested response experiment finished; return its observed answer to the researcher'}
+        number = authored['number']
+        selected = {'family': 'authored_setting', 'prediction': authored['setting'],
+                    'question_id': authored['question_id'], 'authored_experiment': True,
+                    'parent_id': authored['parent_id'],
+                    **{key: authored[key] for key in ('research_question', 'response_comparison') if key in authored}}
+        if authored.get('control_preparation'):
+            selected['control_preparation'] = authored['control_preparation']
+        if str(number) in references:
+            selected['restore_frequency'] = references[str(number)]['value']
+        return _trial_action(state, selected, number, crystals, reactors, view, observations, test)
 
     # Reacquire instrument handles and reference roles from this world only.
     for feature, name in FAMILIES:
@@ -537,10 +883,33 @@ def select_actions(public_spec, observations, memory):
         _save(state)
         return _action('TALK', reactor)
     estimators = _estimators()
+    measurements = {feature: measurement for estimator in estimators
+                    for feature, measurement in estimator.get('measurements', {}).items()}
     estimators.sort(key=lambda item: item['id'] != state.get('survivor'))
     trials, selected = [], None
-    for estimator in estimators:
+    # A submitted estimator must reach the existing fit/physical trial before
+    # an older point failure routes the parent back to response research.
+    # Rejected candidates and paid counterexamples still filter that trial.
+    if (not memory.get('program_arguments', {}).get('estimator_trial', False)
+            and _point_needs_response(state, number)):
+        acquire = _acquire_declared_measurements(readings, measurements, known, crystals, public_spec, view)
+        if acquire:
+            return acquire
+        extension = _extend_hypotheses(state, memory, number, path)
+        selected = extension.get('response_trial')
+        if selected is None:
+            return extension
+    for estimator in (() if selected is not None else estimators):
         family, features = estimator['id'], estimator['features']
+        paid_check = state.get('family_history_checks', {}).get(family, {})
+        if (paid_check.get('status') == 'UNSAT_VERIFIED'
+                and paid_check.get('basis') == estimator.get('basis')
+                and all(readings.get(feature + '_' + number, {}).get('value') == value
+                        for number, values in paid_check.get('features', {}).items()
+                        for feature, value in values.items())):
+            # This exclusion concerns the shared response family under the
+            # recorded measurements. Changed bindings reopen the candidate.
+            continue
         if family in state['rejected'].get(str(number), []):
             fit_only = ('basis' in estimator and any(item['number'] == number and item['family'] == family
                 for item in state.get('fit_refutations', [])) and not any(
@@ -552,22 +921,13 @@ def select_actions(public_spec, observations, memory):
             # The strict fit remains rejected. Its shape can still propose an
             # approximate control prediction whose success needs a real trial.
             state['rejected'][str(number)].remove(family)
-        # New instruments are prerequisites only for the candidate that uses
-        # them. They must not interrupt an already sufficient inherited law.
-        for feature, measurement in estimator.get('measurements', {}).items():
-            if all(feature + '_' + str(n) in readings for n in map(int, crystals)):
-                continue
-            instrument = next((obj['uuid'] for obj in known.values()
-                               if obj.get('name', '').lower() == measurement['instrument'].lower()), None)
-            if instrument is None:
-                return _location(public_spec, 'instruments')
-            if instrument not in inventory:
-                return _action('PICKUP', instrument) if instrument in accessible else _approach(instrument, view)
-            for n in sorted(map(int, crystals)):
-                if feature + '_' + str(n) not in readings:
-                    crystal = crystals[str(n)]
-                    return (_action('USE', instrument, crystal) if crystal in accessible | inventory
-                            else _approach(crystal, view))
+        # A later declaration can supply the acquisition for an earlier basis
+        # using the same feature. Acquire only the current candidate's readings.
+        acquire = _acquire_declared_measurements(readings,
+            {feature: measurements[feature] for feature in features if feature in measurements},
+            known, crystals, public_spec, view)
+        if acquire:
+            return acquire
         qid = 'reference_fit_' + family + '_' + str(number)
         fitted = memory.get('relation_research', {}).get(qid)
         rows = [{'features': {feature: readings[feature + '_' + str(n)]['value'] for feature in features},
@@ -653,6 +1013,12 @@ def select_actions(public_spec, observations, memory):
         selected = extension.get('response_trial')
         if selected is None:
             return extension
+    return _trial_action(state, selected, number, crystals, reactors, view, observations, test)
+
+
+def _trial_action(state, selected, number, crystals, reactors, view, observations, test):
+    accessible = {obj['uuid'] for obj in view.get('accessibleEnvironmentObjects', [])}
+    inventory = {obj['uuid'] for obj in view.get('inventoryObjects', [])}
     family, prediction = selected['family'], selected['prediction']
     number = selected.get('number', number)
     crystal, reactor = crystals[str(number)], reactors[str(number)]
@@ -667,10 +1033,14 @@ def select_actions(public_spec, observations, memory):
             'started': len(observations), 'crystal': crystal, 'reactor': reactor,
             'question': selected.get('question_id', 'reference_test_' + str(number) + '_' + family),
             **{key: selected[key] for key in ('fit_mse', 'fit_status', 'leave_one_out_mse',
-                'response_question', 'response_forecasts', 'restore_frequency') if key in selected}}
+                'response_question', 'response_forecasts', 'restore_frequency', 'authored_experiment',
+                'parent_id', 'research_question', 'response_comparison') if key in selected}}
+        if selected.get('control_preparation'):
+            state['test']['control_preparation'] = selected['control_preparation']
         _save(state)
     result = _action('TALK', reactor)
-    result['question'] = {'id': state['test']['question'], 'question':
+    result['question'] = state['test'].get('research_question') or {
+        'id': state['test']['question'], 'question':
         'Does the installed current crystal activate at the current ' + family + ' prediction?',
-        'parent_id': state['test'].get('response_question', 'task'), 'depends_on': []}
+        'parent_id': state['test'].get('parent_id', state['test'].get('response_question', 'task')), 'depends_on': []}
     return result

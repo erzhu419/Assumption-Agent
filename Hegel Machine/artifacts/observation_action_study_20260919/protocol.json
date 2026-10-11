@@ -1,0 +1,93 @@
+{
+  "experiment": "common_observation_and_mechanism_action_selection",
+  "fixed_at": "2026-09-19T13:01:43.280468+00:00",
+  "cohorts": {
+    "development": [
+      95201900
+    ],
+    "main": [
+      95201901,
+      95201902,
+      95201903,
+      95201904
+    ]
+  },
+  "instrument_modes": {
+    "95201900": "recurrent",
+    "95201901": "finite2",
+    "95201902": "finite2",
+    "95201903": "recurrent",
+    "95201904": "recurrent"
+  },
+  "development_runtime": "src",
+  "arms": {
+    "baseline_v092": {
+      "runtime": "artifacts/instrument_method_study_20260919/runtime/src"
+    },
+    "learned": {
+      "runtime": "artifacts/observation_action_study_20260919/runtime/src"
+    },
+    "policy_disabled": {
+      "runtime": "artifacts/observation_action_study_20260919/runtime/src",
+      "research_config_overrides": {
+        "learn_research_policy": false
+      }
+    }
+  },
+  "shared_laboratories": {
+    "ambiguous_instrument_lab": "artifacts/observation_action_study_20260919/shared_ambiguous_instrument_lab.py",
+    "dynamic_instrument_lab": "artifacts/observation_action_study_20260919/shared_dynamic_instrument_lab.py"
+  },
+  "stages": [
+    "ambiguous_short_source",
+    "expanded_same_apparatus",
+    "new_dynamic_apparatus",
+    "unchanged_dynamic_apparatus",
+    "instrument_only_change",
+    "mechanism_only_change",
+    "both_return_to_dynamic_source"
+  ],
+  "public_max_probe_lengths": [
+    3,
+    24,
+    96,
+    96,
+    96,
+    96,
+    96
+  ],
+  "dynamic_apparatus_seed_offset": 500009,
+  "research_config": {
+    "observation_budget": 384,
+    "compute_budget": 360000,
+    "minimum_improvement": 1e-07,
+    "max_rounds": 5,
+    "max_history": 4,
+    "active_probes": true
+  },
+  "measurement_budget": 1536,
+  "maximum_concurrent_research_processes": 1,
+  "terminal": {
+    "length": 24,
+    "trajectories": 4,
+    "seed_offset": 1000003,
+    "impulse_length": 24,
+    "impulse_amplitudes": [
+      -0.85,
+      0.85
+    ],
+    "mse_threshold": 1e-06
+  },
+  "scope": "One full stream combines unresolved observation alternatives, a new apparatus, an unchanged task, instrument drift, mechanism drift and return. All arms start empty; no supplied source program, private parameter, required measurement, diagnostic choice or action score. Finite-history and direct-control response explanations compete normally. Development and main cohorts are evaluated separately, after all declared learning in each cohort.",
+  "persistence": "Restore complete UnifiedResearchSession JSON between stages.",
+  "cost_accounting": "Source learning and all unsuccessful research included; terminal resources separate.",
+  "capability_endpoints": [
+    "paid_common_action_choices",
+    "fresh_response_based_action_feedback",
+    "json_action_experience_transfer",
+    "instrument_and_mechanism_recovery",
+    "no_auxiliary_purchase_when_reuse_suffices"
+  ],
+  "legal_terminal_domain": "Source uses length 3; all successors use length 24 for terminal trajectories. All obey their public horizons.",
+  "formal_evidence": false
+}

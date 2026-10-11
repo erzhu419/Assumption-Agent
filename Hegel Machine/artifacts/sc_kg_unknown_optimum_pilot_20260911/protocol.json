@@ -1,0 +1,176 @@
+{
+  "sc_kg_project_root": "/home/erzhu419/mine_code/KG_op/SC-OLH-KG",
+  "research_config": {
+    "observation_budget": 32,
+    "compute_budget": 60000,
+    "max_rounds": 2,
+    "max_candidates": 16,
+    "max_question_depth": 2,
+    "complexity_weight": 0.001,
+    "minimum_improvement": 1e-07,
+    "validation_fraction": 0.25,
+    "seed": 1043010067,
+    "strategy": "adaptive",
+    "use_memory": true,
+    "active_probes": true,
+    "joint_planning": true,
+    "use_abstractions": true,
+    "structural_transfer": true,
+    "synthesize_probes": true,
+    "partition": "development",
+    "proposer": "search",
+    "llm_calls_per_task": 2,
+    "llm_timeout_seconds": 120,
+    "llm_token_budget": 12000,
+    "max_history": 4,
+    "planning_depth": 2,
+    "experiment_policy": "task_value",
+    "selection_policy": "prospective",
+    "use_warm_start": true,
+    "joint_search": "beam",
+    "adaptive_horizon": true,
+    "risk_learning": true,
+    "state_search": true,
+    "transition_probes": true,
+    "transfer_scheduling": true,
+    "tail_fit": true,
+    "learn_research_policy": true,
+    "joint_state_coordinates": true,
+    "joint_state_probes": true
+  },
+  "total_calls_per_arm": 64,
+  "change_after_new_calls": 12,
+  "optimizer_seed_offset": 4000009,
+  "optimizer_settings": {
+    "n0": 8,
+    "K1": 6,
+    "K2": 0,
+    "posterior_pool_size": 32,
+    "posterior_keep": 3,
+    "axis_candidate_count": 0,
+    "state_candidate_count": 0,
+    "n_thr": 2,
+    "use_problem_initial_samples": false,
+    "use_boundary_initial_samples": false,
+    "use_recommendation_refinement": false,
+    "recommendation_axis_oracle": false,
+    "recommendation_axis_candidate_count": 0,
+    "use_state_coupling": false,
+    "use_state_basis": false,
+    "lambda_coupling": 0.0,
+    "variance_mode": "pooled",
+    "acquisition_mode": "exact_mc",
+    "exact_kg_mc_samples": 1,
+    "exact_kg_jobs": 1,
+    "eval_pool_size": 32,
+    "evaluate_interval": 0,
+    "truth_pool_diagnostics": false,
+    "checkpoint_interval": 0
+  },
+  "policy": {
+    "initial_basis": "default",
+    "minimum_new_observations": 4,
+    "minimum_gain": 1e-07,
+    "evidence": "Paired constraint predictions made before each new optimizer observation; the research data fit both models but do not count as prior-adoption trials"
+  },
+  "revision": {
+    "minimum_error": 1e-07,
+    "batch_size": 4,
+    "compute_budget": 20000,
+    "seed_offset": 5000011
+  },
+  "evaluation": {
+    "count": 128,
+    "seed_offset": 6000017,
+    "rule": "Public evaluation coordinates and all final Program/GP predictions are frozen after each optimizer run. After every selected run is complete, a separate actual simulator stream supplies shared measurements and evaluator-only true constraint means. Evaluation calls never enter the controller and are reported separately.",
+    "additional_requested_metrics": "Record which experimental controls provide useful measured objective values, objective prediction errors on actual future observations, final objective-GP predictions on the same frozen independent controls when available, and the best measured point after the mechanism change. Preserve the original constraint Program/GP errors, confirmation and revision sequence, feasibility, and paid costs."
+  },
+  "experiment": "unknown_interior_goal_pilot",
+  "cases": [
+    {
+      "case_id": "unknown_interior_1_noise_0.03",
+      "split": "pilot",
+      "profile": "stable_unknown_interior_goal",
+      "cohort": "pilot3",
+      "task": {
+        "problem": "state_policy_rzdt1",
+        "dimension": 3,
+        "seed": 1843012269,
+        "noise": 0.03
+      },
+      "next_problem": "unknown_interior_goal_state_policy",
+      "research_id": "unknown_interior_1"
+    },
+    {
+      "case_id": "unknown_interior_2_noise_0.03",
+      "split": "pilot",
+      "profile": "stable_unknown_interior_goal",
+      "cohort": "pilot3",
+      "task": {
+        "problem": "state_policy_rzdt1",
+        "dimension": 3,
+        "seed": 1843112287,
+        "noise": 0.03
+      },
+      "next_problem": "unknown_interior_goal_state_policy",
+      "research_id": "unknown_interior_2"
+    },
+    {
+      "case_id": "unknown_interior_3_noise_0.03",
+      "split": "pilot",
+      "profile": "stable_unknown_interior_goal",
+      "cohort": "pilot3",
+      "task": {
+        "problem": "state_policy_rzdt1",
+        "dimension": 3,
+        "seed": 1843212301,
+        "noise": 0.03
+      },
+      "next_problem": "unknown_interior_goal_state_policy",
+      "research_id": "unknown_interior_3"
+    }
+  ],
+  "seeds": [
+    1843012269,
+    1843112287,
+    1843212301
+  ],
+  "arms": [
+    "native_sc_kg_shared_paid32",
+    "hegel_v052"
+  ],
+  "frozen_hegel_source": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/artifacts/sc_kg_unknown_optimum_pilot_20260911/frozen_hegel_v052",
+  "source_completed_study": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/artifacts/sc_kg_objective_reentry_v052_20260911",
+  "task_formula": {
+    "normalized_control": "t=x/100, x in {0,...,100}^3",
+    "center_generation": "default_rng(task_seed+91117); draw each integer independently, inclusive bounds",
+    "center_integer_ranges": [
+      [
+        13,
+        38
+      ],
+      [
+        58,
+        82
+      ],
+      [
+        58,
+        82
+      ]
+    ],
+    "objective_means": "f1=f2=0.35+2.2*(t1-c1)^2+2.5*(t2-c2)^2+2.5*(t3-c3)^2; c=center_integer/100",
+    "constraint_mean": "StatePolicyRZDT1: 0.12*(((t1-.25)/.28)^2+mean(((t_tail-.70)/.28)^2)-1.5)+.02*std(t_tail)",
+    "noise": "One iid Gaussian vector draw with standard deviation.03 on each of three outputs; scalar objective=.5*f1+.5*f2",
+    "true_minimum": 0.35,
+    "mechanism": "Stable throughout all64 observations; no change or outlier injection"
+  },
+  "task_information": "Only the script-owned simulator stores its hidden center. The public TaskSpec, context, probes, initial completion and optimizer candidates are unchanged functions of public settings and paid observations. Center coordinates never initialize or nominate controls. Evaluator noise uses task_seed+6000017 while its true objective uses the original task_seed; task parameters and analytic minimum enter only postrun evaluation.",
+  "comparison": "Ordinary native SC-KG is conditioned on the same32 actually purchased full vectors as frozen Hegel0.52. Its only modifications load those records through the two standard initial-data hooks. Both arms then use the same original32-online-call budget and optimizer settings. Initial research computation belongs to Hegel and is reported separately.",
+  "expected_optimizer_runs": 6,
+  "expected_initial_calls": 96,
+  "expected_online_calls": 192,
+  "expected_evaluation_calls": 384,
+  "expected_physical_calls": 672,
+  "accounting": "Three shared32-vector research initializations cost96 simulator calls; six optimizations cost32 new calls each,192 total. After all final predictions are frozen, three independent128-vector evaluations cost384. Total672 physical calls. Evaluation is shared across arms, never fed back. Preserve all failures, infeasible recommendations and model costs. No other optimizer variant or CodeAgent is executed.",
+  "limitations": "A three-task pilot tests optimization room beyond the earlier shared known minima. It is a conditional shared-initialization comparison and cannot establish broad superiority. The separable quadratic objective is representable by the existing native basis; report initial best feasible objective and final regret to assess remaining saturation."
+}

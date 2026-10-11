@@ -1,0 +1,72 @@
+{
+  "status": "Complete; 0.181 source-feedback candidate compared with frozen 0.180 baseline",
+  "purpose": "Measure whether an actual ordinary knowledge return changes the next queued research choice, while preserving a matched negative-return ordering case.",
+  "arms": {
+    "baseline_0180": {
+      "runtime": "artifacts/source_feedback_selection_20261004/baseline_runtime/src",
+      "version": "0.180.0",
+      "source_note": "Frozen from the active src tree before the next source-feedback edit."
+    },
+    "candidate": {
+      "runtime": "src",
+      "version": "post-0.180 source-feedback candidate"
+    }
+  },
+  "cases": {
+    "existing_two_task": {
+      "tasks": [
+        {"kind": "unknown", "task_index": 8, "seed": 12811},
+        {"kind": "unknown", "task_index": 8, "seed": 12812}
+      ],
+      "partial_positions": [0],
+      "source_positions": [1],
+      "purpose": "Single ordinary source return followed by a same-condition successor."
+    },
+    "three_source_three_successor": {
+      "tasks": [
+        {"kind": "suite", "partition": "forward", "task_index": 11, "suite_seed": 2237, "task_id": "selection_successor_0", "seed": 12821},
+        {"kind": "suite", "partition": "forward", "task_index": 11, "suite_seed": 2237, "task_id": "selection_successor_1", "seed": 12822},
+        {"kind": "suite", "partition": "forward", "task_index": 11, "suite_seed": 2237, "task_id": "selection_successor_2", "seed": 12823},
+        {"kind": "suite", "partition": "development", "task_index": 0, "suite_seed": 2237, "task_id": "selection_source_0", "seed": 12831},
+        {"kind": "suite", "partition": "development", "task_index": 1, "suite_seed": 2237, "task_id": "selection_source_1", "seed": 12832},
+        {"kind": "suite", "partition": "development", "task_index": 13, "suite_seed": 2237, "task_id": "selection_source_13", "seed": 12844}
+      ],
+      "partial_positions": [0, 1, 2],
+      "source_positions": [3, 4, 5],
+      "purpose": "Three real source candidates compete for matching successor evidence."
+    }
+  },
+  "config": {
+    "observation_budget": 192,
+    "compute_budget": 120000,
+    "minimum_improvement": 1e-7,
+    "max_rounds": 4,
+    "max_candidates": 16,
+    "active_probes": false,
+    "seed": 12811,
+    "proposer": "search"
+  },
+  "partial_initial_compute": 512,
+  "measurement_budget": 768,
+  "terminal": {"length": 12, "trajectories": 4, "seed_offset": 1000003},
+  "learning_barrier": "Prepare each common paid prefix once under 0.180; run every baseline and candidate continuation before terminal evaluation.",
+  "same_budget": "Both arms receive the same saved paid prefix, task seeds, observation/measurement/compute ceilings, and evaluator draws.",
+  "primary_outcomes": [
+    "matching_return_screens > 0 in candidate while baseline has none",
+    "candidate source priority contains a non-zero return_priority for a later screen",
+    "candidate reorders or suppresses a source/research call after the return",
+    "no duplicate source return after JSON save/restore",
+    "terminal loss and all resource bills remain directly comparable"
+  ],
+  "negative_case": {
+    "fixture": "tests/test_cognition_unified_source_returns.py::source_competition",
+    "checks": [
+      "test_actual_negative_return_changes_callable_source_selection",
+      "test_actual_negative_return_changes_replay_queue_without_global_exclusion"
+    ],
+    "purpose": "A rejected binding must lower the matching source priority without revoking the source globally or changing an unmatched condition."
+  },
+  "external_model_calls": 0,
+  "runner": "run_study.py",
+  "run_policy": "Completed offline; no external model calls."
+}

@@ -11,8 +11,8 @@ import pytest
 
 from hegel_machine.cognition import world_reference_recalibration as recipe
 from hegel_machine.cognition import world_reference_response as wrapper
-from test_world_reference_hypothesis import PATH, prepared, square, submit
-from test_world_response_controller import BoundedReferenceLab, _exhausted_grammar, _state
+from test_world_reference_hypothesis import PATH, prepared, square
+from test_world_response_controller import BoundedReferenceLab, _exhausted_grammar, _state, _submit_point_prefix
 
 
 class ReferenceResearchLab(BoundedReferenceLab):
@@ -47,7 +47,7 @@ def stopped_target(tmp_path, *, lab_type=ReferenceResearchLab, **options):
     agent.lab = lab
     lab.density[5] = 395.5 ** .5
     lab.required[5] = 4077.3
-    submit(agent, lab, square("density", "density_square"))
+    _submit_point_prefix(agent, lab, square("density", "density_square"))
     assert lab.active(4) and not lab.active(5)
     _exhausted_grammar(agent)
     return agent, lab
@@ -70,6 +70,7 @@ def fixed_reference_result(state, path, *, selected):
     return {"status": "discriminating_experiment_available" if selected else "no_untried_supported_setting",
             "target_number": target, "assumptions": ["A fixed shared response interval is testable"],
             "joint_parameter_search": [],
+            "family_history_checks": deepcopy(state.get("family_history_checks", {})),
             "candidates": [{"id": "coefficient_0", "status": "compatible", "family": "density_square"}],
             "hypotheses": hypotheses, "selection": {
                 "selected_experiment": experiment if selected else None,

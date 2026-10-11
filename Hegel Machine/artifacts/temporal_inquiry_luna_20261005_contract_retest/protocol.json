@@ -1,0 +1,94 @@
+{
+  "study": "temporal_scope_expansion_development",
+  "profile": "development",
+  "model": "gpt-6-luna",
+  "arms": [
+    "code_react"
+  ],
+  "cases": [
+    {
+      "chain_id": "temporal_dev_00",
+      "source": {
+        "task_id": "temporal_00_0",
+        "lab": {
+          "task_index": 0,
+          "seed": 80105007,
+          "apparatus_seed": 80105007,
+          "instrument_mode": "finite2"
+        },
+        "evaluation_seed": 81105010
+      },
+      "consumers": [
+        {
+          "task_id": "temporal_00_1",
+          "lab": {
+            "task_index": 1,
+            "seed": 80105007,
+            "apparatus_seed": 80105007,
+            "instrument_mode": "finite2"
+          },
+          "evaluation_seed": 81106019,
+          "condition": "same_physics_longer_horizon"
+        }
+      ]
+    },
+    {
+      "chain_id": "temporal_dev_01",
+      "source": {
+        "task_id": "temporal_01_0",
+        "lab": {
+          "task_index": 0,
+          "seed": 80105007,
+          "apparatus_seed": 80105007,
+          "instrument_mode": "recurrent"
+        },
+        "evaluation_seed": 81105010
+      },
+      "consumers": [
+        {
+          "task_id": "temporal_01_1",
+          "lab": {
+            "task_index": 1,
+            "seed": 80105007,
+            "apparatus_seed": 80105007,
+            "instrument_mode": "recurrent"
+          },
+          "evaluation_seed": 81106019,
+          "condition": "same_physics_longer_horizon"
+        }
+      ]
+    }
+  ],
+  "limits": {
+    "observation_budget": 288,
+    "max_model_calls": 24,
+    "token_budget": 600000,
+    "execution_seconds": 120.0,
+    "compute_budget": 100000,
+    "confirmation_rows": 48
+  },
+  "provider": {
+    "backend": "codex_cli",
+    "auth_mode": "ChatGPT_subscription",
+    "reasoning_effort": "medium",
+    "timeout_seconds": 180
+  },
+  "evaluation": {
+    "length": 256,
+    "mse_threshold": 1e-10,
+    "prediction_inputs": "current and previous controls only, reset per trajectory"
+  },
+  "memory_conditions": {
+    "code_react": "task-local Python, no inherited knowledge",
+    "textual_memory": "source-authored textual lesson",
+    "hegel": "source-authored executable hypotheses and research programs"
+  },
+  "question": "Can an agent test and revise the temporal scope of a learned response?",
+  "source_scope": "At most three steps; both physical families agree on every legal source probe.",
+  "target_scope": "At most 24 steps; same apparatus physics as source.",
+  "source_freeze": "Only source knowledge transfers; no target outcomes cross cases or arms.",
+  "primary_outcome": "fresh-confirmed control-history prediction on independent trajectories",
+  "costs": "All trajectory rows and optional meter costs recorded; 48 observation rows reserved by the agent for fresh confirmation.",
+  "interpretation": "Two paired worlds are development cases, not independent population samples. Neither auxiliary measurements nor recursive questions are compulsory. Direct Python system identification is a valid solution.",
+  "limitations": "Finite synthetic apparatus; no evidence yet for comparative benefit, recursive causation or reuse of a target-learned method."
+}

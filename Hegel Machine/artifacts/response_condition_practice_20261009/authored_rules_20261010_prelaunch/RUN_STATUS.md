@@ -1,0 +1,1 @@
+Stopped during request construction, before the first model call (saved calls:128, unchanged). The saved historical extension assignment incorrectly described current target support as empty; current projection was unresolved. The next launch corrects only this stale assignment wording. Local comparison work is preparatory, with no new world observations.

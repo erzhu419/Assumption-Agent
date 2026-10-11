@@ -1,0 +1,188 @@
+{
+  "source_protocol": {
+    "experiment": "sc_kg_autonomous_meta_prior_and_gp_consumption",
+    "sc_kg_project_root": "/home/erzhu419/mine_code/KG_op/SC-OLH-KG",
+    "cohorts": {
+      "sequence_1": [
+        {
+          "problem": "rzdt1",
+          "dimension": 5,
+          "seed": 843000013,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt2",
+          "dimension": 5,
+          "seed": 843010020,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt1",
+          "dimension": 5,
+          "seed": 843020027,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt2",
+          "dimension": 5,
+          "seed": 843030034,
+          "noise": 0.0
+        }
+      ],
+      "sequence_2": [
+        {
+          "problem": "rzdt1",
+          "dimension": 5,
+          "seed": 843100019,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt2",
+          "dimension": 5,
+          "seed": 843110026,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt1",
+          "dimension": 5,
+          "seed": 843120033,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt2",
+          "dimension": 5,
+          "seed": 843130040,
+          "noise": 0.0
+        }
+      ],
+      "sequence_3": [
+        {
+          "problem": "rzdt1",
+          "dimension": 5,
+          "seed": 843200029,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt2",
+          "dimension": 5,
+          "seed": 843210036,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt1",
+          "dimension": 5,
+          "seed": 843220043,
+          "noise": 0.0
+        },
+        {
+          "problem": "rzdt2",
+          "dimension": 5,
+          "seed": 843230050,
+          "noise": 0.0
+        }
+      ]
+    },
+    "arms": [
+      "shared",
+      "cold"
+    ],
+    "config": {
+      "observation_budget": 96,
+      "compute_budget": 60000,
+      "max_rounds": 4,
+      "max_candidates": 16,
+      "max_question_depth": 2,
+      "complexity_weight": 0.001,
+      "minimum_improvement": 1e-07,
+      "validation_fraction": 0.25,
+      "seed": 7,
+      "strategy": "adaptive",
+      "use_memory": true,
+      "active_probes": true,
+      "joint_planning": true,
+      "use_abstractions": true,
+      "structural_transfer": true,
+      "synthesize_probes": true,
+      "partition": "development",
+      "proposer": "search",
+      "llm_calls_per_task": 2,
+      "llm_timeout_seconds": 120,
+      "llm_token_budget": 12000,
+      "max_history": 4,
+      "planning_depth": 2,
+      "experiment_policy": "task_value",
+      "selection_policy": "prospective",
+      "use_warm_start": true,
+      "joint_search": "beam",
+      "adaptive_horizon": true,
+      "risk_learning": true,
+      "state_search": true,
+      "transition_probes": true,
+      "transfer_scheduling": true,
+      "tail_fit": true,
+      "learn_research_policy": true,
+      "joint_state_coordinates": true,
+      "joint_state_probes": true
+    },
+    "evaluation": {
+      "seed_offset": 1000003,
+      "rows": 128
+    },
+    "sc_kg_gp": {
+      "train_seed_offset": 2000003,
+      "training_rows": 8,
+      "evaluation_seed_offset": 3000017,
+      "evaluation_rows": 64,
+      "lambda_i": 1e-12,
+      "prior_var": 1000000.0,
+      "observation_variance": 1e-08,
+      "comparators": [
+        "learned_program",
+        "linear_x1",
+        "sc_kg_default_quadratic"
+      ]
+    },
+    "learning": "Shared retains one KnowledgeLibrary per sequence; cold starts a new library per task. Both retain within-task prior revision. Task and evaluation seeds are identical across arms.",
+    "evaluation_timing": "All 24 learning tasks must finish before independent measurements or GP training are requested. No evaluation observations return to the library.",
+    "accounting": "Actual simulator calls are counted. Each frozen model uses 128 primary evaluation calls, 8 new GP training calls and 64 GP evaluation calls. The three GP models share identical newly acquired data, rather than reacquiring it three times.",
+    "scope": "Two finite noise-free RZDT constraint families at dimension five. Public simulate outputs only; this evaluates hypothesis discovery and cross-project consumption, not optimization improvement or the current SC-KG paper method."
+  },
+  "prior_smoke": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/artifacts/sc_kg_optimizer_smoke_v030_20260910",
+  "arms": [
+    "learned_with_data",
+    "default_with_data",
+    "default_cold"
+  ],
+  "total_calls_per_arm": 64,
+  "optimizer_settings": {
+    "n0": 8,
+    "K1": 6,
+    "K2": 0,
+    "posterior_pool_size": 32,
+    "posterior_keep": 3,
+    "axis_candidate_count": 0,
+    "state_candidate_count": 0,
+    "n_thr": 2,
+    "use_problem_initial_samples": false,
+    "use_boundary_initial_samples": false,
+    "use_recommendation_refinement": false,
+    "recommendation_axis_oracle": false,
+    "recommendation_axis_candidate_count": 0,
+    "use_state_coupling": false,
+    "use_state_basis": false,
+    "lambda_coupling": 0.0,
+    "variance_mode": "pooled",
+    "acquisition_mode": "exact_mc",
+    "exact_kg_mc_samples": 1,
+    "exact_kg_jobs": 1,
+    "eval_pool_size": 32,
+    "evaluate_interval": 0,
+    "truth_pool_diagnostics": false,
+    "checkpoint_interval": 0
+  },
+  "optimizer_seed_offset": 4000009,
+  "task_selection": "RZDT2 at position 1 of each source cohort; acquire new full vector records under the same frozen research protocol",
+  "accounting": "Each data-reuse arm pays for the whole Hegel research history once, initializes the real SC-KG GP/HVD with every recorded objective/constraint observation, and spends the remaining calls on original SC-KG acquisition. The default-cold arm gets 64 original SC-KG calls. The two data-reuse arms share identical acquired research data; their per-arm totals each include that source cost.",
+  "evaluation": "Original SC-KG post-run truth scoring only, after all acquisition and the final recommendation have frozen. No truth values reconstruct missing research outputs.",
+  "scope": "Three-seed bounded optimizer comparison; the prior program-only negative baseline is retained."
+}

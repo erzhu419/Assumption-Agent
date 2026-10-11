@@ -1,0 +1,11 @@
+# 停止父程序的实测反馈修订
+
+已结束。先核对0.77/0.92的旧稿保留、EditPracticeMethodLearner的改稿后实测，以及已发布python_response_reopening_method的按结果分支。DW停止反馈原本存在，但已有parent_program_path会屏蔽作者续研。本轮沿原research_focus和execute_procedure补一次结果复议；任何实际选择均可回应，合法stop不变成error或科学反驳。method_decision显示本路径最新结果，两臂程序均获得program_path/program_results，保留全部旧历史。新增15项测试，相关98项通过。
+
+同一198历史调用/241观测现场，两臂各12调用，订阅gpt-6-luna/medium，900秒单请求，无超时。Hegel/Code新增动作30/12，新程序函数执行26/0，新子答案0/0，均0.68未完成。tokens 833579/577706，缓存输入178432/182528；完整旧现场及每稿源码保留在prefix_files和新事件中。
+
+Hegel首轮已修写现成程序，以当前位置替代全局计数并执行east/east/north；north撞桌后改试teleport-core，失败后继续修改路径。六次写入均实际执行，终止状态依次为error/error/stop/stop/error/step_limit。第六稿反复TALK→Exit，观测253–264达到12步上限；之后普通动作取出、重装晶体3并继续导航。没有调频或新科学假设检验。Code本轮也只有导航、控制交互及一次不支持的ACTIVATE。
+
+## Limitations与下一步
+
+实测成立的是主机安排复议后，模型根据执行结果修改并运行程序；未建立科学假设修订或任务收益。更多程序调用未带来正确率提升。本轮没有自动修补模型源码或提供场景规律。下一步优先处理研究问题选择：让未证实的操作必要性与响应规律失配成为可区分的解释，沿既有子问题、物理结果分析和候选比较选择实验；不继续以函数调用次数衡量科学进展。上轮Code已在笔记中怀疑预测不准，原记录已更正为“尚未执行修订或区分实验”。

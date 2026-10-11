@@ -1,0 +1,11 @@
+# Unresolved temporal research and successor returns
+
+Protocols were saved before new learning. Baseline is the retained 0.141.0 runtime; candidate 0.142.0 was frozen after 94 related checks, with 466 Python source files in each runtime capsule. All proposals used local search; external model calls were zero.
+
+Development uses known-negative apparatus 9915908–9915909 and reuses only baseline learning checkpoints. Formal uses 12 fresh apparatus 9916001–9916012, seven stages and three arms (252 tasks), starting from empty knowledge. Budgets remain 320 observation rows, 320 measurement units and 320,000 computation per first visit; shared revisits use only visited-task unused allocations. All learning and natural revisits in both cohorts completed before terminal scoring at fixed offset 910404, four 64-row trajectories, MSE ≤ 1e-6. Source, seeds, budgets and exclusions were unchanged after terminal.
+
+Formal strict solutions: old cumulative 60/84, new cumulative 60/84, new independent 55/84; completion 24 each and false completion zero. New cumulative versus old: MSE −55.10%, learning CPU −15.12%, observations −13.50%, measurements −14.32%, computation −13.69%; chains 3 wins, 3 ties, 6 losses. Versus independent: five additional strict solutions and MSE −84.93%, but CPU +1.88%, computation +1.99%, measurements +28.03%; chains 8 wins and 4 losses. Stable net benefit is not established.
+
+Formal learning records show 29 unresolved temporal nominations entering full response fits, 26 producing candidates; 11 whole method visits (8 improved on their last newly measured paired response and 3 unscored), costing 720 observation rows, 720 measurement units and 1,973,848 computation including screening. Three later offers used measured method experience and were scheduled. Development improved 9/14 to 11/14; these known examples do not replace formal outcomes.
+
+Use compact_results.json for quality/cost/chain summaries and each cohort's summary.json, knowledge_consumption.json, temporal_method_opportunities.json and unresolved_research_analysis.json for recorded causal steps. The independent arm is full Hegel with reset knowledge. Ordinary Code/real LLM and component-specific deletion comparisons are absent; all 60 formal conditional tasks remain unresolved.

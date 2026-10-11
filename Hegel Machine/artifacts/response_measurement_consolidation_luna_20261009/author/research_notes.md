@@ -1,0 +1,7 @@
+Notebook — source method repair
+
+Observed: No source practice is confirmed; `source_initial` and `source_continuation` remain missing. Restored trial_000/004 failed when reference rows assumed `signal_1`; after filtering incomplete reference rows, trial_005/006 source_initial reached 22 actions and failed on missing `signal_4` in successful-setting-row construction. That append was then patched to skip incomplete feature rows. The latest trace (trial_006) instead shows the estimator trying to make a probe for target 4 without measured `signal_4`, failing at line 675. Density/gap fits on early references had MSE around 150 and are inadequate; they do not settle signal-based alternatives. Archive experience (development only) reports crystals 1–3 at 110.3, 140.3, 190.3 Hz, crystal 4 at 260 Hz, and crystal 5 at 4055 Hz; not current practice confirmation.
+
+Working explanation: code now handles incomplete training rows, but must also avoid generating a target prediction until all features required by that estimator have actually been measured on that target. A prior patch script intended to add this guard failed with a Python syntax error, so no edit occurred.
+
+Unresolved: whether the guard fits the exact source location and whether subsequent acquisition, fitting, control, and physical confirmation succeed. Proposed action patches the target-probe path to skip targets missing any required feature; this has not yet run. Then use automatic source_initial practice feedback to diagnose the next actual failure, and verify source_continuation separately.

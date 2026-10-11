@@ -1,0 +1,6 @@
+## Notebook
+**Observed:** Crystals 1–3 activated at 46.716, 60.378, and 100.955 Hz (records 0–5). Crystal 4 remains publicly uncalibrated after many negative trials, including the 38–41 Hz region, 100–500 Hz, 215 Hz, and 241 Hz (records 28–100). Crystal 1 was inactive at 47.716 Hz after activating at 46.716 Hz (records 91–94). The registered measured-feature and shared-connected-band families were refuted on recorded outcomes; this does not exclude other response structures. The saved parent procedure previously failed with StopIteration; that is operational failure, not evidence about activation. Child question `reference_response_4_54` is open and has no outcome yet.
+
+**Working explanation / alternatives:** Crystal 4 may still have an activation window in the untested low-frequency interval, or may remain inactive at the proposed 54 Hz point. These alternatives predict different physical outcomes for the same test; neither is presently supported.
+
+**Next experiment:** Invoke the existing reference-response controller for crystal 4 at 54 Hz, using its actual reactor/object response to determine activation. A positive result establishes only activation at that tested point; a negative result rejects only that point. No calibration law or crystal-5 target setting is established.

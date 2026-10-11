@@ -95,7 +95,12 @@ class ReferenceLab:
             self.inventory.add(action["arg1"])
             self.installed.discard(action["arg1"] - 200)
         elif action["action"] == "PUT":
-            assert action["arg1"] - 200 == action["arg2"] - 100
+            if action["arg1"] - 200 != action["arg2"] - 100:
+                self.last_message = ("This laboratory pairs each numbered crystal with the same-numbered "
+                                     "reactor; cross-reactor insertion is unavailable.")
+                return {"action": deepcopy(action),
+                        "feedback": {"success": False, "errors": [self.last_message]},
+                        "observation": self.public_observation()}
             self.inventory.remove(action["arg1"])
             self.installed.add(action["arg1"] - 200)
         elif action["action"] == "USE":
@@ -104,8 +109,11 @@ class ReferenceLab:
                         92: "quantum gap is estimated to be " + str(self.gap[number]) + " nm.",
                         93: "signal magnitude = " + str(self.density[number]) + " units."}
             self.last_message = "You examine quantum crystal " + str(number) + ". The " + readings[action["arg1"]]
-        else:
-            assert action["action"] in ("TELEPORT_TO_OBJECT", "TELEPORT_TO_LOCATION", "ROTATE_DIRECTION")
+        elif action["action"] not in ("TELEPORT_TO_OBJECT", "TELEPORT_TO_LOCATION", "ROTATE_DIRECTION"):
+            self.last_message = "Unsupported laboratory action: " + str(action["action"])
+            return {"action": deepcopy(action),
+                    "feedback": {"success": False, "errors": [self.last_message]},
+                    "observation": self.public_observation()}
         return {"action": deepcopy(action), "feedback": {"success": True},
                 "observation": self.public_observation()}
 
@@ -148,6 +156,9 @@ def test_declaring_estimator_changes_only_declaration_and_identical_retry_keeps_
     assert agent.files[PATH] == revised
     assert first["fitted_predictions"][0]["selected_probe"]["predictions"] == pytest.approx([350.])
     assert [(test["family"], test["status"]) for test in first["tests"]] == [("gap_square", "refuted")]
+    assert first['response_research_history']
+    assert first['status'] == 'method_stopped'
+    assert 'return the acquired outcomes to the proposing researcher' in first['reason']
     assert not lab.success
     count = len(lab.actions)
     repeated = submit(agent, lab, hypothesis)
@@ -164,6 +175,7 @@ def test_failed_physical_prediction_leaves_new_family_available_and_parent_tests
 
     assert result["status"] == "completed" and lab.success
     assert [lab.frequencies[n] for n in (4, 5)] == [260, 350]
+
     questions = {q["id"]: q for q in agent.questions}
     assert questions["reference_test_4_gap_square"]["status"] == "refuted"
     for number in (4, 5):
@@ -219,3 +231,237 @@ def test_retained_estimator_keeps_existing_linear_case_on_original_family(tmp_pa
     assert [linear.frequencies[n] for n in (4, 5)] == [140, 160]
     assert set(old.relation_research) == {"reference_fit_density_4", "reference_fit_density_5"}
     assert old.costs["model_calls"] == 0 and (old.workspace / PATH).read_text() == source
+
+
+def test_declaration_continues_refuted_point_into_actual_boolean_family_trials(tmp_path):
+    class BoundedReferenceLab(ReferenceLab):
+        def public_observation(self):
+            view = super().public_observation()
+            if 'dialogIn' in view['dialog_box']:
+                view['dialog_box']['dialogIn'] += ' The allowable range is 0 to 10,000 Hz.'
+            return view
+
+    agent, _ = prepared(tmp_path, intercept=100.3)
+    lab = BoundedReferenceLab(intercept=100.3)
+    lab.density[5] = 395.5 ** .5
+    lab.required[5] = 4055.3
+    agent.lab = lab
+    result = submit(agent, lab, square('density', 'density_square'))
+    questions = {q['id']: q for q in agent.questions}
+    old = questions['reference_test_5_density_square']
+    assert old['status'] == 'refuted' and old['evidence']
+    assert result['response_research_history']
+    physical = [q for q in agent.questions if q['id'].startswith('reference_response_')
+                and q['id'].endswith('_physical')]
+    assert physical and all(q['evidence'] for q in physical)
+    assert all(min(q['evidence']) > max(old['evidence']) for q in physical)
+    assert result['response_research']['family_research']
+    assert not agent.llm_inquiries and agent.costs['model_calls'] == 0
+    source = ast.parse((tmp_path / PATH).read_text())
+    estimators = next(node.value for node in source.body if isinstance(node, ast.Assign)
+                      and any(isinstance(t, ast.Name) and t.id == 'ESTIMATORS' for t in node.targets))
+    assert [item['id'] for item in ast.literal_eval(estimators)] == ['density_square']
+    # A submitted estimator returns an unresolved scientific obligation to its
+    # author after real response experiments; it does not run the parent's
+    # offline operational fallback or promise to solve the whole task.
+    assert result['status'] == 'method_stopped' and not lab.success
+    assert 'return the acquired outcomes to the proposing researcher' in result['reason']
+    assert result['research_obligation']['reason'] == (
+        'completed_tests_changed_members_without_task_or_nonlocal_progress')
+    assert result['response_research']['family_research']['families'][0]['status'] == 'SAT_WITNESS'
+    assert physical[-1]['status'] == 'refuted'
+    assert questions['reference_test_5_density_square'] == old
+
+
+def test_budget_stopped_new_measurement_does_not_relabel_old_family_diagnosis(tmp_path):
+    agent, lab = prepared(tmp_path)
+    old_response = {'status': 'family_research_needed', 'question_id': 'reference_response_4_1',
+        'family_research': {'families': [{'id': 'gap_square', 'status': 'UNSAT_VERIFIED'}],
+            'research_obligation': {'reason': 'declared_shared_response_families_refuted',
+                'question': 'Which measurement distinguishes the old gap conflict?'}}}
+    previous = {'completed': [], 'rejected': {'4': ['gap_square']},
+        'response_research': old_response,
+        'response_research_history': [deepcopy(old_response)]}
+    state_path = tmp_path / recipe.STATE
+    state_path.write_text(json.dumps(previous))
+    agent.limits['environment_steps'] = 0
+    hypothesis = square('signal', 'signal_square')
+    hypothesis['measurements'] = {'signal': {'instrument': 'signal meter',
+        'pattern': r'signal magnitude = ([\d.]+) units', 'group': 1}}
+
+    # A new declaration and an identical retry both preserve the notebook.
+    # Neither invocation has acquired evidence or run a response-family query.
+    for _ in range(2):
+        result = submit(agent, lab, hypothesis)
+        assert result['status'] == 'environment_budget_exhausted'
+        assert result['new_observation_count'] == 0
+        assert result['response_research_history'] == []
+        assert result['response_research'] == {}
+        assert result['research_obligation'] is None
+        assert json.loads(state_path.read_text()) == previous
+        assert lab.actions == []
+
+
+@pytest.mark.parametrize('source_kind', ('current', 'retained_bundle'))
+def test_later_measurement_declaration_supplies_missing_reading_for_retained_earlier_basis(tmp_path, source_kind):
+    from test_world_observed_settings import _incidental_success
+
+    source = None
+    if source_kind == 'retained_bundle':
+        from scripts import run_response_revision_replay as replay
+
+        original = json.loads((replay.matched.SOURCE / 'completed_target_routing_bundle.json').read_text())
+        # This fixture submits its own hypotheses. Keep the archived executor,
+        # applying the same preparation used by the live comparison entry.
+        prepared_bundle = replay.matched.prepare_bundle(
+            replay.historical_knowledge(original, 'ESTIMATORS = ()\n'))
+        source = prepared_bundle['files'][replay.matched.study.METHOD_PATH]
+    agent, lab, _ = _incidental_success(tmp_path, source=source)
+    assert lab.active(4) and not lab.active(5)
+    agent._execute('query', {'actions': [{'action': 'PICKUP', 'arg1': 93}, *[
+        {'action': 'USE', 'arg1': 93, 'arg2': 200 + number} for number in (1, 2, 3, 5)]]}, lab)
+    unbound = {'id': 'signal_linear_unbound', 'basis': [{'op': 'feature', 'name': 'signal'}]}
+    failed = submit(agent, lab, unbound)
+    assert failed['status'] == 'method_error' and "KeyError: 'signal_1'" in failed['error']
+    corrected = square('signal', 'signal_square')
+    corrected['measurements'] = {'signal': {'instrument': 'signal meter',
+        'pattern': r'signal magnitude = ([\d.]+) units', 'group': 1}}
+    before_actions, before_observations = len(lab.actions), len(agent.observations)
+
+    result = submit(agent, lab, corrected)
+
+    # The earlier declaration still needs the same feature. Its missing C4
+    # reading must be acquired using the later declaration's known instrument
+    # before either candidate assembles C4's successful calibration row.
+    acquisitions = [a['arg2'] for a in lab.actions[before_actions:]
+                    if a.get('action') == 'USE' and a.get('arg1') == 93]
+    assert acquisitions == [204]
+    assert result['status'] == 'completed' and lab.success
+    state = json.loads((tmp_path / recipe.STATE).read_text())
+    crystal4 = next(row for row in state['research_table']['targets'] if row['crystal'] == 4)
+    assert crystal4['measurements']['signal']['evidence'] >= before_observations
+    assert crystal4['measurements']['signal']['value'] == 4.
+    assert 'signal_linear_unbound' in (tmp_path / PATH).read_text()
+    assert agent.costs['model_calls'] == 0 and not agent.llm_inquiries
+
+
+def _paid_shared_band_conflict(tmp_path):
+    class AliasedReferenceLab(ReferenceLab):
+        def act(self, action):
+            result = super().act(action)
+            if action.get('action') == 'USE' and action['arg1'] == 93:
+                number = action['arg2'] - 200
+                self.last_message = ('You examine quantum crystal ' + str(number)
+                    + '. The signal magnitude = ' + str(number) + ' units.')
+                result['observation'] = self.public_observation()
+            return result
+
+    agent, _ = prepared(tmp_path)
+    lab = AliasedReferenceLab()
+    lab.density[2] = lab.gap[2] = 1.
+    agent.lab = lab
+    for _ in range(32):
+        agent._run_procedure(lab, PATH, max_steps=1)
+        state_path = tmp_path / recipe.STATE
+        state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        if state.get('research_table'):
+            break
+    assert state.get('research_table')
+    # References 1 and 2 share the measured representation but activate at
+    # 110 and 140. The real negative at 111 contradicts a shared connected band.
+    agent._execute('query', {'actions': [
+        {'action': 'TALK', 'arg1': 101}, {'chosen_dialog_option_int': 5},
+        {'chosen_dialog_option_int': 9}, {'chosen_dialog_option_int': 1}]}, lab)
+    assert lab.active(1) and lab.active(2)
+    return agent, lab
+
+
+def test_new_basis_is_compared_with_paid_conflict_before_physical_trial(tmp_path, monkeypatch):
+    agent, lab = _paid_shared_band_conflict(tmp_path)
+    hypothesis = square('density', 'density_square')
+    before_actions, before_observations = len(lab.actions), len(agent.observations)
+    old_questions = deepcopy(agent.questions)
+
+    result = submit(agent, lab, hypothesis)
+
+    assert len(lab.actions) == before_actions and len(agent.observations) == before_observations
+    assert result['status'] == 'method_stopped' and result['new_observation_count'] == 0
+    check = result['paid_family_check']
+    assert check['status'] == 'UNSAT_VERIFIED'
+    assert check['reason'] == 'equal_basis_connected_band_conflict'
+    assert check['scope'] == 'declared_basis_shared_connected_band'
+    assert check['queries'] == [] and check['lp_calls'] == 0
+    assert [(r['frequency'], r['activated']) for r in check['conflicting_conditions']] == [
+        (110., True), (111., False), (140., True)]
+    assert all(r['evidence'] and max(r['evidence']) < before_observations
+               for r in check['conflicting_conditions'])
+    assert all(i < before_observations for i in check['evidence'])
+    assert any(not r['activated'] and r['frequency'] == 111 for r in check['responses'])
+    assert result['research_obligation']['evidence'] == check['evidence']
+    assert agent.questions == old_questions
+    assert 'density_square' in (agent.workspace / PATH).read_text()
+
+    # The parent must not immediately undo the submission decision by fitting
+    # the same declaration. Reacquired, changed measurements reopen it.
+    monkeypatch.setattr(recipe, 'STATE', tmp_path / recipe.STATE)
+    monkeypatch.setattr(recipe, 'FAMILIES', ())
+    monkeypatch.setattr(recipe, 'ESTIMATORS', (hypothesis,))
+    monkeypatch.setattr(recipe, '_extend_hypotheses', lambda *args: {'stop': 'No surviving point family'})
+    spec = {'current_observation': lab.public_observation()}
+    memory = {'program_path': PATH, 'questions': agent.questions}
+    assert recipe.select_actions(spec, agent.observations, memory) == {'stop': 'No surviving point family'}
+    lab.density[2] = 2.
+    agent._execute('query', {'actions': [{'action': 'USE', 'arg1': 91, 'arg2': 202}]}, lab)
+    proposal = recipe.select_actions({'current_observation': lab.public_observation()}, agent.observations, memory)
+    assert proposal['arguments']['operator'] == 'research_update'
+    assert proposal['arguments']['question']['id'] == 'reference_fit_density_square_4'
+
+
+def test_paid_family_unknown_keeps_proposed_physical_research_available(tmp_path, monkeypatch):
+    from hegel_machine.cognition import world_reference_hypothesis as hypothesis_entry
+
+    agent, lab = _paid_shared_band_conflict(tmp_path)
+    original_query = hypothesis_entry.query_response_family
+    monkeypatch.setattr(hypothesis_entry, 'query_response_family', lambda *args, **kwargs:
+        original_query(*args, **{**kwargs, 'compute_limit': 0}))
+    before = len(lab.actions)
+
+    result = submit(agent, lab, square('density', 'density_square'))
+
+    assert result['paid_family_check']['status'] == 'UNKNOWN'
+    assert result['paid_family_check']['reason'] == 'query_compute_limit'
+    assert len(lab.actions) > before and result['new_observation_count'] > 0
+
+
+def test_new_measurement_after_paid_conflict_is_acquired_and_can_succeed(tmp_path):
+    agent, lab = _paid_shared_band_conflict(tmp_path)
+    rejected = submit(agent, lab, square('density', 'density_square'))
+    assert rejected['paid_family_check']['status'] == 'UNSAT_VERIFIED'
+    hypothesis = square('signal', 'signal_square')
+    hypothesis['measurements'] = {'signal': {'instrument': 'signal meter',
+        'pattern': r'signal magnitude = ([\d.]+) units', 'group': 1}}
+    before = len(lab.actions)
+
+    result = submit(agent, lab, hypothesis)
+
+    assert 'paid_family_check' not in result
+    assert {a['arg2'] for a in lab.actions[before:] if a.get('action') == 'USE' and a['arg1'] == 93} == set(range(201, 206))
+    assert result['status'] == 'completed' and lab.success
+    assert [lab.frequencies[n] for n in (4, 5)] == [260, 350]
+
+
+def test_cross_reactor_insertion_returns_evidence_then_a_valid_insertion_can_continue(tmp_path):
+    agent, lab = prepared(tmp_path)
+    failed = agent._execute("query", {"actions": [
+        {"action": "PICKUP", "arg1": 204},
+        {"action": "PUT", "arg1": 204, "arg2": 101},
+        {"action": "PUT", "arg1": 204, "arg2": 104}]}, lab)
+    assert lab.environment_steps == 2 and failed["observation_indices"] == [0, 1]
+    assert failed["error"] and failed["action_results"][-1]["feedback"]["success"] is False
+    assert "cross-reactor insertion is unavailable" in lab.last_message
+    assert 204 in lab.inventory and 4 not in lab.installed
+    resumed = agent._execute("query", {"actions": [
+        {"action": "PUT", "arg1": 204, "arg2": 104}]}, lab)
+    assert lab.environment_steps == 3 and resumed["observation_indices"] == [2]
+    assert "error" not in resumed and resumed["action_results"][0]["feedback"]["success"] is True
+    assert 204 not in lab.inventory and 4 in lab.installed

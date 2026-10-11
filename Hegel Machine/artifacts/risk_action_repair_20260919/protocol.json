@@ -1,0 +1,106 @@
+{
+  "experiment": "known_risk_counterexample_repair_development",
+  "fixed_at": "2026-09-19T15:50:24.314094+00:00",
+  "cohorts": {
+    "development": [
+      95401901,
+      95401903
+    ]
+  },
+  "stages": [
+    "control_risk_source",
+    "new_independent_signal",
+    "changed_response",
+    "return_control_risk"
+  ],
+  "tasks_by_seed": {
+    "95401901": [
+      {
+        "environment": "scalar",
+        "task_index": 12,
+        "profile": "development",
+        "seed": 95401901
+      },
+      {
+        "environment": "scalar",
+        "task_index": 13,
+        "profile": "development",
+        "seed": 95411908
+      },
+      {
+        "environment": "scalar",
+        "task_index": 13,
+        "profile": "confirmation",
+        "seed": 95421915
+      },
+      {
+        "environment": "scalar",
+        "task_index": 12,
+        "profile": "development",
+        "seed": 95431922
+      }
+    ],
+    "95401903": [
+      {
+        "environment": "scalar",
+        "task_index": 12,
+        "profile": "development",
+        "seed": 95401903
+      },
+      {
+        "environment": "scalar",
+        "task_index": 13,
+        "profile": "development",
+        "seed": 95411910
+      },
+      {
+        "environment": "scalar",
+        "task_index": 13,
+        "profile": "confirmation",
+        "seed": 95421917
+      },
+      {
+        "environment": "scalar",
+        "task_index": 12,
+        "profile": "development",
+        "seed": 95431924
+      }
+    ]
+  },
+  "development_runtime": "artifacts/risk_action_repair_20260919/runtime/src",
+  "arms": {
+    "learned": {
+      "runtime": "artifacts/risk_action_repair_20260919/runtime/src"
+    }
+  },
+  "shared_laboratory_source": "artifacts/object_action_study_20260919/runtime/src/hegel_machine/cognition/unknown_task_lab.py",
+  "research_config": {
+    "observation_budget": 384,
+    "compute_budget": 240000,
+    "minimum_improvement": 1e-07,
+    "max_rounds": 4,
+    "active_probes": false
+  },
+  "measurement_budget": 1536,
+  "maximum_concurrent_research_processes": 2,
+  "terminal": {
+    "length": 96,
+    "trajectories": 16,
+    "seed_offset": 1000003,
+    "risk_quantile": 0.9,
+    "underage_cost": 9.0,
+    "overage_cost": 1.0
+  },
+  "scope": "Two known stochastic trajectory streams, each four tasks from empty knowledge with JSON restoration; repaired arm only. Reuse original old0.95, original0.96 and policy-disabled outcomes as descriptive paired development references.",
+  "risk_contract": "Primary endpoint is pinball loss at the fixed public quantile .9. Deploy the returned Program prediction directly as the action. Fixed (9,1) underage/overage action loss is exactly ten times pinball and is not an independent performance endpoint. Coverage and mean underage/overage remain descriptive. There is no risk solved threshold; completed/unresolved are learning statuses, and all returned models remain in evaluation.",
+  "oracle_contract": "Only the terminal scorer uses the existing evaluation_oracle after every learning task in the cohort has finished. Its full-state conditional quantile includes unpurchased instrument state; it is a reference, not an attainable target for every view. Report realized excess loss without clipping. Oracle values never enter learning or memory.",
+  "evaluation_contract": "All arms see the same independent terminal controls and disturbances per task. Save per-trajectory metrics, not observation dumps. Score every row including startup. Compare matched complete streams and stages; do not tune from terminal results.",
+  "cost_accounting": "All source learning and unsuccessful research included; terminal costs separate.",
+  "execution_revision": {
+    "learning_barrier": "Complete both repaired streams before any terminal evaluation.",
+    "timing_contract": "At most two independent streams concurrently; CPU time per stream and wall time per task are descriptive."
+  },
+  "original_results": "artifacts/risk_action_study_20260919/main/summary.json",
+  "known_exposure": "Both roots were exposed in the original 96-task study, including terminal outcomes, before this repair was designed. These are paired development regressions, not new independent confirmation. Preserve all original results unchanged; no iterative tuning from these new terminal outcomes.",
+  "formal_evidence": false
+}

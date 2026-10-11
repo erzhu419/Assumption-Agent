@@ -1,0 +1,13 @@
+# Finite-memory identification
+
+Task 000: instrument readings were exactly quadratic in the preceding control and linear in the current control. Response was an intercept plus a current-control term, squared current instrument reading, and previous instrument reading. Consequently the response is a sparse polynomial of u[t], u[t-1], and u[t-2]. Missing pre-trajectory controls are zero.
+
+Instrumented fitting used 96 rows; an independent 48-row uninstrumented trajectory agreed within 6e-16, including a nonzero initial control and boundary transitions. The equivalent 11-column channel-free basis was full rank and independently validated. The final model refits that basis on all acquired rows and needs no meter.
+
+Reuse finite_memory.py for identified finite-memory polynomial mechanisms. Refit coefficients on each task. Select memory depth and monomials from new evidence; this task does not establish those choices for other mechanisms. Persistent state, nonpolynomial responses, or different reset rules require another model.
+
+Task 001: The same 11-term, two-lag basis was refitted on current observations. Fitting the first 64 rows gave full rank and a maximum error of 1.22e-15 on the remaining 32 rows. Refitting all 96 rows gave MSE 6.17e-31. This supports reusing the channel-free structure for this task; coefficients were estimated anew.
+
+Task 002: The prior two-lag structure failed. A degree-four polynomial search identified a sparse three-lag response: intercept; u and u^2; lag1; lag2^2, lag2^3, lag2^4; u*lag2 and u*lag2^2; lag3 and lag3^2. The 11-term fit on the first 96 rows predicted a separately acquired 32-row trajectory, including reset, impulses and boundary transitions, with maximum error 3.66e-15. Refit all 128 rows using finite_memory.py; no meter is needed. Memory depth and interaction placement can change between tasks, so do not blindly reuse the previous basis.
+
+Task 003: The Task 002 three-lag, 11-term structure remains supported, but its coefficients changed. Refitting the first 64 current rows gave full rank and maximum error 7.77e-16; the remaining 32 rows had maximum error 1.22e-15. The acquired trajectory includes initial and separated positive/negative impulses. The final model refits all 96 rows and uses controls only. Continue to refit coefficients and reassess structure in subsequent tasks.

@@ -1,0 +1,7 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) values (1,1,1), (1,1,2), (3,3,3), (4,5,4) and successful operational settings 15.8, 20, 31.4, 54 Hz (records 10–24, 63; crystal 1 repeat 191). Crystal 5 measures (5,4,19.8872) (14, 19, 25). It was inactive at numerous tested settings, including 4746, 666, 729, 222, 563, 363, 577–591, and 758 Hz (e.g. 350, 395, 422, 430, 434, 449, 511–523, 550–561, 568, 571, 574). All are pointwise negatives; none establishes universal inactivity.
+
+**Model evidence:** The earlier `log_signal` alias was raw signal, not a logarithm (21–25, 117, 119). A genuine natural-log-signal cubic/shared-connected-band family remains a scoped SAT compatibility witness, not a confirmed law. Particular witnesses predicting activation near 589–590 Hz were contradicted by negatives (568, 571). Finite Boolean-rule searches are incomplete/non-exhaustive; no target support in that pool does not prove physical impossibility. No unique feature, coefficient set, response form, or shared-response premise explains crystal 5; object-specific response and missing features remain alternatives.
+
+**Current child trial:** The conditional test requests 4734 Hz. Records 584 and 585 show the reactor at 4721 then 4731 Hz; 4734 has not been reached and no target activation outcome is present. The proposed evaluation judges record 585 only, so its expected result is inconclusive. After that analysis, continue the same controlled trial to 4734 Hz and inspect the physical outcome.

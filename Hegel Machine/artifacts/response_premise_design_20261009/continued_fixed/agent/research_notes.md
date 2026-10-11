@@ -1,0 +1,9 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) values (1,1,1), (1,1,2), (3,3,3), (4,5,4) and successful settings 15.8, 20, 31.4, 54 Hz (evidence 10–24, 63; crystal 1 reconfirmation 191). Crystal 5 measures (5,4,19.8872) (14, 19, 25). Numerous tested settings were inactive, including 666 and fitted predictions 4721, 4735, 4784, 4839 Hz (evidence 176, 186, 218, 225, 350). The 197-Hz trial reached its target and was inactive (407). These pointwise outcomes do not establish universal inactivity.
+
+**Models:** The raw-signal `log_signal` declaration predicted about 249 Hz and failed (117, 119). A distinct natural-log-signal cubic has a compatibility witness under the shared connected residual-band premise, but its ~665.6-Hz prediction failed at 666 (350). Other searches report conditional UNSAT results or incomplete computation; neither establishes the true response law. A prior finite response search selected 222 Hz as a possible discriminator, but predictions and shared-premise assumptions remain provisional.
+
+**Latest execution:** The procedure was intended to test crystal 5 at 222 Hz. It talked to reactor 105 and saw 197 Hz, then stopped because its frequency parser did not match the dialog text. No tuning or physical test at 222 occurred; this is an operational/parser failure, not a failed physical prediction. Current live state is reactor 105 in dialog at 197 Hz.
+
+**Next experiment (proposed, not yet executed):** Repair the parser, continue tuning the same crystal to exactly 222 Hz, and inspect the actual activation result. This is a single-setting observation, not confirmation of a general law.

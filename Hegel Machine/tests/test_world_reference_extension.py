@@ -31,6 +31,123 @@ def select_actions(public_spec, observations, memory):
 """
 
 
+def test_declared_trial_enters_response_research_without_expanding_its_bases(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    declarations = ({'id': 'measured_signal', 'basis': [{'op': 'feature', 'name': 'signal'}]},)
+    monkeypatch.setattr(recipe, 'ESTIMATORS', declarations)
+    state = deepcopy(FAILED)
+    state['research_table'] = {'references': [{'crystal': 1, 'measurements': {
+        'signal': {'value': 2., 'evidence': 1}}}], 'targets': []}
+    state['response_settings'] = [{'crystal': 1, 'frequency': 3., 'activated': True}]
+    result = recipe._extend_hypotheses(state, {
+        'program_arguments': {'estimator_trial': True},
+        'limits': {'max_model_calls': 4}, 'costs': {'model_calls': 0}}, 3, PATH)
+    assert result['arguments']['operator'] == 'reference_response'
+    context = result['arguments']['context']
+    assert context['estimators'] == list(declarations)
+    assert context['responses'] == [[1, 3., True]]
+    assert not list(tmp_path.iterdir())
+
+
+def test_declared_trial_returns_family_obligation_instead_of_offline_fallback_or_nested_inquiry(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    state = deepcopy(FAILED)
+    state['response_research'] = {'status': 'family_research_needed',
+        'family_research': {'research_obligation': {
+            'question': 'Which new measurement separates the contradictory responses?'}},
+        'operational_fallback': {'selected_experiment': {'family': 'old', 'prediction': 7.}}}
+    for model_available in (False, True):
+        result = recipe._extend_hypotheses(state, {
+            'program_arguments': {'estimator_trial': True},
+            'model_available': model_available,
+            'limits': {'max_model_calls': 4}, 'costs': {'model_calls': 0}}, 3, PATH)
+        assert 'family_research_needed' in result['stop']
+        assert 'Which new measurement' in result['stop']
+        assert 'action' not in result and 'response_trial' not in result
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize('model_available', [False, True])
+def test_parent_consumes_available_composition_before_fallback_or_author(model_available):
+    action = {'action': 'run', 'arguments': {
+        'operator': 'reference_expansion', 'path': PATH}}
+    state = deepcopy(FAILED)
+    state['response_research'] = {'status': 'family_research_needed',
+        'basis_expansion_action': action,
+        'operational_fallback': {'selected_experiment': {
+            'family': 'old', 'prediction': 7.}}}
+    memory = {'model_available': model_available,
+        'limits': {'max_model_calls': 4}, 'costs': {'model_calls': 0}}
+    assert recipe._extend_hypotheses(state, memory, 3, PATH) == action
+    # A trial of one authored declaration must return its own evidence rather
+    # than silently introducing another scientific structure.
+    trial = recipe._extend_hypotheses(state, {
+        **memory, 'program_arguments': {'estimator_trial': True}}, 3, PATH)
+    assert 'family_research_needed' in trial['stop']
+    assert 'action' not in trial
+
+
+def test_actual_offline_fallback_enters_existing_next_response_progress(tmp_path, monkeypatch):
+    from test_world_response_consequences import fixture, assess, experiment, response
+
+    monkeypatch.chdir(tmp_path)
+    state = fixture(panel_crystal=4, panel_frequency=11.)
+    state['expanded_features'] = ['x']
+    first = assess(state, experiments=[experiment('negative_7', 1, 7.)])
+    first['family_research']['no_progress_cycles'] = 2
+    state['response_research'] = first
+    current = assess(state, experiments=[experiment('negative_8', 1, 8.)])
+    assert current['status'] == 'family_research_needed'
+    current['question_id'] = 'response_review'
+    chosen = current['operational_fallback']['selected_experiment']
+    chosen['family'] = 'linear'
+    state['response_research'] = current
+    selected = recipe._extend_hypotheses(state, {
+        'model_available': False, 'limits': {'max_model_calls': 0}, 'costs': {'model_calls': 0}}, 3, PATH)
+    assert selected['response_trial']['prediction'] == 8.
+    saved = json.loads(recipe.STATE.read_text())
+    assert saved['response_research']['family_research']['selected_test'] == {'crystal': 1, 'frequency': 8.}
+    state['response_settings'].append(response(1, 8., False))
+    after = assess(state, experiments=[experiment('negative_6', 1, 6.)])
+    assert after['family_research']['no_progress_cycles'] == 3
+
+
+def test_stagnant_live_research_keeps_surviving_families_and_operational_alternative(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'shared').mkdir()
+    (tmp_path / PATH).write_text(wrapper())
+    state = deepcopy(FAILED)
+    obligation = {
+        'reason': 'completed_tests_changed_members_without_task_or_nonlocal_progress',
+        'question': 'Which shared response assumption or missing measurement prevents a new target prediction?',
+        'family_statuses': ['SAT_WITNESS', 'UNKNOWN'],
+    }
+    fallback = {'diagnosis': 'conditional_family_test', 'selected_experiment': {
+        'family': 'linear', 'number': 3, 'prediction': 7., 'predictions': {'member': True}}}
+    state['response_research'] = {'status': 'family_research_needed',
+        'family_research': {'families': [{'id': 'linear', 'status': 'SAT_WITNESS'},
+                                       {'id': 'quadratic', 'status': 'UNKNOWN'}],
+            'no_progress_cycles': 2, 'research_obligation': obligation},
+        'operational_fallback': fallback}
+    before = deepcopy(state)
+
+    result = recipe._extend_hypotheses(state, {'model_available': True,
+        'limits': {'max_model_calls': 4}, 'costs': {'model_calls': 0},
+        'llm_inquiries': {}}, 3, PATH)
+
+    assert result['arguments']['operator'] == 'inquire'
+    assert 'response_trial' not in result
+    question = result['arguments']['question']['question']
+    assert 'shared/reference_extension_3.json' in question
+    assert 'shared/reference_recalibration.json' in question
+    assert 'Current measured table:' not in question
+    assert 'hypotheses failed' not in question
+    evidence = json.loads((tmp_path / 'shared/reference_extension_3.json').read_text())
+    assert evidence['family_research'] == before['response_research']['family_research']
+    assert evidence['operational_fallback'] == fallback
+    assert state == before
+
+
 @pytest.mark.parametrize("limit,spent", [(0, 0), (3, 3)])
 def test_no_remaining_calls_explicitly_stops_without_opening_research(tmp_path, monkeypatch, limit, spent):
     monkeypatch.chdir(tmp_path)
@@ -44,12 +161,23 @@ def test_no_remaining_calls_explicitly_stops_without_opening_research(tmp_path, 
     assert not list(tmp_path.iterdir())
 
 
-def test_request_preserves_prior_source_physical_refutation_and_range_failure(tmp_path, monkeypatch):
+@pytest.mark.parametrize('family_obligation', [None, {
+    'reason': 'declared_shared_response_families_refuted',
+    'question': 'Which additional measurement distinguishes the contradictory responses?',
+    'same_measurement_conflict': [
+        {'crystal': 2, 'frequency': 3., 'activated': True, 'evidence': [6]},
+        {'crystal': 1, 'frequency': 3., 'activated': False, 'evidence': [10]}],
+}])
+def test_request_preserves_prior_source_physical_refutation_and_range_failure(tmp_path, monkeypatch, family_obligation):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "shared").mkdir()
     source = wrapper()
     (tmp_path / PATH).write_text(source)
     state = deepcopy(FAILED)
+    if family_obligation:
+        state['response_research'] = {'status': 'family_research_needed',
+            'family_research': {'research_obligation': family_obligation}}
+    before = deepcopy(state)
     result = recipe._extend_hypotheses(state, {
         "limits": {"max_model_calls": 40}, "costs": {"model_calls": 2},
         "llm_inquiries": {},
@@ -66,8 +194,9 @@ def test_request_preserves_prior_source_physical_refutation_and_range_failure(tm
     assert evidence["out_of_range_predictions"] == FAILED["out_of_range"]
     assert evidence["rejected_families"] == ["density", "gap"]
     assert evidence["current_program"] == PATH
-    assert json.loads((tmp_path / recipe.STATE).read_text()) == FAILED
-    assert state == FAILED
+    assert evidence['family_research'] == (state.get('response_research') or {}).get('family_research')
+    assert json.loads((tmp_path / recipe.STATE).read_text()) == before
+    assert state == before
 
 
 def prepared(tmp_path, steps, *, calls=6, readings=(3,)):

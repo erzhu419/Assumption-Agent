@@ -18,7 +18,8 @@ from .world_llm_inquiry import INQUIRY_INTERFACE, execute_llm_inquiry
 from .world_procedure_repair import run_world_procedure
 from .world_reference_hypothesis import HYPOTHESIS_INTERFACE, execute_reference_hypothesis
 from .world_reference_expansion import execute_reference_expansion
-from .world_reference_response import execute_reference_response
+from .world_reference_response import (execute_reference_response,
+                                       response_premise_design_action, dispatch_response_premise)
 
 
 INTERFACE = """You are conducting scientific research inside DiscoveryWorld.
@@ -39,7 +40,13 @@ Extract rows from actual observations; features are your chosen measured inputs,
 target is the measured quantity to explain. Each row cites its supporting records.
 Return all available rows on every invocation and rebuild probes for the current
 world state. An optional hypotheses:[Program_AST,...] supplies your own candidates;
-otherwise existing refit/composition/relation search proposes them. AST examples:
+otherwise existing refit/composition/relation search proposes them. To add new
+programs to the same question, return candidate_additions:[Program_AST,...]
+(or [{program:Program_AST}]); old candidates and their actual evidence remain.
+Additions are screened on all bound rows and need their own later confirmation.
+Repeated programs do not reset their evidence or count as additional votes.
+Changing hypotheses alone does not replace this question's frozen candidates.
+AST examples:
 {op:'feature',name:'x'}, {op:'const',value:2},
 {op:'mul',children:[{op:'feature',name:'x'},{op:'feature',name:'x'}]}.
 Distinguish a chosen control value, a successful API action, and an observed
@@ -53,10 +60,13 @@ its predicted setting through query, then use an authored after_observation
 answer to judge the actual public outcome. Do not validate a predicted setting
 against its own read-back. Preserve the candidate before its test; let a failed
 intervention refute it or motivate a specific revised condition.
-Numerical confirmation requires a new row whose full supporting evidence is
-independent of fitting. If an intervention reuses previously measured features,
-cite those records honestly and use authored analysis of its new outcome rather
-than presenting that row as independent numerical confirmation.
+Rows may include conditioning_refs:[old_measurement_indices] and
+outcome_refs:[response_indices]. Both must cite real records and together cover
+evidence; outcome_refs must be nonempty. This permits a new response conditional
+on previously measured properties. Only outcomes observed after the candidate's
+selection can confirm it; rebinding an already public outcome is not new evidence.
+Keep all citations so a later correction can revisit the extraction. Rows without
+these roles still require the whole supporting evidence to be independent.
 The tool compares candidates, chooses a probe by disagreement, performs its exact
 actions, then re-runs your binding against new records to test FROZEN candidates.
 Training fit alone is not confirmation. tolerance is the declared MSE criterion.
@@ -179,8 +189,11 @@ messages at the TOP LEVEL, and public_objects for action participants and their
 direct public containment relations (or accessible objects for dialog steps).
 These are the actual contemporaneous names/descriptions, not inferred outcome
 labels. An observed negative physical state differs from an absent outcome.
-Program observations include this same top-level public view AND the original
-record.observation. public_relations lists explicit {subject,relation,object,text}
+Program observations include this same top-level action view. Their nested
+record.observation retains the original environment fields and adds the full
+public_objects/public_relations projection, as current_observation does. The
+laboratory_observations.json records retain the raw environment fields unchanged.
+public_relations lists explicit {subject,relation,object,text}
 clauses: '(in crystal reactor (uncalibrated) [uuid: 8])' on object 9 becomes
 {subject:9,relation:'in',object:8,text:'(in crystal reactor (uncalibrated) [uuid: 8])'}.
 Match relation UUIDs; names can include qualifiers. The text remains an observed
@@ -188,6 +201,10 @@ description for your analysis, not a host-assigned scientific outcome.
 Start with this
 compact file for analysis; use the full records for historical object/world state.
 current_observation.json and research_state.json are refreshed after every action.
+current_observation (in public_spec and current_observation.json) includes the same
+public_objects/public_relations projection of currently accessible objects alongside
+the original environment fields. It is a live view; use indexed action records for
+past states. Object names and descriptions remain observations for your analysis.
 
 run {operator:'question',id:'q',question:'...',parent_id:null,depends_on:[]} opens
 or revises a research question before obtaining evidence. To return a child
@@ -339,6 +356,22 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             result["dialog_box"] = deepcopy(observation["dialog_box"])
         return result
 
+    @staticmethod
+    def _public_observation(observation):
+        from .world_prerequisite_research import public_object_context, public_object_relations
+
+        observation = deepcopy(observation)
+        observation["public_objects"] = public_object_context(observation)
+        observation["public_relations"] = public_object_relations(observation["public_objects"])
+        return observation
+
+    def _current_observation(self):
+        return self._public_observation(self.lab.public_observation())
+
+    def _program_observation(self, record):
+        return {**record, **self._action_observation(record),
+                "observation": self._public_observation(record["observation"])}
+
     def _python(self, command, payload=""):
         remaining = min(self.limits["python_seconds_per_call"],
                         self.limits["python_seconds_per_task"] - self.costs["python_execution_seconds"],
@@ -404,7 +437,7 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
         self._write_evidence()
         for name, data in (("research_state.json", self._state()),
                            ("llm_inquiries.json", self.llm_inquiries),
-                           ("current_observation.json", self.lab.public_observation()),
+                           ("current_observation.json", self._current_observation()),
                            ("action_observations.json", [self._action_observation(r) for r in self.observations])):
             (self.workspace / name).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         self._prepare_program_state()
@@ -512,11 +545,18 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             if method.get("evidence_file"):
                 entry["prior_execution"] = json.loads((self.workspace / method["evidence_file"]).read_text())
             methods.append(entry)
+        proposals = []
+        for key, session in self.llm_inquiries.items():
+            if "proposal" not in session:
+                continue
+            proposal = {"session_id": key, "question_id": session["question_id"],
+                        "notes": session["notes"], **deepcopy(session["proposal"])}
+            comparison = proposal.get("comparison_result")
+            if comparison:
+                proposal["premise_design_action"] = response_premise_design_action(comparison)
+            proposals.append(proposal)
         summary = {"questions": questions, "methods": methods,
-                   "explanation_proposals": [{"session_id": key, "question_id": session["question_id"],
-                       "notes": session["notes"], **deepcopy(session["proposal"])}
-                       for key, session in self.llm_inquiries.items()
-                       if "proposal" in session],
+                   "explanation_proposals": proposals,
                    "research_advice": deepcopy(self.research_advice),
                    "answer_semantics": "Agent-authored support on cited evidence; new evidence requires review."}
         self.files["method_decision.json"] = json.dumps(summary, ensure_ascii=False)
@@ -534,8 +574,9 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             path = self.workspace / name
             if path.is_file():
                 self.files[name] = path.read_text(encoding="utf-8")
-        return {**({"research_root": {"id": "task", "question": self.questions[0]["question"]}}
-                   if self.agent_arm == "hegel" and self.questions and self.questions[0]["id"] == "task" else {}),
+        root = next((question for question in self.questions if question['id'] == 'task'), None)
+        return {**({"research_root": {"id": "task", "question": root["question"]}}
+                   if self.agent_arm == "hegel" and root else {}),
                 "task_interface": INTERFACE + INQUIRY_INTERFACE + HYPOTHESIS_INTERFACE + "\n" + STRATEGIES[self.agent_arm],
                 "research_notes": notes, **self._spec(),
                 **({"research_focus": deepcopy(self.research_focus)} if self.research_focus else {}),
@@ -735,7 +776,7 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
         self._save_state()
 
     def _spec(self):
-        return {"current_observation": self.lab.public_observation(), "capabilities": self.lab.capabilities()}
+        return {"current_observation": self._current_observation(), "capabilities": self.lab.capabilities()}
 
     def _question(self, value):
         question_id = value["id"]
@@ -798,7 +839,7 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
                                   "design": _DESIGN_RUNNER}[function],
              str(self.workspace / path)],
             json.dumps({"spec": self._spec(), "observations": [
-                {**record, **self._action_observation(record)} for record in self.observations],
+                self._program_observation(record) for record in self.observations],
                 "memory": memory}))
         self.program_executions += 1
         if code or timed_out:
@@ -1103,6 +1144,55 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             return {"status": "inquiry_finished", "lesson": arguments.get("lesson", "")}
         if self._inquiry_stack and self._inquiry_stack[-1].get("stage") == "proposal":
             frame = self._inquiry_stack[-1]
+            draft = self.workspace / frame['proposal_path']
+            if (action == 'run' and arguments.get('operator') == 'inquire'
+                    and arguments['question']['id'] not in {
+                        item['question_id'] for item in self._inquiry_stack}):
+                from .world_llm_inquiry import (
+                    preview_design_proposal, refresh_authored_response, refresh_condition_proposal)
+                available = frame['call_limit'] - self.costs['model_calls'] - 1
+                if available < 1:
+                    return {'operator': 'inquire', 'status': 'model_call_budget_exhausted',
+                            'model_calls': 0, 'message': 'The remaining decision is reserved for the author.'}
+                params = deepcopy(arguments)
+                params['max_model_calls'] = min(params.get('max_model_calls', 8), available)
+                # A draft revision is not a dependency of the old adopted law.
+                params['question'].setdefault('parent_id', 'proposal:' + frame['proposal_path'])
+                if frame.get('condition_proposal'):
+                    params.setdefault('condition_proposal', frame['condition_proposal'])
+                before_source = draft.read_text() if draft.exists() else None
+                before_observations = len(self.observations)
+                returned = execute_llm_inquiry(self, laboratory, params)
+                if (before_source != (draft.read_text() if draft.exists() else None)
+                        or len(self.observations) != before_observations):
+                    if frame.get('response_path'):
+                        returned.update(refresh_authored_response(self, laboratory, frame))
+                    else:
+                        compared = preview_design_proposal(self, frame)
+                        if compared is not None:
+                            returned['design_comparison'] = compared
+                        conditions = refresh_condition_proposal(self, frame['proposal_path'])
+                        if conditions is not None:
+                            returned['condition_research'] = conditions
+                return returned
+            if (action == 'run' and arguments.get('operator') == 'reference_response'
+                    and arguments.get('experiment')
+                    and (arguments.get('condition_proposal', frame.get('condition_proposal'))
+                         == frame.get('condition_proposal', frame['proposal_path'])
+                         or (frame.get('response_path') == arguments.get('path')
+                             and arguments.get('response_comparison', {}).get('binding_path')
+                             == frame['proposal_path']))):
+                # The author selected a test of this draft's computed rules.
+                # Reuse ordinary inquiry execution for the complete controller
+                # call, including its nested query/evaluate actions. A measured
+                # point does not adopt the draft or answer its enclosing law.
+                self._question({key: deepcopy(frame['question'][key]) for key in
+                                ('id', 'question', 'parent_id', 'depends_on')})
+                frame['stage'] = 'inquiry'
+                try:
+                    return self._execute(action, arguments, laboratory)
+                finally:
+                    frame['stage'] = 'proposal'
             if action != "write" and not (action == "run" and not arguments.get("operator")):
                 deferred = {"action": action, "arguments": deepcopy(arguments)}
                 frame["deferred_actions"].append(deferred)
@@ -1112,9 +1202,23 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             if action == "run":
                 self._python_runs += 1
                 arguments = {"path": f"scratch_{len(self.events):03d}_{self._python_runs:03d}.py", **arguments}
-            # Ordinary writing/calculation: no scientific question registration,
-            # analysis, or implicit write -> world experiment in this phase.
-            return super()._execute(action, arguments, laboratory)
+            draft = self.workspace / frame["proposal_path"]
+            before_source = draft.read_text() if draft.exists() else None
+            # Drafting does not register a scientific question or buy evidence.
+            written = super()._execute(action, arguments, laboratory)
+            if (frame.get("response_path") and (
+                    (action == "write" and arguments["path"] == frame["proposal_path"])
+                    or before_source != (draft.read_text() if draft.exists() else None))):
+                from .world_llm_inquiry import refresh_authored_response
+                return {**written, **refresh_authored_response(self, laboratory, frame)}
+            if (not frame.get("response_path") and (
+                    (action == "write" and arguments["path"] == frame["proposal_path"])
+                    or before_source != (draft.read_text() if draft.exists() else None))):
+                from .world_llm_inquiry import preview_design_proposal
+                compared = preview_design_proposal(self, frame)
+                if compared is not None:
+                    return {**written, "design_comparison": compared}
+            return written
         if action == "run" and arguments.get("operator") == "propose_explanations":
             return execute_llm_inquiry(self, laboratory, arguments)
         if (self.research_focus and self.research_focus.get("stage") == "contrast"
@@ -1147,16 +1251,27 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             return {**result, "trigger_origin": focus["origin"]}
         if self.research_focus and self.research_focus.get("kind") == "parent_research":
             focus = self.research_focus
-            parent = self._question({"id": focus["question"]["id"]})
-            if focus.get("previous_execution"):
-                parent["reviewed_program_step"] = focus["previous_execution"]["step"]
-            parent.setdefault("reviewed_child_answers", {}).update({q["id"]: {
-                key: deepcopy(q[key]) for key in ("status", "answer", "evidence")}
-                for q in focus["returned_children"]})
-            # Any chosen research action can answer this review. Repeating a
-            # request alone does not consume it or rerun the stopped program.
             if action != "write" or arguments.get("path") != focus["path"]:
+                # Execute through the ordinary dispatcher before accepting the
+                # review. A rejected action must leave this return available for
+                # repair instead of moving the author to another parent.
                 self.research_focus = None
+                try:
+                    result = self._execute(action, arguments, laboratory)
+                except (ValueError, KeyError, TypeError, StopIteration, OSError):
+                    self.research_focus = focus
+                    raise
+                if result.get("error"):
+                    self.research_focus = focus
+                    return result
+                parent = self._question({"id": focus["question"]["id"]})
+                if focus.get("previous_execution"):
+                    parent["reviewed_program_step"] = focus["previous_execution"]["step"]
+                parent.setdefault("reviewed_child_answers", {}).update({q["id"]: {
+                    key: deepcopy(q[key]) for key in ("status", "answer", "evidence")}
+                    for q in focus["returned_children"]})
+                self._save_state()
+                return result
         if "notes" in arguments:
             (self.workspace / "research_notes.md").write_text(arguments["notes"], encoding="utf-8")
         if isinstance(arguments.get("question"), dict):
@@ -1267,15 +1382,28 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
                     # edit with the original phase, parameters and step limit.
                     # Keep that contract; the local researcher can explicitly
                     # run a diagnostic before returning it.
-                    return written
-                procedure = self._run_procedure(laboratory, focus["path"], max_steps=12)
-                if procedure["status"] == "method_error":
+                    result = written
+                else:
+                    try:
+                        procedure = self._run_procedure(laboratory, focus["path"], max_steps=12)
+                    except (ValueError, KeyError, TypeError, StopIteration, OSError):
+                        self.research_focus = focus
+                        raise
+                    result = {**written, "procedure": procedure, "question": deepcopy(question),
+                              "trigger_origin": focus["origin"]}
+                if focus.get("previous_execution"):
+                    question["reviewed_program_step"] = focus["previous_execution"]["step"]
+                question.setdefault("reviewed_child_answers", {}).update({q["id"]: {
+                    key: deepcopy(q[key]) for key in ("status", "answer", "evidence")}
+                    for q in focus["returned_children"]})
+                if "procedure" in result and result["procedure"]["status"] == "method_error":
                     focus.update(stage="review", origin="host_parent_program_review",
                                  previous_execution=deepcopy(self.method_results[-1]))
                     self.research_focus = focus
+                if "question" in result:
+                    result["question"] = deepcopy(question)
                 self._save_state()
-                return {**written, "procedure": procedure, "question": deepcopy(question),
-                        "trigger_origin": focus["origin"]}
+                return result
             if focus.get("kind") == "analysis":
                 analysis = self._execute("evaluate", {"path": focus["path"], "question_id": question_id}, laboratory)
                 self.research_focus = None
@@ -1348,9 +1476,10 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
         return decision
 
     def run(self, laboratory, *, on_checkpoint=None):
-        self.lab, self.started = laboratory, monotonic()
+        self.lab = laboratory
+        self.started = monotonic() - self.costs["wall_time_seconds"]
         self._on_checkpoint = on_checkpoint
-        if self.agent_arm == "hegel" and not self.questions:
+        if self.agent_arm == "hegel" and not any(q['id'] == 'task' for q in self.questions):
             task = laboratory.public_observation().get("taskProgress", [])
             root = self._question({"id": "task", "question": "\n".join(
                 row.get("description", row.get("taskName", "")) for row in task)})
@@ -1373,6 +1502,8 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
             if remaining <= 0:
                 self.status = "wall_time_exhausted"
                 break
+            if dispatch_response_premise(self, laboratory):
+                continue
             request = self._request()
             decision = self._model_decision(request)
             usage = decision.get("usage", {})

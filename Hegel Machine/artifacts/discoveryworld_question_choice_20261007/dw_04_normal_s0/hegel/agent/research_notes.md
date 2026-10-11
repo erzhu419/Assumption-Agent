@@ -1,0 +1,7 @@
+Task: infer and set frequencies for crystals 3 and 4, then install them.
+
+Evidence: reference gap/frequency pairs are 27.47 nm/3880.56 Hz and 36.56 nm/2239.92 Hz (records 120, 122, 107, 110); target gaps are 47.52 and 58.2 nm (records 30, 35). Inverse-square scaling estimates about 1298/884 Hz; the two-reference power-law fit estimates about 1353/916 Hz. Neither relation has independent physical validation.
+
+TALK provides reactor frequency controls, including 1-Hz adjustments (104, 178). Crystals 3 and 4 are installed in their respective reactors (3: current setting 1320 Hz, readback record 348; 4: installed at 886 Hz, pickup/reinstall records 333–334, prior setting/readback 328–332). Prior attempts did not show task completion; reactor 4 remained publicly uncalibrated and ACTIVATE was unsupported (295). Generator activation is unsupported (343). The task progress in the supplied current observation remains incomplete.
+
+Working hypothesis: inverse-square is plausible, though the power-law model remains unresolved. A conservative next test is to set reactor 3 to 1310 Hz and reactor 4 to 870 Hz, near the inverse-square estimates and close to the original reactor-4 setting, then observe whether task progress changes. Proposed settings are a test, not yet observed; readbacks alone will not establish correctness.

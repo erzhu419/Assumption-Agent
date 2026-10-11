@@ -1,0 +1,9 @@
+## Crystal 5 notebook
+
+**Observed:** Reference crystals 1–4 have (density, gap, signal) values (1,1,1), (1,1,2), (3,3,3), (4,5,4), with operational successful settings 15.8, 20, 31.4, 54 Hz (records 10–24, 63; crystal 1 reconfirmation 191). Crystal 5 measures (5,4,19.8872) (records 14, 19, 25). It was inactive at many tested settings, including 666, 729, 222, 563, 363 and 4746 Hz (records 350, 395, 422, 430, 434, 449); each negative is pointwise only.
+
+**Model evidence:** The earlier `log_signal` alias used raw signal and was inadequate (records 21–25, 117, 119). A genuine natural-log-signal cubic remains compatible under deterministic activation and a shared connected residual-band assumption, but is not confirmed. Several fitted point predictions failed individually. Branch-limited searches remain unresolved. Fixed-panel premise analysis found no executable contrast with distinct predictions.
+
+**Execution review:** The current parent procedure `shared/research_reference_response_5_24.py` failed immediately with `FileNotFoundError`; no experiment or physical outcome occurred. This is an operational failure, not a refutation. Do not retry unchanged. The paid 4746-Hz inactive outcome is record 449.
+
+**Conclusion / next prerequisite:** No unique measured variable, functional form, or shared-response premise explains crystal 5. Shared-band transfer is unverified; object-specific behavior and missing measured features remain alternatives. Universal inactivity is unsupported. A matched cross-crystal experiment requires frozen, distinct predictions under shared versus nonshared response assumptions; none is currently justified, so calibration remains unresolved.

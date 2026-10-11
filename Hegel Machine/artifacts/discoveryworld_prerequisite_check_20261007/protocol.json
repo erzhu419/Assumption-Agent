@@ -1,0 +1,101 @@
+{
+  "study": "discoveryworld_prerequisite_integration_check",
+  "selection_file": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/config/discoveryworld_hard_selection_20261007.json",
+  "split": "development",
+  "tasks": [
+    {
+      "id": "dw_04_normal_s0",
+      "scenario_name": "Reactor Lab",
+      "difficulty": "Normal",
+      "random_seed": 0,
+      "split": "development",
+      "cluster": "Reactor Lab"
+    }
+  ],
+  "arms": [
+    "code_archive",
+    "hegel"
+  ],
+  "jobs": [
+    {
+      "task_id": "dw_04_normal_s0",
+      "arm": "code_archive"
+    },
+    {
+      "task_id": "dw_04_normal_s0",
+      "arm": "hegel"
+    }
+  ],
+  "model": {
+    "requested_alias": "gpt-6-luna",
+    "backend": "codex_cli",
+    "reasoning_effort": "medium",
+    "status": "Requested through the authorized ChatGPT subscription CLI in the first Reactor Lab development pilot."
+  },
+  "limits": {
+    "environment_steps": 2000,
+    "score_checkpoints_environment_steps": [
+      250,
+      500,
+      1000,
+      2000
+    ],
+    "max_model_calls": 12,
+    "reported_token_budget": null,
+    "task_wall_seconds": 28800,
+    "provider_request_timeout_seconds": 900,
+    "python_seconds_per_call": 600,
+    "python_seconds_per_task": 7200,
+    "note": "Initial generous development ceilings, not calibrated main-run limits. Stop on completion. Record official 1000-step and extended 2000-step outcomes separately. No aggregate reported-token cutoff; record input/output/cached tokens. Preserve intrinsic model context limits."
+  },
+  "runtime": "/home/erzhu419/.cache/hegel-machine/discoveryworld",
+  "workers": 2,
+  "failure_policy": "Keep every initial attempt. Completed replies with malformed arguments return their error to the model within the original call budget; service failures stop.",
+  "resume_policy": "New output directory required; interrupted attempts remain preserved.",
+  "outcomes": {
+    "primary": "Environment completedSuccessfully at the fixed action limits, macro averaged by theme and difficulty.",
+    "secondary": [
+      "normalized procedural score",
+      "successful experiments and revised hypotheses in actual action traces",
+      "model calls, tokens including cached input, elapsed/model/Python time",
+      "service, timeout, invalid action, budget exhaustion and scientific failure categories"
+    ],
+    "knowledge_score": "Official free-text explanatory-knowledge score requires a judge. Do not substitute success/procedural score for it; no knowledge-accuracy claim until a judging protocol is specified."
+  },
+  "fairness": "Both agents receive the same public text observations/actions and initial files. Ordinary Code can store and execute its own research programs. Gold rules, hidden scorecards and scenario source are evaluation-side materials.",
+  "auth_mode": "ChatGPT_subscription",
+  "prefix_source": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/artifacts/discoveryworld_pilot_20261007_v4/dw_04_normal_s0/hegel",
+  "prefix_calls": 106,
+  "source_checkpoint_costs": {
+    "observation_cost": 0,
+    "measurement_cost": 0,
+    "compute_cost": 0,
+    "python_execution_seconds": 1.0512346347677521,
+    "model_calls": 148,
+    "reported_tokens": 4250835,
+    "environment_steps": 146,
+    "input_tokens": 4164771,
+    "output_tokens": 86064,
+    "cached_input_tokens": 1943552,
+    "usage_missing_calls": 1,
+    "wall_time_seconds": 2503.067794346949,
+    "research_compute_units": 0
+  },
+  "prefix_cost_scope": "Call-cut prefix costs reconstruct calls and reported token usage from its events; Python/wall costs are not reconstructed. Source checkpoint totals are listed separately.",
+  "prefix_environment_steps": 104,
+  "prefix_prior_costs": {
+    "model_calls": 106,
+    "environment_steps": 104,
+    "usage_missing_calls": 0,
+    "input_tokens": 2836475,
+    "output_tokens": 59248,
+    "cached_input_tokens": 1303808,
+    "reported_tokens": 2895723
+  },
+  "prefix_question_ids": [
+    "task"
+  ],
+  "purpose": "Test host-triggered prerequisite research from the same frozen public failure state; the short call ceiling is not a full-task performance budget.",
+  "replay_policy": "Each arm replays the frozen official actions and compares public success/messages before its model calls. Replay failure stops that attempt; its paired comparison is unavailable.",
+  "accounting": "New model calls and tokens start at zero. Original environment ceiling includes the prefix; prior costs and new environment steps are reported separately."
+}

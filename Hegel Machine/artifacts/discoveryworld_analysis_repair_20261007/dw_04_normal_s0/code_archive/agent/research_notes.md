@@ -1,0 +1,5 @@
+Observed reference gap/frequency pairs: 27.47 nm/3880.56 Hz (records 120, 107) and 36.56 nm/2239.92 Hz (122, 110); target gaps are 47.52 and 58.2 nm (30, 35). Inverse-square extrapolations predict ~1296 Hz (crystal 3) and ~874 Hz (crystal 4); the two-point power-law fit predicts ~1353 and ~916 Hz. These are hypotheses, not confirmed laws.
+
+Crystals 3 and 4 are installed (267, 380). Reactor 4 remained publicly uncalibrated at 916 Hz installed (400), 886 Hz (404), and after setting empty to 886 then reinserting (370–380). It was adjusted to 874 then later 870 Hz; last actual readback at 870 is record 468 and the reactor was still uncalibrated. Reactor 3 was uncalibrated at 1296 Hz (422) and 1353 Hz (445); later adjustments reached 1393 and returned to 1353 (457–462), with no calibration. ACTIVATE on uncalibrated reactors is unsupported (295). Task remains incomplete.
+
+Proposed experiment: with crystal 4 installed and live frequency 870 Hz, raise four 1-Hz steps to the inverse-square estimate 874 Hz and exit; inspect the immediate public state for calibration/activation. The readback itself is not validation. This action has not yet occurred.

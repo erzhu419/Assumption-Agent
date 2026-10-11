@@ -1,0 +1,9 @@
+# Same-model inquiry comparison: interrupted service run
+
+The frozen protocol registered 30 independent source-to-target chains per arm (180 task slots). It uses direct ruoli Responses requests to `gpt-6.1-sol`, with the same public laboratory, Python tools, observation/model/time limits and independent terminal evaluation. It never invokes Codex subscription providers.
+
+The run stopped after consecutive HTTP 500 `model_unavailable` failures. Six arm-chains started: seven tasks were attempted, one source task completed and six tasks failed at the provider. The remaining 173 task slots were not attempted. All six failures returned `server_error` / `model_unavailable` (message: 当前模型不可用); the response does not identify quota exhaustion or a particular channel restriction. No failed request was retried or replaced.
+
+There were 23 model calls and at least 60,446 reported tokens; six error responses did not report usage, so the complete token total is unknown. The single completed source passed its independent terminal evaluation. No source-to-target chain completed, so this artifact does not establish an algorithm ranking or a transfer effect.
+
+`protocol.json` preserves the registered roster; `frozen_source/` preserves the implementation. Per-chain `training.json` and `result.json` retain initial failures and actual paid research. `summary.json` separates completed, infrastructure-failed and unattempted task counts. Previous development runs remain separate: development_1 exposed premature confirmation-label file writes; development_2 exposed an empty executable-memory manifest contract; development_3 used the corrected live-question/program interface but encountered the same service failure. Five focused interface tests passed; scripted tests are not LLM performance evidence.

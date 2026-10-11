@@ -1,0 +1,7 @@
+## Crystal 5 notebook
+
+**Observed:** Crystals 1–4 have (density, gap, signal) = (1,1,1), (1,1,2), (3,3,3), (4,5,4), with successful operational settings 15.8, 20, 31.4, and 54 Hz (records 10–24, 63; crystal 1 repeat 191). Crystal 5 measures (5,4,19.8872) (14, 19, 25). It was inactive at many tested settings, including 4746, 666, 729, 222, 563, 363, 577–591, and 758 Hz (e.g. 350, 395, 422, 430, 434, 449, 511–523, 550–561, 568, 571, 574). These are pointwise negatives only. The requested 4734-Hz setting activated crystal 5 (record 588; answer supported in `reference_response_5_30`).
+
+**Model evidence:** The earlier `log_signal` alias was raw signal, not a logarithmic transform (21–25, 117, 119). A genuine natural-log-signal cubic/shared-connected-band family remains a scoped compatibility witness, not a confirmed law; specific witnesses predicting activation near 589–590 Hz were contradicted by negatives (568, 571). Finite Boolean-rule searches are scoped/non-exhaustive, and an empty target support does not establish physical impossibility.
+
+**Conclusion and limits:** The 4734-Hz activation achieves the requested pointwise outcome. No unique measured feature, coefficient set, functional form, or shared-response premise explains crystal 5. Common-band transfer remains conditional; object-specific response and unmeasured features remain possible. The positive result does not establish a general calibration law.

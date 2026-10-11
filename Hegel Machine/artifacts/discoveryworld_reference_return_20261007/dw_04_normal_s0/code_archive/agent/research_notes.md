@@ -1,0 +1,5 @@
+Task: infer correct frequencies for crystals 3 and 4, set them, and install the crystals. Observations: reference gap/frequency pairs are 27.47 nm/3880.56 Hz and 36.56 nm/2239.92 Hz (records 120, 122, 107, 110); target gaps are 47.52 and 58.2 nm (30, 35). Inverse-square scaling estimates about 1298/884 Hz; a two-point power-law alternative estimates about 1353/916 Hz. Neither law has independent physical validation.
+
+TALK exposes adjustments down to 1 Hz (104, 178). Crystals 3 and 4 are installed in their reactors (3: 267; 4: 334), with settings read back as 1298 and 884 Hz (374, 368). Both remain labeled uncalibrated. Re-seating succeeded (385–386, 390–391) but did not establish calibration. ACTIVATE was unsupported (295); no actual success response or completed task progress was observed.
+
+Working interpretation: inverse-square is a plausible leading estimate, but alternative scaling and exact optimality remain unresolved. Since the allowed operations have not produced a supported physical calibration response, the task is not demonstrably solved; stop without claiming completion.

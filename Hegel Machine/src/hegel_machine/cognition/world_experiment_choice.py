@@ -7,6 +7,20 @@ from .models import Candidate, Probe, SearchBudget
 from .probing import choose_probe
 
 
+def forecast_equivalence_classes(experiments):
+    """Group members that agree on every currently executable experiment.
+
+    This is the response panel's existing comparison rule. Groups are rebuilt
+    for each offered pool; the scientific hypotheses themselves stay separate.
+    """
+    groups = {}
+    if experiments:
+        for identifier in experiments[0]['predictions']:
+            signature = tuple(e['predictions'][identifier] for e in experiments)
+            groups.setdefault(signature, []).append(identifier)
+    return list(groups.values())
+
+
 def select_experiment(design):
     """Compare prospective Boolean forecasts, without fitting or granting support.
 
@@ -15,6 +29,8 @@ def select_experiment(design):
     they are not world measurements. The author supplies outcome semantics and
     the caller executes and analyzes the selected original actions.
     """
+    if not isinstance(design, dict):
+        raise ValueError("design must return a dictionary with hypotheses and experiments")
     hypotheses = design.get("hypotheses", [])
     ids = [item.get("id") for item in hypotheses]
     if (len(ids) < 2 or any(not isinstance(value, str) or not value.strip() for value in ids)
@@ -53,7 +69,9 @@ def select_experiment(design):
     selected, separation = choose_probe(probes, candidates, 0., budget)
     experiment = next((item for item in experiments
                        if selected is not None and item["id"] == selected.probe_id), None)
-    return {"diagnosis": "discriminating_experiment_available" if separation > 0 else "observational_ambiguity",
+    return {"diagnosis": ("no_experiments_proposed" if not probes else
+                          "discriminating_experiment_available" if separation > 0 else "observational_ambiguity"),
             "selected_experiment": deepcopy(experiment) if separation > 0 else None,
             "hypotheses": deepcopy(hypotheses), "predicted_separation": separation,
+            "experiment_count": len(probes), "comparison_scope": "authored_experiments_only",
             "compute_cost": budget.spent}

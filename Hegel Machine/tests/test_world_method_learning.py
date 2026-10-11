@@ -6,7 +6,9 @@ import json
 import pytest
 
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH
-from hegel_machine.cognition.world_method_learning import WorldMethodLearner, compact_author_events
+from hegel_machine.cognition.world_method_learning import (
+    WorldMethodLearner, compact_author_events, run_world_method_author,
+)
 from test_discoveryworld_agent import InstrumentLab, LIMITS, ScriptedProvider
 
 
@@ -54,6 +56,40 @@ def prepared(tmp_path, source=STOP, *, child_steps=(), calls=8, completed=False)
 
 def finish(learner):
     return learner._execute("finish", {"path": METHOD_PATH}, None)
+
+
+def test_shared_author_loop_publishes_with_current_limits_and_terminal_checkpoint(tmp_path):
+    learner, _, _ = prepared(tmp_path, calls=2)
+    learner.provider = ScriptedProvider([
+        ("write", {"path": METHOD_PATH, "code": SOLVE}),
+        ("finish", {"path": METHOD_PATH}),
+    ])
+    checkpoints = []
+    experiences = [{"file": "shared/source_episode.json", "notes": "Earlier paid source"}]
+
+    status = run_world_method_author(learner, task_interface="Author from source experience",
+        source_experiences=experiences, on_checkpoint=checkpoints.append)
+
+    assert status == checkpoints[-1] == "published_source_practiced"
+    assert checkpoints[0] == "authoring"
+    assert learner.published_source == SOLVE and learner.costs["model_calls"] == 2
+    request = learner.provider.requests[0]
+    assert request["limits"]["max_model_calls"] == 2
+    assert request["source_experiences"] == experiences
+    assert all(trial["fresh_confirmation"]["passed"] for trial in learner.practice_trials)
+
+
+def test_shared_author_loop_preserves_provider_failure_in_terminal_checkpoint(tmp_path):
+    learner, _, _ = prepared(tmp_path, calls=2)
+    learner.provider = ScriptedProvider([])
+    checkpoints = []
+
+    status = run_world_method_author(learner, task_interface="Author from source experience",
+        source_experiences=[], on_checkpoint=checkpoints.append)
+
+    assert status == checkpoints[-1] == "provider_failed"
+    assert learner.costs["model_calls"] == 1 and learner.published_source is None
+    assert learner.events[-1]["action"] == "provider_error"
 
 
 def test_registration_must_execute_then_edit_practice_and_publication_cover_both_cases(tmp_path):

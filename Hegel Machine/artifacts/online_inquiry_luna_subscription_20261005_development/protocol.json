@@ -1,0 +1,82 @@
+{
+  "study": "same_llm_online_inquiry_knowledge_conditions",
+  "profile": "development",
+  "model": "gpt-6-luna",
+  "base_url": null,
+  "arms": [
+    "code_react",
+    "textual_memory",
+    "hegel"
+  ],
+  "cases": [
+    {
+      "chain_id": "78101003",
+      "source": {
+        "task_id": "78101003:source",
+        "lab": {
+          "seed": 78101003,
+          "surface": 0,
+          "mechanism": "linear",
+          "driver": 0,
+          "orientation": 1,
+          "calibration_sign": 1,
+          "calibration_offset": -1
+        },
+        "evaluation_seed": 88501034
+      },
+      "consumers": [
+        {
+          "task_id": "78101003:same_structure_changed_surface",
+          "condition": "same_structure_changed_surface",
+          "same_structure": true,
+          "same_surface": false,
+          "lab": {
+            "seed": 78101003,
+            "surface": 1,
+            "mechanism": "linear",
+            "driver": 0,
+            "orientation": 1,
+            "calibration_sign": -1,
+            "calibration_offset": 0
+          },
+          "evaluation_seed": 88201025
+        }
+      ]
+    }
+  ],
+  "limits": {
+    "observation_budget": 24,
+    "max_model_calls": 16,
+    "token_budget": 60000,
+    "execution_seconds": 60.0,
+    "compute_budget": 100000,
+    "confirmation_rows": 3
+  },
+  "evaluation": {
+    "length": 256,
+    "mse_threshold": 1e-10
+  },
+  "provider": {
+    "backend": "codex_cli",
+    "env_key": null,
+    "max_output_tokens": null,
+    "timeout_seconds": 180,
+    "runtime": "codex_cli",
+    "auth_mode": "ChatGPT_subscription",
+    "reasoning_effort": "medium"
+  },
+  "memory_conditions": {
+    "code_react": "task-local code and active experimentation",
+    "textual_memory": "source agent-authored textual lesson only",
+    "hegel": "source agent-authored executable files and editable question/hypothesis manifest"
+  },
+  "source_freeze": "Each arm pays to learn its own source; consumers independently inherit only that source.",
+  "target_allocation": "Main single-target chains rotate the four fixed transfer cells by cohort position.",
+  "terminal_order": "All registered arms and chains stop training before any terminal evaluation.",
+  "failure_policy": "Keep initial provider, parsing, execution, budget and research failures; no retry replacement.",
+  "format_error_policy": "Malformed model actions with reported usage receive charged corrective feedback within the original limits; no invalid action is executed. Service failures remain terminal.",
+  "service_stop_policy": "Stop new chains after three consecutive chains end with model_unavailable or empty_response; finish in-flight chains and keep all records. No retry.",
+  "scope": "Same-LLM knowledge representation and persistence intervention, not the offline solver's score.",
+  "token_limit_kind": "reported usage between calls; the final paid call can exceed the cap",
+  "python_limit_kind": "actual subprocess wall time, identical per-task cap; no host fitting solver"
+}

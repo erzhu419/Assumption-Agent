@@ -13,7 +13,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 from hegel_machine.cognition.code_agent import CodexCodeProvider
 from hegel_machine.cognition.discoveryworld_agent import DiscoveryWorldAgent, INTERFACE, INQUIRY_INTERFACE
-from hegel_machine.cognition.world_method_learning import WorldMethodLearner, compact_author_events
+from hegel_machine.cognition.world_method_learning import WorldMethodLearner, run_world_method_author
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH
 from hegel_machine.cognition.world_prerequisite_research import public_reference_history
 from scripts.run_discoveryworld_pilot import SELECTION, write_json
@@ -298,59 +298,21 @@ def prepare(source, output, calls=None, initial_bundle=None, resume_author=None,
             first = agent._practice(case)
             agent.events.append({"action": "run", "arguments": {"operator": "practice", "case": case},
                                  "feedback": first, "origin": "initial_source_practice"})
-    status = "authoring"
-
-    def save():
+    def save(status):
         agent.costs["wall_time_seconds"] = monotonic() - agent.started
         state = agent.result(status)
         state.update(source=str(source), model=plan["model"], auth_mode=auth_mode,
                      validation=protocol["validation"])
         write_json(output / "result.json", state)
 
-    save()
-    while agent.costs["model_calls"] < calls and agent.published_source is None:
-        agent._prepare_program_state()
-        request = {"task_interface": INTERFACE + INQUIRY_INTERFACE + AUTHOR_TASK,
-            "files": {path: (workspace / path).read_text() for path in agent.files},
-            "source_experience_file": "shared/source_episode.json",
-            "source_experiences": source_experiences,
-            "practice_cases": deepcopy(agent.cases),
-            "research_notes": (workspace / "research_notes.md").read_text()
-                if (workspace / "research_notes.md").exists() else "",
-            "events": compact_author_events(agent.events), "costs": deepcopy(agent.costs),
-            "limits": {**plan["limits"], "max_model_calls": calls}}
-        if frozen_practice:
-            request["task_interface"] += ("\nIn this consolidation study every practice executes without an LLM. "
-                "You are the method author: use actual source experience to revise the measurement, "
-                "estimation and test program. A failure returns here for you to repair; a practice "
-                "cannot delegate its missing estimator to another model. Preserve working phases.")
-        decision = agent._model_decision(request)
-        action, arguments = decision["action"], decision.get("arguments", {})
-        started = monotonic()
-        recorded_wall = agent.costs["wall_time_seconds"]
-        if action == "provider_error":
-            feedback = {"error": decision.get("error")}
-        else:
-            try:
-                feedback = agent._execute(action, arguments, None)
-            except (ValueError, KeyError, TypeError, OSError) as error:
-                feedback = {"error": f"{type(error).__name__}: {error}"}
-        agent.events.append({"action": action, "arguments": deepcopy(arguments),
-                             "feedback": feedback, "usage": decision.get("usage", {})})
-        # Practices already charged their duration, including child calls.
-        # Add only the outer author request and remaining dispatch/inspection time.
-        charged_practice_wall = agent.costs["wall_time_seconds"] - recorded_wall
-        agent.costs["wall_time_seconds"] += (decision.get("usage", {}).get("wall_time_seconds", 0)
-            + max(0., monotonic() - started - charged_practice_wall))
-        status = "published_source_practiced" if agent.published_source else "authoring"
-        save()
-        print(json.dumps({"calls": agent.costs["model_calls"], "action": action,
-                          "status": status, "error": feedback.get("error")}), flush=True)
-        if action == "provider_error":
-            error = decision.get("error")
-            if not isinstance(error, dict) or not error.get("decode_error"):
-                status = "provider_failed"
-                break
+    task_interface = INTERFACE + INQUIRY_INTERFACE + AUTHOR_TASK
+    if frozen_practice:
+        task_interface += ("\nIn this consolidation study every practice executes without an LLM. "
+            "You are the method author: use actual source experience to revise the measurement, "
+            "estimation and test program. A failure returns here for you to repair; a practice "
+            "cannot delegate its missing estimator to another model. Preserve working phases.")
+    status = run_world_method_author(agent, task_interface=task_interface,
+        source_experiences=source_experiences, on_checkpoint=save)
     if agent.published_source:
         practice = agent.public_practice_archive()
         write_json(output / "source_practice.json", practice)
@@ -371,7 +333,7 @@ def prepare(source, output, calls=None, initial_bundle=None, resume_author=None,
         status = "published_source_practiced"
     elif status == "authoring":
         status = "model_call_budget_exhausted"
-    save()
+    save(status)
     return status
 
 

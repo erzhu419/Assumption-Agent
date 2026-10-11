@@ -1,0 +1,109 @@
+{
+  "study": "same_llm_temporal_shared_operators_development",
+  "profile": "development",
+  "model": "gpt-6-luna",
+  "arms": [
+    "code_react",
+    "textual_memory",
+    "hegel"
+  ],
+  "cases": [
+    {
+      "chain_id": "temporal_operators_dev_00",
+      "source": {
+        "task_id": "temporal_00_0",
+        "lab": {
+          "task_index": 0,
+          "seed": 98106007,
+          "apparatus_seed": 98106007,
+          "instrument_mode": "finite2"
+        },
+        "evaluation_seed": 99106010
+      },
+      "consumers": [
+        {
+          "task_id": "temporal_00_1",
+          "lab": {
+            "task_index": 1,
+            "seed": 98106007,
+            "apparatus_seed": 98106007,
+            "instrument_mode": "finite2"
+          },
+          "evaluation_seed": 99107019,
+          "condition": "same_physics_longer_horizon"
+        }
+      ]
+    },
+    {
+      "chain_id": "temporal_operators_dev_01",
+      "source": {
+        "task_id": "temporal_01_0",
+        "lab": {
+          "task_index": 0,
+          "seed": 98106007,
+          "apparatus_seed": 98106007,
+          "instrument_mode": "recurrent"
+        },
+        "evaluation_seed": 99106010
+      },
+      "consumers": [
+        {
+          "task_id": "temporal_01_1",
+          "lab": {
+            "task_index": 1,
+            "seed": 98106007,
+            "apparatus_seed": 98106007,
+            "instrument_mode": "recurrent"
+          },
+          "evaluation_seed": 99107019,
+          "condition": "same_physics_longer_horizon"
+        }
+      ]
+    }
+  ],
+  "limits": {
+    "observation_budget": 240,
+    "max_model_calls": 24,
+    "token_budget": 600000,
+    "execution_seconds": 120.0,
+    "compute_budget": 100000,
+    "confirmation_rows": 48
+  },
+  "provider": {
+    "backend": "codex_cli",
+    "auth_mode": "ChatGPT_subscription",
+    "reasoning_effort": "medium",
+    "timeout_seconds": 180
+  },
+  "evaluation": {
+    "length": 256,
+    "mse_threshold": 1e-10,
+    "prediction_inputs": "current and previous controls only, reset per trajectory"
+  },
+  "memory_conditions": {
+    "code_react": "task-local Python, no inherited knowledge",
+    "textual_memory": "source-authored textual lesson",
+    "hegel": "source-authored executable hypotheses and research programs"
+  },
+  "question": "Can the same LLM select and reuse shared representation and instrument research operations?",
+  "source_scope": "At most three steps; both physical families agree on every legal source probe.",
+  "target_scope": "At most 24 steps; same apparatus physics as source.",
+  "source_freeze": "Only source knowledge transfers; no target outcomes cross cases or arms.",
+  "primary_outcome": "fresh-confirmed control-history prediction on independent trajectories",
+  "costs": "All trajectory rows and optional meter costs recorded; 48 observation rows reserved by the agent for fresh confirmation.",
+  "interpretation": "Two paired worlds are development cases, not independent population samples. Neither auxiliary measurements nor recursive questions are compulsory. Direct Python system identification is a valid solution.",
+  "limitations": "Development pilot within fixed operator families. Success is operator-assisted LLM research, not invention of the fitting algorithms. Only source memory transfers; target-learned methods are not reused. Previous raw-Python LLM cohorts remain separate.",
+  "operator_interface": "\nAll knowledge conditions additionally share these optional numerical operators.\nUse action run with an operator key instead of Python code/path execution:\nrun {operator:'history',base_lags:2,path:'model.py'} compares complete quadratic\ncontrol-history bases with base_lags and base_lags+1 past controls. It reports\nseparate trajectory validation and exports the selected basis fitted on all\npaid responses. Unsupported extension keeps the base; this is not confirmation.\nrun {operator:'instrument',path:'instrument.json'} fits competing bounded\nfinite-history polynomial and continuous-state explanations of purchased meter\nreadings only. It exports all fitted hypotheses, not a known apparatus formula.\nrun {operator:'response',instrument:'instrument.json',output_dir:'shared/candidates'}\nfits quadratic response functions of current control, each surviving learned\nmeter coordinate, and its previous value. It returns EVERY candidate with its\nvalidation error and Python path, without choosing a candidate. Each export is\nthen refitted on all paid responses and frozen; reported validation precedes\nthat refit. You decide whether any candidate warrants evaluate or finish.\nhistory and response accept optional validation_records:[2,3], zero-based indices\nin laboratory_observations.json, never row_indices. By default, the last two\namong the longest paid trajectories are validation; the others are training.\nWhen selecting both longest records would leave only shorter training records,\none long record stays in training and a shorter one takes its validation place.\nRecords are never split across training and validation. Results identify both\nsets. These are paid-data comparisons, not fresh confirmation.\nrun {operator:'disagreement',instrument:'instrument.json'} proposes a trajectory\nseparating current instrument hypotheses. It does NOT acquire it; use query if\nyou choose to purchase it. Optional max_length and serial control its search.\nrun {operator:'assess_instrument',instrument:'instrument.json',records:[9]}\nassesses the frozen instrument hypotheses using meter readings in the selected\nalready purchased records and updates their support/refutation status. It does\nnot refit them. Keep the distinction between fitting evidence and new evidence.\nThe methods use only paid records and public capabilities. Their fitting,\nscoring and Python time consume the common limits. No operator buys data,\nopens questions, writes your manifest, or finishes the task automatically.\nTheir output files are ordinary editable files, available equally in all arms.\nYou can explicitly compose acquisition with these same operators in one query:\nquery {actions:[trajectory],after_observation:[\n  {operator:'assess_instrument',instrument:'shared/meter.json',records:'acquired'},\n  {operator:'response',instrument:'shared/meter.json',output_dir:'shared/revised'}]}\nA select_actions program may return the same after_observation list alongside\nits actions. An explicit query argument overrides the program's list. Each\ndeclared operator runs in order after the whole acquisition succeeds; records:\n'acquired' means the exact newly bought laboratory record indices. Operators\nsee those new paid labels. Their returned candidates still require your choice.\nFeedback contains authored steps, their origin (arguments or program path),\nresolved arguments, and numerical results. A failed operator stops the list;\nsuccessful purchases and earlier results remain available. Failed acquisition\nruns no continuation. A live question retains the actual continuation trace\nwithout being automatically answered. This syntax runs only the declared\nshared operators, not another acquisition or finish.\n",
+  "shared_operators": [
+    "history",
+    "instrument",
+    "response",
+    "disagreement",
+    "assess_instrument"
+  ],
+  "operator_authorship": "Developer-authored bounded fit and planning methods available equally to all arms.",
+  "evidence_continuation": "The agent may explicitly compose shared operators in a query's after_observation list, including in its authored select_actions program. Newly acquired laboratory record indices are bound at execution; no continuation is supplied by the researcher.",
+  "decision_ownership": "The LLM selects operations, purchases measurements, chooses a returned predictor, writes any retained procedure and submits it for fresh confirmation. No operator runs a complete research policy.",
+  "terminal_order": "All arms and cases stop training before terminal labels are generated.",
+  "compute_scope": "Host operator work and candidate scoring consume compute units; all operator and ordinary Python execution consumes the common wall-time allowance. These units are not hardware FLOPs."
+}

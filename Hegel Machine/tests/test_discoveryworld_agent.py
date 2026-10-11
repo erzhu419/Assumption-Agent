@@ -92,6 +92,104 @@ def run_steps(tmp_path, steps, *, arm="hegel", readings=(3,)):
     return agent.run(lab), provider, lab
 
 
+def test_resumed_root_respects_already_paid_wall_time_before_requesting_model(tmp_path, monkeypatch):
+    monkeypatch.setattr("hegel_machine.cognition.discoveryworld_agent.monotonic", lambda: 100.)
+    provider, lab = ScriptedProvider([("finish", {})]), InstrumentLab()
+    agent = DiscoveryWorldAgent(provider, tmp_path, arm="hegel", limits=LIMITS)
+    agent.costs.update(wall_time_seconds=31., model_calls=8, reported_tokens=80)
+    agent.started = 69.
+
+    result = agent.run(lab)
+
+    assert result["status"] == "wall_time_exhausted"
+    assert provider.requests == [] and lab.actions == []
+    assert result["costs"]["wall_time_seconds"] == 31.
+    assert result["costs"]["model_calls"] == 8
+    assert result["costs"]["reported_tokens"] == 80
+
+
+def test_restored_task_after_existing_children_still_exposes_its_public_root(tmp_path):
+    provider, lab = ScriptedProvider([]), InstrumentLab()
+    agent = DiscoveryWorldAgent(provider, tmp_path, arm="hegel", limits=LIMITS)
+    agent.lab = lab
+    child = {"id": "instrument", "question": "What does the instrument report?", "parent_id": "task"}
+    agent._execute("query", {"question": child, "actions": [{"action": "MEASURE"}]}, lab)
+    description = lab.public_observation()["taskProgress"][0]["description"]
+    root = agent._question({"id": "task", "question": description})
+    root["origin"] = "public_task"
+    # Procedure-only archives can acquire a child before the task is registered.
+    agent.questions = json.loads(json.dumps(agent.questions))
+    assert [q["id"] for q in agent.questions] == ["instrument", "task"]
+    questions, evidence = deepcopy(agent.questions), deepcopy(agent.observations)
+
+    request = agent._request()
+
+    assert request["research_root"] == {"id": "task", "question": description}
+    assert request["research_root"]["question"] != child["question"]
+    assert agent.questions == questions and agent.observations == evidence
+    assert provider.requests == [] and agent.costs["model_calls"] == 0
+
+
+def test_run_adds_missing_public_root_to_restored_paid_child_without_replacing_it(tmp_path):
+    provider, lab = ScriptedProvider([("finish", {"lesson": "The instrument evidence remains available."})]), InstrumentLab()
+    agent = DiscoveryWorldAgent(provider, tmp_path, arm="hegel", limits=LIMITS)
+    agent.lab = lab
+    agent._execute("query", {"question": {"id": "instrument", "question": "What does the instrument report?",
+        "parent_id": "task"}, "actions": [{"action": "MEASURE"}]}, lab)
+    child, evidence, actions = deepcopy(agent.questions[0]), deepcopy(agent.observations), deepcopy(lab.actions)
+    assert all(q["id"] != "task" for q in agent.questions)
+
+    result = agent.run(lab)
+
+    assert result["status"] == "agent_finished"
+    root, = [q for q in agent.questions if q["id"] == "task"]
+    assert root["origin"] == "public_task"
+    assert root["question"] == lab.public_observation()["taskProgress"][0]["description"]
+    assert root["evidence"] == [] and "answer" not in root
+    assert agent.questions[0] == child and agent.observations == evidence
+    assert lab.actions == actions
+    assert len(provider.requests) == 1
+    assert provider.requests[0]["research_root"] == {"id": "task", "question": root["question"]}
+
+
+def test_returned_inquiry_resumes_existing_root_and_keeps_the_paid_account(tmp_path, monkeypatch):
+    monkeypatch.setattr("hegel_machine.cognition.discoveryworld_agent.monotonic", lambda: 100.)
+    provider = ScriptedProvider([
+        ("query", {"actions": [{"action": "MEASURE"}]}),
+        ("finish", {"lesson": "The paid instrument reading is 3; return it to the task."}),
+        ("query", {"actions": [{"action": "TUNE", "arg1": 6}]}),
+    ])
+    lab = InstrumentLab()
+    agent = DiscoveryWorldAgent(provider, tmp_path, arm="hegel", limits=LIMITS)
+    agent.lab = lab
+    agent._question({"id": "task", "question": "Read the instrument and tune accordingly"})
+    agent.costs.update(wall_time_seconds=9., model_calls=7, reported_tokens=70)
+    agent.started = 91.
+    child = {"id": "instrument", "question": "What does the instrument report?",
+             "parent_id": "task", "depends_on": []}
+
+    returned = agent._execute("run", {"operator": "inquire", "question": child,
+        "max_model_calls": 8}, lab)
+    paid = agent.result()["costs"]
+    assert returned["status"] == "inquiry_finished" and agent.status == "running"
+    assert paid["model_calls"] == 9 and paid["wall_time_seconds"] == 9.
+    assert len(provider.requests) == 2 and agent._inquiry_stack == []
+
+    result = agent.run(lab)
+
+    assert result["status"] == "completed" and result["score"]["completedSuccessfully"]
+    assert lab.actions == [{"action": "MEASURE"}, {"action": "TUNE", "arg1": 6}]
+    assert len(provider.requests) == 3
+    assert "llm_inquiry" not in provider.requests[-1]
+    assert provider.requests[-1]["research_root"]["id"] == "task"
+    assert result["research"]["llm_inquiries"]["instrument"]["invocations"] == 1
+    assert result["research"]["llm_inquiries"]["instrument"]["status"] == "inquiry_finished"
+    assert result["costs"]["model_calls"] == paid["model_calls"] + 1
+    assert result["costs"]["reported_tokens"] == paid["reported_tokens"] + 1
+    assert result["costs"]["environment_steps"] == paid["environment_steps"] + 1
+    assert result["costs"]["wall_time_seconds"] == 9.
+
+
 @pytest.mark.parametrize("arm", ["code_archive", "hegel"])
 def test_executed_child_answer_changes_parent_action_and_success_needs_no_manifest(tmp_path, arm):
     parent_program = """def select_actions(spec, observations, memory):

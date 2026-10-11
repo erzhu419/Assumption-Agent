@@ -14,8 +14,8 @@ from hegel_machine.cognition import world_reference_response as wrapper
 from hegel_machine.cognition import world_response_hypotheses as response
 from hegel_machine.cognition.language import Program
 from hegel_machine.cognition.models import Observation
-from test_world_reference_hypothesis import PATH, ReferenceLab, prepared, square, submit
-from test_world_response_controller import BoundedReferenceLab, _exhausted_grammar, _state
+from test_world_reference_hypothesis import PATH, ReferenceLab, prepared, square
+from test_world_response_controller import BoundedReferenceLab, _exhausted_grammar, _state, _submit_point_prefix
 
 
 def _pool():
@@ -194,7 +194,7 @@ def test_controller_installs_other_target_and_preserves_its_success(tmp_path, mo
     agent, _ = prepared(tmp_path)
     lab = BoundedReferenceLab()
     agent.lab = lab
-    submit(agent, lab, square("gap", "gap_square"))
+    _submit_point_prefix(agent, lab, square("gap", "gap_square"))
     assert not lab.active(4) and not lab.active(5)
     _exhausted_grammar(agent)
     before = len(lab.actions)

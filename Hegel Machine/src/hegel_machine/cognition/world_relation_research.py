@@ -64,8 +64,11 @@ def research_relation(binding, observations, previous=None):
     """Fit, retain and distinguish a relation on explicitly cited public readings.
 
     ``previous`` is the last result. Its programs remain frozen while new rows
-    test them. A validation row's entire evidence must be disjoint from fitting
-    evidence. Citation existence is checked; extracting numerical meaning from a
+    test them; explicit ``candidate_additions`` screen new programs on paid rows.
+    Rows may distinguish conditioning citations from new outcome citations. The
+    host's available records determine when an outcome is prospective, while
+    rows without these roles retain whole-row evidence independence. Citation
+    existence is checked; extracting numerical meaning from a
     public message remains the caller's scientific hypothesis. A ``basis`` of
     Program expressions fits one affine coefficient vector with the existing
     fitter; it does not enumerate other functional forms. Explicit hypotheses
@@ -82,6 +85,13 @@ def research_relation(binding, observations, previous=None):
         evidence = row.get("evidence", [])
         if not evidence or any(type(index) is not int or index not in available for index in evidence):
             raise ValueError("each numerical row must cite actual observation indices")
+        if "conditioning_refs" in row or "outcome_refs" in row:
+            if "conditioning_refs" not in row or not row.get("outcome_refs"):
+                raise ValueError("conditional rows need conditioning_refs and nonempty outcome_refs")
+            refs = [*row["conditioning_refs"], *row["outcome_refs"]]
+            if (any(type(index) is not int or index not in available for index in refs)
+                    or set(refs) != set(evidence)):
+                raise ValueError("conditioning_refs and outcome_refs must cover actual row evidence")
         values = [*row["features"].values(), row["target"]]
         if not row["features"] or any(not isfinite(float(value)) for value in values):
             raise ValueError("numerical rows need finite features and targets")
@@ -89,7 +99,12 @@ def research_relation(binding, observations, previous=None):
     result = {"status": "inconclusive", "diagnosis": "numerical_evidence_needed",
               "candidates": [], "fit_rows": [], "fit_evidence": [],
               "validation_evidence": [], "evidence": evidence,
-              "selected_probe": None, "compute_cost": 0}
+              "selected_probe": None, "compute_cost": 0,
+              "available_evidence": sorted(available), "bound_rows": deepcopy(entries)}
+    if previous and previous.get("binding_history"):
+        result["binding_history"] = deepcopy(previous["binding_history"])
+    if previous and previous.get("rejected_candidates"):
+        result["rejected_candidates"] = deepcopy(previous["rejected_candidates"])
     if "basis" in binding:
         result["basis"] = deepcopy(binding["basis"])
     if not entries:
@@ -121,8 +136,7 @@ def research_relation(binding, observations, previous=None):
                                    budget=allowance, max_history=0)
             budget.spend(allowance.spent)
             programs = [candidate.program.simplified() for candidate in generated]
-        fitted = [{"program": program.to_dict(), "fit_mse": score(program, rows),
-                   "validation_mse": None} for program in dict.fromkeys(programs)]
+        fitted = [new_candidate(program) for program in dict.fromkeys(programs)]
         fitted.sort(key=lambda item: (item["fit_mse"], Program.from_dict(item["program"]).size))
         # Preserve structurally different tied explanations for active tests.
         for item in fitted:
@@ -130,40 +144,131 @@ def research_relation(binding, observations, previous=None):
         result.update(candidates=fitted[:12], fit_rows=deepcopy(entries), fit_evidence=evidence,
                       validation_evidence=[])
 
+    def new_candidate(program):
+        return {"program": program.to_dict(), "fit_mse": score(program, rows),
+                "validation_mse": None, "fit_rows": deepcopy(entries),
+                "fit_evidence": evidence, "proposed_after": sorted(available)}
+
+    def fresh_rows(after, *, fit_evidence=None):
+        selected = []
+        for row in entries:
+            if "outcome_refs" in row:
+                fresh = set(row["outcome_refs"]).isdisjoint(after)
+            else:
+                fresh = set(row["evidence"]).isdisjoint(
+                    after if fit_evidence is None else fit_evidence)
+            if fresh:
+                selected.append(row)
+        return selected
+
+    def measured(program, selected):
+        return score(program, [Observation(row["features"], row["target"])
+                               for row in selected]) if selected else None
+
+    def refs(selected):
+        return sorted({index for row in selected for index in row["evidence"]})
+
+    def archive_rejected(items):
+        archived = result.get("rejected_candidates", [])
+        result["rejected_candidates"] = deepcopy(items) + [deepcopy(old) for old in archived
+            if not any(old["program"] == item["program"] for item in items)]
+
     old_fit = previous.get("fit_rows", []) if previous else []
-    old_candidates = [item for item in (previous or {}).get("candidates", [])
-                      if item.get("status") != "refuted"]
-    binding_changed = bool(previous and (
-        any(row not in entries for row in old_fit)
-        or previous.get("basis") != binding.get("basis")))
+    old_candidates = (previous or {}).get("candidates", [])
+    rows_changed = bool(previous and (
+        any(row not in entries for row in previous.get("bound_rows", old_fit))
+        or any(row not in entries for item in old_candidates
+               for row in item.get("fit_rows", []))))
+    old_basis = (previous or {}).get("basis")
+    new_basis = binding.get("basis")
+    basis_expanded = (new_basis is not None
+                      and all(term in new_basis for term in (old_basis or [])))
+    binding_changed = bool(previous and (rows_changed
+        or (old_basis != new_basis and not basis_expanded)))
     if old_candidates and not binding_changed:
-        fit_evidence = set(previous["fit_evidence"])
-        validation_entries = [row for row in entries if set(row["evidence"]).isdisjoint(fit_evidence)]
-        validation = [Observation(row["features"], row["target"]) for row in validation_entries]
-        result.update(fit_rows=deepcopy(old_fit), fit_evidence=sorted(fit_evidence),
-                      validation_evidence=sorted({i for row in validation_entries for i in row["evidence"]}))
+        result.update(fit_rows=deepcopy(old_fit), fit_evidence=deepcopy(previous["fit_evidence"]))
+        validation_evidence = set()
+        newly_rejected = []
         for old in old_candidates:
             item = deepcopy(old)
-            measured = score(Program.from_dict(item["program"]), validation) if validation else None
-            confirmation_mse = None
+            item.setdefault("fit_rows", deepcopy(old_fit))
+            item.setdefault("fit_evidence", deepcopy(previous["fit_evidence"]))
+            item.setdefault("proposed_after", previous.get("available_evidence", sorted(available)))
             if previous.get("selected_program") == item["program"]:
-                after = set(previous["confirmation_after"])
-                fresh = [Observation(row["features"], row["target"]) for row in entries
-                         if set(row["evidence"]).isdisjoint(after)]
-                if fresh:
-                    confirmation_mse = score(Program.from_dict(item["program"]), fresh)
-            item.update(validation_mse=measured,
-                        confirmation_mse=confirmation_mse,
-                        status="refuted" if any(value is not None and value > tolerance
-                            for value in (measured, confirmation_mse)) else "plausible")
+                item.setdefault("confirmation_after", deepcopy(previous["confirmation_after"]))
+                item.setdefault("selected_evidence", deepcopy(previous["selected_evidence"]))
+            if item.get("status") == "refuted":
+                result["candidates"].append(item)
+                continue
+            program = Program.from_dict(item["program"])
+            validation = fresh_rows(set(item["proposed_after"]),
+                                    fit_evidence=set(item["fit_evidence"]))
+            confirmation = (fresh_rows(set(item["confirmation_after"]))
+                            if "confirmation_after" in item else [])
+            # Old paid outcomes can contradict an explanation without becoming
+            # prospective confirmation merely because they were bound later.
+            screening = [row for row in entries
+                         if "outcome_refs" in row and row not in item["fit_rows"]]
+            item.update(validation_mse=measured(program, validation),
+                        validation_evidence=refs(validation),
+                        confirmation_mse=measured(program, confirmation),
+                        confirmation_evidence=refs(confirmation),
+                        screening_mse=measured(program, screening),
+                        screening_evidence=refs(screening))
+            validation_evidence.update(item["validation_evidence"])
+            item["status"] = "refuted" if any(item[key] is not None and item[key] > tolerance
+                for key in ("validation_mse", "confirmation_mse", "screening_mse")) else "plausible"
+            if item["status"] == "refuted":
+                newly_rejected.append(item)
             result["candidates"].append(item)
-        if not any(item["status"] == "plausible" for item in result["candidates"]):
-            result["rejected_candidates"] = deepcopy(result["candidates"])
-            fit(refit=True)
-            result.update(status="refuted", diagnosis="refit_needed")
+        result["validation_evidence"] = sorted(validation_evidence)
+        if newly_rejected:
+            archive_rejected(newly_rejected)
     else:
+        if binding_changed:
+            result.setdefault("binding_history", []).append({
+                "basis": deepcopy(old_basis), "candidates": deepcopy(old_candidates),
+                "bound_rows": deepcopy(previous.get("bound_rows", old_fit)),
+                "available_evidence": deepcopy(previous.get("available_evidence", []))})
         fit()
+        if rows_changed:
+            # Re-extracting a row changes its scientific interpretation. Keep
+            # executable old proposals, but screen them on the revised rows as
+            # new versions; their earlier support remains in binding_history.
+            for old in old_candidates:
+                program = Program.from_dict(old["program"])
+                if program.required_features() <= names and not any(
+                        old["program"] == item["program"] for item in result["candidates"]):
+                    item = new_candidate(program)
+                    item["status"] = "plausible" if item["fit_mse"] <= tolerance else "refuted"
+                    result["candidates"].append(item)
         result["diagnosis"] = "binding_revised_requires_confirmation" if binding_changed else "fresh_confirmation_required"
+
+    # New hypotheses must be explicit. Rewriting the initial hypotheses field
+    # does not change the frozen bank or silently replace a supported model.
+    for supplied in binding.get("candidate_additions", []):
+        program = Program.from_dict(supplied.get("program", supplied)).simplified()
+        if any(program.to_dict() == item["program"] for item in
+               result["candidates"] + result.get("rejected_candidates", [])):
+            continue
+        item = new_candidate(program)
+        item["status"] = "plausible" if item["fit_mse"] <= tolerance else "refuted"
+        result["candidates"].append(item)
+        if item["status"] == "refuted":
+            archive_rejected([item])
+
+    if (old_candidates and not binding_changed and not any(
+            item["status"] == "plausible" for item in result["candidates"])
+            and (any(item.get("status") != "refuted" for item in old_candidates)
+                 or any(row not in old_fit for row in entries))):
+        # First test the frozen bank and retain its failures, then refit the
+        # declared family. Screening a refit does not confirm it.
+        archived = result.get("rejected_candidates", [])
+        archive_rejected(archived + [item for item in result["candidates"]
+            if item["status"] == "refuted" and not any(
+                item["program"] == old["program"] for old in archived)])
+        fit(refit=True)
+        result.update(status="refuted", diagnosis="refit_needed")
 
     survivors = [item for item in result["candidates"] if item["status"] == "plausible"]
     if not survivors:
@@ -176,15 +281,20 @@ def research_relation(binding, observations, previous=None):
         if set(proposal["features"]) != names or not proposal.get("actions"):
             raise ValueError("each experiment must bind every feature and executable actions")
     if len(survivors) == 1:
-        program = survivors[0]["program"]
-        retained_selection = (previous and previous.get("selected_program") == program
+        selected = survivors[0]
+        program = selected["program"]
+        retained_selection = ("confirmation_after" in selected
                               and not binding_changed and result["diagnosis"] != "refit_needed")
-        after = set(previous["confirmation_after"]) if retained_selection else available
-        confirmation = [row for row in entries if set(row["evidence"]).isdisjoint(after)]
+        after = set(selected["confirmation_after"]) if retained_selection else available
+        confirmation = fresh_rows(after)
+        selected.update(confirmation_after=sorted(after),
+                        selected_evidence=selected["selected_evidence"] if retained_selection else evidence,
+                        confirmation_evidence=refs(confirmation))
         result.update(selected_program=deepcopy(program), confirmation_after=sorted(after),
-                      selected_evidence=deepcopy(previous["selected_evidence"]) if retained_selection else evidence,
-                      confirmation_evidence=sorted({i for row in confirmation for i in row["evidence"]}))
+                      selected_evidence=deepcopy(selected["selected_evidence"]),
+                      confirmation_evidence=refs(confirmation))
         if confirmation:
+            selected["supported_evidence"] = refs(confirmation)
             result.update(status="supported", diagnosis="confirmed_selected_candidate")
         elif result["diagnosis"] != "refit_needed":
             result["diagnosis"] = "needs_confirmation"

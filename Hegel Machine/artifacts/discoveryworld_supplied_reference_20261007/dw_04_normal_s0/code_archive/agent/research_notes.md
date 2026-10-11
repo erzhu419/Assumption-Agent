@@ -1,0 +1,5 @@
+Observed evidence: microscope measured crystal gaps 27.47 nm and 36.56 nm (records 120, 122); known reference frequencies are 3880.56 Hz and 2239.92 Hz (records 107, 110). Target gaps are 47.52 nm and 58.2 nm (records 30, 35). Inverse-square scaling predicts 1296.76 Hz and 883.89 Hz, rounded to achievable settings 1297 and 884. A two-reference power-law fit is an unresolved alternative (~1353 and ~916 Hz).
+
+Both target crystals are installed: crystal 3 in reactor 10581 and crystal 4 in reactor 34810. Reactor 3 was read back at 1297 Hz (412); reactor 4 at 884 Hz (402). These readbacks confirm setpoints, not physical correctness. Reactors remained uncalibrated and ACTIVATE was unsupported (406, 409), so no calibration response validates the law; task progress remained incomplete.
+
+Conclusion: inverse-square is the leading evidence-based estimate, and both crystals have been installed at the corresponding rounded settings. Unresolved: alternative frequency law and why calibration/task completion does not occur. No further experiment proposed; episode is ending.

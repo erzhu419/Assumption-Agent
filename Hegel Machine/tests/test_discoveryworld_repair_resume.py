@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 import json
+import py_compile
+from pathlib import Path
 
 from hegel_machine.cognition.discoveryworld_agent import DiscoveryWorldAgent
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH
@@ -27,6 +29,9 @@ def test_repair_resume_retains_supported_child_source_and_eight_paid_calls(tmp_p
     return {'stop': 'The learned operation and invocation boundary survived'}
 """
     original._execute("write", {"path": METHOD_PATH, "code": source}, original.lab)
+    # Importing an authored binding during paid-evidence comparison generates
+    # bytecode in shared/. It is a runtime cache, not a text research artifact.
+    cached = Path(py_compile.compile(str(original.workspace / METHOD_PATH), doraise=True))
     original.llm_inquiries = {"operation": {"status": "answered", "model_calls": 8,
         "notes": "Retain this operation", "events": [], "invocations": 1}}
     original.events = [{"action": "evaluate", "arguments": {"question_id": "operation"}}]
@@ -49,6 +54,7 @@ def test_repair_resume_retains_supported_child_source_and_eight_paid_calls(tmp_p
     assert agent.llm_inquiries == previous["research"]["llm_inquiries"]
     assert agent.events == previous["events"] and agent.method_results == previous["method_results"]
     assert (agent.workspace / METHOD_PATH).read_text() == source
+    assert not (agent.workspace / cached.relative_to(original.workspace)).exists()
     assert (agent.workspace / "research_notes.md").read_text() == "Parent notebook"
     result = agent._run_procedure(agent.lab, METHOD_PATH, query_arguments={
         "procedure_start": 64, "parameters": {}, "research_question": {"id": "task"}})

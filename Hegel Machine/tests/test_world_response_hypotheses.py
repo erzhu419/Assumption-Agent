@@ -33,7 +33,8 @@ def test_successes_form_coefficient_alternatives_and_every_response_is_consumed(
     before = deepcopy((state, estimators))
     result = propose_response_research(state, estimators, PATH)
     assert (state, estimators) == before
-    sources = [source for candidate in result["candidates"] for source in candidate["fit_sources"]]
+    sources = [source for candidate in result["candidates"] for source in candidate["fit_sources"]
+               if source["family"] in {estimator["id"] for estimator in estimators}]
     assert {item["frequency"] for source in sources for item in source["settings"]
             if item["crystal"] == 4} == {85, 86}
     assert any("leave_out_" in source["origin"] for source in sources)
@@ -63,7 +64,8 @@ def test_same_input_opposite_responses_refute_joint_models_instead_of_dropping_d
     state, estimators = fixture()
     state["response_settings"].append({"crystal": 4, "frequency": 85, "activated": False, "evidence": [20]})
     result = propose_response_research(state, estimators, PATH)
-    assert result["status"] == "no_compatible_response_hypotheses"
+    assert result["status"] == "family_research_needed"
+    assert result["family_research"]["research_obligation"]["reason"] == "declared_shared_response_families_refuted"
     assert result["hypotheses"] == []
     assert all(item["status"] == "rejected" for item in result["candidates"])
     assert all(any(20 in response["evidence"] for response in item["conflicting_responses"])
@@ -89,8 +91,9 @@ def test_experiment_uses_public_noninteger_grid_and_changes_after_negative_respo
 
 
 def test_boolean_disagreement_is_required_to_claim_a_discriminating_experiment():
+    from hegel_machine.cognition.world_response_hypotheses import _propose_fitted_responses
     state, estimators = fixture()
-    result = propose_response_research(state, estimators, PATH)
+    result = _propose_fitted_responses(state, estimators, PATH)
     assert result["status"] == "discriminating_experiment_available"
     forecasts = result["selection"]["selected_experiment"]["predictions"]
     assert set(forecasts.values()) == {True, False}
@@ -106,7 +109,8 @@ def test_single_fixed_response_hypothesis_gets_confirmation_without_inventing_wi
     result = propose_response_research(state, [{"id": "constant", "basis": []}], PATH)
     assert len(result["hypotheses"]) == 1
     assert result["hypotheses"][0]["lower"] == result["hypotheses"][0]["upper"] == 0.
-    assert result["status"] == "confirmation_trial"
+    assert result["status"] == "family_target_trial"
+    assert all(all(signature) for signature in result["family_research"]["possible_signatures"])
     assert result["selected_setting"] == 10.
     assert result["selection"]["predicted_separation"] == 0.
 
@@ -127,8 +131,13 @@ def test_equal_programs_share_candidate_but_preserve_fit_provenance():
     second = propose_response_research(state, estimators + [duplicate], PATH)
     assert len(second["candidates"]) == len(first["candidates"])
     assert len(second["hypotheses"]) == len(first["hypotheses"])
-    assert all({source["family"] for source in item["fit_sources"]}
-               == {"quadratic", "same_basis_other_name"} for item in second["candidates"])
+    declared = {"quadratic", "same_basis_other_name"}
+    original_candidates = [item for item in second["candidates"]
+        if any(source["family"] in declared for source in item["fit_sources"])]
+    assert original_candidates
+    assert all({source["family"] for source in item["fit_sources"]
+                if source["family"] in declared} == declared for item in original_candidates)
+    assert all(set(item["derived_from"]) == declared for item in second["nested_supports"])
 
 
 def test_absent_control_grid_does_not_silently_assume_integer_hz():
@@ -171,7 +180,7 @@ def test_reference_uses_its_own_noninteger_grid_and_no_other_objects_grid():
         response["frequency"] += .25
     state["control_grid"]["upper"] = 1.
     state["control_grids"] = {"2": {"step": .125, "origin": .25, "lower": 0., "upper": 100.},
-                              "4": {"step": 1., "origin": 0., "lower": 0., "upper": 10000.}}
+                              "99": {"step": 1., "origin": 0., "lower": 0., "upper": 10000.}}
     result = propose_response_research(state, estimators, PATH)
     assert result["status"] == "discriminating_experiment_available"
     assert result["selected_number"] == 2
@@ -205,22 +214,50 @@ def test_reference_agreement_does_not_become_a_confirmation_trial(basis):
     assert result["status"] == "no_untried_supported_setting"
     assert result["selection"] is None
     assert result["selected_number"] is None
-    # Joint revision can widen the previously unbounded response interval and
-    # propose a target experiment; it must not confirm an agreed reference.
+    # Joint revision can widen the interval. A reference now competes with
+    # targets, but the operation must remain a test, not reference confirmation.
     revised = propose_response_research(state, estimators, PATH)
-    assert revised['selected_number'] == revised['target_number']
-    assert revised['selection']['selected_experiment']['candidate_id'].startswith('joint_coefficient_')
+    assert revised['status'] not in ('confirmation_trial', 'family_target_trial')
+    selected = revised['selection']['selected_experiment']
+    if revised['selected_number'] != revised['target_number']:
+        assert 'restore_frequency' in selected
+        assert (set(selected['predictions'].values()) == {True, False}
+                or revised['family_research']['selected_role'] in
+                ('nonlocal_family_test', 'conditional_family_test'))
 
 
-def test_available_target_experiment_keeps_priority_over_references():
+def test_available_target_does_not_exclude_references_from_experiment_pool():
     state, estimators = fixture()
     first = propose_response_research(state, estimators, PATH)
     state["control_grids"] = {str(n): {"step": .25, "origin": 0., "lower": 0., "upper": 100.}
                               for n in (1, 2, 3)}
     second = propose_response_research(state, estimators, PATH)
-    assert second["selected_number"] == second["target_number"] == 5
-    assert second["selection"] == first["selection"]
-    assert "restore_frequency" not in second["selection"]["selected_experiment"]
+    assert {e['number'] for e in first['experiments']} == {5}
+    assert {e['number'] for e in second['experiments']} == {1, 2, 3, 5}
+    assert second['selection']['selected_experiment'] in second['experiments']
+
+
+def test_measured_response_bracket_survives_a_narrow_representatives_proposals():
+    from hegel_machine.cognition.world_response_hypotheses import _select_response_experiment
+
+    state, _ = fixture()
+    state['control_grids'] = {'1': {'step': 1., 'origin': 0., 'lower': 0., 'upper': 20.}}
+    state['response_settings'].append({'crystal': 1, 'frequency': 4.,
+                                      'activated': False, 'evidence': [20]})
+    # A point-band member proposes only the known reference setting and its
+    # neighbours. The unresolved actual 4-negative/10-positive boundary still
+    # supplies a distinct experiment inside the bracket.
+    result = {'target_number': 5, 'compute_cost': 0,
+        'candidates': [{'id': 'coefficient', 'fit_mse': 0.}],
+        'hypotheses': [{'id': 'point_band', 'candidate_id': 'coefficient',
+            'family': 'quadratic', 'claim': 'A narrow shared band',
+            'lower': 0., 'upper': 0.,
+            'predictions_by_crystal': {'1': 10., '5': 130.}}]}
+    result = _select_response_experiment(result, state, PATH)
+    experiment = next(e for e in result['experiments'] if e['number'] == 1 and e['prediction'] == 7.)
+    assert experiment['predictions'] == {'point_band': False}
+    assert experiment['restore_frequency'] == 10.
+    assert experiment['procedure']['path'] == PATH
 
 
 def test_saved_exhausted_point_fit_resumes_untried_parameter_research_once(monkeypatch):

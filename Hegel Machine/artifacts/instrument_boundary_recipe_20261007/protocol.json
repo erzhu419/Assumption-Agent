@@ -1,0 +1,37 @@
+{
+  "question": "Does retaining the newly connected, measured instrument-boundary recipe reduce target research cost independently of an unchanged fresh boundary planner?",
+  "historical_evidence_reused": [
+    "artifacts/growth_paper_20261006_main_30/summary.json",
+    "artifacts/boundary_method_transfer_20260922/fresh_replication",
+    "artifacts/instrument_method_study_20260919/main/summary.json"
+  ],
+  "development_pilot": {
+    "apparatus_seeds": [9013, 10013, 11013],
+    "random_prefix_seed": 183,
+    "objects": [4, 4, 5],
+    "finding": "UnifiedObjectLab naturally learns an at-boundary recipe and reapplies it across measurement names, apparatuses and object counts. Direct AnonymousObjectLab fitting without object discovery does not produce membership candidates; it is outside this comparison."
+  },
+  "source_seeds": [67001, 67038, 67075, 67112, 67149, 67186, 67223, 67260, 67297, 67334, 67371, 67408, 67445, 67482, 67519, 67556, 67593, 67630, 67667, 67704, 67741, 67778, 67815, 67852, 67889, 67926, 67963, 68000, 68037, 68074],
+  "targets": [
+    {"name": "renamed_apparatus", "objects": 4, "seed_offset": 100000},
+    {"name": "larger_apparatus", "objects": 5, "seed_offset": 200000}
+  ],
+  "arms": ["keep_boundary", "delete_boundary"],
+  "intervention": "Delete only inherited records with instrument_recipe.sequence_mode == learned_boundary. Keep the fitted target model, paid prefix, other methods, fresh planner and local method learning identical. Both targets start independently from the frozen source book.",
+  "laboratory": "UnifiedObjectLab; source has 4 objects, public object schema, fine instruments. For task seed s use seed=s, apparatus_seed=s+1009, rename_prefix=s{s}_. Target task seed is source seed plus its specified offset.",
+  "prefix_rows": 48,
+  "prefix_seed_offset": 7919,
+  "fit_budget": 24000,
+  "planning_budget_per_round": 50000,
+  "assessment_budget_per_round": 12000,
+  "max_rounds": 4,
+  "max_probe_length": 12,
+  "tolerance": 1e-7,
+  "terminal_random_rows": 64,
+  "terminal_seed_offset": 900000,
+  "terminal": "Evaluate frozen survivors on independent actual readings: a random trajectory, independent low/mid/high probes on each public control, and half-grid probes across the publicly named focus control. Every measured field must have survivors, all of which must have maximum squared error <= tolerance. Terminal data never alter the model or method book; costs are separate.",
+  "primary_outcomes": ["all_fields_terminal_pass", "actual_candidate_elimination", "inherited_method_use", "observation_cost", "measurement_cost", "compute_cost"],
+  "accounting": "Fit the shared target prefix once and copy its cost to each counterfactual arm. Include the same source acquisition cost once per two-target sequence in each arm. Report target-only and source-inclusive costs. Retain all 30 sources, including unsuccessful acquisitions and all unmodeled fields.",
+  "analysis": "Pair by source seed, summing its two targets. Report raw totals and source-cluster bootstrap 95% intervals for keep-minus-delete cost differences, using 10000 resamples and fixed analysis seed 20261007. Do not treat 60 targets as 60 independent source-method acquisitions.",
+  "scope": "Finite role-labelled instrument family, with changes of measurement names, apparatus coefficients and object count. Existing half-integer membership law and supplied role schema remain; this is not anonymous structure discovery, unseen threshold-family invention or end-to-end LLM evidence. No model/provider calls."
+}

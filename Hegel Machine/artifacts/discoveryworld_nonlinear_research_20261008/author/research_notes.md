@@ -1,0 +1,9 @@
+## Research notebook
+
+**Observed evidence:** The unchanged `trials/trial_000` passed fresh confirmation on `source_initial` (72 steps), `dw_04_normal_s2_initial` (78), `dw_04_normal_s4_initial` (84), and `source_continuation` (508 total, including 478 replayed). Public C4 activations were 5728 Hz (normal s2, trial_002 record 77), 2230 Hz (normal s4, trial_003 record 83), and 6342 Hz (source continuation, trial_004 record 507); these are case-specific outcomes. The only missing case is `dw_04_challenge_s1_initial`.
+
+The earlier challenge run stopped after 108 steps and 34 model calls. Challenge C1–C3 references were activated at 2364.93, 3881.84, and 2112.48 Hz. Tested C4 settings based on density, gap, channel-5, temperature, and quadratic radiation near 4653 Hz did not activate it; it remained uncalibrated at 4653, 4654, and 4754 Hz. These reject settings but do not determine the correct frequency; challenge C4/C5 remain unresolved. Previous analyses had evidence-index errors and inconsistent calibration interpretation. Inspection of `_extend_hypotheses` shows delegation after inherited fits fail, with a stop when the inquiry returns without a fresh refutation; no focused repair is established. The candidate was restored and retains the four passing cases.
+
+**Working explanation / alternatives:** Transfer succeeds unchanged on four cases. Challenge failure may reflect unresolved seed-specific relationships or an unproductive delegated search/analysis path; current evidence does not distinguish these or establish the target settings.
+
+**Next experiment (proposed, not yet run):** Rerun the unchanged candidate on the missing challenge practice to obtain current feedback and test whether the search path now yields usable evidence.

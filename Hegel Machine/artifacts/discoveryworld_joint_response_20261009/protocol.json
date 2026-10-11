@@ -1,0 +1,67 @@
+{
+  "runtime": "/home/erzhu419/.cache/hegel-machine/discoveryworld",
+  "limits": {
+    "environment_steps": 2000,
+    "score_checkpoints_environment_steps": [
+      250,
+      500,
+      1000,
+      2000
+    ],
+    "max_model_calls": 65,
+    "reported_token_budget": null,
+    "task_wall_seconds": 28800,
+    "provider_request_timeout_seconds": 900,
+    "python_seconds_per_call": 600,
+    "python_seconds_per_task": 7200,
+    "note": "Initial generous development ceilings, not calibrated main-run limits. Stop on completion. Record official 1000-step and extended 2000-step outcomes separately. No aggregate reported-token cutoff; record input/output/cached tokens. Preserve intrinsic model context limits."
+  },
+  "provider": null,
+  "max_procedure_steps": 512,
+  "cases": [
+    {
+      "id": "seed0_prefix529",
+      "task": {
+        "id": "dw_04_challenge_s0",
+        "scenario_name": "Reactor Lab",
+        "difficulty": "Challenge",
+        "random_seed": 0,
+        "split": "development",
+        "cluster": "Reactor Lab"
+      },
+      "prefix": "artifacts/discoveryworld_reference_discrimination_recovery_20261009/seed0_prefix528/reference_discrimination"
+    },
+    {
+      "id": "seed1_prefix408",
+      "task": {
+        "id": "dw_04_challenge_s1",
+        "scenario_name": "Reactor Lab",
+        "difficulty": "Challenge",
+        "random_seed": 1,
+        "split": "evaluation",
+        "cluster": "Reactor Lab"
+      },
+      "prefix": "artifacts/discoveryworld_predictive_trial_20261008/grammar"
+    }
+  ],
+  "jobs": [
+    {
+      "case": "seed0_prefix529",
+      "arm": "point_fit"
+    },
+    {
+      "case": "seed0_prefix529",
+      "arm": "joint_constraints"
+    },
+    {
+      "case": "seed1_prefix408",
+      "arm": "point_fit"
+    },
+    {
+      "case": "seed1_prefix408",
+      "arm": "joint_constraints"
+    }
+  ],
+  "intervention": "Same paid prefix, declared bases, current controller and public evidence. Both arms retain point-fit and reference-discrimination experiments. Only joint_constraints adds a bounded coefficient/shared-band LP after those experiments are exhausted. The point_fit selector marks that omitted stage explicitly to avoid a cache-reopening loop.",
+  "scope": "Opened development continuations with a host-authored solver adaptation. No model calls, supplied target formula or successful setting, or mid-run source edits. A feasible target witness is an unconfirmed design condition, not observed success."
+}

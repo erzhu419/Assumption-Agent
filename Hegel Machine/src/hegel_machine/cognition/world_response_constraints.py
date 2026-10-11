@@ -4,12 +4,14 @@ A successful setting is an inequality, not an equality label for the latent
 program.  Each LP jointly fits that program and a shared connected activation
 band.  Negative settings choose which side of the band they occupy; observed
 positive settings fix that choice, otherwise we enumerate their ordered gaps.
-The target search is conditional on an untried reachable activation setting.
-Failure here does not exclude models whose activation lies outside the grid.
+The legacy target refit is conditional on an untried reachable activation
+setting. The family query instead checks history plus explicit hypothetical
+responses, including models whose activation lies outside a target grid.
 """
 
 from itertools import islice, product
-from math import ceil, floor, inf, prod
+from fractions import Fraction
+from math import ceil, floor, inf, isfinite, prod
 
 import numpy as np
 from scipy.optimize import linprog
@@ -19,6 +21,493 @@ from .models import Observation
 
 
 BRANCH_LIMIT = 128
+
+
+def _response_extremes(raw_rows, values, *, minimum=True, maximum=True):
+    """Keep the strongest residual bounds for each identical basis vector.
+
+    Subtracting the same model prediction preserves frequency order. Positive
+    responses therefore need only their two extremes; a below-band negative
+    needs only the largest setting, and an above-band negative the smallest.
+    The original observations remain available for executable witness checks.
+    """
+    groups = {}
+    for item in values:
+        key = tuple(raw_rows[item["crystal"]])
+        low, high = groups.setdefault(key, (item, item))
+        groups[key] = (item if item["frequency"] < low["frequency"] else low,
+                       item if item["frequency"] > high["frequency"] else high)
+    extremes = []
+    for low, high in groups.values():
+        if minimum:
+            extremes.append(low)
+        if maximum and (not minimum or high["frequency"] != low["frequency"]):
+            extremes.append(high)
+    return extremes
+
+
+def _excluded_low_dimensional_branch(raw_rows, positives, below, above, comparison_limit=None):
+    """Exactly eliminate band bounds and up to two varying basis coefficients.
+
+    Below-band residuals must be strictly smaller than every positive residual;
+    positive residuals must be strictly smaller than above-band residuals. With
+    no positives the below/above pairs still constrain the possible band. Each
+    comparison is a strict linear inequality on the slopes. With two slopes,
+    Fourier--Motzkin elimination removes one before intersecting intervals for
+    the other. There are no coefficient or bandwidth limits. Fractions represent
+    the supplied floating-point basis values exactly. Each original comparison
+    and each elimination pair consumes one unit of the supplied allowance.
+    """
+    vectors = list(raw_rows.values())
+    varying = [index for index in range(len(vectors[0]))
+               if any(row[index] != vectors[0][index] for row in vectors[1:])]
+    if len(varying) > 2:
+        return None, 0, True
+    if len(varying) < 2:
+        excluded, _, _, comparisons, finished = _scalar_response_interval(
+            raw_rows, positives, below, above, varying[0] if varying else None,
+            comparison_limit)
+        return excluded, comparisons, finished
+    inequalities = {}
+    slope_lower = slope_upper = None
+    comparisons = 0
+
+    def excludes_interval(coefficient, bound):
+        nonlocal slope_lower, slope_upper
+        if not coefficient:
+            return bound <= 0
+        cutoff = bound / coefficient
+        if coefficient > 0:
+            slope_upper = cutoff if slope_upper is None else min(slope_upper, cutoff)
+        else:
+            slope_lower = cutoff if slope_lower is None else max(slope_lower, cutoff)
+        return slope_lower is not None and slope_upper is not None and slope_lower >= slope_upper
+
+    # With any positive residual, below < positive < above already implies
+    # below < above. Repeating those pairs used to exhaust the query allowance
+    # on long histories before reaching another negative-response branch.
+    pairs = ((below, positives), (positives, above)) if positives else ((below, above),)
+    for lefts, rights in pairs:
+        for left in lefts:
+            for right in rights:
+                if comparison_limit is not None and comparisons >= comparison_limit:
+                    return None, comparisons, False
+                comparisons += 1
+                coefficients = tuple(Fraction(float(raw_rows[right["crystal"]][column]))
+                                     - Fraction(float(raw_rows[left["crystal"]][column]))
+                                     for column in varying)
+                bound = Fraction(float(right["frequency"])) - Fraction(float(left["frequency"]))
+                # Duplicate inequalities need only their strongest bound.
+                inequalities[coefficients] = min(bound, inequalities.get(coefficients, bound))
+    # Eliminate the cheaper coordinate. The intermediate size is at most the
+    # number of positive/negative coefficient pairs, bounded by the allowance.
+    pivot = min(range(2), key=lambda column:
+                sum(row[column] > 0 for row in inequalities)
+                * sum(row[column] < 0 for row in inequalities))
+    positive, negative = [], []
+    for coefficients, bound in inequalities.items():
+        coefficient, remaining = coefficients[pivot], coefficients[1 - pivot]
+        if not coefficient:
+            if excludes_interval(remaining, bound):
+                return True, comparisons, True
+        else:
+            (positive if coefficient > 0 else negative).append(
+                (remaining / abs(coefficient), bound / abs(coefficient)))
+    for upper_coefficient, upper_bound in positive:
+        for lower_coefficient, lower_bound in negative:
+            if comparison_limit is not None and comparisons >= comparison_limit:
+                return None, comparisons, False
+            comparisons += 1
+            if excludes_interval(upper_coefficient + lower_coefficient, upper_bound + lower_bound):
+                return True, comparisons, True
+    return False, comparisons, True
+
+
+def _scalar_response_interval(raw_rows, positives, below, above, column=0,
+                              comparison_limit=None):
+    """Retain the slope interval already used by exact one-term exclusion."""
+    low = high = None
+    comparisons = 0
+    pairs = ((below, positives), (positives, above)) if positives else ((below, above),)
+    for lefts, rights in pairs:
+        for left in lefts:
+            for right in rights:
+                if comparison_limit is not None and comparisons >= comparison_limit:
+                    return None, low, high, comparisons, False
+                comparisons += 1
+                coefficient = (Fraction(float(raw_rows[right["crystal"]][column]))
+                    - Fraction(float(raw_rows[left["crystal"]][column]))) if column is not None else Fraction(0)
+                bound = Fraction(float(right["frequency"])) - Fraction(float(left["frequency"]))
+                if not coefficient:
+                    if bound <= 0:
+                        return True, low, high, comparisons, True
+                elif coefficient > 0:
+                    value = bound / coefficient
+                    high = value if high is None else min(high, value)
+                else:
+                    value = bound / coefficient
+                    low = value if low is None else max(low, value)
+                if low is not None and high is not None and low >= high:
+                    return True, low, high, comparisons, True
+    return False, low, high, comparisons, True
+
+
+def query_response_family(features, responses, estimator, queries=(), branch_limit=BRANCH_LIMIT,
+                          compute_limit=None):
+    """Ask whether a declared response family permits explicit consequences.
+
+    ``queries`` are hypothetical ``{crystal, frequency, activated}`` conditions,
+    never newly observed evidence. An empty query checks the paid history alone,
+    without requiring a positive response or a reachable target setting.
+
+    SAT has an executable witness. UNSAT is restricted to exact equal-basis
+    connected-band conflicts or exhaustive exact elimination for at most two
+    varying terms. In higher dimensions an LP failure is UNKNOWN. A truncated
+    search can establish SAT with a checked witness, but cannot establish UNSAT.
+    ``compute_limit`` bounds basis evaluations, endpoint-reduction scans, exact
+    comparisons, LP rows and executable checks; work is charged before execution.
+    Dominated same-basis response bounds are removed before comparisons and LPs;
+    every original response is still checked against a returned witness.
+    With branch_limit=None the actual compute allowance bounds enumeration,
+    rather than an additional fixed or estimated number of branches.
+    """
+    result = {"status": "UNKNOWN", "witness": None,
+              "scope": "declared_basis_shared_connected_band",
+              "exclusion_scope": "equal_basis_conflict_or_up_to_two_varying_terms_exact_elimination",
+              "basis": estimator.get("basis", []), "family": estimator.get("id"),
+              "query_role": "hypothetical_conditions_not_observed_evidence",
+              "queries": [dict(item) for item in queries],
+              "paid_response_count": len(responses), "compute_cost": 0,
+              "lp_calls": 0, "lp_iterations": 0, "solver_statuses": {},
+              "branch_count": 0, "branches_attempted": 0,
+              "branches_excluded_exactly": 0, "exact_comparisons": 0,
+              "constraint_rows_scanned": 0,
+              "branch_limit": branch_limit, "limited_by_branch_budget": False,
+              "verification_failures": 0, "compute_limit": compute_limit}
+
+    def spend(cost):
+        if compute_limit is not None and result["compute_cost"] + cost > compute_limit:
+            result.update(status="UNKNOWN", reason="query_compute_limit")
+            return False
+        result["compute_cost"] += cost
+        return True
+
+    try:
+        if not features or "basis" not in estimator or (branch_limit is not None and branch_limit < 0):
+            raise ValueError("features, declared basis and nonnegative branch_limit are required")
+        if branch_limit is None and compute_limit is None:
+            raise ValueError("uncapped branch enumeration requires a compute_limit")
+        terms = [Program.from_dict(term) for term in estimator["basis"]]
+        required = set().union(*(term.required_features() for term in terms))
+        if any(term.history_depth for term in terms):
+            raise ValueError("response-family rows do not contain historical observations")
+        if any(not required <= set(values) for values in features.values()):
+            raise ValueError("missing_public_measurements")
+        observations = [dict(item) for item in responses] + result["queries"]
+        if any(item["crystal"] not in features or not isfinite(item["frequency"])
+               or not isinstance(item["activated"], bool) for item in observations):
+            raise ValueError("response conditions need measured objects, finite settings and Boolean outcomes")
+        numbers = list(features)
+        if not spend(len(numbers) * len(terms)):
+            return result
+        raw = np.array([[term.predict(Observation(features[key], 0.)) for term in terms]
+                        for key in numbers], dtype=float).reshape(len(numbers), len(terms))
+        if not np.isfinite(raw).all():
+            raise ValueError("nonfinite_basis_evaluation")
+    except (KeyError, TypeError, ValueError, OverflowError, ZeroDivisionError) as exc:
+        result.update(status="INVALID_BINDING", reason=str(exc))
+        return result
+    raw_rows = dict(zip(numbers, raw))
+    result["varying_basis_terms"] = sum(any(row[index] != raw[0][index] for row in raw[1:])
+                                         for index in range(len(terms)))
+    by_representation = {}
+    by_crystal = {}
+    for item in observations:
+        by_representation.setdefault(tuple(raw_rows[item["crystal"]]), []).append(item)
+        by_crystal.setdefault(item["crystal"], []).append(item)
+    for values in by_representation.values():
+        positives = [item for item in values if item["activated"]]
+        if positives:
+            left = min(positives, key=lambda item: item["frequency"])
+            right = max(positives, key=lambda item: item["frequency"])
+            negative = next((item for item in values if not item["activated"]
+                and left["frequency"] <= item["frequency"] <= right["frequency"]), None)
+            if negative is not None:
+                result.update(status="UNSAT_VERIFIED", reason="equal_basis_connected_band_conflict",
+                              conflicting_conditions=[dict(item) for item in (left, negative, right)])
+                return result
+    if not spend(len(observations)):
+        return result
+    result["constraint_rows_scanned"] += len(observations)
+    positive_rows = _response_extremes(raw_rows, [item for item in observations if item["activated"]])
+    positive_settings = {key: [item["frequency"] for item in values if item["activated"]]
+                         for key, values in by_crystal.items()}
+    gaps = {key: list(zip([-inf, *settings], [*settings, inf]))
+            for key, values in by_crystal.items() if not positive_settings[key]
+            for settings in [sorted({item["frequency"] for item in values})]}
+    result["branch_count"] = prod(len(values) for values in gaps.values())
+    result["limited_by_branch_budget"] = branch_limit is not None and result["branch_count"] > branch_limit
+    means = raw.mean(axis=0)
+    scales = np.max(abs(raw - means), axis=0)
+    scales[scales == 0.] = 1.
+    rows = dict(zip(numbers, (raw - means) / scales))
+    frequency_scale = max([1., *(abs(item["frequency"]) for item in observations)])
+    width = len(terms)
+    lower_index, upper_index, margin_index = range(width, width + 3)
+    for branch in islice(product(*gaps.values()), branch_limit):
+        result["branches_attempted"] += 1
+        assigned = dict(zip(gaps, branch))
+        below, above = [], []
+        if not spend(len(observations)):
+            return result
+        result["constraint_rows_scanned"] += len(observations)
+        for item in observations:
+            if not item["activated"]:
+                settings = positive_settings[item["crystal"]]
+                is_below = item["frequency"] < min(settings) if settings \
+                    else item["frequency"] <= assigned[item["crystal"]][0]
+                (below if is_below else above).append(item)
+        below = _response_extremes(raw_rows, below, minimum=False)
+        above = _response_extremes(raw_rows, above, maximum=False)
+        remaining = None if compute_limit is None else compute_limit - result["compute_cost"]
+        excluded, comparisons, finished = _excluded_low_dimensional_branch(
+            raw_rows, positive_rows, below, above, comparison_limit=remaining)
+        result["exact_comparisons"] += comparisons
+        spend(comparisons)
+        if not finished:
+            result.update(status="UNKNOWN", reason="query_compute_limit")
+            return result
+        if excluded:
+            result["branches_excluded_exactly"] += 1
+            continue
+        matrix, rhs = [], []
+        for values, constraints in ((positive_rows, ((lower_index, 1.), (upper_index, -1.))),
+                                   (below, ((lower_index, -1.),)),
+                                   (above, ((upper_index, 1.),))):
+            for item in values:
+                for boundary, sign in constraints:
+                    row = np.zeros(width + 3)
+                    row[:width] = sign * rows[item["crystal"]]
+                    row[boundary] = sign
+                    row[margin_index] = 0. if item["activated"] else 1.
+                    matrix.append(row); rhs.append(sign * item["frequency"] / frequency_scale)
+        row = np.zeros(width + 3)
+        row[lower_index], row[upper_index] = 1., -1.
+        matrix.append(row); rhs.append(0.)
+        objective = np.zeros(width + 3)
+        objective[margin_index] = -1.
+        if not spend(len(rhs)):
+            return result
+        fit = linprog(objective, A_ub=np.asarray(matrix), b_ub=np.asarray(rhs),
+                      bounds=[(None, None)] * (width + 2) + [(0., 1.)],
+                      method="highs", options={"dual_feasibility_tolerance": 1e-9,
+                                               "primal_feasibility_tolerance": 1e-9})
+        result["lp_calls"] += 1
+        result["lp_iterations"] += int(fit.nit or 0)
+        status = str(fit.status)
+        result["solver_statuses"][status] = result["solver_statuses"].get(status, 0) + 1
+        if not fit.success or (below or above) and fit.x[margin_index] <= 0.:
+            continue
+        if not spend(len(numbers) + len(observations)):
+            return result
+        slopes = fit.x[:width] * frequency_scale / scales
+        program = Program("const", value=-float(np.dot(slopes, means)))
+        for term, slope in zip(terms, slopes):
+            if slope != 0.:
+                program = Program("add", children=(program, Program("mul", children=(
+                    Program("const", value=float(slope)), term))))
+        program = program.simplified()
+        predictions = {key: program.predict(Observation(features[key], 0.)) for key in numbers}
+        residual = lambda item: item["frequency"] - predictions[item["crystal"]]
+        left = max((residual(item) for item in below), default=-inf)
+        right = min((residual(item) for item in above), default=inf)
+        if positive_rows:
+            lower = min(residual(item) for item in positive_rows)
+            upper = max(residual(item) for item in positive_rows)
+            if left != -inf:
+                lower = (left + lower) / 2.
+            if right != inf:
+                upper = (upper + right) / 2.
+        else:
+            lower = upper = ((left / 2. + right / 2.) if isfinite(left) and isfinite(right)
+                             else left + max(1., abs(left)) if isfinite(left)
+                             else right - max(1., abs(right)) if isfinite(right) else 0.)
+        if not isfinite(lower) or not isfinite(upper) or lower > upper or any(
+                (lower <= residual(item) <= upper) != item["activated"] for item in observations):
+            result["verification_failures"] += 1
+            continue
+        result.update(status="SAT_WITNESS", witness={"program": program.to_dict(),
+            "lower": lower, "upper": upper,
+            "predictions_by_crystal": {str(key): value for key, value in predictions.items()},
+            "checked_responses": len(responses), "checked_queries": len(queries)})
+        return result
+    if not result["limited_by_branch_budget"] and \
+            result["branches_excluded_exactly"] == result["branch_count"]:
+        result.update(status="UNSAT_VERIFIED", reason="exact_one_dimensional_branch_exclusion"
+                      if result["varying_basis_terms"] <= 1 else "exact_two_dimensional_branch_exclusion")
+    else:
+        result["reason"] = "branch_limit" if result["limited_by_branch_budget"] \
+            else "no_executable_witness_and_no_exact_exclusion"
+    return result
+
+
+def response_family_grid_support(features, responses, estimator, number, grid, queries=(),
+                        compute_limit=20000, branch_limit=128):
+    """Exact attainable grid settings for a bounded scalar response family.
+
+    Returns UNKNOWN, never a narrower set, when work or this scope is exceeded.
+    These are possible activations, not points certain to activate. Numeric
+    floats from the public interface are interpreted exactly as in the existing
+    low-dimensional exclusion routine. No floating LP statuses enter the result.
+    """
+    result = {'status': 'UNKNOWN', 'intervals': [], 'compute_cost': 0,
+              'branches_attempted': 0, 'branch_count': 0,
+              'scope': 'one_varying_term_finite_slope_grid_activation_support'}
+
+    def spend(cost):
+        if result['compute_cost'] + cost > compute_limit:
+            result['reason'] = 'projection_compute_limit'
+            return False
+        result['compute_cost'] += cost
+        return True
+
+    terms = [Program.from_dict(t) for t in estimator['basis']]
+    if len(terms) != 1 or terms[0].history_depth:
+        result['reason'] = 'requires_single_nonhistorical_term'
+        return result
+    if not spend(len(features)):
+        return result
+    raw = {k: [terms[0].predict(Observation(v, 0.))] for k, v in features.items()}
+    xs = {k: Fraction(float(v[0])) for k, v in raw.items()}
+    rows = [*responses, *queries]
+    if not spend(len(rows)):
+        return result
+    by = {}
+    for row in rows:
+        by.setdefault(row['crystal'], []).append(row)
+    positives = {k: [r['frequency'] for r in rr if r['activated']] for k, rr in by.items()}
+    # Shared connected-band conflicts at identical representations are handled
+    # by the same residual-order inequalities below; within-object conflicts
+    # need no negative gap assignment.
+    if any(not r['activated'] and positives[k]
+           and min(positives[k]) <= r['frequency'] <= max(positives[k])
+           for k, rr in by.items() for r in rr):
+        result.update(status='COMPLETE', grid_count=0, reason='paid_connected_band_conflict')
+        return result
+    negatives = {k: sorted({r['frequency'] for r in rr if not r['activated']})
+                 for k, rr in by.items()}
+    gaps = {k: list(zip([None, *negatives[k]], [*negatives[k], None]))
+            for k in by if not positives[k]}
+    origin, step = Fraction(float(grid['origin'])), Fraction(float(grid['step']))
+    ceil = lambda x: -((-x.numerator) // x.denominator)
+    floor = lambda x: x.numerator // x.denominator
+    public_first = ceil((Fraction(float(grid['lower'])) - origin) / step)
+    public_last = floor((Fraction(float(grid['upper'])) - origin) / step)
+    result['branch_count'] = prod(map(len, gaps.values()))
+    if result['branch_count'] > branch_limit and number in gaps:
+        # Paid target negatives often lie outside every anchored explanation.
+        # Dropping unanchored rows gives a superset of attainable settings;
+        # its exact projection can remove irrelevant gaps before the same
+        # branch allowance is applied. Retained branches still use all rows.
+        anchored = [row for row in rows if positives[row['crystal']]]
+        enclosing = response_family_grid_support(features, anchored, estimator, number, grid,
+            compute_limit=compute_limit - result['compute_cost'], branch_limit=branch_limit)
+        spend(enclosing['compute_cost'])
+        if enclosing['status'] != 'COMPLETE':
+            result['reason'] = enclosing.get('reason', 'unresolved_anchored_support')
+            return result
+        retained = []
+        for left, right in gaps[number]:
+            first = public_first if left is None else max(public_first,
+                floor((Fraction(float(left)) - origin) / step) + 1)
+            last = public_last if right is None else min(public_last,
+                ceil((Fraction(float(right)) - origin) / step) - 1)
+            if not spend(len(enclosing['intervals'])):
+                return result
+            if any(max(first, low) <= min(last, high) for low, high in enclosing['intervals']):
+                retained.append((left, right))
+        result['pruned_target_gaps'] = len(gaps[number]) - len(retained)
+        gaps[number] = retained
+        result['branch_count'] = prod(map(len, gaps.values()))
+    if result['branch_count'] > branch_limit:
+        result['reason'] = 'projection_branch_limit'
+        return result
+    positive_rows = _response_extremes(raw, [r for r in rows if r['activated']])
+    fixed_below, fixed_above = [], []
+    for key, values in by.items():
+        if positives[key]:
+            for row in values:
+                if not row['activated']:
+                    (fixed_below if row['frequency'] < min(positives[key]) else fixed_above).append(row)
+    fixed_below = _response_extremes(raw, fixed_below, minimum=False)
+    fixed_above = _response_extremes(raw, fixed_above, maximum=False)
+    intervals = []
+    for branch in product(*gaps.values()):
+        result['branches_attempted'] += 1
+        # Fixed positive anchors determine their negative sides once. For an
+        # unanchored object's gap, only its adjacent actual negative readings
+        # can tighten that side; interior dominated rows add no constraint.
+        below, above = list(fixed_below), list(fixed_above)
+        for key, (left, right) in zip(gaps, branch):
+            if left is not None:
+                below.append({'crystal': key, 'frequency': left})
+            if right is not None:
+                above.append({'crystal': key, 'frequency': right})
+        if not spend(len(below) + len(above)):
+            return result
+        below = _response_extremes(raw, below, minimum=False)
+        above = _response_extremes(raw, above, maximum=False)
+        excluded, low, high, comparisons, finished = _scalar_response_interval(
+            raw, positive_rows, below, above, comparison_limit=compute_limit - result['compute_cost'])
+        spend(comparisons)
+        if not finished:
+            result['reason'] = 'projection_compute_limit'
+            return result
+        if excluded:
+            continue
+        if low is None or high is None:
+            result['reason'] = 'unbounded_scalar_slope'
+            return result
+
+        def envelope(values, outer, inner):
+            lines = {(xs[number] - xs[r['crystal']], Fraction(float(r['frequency']))) for r in values}
+            if not spend(len(lines) * len(lines)):
+                return None
+            cuts = {low, high}
+            for a, b in lines:
+                for c, d in lines:
+                    if a != c:
+                        cut = (d - b) / (a - c)
+                        if low <= cut <= high:
+                            cuts.add(cut)
+            if not spend(len(cuts) * len(lines)):
+                return None
+            return outer(inner(a * x + b for a, b in lines) for x in cuts)
+
+        first, last = public_first, public_last
+        if below:
+            lower = envelope(below, min, max)
+            if lower is None:
+                return result
+            first = max(first, floor((lower - origin) / step) + 1)
+        if above:
+            upper = envelope(above, max, min)
+            if upper is None:
+                return result
+            last = min(last, ceil((upper - origin) / step) - 1)
+        if first <= last:
+            intervals.append([first, last])
+    if not spend(len(intervals)):
+        return result
+    merged = []
+    for first, last in sorted(intervals):
+        if merged and first <= merged[-1][1] + 1:
+            merged[-1][1] = max(merged[-1][1], last)
+        else:
+            merged.append([first, last])
+    result.update(status='COMPLETE', intervals=merged,
+                  grid_count=sum(last - first + 1 for first, last in merged))
+    return result
 
 
 def _target_gaps(negatives, observed, grid):

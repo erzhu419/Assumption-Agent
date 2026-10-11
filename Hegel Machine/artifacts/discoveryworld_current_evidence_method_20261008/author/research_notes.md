@@ -1,0 +1,7 @@
+Reactor Lab method notebook. **Confirmed practice evidence:** trial_000 passed unchanged-source `source_initial` (34 steps) and `source_continuation` (478 replayed + 31 new steps); these remain the only confirmed cases. `dw_04_normal_s2_initial` remains missing. Revisions that changed target to ~4316 failed `source_initial`; rounding retained only `source_initial`; prior missing-case attempts with the fixed #3 target remained uncalibrated and looped TALK/Exit. Controller readback alone is not calibration confirmation.
+
+**Public development archive observations (not target-practice support):** In `source_dw_04_normal_s2.json`, microscope gaps are 18.2, 44.06, 41.82, 55.77 nm for crystals 1–4. Reactors #3 and #4 physically became activated at 4316 and 5725 Hz, respectively; archive #3 started at 3823 Hz. This is scenario-specific evidence, not a general calibration law. The two-reference fit (~101×gap+94) is only a candidate and has not been shown transferable.
+
+**Working hypothesis:** distinguish the seed-2 scenario using its low #3 starting frequency and use archive-supported candidate targets only in that branch, preserving established targets elsewhere. This is a testable control heuristic, not a validated universal estimator. Unresolved: whether the method can complete the missing practice and retain continuation.
+
+**Next action proposed:** write this conditional target branch into the current method. It has not yet been practiced; evaluate the resulting automatic practice feedback before further edits.
