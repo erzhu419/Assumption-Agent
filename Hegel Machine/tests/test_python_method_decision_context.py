@@ -5,6 +5,11 @@ from dataclasses import replace
 import json
 
 from hegel_machine.cognition.code_provider_context import prepare_code_context
+from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
+from hegel_machine.cognition.anonymous_method_learning import AnonymousResearchMethodLearner
+from hegel_machine.cognition.interrupted_method_author import recover_interrupted_method_author
+from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+from test_interrupted_method_author import stopped_edit, write_json
 from test_python_method_incumbent import ORIGIN, resumed_author, runner
 
 
@@ -89,3 +94,56 @@ def test_explicit_summary_restore_action_keeps_the_original_publication_requirem
     assert 'published' not in result and learner.published_source is None
     assert result['unconfirmed_cases'] == [f'case_{i}' for i in range(5)]
     assert learner.costs == costs
+
+
+def test_resumed_no_progress_is_inline_and_later_practice_does_not_hide_its_evidence(
+        tmp_path, stopped_edit):
+    old, copied, _, _, source = stopped_edit
+    no_progress = {'kind': 'repeated_experiment_comparison', 'comparison_indices': [0, 1],
+        'evidence_cutoff': {'records': 2, 'rows': 72}, 'diagnosis': 'single_supported_candidate',
+        'reason': 'The same forecasts were compared twice without new paid evidence.'}
+    write_json(old / 'runtime_stop.json', {
+        'reason': 'operator_stopped_repeated_no_progress', 'interrupted_python_seconds': 4.,
+        'no_progress': no_progress})
+    restored = recover_interrupted_method_author(old, copied)
+    learner = AnonymousResearchMethodLearner(None, tmp_path / 'resumed',
+        knowledge={'files': {runner.METHOD_PATH: source}}, cases={'case_0': {}, 'case_1': {}},
+        lab_factory=lambda _: AnonymousHistoryLab(kind='memoryless', seed=42),
+        config=InquiryLLMConfig(), prepare_trial=None)
+    learner.restore_practice(restored)
+    costs = deepcopy(learner.costs)
+
+    def provider_view():
+        summary = decision(learner)
+        context = prepare_code_context(learner.workspace, {
+            'task_interface': learner.common_interface, 'files': dict(learner.files),
+            'events': learner.events, 'observations': [], 'session_knowledge': learner.knowledge},
+            schema={}, instructions='test')
+        assert context['files']['resume_context.json'] == {'full_content_file': 'resume_context.json'}
+        assert context['method_decision'] == summary
+        return context['method_decision']
+
+    view = provider_view()
+    assert view['latest_practice']['status'] == 'method_no_progress'
+    assert view['latest_practice']['no_progress'] == no_progress
+    assert view['current_source_latest_no_progress']['directory'] == 'trials/trial_001'
+    assert 'steps' not in view['latest_practice'] and 'method_source' not in view['latest_practice']
+
+    # A later operator interruption is a new outcome, not a refutation or a
+    # repair of the identical source's already recorded stalled comparison.
+    interrupted = {**deepcopy(learner.practice_trials[-1]),
+                   'directory': 'trials/trial_002', 'status': 'runtime_interrupted'}
+    interrupted.pop('no_progress')
+    learner.practice_trials.append(interrupted)
+    learner.events.append({'action': 'run', 'arguments': {'operator': 'practice', 'case': 'case_1'},
+        'feedback': {key: value for key, value in interrupted.items() if key != 'method_source'}})
+    view = provider_view()
+    assert view['latest_practice']['directory'] == 'trials/trial_002'
+    assert view['latest_practice']['status'] == 'runtime_interrupted'
+    assert 'no_progress' not in view['latest_practice']
+    assert view['current_source_latest_no_progress']['no_progress'] == no_progress
+    assert view['current_source_latest_no_progress']['directory'] == 'trials/trial_001'
+
+    (learner.workspace / runner.METHOD_PATH).write_text(source + '\n# New authored draft.\n')
+    assert provider_view()['current_source_latest_no_progress'] is None
+    assert learner.costs == costs and learner.model is None

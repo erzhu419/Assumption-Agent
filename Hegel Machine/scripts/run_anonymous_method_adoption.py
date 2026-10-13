@@ -25,8 +25,13 @@ def run_adoption(source, output, *, provider_factory, auth_mode=None):
     author = json.loads((source / 'author' / 'training.json').read_text())
     memory = register_published_method(
         json.loads((source / 'initial_archive.json').read_text()), author, max_steps=12)
-    cases = [deepcopy(case) for case in original['transfer_cases']
-             if case['id'] in original['live_control_cases']]
+    repair = original.get('study') == 'recurrent_published_method_repair_transfer'
+    if repair:
+        cases = [deepcopy(case) for case in original['transfer_cases']
+                 if case['id'] not in original['old_target_ids']]
+    else:
+        cases = [deepcopy(case) for case in original['transfer_cases']
+                 if case['id'] in original['live_control_cases']]
     recurrent = 'apparatus_seed' in cases[0]
     plan = {'study': 'anonymous_published_method_live_binding',
         'source': str(source), 'arms': ['code_react', 'hegel'], 'cases': cases,
@@ -42,7 +47,21 @@ def run_adoption(source, output, *, provider_factory, auth_mode=None):
             'estimate of interface benefit. Terminal labels are withheld until all research stops.'}
     if auth_mode is not None:
         plan['provider']['auth_mode'] = auth_mode
-    if recurrent:
+    if repair:
+        plan.update(study='recurrent_repaired_method_live_adoption_development',
+            prefix_protocol='Buy 24 independent three-step trajectories without meter readings.',
+            binding='Both arms receive the same original K0 archive, newly published method, '
+                'author entry and its paid source-practice support. The repair-study archive '
+                'remains author-only. The model chooses whether to invoke, inspect or revise '
+                'the program through the existing common tools.',
+            terminal_order='Every live research episode stops before any terminal scoring.',
+            scope=f'Development adoption on all {len(cases)} already-opened new-parameter '
+                f'targets of the paired frozen-method study, {2 * len(cases)} Code/Hegel '
+                'episodes. Both live arms receive the same revised method. No earlier target '
+                'training, frozen outcomes or terminal labels enter research. This measures '
+                'online use, not the causal effect of new versus old methods, an independent '
+                'task replication, or autonomous recursive self-improvement.')
+    elif recurrent:
         plan.update(study='recurrent_published_method_live_continuation_development',
             prefix_protocol=original['prefix_protocol'],
             scope=f'Development rerun on the same {len(cases)} registered recurrent targets, '

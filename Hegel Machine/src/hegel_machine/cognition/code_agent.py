@@ -3,6 +3,8 @@
 from dataclasses import asdict, dataclass
 from copy import deepcopy
 from contextlib import nullcontext
+import errno
+import fcntl
 import importlib.util
 import json
 from pathlib import Path
@@ -606,28 +608,62 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
     return result
 
 
+def _copy_model_file(source, destination):
+    """Keep writable files independent, sharing disk extents where supported."""
+    clone_supported = True
+    with open(source, "rb") as original, open(destination, "wb") as copied:
+        try:
+            fcntl.ioctl(copied.fileno(), 0x40049409, original.fileno())  # FICLONE
+        except OSError as error:
+            if error.errno not in {errno.EOPNOTSUPP, errno.ENOTTY, errno.EXDEV}:
+                raise
+            clone_supported = False
+    if not clone_supported:
+        return shutil.copy2(source, destination)
+    shutil.copystat(source, destination)
+    return destination
+
+
+def _model_context_ignored(path, context_root):
+    if path.name == "__pycache__" or path.suffix == ".pyc":
+        return True
+    # These names identify host records only at an execution-context boundary.
+    # Identically named files in ordinary model data directories remain inputs.
+    return ((path.parent == context_root or path.parent.name == "_evaluated_model")
+            and (path.name in {"code_agent_instructions.txt", "research_context.json",
+                               "research_state.json", "method_decision.json", "active.json",
+                               "training.json", "archive.json", "evaluation.json", "result.json",
+                               "protocol.json", "summary.json"}
+                 or path.name.startswith(("code_action_", "code_call_"))))
+
+
 def _copy_model_context(workspace, model, destination):
     source, model = python_model_context(workspace, model)
     destination = Path(destination).resolve()
     if source == destination:
         return model
+
+    def ignored(directory, names):
+        return {name for name in names if _model_context_ignored(Path(directory) / name, source)}
+
     # Archives can live inside the source workspace. Stage outside that source
     # before installing the copy, so it never recursively copies itself.
     with TemporaryDirectory(prefix="hegel-model-", dir=source.parent) as temporary:
         staged = Path(temporary) / "snapshot"
         staged.mkdir()
+        # Keep ordinary code/data, including inherited archives. Conversation
+        # and research-state records describe the host loop, not the fitted
+        # predictor, and can themselves contain every earlier comparison.
         for path in source.iterdir():
-            if (path.name in {"_evaluated_model", "_target_work", "__pycache__", "code_agent_instructions.txt",
-                              "active.json", "training.json", "archive.json", "evaluation.json",
-                              "result.json", "protocol.json", "summary.json"}
+            if (path.name in {"_evaluated_model", "_target_work", "_experiment_models", "_submitted_models"}
                     or (path.name == "_observable_models" and destination.is_relative_to(path))
-                    or path.name.startswith(("code_action_", "code_call_"))):
+                    or _model_context_ignored(path, source)):
                 continue
             target = staged / path.name
             if path.is_dir():
-                shutil.copytree(path, target)
+                shutil.copytree(path, target, ignore=ignored, copy_function=_copy_model_file)
             else:
-                shutil.copy2(path, target)
+                _copy_model_file(path, target)
         # Target revisions can call an earlier retained target. Copy only
         # their declared contexts when the enclosing archive was skipped.
         bindings_file = source / "model_bindings.json"
@@ -639,7 +675,8 @@ def _copy_model_context(workspace, model, destination):
             target = staged / child_context.relative_to(source)
             if not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(child_context, target)
+                shutil.copytree(child_context, target,
+                                ignore=ignored, copy_function=_copy_model_file)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             shutil.rmtree(destination)
@@ -692,9 +729,7 @@ def python_model_context_matches(workspace, model, snapshot_workspace, inner_mod
         directory = Path(directory)
         return {path.relative_to(directory): path for path in directory.rglob("*")
             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
-            and path.name not in {"research_context.json", "research_state.json",
-                                  "code_agent_instructions.txt"}
-            and not path.name.startswith(("code_action_", "code_call_"))}
+            and not _model_context_ignored(path, directory)}
 
     submitted, original = context_files(current), context_files(snapshot_workspace)
     return (submitted.keys() == original.keys()

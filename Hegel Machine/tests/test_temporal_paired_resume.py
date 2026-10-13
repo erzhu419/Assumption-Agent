@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+import shutil
 
 import pytest
 
@@ -98,8 +99,9 @@ def test_resume_preserves_only_current_support_and_requires_new_paid_missing_cas
     for trial in prior["result"]["practice_trials"]:
         old = prior["previous"].workspace / trial["directory"]
         restored = resumed.workspace / trial["directory"]
+        assert restored.is_symlink() and restored.readlink() == old.resolve()
         for filename in ("result.json", "laboratory_observations.json", instrument):
-            assert (restored / filename).read_text() == (old / filename).read_text()
+            assert (restored / filename).samefile(old / filename)
     historical_fit = resumed.workspace / prior["result"]["practice_trials"][0]["directory"] / instrument
     assert historical_fit.read_text() != original_instrument
     assert (resumed.workspace / instrument).read_text() == original_instrument
@@ -122,6 +124,7 @@ def test_resume_preserves_only_current_support_and_requires_new_paid_missing_cas
     assert paid["status"] == "completed" and paid["fresh_confirmation"]["passed"]
     assert paid["selected_prior_predictor"] is False
     assert paid["directory"] == "trials/trial_002"
+    assert not (resumed.workspace / paid["directory"]).is_symlink()
     assert paid["costs"]["observation_cost"] == 144
     assert initial_files == [{path: prior["original"]["files"][path]
                               for path in prior["original"]["research_roles"].values()}]
@@ -154,3 +157,96 @@ def test_editing_restored_source_invalidates_coverage_without_recharging_history
     assert resumed.practice_trials == prior["result"]["practice_trials"]
     assert all(value == 0 for value in resumed.costs.values())
     assert resumed.knowledge == prior["original"]
+
+
+def test_restore_reuses_relocated_paid_trials_without_copying_or_replaying(
+        tmp_path, interrupted_practice, monkeypatch):
+    prior = interrupted_practice
+    resumed = make_learner(tmp_path / "relocated", prior["original"])
+    old_trials = prior["previous"].workspace / "trials"
+    moved_trials = resumed.workspace / "trials"
+    old_trials.rename(moved_trials)
+    old_trials.symlink_to(moved_trials, target_is_directory=True)
+
+    def unexpected_copy(*args, **kwargs):
+        pytest.fail("relocated paid history was copied again")
+
+    monkeypatch.setattr(shutil, "copytree", unexpected_copy)
+    context = resumed.restore_practice(prior["result"])
+    assert context["previous_practice"] == [
+        {k: v for k, v in t.items() if k != "method_source"}
+        for t in prior["result"]["practice_trials"]]
+    assert resumed.practice_trials == prior["result"]["practice_trials"]
+    assert resumed.events == resumed.observations == []
+    assert all(value == 0 for value in resumed.costs.values())
+    for trial in resumed.practice_trials:
+        source = prior["previous"].workspace / trial["directory"] / "result.json"
+        target = resumed.workspace / trial["directory"] / "result.json"
+        assert source.samefile(target)
+    assert (resumed.workspace / METHOD_PATH).read_text() == CURRENT_SOURCE
+
+
+def test_repeated_resume_references_original_trials_without_copying_or_moving(
+        tmp_path, interrupted_practice, monkeypatch):
+    prior = interrupted_practice
+    original_trials = prior["previous"].workspace / "trials"
+    before = {path.relative_to(original_trials): path.read_bytes()
+              for path in original_trials.rglob("*") if path.is_file()}
+    first = make_learner(tmp_path / "first_resume", prior["original"])
+    second = make_learner(tmp_path / "second_resume", prior["original"])
+
+    def unexpected_copy(*args, **kwargs):
+        pytest.fail("paid history must be referenced, not copied")
+
+    monkeypatch.setattr(shutil, "copytree", unexpected_copy)
+    first.restore_practice(prior["result"])
+    second.restore_practice(first.result("model_call_budget_exhausted"))
+    assert first.practice_trials == second.practice_trials == prior["result"]["practice_trials"]
+    for trial in second.practice_trials:
+        original = prior["previous"].workspace / trial["directory"]
+        reference = second.workspace / trial["directory"]
+        assert reference.is_symlink() and reference.readlink() == original.resolve()
+        assert (reference / "result.json").samefile(original / "result.json")
+        assert not original.is_symlink()
+    restored = second._execute("run", {"operator": "restore_method",
+        "trial": second.practice_trials[0]["directory"]}, second.interface)
+    assert restored["restored_method"] == "trials/trial_000"
+    assert (second.workspace / METHOD_PATH).read_text() == EARLIER_SOURCE
+    assert all(value == 0 for value in second.costs.values())
+    assert before == {path.relative_to(original_trials): path.read_bytes()
+                      for path in original_trials.rglob("*") if path.is_file()}
+
+
+def test_fifty_seven_retained_trials_start_new_practice_at_trial_057(
+        tmp_path, interrupted_practice, monkeypatch):
+    prior = interrupted_practice
+    previous = deepcopy(prior["result"])
+    # Small stopped-trial fixtures exercise the current real continuation count.
+    for index in range(2, 57):
+        trial = deepcopy(previous["practice_trials"][0])
+        trial.update(directory=f"trials/trial_{index:03d}", status="method_stopped",
+                     fresh_confirmation=None, costs={})
+        directory = prior["previous"].workspace / trial["directory"]
+        directory.mkdir()
+        (directory / "result.json").write_text(json.dumps({"status": "method_stopped"}))
+        previous["practice_trials"].append(trial)
+    old_tree = prior["previous"].workspace / "trials"
+    before = {path.relative_to(old_tree): path.read_bytes()
+              for path in old_tree.rglob("*") if path.is_file()}
+    resumed = make_learner(tmp_path / "resume_57", prior["original"])
+
+    def unexpected_copy(*args, **kwargs):
+        pytest.fail("restoration must not copy the 57 retained trial trees")
+
+    with monkeypatch.context() as context:
+        context.setattr(shutil, "copytree", unexpected_copy)
+        resumed.restore_practice(previous)
+    assert len(resumed.practice_trials) == 57
+    outcome = resumed._execute("run", {"operator": "practice", "case": "case_a"}, resumed.interface)
+    assert outcome["directory"] == "trials/trial_057"
+    assert outcome["fresh_confirmation"]["passed"]
+    current = resumed.workspace / outcome["directory"]
+    assert current.is_dir() and not current.is_symlink()
+    assert not (old_tree / "trial_057").exists()
+    assert before == {path.relative_to(old_tree): path.read_bytes()
+                      for path in old_tree.rglob("*") if path.is_file()}

@@ -68,7 +68,10 @@ def test_authored_pool_is_compared_before_purchase_and_result_returns_to_parent(
     assert record['evidence_cutoff'] == comparison['evidence_cutoff']
     assert record['proposal']['comparison_index'] == comparison['index']
     assert [item['prospective_mse'] for item in record['forecasts']] == [6.5, 0.]
-    assert record['authored_answer']['answer'] == {'rejected': ['old.py'], 'surviving': ['new.py']}
+    contexts = {item['source_model']: item['model'] for item in comparison['candidate_contexts']}
+    assert record['authored_answer']['answer'] == {
+        'rejected': [contexts['old.py']], 'surviving': [contexts['new.py']]}
+    assert record['proposal']['original_models'] == {value: key for key, value in contexts.items()}
 
     request = agent._request(lab)
     returned = next(item for item in request['online_research']['parent_returns']
@@ -172,3 +175,67 @@ def test_partial_compute_budget_cannot_choose_from_an_incomplete_comparison(tmp_
     assert result['selected_experiment'] is None
     assert agent.costs['compute_cost'] <= 3
     assert lab.paid == 1
+
+
+@pytest.mark.parametrize('arm', ['code_react', 'hegel'])
+def test_comparison_keeps_incumbent_callable_after_better_candidate_replaces_it(tmp_path, arm):
+    agent, lab = prepared(tmp_path, arm), PublicLab()
+    agent._execute('query', {'actions': [action(0)]}, lab)
+    write(agent, 'incumbent.py', 'def predict(row): return 0.000001\n', lab)
+    agent._execute('evaluate', {'model': 'incumbent.py'}, lab)
+    retained = agent._evaluated_summary()['model']
+    # Editing the working file is supported: the retained candidate should
+    # remain usable even when another, slightly better candidate is retained.
+    write(agent, 'incumbent.py', 'def predict(row): return -99.\n', lab)
+    write(agent, 'replacement.py', NEW_MODEL, lab)
+    result = compare(agent, lab, [{'id': 'contrast', 'actions': [action(4)]}],
+                     models=[retained, 'replacement.py'])
+    assert result['eligible_models'] == [retained, 'replacement.py']
+    assert [item['predictions'] for item in result['forecasts']] == [[1e-6], [4.]]
+    # The live incumbent location changed during comparison; its old source
+    # cannot identify the predictor promised by query_arguments anymore.
+    assert (tmp_path / retained).read_text() == 'def predict(row): return -99.\n'
+    query = agent._execute('query', result['query_arguments'], lab)
+    assert [item['predictions'] for item in query['revision']['forecasts']] == [[1e-6], [4.]]
+    assert [item['prospective_mse'] for item in query['revision']['forecasts']] == [
+        pytest.approx((4. - 1e-6) ** 2), 0.]
+    assert lab.paid == 2
+
+
+@pytest.mark.parametrize('arm', ['code_react', 'hegel'])
+def test_comparison_preserves_each_fitting_view_after_new_paid_evidence(tmp_path, arm):
+    agent, lab = prepared(tmp_path, arm), PublicLab()
+    source = """import json
+scale = 0.
+def fit(rows):
+    global scale
+    scale = len(rows) * json.load(open('parameter.json'))['gain']
+def predict(row): return scale * row['features']['u']
+"""
+    agent._execute('query', {'actions': [action(0)]}, lab)
+    write(agent, 'parameter.json', '{"gain": 1}', lab)
+    write(agent, 'fit.py', source, lab)
+    agent._execute('evaluate', {'model': 'fit.py'}, lab)
+    retained = agent._evaluated_summary()['model']
+    agent._execute('query', {'actions': [action(0)]}, lab)
+    write(agent, 'parameter.json', '{"gain": 2}', lab)
+    result = compare(agent, lab, [{'id': 'contrast', 'actions': [action(3)]}],
+                     models=[retained, 'fit.py'])
+    contexts = {item['source_model']: item['model'] for item in result['candidate_contexts']}
+    assert result['eligible_models'] == [retained, 'fit.py']
+    assert [item['predictions'] for item in result['forecasts']] == [[3.], [12.]]
+    for model, expected_rows, expected_gain in ((retained, 1, 1), ('fit.py', 2, 2)):
+        directory = (tmp_path / contexts[model]).parent
+        assert len(json.loads((directory / 'model_observations.json').read_text())) == expected_rows
+        assert json.loads((directory / 'parameter.json').read_text())['gain'] == expected_gain
+        assert not (directory / '_experiment_models').exists()
+        assert not (directory / '_submitted_models').exists()
+    # Both new observations and a new local parameter file must stay outside
+    # the candidate views that generated this experiment's predictions.
+    agent._execute('query', {'actions': [action(7)]}, lab)
+    write(agent, 'parameter.json', '{"gain": 99}', lab)
+    query = agent._execute('query', result['query_arguments'], lab)
+    assert query['revision']['evidence_cutoff']['rows'] == 3
+    assert [item['predictions'] for item in query['revision']['forecasts']] == [[3.], [12.]]
+    assert [item['prospective_mse'] for item in query['revision']['forecasts']] == [0., 81.]
+    assert lab.paid == 4

@@ -2,20 +2,25 @@
 
 from copy import deepcopy
 import json
+import os
+from pathlib import Path
+from statistics import pvariance
 import sys
 from time import monotonic
 
-from .code_agent import evaluate_python_model, python_model_context
+from .code_agent import (
+    evaluate_python_model, python_model_context, retain_evaluated_python_model,
+)
 from .language import Program
 from .models import Candidate, Probe, SearchBudget
-from .probing import choose_probe
+from .probing import choose_probe, value_forecast_experiments
 
 
 REVISION_INTERFACE = """
 A query or select_actions result may include revision:{id:'r1',
 affected_object:'representation', models:['old.py','new.py'], readout:'readout.py',
-parent_and_scope:{...}, ...}. Supply the actual experiment through the usual
-actions. Additional proposal fields are retained as authored. Each named model
+target:'response', parent_and_scope:{...}, ...}. Supply the actual experiment
+through the usual actions. Additional proposal fields are retained as authored. Each named model
 joins the common comparison on already paid rows; the better executed old model
 is preserved. Before buying these actions, the runtime executes every proposed
 predictor on their public control histories and saves the predictions, source
@@ -28,9 +33,18 @@ has model, predictions, prediction_inputs and, after acquisition, prospective_ms
 Return {status:'supported'|'refuted'|'inconclusive',answer:...,evidence:[row IDs]}.
 The answer is authored analysis, not a runtime claim of truth. It returns to the
 query question and parent; a negative child answer can inform further research.
+Queries returned by compare_experiments name saved predictors with their own
+fitting contexts. proposal.original_models maps those executable paths back to
+the originally offered paths; later paid labels do not change their fitting view.
 research_state.json exposes revisions and questions, including returned answers,
 to the next program invocation. All arms may use this same interface. Failing
 forecasts and analyses remain recorded. No physical mechanism is supplied.
+For a purchased channel, set target to its public name and include that channel
+in every action's channels. Candidate fit and prospective MSE then use only
+that channel's readings. These candidates cannot replace the response predictor.
+Channel revision forecasts name frozen executable paths, so a readout can return
+forecast.model directly for parent bindings. proposal.original_models preserves
+the originally offered paths.
 """
 
 
@@ -48,30 +62,38 @@ def _sources(agent, model):
     """Capture executable source, including ordinary local Python dependencies."""
     directory, inner = python_model_context(agent.workspace, model)
     sources = {}
-    for path in directory.rglob('*.py'):
-        relative = path.relative_to(directory)
-        if '_evaluated_model' not in relative.parts:
-            sources[str(relative)] = path.read_text(encoding='utf-8')
+    # Retained contexts were already excluded from this source record. Prune
+    # them before walking: repeated comparisons can otherwise traverse every
+    # preceding candidate's complete archive just to discard it afterwards.
+    for root, directories, filenames in os.walk(directory):
+        directories[:] = [name for name in directories if name != '_evaluated_model']
+        for name in filenames:
+            if name.endswith('.py'):
+                path = Path(root) / name
+                sources[str(path.relative_to(directory))] = path.read_text(encoding='utf-8')
     return {'model': inner, 'files': sources}
 
 
-def _forecast_models(agent, models, rows, forecasts):
+def _forecast_models(agent, models, rows, forecasts, *, model_contexts=None):
     """Execute authored predictors on public inputs, without acquiring labels."""
     if len(rows) * len(models) > agent.config.compute_budget - agent.costs['compute_cost']:
         raise ValueError('prospective candidate-row scoring budget exhausted')
     for model in models:
+        execution_model = (model_contexts or {}).get(model, model)
         forecast = {'model': model, 'prediction_inputs': [
             {'features': deepcopy(row.features), 'history': deepcopy(row.history)} for row in rows]}
+        if execution_model != model:
+            forecast['execution_model'] = execution_model
         forecasts.append(forecast)
         try:
-            forecast['source'] = _sources(agent, model)
+            forecast['source'] = _sources(agent, execution_model)
             remaining = agent.config.execution_seconds - agent.costs['python_execution_seconds']
             if remaining <= 0:
                 raise ValueError('Python execution time budget exhausted')
             agent.costs['compute_cost'] += len(rows)
             started = monotonic()
             try:
-                result = evaluate_python_model(agent.workspace, model, rows, timeout_seconds=remaining)
+                result = evaluate_python_model(agent.workspace, execution_model, rows, timeout_seconds=remaining)
             finally:
                 agent.costs['python_execution_seconds'] += monotonic() - started
             # Placeholder target errors are not scientific results.
@@ -80,18 +102,53 @@ def _forecast_models(agent, models, rows, forecasts):
             forecast.update(returncode=1, error=f'{type(error).__name__}: {error}')
 
 
-def _compare_paid_models(agent, models, prior_fit):
+def _compare_paid_models(agent, models, prior_fit, *, model_contexts=None,
+                         target='response', laboratory=None):
     """Reuse paid scoring and retention after saving every offered forecast."""
+    rows = agent.rows if target == 'response' else laboratory.target_rows(agent.observations, target)
     prior_models = sorted(models, key=lambda model: '_evaluated_model' not in model.split('/'))
     for model in prior_models:
-        if not agent.rows:
+        if not rows:
             break
+        execution_model = (model_contexts or {}).get(model, model)
         try:
-            score = agent._score(model)
-            agent._retain_evaluation(model, score)
+            if target == 'response':
+                score = agent._score(execution_model)
+                agent._retain_evaluation(execution_model, score)
+            else:
+                from .observable_research import evaluate_observable
+                score = evaluate_observable(agent, {'target': target, 'model': execution_model}, laboratory)
             prior_fit.append({'model': model, **score})
         except (ValueError, TypeError, KeyError, OSError) as error:
             prior_fit.append({'model': model, 'error': f'{type(error).__name__}: {error}'})
+
+
+def _comparison_contexts(agent, models, record, *, target='response', laboratory=None,
+                         context_kind='comparison'):
+    """Keep offered predictors callable after incumbent retention replaces its view."""
+    contexts = {}
+    for index, model in enumerate(models):
+        candidate = {'source_model': model}
+        record['candidate_contexts'].append(candidate)
+        try:
+            directory, inner = python_model_context(agent.workspace, model)
+            if not (directory / inner).is_file():
+                raise FileNotFoundError(model)
+            destination = (f"_experiment_models/{context_kind}_{record['index']:04d}/"
+                           f"candidate_{index:04d}/_evaluated_model")
+            training = (laboratory.target_rows(agent.observations, target)
+                        if target != 'response' and '_evaluated_model' not in model.split('/') else None)
+            retained = retain_evaluated_python_model(
+                agent.workspace, model, [], None, destination=destination, training_observations=training)
+            if training is not None:
+                from .observable_research import _indices
+                (agent.workspace / destination / 'observable_support.json').write_text(json.dumps({
+                    'target': target, 'training_observation_indices': _indices(agent.observations, target)}))
+            frozen_model = f"{destination}/{retained['model']}"
+            contexts[model] = candidate['model'] = frozen_model
+        except (ValueError, TypeError, KeyError, OSError) as error:
+            candidate['error'] = f'{type(error).__name__}: {error}'
+    return contexts
 
 
 def prepare_revision(agent, proposal, actions, laboratory, *, experiment_path=None):
@@ -111,6 +168,11 @@ def prepare_revision(agent, proposal, actions, laboratory, *, experiment_path=No
             raise ValueError('revision.models must be a nonempty list of Python predictor paths')
         if not actions:
             raise ValueError('a prospective revision requires actual query actions')
+        target = record['target'] = proposal.get('target', 'response')
+        if target != 'response':
+            laboratory.target_rows(agent.observations, target)
+            if any(target not in action.get('channels', []) for action in actions):
+                raise ValueError('every action must include the prediction target in channels')
         rows_by_action = [laboratory.prediction_rows(action) for action in actions]
         rows = [row for group in rows_by_action for row in group]
         record['action_row_counts'] = [len(group) for group in rows_by_action]
@@ -121,11 +183,19 @@ def prepare_revision(agent, proposal, actions, laboratory, *, experiment_path=No
         readout = proposal.get('readout')
         if readout:
             record['readout_source'] = (agent.workspace / readout).read_text(encoding='utf-8')
+        if target != 'response':
+            record['candidate_contexts'] = []
+            contexts = _comparison_contexts(agent, models, record, target=target,
+                                           laboratory=laboratory, context_kind='revision')
+            originals = proposal.get('original_models', {})
+            record['proposal']['original_models'] = {
+                contexts.get(model, model): originals.get(model, model) for model in models}
+            models = record['proposal']['models'] = [contexts.get(model, model) for model in models]
         # Forecast all candidates before retention can replace an incumbent path.
         _forecast_models(agent, models, rows, record['forecasts'])
         # Score retained paths before a better new model can replace their
         # fitting directory; forecasts already captured the original context.
-        _compare_paid_models(agent, models, record['prior_fit'])
+        _compare_paid_models(agent, models, record['prior_fit'], target=target, laboratory=laboratory)
         record['evaluated_model'] = agent._evaluated_summary()
         record['status'] = 'predictions_frozen'
     except (ValueError, TypeError, KeyError, OSError, AttributeError) as error:
@@ -133,20 +203,25 @@ def prepare_revision(agent, proposal, actions, laboratory, *, experiment_path=No
     return record
 
 
-def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold):
+def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold, target='response',
+                        reference_actions=None):
     """Compare only authored Python hypotheses and experiments before purchase.
 
     The forecast-column adapter follows world_experiment_choice: predictions
     become feature projections for the existing numerical trajectory chooser.
     It neither constructs scientific alternatives nor executes a selected probe.
     """
-    record = {'index': len(agent.experiment_comparisons), 'models': deepcopy(models),
+    record = {'index': len(agent.experiment_comparisons), 'models': deepcopy(models), 'target': target,
               'experiments': deepcopy(experiments),
               'evidence_cutoff': {'records': len(agent.observations), 'rows': len(agent.rows)},
               'mse_threshold': mse_threshold, 'prior_fit': [], 'forecasts': [],
+              'candidate_contexts': [],
               'comparisons': [], 'eligible_models': [], 'selected_experiment': None,
               'query_arguments': None, 'status': 'preparing',
               'diagnosis': 'preparing', 'comparison_scope': 'authored_experiments_only'}
+    if reference_actions is not None:
+        record['reference_actions'] = deepcopy(reference_actions)
+        record['selection_policy'] = 'expected_reference_risk_reduction'
     agent.experiment_comparisons.append(record)
     before = agent.costs['compute_cost']
     try:
@@ -156,6 +231,8 @@ def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold
             raise ValueError('models must list distinct existing Python predictor paths')
         if not isinstance(experiments, list) or not experiments:
             raise ValueError('experiments must contain authored experiment objects')
+        paid_rows = (agent.rows if target == 'response'
+                     else laboratory.target_rows(agent.observations, target))
         rows, seen = [], set()
         for experiment in experiments:
             identifier, actions = experiment.get('id'), experiment.get('actions')
@@ -163,6 +240,8 @@ def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold
                 raise ValueError('each experiment needs a unique nonempty id')
             if not isinstance(actions, list) or not actions:
                 raise ValueError('each experiment needs authored public actions')
+            if target != 'response' and any(target not in action.get('channels', []) for action in actions):
+                raise ValueError('every action must include the prediction target in channels')
             seen.add(identifier)
             groups = [laboratory.prediction_rows(action) for action in actions]
             inputs = [row for group in groups for row in group]
@@ -172,8 +251,21 @@ def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold
                 'observation_cost': sum(laboratory.action_cost(action) for action in actions),
                 'forecasts': [], 'predicted_separation': None})
             rows.extend(inputs)
-        _forecast_models(agent, models, rows, record['forecasts'])
-        _compare_paid_models(agent, models, record['prior_fit'])
+        reference_start = len(rows)
+        if reference_actions is not None:
+            if not isinstance(reference_actions, list) or not reference_actions:
+                raise ValueError('reference_actions must contain public prediction actions')
+            if target != 'response' and any(target not in action.get('channels', [])
+                                           for action in reference_actions):
+                raise ValueError('reference actions must include the prediction target in channels')
+            rows.extend(row for action in reference_actions for row in laboratory.prediction_rows(action))
+        # Both prospective and paid execution use the same saved fitting view.
+        # Paid retention may replace _evaluated_model before the actor purchases
+        # a selected experiment, so that incumbent alias cannot be its identity.
+        contexts = _comparison_contexts(agent, models, record, target=target, laboratory=laboratory)
+        _forecast_models(agent, models, rows, record['forecasts'], model_contexts=contexts)
+        _compare_paid_models(agent, models, record['prior_fit'], model_contexts=contexts,
+                             target=target, laboratory=laboratory)
         record['evaluated_model'] = agent._evaluated_summary()
         eligible = record['eligible_models'] = [fit['model'] for fit in record['prior_fit']
             if fit.get('returncode') == 0 and isinstance(fit.get('mse'), (int, float))
@@ -186,7 +278,7 @@ def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold
                 if 'predictions' in forecast:
                     detail['predictions'] = forecast['predictions'][start:start + count]
                 experiment['forecasts'].append(detail)
-        if not agent.rows:
+        if not paid_rows:
             record['diagnosis'] = 'no_paid_support'
         elif not eligible:
             record['diagnosis'] = 'needs_model_revision'
@@ -218,12 +310,47 @@ def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold
             agent.costs['compute_cost'] += budget.spent
             record['diagnosis'] = ('comparison_budget_exhausted' if not complete else
                 'discriminating_experiment_available' if best is not None else 'observational_ambiguity')
+            if complete and reference_actions is not None:
+                reference_predictions = {
+                    forecast['model']: forecast['predictions'][reference_start:]
+                    for forecast in record['forecasts'] if forecast['model'] in eligible}
+                panels = [{
+                    'id': experiment['id'], 'observation_cost': experiment['observation_cost'],
+                    'predictions': [next(forecast['predictions'] for forecast in experiment['forecasts']
+                                         if forecast['model'] == model) for model in eligible],
+                } for experiment in record['comparisons']]
+                # All retained instances meet the same paid-fit criterion. The
+                # finite empirical prior has equal mass, including alternative
+                # parameter fits when the author supplies them. It is not a
+                # posterior over unoffered families or their parameter spaces.
+                noise_scale = max(min(fit['mse'] for fit in record['prior_fit']
+                                      if fit['model'] in eligible),
+                                  pvariance(row.target for row in paid_rows) * 1e-6, 1e-8)
+                value_budget = SearchBudget(agent.config.compute_budget - agent.costs['compute_cost'])
+                value = value_forecast_experiments(
+                    [reference_predictions[model] for model in eligible], panels,
+                    weights=[1. / len(eligible)] * len(eligible),
+                    noise_scale=noise_scale, budget=value_budget)
+                agent.costs['compute_cost'] += value_budget.spent
+                record['task_value'] = {**value, 'noise_scale': noise_scale,
+                    'reference_rows': len(rows) - reference_start,
+                    'candidate_weights': [{'model': model, 'weight': 1. / len(eligible)} for model in eligible],
+                    'scope': 'Expected MSE reduction on authored reference inputs, conditional on the '
+                        'supplied supported instances and finite observation channel. No reference '
+                        'labels, unoffered models or future refitting outcomes were consulted.'}
+                best = next((experiment for experiment in record['comparisons']
+                             if experiment['id'] == value['selected_experiment_id']), None)
+                record['diagnosis'] = ('comparison_budget_exhausted' if value['status'] == 'budget_exhausted'
+                    else 'task_relevant_experiment_available' if best is not None
+                    else 'no_expected_task_risk_reduction')
             if complete and best is not None:
                 record['selected_experiment'] = {key: deepcopy(best[key]) for key in
                     ('id', 'actions', 'observation_cost', 'predicted_separation')}
                 record['selected_experiment']['revision'] = {
                     'id': f"comparison_{record['index']}_{best['id']}",
-                    'affected_object': 'prediction', 'models': list(eligible),
+                    'affected_object': 'prediction', 'target': target,
+                    'models': [contexts[model] for model in eligible],
+                    'original_models': {contexts[model]: model for model in eligible},
                     'comparison_index': record['index']}
                 record['query_arguments'] = {key: deepcopy(record['selected_experiment'][key])
                                              for key in ('actions', 'revision')}
@@ -242,7 +369,10 @@ def complete_revision(agent, record, observations, record_indices, laboratory, q
                   status='acquisition_failed' if error else 'observed')
     if error:
         record['acquisition_error'] = error
-    targets = [row.target for batch in observations for row in laboratory.observation_rows(batch)]
+    target = record.get('target', 'response')
+    rows = (laboratory.target_rows(observations, target) if target != 'response' else
+            [row for batch in observations for row in laboratory.observation_rows(batch)])
+    targets = [row.target for row in rows]
     for forecast in record['forecasts']:
         predicted = forecast.get('predictions')
         if forecast.get('returncode') == 0 and predicted is not None:

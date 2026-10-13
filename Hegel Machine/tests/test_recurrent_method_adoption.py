@@ -115,3 +115,83 @@ def test_adoption_reuses_actual_laboratory_and_prefix_without_target_outcomes(tm
         assert plan["study"] == "anonymous_published_method_live_binding"
     for name in plan["runtime_snapshot"]:
         assert (output / "source_at_run" / name).read_text() == (study.ROOT / name).read_text()
+
+
+def repair_source_study(path):
+    plan = source_study(path, "recurrent")
+    plan.update(study="recurrent_published_method_repair_transfer",
+                old_target_ids=[case["id"] for case in plan["transfer_cases"]])
+    plan.pop("live_control_cases")
+    plan.pop("prefix_protocol")
+    targets = []
+    for index, kind in enumerate(("recurrent", "finite2", "recurrent", "finite2")):
+        targets.append({**deepcopy(plan["transfer_cases"][index // 2]),
+                        "id": f"new_target_{index:03d}", "kind": kind})
+    plan["transfer_cases"] += targets
+    save(path / "protocol.json", plan)
+    save(path / "author/repair_archive/source.json", {"author_only_repair": "excluded"})
+    save(path / "author_experience.json", {"author_only_repair": "excluded"})
+    save(path / "revised/new_target_000/training.json", {"prior_target_fit": "excluded"})
+    return plan, targets
+
+
+def test_revised_method_enters_existing_live_loop_without_author_or_target_experience(
+        tmp_path, monkeypatch):
+    source, output = tmp_path / "source", tmp_path / "adoption"
+    original, targets = repair_source_study(source)
+    requests, invocations = [], []
+    execute = study.run_study
+
+    def run_study(plan, output, **kwargs):
+        invocations.append((deepcopy(plan), deepcopy(kwargs["knowledge"])))
+        return execute(plan, output, **kwargs)
+
+    class StopProvider:
+        def next_action(self, request):
+            requests.append(deepcopy(request))
+            return {"action": "run", "arguments": {"operator": "procedure", "path": METHOD_PATH,
+                    "max_steps": 12, "confirm": True},
+                    "usage": {"backend": "scripted_test", "total_tokens": 1}}
+
+    monkeypatch.setattr(study, "run_study", run_study)
+    summary = study.run_adoption(source, output, provider_factory=lambda workspace: StopProvider())
+    assert len(summary["trials"]) == len(requests) == 8
+    plan, memory = invocations[0]
+    assert plan["cases"] == targets
+    assert plan["limits"] == original["limits"]
+    assert plan["provider"] == original["provider"]
+    assert plan["evaluation"] == original["evaluation"]
+    assert plan["prefix_rows"] == 72
+    assert plan["execution_workers"] == original["execution_workers"]
+    assert plan["study"] == "recurrent_repaired_method_live_adoption_development"
+    assert "already-opened" in plan["scope"]
+    assert "not the causal effect" in plan["scope"]
+    assert "before any terminal scoring" in plan["terminal_order"]
+    initial = json.loads((source / "initial_archive.json").read_text())
+    assert set(memory["files"]) == set(initial["files"])
+    assert memory["files"][METHOD_PATH] == STOP_METHOD
+    assert memory["source_catalog"] == initial["source_catalog"]
+    assert memory["research_roles"]["method"] == METHOD_PATH
+    for request in requests:
+        assert request["files"][METHOD_PATH] == STOP_METHOD
+        assert request["costs"]["observation_cost"] == 72
+        assert request["costs"]["measurement_cost"] == 0
+        assert len(request["laboratory_observations"]) == 24
+        text = json.dumps(request)
+        for marker in ("author_only_repair", "prior_target_fit", "private_terminal_marker"):
+            assert marker not in text
+    assert {row["case"] for row in summary["trials"]} == {case["id"] for case in targets}
+    assert all(row["entry_attempts"] == 1 for row in summary["trials"])
+
+
+@pytest.mark.parametrize("update", [{"status": "token_budget_exhausted"}, {"method_source": None}])
+def test_repair_adoption_requires_actual_publication(tmp_path, update):
+    source, output = tmp_path / "source", tmp_path / "adoption"
+    repair_source_study(source)
+    author = json.loads((source / "author/training.json").read_text())
+    author.update(update)
+    save(source / "author/training.json", author)
+    with pytest.raises(ValueError, match="published consolidated method is required"):
+        study.run_adoption(source, output, provider_factory=lambda workspace: pytest.fail(
+            "an unpublished source must not start a provider"))
+    assert not output.exists()

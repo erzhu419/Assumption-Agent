@@ -56,6 +56,8 @@ inherited predictor or one your procedure exported. The executor creates only th
 manifest bindings needed to submit that declared path to ordinary fresh confirmation.
 Failed confirmation contributes paid counterexamples, visible on the next invocation.
 No candidate is selected, instrument refitted, or model submitted automatically.
+A repeated comparison with unchanged evidence, candidates and predictions, or a
+repeated identical execution error, returns method_no_progress to the caller.
 Alternatively return {'action':'evaluate','arguments':{'model':'model.py'}}, or
 another ordinary query/run/write/finish action. The same agent executes exactly
 that declared action and records its result before the next program invocation.
@@ -84,6 +86,7 @@ adds no scientific support: fresh predictive confirmation still determines adopt
         self._current_proposal = None
         self._active_program_path = None
         self._procedure_confirmation_allowed = True
+        self._method_no_progress = None
 
     def _execute(self, action, arguments, laboratory):
         if action == "run" and arguments.get("operator") == "procedure":
@@ -192,6 +195,8 @@ adds no scientific support: fresh predictive confirmation still determines adopt
     def result(self, status):
         result = super().result(status)
         result["method_results"] = deepcopy(self.method_results)
+        if status == "method_no_progress" and self._method_no_progress:
+            result["no_progress"] = deepcopy(self._method_no_progress)
         return result
 
     def _procedure_budget_status(self):
@@ -201,6 +206,31 @@ adds no scientific support: fresh predictive confirmation still determines adopt
 
     def _procedure_terminal_status(self):
         return "completed" if self.model else None
+
+
+def _comparison_state(record):
+    """Reuse saved scientific values, excluding new snapshot paths and charges."""
+    state = {key: record.get(key) for key in (
+        "models", "target", "experiments", "reference_actions", "evidence_cutoff",
+        "mse_threshold", "selection_policy", "eligible_models", "diagnosis")}
+    state["forecasts"] = [{key: row.get(key) for key in (
+        "model", "source", "prediction_inputs", "predictions", "returncode", "timeout")}
+        for row in record.get("forecasts", [])]
+    state["prior_fit"] = [{key: row.get(key) for key in (
+        "model", "mse", "loss", "rows", "returncode", "timeout")}
+        for row in record.get("prior_fit", [])]
+    return state
+
+
+def _failure_state(feedback):
+    keys = ("error", "after_observation_error", "returncode", "timeout")
+    if not any(feedback.get(key) for key in keys):
+        return None
+    failure = {key: feedback.get(key) for key in keys}
+    # Traceback paths vary between candidate snapshots; the actual last error
+    # remains available in full in the original step feedback.
+    failure["stderr"] = (feedback.get("stderr") or "").strip().splitlines()[-1:]
+    return failure
 
 
 def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmation=True,
@@ -214,6 +244,8 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
     if not isinstance(max_steps, int) or max_steps < 1:
         raise ValueError("max_steps must be a positive integer")
     status, steps = "method_step_limit", []
+    previous_comparison, previous_failure = None, None
+    agent._method_no_progress = None
     previous = agent._procedure_confirmation_allowed
     agent._procedure_confirmation_allowed = allow_confirmation
     try:
@@ -227,6 +259,7 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
                 status = exhausted
                 break
             agent._current_proposal = None
+            comparison_start = len(getattr(agent, "experiment_comparisons", []))
             try:
                 arguments = {**(query_arguments or {}), "path": path}
                 feedback = agent._execute("query", arguments, laboratory)
@@ -249,6 +282,45 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
             if feedback.get("status") in {"confirmation_not_authorized", "method_stopped"}:
                 status = feedback["status"]
                 break
+            no_progress = None
+            for comparison in getattr(agent, "experiment_comparisons", [])[comparison_start:]:
+                if comparison.get("status") != "compared":
+                    continue
+                state = _comparison_state(comparison)
+                if previous_comparison and state == previous_comparison["state"]:
+                    no_progress = {"kind": "repeated_experiment_comparison", "path": path,
+                        "steps": [previous_comparison["step"], step],
+                        "comparison_indices": [previous_comparison["index"], comparison["index"]],
+                        "evidence_cutoff": deepcopy(comparison["evidence_cutoff"]),
+                        "diagnosis": comparison["diagnosis"],
+                        "reason": "The same experiments and candidate sources, predictions and paid-fit "
+                                  "results were compared twice without new paid evidence."}
+                    break
+                previous_comparison = {"state": state, "step": step, "index": comparison["index"]}
+            failure = _failure_state(feedback)
+            if failure is not None:
+                state = {"failure": failure, "proposal": entry["proposal"],
+                    "evidence_cutoff": {"records": len(agent.observations),
+                                        "rows": len(getattr(agent, "rows", []))}}
+                if previous_failure and state == previous_failure["state"]:
+                    no_progress = {"kind": "repeated_execution_error", "path": path,
+                        "steps": [previous_failure["step"], step],
+                        "evidence_cutoff": state["evidence_cutoff"], "failure": failure,
+                        "reason": "The same proposed operation returned the same error twice "
+                                  "without new paid evidence."}
+                previous_failure = {"state": state, "step": step}
+            else:
+                previous_failure = None
+            if no_progress is not None:
+                status, agent._method_no_progress = "method_no_progress", no_progress
+                entry["feedback"]["no_progress"] = deepcopy(no_progress)
+                if getattr(agent, "method_results", None):
+                    agent.method_results[-1]["feedback"]["no_progress"] = deepcopy(no_progress)
+                if record_events:
+                    agent.events[-1]["feedback"]["no_progress"] = deepcopy(no_progress)
+                if on_checkpoint:
+                    on_checkpoint(agent.result(status))
+                break
             if not record_events:
                 if (feedback.get("fresh_confirmation") or {}).get("passed") is False:
                     status = "confirmation_failed"
@@ -260,6 +332,7 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
     finally:
         agent._procedure_confirmation_allowed = previous
     return {"status": status, "path": path, "steps": steps, "model": agent.model,
+            **({"no_progress": deepcopy(agent._method_no_progress)} if status == "method_no_progress" else {}),
             "fresh_confirmation": deepcopy(agent.confirmations[-1]) if agent.confirmations else None}
 
 

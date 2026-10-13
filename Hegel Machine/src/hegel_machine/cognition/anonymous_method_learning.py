@@ -1,10 +1,14 @@
 """Bind the existing method author/practice loop to the anonymous apparatus."""
 
-from .code_provider_context import _compact_practice_feedback
+from copy import deepcopy
+
+from .common_archive_inquiry import CommonArchiveInquiryAgent, ONLINE_RESEARCH_INTERFACE
 from .inquiry_revision import REVISION_INTERFACE
+from .observable_research import OBSERVABLE_INTERFACE
+from .conditional_research import CONDITIONAL_INTERFACE
 from .python_method_learning import PreparedPythonMethodAgent, PythonArchiveMethodLearner
 from .temporal_method_learning import METHOD_PATH
-from .temporal_paired_method import FROZEN_METHOD_INTERFACE
+from .temporal_paired_method import FROZEN_METHOD_INTERFACE, execute_procedure
 
 
 EMPTY_METHOD = '''def select_actions(spec, records, memory):
@@ -36,6 +40,10 @@ confirmation rows, subject to the remaining author account. It executes at most
 can use actual feedback to repair a failure before that limit.
 Every practice costs real observations and execution. Its directory contains
 result.json, laboratory_observations.json and the actual generated files.
+Repeated identical errors or completed comparisons on unchanged evidence return
+method_no_progress to the author, with the repeated steps and their paid outcomes.
+This ends that practice without confirming or refuting its scientific hypotheses.
+Inspect the retained evidence and decide whether to revise or restore your method.
 Changing shared/consolidated_method.py through write or ordinary run also requests
 one paid practice. It uses the most recently failed case still unconfirmed for
 this exact source, or the first missing case in listed order. Its actual outcome,
@@ -79,7 +87,7 @@ at MSE <= 1e-10. Failed confirmation becomes paid evidence on the next invocatio
 The program may create local predictors and dependencies. Use only its own trial
 workspace, public interface and inherited files. The following apparatus and
 program contracts apply INSIDE a practice, not as direct authoring actions.
-""" + FROZEN_METHOD_INTERFACE + REVISION_INTERFACE
+""" + FROZEN_METHOD_INTERFACE + REVISION_INTERFACE + ONLINE_RESEARCH_INTERFACE + OBSERVABLE_INTERFACE + CONDITIONAL_INTERFACE
 
 
 class AnonymousResearchMethodLearner(PythonArchiveMethodLearner):
@@ -87,7 +95,9 @@ class AnonymousResearchMethodLearner(PythonArchiveMethodLearner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.common_interface = (AUTHOR_INTERFACE
+        self.common_interface = (AUTHOR_INTERFACE.replace(
+            'A trial receives 576 observations',
+            f'A trial receives {self.practice_limits.observation_budget} observations')
             + self.lab_factory(next(iter(self.cases.values()))).task_interface)
 
     def _execute(self, action, arguments, laboratory):
@@ -108,14 +118,101 @@ class AnonymousResearchMethodLearner(PythonArchiveMethodLearner):
             if trial["case"] in missing and (trial["status"] != "completed" or
                 (trial.get("fresh_confirmation") or {}).get("passed") is not True)), first_missing)
         outcome = self._practice(case)
-        return {**feedback, "edit_practice": _compact_practice_feedback(outcome),
+        return {**feedback, "edit_practice": outcome,
                 "current_source_coverage": self._current_source_coverage()}
 
 
-class AnonymousPreparedMethodAgent(PreparedPythonMethodAgent):
-    """Execute authored steps without the old measured-instrument routing."""
+class AnonymousPreparedMethodAgent(CommonArchiveInquiryAgent, PreparedPythonMethodAgent):
+    """Practice and freeze methods with the same tools as the online researcher."""
+
+    def _result_files(self, manifest, manifest_paths, model_paths):
+        # Practice transfers the authored method and original archive, never
+        # its fitted files. Keep those files in this workspace instead of also
+        # embedding every candidate snapshot into the practice result.
+        return {}
+
+    def result(self, status):
+        result = super().result(status)
+        result["outgoing_knowledge"].pop("files")
+        result["outgoing_knowledge"]["workspace"] = str(self.workspace)
+        result["inherited_files_changed"] = sorted(
+            name for name in self.inherited_files
+            if (self.workspace / name).is_file()
+            and (self.workspace / name).read_text(encoding="utf-8") != self.knowledge["files"][name])
+        result["knowledge_protocol"] = "method_practice_workspace"
+        return result
 
     def _attach_research_advice(self, action, arguments, result, laboratory):
         result.pop("available_research_action", None)
         self._current_research_advice = None
+        return result
+
+
+class SingleSubmissionMethodAgent(AnonymousPreparedMethodAgent):
+    """End research at its first submission, then perform ordinary fresh confirmation."""
+
+    def _handle_program_proposal(self, proposed, laboratory):
+        if (not isinstance(proposed, dict) or proposed.get("action") != "query"
+                or not proposed.get("arguments", {}).get("path")):
+            return super()._handle_program_proposal(proposed, laboratory)
+        path = self._active_program_path
+        try:
+            result = super()._handle_program_proposal(proposed, laboratory)
+        finally:
+            self._current_proposal, self._active_program_path = deepcopy(proposed), path
+        result["executed_path"] = path
+        if result.get("status") == "confirmation_not_authorized":
+            result["procedure_status"] = result["status"]
+            result["status"] = "submission_proposed"
+        return result
+
+    def _execute(self, action, arguments, laboratory):
+        if action != "run" or arguments.get("operator") != "procedure":
+            return super()._execute(action, arguments, laboratory)
+        proposal, path = deepcopy(self._current_proposal), self._active_program_path
+        try:
+            result = super()._execute(action, {**arguments, "confirm": False}, laboratory)
+        finally:
+            self._current_proposal, self._active_program_path = proposal, path
+        if result.get("status") == "confirmation_not_authorized":
+            # A child's explanation is a proposal for its parent, not the
+            # enclosing research program's final submission.
+            result["procedure_status"] = result["status"]
+            result["status"] = "submission_proposed"
+        return result
+
+    def execute_method(self, laboratory, max_steps=8, *, on_checkpoint=None):
+        pending = self.method_results[-1] if self.method_results else None
+        if pending and pending['feedback'].get('status') == 'confirmation_not_authorized':
+            # A checkpoint may have persisted the final declaration just before
+            # its confirmation. Continue that declaration without another choice.
+            proposal = deepcopy(pending['proposal'])
+            self._active_program_path = pending['path']
+            self._current_proposal = deepcopy(proposal)
+        else:
+            outcome = execute_procedure(self, laboratory, METHOD_PATH, max_steps,
+                allow_confirmation=False, record_events=True, on_checkpoint=on_checkpoint)
+            if outcome["status"] != "confirmation_not_authorized":
+                return self.result(outcome["status"])
+            proposal = deepcopy(outcome["steps"][-1]["proposal"])
+
+        # The program has already selected its explanation. Execute that saved
+        # declaration without invoking it again or returning new labels to it.
+        try:
+            feedback = self._handle_program_proposal(proposal, laboratory)
+        except (ValueError, TypeError, KeyError, OSError) as error:
+            feedback = {"error": f"{type(error).__name__}: {error}",
+                        "executed_path": METHOD_PATH}
+        self.method_results[-1]["feedback"] = self._compact_feedback(feedback)
+        self.events[-1]["feedback"] = deepcopy(feedback)
+        if self.model is not None:
+            status = "completed"
+        elif feedback.get("fresh_confirmation", {}).get("passed") is False:
+            status = "confirmation_failed"
+        else:
+            status = "method_error"
+        self._prepare_program_state()
+        result = self.result(status)
+        if on_checkpoint:
+            on_checkpoint(result)
         return result

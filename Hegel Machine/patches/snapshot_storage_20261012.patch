@@ -1,0 +1,272 @@
+--- a/Hegel Machine/src/hegel_machine/cognition/code_agent.py
++++ b/Hegel Machine/src/hegel_machine/cognition/code_agent.py
+@@ -3,6 +3,8 @@
+ from dataclasses import asdict, dataclass
+ from copy import deepcopy
+ from contextlib import nullcontext
++import errno
++import fcntl
+ import importlib.util
+ import json
+ from pathlib import Path
+@@ -606,11 +608,44 @@
+     return result
+ 
+ 
++def _copy_model_file(source, destination):
++    """Keep writable files independent, sharing disk extents where supported."""
++    clone_supported = True
++    with open(source, "rb") as original, open(destination, "wb") as copied:
++        try:
++            fcntl.ioctl(copied.fileno(), 0x40049409, original.fileno())  # FICLONE
++        except OSError as error:
++            if error.errno not in {errno.EOPNOTSUPP, errno.ENOTTY, errno.EXDEV}:
++                raise
++            clone_supported = False
++    if not clone_supported:
++        return shutil.copy2(source, destination)
++    shutil.copystat(source, destination)
++    return destination
++
++
++def _model_context_ignored(path, context_root):
++    if path.name == "__pycache__" or path.suffix == ".pyc":
++        return True
++    # These names identify host records only at an execution-context boundary.
++    # Identically named files in ordinary model data directories remain inputs.
++    return ((path.parent == context_root or path.parent.name == "_evaluated_model")
++            and (path.name in {"code_agent_instructions.txt", "research_context.json",
++                               "research_state.json", "method_decision.json", "active.json",
++                               "training.json", "archive.json", "evaluation.json", "result.json",
++                               "protocol.json", "summary.json"}
++                 or path.name.startswith(("code_action_", "code_call_"))))
++
++
+ def _copy_model_context(workspace, model, destination):
+     source, model = python_model_context(workspace, model)
+     destination = Path(destination).resolve()
+     if source == destination:
+         return model
++
++    def ignored(directory, names):
++        return {name for name in names if _model_context_ignored(Path(directory) / name, source)}
++
+     # Archives can live inside the source workspace. Stage outside that source
+     # before installing the copy, so it never recursively copies itself.
+     with TemporaryDirectory(prefix="hegel-model-", dir=source.parent) as temporary:
+@@ -620,19 +655,15 @@
+         # and research-state records describe the host loop, not the fitted
+         # predictor, and can themselves contain every earlier comparison.
+         for path in source.iterdir():
+-            if (path.name in {"_evaluated_model", "_target_work", "_experiment_models", "_submitted_models",
+-                              "__pycache__", "code_agent_instructions.txt",
+-                              "research_context.json", "research_state.json",
+-                              "active.json", "training.json", "archive.json", "evaluation.json",
+-                              "result.json", "protocol.json", "summary.json"}
++            if (path.name in {"_evaluated_model", "_target_work", "_experiment_models", "_submitted_models"}
+                     or (path.name == "_observable_models" and destination.is_relative_to(path))
+-                    or path.name.startswith(("code_action_", "code_call_"))):
++                    or _model_context_ignored(path, source)):
+                 continue
+             target = staged / path.name
+             if path.is_dir():
+-                shutil.copytree(path, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
++                shutil.copytree(path, target, ignore=ignored, copy_function=_copy_model_file)
+             else:
+-                shutil.copy2(path, target)
++                _copy_model_file(path, target)
+         # Target revisions can call an earlier retained target. Copy only
+         # their declared contexts when the enclosing archive was skipped.
+         bindings_file = source / "model_bindings.json"
+@@ -645,7 +676,7 @@
+             if not target.exists():
+                 target.parent.mkdir(parents=True, exist_ok=True)
+                 shutil.copytree(child_context, target,
+-                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
++                                ignore=ignored, copy_function=_copy_model_file)
+         destination.parent.mkdir(parents=True, exist_ok=True)
+         if destination.exists():
+             shutil.rmtree(destination)
+@@ -698,9 +729,7 @@
+         directory = Path(directory)
+         return {path.relative_to(directory): path for path in directory.rglob("*")
+             if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+-            and path.name not in {"research_context.json", "research_state.json",
+-                                  "code_agent_instructions.txt"}
+-            and not path.name.startswith(("code_action_", "code_call_"))}
++            and not _model_context_ignored(path, directory)}
+ 
+     submitted, original = context_files(current), context_files(snapshot_workspace)
+     return (submitted.keys() == original.keys()
+--- a/Hegel Machine/tests/test_model_snapshot_storage.py
++++ b/Hegel Machine/tests/test_model_snapshot_storage.py
+@@ -1,13 +1,17 @@
+ """Snapshot storage keeps execution inputs without walking excluded history."""
+ 
+ from dataclasses import asdict
++import errno
+ import json
+ import os
+ from pathlib import Path
+ from types import SimpleNamespace
+ 
++import pytest
++
++from hegel_machine.cognition import code_agent
+ from hegel_machine.cognition.code_agent import (
+-    evaluate_python_model, retain_evaluated_python_model,
++    evaluate_python_model, python_model_context_matches, retain_evaluated_python_model,
+ )
+ from hegel_machine.cognition.inquiry_revision import _sources
+ from hegel_machine.cognition.models import Observation
+@@ -84,3 +88,111 @@
+         'model.py': 'def predict(row): return 1.\n',
+         'shared/helper.py': 'FACTOR = 2.\n',
+     }}
++
++
++def test_parent_and_bound_child_fits_cannot_overwrite_another_candidate(tmp_path):
++    source = tmp_path / 'source'
++    child = '_observable_models/meter/_evaluated_model'
++    fitting = '''import json
++from pathlib import Path
++def fit(rows):
++    global value
++    value = json.loads(Path('parameter.json').read_text()) + rows[0]['target']
++    Path('parameter.json').write_text(json.dumps(value))
++    Path('fit_created.json').write_text(json.dumps(value))
++'''
++    write(source, 'parent.py', fitting + '''def bind_models(models):
++    global child
++    child = models['meter']
++def predict(row): return value + child(row)
++''')
++    write(source, 'parameter.json', '5')
++    write(source, 'model_observations.json', '[{"features":{"u":0},"target":3}]')
++    write(source, f'{child}/child.py', fitting + 'def predict(row): return value\n')
++    write(source, f'{child}/parameter.json', '7')
++    write(source, f'{child}/model_observations.json', '[{"features":{"u":0},"target":2}]')
++    write(source, 'model_bindings.json', json.dumps({'parent.py': {'meter': f'{child}/child.py'}}))
++    snapshots = [Path(retain_evaluated_python_model(source, 'parent.py', [], 0.,
++        destination=f'_experiment_models/candidate_{index}/_evaluated_model')['workspace'])
++        for index in range(2)]
++    score = evaluate_python_model(snapshots[0], 'parent.py', [Observation({'u': 0.}, 17.)])
++    assert score['returncode'] == 0, score
++    assert score['mse'] == 0
++    for directory in (source, snapshots[1]):
++        assert (directory / 'parameter.json').read_text() == '5'
++        assert (directory / child / 'parameter.json').read_text() == '7'
++        assert not (directory / 'fit_created.json').exists()
++        assert not (directory / child / 'fit_created.json').exists()
++    assert json.loads((snapshots[0] / 'parameter.json').read_text()) == 8
++    assert json.loads((snapshots[0] / child / 'parameter.json').read_text()) == 9
++    assert evaluate_python_model(snapshots[1], 'parent.py', [Observation({'u': 0.}, 17.)])['mse'] == 0
++
++
++def test_known_context_history_is_omitted_without_discarding_same_named_user_data(tmp_path):
++    source = tmp_path / 'source'
++    nested = 'archive/source_000/_evaluated_model'
++    for directory in ('', nested):
++        for name in ('research_state.json', 'research_context.json', 'method_decision.json'):
++            write(source / directory, name, '{"host_history": true}')
++        # Inside an ordinary data folder these names are model inputs, not
++        # host records, even when the folder sits below an archived context.
++        for name in ('result.json', 'research_state.json', 'method_decision.json'):
++            write(source / directory, f'data/{name}', '3')
++    write(source, 'archive/source_000/paid_trace.json', '{"events": ["actual old evidence"]}')
++    write(source, f'{nested}/child.py', 'def predict(row): return 2.\n')
++    write(source, 'observations.json', '[{"features":{"u":0},"target":6}]')
++    write(source, 'model.py', '''import json
++def predict(row):
++    return json.load(open('data/result.json')) + json.load(open(
++        'archive/source_000/_evaluated_model/data/method_decision.json'))
++''')
++    destination = tmp_path / 'candidate/_evaluated_model'
++    retained = retain_evaluated_python_model(source, 'model.py', [], 0., destination=destination)
++    for directory in ('', nested):
++        for name in ('research_state.json', 'research_context.json', 'method_decision.json'):
++            assert not (destination / directory / name).exists()
++            assert (source / directory / name).read_text() == '{"host_history": true}'
++        for name in ('result.json', 'research_state.json', 'method_decision.json'):
++            assert (destination / directory / 'data' / name).read_text() == '3'
++    assert (destination / 'archive/source_000/paid_trace.json').read_text() == (
++        source / 'archive/source_000/paid_trace.json').read_text()
++    assert evaluate_python_model(destination, retained['model'], [Observation({'u': 0.}, 6.)])['mse'] == 0
++    assert python_model_context_matches(tmp_path / 'candidate', '_evaluated_model/model.py', source, 'model.py')
++
++
++@pytest.mark.parametrize('unsupported_errno', [errno.EOPNOTSUPP, errno.ENOTTY, errno.EXDEV])
++def test_unsupported_clone_copies_the_same_contents_and_metadata(tmp_path, monkeypatch, unsupported_errno):
++    source, destination = tmp_path / 'parameters.json', tmp_path / 'snapshot.json'
++    source.write_text('{"coefficient": 3.25}\n')
++    source.chmod(0o640)
++    os.utime(source, ns=(1_600_000_000_000_000_000, 1_600_000_000_000_000_000))
++
++    def unavailable(*args):
++        raise OSError(unsupported_errno, 'filesystem cannot clone this copy')
++
++    monkeypatch.setattr(code_agent.fcntl, 'ioctl', unavailable)
++    code_agent._copy_model_file(source, destination)
++    assert destination.read_bytes() == source.read_bytes()
++    assert destination.stat().st_mode == source.stat().st_mode
++    assert destination.stat().st_mtime_ns == source.stat().st_mtime_ns
++    destination.write_text('independent new fit')
++    assert source.read_text() == '{"coefficient": 3.25}\n'
++
++
++@pytest.mark.parametrize('storage_errno', [errno.EIO, errno.ENOSPC])
++def test_storage_failure_is_reported_without_silent_copy_retry(tmp_path, monkeypatch, storage_errno):
++    source, destination = tmp_path / 'parameters.json', tmp_path / 'snapshot.json'
++    source.write_text('{"coefficient": 3.25}\n')
++
++    def failed(*args):
++        raise OSError(storage_errno, 'actual storage failure')
++
++    def forbidden_copy(*args, **kwargs):
++        pytest.fail('An I/O or capacity failure must not be disguised as unsupported cloning.')
++
++    monkeypatch.setattr(code_agent.fcntl, 'ioctl', failed)
++    monkeypatch.setattr(code_agent.shutil, 'copy2', forbidden_copy)
++    with pytest.raises(OSError) as caught:
++        code_agent._copy_model_file(source, destination)
++    assert caught.value.errno == storage_errno
++    assert source.read_text() == '{"coefficient": 3.25}\n'
+--- a/Hegel Machine/src/hegel_machine/cognition/historical_capabilities.json
++++ b/Hegel Machine/src/hegel_machine/cognition/historical_capabilities.json
+@@ -7479,7 +7479,11 @@
+         "runtime_interrupted",
+         "storage",
+         "snapshot",
+-        "paid reply recovery"
++        "paid reply recovery",
++        "reflink",
++        "copy-on-write",
++        "候选快照",
++        "研究历史复制"
+       ],
+       "historical_versions": [
+         "0.12",
+@@ -7695,7 +7699,8 @@
+         "scripts/run_anonymous_method_revision.py --repair-study <completed-study> --source <published-method> --output <new-output>",
+         "hegel_machine.cognition.anonymous_method_learning:AnonymousPreparedMethodAgent",
+         "scripts/run_anonymous_method_adoption.py --source <published-repair-study> --output <new-output>",
+-        "hegel_machine.cognition.interrupted_method_author:recover_interrupted_method_author"
++        "hegel_machine.cognition.interrupted_method_author:recover_interrupted_method_author",
++        "hegel_machine.cognition.code_agent:_copy_model_file"
+       ],
+       "operators": [
+         {
+@@ -8382,9 +8387,10 @@
+         "artifacts/recurrent_method_repair_luna_20261012/summary.json",
+         "tests/test_interrupted_method_author.py",
+         "tests/test_model_snapshot_storage.py",
+-        "tests/test_prospective_design_study.py"
+-      ],
+-      "remaining_gap": "同现场已见可执行修订委派2/3物理成功，采用仍不稳定；新原生入口从零触发及独立请求点确认尚待验证。旧全族排除复用的35动作成功是已知提案离线重放，不计新发现。此处不继续无限追加旧现场，保留既有成功/混叠控制；递归独有优势、完整Code优势及稳定长期净收益仍未成立。 2026-10-11匿名主线已复用完整档案、旧方法作者/实践/发布/冻结链：原方法6/6实践、9/9冻结迁移；发布注册接回后，同三题live两臂均3/3原样采用，各3调用/504观测。反例后24调用未发布，接回旧账本再9调用虽发布但33对目标旧32/33、新30/33；七项实践接受含一例已被付费数据否定的模型。0.145付费反驳保留漏接Python finish现已修复，66次零LLM同目标重放保持全部正确结果，三次错误接受变为未确认。保留成功旧稿。零LLM编译稿仍有本地模型已失败后不更新的问题；系统复盘确认当前有限族首次确认后168行已唯一，552行恢复降为有界执行回归。接回历史持续在线研究后，固定72/168行×两臂四次live均确认及512行终测通过；Hegel72行分支step10确认失败、11重分析、12实际换稿、14再次确认成功。两臂revision/readout/child均0，Hegel总30调用/354新观测，Code14调用/192新观测。在线自修成立。随后复用0.69区分流程、world_experiment_choice预测列适配及choose_probe，接入共享compare_experiments；36相关检查通过。同现场四次开发复测仍全通过：Hegel72购测前提出边界问题，自主24步实验取得反例并改稿；两臂各17调用，新观测Hegel216/Code360。新比较入口、revision和子读出均0采用，不能将改善归因为该模块或阶段说明；Hegel168额外4调用/336计算来自清单修补。保留有效主动研究轨迹和当前运行时，将阈值现场留作回归，下一来源检验真正表示歧义及可执行替代解释，再编译迁移。无递归或完整Agent优势；移除/错配、多作者独立重复、跨接口及更广M1仍未完成。 独立表示歧义的两参数块已完成8次首批及5次统一token接续，两臂最终各2/4；有限历史表示扩展后确认成立，递推装置各0/2（保留5.76e-10和2.76e-8的近门槛确认误差）。Hegel的精确meter拟合只打印、未导出组合。历史仪器独立验证与父绑定已存在；自由Python现成评分/旧稿保留仅面向响应，下一步复用付费读数对齐和通用执行器接入作者指定观测目标，再测可调用子模型真正改变父预测。不能将作者未采用完全归因为接口；无新增递归优势或迁移证据。 批后系统复盘：当前两臂主要执行同一普通Python循环，子题/前瞻比较均未采用，不能把2/4对2/4解释为完整递归控制器无效。现复用旧仪器子研究接通作者选定目标的独立拟合/保留、bind_models实际父调用与新增读数复验，Hegel接收子模型返回/失效焦点；续研不再强求非空研究程序清单。110相关检查通过。同起点救援及所有token截断臂统一接续已结束：Code新增18调用/96观测，Hegel24调用/24观测，均未提交确认模型，子模型和实际依赖采用0。Code新确认MSE9.5954e-8未达1e-10；Hegel曾算出精确条件关系，却在笔记中误记特征并混淆不同输入的拟合，最终响应候选轨迹留出误差2.578e-7、无新确认。停止延长该现场。后续复用world_relation_research作者bind契约，接入自由Python条件组件：自选实测特征/标签/证据、冻结视图和拟合行、同视图新旧稿比较、实际父调用及新证据撤回。7项新增组件集成用例及相关回归共33项通过；接口在接续快照之后实现，当前无自主采用或相对收益证据。新参数4次配对实测及终测已完成：Hegel1/2、Code0/2。成功Hegel自主购测96仪器行，发现递推和条件响应、自修组合漏项，最终控制历史预测器新确认1.42e-30、512行终测1.52e-30。科学上已实际组合中间机制，但手写成单体model.py；4次条件组件/绑定/子题/revision采用0，不能归因接口或递归组织。另一Hegel末次确认超时无MSE，原通用反馈称新反例不准确。全批150调用/13610602报告token，两个参数、更多Hegel调用与测量不支持稳定优势。保留成功作者源码及实际轨迹。2026-10-12已将旧方法作者/实践/冻结链接到TemporalInquiryLab和24条三步前缀，公开说明来自实际装置；12项定向检查通过。Luna作者7调用、8次累计实践后发布，最终同源码4/4实践通过；6个新参数冻结目标均首次确认失败、纳入反例重拟合后通过新确认及512行终测，0新LLM、无仪器购买。在线同档案同方法Code2/2共10调用，Hegel1/2共28调用；失败Hegel首次调用后不再用现成程序，转向其他模型而最终确认失败，非超时。冻结允许失败后下一轮，live返回LLM选择，两臂合同相同。保留可迁移程序，下一重点是确认失败后的方法续用/修订决策。一个作者、同族新参数，不支持递归独有或完整Agent优势；原论文保持冻结。 后续核实实际接线缺陷：无shared/knowledge.json时，Hegel首次确认前采用临时提交manifest，在线method_decision丢失max_steps和prior_execution；Code保留。已有按路径回填只用于结果导出，现复用到在线视图，并呈现失败预测器、新付费行、原执行动作及改稿路径，仍由LLM选择；确认未评分不再冒称反例。26项相关检查通过。原6/6源码/冻结结果保留。原2任务×2臂开发复测已完成：Hegel2/2、4调用、528观测，两项均自主续调原方法后重拟合反例，通过新确认及终测；Code1/2、13调用、624观测，另一项打印精确付费拟合却未导出，增购至360行后第二次原样方法调用耗尽600秒执行预算，尚未生成新确认。无人工科学指导或自动重试。两题开发复测不能独立归因各项修改或证明稳定优势，方法族修订选择仍未验证。 2026-10-12下一主线再次核对0.38/0.79/0.84/0.117与Python响应重开方法：历史已有系数→结构→测量选路及前瞻区分，当前缺口是匿名自由Python中的自主选用，不能将未调用当算法无效。现修复候选比较时最佳稿保留会覆盖旧稿可执行上下文的问题，复用原保留器分别保存比较稿；首次确认前也保留提交候选与其拟合上下文，使方法停止后仍可比较历史解释。新接续沿同一CommonArchiveInquiryAgent和既有前瞻接口，固定两组新参数×递推/有限历史两种结构×Code/Hegel共8次，同72行短轨迹前缀，执行上限3600秒。原6/6程序与结果不改。97项相关检查通过，8次在线与批后终测完成：Hegel4/4、Code2/4；可重拟合任务各2/2，失配任务Hegel购测改稿2/2，Code两题耗尽1000万报告token而非执行超时。Hegel/Code54/80调用。原6/6和本批全部方法副本未改。正式compare_experiments及前瞻revision仍0采用，竞争解释购测前预测→实测区分尚待自主验证；两参数块不能归因递归组织或快照修复的独立收益，不预设族排除或稳定优势。 本轮轨迹复核：购测时没有两个受支持候选，0比较调用不能单独判失败；两次成功仍只修改预测器，原方法未继承表示修订。现沿历史方法修订/实践/冻结入口接续，仪器目标比较及返回子模型上下文已修，方法实践接入在线工具。下一实测以原6目标回访及2新参数块×2结构比较原方法/修订方法；额外8来源仅供作者，所有目标仍同原K0。作者已17调用发布同源码6/6实践的新方法；配对研究及512行终测完成：原8/10、新10/10，原6/6保留，新4目标2/4→4/4，0目标LLM。新增成功为两项有限历史任务，每项多96行确认观测。实践中三项反例后切换潜在递推、两项保留二次表示重拟合、一项原样复用；确认轨迹仍由框架提供。旧在线采用入口已适配该发布协议，5项定向检查通过；配对结果已支持本组任务上的新增收益；在线采用待实测，不将提示修订写成自主方法晋升。 2026-10-12自主实验设计接续复用现成前瞻比较、读出和方法实践。新协议结束研究后只确认一次，子研究候选返回父研究而不买确认标签；6项源实践重取支持，原6目标保留检查及4新目标配对，28项集成检查通过。Luna作者7调用发布，9次新实践后同源码6/6通过；20次冻结及终测完成，旧6/10、新10/10，其中原6目标各6/6、4新目标0/4→4/4，目标0新LLM。10目标均自主购同一8×24长轨迹，随后才拟合比较两种表示；已支持主动购测程序迁移，尚无购测前竞争预测驱动选择。总目标观测2256→3600，表示和拟合同时改变，未隔离实验设计收益。下一对照保留此固定套件，比较同候选拟合及同观测量的分歧驱动实验。派生报告已接回实际actions简写、14测试通过；原10/10的不同协议结果继续保留。 前瞻设计接续复盘：候选在购測后形成、预测全过即停、固定丰富实验足够是本轮主要成因；初始三步证据仍有族内参数歧义，同参数两族首实验相同合理。现接目标反馈区分预测支持与设计完成，允许共同反驳后修订；同一新程序增加随机同成本实验选择控制，保留原成功方法。29项定向检查通过，Luna作者已启动；尚未取得新科学结果。入口 run_anonymous_method_revision.py --prospective-design；6旧目标与4新目标共30次冻结研究，均72前缀+至多192实验+96最终确认、0目标LLM。 2026-10-12存储接续修复：现行restore_practice继承逐目录复制，跨WSL/Windows处理30万文件导致小时级等待，关键37次实践未被清理。快照保留执行依赖但去掉宿主状态和字节码，源码采集提前剪枝旧快照。新增runtime_interrupted保留实际已付write与未返回实践、扣原剩余额度，既不重放也不伪装成科学失败。活跃目录改用C盘单文件承载的原生ext4；科学源码及实验选择不由宿主修改。前瞻购测和三臂收益仍待实测。 当前已接回完整请求长度限制、仅实践结果保留磁盘文件引用及同盘迁移历史直接恢复，避免重复内嵌和重复复制；在线源档案导出继续保留。"
++        "tests/test_prospective_design_study.py",
++        "artifacts/snapshot_storage_validation_20261012/snapshot_storage_validation.json"
++      ],
++      "remaining_gap": "同现场已见可执行修订委派2/3物理成功，采用仍不稳定；新原生入口从零触发及独立请求点确认尚待验证。旧全族排除复用的35动作成功是已知提案离线重放，不计新发现。此处不继续无限追加旧现场，保留既有成功/混叠控制；递归独有优势、完整Code优势及稳定长期净收益仍未成立。 2026-10-11匿名主线已复用完整档案、旧方法作者/实践/发布/冻结链：原方法6/6实践、9/9冻结迁移；发布注册接回后，同三题live两臂均3/3原样采用，各3调用/504观测。反例后24调用未发布，接回旧账本再9调用虽发布但33对目标旧32/33、新30/33；七项实践接受含一例已被付费数据否定的模型。0.145付费反驳保留漏接Python finish现已修复，66次零LLM同目标重放保持全部正确结果，三次错误接受变为未确认。保留成功旧稿。零LLM编译稿仍有本地模型已失败后不更新的问题；系统复盘确认当前有限族首次确认后168行已唯一，552行恢复降为有界执行回归。接回历史持续在线研究后，固定72/168行×两臂四次live均确认及512行终测通过；Hegel72行分支step10确认失败、11重分析、12实际换稿、14再次确认成功。两臂revision/readout/child均0，Hegel总30调用/354新观测，Code14调用/192新观测。在线自修成立。随后复用0.69区分流程、world_experiment_choice预测列适配及choose_probe，接入共享compare_experiments；36相关检查通过。同现场四次开发复测仍全通过：Hegel72购测前提出边界问题，自主24步实验取得反例并改稿；两臂各17调用，新观测Hegel216/Code360。新比较入口、revision和子读出均0采用，不能将改善归因为该模块或阶段说明；Hegel168额外4调用/336计算来自清单修补。保留有效主动研究轨迹和当前运行时，将阈值现场留作回归，下一来源检验真正表示歧义及可执行替代解释，再编译迁移。无递归或完整Agent优势；移除/错配、多作者独立重复、跨接口及更广M1仍未完成。 独立表示歧义的两参数块已完成8次首批及5次统一token接续，两臂最终各2/4；有限历史表示扩展后确认成立，递推装置各0/2（保留5.76e-10和2.76e-8的近门槛确认误差）。Hegel的精确meter拟合只打印、未导出组合。历史仪器独立验证与父绑定已存在；自由Python现成评分/旧稿保留仅面向响应，下一步复用付费读数对齐和通用执行器接入作者指定观测目标，再测可调用子模型真正改变父预测。不能将作者未采用完全归因为接口；无新增递归优势或迁移证据。 批后系统复盘：当前两臂主要执行同一普通Python循环，子题/前瞻比较均未采用，不能把2/4对2/4解释为完整递归控制器无效。现复用旧仪器子研究接通作者选定目标的独立拟合/保留、bind_models实际父调用与新增读数复验，Hegel接收子模型返回/失效焦点；续研不再强求非空研究程序清单。110相关检查通过。同起点救援及所有token截断臂统一接续已结束：Code新增18调用/96观测，Hegel24调用/24观测，均未提交确认模型，子模型和实际依赖采用0。Code新确认MSE9.5954e-8未达1e-10；Hegel曾算出精确条件关系，却在笔记中误记特征并混淆不同输入的拟合，最终响应候选轨迹留出误差2.578e-7、无新确认。停止延长该现场。后续复用world_relation_research作者bind契约，接入自由Python条件组件：自选实测特征/标签/证据、冻结视图和拟合行、同视图新旧稿比较、实际父调用及新证据撤回。7项新增组件集成用例及相关回归共33项通过；接口在接续快照之后实现，当前无自主采用或相对收益证据。新参数4次配对实测及终测已完成：Hegel1/2、Code0/2。成功Hegel自主购测96仪器行，发现递推和条件响应、自修组合漏项，最终控制历史预测器新确认1.42e-30、512行终测1.52e-30。科学上已实际组合中间机制，但手写成单体model.py；4次条件组件/绑定/子题/revision采用0，不能归因接口或递归组织。另一Hegel末次确认超时无MSE，原通用反馈称新反例不准确。全批150调用/13610602报告token，两个参数、更多Hegel调用与测量不支持稳定优势。保留成功作者源码及实际轨迹。2026-10-12已将旧方法作者/实践/冻结链接到TemporalInquiryLab和24条三步前缀，公开说明来自实际装置；12项定向检查通过。Luna作者7调用、8次累计实践后发布，最终同源码4/4实践通过；6个新参数冻结目标均首次确认失败、纳入反例重拟合后通过新确认及512行终测，0新LLM、无仪器购买。在线同档案同方法Code2/2共10调用，Hegel1/2共28调用；失败Hegel首次调用后不再用现成程序，转向其他模型而最终确认失败，非超时。冻结允许失败后下一轮，live返回LLM选择，两臂合同相同。保留可迁移程序，下一重点是确认失败后的方法续用/修订决策。一个作者、同族新参数，不支持递归独有或完整Agent优势；原论文保持冻结。 后续核实实际接线缺陷：无shared/knowledge.json时，Hegel首次确认前采用临时提交manifest，在线method_decision丢失max_steps和prior_execution；Code保留。已有按路径回填只用于结果导出，现复用到在线视图，并呈现失败预测器、新付费行、原执行动作及改稿路径，仍由LLM选择；确认未评分不再冒称反例。26项相关检查通过。原6/6源码/冻结结果保留。原2任务×2臂开发复测已完成：Hegel2/2、4调用、528观测，两项均自主续调原方法后重拟合反例，通过新确认及终测；Code1/2、13调用、624观测，另一项打印精确付费拟合却未导出，增购至360行后第二次原样方法调用耗尽600秒执行预算，尚未生成新确认。无人工科学指导或自动重试。两题开发复测不能独立归因各项修改或证明稳定优势，方法族修订选择仍未验证。 2026-10-12下一主线再次核对0.38/0.79/0.84/0.117与Python响应重开方法：历史已有系数→结构→测量选路及前瞻区分，当前缺口是匿名自由Python中的自主选用，不能将未调用当算法无效。现修复候选比较时最佳稿保留会覆盖旧稿可执行上下文的问题，复用原保留器分别保存比较稿；首次确认前也保留提交候选与其拟合上下文，使方法停止后仍可比较历史解释。新接续沿同一CommonArchiveInquiryAgent和既有前瞻接口，固定两组新参数×递推/有限历史两种结构×Code/Hegel共8次，同72行短轨迹前缀，执行上限3600秒。原6/6程序与结果不改。97项相关检查通过，8次在线与批后终测完成：Hegel4/4、Code2/4；可重拟合任务各2/2，失配任务Hegel购测改稿2/2，Code两题耗尽1000万报告token而非执行超时。Hegel/Code54/80调用。原6/6和本批全部方法副本未改。正式compare_experiments及前瞻revision仍0采用，竞争解释购测前预测→实测区分尚待自主验证；两参数块不能归因递归组织或快照修复的独立收益，不预设族排除或稳定优势。 本轮轨迹复核：购测时没有两个受支持候选，0比较调用不能单独判失败；两次成功仍只修改预测器，原方法未继承表示修订。现沿历史方法修订/实践/冻结入口接续，仪器目标比较及返回子模型上下文已修，方法实践接入在线工具。下一实测以原6目标回访及2新参数块×2结构比较原方法/修订方法；额外8来源仅供作者，所有目标仍同原K0。作者已17调用发布同源码6/6实践的新方法；配对研究及512行终测完成：原8/10、新10/10，原6/6保留，新4目标2/4→4/4，0目标LLM。新增成功为两项有限历史任务，每项多96行确认观测。实践中三项反例后切换潜在递推、两项保留二次表示重拟合、一项原样复用；确认轨迹仍由框架提供。旧在线采用入口已适配该发布协议，5项定向检查通过；配对结果已支持本组任务上的新增收益；在线采用待实测，不将提示修订写成自主方法晋升。 2026-10-12自主实验设计接续复用现成前瞻比较、读出和方法实践。新协议结束研究后只确认一次，子研究候选返回父研究而不买确认标签；6项源实践重取支持，原6目标保留检查及4新目标配对，28项集成检查通过。Luna作者7调用发布，9次新实践后同源码6/6通过；20次冻结及终测完成，旧6/10、新10/10，其中原6目标各6/6、4新目标0/4→4/4，目标0新LLM。10目标均自主购同一8×24长轨迹，随后才拟合比较两种表示；已支持主动购测程序迁移，尚无购测前竞争预测驱动选择。总目标观测2256→3600，表示和拟合同时改变，未隔离实验设计收益。下一对照保留此固定套件，比较同候选拟合及同观测量的分歧驱动实验。派生报告已接回实际actions简写、14测试通过；原10/10的不同协议结果继续保留。 前瞻设计接续复盘：候选在购測后形成、预测全过即停、固定丰富实验足够是本轮主要成因；初始三步证据仍有族内参数歧义，同参数两族首实验相同合理。现接目标反馈区分预测支持与设计完成，允许共同反驳后修订；同一新程序增加随机同成本实验选择控制，保留原成功方法。29项定向检查通过，Luna作者已启动；尚未取得新科学结果。入口 run_anonymous_method_revision.py --prospective-design；6旧目标与4新目标共30次冻结研究，均72前缀+至多192实验+96最终确认、0目标LLM。 2026-10-12存储接续修复：现行restore_practice继承逐目录复制，跨WSL/Windows处理30万文件导致小时级等待，关键37次实践未被清理。快照保留执行依赖但去掉宿主状态和字节码，源码采集提前剪枝旧快照。新增runtime_interrupted保留实际已付write与未返回实践、扣原剩余额度，既不重放也不伪装成科学失败。活跃目录改用C盘单文件承载的原生ext4；科学源码及实验选择不由宿主修改。前瞻购测和三臂收益仍待实测。 当前已接回完整请求长度限制、仅实践结果保留磁盘文件引用及同盘迁移历史直接恢复，避免重复内嵌和重复复制；在线源档案导出继续保留。 后续快照存储修复已在隔离代码接入既有_copy_model_context：同卷XFS用FICLONE共享未改数据块，保留候选独立拟合；执行上下文边界剔除宿主研究历史，付费证据和普通数据保留。42项相关测试通过，真实ext4回退已验证。开发目录/mnt/hegel-snapshot-cow/dev/Hegel Machine；当前ext4在线运行保持原代码，未热更新。此为存储修复，不新增科学结果；文件和目录元数据仍逐候选保留。 实际档案同量3份快照物理新增138.13MB→4.66MB；96份COW实际新增151.00MB，逻辑3.80GB；共享块及独立写入已验证。"
+     }
+   ]
+ }

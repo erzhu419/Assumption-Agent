@@ -94,3 +94,36 @@ def test_study_uses_the_same_supplied_laboratory_factory_for_training_and_termin
     assert calls == ['factory_defined_physics'] * 4
     assert all(trial['fresh_confirmation_passed'] and trial['terminal']['passed']
                for trial in result['trials'])
+
+
+def test_evidence_kind_uses_new_provider_events_after_restored_frozen_history(tmp_path):
+    # Only metadata routing is under test: this fixture makes no external call.
+    from random import Random
+
+    class ProviderMetadata(ScriptedProvider):
+        def next_action(self, request):
+            response = super().next_action(request)
+            response["usage"]["backend"] = "codex_cli"
+            return response
+
+    def restored_prefix(agent, laboratory, case):
+        actions = laboratory.confirmation_actions(72, Random(case["prefix_seed"]))
+        feedback = agent._execute("query", {"actions": actions}, laboratory)
+        # Real zero-LLM practice events have no external backend marker.
+        agent.events.append({"step": 0, "action": "query", "arguments": {"actions": actions},
+                             "feedback": feedback})
+        return {"prior_research_cost": dict(agent.costs)}
+
+    plan = protocol(kinds=("memoryless",), arms=("hegel",), config=InquiryLLMConfig(
+        observation_budget=144, confirmation_rows=24, max_model_calls=6,
+        execution_seconds=30., token_budget=10000))
+    summary = run_study(plan, tmp_path, provider_factory=lambda _: ProviderMetadata(),
+        knowledge={"files": {"shared/old.py": "# retained original evidence\n"}},
+        prepare_prefix=restored_prefix)
+    assert summary["evidence_kind"] == "real_external_model"
+    training = json.loads((tmp_path / "case_000/hegel/training.json").read_text())
+    assert "usage" not in training["events"][0]
+    assert len(training["events"]) == 6
+    assert training["costs"]["observation_cost"] == 99
+    assert training["prior_research_cost"]["observation_cost"] == 72
+    assert training["continuation_cost"]["observation_cost"] == 27

@@ -156,8 +156,22 @@ class PythonArchiveMethodLearner(PairedMethodLearner):
                     'confirmed_revision_cases', 'selective_revision_coverage', 'scoped_revision_coverage')
                 if key in feedback}}
             break
+        # The paid-practice ledger already survives resumption and is updated
+        # after each new practice. Surface its outcome directly: replacing the
+        # large resume_context file with a file reference otherwise hid the
+        # interruption that the author was being asked to respond to.
+        fields = ('case', 'directory', 'status', 'costs', 'no_progress')
+        latest_practice = ({key: self.practice_trials[-1][key] for key in fields
+                            if key in self.practice_trials[-1]} if self.practice_trials else None)
+        current_source = (self.workspace / METHOD_PATH).read_text()
+        stopped = next((trial for trial in reversed(self.practice_trials)
+            if trial['method_source'] == current_source and trial.get('no_progress')), None)
+        latest_no_progress = ({key: stopped[key] for key in fields if key in stopped}
+                              if stopped is not None else None)
         summary = {'current_source_coverage': coverage,
-            'latest_publication_failure': failure, 'candidates': candidates}
+            'latest_publication_failure': failure, 'candidates': candidates,
+            'latest_practice': latest_practice,
+            'current_source_latest_no_progress': latest_no_progress}
         self.files['method_decision.json'] = json.dumps(summary, indent=2)
         (self.workspace / 'method_decision.json').write_text(self.files['method_decision.json'])
 

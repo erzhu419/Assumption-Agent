@@ -6,6 +6,7 @@ import json
 import pytest
 
 from hegel_machine.cognition.code_provider_context import prepare_code_context
+from hegel_machine.cognition.code_agent import evaluate_python_model
 from hegel_machine.cognition.common_archive_inquiry import CommonArchiveInquiryAgent
 from hegel_machine.cognition import online_inquiry_llm
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
@@ -111,6 +112,11 @@ def test_failed_confirmation_keeps_published_invocation_and_explicit_refit(tmp_p
     assert continuation["current_paid_rows"] == 7
     assert continuation["resume_action"] == initial["execute_action"]
     assert continuation["revision_path"] == METHOD
+    saved = continuation["submitted_candidate"]
+    assert saved["source_model"] == "old.py"
+    assert saved["paid_rows"] == 3
+    assert saved["mse"] == 0.
+    assert (agent.workspace / saved["model"]).is_file()
 
     # The ordinary caller, not context preparation, chooses to resume.
     second = execute(agent, lab, continuation["resume_action"])
@@ -144,6 +150,40 @@ def test_changed_method_is_visible_and_stop_does_not_reoffer_stale_confirmation(
     assert agent.costs["observation_cost"] == paid
     assert not method_view(agent, lab).get("continuation")
     assert agent.method_results[0]["feedback"]["fresh_confirmation"]["passed"] is False
+    evidence = method_view(agent, lab)["submitted_candidates"]
+    assert len(evidence) == 1
+    assert evidence[0]["confirmation"]["passed"] is False
+    assert evidence[0]["paid_rows"] == 3
+
+
+@pytest.mark.parametrize("arm", ["code_react", "hegel"])
+def test_failed_submission_keeps_its_fitting_view_after_method_overwrites_model(tmp_path, arm):
+    agent, lab = prepared(tmp_path, arm)
+    old = """import json
+value = 0.
+def fit(rows):
+    global value
+    value = sum(row['target'] for row in rows) / len(rows) + json.load(open('offset.json'))
+def predict(row): return value
+"""
+    (tmp_path / "offset.json").write_text("0")
+    agent._execute("write", {"path": "old.py", "code": old}, lab)
+    first = execute(agent, lab, method_view(agent, lab)["execute_action"])
+    assert first["status"] == "confirmation_failed"
+    saved = method_view(agent, lab)["continuation"]["submitted_candidate"]
+    assert len(agent.rows) == 7
+    saved_context = (tmp_path / saved["model"]).parent
+    assert len(json.loads((saved_context / "model_observations.json").read_text())) == 3
+
+    # Subsequent fitting and source edits must not revise the earlier hypothesis.
+    (tmp_path / "offset.json").write_text("99")
+    agent._execute("write", {"path": "old.py", "code": "def predict(row): return -99.\n"}, lab)
+    scoring = evaluate_python_model(tmp_path, saved["model"], agent.rows)
+    assert scoring["returncode"] == 0
+    assert scoring["predictions"] == [0.] * 7
+    assert scoring["mse"] > 0
+    assert (saved_context / "offset.json").read_text() == "0"
+    assert len(agent.confirmations) == 1
 
 
 def test_confirmation_execution_failure_is_not_labelled_a_scientific_counterexample(tmp_path, monkeypatch):

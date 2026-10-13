@@ -91,6 +91,7 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
                 "feedback": feedback, "usage": {"backend": "common_paid_prefix", "total_tokens": 0}})
         else:
             prefix_account = prepare_prefix(agent, laboratory, case)
+        initial_event_count = len(agent.events)
         result = agent.run(laboratory, on_checkpoint=lambda data, path=workspace:
                            write_json(path / "active.json", data))
         if prefix_account:
@@ -108,7 +109,8 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
         print(json.dumps({"case": case["id"], "arm": arm, "status": result["status"],
                           "costs": result["costs"]}), flush=True)
 
-        return {"case": case, "arm": arm, "result": result}
+        return {"case": case, "arm": arm, "result": result,
+                "initial_event_count": initial_event_count}
 
     if workers == 1:
         trials = [train(job) for job in jobs]
@@ -145,7 +147,8 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
                       "prior_research_cost", "continuation_cost", "resume_origin"):
             if field in result:
                 records[-1][field] = deepcopy(result[field])
-    live_events = [event for trial in trials for event in trial["result"]["events"]
+    live_events = [event for trial in trials
+                   for event in trial["result"]["events"][trial["initial_event_count"]:]
                    if event.get("usage", {}).get("backend") not in
                        {"common_paid_prefix", "restored_paid_prefix"}]
     summary = {"study": plan["study"], "status": "completed", "trials": records,

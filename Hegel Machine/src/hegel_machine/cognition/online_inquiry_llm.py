@@ -30,6 +30,7 @@ class InquiryLLMConfig:
     execution_seconds: float = 60.0
     compute_budget: int = 100000
     confirmation_rows: int = 3
+    confirmation_mse_threshold: float = 1e-10
 
 
 POINT_LAB_INTERFACE = """This laboratory extends the ordinary Python research interface.
@@ -396,7 +397,7 @@ class InquiryLLMAgent:
             if action == "finish" and result["returncode"] == 0:
                 precondition = getattr(laboratory, "confirmation_precondition", None)
                 if callable(precondition):
-                    error = precondition(result, mse_threshold=CONFIRMATION_MSE_THRESHOLD)
+                    error = precondition(result, mse_threshold=self.config.confirmation_mse_threshold)
                     if error:
                         result["error"] = error
                         return result
@@ -415,6 +416,15 @@ class InquiryLLMAgent:
                 if self.costs["compute_cost"] + n > self.config.compute_budget:
                     result["error"] = "reserve candidate scoring budget for fresh confirmation"
                     return result
+                # A method may overwrite the same predictor on its next call.
+                # Keep this submitted explanation and its fitting view before
+                # new labels arrive, so it remains executable after a revision.
+                destination = Path("_submitted_models") / f"confirmation_{len(self.confirmations):04d}" / "_evaluated_model"
+                retained = retain_evaluated_python_model(
+                    self.workspace, model, [], result.get("mse"), destination=destination)
+                submitted = {"model": str(destination / retained["model"]),
+                    "source_model": model, "paid_rows": len(self.rows), "mse": result.get("mse")}
+                result["submitted_candidate"] = submitted
                 actions = laboratory.confirmation_actions(n, self.confirmation_rng)
                 # The executing candidate may read any ordinary training file.
                 # Keep new labels entirely outside that workspace until scored.
@@ -428,9 +438,10 @@ class InquiryLLMAgent:
                 self.costs["python_execution_seconds"] += monotonic() - started
                 fresh.pop("predictions", None)
                 passed = (fresh.get("returncode") == 0
-                          and fresh.get("mse", float("inf")) <= CONFIRMATION_MSE_THRESHOLD)
+                          and fresh.get("mse", float("inf")) <= self.config.confirmation_mse_threshold)
                 result["fresh_confirmation"] = {**fresh, "passed": passed, "rows": n,
-                    "mse_threshold": CONFIRMATION_MSE_THRESHOLD,
+                    "submitted_candidate": deepcopy(submitted),
+                    "mse_threshold": self.config.confirmation_mse_threshold,
                     "observation_indices": [index for record in acquired for index in
                         record.get("row_indices", [record["observation_index"]])],
                     "observations": acquired}
@@ -469,6 +480,9 @@ class InquiryLLMAgent:
         """Expose the current executable research state to the next model turn."""
         self._prepare_program_state()
         interface = getattr(laboratory, "task_interface", POINT_LAB_INTERFACE) + self.common_interface
+        interface = interface.replace(
+            "mean squared error (MSE) is at most 1e-10.",
+            f"mean squared error (MSE) is at most {self.config.confirmation_mse_threshold}.")
         if callable(getattr(laboratory, 'prediction_rows', None)):
             interface += REVISION_INTERFACE
         return {"capabilities": laboratory.public_spec(), "task_interface": interface,

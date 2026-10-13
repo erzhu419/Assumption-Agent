@@ -673,6 +673,52 @@ def _expected_query_risk(predictions, weights, reference_losses, noise_scale):
     return expected
 
 
+def value_forecast_experiments(reference_predictions, experiments, *, weights,
+                               noise_scale, budget):
+    """Value already computed forecasts using the existing finite-model channel.
+
+    Inputs contain one prediction vector per hypothesis, with explicit
+    probability weights. Reference rows describe the caller's public task
+    design; they are not new observations. Available decisions are the supplied
+    predictors, scored by pairwise reference MSE. Duplicate hypotheses retain
+    only their supplied probability mass, not an extra automatic vote.
+
+    Charge squared-error and weighted-risk terms after reserving the complete
+    panel. A partial panel cannot recommend an experiment. Forecast execution
+    and actual acquisition remain the caller's separate operations.
+    """
+    count = len(reference_predictions)
+    required = count * count * (len(reference_predictions[0]) + 1)
+    for experiment in experiments:
+        outcomes = []
+        for prediction in experiment['predictions']:
+            if prediction not in outcomes:
+                outcomes.append(prediction)
+        required += len(outcomes) * count * (len(experiment['predictions'][0]) + count)
+    result = {'policy': 'expected_task_risk_reduction', 'status': 'budget_exhausted',
+              'reference_risk': None, 'comparisons': [],
+              'selected_experiment_id': None, 'compute_cost': 0,
+              'required_compute': required}
+    if not budget.spend(required):
+        return result
+    result['compute_cost'] = required
+    losses = [[mean((action - target) ** 2 for action, target in zip(left, right))
+               for right in reference_predictions] for left in reference_predictions]
+    prior = result['reference_risk'] = _risk(weights, losses)
+    for experiment in experiments:
+        expected = _expected_query_risk(experiment['predictions'], weights, losses, noise_scale)
+        reduction = max(0., prior - expected)
+        result['comparisons'].append({
+            'id': experiment['id'], 'observation_cost': experiment['observation_cost'],
+            'expected_posterior_risk': expected, 'expected_risk_reduction': reduction,
+            'value_per_observation': reduction / experiment['observation_cost']})
+    result['comparisons'].sort(key=lambda row: -row['value_per_observation'])
+    result['status'] = 'no_positive_value'
+    if result['comparisons'] and result['comparisons'][0]['value_per_observation'] > 0:
+        result.update(status='valued', selected_experiment_id=result['comparisons'][0]['id'])
+    return result
+
+
 def choose_valuable_probe(probes: list[Probe], candidates: list[Candidate], fallback: float,
                           budget: SearchBudget, *, observations: list[Observation],
                           spec: TaskSpec, queried_probes=(), max_compute=None, simulator=None) -> tuple[Probe | None, dict]:

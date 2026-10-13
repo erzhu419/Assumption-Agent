@@ -4,7 +4,6 @@ from copy import deepcopy
 from dataclasses import replace
 import json
 from pathlib import Path
-import shutil
 
 from .code_provider_context import _compact_trajectory_payload
 from .online_inquiry_llm import InquiryLLMAgent
@@ -117,12 +116,12 @@ class PairedMethodLearner(InquiryLLMAgent):
         return super().run(self.interface, on_checkpoint=on_checkpoint)
 
     def restore_practice(self, previous_result):
-        """Retain paid trials for further research; charge new work separately."""
+        """Reference completed paid trials; charge and write new work separately."""
         published = (previous_result["status"] == "completed"
                      and isinstance(previous_result.get("method_source"), str)
                      and bool(previous_result["method_source"]))
         if not published and previous_result["status"] not in {
-                "provider_failed", "token_budget_exhausted", "model_call_budget_exhausted"}:
+                "provider_failed", "runtime_interrupted", "token_budget_exhausted", "model_call_budget_exhausted"}:
             raise ValueError("practice restoration expects an interrupted author or an actually published method")
         source = (previous_result["method_source"] if published
                   else previous_result["outgoing_knowledge"]["files"][METHOD_PATH])
@@ -132,7 +131,14 @@ class PairedMethodLearner(InquiryLLMAgent):
         self.practice_trials = deepcopy(previous_result["practice_trials"])
         previous_workspace = Path(previous_result["workspace"])
         for trial in self.practice_trials:
-            shutil.copytree(previous_workspace / trial["directory"], self.workspace / trial["directory"])
+            source = previous_workspace / trial["directory"]
+            target = self.workspace / trial["directory"]
+            # Finished trials are evidence, not writable practice workspaces.
+            # Keep their stable IDs while referring to the original paid trees;
+            # a later practice gets its own new numbered directory below trials.
+            if source.resolve() != target.resolve():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.symlink_to(source.resolve(), target_is_directory=True)
         last_action = next((event for event in reversed(previous_result["events"])
                             if event["action"] != "provider_error"), None)
         last_action_summary = _compact_trajectory_payload(last_action)
@@ -155,7 +161,10 @@ class PairedMethodLearner(InquiryLLMAgent):
                                          for trial in self.practice_trials],
                    "last_action": last_action_summary,
                    "cost_scope": "Earlier paid trials are retained. Current costs and limits apply only "
-                                 "to this new authoring phase; earlier costs remain in the preceding result."}
+                                 "to this new authoring phase; earlier costs remain in the preceding result.",
+                   "history_access": "Historical trial directories reference the original paid records "
+                                     "for reading. Edit or restore methods only into the current shared source; "
+                                     "new practices use new numbered directories."}
         self.files["resume_context.json"] = json.dumps(context, indent=2)
         (self.workspace / "resume_context.json").write_text(self.files["resume_context.json"])
         return context
@@ -296,10 +305,13 @@ class PairedMethodLearner(InquiryLLMAgent):
                     "fresh_confirmation": {key: confirmation.get(key) for key in ("passed", "mse", "rows")}
                         if confirmation else None,
                     "steps": deepcopy(result["method_results"])}
+        if result.get("no_progress") is not None:
+            feedback["no_progress"] = deepcopy(result["no_progress"])
         self.practice_trials.append({"case": case, "directory": directory,
             "method_source": source, "status": result["status"], "costs": result["costs"],
             "selected_prior_predictor": selected_prior,
-            "fresh_confirmation": feedback["fresh_confirmation"]})
+            "fresh_confirmation": feedback["fresh_confirmation"],
+            **({"no_progress": deepcopy(result["no_progress"])} if "no_progress" in result else {})})
         feedback["current_source_coverage"] = self._current_source_coverage()
         return feedback
 

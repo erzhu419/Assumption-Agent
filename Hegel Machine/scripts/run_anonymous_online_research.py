@@ -289,7 +289,7 @@ def research_trace(result):
         comparisons.append({'step': event.get('step'), **{key: deepcopy(comparison[key])
             for key in ('index', 'status', 'evidence_cutoff', 'models', 'prior_fit',
                         'eligible_models', 'selected_experiment', 'predicted_separation',
-                        'query_arguments') if key in comparison},
+                        'query_arguments', 'selection_policy', 'task_value') if key in comparison},
             'next_model_decision': decision_after(position),
             'linked_revisions': [trace['index'] for trace in traces
                 if trace['proposal'].get('comparison_index') == comparison.get('index')]})
@@ -297,6 +297,182 @@ def research_trace(result):
             'interpretation': 'These are actual recorded forecasts and decisions, not an automatic '
                 'scientific-success verdict. Ordinary Python research may establish the same '
                 'process without this interface; inspect the complete event trace.'}
+
+
+def experimental_design_trace(result, *, mse_threshold=1e-10):
+    """Summarize actual pre-submission discrimination; never generate evidence.
+
+    Program invocations can repeat a revision inside both events and method_results.
+    Index revisions once, keep chronology from the execution events, and omit their
+    source bundles, raw observations and prediction inputs from this report.
+    """
+    def compact(mapping, keys):
+        return {key: deepcopy(mapping[key]) for key in keys if key in mapping}
+
+    def action_summary(actions):
+        return [dict(compact(action, ('kind', 'channels')),
+                     sequence_length=len(action.get('sequence', []))) for action in actions]
+
+    def entries(events):
+        for event in events:
+            nested = event.get('feedback', {}).get('steps', [])
+            if nested:
+                yield from entries(nested)
+            else:
+                yield event
+
+    timeline = list(entries(result.get('events', [])))
+    if not timeline:
+        timeline = list(entries(result.get('method_results', [])))
+    method_proposals = {(record.get('step'), record.get('path')): record['proposal']
+                        for record in result.get('method_results', [])
+                        if record.get('path') and record.get('proposal')}
+    revisions = {record['index']: record for record in result.get('revision_proposals', [])}
+    comparisons = {record['index']: record for record in result.get('experiment_comparisons', [])}
+    acquisition_positions, analysis_positions, submissions, confirmations, queries = {}, {}, [], [], []
+    deferred_proposals = []
+    for position, event in enumerate(timeline):
+        feedback = event.get('feedback', {})
+        method_proposal = method_proposals.get((event.get('step'),
+            event.get('arguments', {}).get('path') or feedback.get('executed_path')))
+        proposed = feedback.get('program_action') or event.get('proposal') or method_proposal or event
+        arguments = proposed.get('arguments', {})
+        revision = feedback.get('revision')
+        if revision is not None:
+            revisions.setdefault(revision['index'], revision)
+            if revision.get('observations'):
+                acquisition_positions.setdefault(revision['index'], position)
+            if revision.get('analysis_is_agent_authored') and not revision.get('readout_error'):
+                analysis_positions.setdefault(revision['index'], position)
+        comparison = feedback.get('comparison')
+        if comparison is not None:
+            comparisons.setdefault(comparison['index'], comparison)
+        confirmation = feedback.get('fresh_confirmation')
+        deferred = feedback.get('status') in {'confirmation_not_authorized', 'submission_proposed'}
+        if confirmation and not deferred:
+            confirmations.append((position, confirmation))
+        model = (proposed.get('model') or feedback.get('method_submission')
+                 or (arguments.get('model') if proposed.get('action') == 'finish' else None))
+        next_action = feedback.get('next_action', {})
+        if not model and next_action.get('action') == 'finish':
+            model = next_action.get('arguments', {}).get('model')
+        if model or confirmation:
+            declaration = {'position': position, 'step': event.get('step'), 'model': model}
+            if deferred:
+                deferred_proposals.append({**declaration, 'status': feedback['status']})
+            else:
+                submissions.append(declaration)
+        actions = proposed.get('actions') or arguments.get('actions')
+        if (actions and feedback.get('observations') and event.get('step', 0) >= 0
+                and event.get('usage', {}).get('backend') not in
+                {'common_paid_prefix', 'restored_paid_prefix'}):
+            queries.append({'position': position, 'step': event.get('step'),
+                'actions': action_summary(actions),
+                'paid_rows': sum(len(batch.get('row_indices', [])) for batch in feedback['observations']),
+                'revision_index': revision.get('index') if revision else None,
+                'classification': 'prospective_revision' if revision else 'unclassified_explicit_query'})
+
+    first_submission = submissions[0] if submissions else None
+    for query in queries:
+        query['before_first_submission'] = bool(first_submission is not None
+            and query['position'] < first_submission['position'])
+    final_confirmation = result.get('fresh_confirmation') or {}
+    final_accepted = bool(result.get('model') and final_confirmation.get('passed') is True)
+    final_position = submissions[-1]['position'] if submissions else None
+    traces = []
+    for index, revision in sorted(revisions.items()):
+        proposal = revision.get('proposal', {})
+        threshold = comparisons.get(proposal.get('comparison_index'), {}).get('mse_threshold', mse_threshold)
+        prior = [compact(fit, ('model', 'returncode', 'mse', 'error'))
+                 for fit in revision.get('prior_fit', [])]
+        supported = [fit['model'] for fit in prior if fit.get('returncode') == 0
+                     and isinstance(fit.get('mse'), (int, float)) and fit['mse'] <= threshold]
+        forecasts = revision.get('forecasts', [])
+        usable = [forecast for forecast in forecasts if forecast.get('model') in supported
+                  and forecast.get('returncode') == 0 and forecast.get('predictions')]
+        vectors = {tuple(forecast['predictions']) for forecast in usable}
+        witness = None
+        for row_index, values in enumerate(zip(*(forecast['predictions'] for forecast in usable))):
+            if len(set(values)) > 1:
+                witness = {'prediction_index': row_index,
+                           'values': dict(zip((forecast['model'] for forecast in usable), values))}
+                break
+        measured = [forecast for forecast in usable if forecast.get('complete_experiment') is True
+                    and isinstance(forecast.get('prospective_mse'), (int, float))]
+        survivors = [forecast['model'] for forecast in measured if forecast['prospective_mse'] <= threshold]
+        refuted = [forecast['model'] for forecast in measured if forecast['prospective_mse'] > threshold]
+        observations = revision.get('observations', [])
+        acquired_indices = [row for batch in observations for row in batch.get('row_indices', [])]
+        answer = revision.get('authored_answer') or {}
+        readout = bool(revision.get('analysis_is_agent_authored') and not revision.get('readout_error')
+                       and answer.get('status') in {'supported', 'refuted'}
+                       and set(answer.get('evidence', [])).intersection(acquired_indices))
+        position, analyzed = acquisition_positions.get(index), analysis_positions.get(index)
+        before_submission = (position is not None and first_submission is not None
+                             and position < first_submission['position'])
+        readout_before_submission = (analyzed is not None and first_submission is not None
+                                     and analyzed < first_submission['position'])
+        after_confirmation = (position is not None and any(when < position for when, _ in confirmations))
+        followed_by_accepted = (final_accepted and analyzed is not None and final_position is not None
+                               and analyzed < final_position)
+        discrimination = bool(len(supported) >= 2 and len(vectors) >= 2 and survivors and refuted and readout)
+        outcome = ('hypothesis_set_refuted' if measured and len(refuted) == len(usable) else
+                   'supported_and_refuted' if survivors and refuted else
+                   'no_measured_rejection' if survivors else 'incomplete_prospective_evidence')
+        traces.append({'index': index, 'comparison_index': proposal.get('comparison_index'),
+            'target': revision.get('target', proposal.get('target', 'response')),
+            'offered_models': deepcopy(proposal.get('models', [])),
+            'original_models': deepcopy(proposal.get('original_models', {})),
+            'experiment_path': revision.get('experiment_path'),
+            'actions': action_summary(revision.get('actions', [])),
+            'evidence_cutoff': deepcopy(revision.get('evidence_cutoff')),
+            'mse_threshold': threshold, 'prior_fit': prior, 'supported_models': supported,
+            'predictions_differ': len(vectors) >= 2, 'disagreement_witness': witness,
+            'forecasts': [dict(compact(forecast, ('model', 'execution_model', 'returncode', 'error',
+                'prospective_mse', 'scored_rows', 'complete_experiment')),
+                prediction_count=len(forecast.get('predictions') or [])) for forecast in forecasts],
+            'measured_supported_models': survivors, 'measured_refuted_models': refuted,
+            'measured_outcome': outcome,
+            'paid_row_indices': acquired_indices, 'authored_readout': readout,
+            'readout_path': (revision.get('analysis_attempts') or [{}])[-1].get('path', proposal.get('readout')),
+            'readout_status': answer.get('status'), 'readout_evidence': deepcopy(answer.get('evidence', [])),
+            'readout_error': revision.get('readout_error'),
+            'acquisition_position': position, 'analysis_position': analyzed,
+            'before_first_submission': before_submission, 'after_framework_confirmation': after_confirmation,
+            'readout_before_first_submission': readout_before_submission,
+            'selected_from_recorded_comparison': bool(proposal.get('comparison_index') in comparisons
+                and (comparisons[proposal['comparison_index']].get('selected_experiment') or {}).get('actions')
+                == revision.get('actions')),
+            'followed_by_accepted_model': followed_by_accepted,
+            'complete_discrimination': bool(discrimination and before_submission
+                                           and readout_before_submission and followed_by_accepted)})
+    comparison_traces = []
+    for index, comparison in sorted(comparisons.items()):
+        selected = comparison.get('selected_experiment') or {}
+        comparison_traces.append({**compact(comparison, ('index', 'target', 'status', 'diagnosis',
+            'models', 'eligible_models', 'evidence_cutoff', 'mse_threshold', 'selection_policy', 'task_value')),
+            'prior_fit': [compact(fit, ('model', 'returncode', 'mse', 'error'))
+                          for fit in comparison.get('prior_fit', [])],
+            'selected_experiment': compact(selected, ('id', 'observation_cost', 'predicted_separation')),
+            'experiments': [{**compact(experiment, ('id', 'row_count', 'observation_cost', 'predicted_separation')),
+                'actions': action_summary(experiment.get('actions', []))}
+                for experiment in comparison.get('comparisons', [])],
+            'linked_revisions': [trace['index'] for trace in traces if trace['comparison_index'] == index]})
+        control = comparison.get('experiment_selection_control')
+        if control:
+            comparison_traces[-1]['choice_control'] = {
+                **compact(control, ('policy', 'seed', 'eligible_experiments', 'selected_experiment')),
+                'greedy_suggestion': compact(control.get('greedy_suggestion', {}),
+                    ('id', 'observation_cost', 'predicted_separation'))}
+    return {'comparisons': comparison_traces, 'revisions': traces, 'explicit_queries': queries,
+        'deferred_model_proposals': deferred_proposals,
+        'first_submission': first_submission, 'final_model': result.get('model'),
+        'final_confirmation': compact(final_confirmation, ('passed', 'mse', 'rows', 'returncode')),
+        'complete_discrimination': any(trace['complete_discrimination'] for trace in traces),
+        'interpretation': 'complete_discrimination requires supported rivals, prospective disagreement, '
+            'paid separation and authored readout before the first submission, followed by an accepted model. '
+            'This trace does not establish causal benefit or independent terminal accuracy. '
+            'Unclassified explicit queries require inspection; absent classification is not failure.'}
 
 
 def continuation_protocol(source):

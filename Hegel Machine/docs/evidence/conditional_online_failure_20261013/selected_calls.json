@@ -1,0 +1,3519 @@
+{
+  "numbering": "One-based new Luna decisions, excluding five inherited trial095 events.",
+  "calls": [
+    {
+      "call": 1,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom itertools import combinations_with_replacement\nrows=json.load(open('observations.json')); print(type(rows),len(rows));\nif isinstance(rows,dict): rows=rows.get('rows',[])\nprint('n',len(rows), 'firstkeys',rows[0].keys())\ndef feat(r,L,D):\n s=list(r.get('history',[]))+[r['features']]; s=([dict.fromkeys(['x','z','c'],0.)]*max(0,L+1-len(s)))+s[-L-1:]; v=[float(q[k]) for q in s for k in ['x','z','c']]; return np.array([1.]+[np.prod([v[i] for i in ix]) for d in range(1,D+1) for ix in combinations_with_replacement(range(len(v)),d)])\ny=np.array([r['target'] for r in rows]);\nfor L in range(0,11):\n for D in (1,2,3):\n  X=np.array([feat(r,L,D) for r in rows]); c=np.linalg.lstsq(X,y,rcond=1e-12)[0]; e=X@c-y; print(L,D,round(float(np.mean(e*e)),12),round(float(np.max(np.abs(e))),8))",
+        "research_question": {
+          "id": "task",
+          "question": "Find a response model that explains all paid trajectories, including confirmation counterexamples.",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Observed: 192 paid response rows total, with fresh-confirmation counterexamples at indices 96–191 (evidence previews show continuing controls x,z,c and targets); the submitted polynomial model failed fresh confirmation with MSE 3.955830312868331, despite paid fit MSE 1.2789e-29. Prior evaluated lag-3 degree-3 candidate has only been scored on 72 rows; fitting contexts for rival poly candidates also precede the 24-row prospective query. Latest comparison experiment used 24 varied controls and did not validate the submitted degree-3 lag-3 model against confirmation data. Working hypothesis: an exact control-history relation exists but the fitted finite-lag/order family is not yet adequate or coefficients are ill-conditioned from insufficient training; alternatives include nonlinear latent dynamics or longer lag. Next analysis: assess polynomial fits across lags/degrees against all purchased rows, particularly whether any family achieves machine-precision residuals. Reserve 96 rows for fresh confirmation."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "<class 'list'> 192\nn 192 firstkeys dict_keys(['features', 'target', 'history'])\n0 1 3.067394166741 5.97289739\n0 2 2.419218007198 6.08672724\n0 3 2.011364388 5.37219196\n1 1 2.962297870409 5.13049426\n1 2 1.622230437191 5.21152996\n1 3 0.732224823912 2.83528737\n2 1 2.901771238076 5.05434152\n2 2 1.112233372334 4.14640086\n2 3 0.0 0.0\n3 1 2.834994524208 4.96289599\n3 2 0.676711925704 2.37000485\n3 3 0.0 0.0\n4 1 2.830595036665 4.89875464\n4 2 0.366341867998 1.63091745\n4 3 0.0 0.0\n5 1 2.808787209032 4.9261752\n5 2 0.004888219727 0.58375628\n5 3 0.0 0.0\n6 1 2.659835102358 4.53418647\n6 2 0.0 0.0\n6 3 0.0 0.0\n7 1 2.639404051032 4.86555208\n7 2 0.0 0.0\n7 3 0.0 0.0\n8 1 2.573183321607 5.14242043\n8 2 0.0 0.0\n8 3 0.0 0.0\n9 1 2.567188999965 5.01660521\n9 2 0.0 0.0\n9 3 0.0 0.0\n10 1 2.407263239169 4.41379635\n10 2 0.0 0.0\n10 3 0.0 0.0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 4,
+      "action": "finish",
+      "arguments": {
+        "model": "model.py",
+        "lesson": "The lag-2, degree-3 reset-padded polynomial in current and preceding x, z, c controls fits all 192 paid rows, including the prior confirmation counterexamples, at MSE 2.90e-29. Submit this refit for independent confirmation.",
+        "manifest": "shared/knowledge.json",
+        "research_question": {
+          "id": "task",
+          "question": "Can the lag-2 cubic control-history polynomial fitted to all paid rows predict independent trajectories?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Observed: 192 paid response rows (indices 0–191). The first submitted model fit its original paid rows but failed fresh confirmation on indices 96–191 (MSE 3.9558). A lag-2, degree-3 polynomial in reset-padded current and previous x,z,c controls fit all 192 rows with MSE 3.05e-29 / max residual 1.69e-14; ordinary evaluation retained it with MSE 2.90e-29 (paid fit only). Working explanation: this finite control-history polynomial captures the deterministic response. Unresolved: independent generalization. Next: submit the refit for fresh confirmation (96 reserved rows)."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stderr": "",
+        "error": "fresh confirmation failed; new counterexamples are now paid evidence",
+        "mse": 2.9005253830739534e-29
+      }
+    },
+    {
+      "call": 29,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 1,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": 1
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Do the pulse-response effects persist with the same linear, additive signature when pulses occur after the reset transient has settled?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Do the pulse-response effects persist with the same linear, additive signature when pulses occur after the reset transient has settled?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 544 paid response rows across reset trajectories. Independent predictions remain unresolved: the lag-3 cubic first fit rows 0–95 but failed on rows 96–191 (fresh MSE 3.96); a lag-2 cubic refit on 192 rows failed the next independent test (MSE 15.17). Higher-lag polynomials, scalar/2D latent recurrences, reservoirs, kernels, tree ensembles, MLPs, GRUs, distributed lags, and exponential summaries all generalize poorly; best cited held-out tree error was ~0.17, far above the 1e-6 fresh-confirmation threshold. The retained evaluated polynomial has only paid-fit support on its original 192 rows; later rows have not been scored with it. Pulse evidence: rows 416–435 zero controls produce −0.274723, −0.549447, then −0.824170 persistently; rows 436–455 unit x shifts the first three outputs by −0.939181 then no difference; rows 456–475 unit z shifts them by −0.461237 then no difference; rows 476–495 unit c matches zero. Rows 496–507 x=0.5 and 508–519 x=1.5 scale the transient pulse effect linearly; rows 520–531 simultaneous x=z=1 appear additive; rows 532–543 x=1,c=1 matches x alone. These observations suggest short transient linear x/z effects, but do not explain broad random-control trajectories. A previous affine finite-lag test was still inaccurate (full-data MSE ~2.04–2.24; holdout ~0.19–0.22). Proposed experiment: pulse x, z, x+z, and x+c after four zero steps, to test whether the transient, additive signature persists once the reset ramp has settled. This experiment has not happened yet; preserve the 96-row confirmation reserve."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          17,
+          18,
+          19,
+          20
+        ]
+      }
+    },
+    {
+      "call": 30,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 1,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": 1
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Do x/z pulse effects remain linear, additive, and c-independent when applied after the initial reset transient?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Do x/z pulse effects remain linear, additive, and c-independent when applied after the initial reset transient?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 592 paid response rows across reset trajectories. Tested models remain inadequate: short-lag polynomial interpolations failed independent trajectories (fresh MSE 3.96 and 15.17); longer-window polynomials, linear/compact latent recurrences, reservoirs, kernels, trees, MLPs, GRUs, distributed lags, and exponential summaries also generalize poorly. The best cited leave-one-episode-out tree result was still ~0.17 MSE, far above the 1e-6 confirmation threshold. Pulse evidence at rows 416–543: zero input yields −0.274723, −0.549447, then −0.824170; an initial x pulse shifts the first three outputs by −0.939181, z by −0.461237, and c has no effect. Pulse amplitude scaling and x/z additivity at time zero appear linear; x+c matches x. Crucially, the recent rows 544–591 intended to test delayed pulses were actually four all-zero trajectories, so they only repeat the baseline and provide no delayed-pulse evidence. Working explanation: a short transient linear x/z effect is possible, but broad random-control response and its history dependence remain unexplained. Proposed experiment (not yet observed): apply x, z, x+z, and x+c pulses after four zero-control steps to test whether the initial-pulse signature persists after reset transient settles."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          21,
+          22,
+          23,
+          24
+        ]
+      }
+    },
+    {
+      "call": 31,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 1,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": 1
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              },
+              {
+                "x": 0,
+                "z": 0,
+                "c": 0
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Do correctly delayed x/z pulses preserve their initial transient, additive and c-independent response signature?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Do correctly delayed x/z pulses preserve their initial transient, additive and c-independent response signature?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence so far: 640 paid response rows across reset trajectories. Multiple model families have poor independent-trajectory performance: lagged polynomial interpolations failed fresh tests (MSE 3.96 and 15.17); compact linear latent recurrences, reservoirs, kernels, trees, MLPs, GRUs, distributed lags and exponential summaries remain far above the 1e-6 confirmation threshold (best cited held-out tree MSE ~0.17). Pulse evidence at rows 416–543: zero controls give −0.274723, −0.549447, then −0.824170; unit x and z pulses at step 0 shift the first three outputs by −0.939181 and −0.461237, respectively, then no difference; c alone matches zero. Amplitude scaling, x/z additivity, and x+c equivalence were observed for pulses at reset. Rows 544–591, supposed to test delayed pulses, were in fact all-zero trajectories and provide no delayed-pulse evidence. Rows 592–639 also repeat zero controls. Working hypothesis: an x/z transient contribution may be linear/additive and limited to three output steps, but the broad response relation remains unexplained. The proposed 12-step trajectories correctly place separate x, z, x+z, and x+c pulses at step 4 after four zero controls; they have not yet been observed. Next compare their responses with the known zero baseline and reset-time signatures."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          25,
+          26,
+          27,
+          28
+        ]
+      }
+    },
+    {
+      "call": 34,
+      "action": "run",
+      "arguments": {
+        "code": "import json\nrows=json.load(open('observations.json'))\n# Inspect the most recent four 12-step trajectories: controls, targets and increments.\nfor start in (688,700,712,724):\n    ep=rows[start:start+12]\n    print('episode',start)\n    print('controls',[(r['features']['x'],r['features']['z'],r['features']['c']) for r in ep])\n    print('targets',[round(r['target'],6) for r in ep])\n    print('deltas',[round(ep[i]['target']-ep[i-1]['target'],6) for i in range(1,len(ep))])\n",
+        "research_question": {
+          "id": "task",
+          "question": "Do the newest four trajectories contain negative delayed pulses or rapid x reversals, and what response signatures do they show?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 736 paid rows across reset trajectories. Controlled pulse records 416–543 establish a zero-input baseline of −0.274723, −0.549447, then −0.824170; an initial unit x pulse shifts the first three outputs by −0.939181, a unit z pulse by −0.461237, while c alone has no effect. Amplitude scaling, x/z additivity, and x+c equivalence held for initial pulses. Delayed pulses in records 640–687, after four zeros, preserve the same x/z shifts over the next three outputs and then return to baseline. However, intended follow-up records 688–735 may again have been all-zero trajectories; this has not yet been checked from full rows. Many polynomial, latent recurrence, reservoir, kernel, tree, MLP/GRU and lag-summary candidates failed independent episode prediction. Two fitted polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); best cited cross-episode tree errors remain around 0.17, nowhere near the 1e−6 criterion. The sole evaluated model was fit on only the initial 192 rows and remains unsupported on newer evidence. Working hypothesis: simple pulse responses are linear/additive transient components, but broad control-history response remains unexplained. Next action is a small local check of exact controls, targets and target increments in the newest four trajectories; that proposed inspection has not happened yet. Keep 96 confirmation rows reserved."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "episode 688\ncontrols [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (-1, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]\ntargets [-0.274723, -0.549447, -0.82417, -0.82417, 0.115011, 0.115011, 0.115011, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417]\ndeltas [-0.274723, -0.274723, 0.0, 0.939181, 0.0, 0.0, -0.939181, 0.0, 0.0, 0.0, 0.0]\nepisode 700\ncontrols [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, -1, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]\ntargets [-0.274723, -0.549447, -0.82417, -0.82417, -1.285408, -1.285408, -1.285408, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417]\ndeltas [-0.274723, -0.274723, 0.0, -0.461237, 0.0, 0.0, 0.461237, 0.0, 0.0, 0.0, 0.0]\nepisode 712\ncontrols [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 1), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]\ntargets [-0.274723, -0.549447, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417, -0.82417]\ndeltas [-0.274723, -0.274723, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]\nepisode 724\ncontrols [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (1, 0, 0), (-1, 0, 0), (1, 0, 0), (-1, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]\ntargets [-0.274723, -0.549447, -0.82417, -0.82417, -1.763352, -0.82417, -1.763352, 0.115011, -0.82417, 0.115011, -0.82417, -0.82417]\ndeltas [-0.274723, -0.274723, 0.0, -0.939181, 0.939181, -0.939181, 1.878362, -0.939181, 0.939181, -0.939181, 0.0]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 35,
+      "action": "run",
+      "arguments": {
+        "code": "import json\nimport numpy as np\nfrom itertools import combinations_with_replacement\nrows=json.load(open('observations.json'))\n# Assess whether a short affine FIR model improves on the known baseline-plus-pulse description.\nepisodes=[]; start=0\nfor i,r in enumerate(rows):\n    if len(r.get('history',[]))==0 and i>start:\n        episodes.append(rows[start:i]); start=i\nepisodes.append(rows[start:])\nfor lag in (0,1,2,3,5,8):\n    X=[]; y=[]; groups=[]\n    for ei,ep in enumerate(episodes):\n        for t,r in enumerate(ep):\n            xx=[]\n            for k in range(lag+1):\n                j=t-k\n                xx.extend([0.,0.,0.] if j<0 else [ep[j]['features'][n] for n in ('x','z','c')])\n            X.append([1.,*xx]); y.append(r['target']); groups.append(ei)\n    X=np.asarray(X); y=np.asarray(y); groups=np.asarray(groups)\n    preds=np.zeros_like(y);\n    for g in np.unique(groups):\n        tr=groups!=g; te=~tr; coef=np.linalg.lstsq(X[tr],y[tr],rcond=None)[0]; preds[te]=X[te]@coef\n    print('lag',lag,'LOEO_MSE',round(float(np.mean((preds-y)**2)),6),'all_MSE',round(float(np.mean((X@np.linalg.lstsq(X,y,rcond=None)[0]-y)**2)),8))\n",
+        "research_question": {
+          "id": "task",
+          "question": "Does an affine finite-impulse-response model of x, z, and c controls explain mixed trajectories across independent resets?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 736 paid rows across reset trajectories. Controlled pulses (rows 416–543) show zero-input output −0.274723, −0.549447, then −0.824170 steady; x=1 shifts outputs by −0.939181 for three steps, z=1 by −0.461237 for three, and c alone has no effect. Pulse effects scale linearly, x/z effects add, x+c matches x, and delayed pulses after four zeros reproduce the same three-step signatures (rows 640–687). Negative delayed x/z pulses reverse the shifts; delayed c has no effect; alternating x signs in rows 724–735 are consistent with overlapping three-step pulse contributions (inspection at run step 33). These controlled results support a compact additive transient response for isolated controls, but random-control trajectories remain unexplained. Multiple nonlinear, polynomial, latent-state, kernel, tree, MLP/GRU, and distributed-lag models have not generalized adequately; short-lag polynomial candidates failed fresh confirmation (MSE 3.956 and 15.169), and best cited episode-held-out tree error was ~0.17. Evaluated model fits only the initial 192 rows and has not been scored on current rows. Current action will compute leave-one-reset-trajectory-out and pooled error for affine FIR control histories at several lags; this detects whether isolated pulse response extends linearly to arbitrary mixed inputs, and whether to pursue interactions/state structure next. No new observation or model submission is being proposed."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "lag 0 LOEO_MSE 1.652449 all_MSE 1.62047621\nlag 1 LOEO_MSE 1.690465 all_MSE 1.6168531\nlag 2 LOEO_MSE 1.715013 all_MSE 1.60849061\nlag 3 LOEO_MSE 1.738147 all_MSE 1.6036955\nlag 5 LOEO_MSE 1.791999 all_MSE 1.58477128\nlag 8 LOEO_MSE 1.829914 all_MSE 1.52941018\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 48,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nr=json.load(open('observations.json'))\nprint('n',len(r),'keys',r[-1].keys())\n# inspect last rows by chronological array position; determine trajectory starts from history length\nstarts=[i for i,v in enumerate(r) if len(v.get('history',[]))==0]\nprint('starts',[(i, r[i].get('row_index')) for i in starts[-12:]])\nfor s in starts[-4:]:\n ep=r[s:s+12]; print('ep',s,'controls',[(v['features']['x'],v['features']['z'],v['features']['c']) for v in ep]); print('y',np.round([v['target'] for v in ep],6).tolist())\n# evaluate fixed impulse model: baseline transient + three output effects per input; extrapolate candidate coefficient fit diagnostics\nbase=np.array([-.27472345791918956,-.5494469158383791,-.8241703737575687])\nax=-.9391812239168453; az=-.46123736686538214\ndef pred(ep):\n out=[]\n for t,row in enumerate(ep):\n  y=base[min(t,2)]\n  for j in range(max(0,t-2),t+1):\n   y+=ax*ep[j]['features']['x']+az*ep[j]['features']['z']\n  out.append(y)\n return np.array(out)\nfor s in starts:\n ep=r[s:s+min(64, (starts[starts.index(s)+1]-s if starts.index(s)+1<len(starts) else len(r)-s))]\n if len(ep):\n  e=pred(ep)-np.array([v['target'] for v in ep]); print('mse',s,len(ep),round(float(e@e/len(e)),5),'max',round(float(abs(e).max()),4))",
+        "research_question": {
+          "id": "task",
+          "question": "Do the latest sustained mixed-control trajectories agree with the pulse-derived additive x/z response rule, and does that rule explain the broad episodes?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence reviewed: 928 paid response rows (indices 0–927) and 96-row confirmation requirement. Controlled pulses at indices 416–735 show settled zero baseline −0.824170, with impulse effects −0.939181 per x and −0.461237 per z lasting exactly three outputs; amplitude scaling, x/z additivity, delayed pulses, negative pulses, x reversals, and c-independence were observed. Sustained x=.5, x=1, z=1 reach −2.232942, −3.641714, −2.207882, while c=1 matches baseline (736–831); x durations 1–4 recover in three steps (832–879). Sustained mixtures x=z=1, x=1,z=−1, x=z=.5, and x=1,c=1 look additive (880–927 previews). Yet the pulse-derived FIR has MSE 4.142 on broad trajectories; numerous polynomial, linear/nonlinear latent, reservoir, kernel, tree, MLP, GRU, and lag-summary approaches generalize poorly. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); retained evaluated polynomial only has paid support on first 192 rows. Previous readout script failed because it searched row_index instead of array positions/trajectory boundaries. Proposed run inspects latest full records, identifies reset boundaries, and scores the fixed pulse-rule against each episode; it has not run yet. Unresolved: nonlinear/state-dependent mixed-input dynamics versus a missing indexing/feature interpretation in earlier analysis. Next experiment depends on those results; reserve 96 confirmation rows."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "n 928 keys dict_keys(['features', 'target', 'history'])\nstarts [(784, None), (796, None), (808, None), (820, None), (832, None), (844, None), (856, None), (868, None), (880, None), (892, None), (904, None), (916, None)]\nep 880 controls [(1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0), (1, 1, 0)]\ny [-1.675142, -3.350284, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426]\nep 892 controls [(1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0), (1, -1, 0)]\ny [-1.675142, -3.350284, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426, -5.025426]\nep 904 controls [(0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0), (0.5, 0.5, 0)]\ny [-0.859623, -1.719247, -2.57887, -2.57887, -2.57887, -2.57887, -2.57887, -2.57887, -2.57887, -2.57887, -2.57887, -2.57887]\nep 916 controls [(1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1), (1, 0, 1)]\ny [-1.213905, -2.427809, -3.641714, -3.641714, -3.641714, -3.641714, -3.641714, -3.641714, -3.641714, -3.641714, -3.641714, -3.641714]\nmse 0 64 6.87816 max 7.4119\nmse 64 8 4.40174 max 4.0202\nmse 72 24 7.15087 max 7.8398\nmse 96 64 10.52707 max 10.4846\nmse 160 32 4.14654 max 6.0614\nmse 192 64 9.31698 max 8.0363\nmse 256 32 7.82533 max 7.8899\nmse 288 64 6.21536 max 6.1586\nmse 352 64 5.44324 max 6.0091\nmse 416 20 0.0 max 0.0\nmse 436 20 0.0 max 0.0\nmse 456 20 0.0 max 0.0\nmse 476 20 0.0 max 0.0\nmse 496 12 0.0 max 0.0\nmse 508 12 0.0 max 0.0\nmse 520 12 0.0 max 0.0\nmse 532 12 0.0 max 0.0\nmse 544 12 0.0 max 0.0\nmse 556 12 0.0 max 0.0\nmse 568 12 0.0 max 0.0\nmse 580 12 0.0 max 0.0\nmse 592 12 0.0 max 0.0\nmse 604 12 0.0 max 0.0\nmse 616 12 0.0 max 0.0\nmse 628 12 0.0 max 0.0\nmse 640 12 0.0 max 0.0\nmse 652 12 0.0 max 0.0\nmse 664 12 0.0 max 0.0\nmse 676 12 0.0 max 0.0\nmse 688 12 0.0 max 0.0\nmse 700 12 0.21274 max 0.9225\nmse 712 12 0.0 max 0.0\nmse 724 12 0.0 max 0.0\nmse 736 12 0.0 max 0.0\nmse 748 12 0.0 max 0.0\nmse 760 12 0.0 max 0.0\nmse 772 12 0.0 max 0.0\nmse 784 12 0.0 max 0.0\nmse 796 12 0.0 max 0.0\nmse 808 12 0.0 max 0.0\nmse 820 12 0.0 max 0.0\nmse 832 12 0.0 max 0.0\nmse 844 12 0.0 max 0.0\nmse 856 12 0.0 max 0.0\nmse 868 12 0.0 max 0.0\nmse 880 12 0.0 max 0.0\nmse 892 12 6.73676 max 2.7674\nmse 904 12 0.10526 max 0.3459\nmse 916 12 0.0 max 0.0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 62,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Where between c=-0.01 and c=-0.25 does the sustained mixed-input regime transition occur?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Where between c=-0.01 and c=-0.25 does the sustained mixed-input regime transition occur?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Observed: 1060 paid response rows; fresh confirmation requires MSE ≤1e-6 on 96 rows. No predictor is confirmed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); many polynomial, FIR, latent-state, tree, kernel, and neural approaches also generalized poorly. Controlled pulses show x/z effects lasting three outputs (−0.939181 per x, −0.461237 per z), but the pulse FIR fails broad trajectories (MSE 4.142). For sustained x=z=0.5, c=0 and positive c give steady −2.578870; c=−1, −0.75, −0.5, and −0.25 give +1.374835. New paid evidence 1024–1059 shows c=−0.01, −0.001, and +0.001 all remain in the negative steady-output regime (−2.578870). Thus the transition is below −0.01 and at or above −0.25; a threshold remains a hypothesis, not established. Proposed experiment: test sustained x=z=0.5 at c=−0.02, −0.05, −0.1, and −0.15 to narrow this interval. The response law for general trajectories remains unresolved."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          60,
+          61,
+          62,
+          63
+        ]
+      }
+    },
+    {
+      "call": 63,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Where between c=-0.01 and c=-0.25 does the sustained mixed-input regime transition occur?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Where between c=-0.01 and c=-0.25 does the sustained mixed-input regime transition occur?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 1108 paid response rows; confirmation requires 96 fresh rows with MSE ≤1e-6, and no predictor is confirmed. Two submitted polynomial models failed confirmation (MSE 3.956 and 15.169); many polynomial, FIR, state-space, tree, kernel, and neural models also generalized poorly. Controlled pulses show three-step x/z effects (−0.939181 per x, −0.461237 per z), but the pulse FIR fails broad trajectories (MSE 4.142). For sustained x=z=0.5, c=0, positive c, and c=−0.01, −0.001 remain in the negative-output regime (steady −2.578870), while c=−0.25 and more negative tested values produce a positive regime (steady +1.374835). The transition is therefore bracketed between −0.25 and −0.01; a sharp threshold is still a hypothesis. Proposed next measurement tests c=−0.02, −0.05, −0.1, −0.15 at the same sustained x,z setting to narrow the interval."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          64,
+          65,
+          66,
+          67
+        ]
+      }
+    },
+    {
+      "call": 64,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.02
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.05
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.15
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Where between c=-0.01 and c=-0.25 does the sustained mixed-input regime transition occur?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Where between c=-0.01 and c=-0.25 does the sustained mixed-input regime transition occur?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 1156 paid response rows; 96 fresh confirmation rows are required at MSE ≤1e-6. No predictor is confirmed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169), and tested polynomial, FIR, latent-state, tree, kernel, and neural models have not generalized adequately. Controlled pulses show three-step x/z effects (−0.939181 per x, −0.461237 per z), but the pulse FIR fails broad trajectories (MSE 4.142). For sustained x=z=0.5, c=0, positive c, and c=−0.01/−0.001 yield steady −2.578870; c=−0.25 and more negative tested values yield +1.374835. This brackets a possible regime boundary between −0.25 and −0.01; a sharp threshold is a hypothesis, not established. Proposed next experiment: test constant x=z=0.5 at c=−0.02, −0.05, −0.1, and −0.15 (12 steps each) to narrow the boundary. These results are not yet observed."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          68,
+          69,
+          70,
+          71
+        ]
+      }
+    },
+    {
+      "call": 73,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.176
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.17625
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              },
+              {
+                "x": 0.5,
+                "z": 0.5,
+                "c": -0.1765
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Can the sustained mixed-input regime boundary be narrowed near c=-0.176?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Can the sustained mixed-input regime boundary be narrowed near c=-0.176?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,384 response rows are paid; 96 fresh confirmation rows are reserved, and the threshold is MSE ≤1e-6. No model has passed. The retained lag-2 cubic fits its first 192 rows nearly exactly but is unsupported on later rows; two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169). Many polynomial, FIR, latent-state, kernel, tree, neural and autoregressive models had poor held-out-trajectory performance. Controlled observations show zero-control response -0.274723, -0.549447, then -0.824170; x/z pulses cause three-output shifts of -0.939181/-0.461237 per unit, but the pulse FIR scores MSE 4.142 on broad trajectories. For sustained x=z=0.5, c=-0.175 yields steady -2.578870, while c=-0.1775 yields +1.374835 (rows 1348-1371); thus the observed transition is between those values. Earlier results agree: c=-0.17 is in the negative-output regime and c=-0.18 in the positive-output regime. A sharp threshold near -0.176 is plausible but not established; these findings describe one fixed x,z setting, not the general response law. Proposed query tests c=-0.176, -0.17625, and -0.1765 at the same sustained x,z; these measurements have not yet occurred. Next, analyze their outcomes and then return to building a general predictor rather than treating boundary refinement as sufficient."
+      },
+      "feedback": {
+        "observation_cost": 36,
+        "record_indices": [
+          87,
+          88,
+          89
+        ]
+      }
+    },
+    {
+      "call": 74,
+      "action": "run",
+      "arguments": {
+        "code": "import json\nrows=json.load(open('observations.json'))\nfor start in range(1396,1420,12):\n q=rows[start:start+12]\n f=q[0]['features']\n print('start',start,'control',f,'targets',[round(float(r['target']),12) for r in q])",
+        "research_question": {
+          "id": "task",
+          "question": "Can the sustained mixed-input regime boundary be narrowed near c=-0.176?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,420 response rows are paid; 96 fresh confirmation rows remain reserved, with MSE threshold 1e-6. No predictor has passed. The retained lag-2 cubic fits its first 192 rows almost exactly but is unsupported on newer evidence; two related polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169). Many polynomial, FIR, latent-state, kernel, tree, neural and autoregressive models generalized poorly. Controlled evidence (rows 416–927) shows zero-input outputs −0.274723, −0.549447, then −0.824170; isolated x/z pulses shift three outputs by −0.939181/−0.461237 per unit, while c was neutral in those tested pulse conditions. Sustained x=.5, x=1, z=1 settle at −2.232942, −3.641714, −2.207882; c=1 matches zero baseline. The pulse FIR has broad-data MSE 4.142. For sustained x=z=.5, observed c≥−0.175 yields −2.578870 and c≤−0.1775 yields +1.374835, so the change is bracketed between these values at this fixed x,z setting; sharp threshold/general law remains unproven. The latest query (indices 1396–1419) tested c=−0.176, −0.17625, and −0.1765 at x=z=.5. Their response outcomes have not yet been inspected. Proposed action: print those three newly paid trajectories to update the bracket; afterward return to building/testing a general predictor rather than treating threshold refinement as sufficient."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "start 1396 control {'x': 0.5, 'z': 0.5, 'c': -0.17625} targets [0.458278211994, 0.916556423989, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983]\nstart 1408 control {'x': 0.5, 'z': 0.5, 'c': -0.1765} targets [0.458278211994, 0.916556423989, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983, 1.374834635983]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 75,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Does the observed c-dependent regime boundary near -0.176 at x=z=0.5 shift when sustained x and z amplitudes change?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Does the observed c-dependent regime boundary near -0.176 at x=z=0.5 shift when sustained x and z amplitudes change?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,420 response rows are paid; 96 fresh confirmation rows remain reserved, with MSE threshold 1e-6. No predictor has passed. Two polynomial submissions fit their paid subsets nearly exactly but failed fresh confirmation (MSE 3.956 and 15.169); many polynomial, FIR, latent-state, kernel, tree, neural, and autoregressive alternatives also generalized poorly. Controlled evidence (rows 416–927) shows zero input outputs −0.274723, −0.549447, then −0.824170; isolated x/z pulses produce additive three-step shifts −0.939181/−0.461237 per unit, with tested c-only controls neutral. Sustained x=.5, x=1, z=1 settle at −2.232942, −3.641714, −2.207882; c=1 matches baseline. Pulse FIR has broad-data MSE 4.142. For sustained x=z=.5, c values through −0.175 give steady −2.578870, while c at or below −0.17625 give +1.374835; thus the regime switch is narrowly bracketed in that fixed setting, not a general response law. The latest paid query at c=−0.176, −0.17625, and −0.1765 has been inspected: −0.17625 and −0.1765 are in the positive regime; the −0.176 outcome was not included in the compact printed output. Working explanation: c participates in a threshold-like mixed-input regime change; its dependence on x,z and the broader trajectory response remain unresolved. Proposed experiment: compare sustained inputs x=z=.25 and x=z=1 at c=−0.17625 and −0.175 to test whether the apparent boundary shifts with input amplitude; this experiment has not yet happened."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          90,
+          91,
+          92,
+          93
+        ]
+      }
+    },
+    {
+      "call": 77,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.17625
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              },
+              {
+                "x": 0.25,
+                "z": 0.25,
+                "c": -0.175
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.17625
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              },
+              {
+                "x": 1.0,
+                "z": 1.0,
+                "c": -0.175
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Does the sustained c-regime boundary near -0.176 shift when x=z changes from 0.5 to 0.25 or 1?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Does the sustained c-regime boundary near -0.176 shift when x=z changes from 0.5 to 0.25 or 1?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Paid response evidence: 1,468 rows, with 96 confirmation rows reserved and threshold MSE ≤1e-6. No model has passed confirmation. Two polynomial submissions failed fresh tests (MSE 3.956 and 15.169); broad held-out tests of polynomial, FIR, latent-state, kernel, tree and neural alternatives remain poor. Controlled pulse evidence (rows 416–927) shows zero-input response −0.274723, −0.549447, then −0.824170; x/z pulses create additive three-output shifts −0.939181/−0.461237 per unit, while tested c-only cases are neutral. But the pulse FIR scores MSE 4.142 on broad trajectories. At sustained x=z=0.5, the output is in one steady regime (−2.578870) for c≥−0.175 and another (+1.374835) for c≤−0.17625; the boundary is bracketed at this setting, not a general law. The submitted candidate is paid-fit supported only on its first 192 rows and unscored on newer evidence. Working hypothesis: the c threshold may depend on x,z amplitudes; alternatives include a more complex mixed-control/state dependence. Proposed experiment (not yet observed): compare sustained x=z=0.25 and x=z=1 at c=−0.17625 and −0.175 (12 steps each). Then compare steady regimes to determine whether the threshold shifts with amplitude."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          94,
+          95,
+          96,
+          97
+        ]
+      }
+    },
+    {
+      "call": 82,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nrows=json.load(open('observations.json'))\neps=[]; cur=[]\nfor r in rows:\n    if len(r.get('history',[]))==0 and cur:\n        eps.append(cur); cur=[]\n    cur.append(r)\nif cur: eps.append(cur)\nconst=[]\nfor ep in eps:\n    f=ep[0]['features']\n    if len(ep)>=4 and all(r['features']==f for r in ep):\n        const.append((f['x'],f['z'],f['c'],float(ep[-1]['target']),len(ep)))\nprint('constant episodes',len(const))\n# Show distinct c transition evidence across tested constant control settings.\nfor x,z in sorted(set((q[0],q[1]) for q in const)):\n    vals=sorted(set((c,round(y,9)) for a,b,c,y,n in const if a==x and b==z))\n    if len(vals)>1 or any(abs(c)<0.3 for c,y in vals):\n        print('x,z',x,z,'c->steady',vals)\n",
+        "research_question": {
+          "id": "task",
+          "question": "Is the sustained c-dependent regime boundary consistent across the already-paid constant-control settings, or does it depend on x and z separately?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,552 paid response rows; 96 fresh confirmation rows are reserved, requiring MSE ≤1e-6. No candidate has passed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); many polynomial/FIR, latent-state, kernel, tree, neural, and autoregressive models had poor held-out-trajectory performance. Controlled records 416–735 show zero-input response −0.274723, −0.549447, then −0.824170; isolated x/z pulses shift three outputs by −0.939181/−0.461237 per unit, with tested linearity/additivity; c-only pulse and sustained controls were neutral in those conditions. Sustained x=.5, x=1, z=1 settle at −2.232942, −3.641714, −2.207882; pulse FIR broad-data MSE is 4.142. At fixed x=z=.5, steady output is −2.578870 for c≥−0.176 and +1.374835 for c≤−0.17625. Newer constant-input evidence (rows 1468–1551; inspected in steps 77–79) gives at x=z=.25: c=−.175 → −1.615038 and c=−.17625/−.1775 → +0.365935; at x=z=1: c=−.175 → −5.025426 and c=−.17625 → +4.187478. This appears to put the regime boundary in the same narrow interval for three diagonal amplitudes, contrary to earlier suggestion of a clear amplitude shift; it is not a general response law. Working hypothesis: a c-controlled regime change may be largely independent of amplitude for these x=z>0 settings, with regime-specific output scaling; alternatives include dependence on other control combinations/history. Proposed action (not yet run): summarize already-paid constant-control trajectories grouped by (x,z), listing c and steady output, to check whether boundary invariance holds beyond the three diagonal settings before designing a broader test."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "constant episodes 58\nx,z 0 0 c->steady [(0, -0.824170374), (1, -0.824170374)]\nx,z 0.25 0.25 c->steady [(-0.1775, 0.365935464), (-0.17625, 0.365935464), (-0.175, -1.615038298)]\nx,z 0.5 0.5 c->steady [(-1, 1.374834636), (-0.75, 1.374834636), (-0.5, 1.374834636), (-0.25, 1.374834636), (-0.245, 1.374834636), (-0.24, 1.374834636), (-0.23, 1.374834636), (-0.22, 1.374834636), (-0.2, 1.374834636), (-0.19, 1.374834636), (-0.18, 1.374834636), (-0.1775, 1.374834636), (-0.1765, 1.374834636), (-0.17625, 1.374834636), (-0.176, -2.578870235), (-0.175, -2.578870235), (-0.1725, -2.578870235), (-0.17, -2.578870235), (-0.16, -2.578870235), (-0.15, -2.578870235), (-0.1, -2.578870235), (-0.05, -2.578870235), (-0.02, -2.578870235), (-0.01, -2.578870235), (-0.001, -2.578870235), (0, -2.578870235), (0.001, -2.578870235), (1, -2.578870235)]\nx,z 1 -1 c->steady [(0, -5.025426146)]\nx,z 1 1 c->steady [(-0.17625, 4.187478388), (-0.175, -5.025426146), (0, -5.025426146)]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 83,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.18
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.18
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.18
+              },
+              {
+                "x": 1,
+                "z": 0,
+                "c": -0.18
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.18
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.18
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.18
+              },
+              {
+                "x": 0,
+                "z": 1,
+                "c": -0.18
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.175
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.17625
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.18
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.18
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.18
+              },
+              {
+                "x": 1,
+                "z": 0.5,
+                "c": -0.18
+              }
+            ],
+            "channels": []
+          },
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.175
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.17625
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.18
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.18
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.18
+              },
+              {
+                "x": 0.5,
+                "z": 1,
+                "c": -0.18
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Does the c-regime boundary observed along x=z diagonals persist for off-diagonal x,z settings, or depend on their separate values?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Does the c-regime boundary observed along x=z diagonals persist for off-diagonal x,z settings, or depend on their separate values?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,552 paid response rows; 96 fresh-confirmation rows are reserved, and confirmation requires MSE ≤1e-6. No model has passed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); many polynomial/FIR, latent-state, kernel, tree, neural, and autoregressive models have poor held-out-trajectory results. Controlled records 416–927 show zero-input response −0.274723, −0.549447, then −0.824170; x/z pulses shift three outputs by −0.939181/−0.461237 per unit, with tested linearity/additivity; c-only controls tested there were neutral. Sustained x=.5, x=1, z=1 settle at −2.232942, −3.641714, −2.207882; the pulse FIR has broad-data MSE 4.142. At x=z=.5, c values ≥−0.176 give steady −2.578870, while c≤−0.17625 gives +1.374835. Constant trajectories at x=z=.25 and 1 similarly switch across this narrow c interval, but only sparse diagonal settings are tested: at x=z=.25, c=−.175 gives −1.615 and c≤−.17625 gives +.366; at x=z=1, c=−.175 gives −5.025 and c=−.17625 gives +4.187. This supports a c-dependent regime change on diagonal settings, not a general predictor or proven invariant threshold. Proposed query tests constant-control c sweeps at four off-diagonal x,z combinations; these measurements have not yet occurred. After feedback, compare observed steady outputs across c and control mix before choosing a model/next test."
+      },
+      "feedback": {
+        "observation_cost": 48,
+        "record_indices": [
+          101,
+          102,
+          103,
+          104
+        ]
+      }
+    },
+    {
+      "call": 85,
+      "action": "run",
+      "arguments": {
+        "code": "import json\nrows=json.load(open('observations.json'))\nfor s in [1552,1564,1576,1588]:\n ep=rows[s:s+12]\n groups=[]\n for r in ep:\n  f=r['features']; key=(f['x'],f['z'],f['c'])\n  if not groups or groups[-1][0]!=key: groups.append((key,[]))\n  groups[-1][1].append(r['target'])\n print('trajectory',s,[(k,round(v[-1],9)) for k,v in groups])",
+        "research_question": {
+          "id": "task",
+          "question": "Does the c-regime boundary observed along x=z diagonals persist for off-diagonal x,z settings, or depend on their separate values?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,600 paid response rows; 96 rows remain reserved for fresh confirmation (MSE threshold 1e-6). No model has passed. Two polynomial submissions failed confirmation (MSE 3.956 and 15.169); numerous polynomial/FIR, latent-state, kernel, tree, neural, and autoregressive models generalized poorly. Controlled pulse evidence (rows 416–927) shows zero-input outputs −0.274723, −0.549447, then −0.824170; isolated x/z pulses produce additive three-output shifts −0.939181/−0.461237 per unit in tested conditions, while c-only controls tested there were neutral. Sustained controls yield distinct steady responses; the pulse FIR has broad-data MSE 4.142. For sustained x=z=0.5, c≥−0.176 gives −2.578870 and c≤−0.17625 gives +1.374835; diagonal amplitudes 0.25 and 1 also switch across this narrow interval. Latest off-diagonal trajectories (rows 1552–1599) were inspected: each holds c=−0.175 for four steps, then −0.17625 for four, then −0.18 for four, at (x,z)=(1,0),(0,1),(1,0.5),(0.5,1). Their responses switch from negative steady values at −0.175 to positive values at −0.17625 and remain positive at −0.18. Thus the narrow regime transition persists across these four off-diagonal settings; the exact boundary and general response law remain unresolved. Proposed now: compactly tabulate paid steady outputs by control segment for these new trajectories, confirming the switch using all target rows rather than previews. Next: use the result to pivot from boundary localization to testing a candidate general response model; no fresh confirmation is proposed."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "trajectory 1552 [((1, 0, -0.175), -3.641714046), ((1, 0, -0.17625), 2.067890633), ((1, 0, -0.18), 2.067890633)]\ntrajectory 1564 [((0, 1, -0.175), -2.207882474), ((0, 1, -0.17625), 1.741572517), ((0, 1, -0.18), 1.741572517)]\ntrajectory 1576 [((1, 0.5, -0.175), -3.987642071), ((1, 0.5, -0.17625), 2.597787572), ((1, 0.5, -0.18), 2.597787572)]\ntrajectory 1588 [((0.5, 1, -0.175), -3.61665431), ((0.5, 1, -0.17625), 2.964525452), ((0.5, 1, -0.18), 2.964525452)]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 86,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom sklearn.linear_model import Ridge\nrows=json.load(open('observations.json'))\n# Reset-aware test: y is a three-step convolution of an instantaneous control contribution q(x,z,c), plus the observed reset offset.\neps=[]; cur=[]\nfor r in rows:\n    if not r['history'] and cur: eps.append(cur); cur=[]\n    cur.append(r)\nif cur: eps.append(cur)\nprint('rows',len(rows),'episodes',len(eps))\ndef features(u,thr):\n    x,z,c=u\n    h=float(c<thr)\n    return np.array([x,z,x*x,z*z,x*z,c,x*c,z*c,x*x*c,z*z*c,x*z*c,h*x,h*z,h*x*z,h*x*x,h*z*z,h*x*c,h*z*c])\ndef make(ep,thr):\n    X=[]; y=[]; groups=[]\n    for gi,e in enumerate(ep):\n        us=[(r['features']['x'],r['features']['z'],r['features']['c']) for r in e]\n        fs=[features(u,thr) for u in us]\n        for t,r in enumerate(e):\n            v=sum((fs[j] for j in range(max(0,t-2),t+1)),np.zeros(fs[0].size))\n            # reset-only baseline transient is known; learn remaining intercept through q\n            b=[-0.27472345791918956,-0.5494469158383791,-0.8241703737575687][min(t,2)]\n            X.append(v); y.append(r['target']-b); groups.append(gi)\n    return np.asarray(X),np.asarray(y),np.asarray(groups)\nfor thr in [-.25,-.22,-.20,-.18,-.1775,-.17625,-.175,-.17,-.15,0]:\n    X,y,g=make(eps,thr); pred=np.zeros_like(y)\n    for k in range(len(eps)):\n        tr=g!=k; te=~tr\n        m=Ridge(alpha=1e-9).fit(X[tr],y[tr]); pred[te]=m.predict(X[te])\n    print('threshold',thr,'LOEO_MSE',round(float(np.mean((pred-y)**2)),6),'pooled',round(float(np.mean((Ridge(alpha=1e-9).fit(X,y).predict(X)-y)**2)),8))",
+        "research_question": {
+          "id": "task",
+          "question": "Can a three-step convolution of a threshold-dependent instantaneous control response predict held-out reset trajectories?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Notebook: 1,600 response rows are paid, leaving 118,592 observation rows by arithmetic from the initial budget/cost summary, with 96 rows reserved for fresh confirmation; acceptance requires fresh MSE ≤1e-6. No predictor has passed. Two earlier polynomial submissions failed confirmation (MSE 3.956 and 15.169); numerous polynomial, FIR, latent-state, kernel, tree, MLP/GRU and autoregressive fits showed poor episode holdout performance. Controlled observations 416–927 establish zero-input outputs −0.274723, −0.549447, then −0.824170; x/z pulses shift three outputs by −0.939181/−0.461237 per unit, with tested scaling, additivity, delayed pulses and negative reversals; c-only tested neutral. Sustained x=.5, x=1, z=1 settle at −2.232942, −3.641714, −2.207882; c=1 alone matches baseline. But pulse FIR has all-data MSE 4.142. For sustained controls, c near −0.176 causes a regime change: at x=z=.5, c≥−0.176 is steady −2.578870, c≤−0.17625 is +1.374835. This transition is also present at diagonal amplitudes .25 and 1, and latest off-diagonal episodes 1552–1599 show the same transition between c=−.175 (negative steady response) and −.17625 (positive) at (x,z)=(1,0),(0,1),(1,.5),(.5,1). The general transient/mixed-control response law remains unresolved. Working hypothesis: output may be a short convolution of an instantaneous nonlinear control contribution with a c-dependent branch; this is unverified, especially on random trajectories. Proposed run fits and leave-one-reset-trajectory-out scores this three-step convolution over a set of candidate c branch thresholds, to test if it improves over the pulse FIR without target-history leakage; results not yet observed."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "rows 1600 episodes 105\nthreshold -0.25 LOEO_MSE 3.51926 pooled 3.10779369\nthreshold -0.22 LOEO_MSE 3.402479 pooled 2.99864797\nthreshold -0.2 LOEO_MSE 3.372535 pooled 2.96647093\nthreshold -0.18 LOEO_MSE 3.267655 pooled 2.85586844\nthreshold -0.1775 LOEO_MSE 2.960782 pooled 2.58905568\nthreshold -0.17625 LOEO_MSE 2.836575 pooled 2.46017405\nthreshold -0.175 LOEO_MSE 1.232566 pooled 1.14784507\nthreshold -0.17 LOEO_MSE 2.776423 pooled 2.39559714\nthreshold -0.15 LOEO_MSE 2.868713 pooled 2.48970359\nthreshold 0 LOEO_MSE 3.202728 pooled 2.84445268\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 91,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom itertools import combinations_with_replacement\nfrom sklearn.model_selection import LeaveOneGroupOut\nfrom sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import Ridge\nrows=json.load(open('observations.json'))\n# Group each reset trajectory using the public history-length marker.\ngroups=np.array([i-int(r['history'][-1].get('_unused',-1)) if False else 0 for i,r in enumerate(rows)])\ng=[]; ep=-1\nfor i,r in enumerate(rows):\n    if len(r.get('history',[]))==0: ep+=1\n    g.append(ep)\ng=np.array(g)\nthresholds=[-0.18,-0.1775,-0.17625,-0.175,-0.17]\nfor lag in (0,1,2):\n  X=[]; y=[]; G=[]\n  for i,r in enumerate(rows):\n    seq=[dict(v) for v in r.get('history',[])]+[dict(r['features'])]\n    seq=([{'x':0.,'z':0.,'c':0.}]*max(0,lag+1-len(seq)))+seq[-(lag+1):]\n    X.append([float(v[k]) for v in seq for k in ('x','z','c')])\n    y.append(float(r['target'])); G.append(g[i])\n  X=np.asarray(X); y=np.asarray(y); G=np.asarray(G)\n  for th in thresholds:\n    errs=[]\n    for tr,te in LeaveOneGroupOut().split(X,y,G):\n      # Separate quadratic response surfaces on either side of the candidate threshold.\n      reg=np.asarray([float(rows[i]['features']['c']<th) for i in tr])\n      testreg=np.asarray([float(rows[i]['features']['c']<th) for i in te])\n      pred=np.empty(len(te))\n      for b in (0.,1.):\n        a=tr[reg==b]; q=np.where(testreg==b)[0]\n        if len(a)==0 or len(q)==0: continue\n        poly=PolynomialFeatures(2,include_bias=True); xa=poly.fit_transform(X[a]); xq=poly.transform(X[te[q]])\n        model=Ridge(alpha=1e-6).fit(xa,y[a]); pred[q]=model.predict(xq)\n      errs.append(float(np.mean((pred-y[te])**2)))\n    print('lag',lag,'threshold',th,'piecewise_LOEO',round(float(np.mean(errs)),6),'worst',round(max(errs),6))\n",
+        "research_question": {
+          "id": "task",
+          "question": "Does a piecewise reset-aware polynomial response map split by the observed c regime improve held-out trajectory prediction?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Current evidence: 1,600 paid response rows across 105 reset trajectories; 96 fresh rows are reserved and confirmation requires MSE ≤1e-6. No predictor has passed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); broad held-out tests of polynomial/FIR, latent-state, kernel, tree, neural, and autoregressive models have been poor. Controlled rows 416–927 show zero-input output −0.274723, −0.549447, then −0.824170; isolated x/z pulses shift three outputs by −0.939181/−0.461237 per unit in tested settings, while c-only tests there were neutral. Sustained inputs have distinct steady outputs. A c-dependent regime switch near −0.176 is observed across several diagonal and off-diagonal constant settings, but is not a complete response law. The pulse FIR has broad-data MSE 4.142. Prior reset-aware quadratic recurrence reached best leave-one-trajectory-out MSE 0.61691; a proposed piecewise recurrence script was missing, so no result was produced. Next proposed diagnostic: assess separate quadratic control-history surfaces for the two sides of candidate c thresholds using leave-one-reset-trajectory-out scoring. It uses only public controls and paid response rows; its result is not yet known."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "lag 0 threshold -0.18 piecewise_LOEO 2.825918 worst 31.388124\nlag 0 threshold -0.1775 piecewise_LOEO 2.542186 worst 36.01099\nlag 0 threshold -0.17625 piecewise_LOEO 2.424346 worst 37.985388\nlag 0 threshold -0.175 piecewise_LOEO 0.631097 worst 14.604999\nlag 0 threshold -0.17 piecewise_LOEO 2.407802 worst 30.345238\nlag 1 threshold -0.18 piecewise_LOEO 2.724445 worst 31.457762\nlag 1 threshold -0.1775 piecewise_LOEO 2.398165 worst 35.907827\nlag 1 threshold -0.17625 piecewise_LOEO 2.267449 worst 37.469979\nlag 1 threshold -0.175 piecewise_LOEO 0.325956 worst 14.067092\nlag 1 threshold -0.17 piecewise_LOEO 2.261481 worst 31.177699\nlag 2 threshold -0.18 piecewise_LOEO 2.581656 worst 30.911902\nlag 2 threshold -0.1775 piecewise_LOEO 2.250982 worst 35.225442\nlag 2 threshold -0.17625 piecewise_LOEO 2.123005 worst 36.686342\nlag 2 threshold -0.175 piecewise_LOEO 0.15418 worst 13.869092\nlag 2 threshold -0.17 piecewise_LOEO 2.121514 worst 30.213056\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 92,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom sklearn.model_selection import LeaveOneGroupOut\nfrom sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import Ridge\nrows=json.load(open('observations.json'))\neps=[]; e=-1\nfor i,r in enumerate(rows):\n    if len(r.get('history',[]))==0: e+=1\n    eps.append(e)\ngroups=np.asarray(eps)\n# A causal three-step additive response: each control step contributes a nonlinear\n# instantaneous term, which remains in the output for three samples.\nths=[-0.1775,-0.17625,-0.175]\nfor th in ths:\n  for deg in (1,2,3):\n    X=[]; y=[]\n    for r in rows:\n      seq=[dict(v) for v in r.get('history',[])]+[dict(r['features'])]\n      # current and previous two controls; absent pre-reset values are zero\n      seq=([{'x':0.,'z':0.,'c':0.}]*max(0,3-len(seq)))+seq[-3:]\n      total=[]\n      for v in seq:\n        x,z,c=(float(v[k]) for k in ('x','z','c'))\n        p=PolynomialFeatures(deg,include_bias=True).fit_transform([[x,z]])[0]\n        # Branch-dependent x/z surface. c itself controls the branch, and has\n        # no within-branch polynomial term in this candidate.\n        b=float(c<th)\n        total.extend(np.r_[p*(1-b),p*b])\n      X.append(np.sum(np.asarray(total).reshape(3,-1),axis=0))\n      y.append(float(r['target']))\n    X=np.asarray(X); y=np.asarray(y); errs=[]\n    for tr,te in LeaveOneGroupOut().split(X,y,groups):\n      m=Ridge(alpha=1e-8).fit(X[tr],y[tr]); errs.append(np.mean((m.predict(X[te])-y[te])**2))\n    m=Ridge(alpha=1e-8).fit(X,y)\n    print('threshold',th,'degree',deg,'LOEO',round(float(np.mean(errs)),6),'worst',round(float(max(errs)),6),'pooled',round(float(np.mean((m.predict(X)-y)**2)),8))\n",
+        "research_question": {
+          "id": "task",
+          "question": "Can a three-step additive convolution with c-branch-specific x/z response surfaces predict held-out reset trajectories?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence notebook: 1,600 paid response rows in 105 reset trajectories; 96 rows are reserved for independent confirmation (MSE threshold 1e-6). No model has passed. Two prior polynomial submissions failed confirmation (MSE 3.956 and 15.169); a broad range of polynomial/FIR, state-space, kernel, tree, and neural models had poor held-out-trajectory results. Controlled rows 416–927 show baseline outputs -0.274723, -0.549447, then -0.824170; x/z pulses shift three outputs by -0.939181/-0.461237 per unit, while c-only controls tested there were neutral. Sustained controls reach distinct three-step steady responses. For constant inputs, c≈-0.176 causes a regime change across diagonal and off-diagonal tested x,z settings: e.g. x=z=.5 gives -2.578870 above and +1.374835 below; x=1,z=0 switches from -3.641714 to +2.067891. This constant-input behavior does not itself explain arbitrary trajectories. Prior pulse-derived FIR has broad-data MSE 4.142. Piecewise reset-aware polynomial maps split by c, evaluated by leave-one-reset-trajectory-out, reached best MSE 0.154 at lag 2 / threshold -0.175 (step 90), but worst held-out episode MSE was 13.87, so the apparent gain is not robust. The latest proposal tests an additive three-step convolution where each input's instantaneous x,z polynomial map has two c-regime branches. This is a hypothesis, not an observed result. If its held-out score remains poor, further refinement of the constant-input threshold is unlikely to solve the general prediction problem; continue testing how response contributions depend on control history."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "threshold -0.1775 degree 1 LOEO 2.725376 worst 36.553274 pooled 2.74831045\nthreshold -0.1775 degree 2 LOEO 2.784767 worst 39.119438 pooled 2.67106688\nthreshold -0.1775 degree 3 LOEO 2.79113 worst 34.10304 pooled 2.56941021\nthreshold -0.17625 degree 1 LOEO 2.558219 worst 38.77805 pooled 2.61330449\nthreshold -0.17625 degree 2 LOEO 2.614822 worst 40.566795 pooled 2.53954698\nthreshold -0.17625 degree 3 LOEO 2.559068 worst 34.2822 pooled 2.39703224\nthreshold -0.175 degree 1 LOEO 0.863864 worst 15.582085 pooled 1.45439923\nthreshold -0.175 degree 2 LOEO 0.613352 worst 13.809848 pooled 1.19851251\nthreshold -0.175 degree 3 LOEO 0.627025 worst 14.087794 pooled 1.16290682\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 93,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom sklearn.model_selection import LeaveOneGroupOut\nfrom sklearn.ensemble import HistGradientBoostingRegressor, ExtraTreesRegressor\nrows=json.load(open('observations.json'))\ngroups=[]; ep=-1\nfor r in rows:\n    if not r.get('history'): ep+=1\n    groups.append(ep)\n# Predict each output from current and recent controls, with explicit c-regime\n# indicators and interaction terms; hold out whole reset trajectories.\ndef features(r, lag):\n    seq=[dict(v) for v in r.get('history',[])]+[dict(r['features'])]\n    seq=([{'x':0.,'z':0.,'c':0.}]*max(0,lag+1-len(seq)))+seq[-(lag+1):]\n    a=np.array([[float(v[k]) for k in ('x','z','c')] for v in seq])\n    out=list(a.ravel())\n    for v in a:\n        x,z,c=v; out += [x*x,z*z,c*c,x*z,x*c,z*c, float(c < -0.175), x*float(c < -0.175), z*float(c < -0.175)]\n    return out\nG=np.asarray(groups); y=np.array([r['target'] for r in rows])\nfor lag in (1,2,3):\n    X=np.asarray([features(r,lag) for r in rows]); splits=list(LeaveOneGroupOut().split(X,y,G))\n    for model in (HistGradientBoostingRegressor(max_iter=120, max_leaf_nodes=15,l2_regularization=1,random_state=3), ExtraTreesRegressor(n_estimators=120,min_samples_leaf=2,max_features=.8,n_jobs=-1,random_state=3)):\n        errs=[]\n        for tr,te in splits:\n            model.fit(X[tr],y[tr]); errs.append(float(np.mean((model.predict(X[te])-y[te])**2)))\n        print(type(model).__name__,'lag',lag,'LOEO',round(float(np.mean(errs)),6),'worst',round(max(errs),6))\n",
+        "research_question": {
+          "id": "task",
+          "question": "Do explicit c-regime and control-interaction features improve held-out reset-trajectory prediction beyond the tested convolution and polynomial maps?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence notebook: 1,600 paid response rows across 105 reset trajectories; 96 rows are reserved for fresh confirmation at MSE ≤1e-6. No predictor has passed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); broad held-out tests of polynomial/FIR, latent-state, kernel, tree, neural, and autoregressive models remain inadequate. Controlled rows 416–927 establish zero-input response -0.274723, -0.549447, then -0.824170; isolated x/z pulses shift three outputs by -0.939181/-0.461237 per unit in tested settings, while c-only controls tested there were neutral. Sustained controls reach distinct steady outputs, and the pulse FIR has broad-data MSE 4.142. For constant inputs, c near -0.176 produces a regime change across tested diagonal and off-diagonal settings; this is not a complete response law. The latest paid-data test of c-branch-specific three-step additive convolution gave best leave-one-reset-trajectory-out MSE 0.613 (threshold -0.175, degree 2), with worst episode MSE 13.81; a related branch model without history-dependent branch assignment had LOEO MSE 1.23. Thus the c regime observation does not validate that response representation. The retained polynomial was originally fit on only 192 rows and is unscored on the remaining paid data. Proposed action: test modest boosted-tree models on current/recent controls with explicit c-threshold and polynomial interaction features under whole-reset-trajectory holdout. The result is not yet observed; if errors remain high, avoid further narrow threshold refinement and reassess the model representation."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "HistGradientBoostingRegressor lag 1 LOEO 0.181303 worst 1.777504\nExtraTreesRegressor lag 1 LOEO 0.319764 worst 13.674743\nHistGradientBoostingRegressor lag 2 LOEO 0.044096 worst 0.495361\nExtraTreesRegressor lag 2 LOEO 0.230056 worst 13.750355\nHistGradientBoostingRegressor lag 3 LOEO 0.048384 worst 0.664885\nExtraTreesRegressor lag 3 LOEO 0.23168 worst 13.750168\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 94,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\nfrom sklearn.model_selection import LeaveOneGroupOut\nrows=json.load(open('observations.json'))\ng=[]; e=-1\nfor r in rows:\n    if not r.get('history'): e+=1\n    g.append(e)\ndef feat(r,lag=2):\n    s=[dict(v) for v in r.get('history',[])]+[dict(r['features'])]\n    s=([{'x':0.,'z':0.,'c':0.}]*max(0,lag+1-len(s)))+s[-(lag+1):]\n    a=np.array([[float(v[k]) for k in ('x','z','c')] for v in s])\n    q=list(a.ravel())\n    for x,z,c in a:\n        b=float(c < -0.175)\n        q.extend([x*x,z*z,c*c,x*z,x*c,z*c,b,x*b,z*b])\n    return q\nX=np.asarray([feat(r) for r in rows]); y=np.asarray([r['target'] for r in rows]); g=np.asarray(g)\nerrs=[]\nfor tr,te in LeaveOneGroupOut().split(X,y,g):\n    m=HistGradientBoostingRegressor(max_iter=120,max_leaf_nodes=15,l2_regularization=1,random_state=3).fit(X[tr],y[tr])\n    er=float(np.mean((m.predict(X[te])-y[te])**2)); errs.append((er,int(g[te[0]]),len(te)))\nprint('episodes',len(errs),'mean_LOEO',round(float(np.mean([x[0] for x in errs])),6),'median',round(float(np.median([x[0] for x in errs])),6))\nprint('worst',[(round(a,5),b,n) for a,b,n in sorted(errs,reverse=True)[:12]])\nprint('best',[(round(a,5),b,n) for a,b,n in sorted(errs)[:8]])\n",
+        "research_question": {
+          "id": "task",
+          "question": "Which reset trajectories remain poorly predicted by the promising c-regime/interactions HistGradientBoosting model?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence notebook: 1,600 paid response rows across 105 reset trajectories; 96 fresh confirmation rows are reserved and the pass criterion is MSE ≤1e-6. No predictor has passed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); a broad range of polynomial/FIR, latent-state, kernel, tree, neural, and autoregressive models had poor held-out-trajectory performance. Controlled rows 416–927 establish zero-input outputs -0.274723, -0.549447, then -0.824170; isolated x/z pulses shift three outputs by -0.939181/-0.461237 per unit in tested conditions, while c-only controls tested there were neutral. Sustained controls reach distinct steady outputs; constant controls show a c-dependent regime transition near -0.176 across several diagonal/off-diagonal settings, but this is not a full dynamic law. The pulse FIR has broad-data MSE 4.142. Latest full-trajectory holdout test (step 92) using recent controls plus explicit c-regime and interaction features achieved HistGradientBoosting LOEO MSE 0.0441, worst 0.495; ExtraTrees was worse at 0.230. This is the most promising tested representation but remains far above the confirmation threshold. Proposed action is a per-trajectory residual diagnostic for that HGB setup, to determine whether errors concentrate in specific broad trajectories or remain systematic; no result is claimed yet. If residuals remain large, pursue structure-specific dynamics rather than submit an unsupported model."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "episodes 105 mean_LOEO 0.044096 median 0.012515\nworst [(0.49536, 46, 12), (0.45846, 3, 64), (0.37593, 5, 64), (0.37343, 4, 32), (0.32434, 0, 64), (0.28044, 2, 24), (0.19472, 8, 64), (0.1815, 103, 12), (0.18125, 7, 64), (0.16784, 104, 12), (0.16392, 6, 32), (0.11085, 87, 12)]\nbest [(7e-05, 53, 12), (0.00016, 55, 12), (0.00016, 74, 12), (0.00016, 75, 12), (0.00016, 76, 12), (0.00016, 77, 12), (0.00016, 78, 12), (0.00016, 82, 12)]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 97,
+      "action": "query",
+      "arguments": {
+        "actions": [
+          {
+            "kind": "trajectory",
+            "sequence": [
+              {
+                "x": -0.91,
+                "z": 0.38,
+                "c": -0.42
+              },
+              {
+                "x": 0.64,
+                "z": -1.12,
+                "c": 0.17
+              },
+              {
+                "x": 1.21,
+                "z": 0.73,
+                "c": -0.19
+              },
+              {
+                "x": -0.34,
+                "z": 1.08,
+                "c": -0.176
+              },
+              {
+                "x": 0.52,
+                "z": -0.67,
+                "c": -0.17625
+              },
+              {
+                "x": -1.27,
+                "z": 0.29,
+                "c": -0.1765
+              },
+              {
+                "x": 0.88,
+                "z": 1.31,
+                "c": -0.175
+              },
+              {
+                "x": -0.72,
+                "z": -1.36,
+                "c": -0.23
+              },
+              {
+                "x": 1.42,
+                "z": -0.18,
+                "c": 0.55
+              },
+              {
+                "x": -0.16,
+                "z": 0.94,
+                "c": -0.84
+              },
+              {
+                "x": 0.31,
+                "z": -0.55,
+                "c": -0.08
+              },
+              {
+                "x": -1.04,
+                "z": -0.91,
+                "c": -0.17625
+              },
+              {
+                "x": 0.77,
+                "z": 0.26,
+                "c": -0.1765
+              },
+              {
+                "x": -0.48,
+                "z": 1.43,
+                "c": -0.176
+              },
+              {
+                "x": 1.13,
+                "z": -0.73,
+                "c": -0.175
+              },
+              {
+                "x": -1.39,
+                "z": 0.61,
+                "c": -0.31
+              },
+              {
+                "x": 0.21,
+                "z": -1.44,
+                "c": 0.28
+              },
+              {
+                "x": 0.96,
+                "z": 0.49,
+                "c": -0.17625
+              },
+              {
+                "x": -0.63,
+                "z": -0.24,
+                "c": -0.1765
+              },
+              {
+                "x": 1.34,
+                "z": 1.05,
+                "c": -0.11
+              },
+              {
+                "x": -0.27,
+                "z": -1.03,
+                "c": -0.67
+              },
+              {
+                "x": 0.58,
+                "z": 0.82,
+                "c": -0.175
+              },
+              {
+                "x": -1.15,
+                "z": -0.47,
+                "c": -0.176
+              },
+              {
+                "x": 0.43,
+                "z": 1.22,
+                "c": -0.17625
+              },
+              {
+                "x": -0.85,
+                "z": 0.14,
+                "c": -0.1765
+              },
+              {
+                "x": 1.48,
+                "z": -1.29,
+                "c": 0.03
+              },
+              {
+                "x": -0.09,
+                "z": 0.57,
+                "c": -1.21
+              },
+              {
+                "x": 0.69,
+                "z": -0.88,
+                "c": -0.176
+              },
+              {
+                "x": -1.32,
+                "z": 1.16,
+                "c": -0.17625
+              },
+              {
+                "x": 0.18,
+                "z": -0.33,
+                "c": -0.1765
+              },
+              {
+                "x": 1.07,
+                "z": 0.02,
+                "c": -0.175
+              },
+              {
+                "x": -0.56,
+                "z": -1.18,
+                "c": -0.49
+              },
+              {
+                "x": 0.82,
+                "z": 1.39,
+                "c": 0.41
+              },
+              {
+                "x": -1.46,
+                "z": -0.62,
+                "c": -0.17625
+              },
+              {
+                "x": 0.36,
+                "z": 0.91,
+                "c": -0.1765
+              },
+              {
+                "x": -0.98,
+                "z": 0.44,
+                "c": -0.176
+              },
+              {
+                "x": 1.26,
+                "z": -0.39,
+                "c": -0.175
+              },
+              {
+                "x": -0.41,
+                "z": -1.41,
+                "c": -0.92
+              },
+              {
+                "x": 0.73,
+                "z": 0.68,
+                "c": -0.17625
+              },
+              {
+                "x": -1.08,
+                "z": 0.97,
+                "c": -0.1765
+              },
+              {
+                "x": 0.09,
+                "z": -0.76,
+                "c": -0.176
+              },
+              {
+                "x": 1.39,
+                "z": 0.33,
+                "c": 0.72
+              },
+              {
+                "x": -0.23,
+                "z": 1.28,
+                "c": -0.24
+              },
+              {
+                "x": 0.47,
+                "z": -1.01,
+                "c": -0.17625
+              },
+              {
+                "x": -1.22,
+                "z": -0.11,
+                "c": -0.1765
+              },
+              {
+                "x": 0.61,
+                "z": 0.53,
+                "c": -0.175
+              },
+              {
+                "x": -0.74,
+                "z": -0.58,
+                "c": -0.176
+              },
+              {
+                "x": 1.17,
+                "z": 1.44,
+                "c": -0.17625
+              },
+              {
+                "x": -0.38,
+                "z": -0.96,
+                "c": -0.1765
+              },
+              {
+                "x": 0.92,
+                "z": 0.07,
+                "c": -0.176
+              },
+              {
+                "x": -1.43,
+                "z": 0.79,
+                "c": -0.17625
+              },
+              {
+                "x": 0.25,
+                "z": -1.25,
+                "c": -0.1765
+              },
+              {
+                "x": 1.03,
+                "z": 0.87,
+                "c": -0.175
+              },
+              {
+                "x": -0.67,
+                "z": 0.21,
+                "c": -0.176
+              },
+              {
+                "x": 0.54,
+                "z": -0.42,
+                "c": -0.17625
+              },
+              {
+                "x": -1.19,
+                "z": 1.34,
+                "c": -0.1765
+              },
+              {
+                "x": 0.14,
+                "z": -0.89,
+                "c": -0.36
+              },
+              {
+                "x": 0.86,
+                "z": 0.46,
+                "c": 0.12
+              },
+              {
+                "x": -0.31,
+                "z": -1.31,
+                "c": -0.176
+              },
+              {
+                "x": 1.45,
+                "z": 0.58,
+                "c": -0.17625
+              },
+              {
+                "x": -0.79,
+                "z": -0.05,
+                "c": -0.1765
+              },
+              {
+                "x": 0.39,
+                "z": 1.11,
+                "c": -0.175
+              },
+              {
+                "x": -1.01,
+                "z": -0.81,
+                "c": -0.61
+              },
+              {
+                "x": 0.68,
+                "z": -0.29,
+                "c": -0.17625
+              }
+            ],
+            "channels": []
+          }
+        ],
+        "question": {
+          "id": "task",
+          "question": "Can varied mixed-control excitation near and across the observed c regime boundary help explain the large residuals on broad reset trajectories?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "research_question": {
+          "id": "task",
+          "question": "Can varied mixed-control excitation near and across the observed c regime boundary help explain the large residuals on broad reset trajectories?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 1,600 paid response rows across 105 reset trajectories; 96 fresh confirmation rows are reserved, with MSE ≤1e-6 required. No predictor has passed. Two polynomial submissions failed confirmation (MSE 3.956 and 15.169); broad polynomial/FIR, latent-state, kernel, tree and neural approaches remain inadequate. Controlled tests (rows 416–927) show a zero-input transient (-0.274723, -0.549447, then -0.824170), three-step x/z pulse effects, and distinct sustained responses. Constant-input experiments show a regime switch near c≈-0.176 across several diagonal and off-diagonal x,z settings, but this is not a full dynamic law. The fixed pulse FIR has broad-data MSE 4.142. Recent HGB holdout diagnostics are inconsistent by feature construction (LOEO MSE 0.0441 at step 92 versus 0.0906 at step 95), with worst episode errors around 0.5–0.64, concentrated in broad-control episodes (step 95); neither is confirmation-grade. Proposed now: acquire one 64-step trajectory varying x,z while repeatedly sampling c around the observed boundary and across wider values. This may reveal whether the apparent constant-input c branch applies under changing controls; outcomes are not yet observed."
+      },
+      "feedback": {
+        "observation_cost": 64,
+        "record_indices": [
+          105
+        ]
+      }
+    },
+    {
+      "call": 99,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\nfrom sklearn.model_selection import LeaveOneGroupOut\nfrom sklearn.metrics import mean_squared_error\nrows=json.load(open('observations.json')); names=['x','z','c']; X=[]; y=[]; g=[]; ep=-1\nfor r in rows:\n if not r.get('history'): ep+=1\n seq=[dict(v) for v in r.get('history',[])]+[r['features']]\n vals=[]\n for lag in range(3):\n  u=seq[-1-lag] if len(seq)>lag else {k:0. for k in names}\n  vals.extend(float(u.get(k,0.)) for k in names)\n x,z,c=vals[:3]; branch=float(c < -0.176)\n vals.extend([branch,x*z,x*c,z*c,x*branch,z*branch])\n X.append(vals); y.append(float(r['target'])); g.append(ep)\nX=np.asarray(X); y=np.asarray(y); g=np.asarray(g); logo=LeaveOneGroupOut(); pred=np.zeros(len(y)); scores=[]\nfor tr,te in logo.split(X,y,g):\n m=HistGradientBoostingRegressor(max_iter=200,max_leaf_nodes=15,l2_regularization=1.,learning_rate=.08,random_state=4).fit(X[tr],y[tr]); pred[te]=m.predict(X[te]); scores.append((mean_squared_error(y[te],pred[te]),int(g[te[0]]),len(te)))\nprint('LOEO',mean_squared_error(y,pred),'groups',len(scores),'latest_episode',scores[-1]); print('worst',sorted(scores,reverse=True)[:8])",
+        "research_question": {
+          "id": "task",
+          "question": "Does recent-control HGB with an explicit c-regime indicator predict held-out reset trajectories, including the latest varied trajectory?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Paid evidence totals 1,664 response rows across reset trajectories; 96 independent rows remain reserved for fresh confirmation (MSE ≤1e-6). No model has passed. Two polynomial submissions failed confirmation (MSE 3.956 and 15.169); finite-lag polynomial/FIR, latent-state, kernel, tree and neural approaches generally failed whole-trajectory validation. Controlled records 416–927 show a zero-input transient (-0.274723, -0.549447, then -0.824170), short additive x/z pulse shifts, distinct sustained responses, and c-alone neutrality in those tested cases. Sustained x=z=.5 has a regime-like change near c≈-0.176 across tested diagonal/off-diagonal settings, but this is not a general law. HGB diagnostics previously reached LOEO MSE 0.0441 or 0.0906 depending on features; worst episode error remained 0.495–0.645, concentrated in broad trajectories. Latest varied mixed-control trajectory, rows 1600–1663, has been inspected: controls sample c near the apparent boundary and elsewhere, and targets vary widely (mean -0.2685, SD 2.0118); its detailed points are in the paid observations. Working hypothesis remains that broad-sequence response depends on nonlinear temporal interactions beyond the controlled pulse/constant regimes. Proposed action, not yet run: rescore a simple recent-control HGB with a c-branch indicator under leave-one-reset-trajectory-out, emphasizing the latest episode’s holdout error. This does not buy data or constitute fresh confirmation."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "LOEO 0.10215739616773917 groups 106 latest_episode (0.2724183861151135, 105, 64)\nworst [(0.43937594717011363, 3, 64), (0.3944955442926681, 46, 12), (0.3728916328465087, 5, 64), (0.3689670309047011, 104, 12), (0.3078867297937639, 0, 64), (0.27981998393790175, 4, 32), (0.27659143069642567, 2, 24), (0.2724183861151135, 105, 64)]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "call": 102,
+      "action": "run",
+      "arguments": {
+        "code": "import json, numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor, ExtraTreesRegressor\nfrom sklearn.model_selection import LeaveOneGroupOut\nfrom sklearn.metrics import mean_squared_error\nrows=json.load(open('observations.json')); names=['x','z','c']; X=[]; y=[]; groups=[]; ep=-1\nfor r in rows:\n    if not r.get('history'): ep+=1\n    seq=[dict(v) for v in r.get('history',[])]+[dict(r['features'])]\n    u=[]\n    for lag in range(3):\n        v=seq[-1-lag] if len(seq)>lag else {k:0. for k in names}\n        u.append([float(v.get(k,0.)) for k in names])\n    f=[v for row in u for v in row]\n    for j in range(3): f.extend([u[j][0]*u[j][1],u[j][0]*u[j][2],u[j][1]*u[j][2]])\n    f += [float(u[j][2] < t) for j in range(3) for t in (-0.1775,-0.17625,-0.175)]\n    X.append(f); y.append(float(r['target'])); groups.append(ep)\nX=np.asarray(X); y=np.asarray(y); groups=np.asarray(groups); logo=LeaveOneGroupOut()\nfor leaves,iters,lr,l2 in [(10,500,.06,1.),(15,500,.04,2.),(20,700,.03,2.),(25,500,.04,5.)]:\n    p=np.zeros(len(y))\n    for tr,te in logo.split(X,y,groups):\n        m=HistGradientBoostingRegressor(max_iter=iters,max_leaf_nodes=leaves,l2_regularization=l2,learning_rate=lr,random_state=4).fit(X[tr],y[tr]); p[te]=m.predict(X[te])\n    per=np.array([mean_squared_error(y[groups==g],p[groups==g]) for g in np.unique(groups)])\n    print('HGB',leaves,iters,lr,l2,'LOEO',round(mean_squared_error(y,p),6),'worst',round(float(per.max()),6),'latest',round(float(per[-1]),6))\n",
+        "research_question": {
+          "id": "task",
+          "question": "Can modestly retuned lag-2 HGB models improve whole-reset-trajectory prediction robustly over the current feature set?",
+          "parent_id": null,
+          "depends_on": []
+        },
+        "notes": "Evidence: 1,664 paid response rows across 106 reset trajectories; 96 fresh rows are reserved and confirmation requires MSE ≤1e-6. No predictor has passed. Two polynomial submissions failed fresh confirmation (MSE 3.956 and 15.169); polynomial/FIR, latent-state, kernel, tree, neural and autoregressive approaches have generally remained inaccurate on whole-trajectory holdouts. Controlled records 416–927 show a zero-input transient, short additive x/z pulse effects, distinct sustained responses, and c-neutrality only in tested conditions. Sustained constant controls show a c-regime change near −0.176 across tested diagonal and off-diagonal settings, but this is not a general response law. Recent HGB holdout scores vary by feature construction: LOEO MSE 0.0441–0.130, with worst episodes 0.5–0.7; modest tuning at step 100 improved only to 0.1049 (worst 0.501). The current proposal tests a few lower-learning-rate/tree-capacity HGB settings using the same whole-reset-trajectory holdout and reports overall, worst-episode, and latest-episode errors. This is a computation-only diagnostic; no new observation or confirmation result is assumed. If scores remain far from confirmation accuracy, continue searching for a more appropriate dynamical representation rather than submit the candidate."
+      },
+      "feedback": {
+        "returncode": 0,
+        "stdout": "HGB 10 500 0.06 1.0 LOEO 0.115848 worst 0.513907 latest 0.400988\nHGB 15 500 0.04 2.0 LOEO 0.106691 worst 0.504118 latest 0.253673\nHGB 20 700 0.03 2.0 LOEO 0.106477 worst 0.584062 latest 0.242269\nHGB 25 500 0.04 5.0 LOEO 0.107552 worst 0.635761 latest 0.222965\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

@@ -10,7 +10,10 @@ from pathlib import Path
 from random import Random
 import shutil
 
-from .online_inquiry_llm import COMMON_INTERFACE, CONFIRMATION_MSE_THRESHOLD
+from .online_inquiry_llm import COMMON_INTERFACE
+from .anonymous_history_lab import AnonymousHistoryLab
+from .code_agent import _copy_model_file, _model_context_ignored
+from .temporal_operator_agent import OPERATOR_INTERFACE
 from .inquiry_revision import analyze_revision, compare_experiments
 from .observable_research import (
     OBSERVABLE_INTERFACE, dependency_focus, evaluate_observable, refresh_observables,
@@ -44,6 +47,11 @@ adds no scientific support: fresh predictive confirmation still determines adopt
 """
 
 
+# Reuse the existing mechanism-independent whole-trajectory refit contract.
+_REFIT_INTERFACE = OPERATOR_INTERFACE[OPERATOR_INTERFACE.index("run {operator:'refit'"):
+    OPERATOR_INTERFACE.index("run {operator:'legacy_capabilities'")]
+
+
 COMMON_ARCHIVE_INTERFACE = COMMON_INTERFACE.replace(
     "Textual memory receives only earlier agent-authored lessons, not earlier code.\n"
     "Code/ReAct receives no previous-task knowledge. Task-local tools remain equal.\n",
@@ -55,7 +63,7 @@ COMMON_ARCHIVE_INTERFACE = COMMON_INTERFACE.replace(
     "work. Code/ReAct may organize this archive freely and has no requirement to\n"
     "create a manifest or question hierarchy. Hegel retains an executable manifest\n"
     "under the current research phase's requirements.\n",
-) + FROZEN_METHOD_INTERFACE + PROCEDURE_INTERFACE
+) + FROZEN_METHOD_INTERFACE + PROCEDURE_INTERFACE + _REFIT_INTERFACE
 
 
 ONLINE_RESEARCH_INTERFACE = """
@@ -93,8 +101,12 @@ that program again. It will receive the expanded records. You decide whether to
 continue, edit revision_path, change the research route or stop. The failed test
 evaluated that predictor; the program's ability to revise it remains a separate
 question. A confirmation execution error is not a measured prediction mismatch.
+submitted_candidate names the saved predictor and fitting view from before that
+confirmation, even if a later method invocation overwrites its original file.
+submitted_candidates keeps these attempts after a method stops. A method's stop
+reason describes its own attempt; it does not exclude every model in its family.
 
-run {operator:'compare_experiments',models:['shared/a.py','shared/b.py'],
+run {operator:'compare_experiments',target:'response',models:['shared/a.py','shared/b.py'],
 experiments:[{id:'an_authored_experiment',actions:[public_action,...]},...]}
 executes your candidate predictors on your proposed public actions without buying
 observations. It compares paid fit and prospective prediction differences, using
@@ -105,8 +117,26 @@ suggest the one with greatest mean prediction variance. A suggestion is neither
 an acquisition nor evidence that its scientific alternatives are exhaustive.
 query_arguments contains ordinary actions and revision arguments you can choose
 to use with query; you may add your readout and question, change the experiment,
-or proceed to confirmation. query reexecutes the current candidate files before
-purchase and charges that new scoring; a comparison is not a frozen reservation.
+or proceed to confirmation. The suggested query names saved candidate contexts;
+query reexecutes those contexts before purchase and charges that new scoring.
+Their fitting views stay fixed. A refitted candidate is a new explanation to
+evaluate and compare on current paid evidence.
+To value an experiment for a prediction task, supply reference_actions:[public_action,...]
+in the same comparison. These describe the control histories on which future
+predictions matter. They acquire no observations and expose no reference labels.
+The existing finite-model risk calculation then ranks expected reference-MSE
+reduction per observation, using the same supported candidates and fitting views.
+task_value reports the reference risk and each option's remaining expected risk;
+equal or zero values are valid. This is conditional on your candidate set and
+reference inputs, not proof that a model family is true or exhausted. Offer
+different supported parameter fits when the existing evidence cannot identify
+one fit; a single fitted instance does not represent every member of its family.
+Omit target for the response, or name a public channel such as 'meter'. A channel
+comparison uses only purchased readings of that target for paid fit and freezes
+them in each new candidate context. Already retained candidates keep their own
+fitting views. Every proposed action must buy that channel through channels.
+The suggested revision keeps the target and scores its acquired readings; these
+auxiliary candidates remain separate from the retained response predictor.
 Full sources and predictions persist in research_state.json experiment_comparisons;
 online_research.latest_comparison summarizes the most recent comparison.
 """
@@ -140,31 +170,60 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         Construct this agent in a new workspace with the intended total limits.
         Only the original task's files and observations enter the continuation.
         """
+        context = json.loads((Path(previous_workspace) / "research_context.json").read_text())
+        self.knowledge = deepcopy(context["session_knowledge"])
+        self.source_task = context["research_phase"] == "source_learning"
+        return self._restore_paid_research(previous, previous_workspace, laboratory,
+            confirmation_seed=confirmation_seed, context=context)
+
+    def restore_practice_research(self, previous, previous_workspace, laboratory, *, confirmation_seed):
+        """Continue a zero-LLM practice directly from its actual saved result/state.
+
+        The caller supplies the original knowledge and new total limits. No online
+        request is fabricated for a frozen practice that never made an LLM call.
+        """
+        return self._restore_paid_research(previous, previous_workspace, laboratory,
+            confirmation_seed=confirmation_seed)
+
+    def _restore_paid_research(self, previous, previous_workspace, laboratory, *,
+                               confirmation_seed, context=None):
         source = Path(previous_workspace).resolve()
         if source == self.workspace:
             raise ValueError("restore into a separate workspace to retain the original run")
         if laboratory.costs["observation_cost"]:
             raise ValueError("restore with a fresh apparatus; do not repurchase the prefix")
-        if laboratory._settings["calibration_change"] is not None:
-            raise ValueError("this continuation restores a fixed temporal apparatus")
-        context = json.loads((source / "research_context.json").read_text())
+        if getattr(laboratory, "_settings", {}).get("calibration_change") is not None:
+            raise ValueError("this continuation restores a fixed apparatus")
         state = json.loads((source / "research_state.json").read_text())
-        self.knowledge = deepcopy(context["session_knowledge"])
         self.inherited_files = set(previous["inherited_files"])
-        self.source_task = context["research_phase"] == "source_learning"
-        excluded = _HOST_RECORD_FILES | {
-            "research_context.json", "research_state.json", "research_trace.json",
-            "code_agent_instructions.txt"}
-        for path in source.rglob("*"):
-            if (not path.is_file() or "__pycache__" in path.parts or path.suffix == ".pyc"
-                    or path.name in excluded or path.name.startswith(("code_action_", "code_call_"))):
+
+        def ignored(directory, names):
+            root = Path(directory)
+            return {name for name in names if _model_context_ignored(root / name, source)
+                    or (root == source and name == "research_trace.json")}
+
+        # Keep candidate fitting views and ordinary dependencies, while sharing
+        # disk extents and excluding host histories from predictor contexts.
+        excluded = ignored(source, [path.name for path in source.iterdir()])
+        for path in source.iterdir():
+            if path.name in excluded:
                 continue
-            target = self.workspace / path.relative_to(source)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
+            target = self.workspace / path.name
+            if path.is_dir():
+                shutil.copytree(path, target, dirs_exist_ok=True, symlinks=True,
+                                ignore=ignored, copy_function=_copy_model_file)
+            else:
+                _copy_model_file(path, target)
         # The last request precedes the last executed action. Refresh its files
         # from disk and add successful final writes, not another arm's archive.
-        names = set(context["files"])
+        names = set(context["files"] if context is not None else self.files)
+        if context is None:
+            # The frozen method can write predictors through its Python steps;
+            # expose those real source files without importing a nonexistent request.
+            names.update(str(path.relative_to(self.workspace))
+                         for path in self.workspace.glob("*.py"))
+            if previous.get("method_path"):
+                names.add(previous["method_path"])
         names.update(event.get("feedback", {}).get("written") for event in previous["events"]
                      if event.get("feedback", {}).get("written"))
         self.files = {name: (self.workspace / name).read_text(encoding="utf-8")
@@ -184,7 +243,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         self.operator_results = deepcopy(state["operator_results"])
         self.candidate_paths = deepcopy(state["exported_candidate_paths"])
         self.manifest = deepcopy(previous["outgoing_knowledge"].get("manifest", {}))
-        self._active_question_id = context["online_research"]["active_question"]
+        self._active_question_id = (context["online_research"]["active_question"]
+            if context is not None else state["online_research"]["active_question"])
         question_ids = {question["id"] for question in self.questions}
         for event in self.events:
             args, feedback = event.get("arguments", {}), event.get("feedback", {})
@@ -215,6 +275,9 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
 
         for event in self.events:
             collect_confirmations(event.get("feedback", {}))
+        # The result also carries the last confirmation directly. Event records
+        # are normally complete; de-duplication avoids consuming the stream twice.
+        collect_confirmations({"fresh_confirmation": previous.get("fresh_confirmation")})
         self.confirmation_rng = Random(confirmation_seed)
         for confirmation in self.confirmations:
             actions = laboratory.confirmation_actions(confirmation["rows"], self.confirmation_rng)
@@ -222,9 +285,16 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 raise ValueError("confirmation stream differs from the saved paid acquisitions")
         # Every temporal trajectory resets physical state. Carry its already
         # paid account forward without purchasing or simulating it again.
-        laboratory._past_costs = {
-            "observation_cost": self.costs["observation_cost"],
-            "measurement_cost": self.costs["measurement_cost"], "queries": len(self.observations)}
+        restore_account = getattr(laboratory, "restore_paid_account", None)
+        if restore_account is not None:
+            restore_account(self.observations, self.costs)
+        else:
+            account = {"observation_cost": self.costs["observation_cost"],
+                "measurement_cost": self.costs["measurement_cost"], "queries": len(self.observations)}
+            if isinstance(laboratory, AnonymousHistoryLab):
+                laboratory._costs = account
+            else:
+                laboratory._past_costs = account
         if self.provider is not None:
             self.provider.calls = self.costs["model_calls"]
         self._write_evidence()
@@ -313,7 +383,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         elif action == "run" and arguments.get("operator") == "compare_experiments":
             result = {"operator": "compare_experiments", "comparison": compare_experiments(
                 self, arguments.get("models"), arguments.get("experiments"), laboratory,
-                mse_threshold=CONFIRMATION_MSE_THRESHOLD)}
+                mse_threshold=self.config.confirmation_mse_threshold, target=arguments.get("target", "response"),
+                reference_actions=arguments.get("reference_actions"))}
         elif action == "run" and arguments.get("operator") == "analyze_revision":
             index = arguments["revision_index"]
             if type(index) is not int or not 0 <= index < len(self.revisions):
@@ -372,8 +443,9 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         feedback = latest.get("feedback", {})
         comparison = self.experiment_comparisons[-1] if self.experiment_comparisons else None
         latest_comparison = ({key: deepcopy(comparison[key]) for key in
-            ("index", "status", "diagnosis", "evidence_cutoff", "models", "eligible_models",
-             "mse_threshold", "selected_experiment", "query_arguments", "compute_cost", "error")
+            ("index", "status", "diagnosis", "target", "evidence_cutoff", "models", "eligible_models",
+             "mse_threshold", "selected_experiment", "query_arguments", "compute_cost", "error",
+             "selection_policy", "task_value")
             if key in comparison} if comparison is not None else None)
         if latest_comparison is not None:
             latest_comparison["prior_fit"] = [{key: deepcopy(fit[key]) for key in
@@ -454,6 +526,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             "status": "prediction_refuted" if scored else "confirmation_execution_failed",
             "submitted_model": feedback.get("method_submission") or proposal.get("model")
                 or proposal.get("arguments", {}).get("model"),
+            "submitted_candidate": deepcopy(feedback.get("submitted_candidate")),
             "method_step": latest["step"],
             "confirmation": {key: deepcopy(confirmation[key]) for key in
                 ("passed", "mse", "rows", "mse_threshold", "returncode", "timeout", "stderr")
@@ -495,6 +568,12 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 {"action": "query", "arguments": {"path": method["path"]}})
             entry["current_executions"] = [deepcopy(outcome) for outcome in self.method_results
                                             if outcome["path"] == method["path"]]
+            entry["submitted_candidates"] = [
+                {"method_step": outcome["step"], **deepcopy(outcome["feedback"]["submitted_candidate"]),
+                 "confirmation": {key: deepcopy(outcome["feedback"]["fresh_confirmation"][key])
+                    for key in ("passed", "mse", "returncode", "timeout", "observation_indices")}}
+                for outcome in entry["current_executions"]
+                if "submitted_candidate" in outcome["feedback"]]
             entry["source_unchanged"] = self._provenance(method["path"])["inherited_source_unchanged"]
             continuation = self._method_continuation(entry)
             if continuation is not None:
@@ -546,6 +625,28 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         if manifest.get("research_programs"):
             manifest["research_programs"] = self._registered_research_programs(manifest)
 
+        files = self._result_files(manifest, manifest_paths, model_paths)
+        lessons = deepcopy(self.knowledge.get("lessons", []))
+        if self.lesson:
+            lessons.append(self.lesson)
+        result["outgoing_knowledge"] = {
+            "files": files,
+            "manifest": deepcopy(manifest),
+            "question_traces": [*deepcopy(self.knowledge.get("question_traces", [])),
+                                *deepcopy(self.questions)],
+            "lessons": lessons,
+        }
+        for key in ("research_roles", "source_catalog", "archive_instructions"):
+            if key in self.knowledge:
+                result["outgoing_knowledge"][key] = deepcopy(self.knowledge[key])
+        result["inherited_files_changed"] = sorted(
+            name for name in self.inherited_files
+            if name in files and files[name] != self.knowledge["files"][name])
+        result["knowledge_protocol"] = "common_executable_archive"
+        return result
+
+    def _result_files(self, manifest, manifest_paths, model_paths):
+        """Export executable source research for later independent consumers."""
         names = set(self.files) | set(manifest_paths) | set(model_paths)
         # Preserve ordinary authored dependencies and the selected training view
         # inside _evaluated_model/, not only predictor source. Provider transcripts
@@ -569,24 +670,6 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                     referenced_paths(item)
 
         referenced_paths(manifest)
-        files = {name: (self.workspace / name).read_text(encoding="utf-8")
-                 for name in sorted(names) if (self.workspace / name).is_file()
-                 and (self.workspace / name).name not in _HOST_RECORD_FILES}
-        lessons = deepcopy(self.knowledge.get("lessons", []))
-        if self.lesson:
-            lessons.append(self.lesson)
-        result["outgoing_knowledge"] = {
-            "files": files,
-            "manifest": deepcopy(manifest),
-            "question_traces": [*deepcopy(self.knowledge.get("question_traces", [])),
-                                *deepcopy(self.questions)],
-            "lessons": lessons,
-        }
-        for key in ("research_roles", "source_catalog", "archive_instructions"):
-            if key in self.knowledge:
-                result["outgoing_knowledge"][key] = deepcopy(self.knowledge[key])
-        result["inherited_files_changed"] = sorted(
-            name for name in self.inherited_files
-            if name in files and files[name] != self.knowledge["files"][name])
-        result["knowledge_protocol"] = "common_executable_archive"
-        return result
+        return {name: (self.workspace / name).read_text(encoding="utf-8")
+                for name in sorted(names) if (self.workspace / name).is_file()
+                and (self.workspace / name).name not in _HOST_RECORD_FILES}

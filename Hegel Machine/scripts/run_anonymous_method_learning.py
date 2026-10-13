@@ -3,7 +3,7 @@
 
 import argparse
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 from random import Random
@@ -113,13 +113,16 @@ def protocol(source_root, *, model='gpt-6-luna', timeout_seconds=300.):
 
 
 def laboratory(case):
+    if case.get('kind') == 'conditional_window':
+        from scripts.run_conditional_discovery_study import laboratory as conditional_laboratory
+        return conditional_laboratory(case)
     if 'apparatus_seed' in case:
         from scripts.run_anonymous_online_research import representation_laboratory
         return representation_laboratory(case)
     return AnonymousHistoryLab(kind=case['kind'], seed=case['seed'])
 
 
-def trial_preparer(knowledge, sources, reference_archive):
+def trial_preparer(knowledge, sources, reference_archive, *, agent_type=AnonymousPreparedMethodAgent):
     candidates = []
     for source in sources:
         if source.get('model'):
@@ -127,10 +130,17 @@ def trial_preparer(knowledge, sources, reference_archive):
                 source['model_context_directory']), 'inner_model': source['inner_model']})
 
     def prepare(case, path, method_source, limits):
-        agent = AnonymousPreparedMethodAgent(None, path, arm='hegel', knowledge=deepcopy(knowledge),
+        # The author account may already be almost exhausted. Per-case ceilings
+        # can reduce that remaining allowance, never replenish it.
+        overrides = case.get('limits', {})
+        limits = replace(limits, **{key: min(getattr(limits, key), value)
+            if key in {'observation_budget', 'compute_budget', 'execution_seconds',
+                       'max_model_calls', 'token_budget'} else value
+            for key, value in overrides.items()})
+        agent = agent_type(None, path, arm='hegel', knowledge=deepcopy(knowledge),
             source_task=False, config=limits, confirmation_seed=case['confirmation_seed'])
         lab = laboratory(case)
-        if 'apparatus_seed' in case:
+        if 'apparatus_seed' in case and case.get('kind') != 'conditional_window':
             from scripts.run_anonymous_online_research import prepare_representation_prefix
             prepare_representation_prefix(agent, lab, case)
         else:
@@ -145,16 +155,65 @@ def trial_preparer(knowledge, sources, reference_archive):
     return prepare
 
 
-def frozen_transfers(plan, output, knowledge, sources, method_source):
-    prepare = trial_preparer(knowledge, sources, Path(output) / 'reference_archive')
+def frozen_transfers(plan, output, knowledge, sources, method_source, *,
+                     agent_type=AnonymousPreparedMethodAgent):
+    prepare = trial_preparer(knowledge, sources, Path(output) / 'reference_archive',
+                            agent_type=agent_type)
     limits = InquiryLLMConfig(**{**plan['limits'], 'max_model_calls': 0, 'token_budget': 0})
     results = []
     for case in plan['transfer_cases']:
         path = Path(output) / 'frozen' / case['id']
-        payload = prepare(case, path, method_source, limits)
-        result = payload['agent'].execute_method(payload['laboratory'], max_steps=12,
-            on_checkpoint=lambda data, path=path: write_json(path / 'active.json', data))
-        write_json(path / 'training.json', result)
+        training = path / 'training.json'
+        if training.exists():
+            # A completed failure is an outcome too; never spend again to replace it.
+            result = json.loads(training.read_text())
+        else:
+            max_steps = plan.get('method_steps', 12)
+            if path.exists() and any(path.iterdir()):
+                checkpoint = path / 'active.json'
+                if not checkpoint.exists():
+                    raise ValueError(f'Preserved partial target has no completed-action checkpoint: {path}')
+                previous = json.loads(checkpoint.read_text())
+                archived = Path(output) / 'interrupted_targets'
+                archived.mkdir(exist_ok=True)
+                attempt = len(list(archived.glob(case['id'] + '_attempt_*')))
+                retained = archived / f"{case['id']}_attempt_{attempt:03d}"
+                path.rename(retained)
+                overrides = case.get('limits', {})
+                restored_limits = replace(limits, **{key: min(getattr(limits, key), value)
+                    if key in {'observation_budget', 'compute_budget', 'execution_seconds',
+                               'max_model_calls', 'token_budget'} else value
+                    for key, value in overrides.items()})
+                agent = agent_type(None, path, arm='hegel', knowledge=deepcopy(knowledge),
+                    source_task=False, config=restored_limits,
+                    confirmation_seed=case['confirmation_seed'])
+                lab = laboratory(case)
+                agent.restore_practice_research(previous, retained, lab,
+                    confirmation_seed=case['confirmation_seed'])
+                agent.bind_method(method_source)
+                payload = {'agent': agent, 'laboratory': lab}
+                max_steps -= len(agent.method_results)
+                write_json(path / 'target_continuation.json', {'previous_workspace': str(retained),
+                    'completed_steps': len(agent.method_results), 'remaining_steps': max(0, max_steps),
+                    'retained_costs': deepcopy(previous['costs']),
+                    'scope': 'Continue completed-action checkpoint without replay or a new prefix. '
+                        'The interrupted directory retains any unfinished-action files.'})
+                if previous['status'] != 'researching':
+                    result = agent.result(previous['status'])
+                    if previous.get('no_progress'):
+                        result['no_progress'] = deepcopy(previous['no_progress'])
+                elif max_steps <= 0 and not (agent.method_results and
+                        agent.method_results[-1]['feedback'].get('status') == 'confirmation_not_authorized'):
+                    result = agent.result('method_step_limit')
+                else:
+                    result = None
+            else:
+                payload = prepare(case, path, method_source, limits)
+                result = None
+            if result is None:
+                result = payload['agent'].execute_method(payload['laboratory'], max_steps=max_steps,
+                    on_checkpoint=lambda data, path=path: write_json(path / 'active.json', data))
+            write_json(training, result)
         results.append((case, result))
         print(json.dumps({'phase': 'frozen_transfer', 'target': case['id'],
             'status': result['status'], 'costs': result['costs']}), flush=True)
@@ -165,13 +224,19 @@ def score_frozen(plan, results):
     records = []
     for case, result in results:
         score = {'status': 'no_submitted_model', 'mse': None, 'passed': False}
-        if result['model']:
+        saved_score = Path(result['workspace']) / 'evaluation.json'
+        if saved_score.exists():
+            score = json.loads(saved_score.read_text())
+        elif result['model']:
             rows = laboratory(case).evaluation_rows(length=plan['evaluation']['rows'],
                 seed=case['evaluation_seed'])
             score = evaluate_python_model(result['workspace'], result['model'], rows,
                 timeout_seconds=plan['limits']['execution_seconds'])
             score.pop('predictions', None)
-            score['passed'] = score.get('returncode') == 0 and score.get('mse', float('inf')) <= 1e-10
+            threshold = case.get('limits', {}).get('confirmation_mse_threshold',
+                plan['limits'].get('confirmation_mse_threshold', 1e-10))
+            score['mse_threshold'] = threshold
+            score['passed'] = score.get('returncode') == 0 and score.get('mse', float('inf')) <= threshold
         write_json(Path(result['workspace']) / 'evaluation.json', score)
         records.append({'case': case['id'], 'kind': case['kind'], 'status': result['status'],
             'model': result['model'], 'costs': result['costs'], 'terminal': score,
