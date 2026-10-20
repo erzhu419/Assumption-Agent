@@ -68,6 +68,10 @@ Return actions and optional after_observation as in the shared temporal interfac
 Empty actions with a nonempty continuation can analyze already-paid evidence.
 Supply your own live question when useful; otherwise the executor records a generic
 question for that invocation. It supplies no experiments, fitting steps or choices.
+An action proposal may carry research_question:{id,question,...}; an ID string
+reuses an already declared question. A declaration inside arguments takes priority.
+For query with a revision, arguments.readout supplies its authored analysis path
+when revision.readout is absent; an explicit revision.readout keeps priority.
 
 When ready, return {'model':'an_existing_predictor.py','lesson':'...'} with no
 actions or after_observation steps. You choose the predictor; this may be an
@@ -192,7 +196,12 @@ adds no scientific support: fresh predictive confirmation still determines adopt
             return {"status": "method_stopped", "reason": proposed["stop"], "executed_path": path}
         if "action" in proposed:
             action = proposed["action"]
-            arguments = proposed.get("arguments", {})
+            arguments = deepcopy(proposed.get("arguments", {}))
+            if (not arguments.get("research_question") and not arguments.get("question")
+                    and proposed.get("research_question") is not None):
+                declaration = proposed["research_question"]
+                arguments["research_question"] = ({"id": declaration}
+                    if isinstance(declaration, str) else deepcopy(declaration))
             if action == "finish" and not self._procedure_confirmation_allowed:
                 return {"status": "confirmation_not_authorized", "next_action": deepcopy(proposed),
                         "executed_path": path}
@@ -395,7 +404,8 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
             if terminal is not None:
                 status = terminal
                 break
-            if feedback.get("status") in {"confirmation_not_authorized", "method_stopped", "method_review_required"}:
+            if feedback.get("status") in {"confirmation_not_authorized", "method_stopped", "method_review_required",
+                                         "author_work_request"}:
                 status = feedback["status"]
                 break
             if review is not None:

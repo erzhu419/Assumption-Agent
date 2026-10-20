@@ -4,6 +4,14 @@
 All arms receive identical paid prefixes and the same optional executable archive.
 The provider sees the public trajectory interface, not the simulator family or a
 menu of fitted state models. Old paper cohorts and their memory arms are unchanged.
+
+Registered arms archive/fixed_pr2/pr3 additionally require
+research_organization={phase:'source'|'target', theories:[shared old declarations],
+initial_library_path:optional frozen file/reference, consolidation:{the existing
+source_theory_ids/episode_sources/materials/allocation/mission arguments}}.
+Source mission declares its stable mission_id and theory compute suballocation;
+target instead requires pr3_library_path. These libraries govern automatic
+organization, while all ordinary coding and explicit research tools remain shared.
 """
 
 import argparse
@@ -23,13 +31,293 @@ from hegel_machine.cognition.code_agent import CodexCodeProvider, evaluate_pytho
 from hegel_machine.cognition.common_archive_inquiry import CommonArchiveInquiryAgent
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.proposers import _events
+from hegel_machine.cognition.question_routing import register_theories
+from hegel_machine.cognition.research_episodes import extract_episodes, load_episode_sources, _contains_reference, _path
+from hegel_machine.cognition.theory_consolidation import (
+    LIBRARY_PATH, install_theory_library, _save as save_theory_library,
+)
 from scripts.run_online_inquiry_llm import verify_codex_subscription, write_json
+
+
+ORGANIZATION_ARMS = ('archive', 'fixed_pr2', 'pr3')
+ORGANIZATION_ORIGIN = 'registered_research_organization'
+
+
+class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
+    """Use the same strong Common condition; vary only automatic organization.
+
+    B/C route the actual active task through PR2. C may additionally consolidate
+    the preregistered source inputs under their retained theory suballocation.
+    A keeps all ordinary tools and the original experiment-selection policy.
+    """
+
+    def __init__(self, *args, arm, research_organization, **kwargs):
+        self.organization_group = arm
+        self._organization_registration = deepcopy(research_organization)
+        super().__init__(*args, arm='code_react', **kwargs)
+        root = self._open_question({'id': 'task', 'question':
+            'Infer the process from current paid observations and predict new public trajectories.',
+            'parent_id': None, 'depends_on': []})
+        root['origin'] = 'public_task'
+        self._active_question_id = root['id']
+        register_theories(self, research_organization.get('theories', []))
+        phase = research_organization['phase']
+        selected = research_organization['initial_library_path']
+        if arm == 'pr3' and phase == 'target':
+            selected = research_organization['pr3_library_path']
+            self.theory_consolidation = install_theory_library(
+                self, {'file': selected, 'json_path': []})
+            save_theory_library(self)
+        elif arm == 'pr3':
+            selected = LIBRARY_PATH
+        self._organization_state = {'group': arm, 'inner_arm': self.arm, 'phase': phase,
+            'initial_library_path': research_organization['initial_library_path'],
+            'automatic_library_path': selected,
+            'theory_mission': deepcopy(research_organization.get('consolidation', {}).get('mission', {})),
+            'automatic_event_indices': [], 'automatic_compute_cost': 0}
+        selected_ids = research_organization.get('consolidation', {}).get('source_theory_ids', list(self.theory_index))
+        self._organization_state['source_theory_scopes'] = {
+            identifier: {key: deepcopy(self.theory_index[identifier][key]) for key in
+                ('source_ref', 'episode_ref', 'program_source_ref') if key in self.theory_index[identifier]}
+            for identifier in selected_ids if identifier in self.theory_index}
+
+    def restore_research(self, previous, *args, **kwargs):
+        # A provider-free run has a real checkpoint but no paid model request.
+        source = Path(args[0])
+        restore = (super().restore_practice_research if previous['costs']['model_calls'] == 0
+                   and not (source / 'research_context.json').is_file() else super().restore_research)
+        restored = restore(previous, *args, **kwargs)
+        current = self._organization_state
+        saved = previous['research_organization']
+        for field in ('group', 'phase', 'inner_arm'):
+            if saved[field] != current[field]:
+                raise ValueError(f'cohort recovery must preserve organization {field}')
+        self._organization_state = deepcopy(saved)
+        self._organization_state.setdefault('source_theory_scopes', current['source_theory_scopes'])
+        if self.organization_group == 'pr3' and saved['phase'] == 'source':
+            self._organization_state['automatic_library_path'] = LIBRARY_PATH
+        return restored
+
+    def _automatic_work(self, arguments, laboratory, kind):
+        before = self.costs['compute_cost']
+        try:
+            feedback = self._execute('run', arguments, laboratory)
+        except (ValueError, TypeError, KeyError, OSError) as error:
+            feedback = {'operator': arguments['operator'], 'status': 'automatic_research_failed',
+                        'error': f'{type(error).__name__}: {error}',
+                        'new_compute_cost': self.costs['compute_cost'] - before}
+        actual = self.costs['compute_cost'] - before
+        state = self._organization_state
+        if feedback.get('cache_hit') and not actual and kind in state:
+            return False
+        event_index = len(self.events)
+        self.events.append({'step': self.costs['model_calls'], 'action': 'run',
+            'arguments': deepcopy(arguments), 'feedback': deepcopy(feedback),
+            'origin': ORGANIZATION_ORIGIN,
+            'usage': {'backend': ORGANIZATION_ORIGIN, 'total_tokens': 0}})
+        state['automatic_event_indices'].append(event_index)
+        state['automatic_compute_cost'] += actual
+        state[kind] = {'status': feedback.get('status'), 'event_index': event_index,
+                       'new_compute_cost': actual}
+        return True
+
+    def _registered_source_ids(self):
+        """Extend explicit source Episodes, retaining exact IDs without provenance."""
+        scopes = self._organization_state['source_theory_scopes']
+        references = self._organization_registration.get('consolidation', {}).get('episode_sources', [])
+        retained = load_episode_sources(references, self.workspace) if references else []
+        episodes = {identifier: episode for episode in extract_episodes(
+            self, retained_episodes=retained)['episodes'] for identifier in episode['theory_ids']}
+
+        def contract(theory):
+            reference = theory.get('source_ref') or theory.get('episode_ref', {})
+            owner = reference.get('question_id')
+            if owner is None:
+                return None
+            return owner, reference.get('meaning_version', 1)
+
+        def address(theory):
+            return theory.get('program_source_ref') or theory.get('episode_ref', {}).get('source_ref')
+
+        def admitted_address(seed, theory):
+            original = seed.get('registered_episode_source_ref') or address(seed)
+            current = address(theory)
+            if original is None or current is None:
+                return original is current
+            parent = next((ref for ref in references if _contains_reference(ref, original)), original)
+            if not _contains_reference(parent, current):
+                return False
+            cutoff = parent.get('action_cutoff')
+            if cutoff is not None:
+                program_ref = theory.get('program_source_ref')
+                if not program_ref or not _contains_reference(parent, program_ref):
+                    return False
+                tail = _path(program_ref)[len(_path(parent)):]
+                return len(tail) >= 2 and tail[0] == 'actions' and type(tail[1]) is int and tail[1] <= cutoff
+            return True
+
+        for identifier, seed in scopes.items():
+            episode = episodes.get(identifier, {})
+            identity = contract(seed)
+            if (identity is not None and identity == contract(self.theory_index.get(identifier, {}))
+                    and identity[1] == episode.get('meaning_version')
+                    and (not address(seed) or episode.get('source_ref') and
+                         _contains_reference(episode['source_ref'], address(seed)))):
+                seed.setdefault('episode_id', episode['episode_id'])
+                seed.setdefault('source_id', episode['source_id'])
+                if episode.get('source_ref'):
+                    seed.setdefault('registered_episode_source_ref', deepcopy(episode['source_ref']))
+        selected = []
+        for identifier, theory in self.theory_index.items():
+            if theory.get('consolidation_ref') and identifier not in scopes:
+                continue
+            if identifier in scopes and contract(scopes[identifier]) is None:
+                selected.append(identifier)
+                continue
+            episode = episodes.get(identifier)
+            identity = contract(theory)
+            if (identifier in scopes and episode is not None and contract(scopes[identifier]) == identity
+                    and identity[1] == episode['meaning_version'] and address(theory) == address(scopes[identifier])):
+                selected.append(identifier)
+                continue
+            if episode is not None and identity is not None and any(contract(seed) == identity
+                    and identity[1] == episode['meaning_version'] and admitted_address(seed, theory)
+                    and seed.get('episode_id') == episode['episode_id']
+                    and seed.get('source_id') == episode['source_id']
+                    for seed in scopes.values() if contract(seed) is not None):
+                selected.append(identifier)
+        return selected
+
+    def _consolidate_registered_source(self, laboratory):
+        opened = False
+        state, registration = self._organization_state, self._organization_registration
+        source_work = registration.get('consolidation')
+        if self.organization_group == 'pr3' and state['phase'] == 'source' and source_work:
+            selected = self._registered_source_ids()
+            # Host organization events are not a new source research attempt.
+            basis = {'source_versions': [{key: deepcopy(self.theory_index.get(identifier, {}).get(key))
+                       for key in ('id', 'version', 'source_ref')}
+                       for identifier in selected],
+                'research_events': sum(event.get('origin') != ORGANIZATION_ORIGIN for event in self.events),
+                'paid_records': len(self.observations), 'revisions': len(self.revisions)}
+            if state.get('consolidation_basis') != basis:
+                active_id = self._active_question_id
+                owner_id = 'organization:source:' + state['theory_mission']['mission_id']
+                owner = next((q for q in self.questions if q['id'] == owner_id), None)
+                if owner is None:
+                    owner = self._open_question({'id': owner_id,
+                        'question': 'Construct shared structure from the registered source episodes; '
+                            'retain failures, costs and unresolved author work.',
+                        'parent_id': None, 'depends_on': [], 'queue': 'theory',
+                        'mission': deepcopy(state['theory_mission'])})
+                arguments = {**deepcopy(source_work), 'operator': 'theory_consolidation',
+                             'source_theory_ids': selected,
+                             'research_question': {'id': owner_id},
+                             'mission': deepcopy(state['theory_mission'])}
+                opened = self._automatic_work(arguments, laboratory, 'consolidation') or opened
+                state['theory_mission'] = deepcopy(owner['mission'])
+                state['theory_question_id'] = owner_id
+                self._active_question_id = active_id
+                state['consolidation_basis'] = basis
+        return opened
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        opened = self._consolidate_registered_source(laboratory) or opened
+        state = self._organization_state
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        return self._automatic_work(arguments, laboratory, 'routing') or opened
+
+    def _after_model_turn(self, laboratory):
+        super()._after_model_turn(laboratory)
+        self._consolidate_registered_source(laboratory)
+
+    def _program_state(self):
+        state = super()._program_state()
+        if hasattr(self, '_organization_state'):
+            state['research_organization'] = deepcopy(self._organization_state)
+        return state
+
+    def _request(self, laboratory):
+        request = super()._request(laboratory)
+        request['research_organization'] = deepcopy(self._organization_state)
+        return request
+
+    def result(self, status):
+        result = super().result(status)
+        result['research_organization'] = deepcopy(self._organization_state)
+        return result
+
+
+def _prepare_organization(plan, output, knowledge, previous_study=None):
+    """Anchor the small registered libraries once, keeping all old knowledge."""
+    arms = set(plan['arms'])
+    if not arms.intersection(ORGANIZATION_ARMS):
+        return None, knowledge
+    if arms != set(ORGANIZATION_ARMS):
+        raise ValueError('register archive, fixed_pr2 and pr3 together')
+    registration = deepcopy(plan.get('research_organization') or {})
+    if registration.get('phase') not in {'source', 'target'}:
+        raise ValueError('three-arm organization needs a registered source or target phase')
+    for case in plan['cases']:
+        if 'arms' in case and set(case['arms']) != arms:
+            raise ValueError('each source must retain all three registered organization groups')
+    source_work = registration.get('consolidation', {})
+    if registration['phase'] == 'source':
+        mission = source_work.get('mission', {})
+        allowance = mission.get('theory_learning_allocation', mission.get('allocation', {}))
+        allowance = allowance.get('compute') if isinstance(allowance, dict) else allowance
+        if (mission.get('purpose') not in {'theory_learning', 'method_learning'}
+                or not mission.get('mission_id') or type(allowance) is not int
+                or not 0 <= allowance <= plan['limits']['compute_budget']):
+            raise ValueError('source organization needs one registered bounded theory mission')
+        if source_work.get('theories', registration.get('theories', [])) != registration.get('theories', []):
+            raise ValueError('registered source declarations must be shared by all three groups')
+    memory = deepcopy(knowledge or {})
+    selected = registration.get('initial_library_path') or memory.get('theory_consolidation')
+    if previous_study:
+        original_input = json.loads((previous_study / 'initial_archive.json').read_text())
+        selected = original_input['theory_consolidation']
+    fixed = output / 'initial_theory_library.json'
+    if selected:
+        reference = ({'file': str(Path(selected).resolve()), 'json_path': []}
+                     if isinstance(selected, str) else deepcopy(selected))
+        write_json(fixed, {'source_ref': reference})
+    else:
+        document = memory.get('files', {}).get(LIBRARY_PATH)
+        write_json(fixed, json.loads(document) if document else {'candidates': {}})
+    # Continue the same registered frozen object; a new output shell is only a
+    # reference, not a new selection-library identity.
+    registration['initial_library_path'] = reference['file'] if previous_study else str(fixed)
+    memory['theory_consolidation'] = (deepcopy(reference) if previous_study else
+                                    {'file': str(fixed), 'json_path': []})
+    if registration['phase'] == 'target':
+        selected = registration.get('pr3_library_path')
+        if not selected:
+            raise ValueError('target organization needs the frozen PR3 library reference')
+        reference = ({'file': str(Path(selected).resolve()), 'json_path': []}
+                     if isinstance(selected, str) else deepcopy(selected))
+        frozen = output / 'pr3_theory_library.json'
+        write_json(frozen, {'source_ref': reference})
+        registration['pr3_library_path'] = str(frozen)
+    return registration, memory
 
 
 def protocol(*, kinds=("memoryless", "delay", "hysteresis"), cases=1,
              arms=("code_react", "hegel"), seed=61011017, config=None,
-             model="gpt-6-luna", timeout_seconds=300, archive=None):
-    return {
+             model="gpt-6-luna", timeout_seconds=300, archive=None,
+             research_organization=None):
+    plan = {
         "study": "anonymous_authored_revision_development",
         "model": model, "arms": list(arms),
         "cases": [{"id": f"case_{index:03d}", "kind": kind, "seed": seed + index * 1009,
@@ -55,6 +343,15 @@ def protocol(*, kinds=("memoryless", "delay", "hysteresis"), cases=1,
                  "Terminal horizon 48 tests new paths, not different physical objects. "
                  "This pilot alone establishes neither recursive superiority nor cross-task meta-prior learning.",
     }
+    if research_organization is not None:
+        plan['research_organization'] = deepcopy(research_organization)
+        plan['controls'] = ('All three groups use Common code_react, the same public task root, '
+            'complete original archive, tools, budgets and terminal order. B/C automatically '
+            'route actual task contracts through PR2. Only C consolidates registered source '
+            'evidence. Fixed libraries constrain automatic organization; ordinary Python, '
+            'explicit research tools and authored candidates remain available to every group. '
+            'Target automatic libraries remain frozen.')
+    return plan
 
 
 def restore_pending_question_error(agent, laboratory, previous, workspace, *, model):
@@ -107,7 +404,7 @@ def restore_pending_question_error(agent, laboratory, previous, workspace, *, mo
 
 
 def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=None,
-              laboratory_factory=None, workers=1, agent_factory=CommonArchiveInquiryAgent,
+              laboratory_factory=None, workers=1, agent_factory=None,
               previous_study=None, resume_task=''):
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -119,9 +416,13 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
         for field in ('cases', 'arms', 'model', 'provider', 'limits', 'prefix_rows', 'evaluation'):
             if plan[field] != previous_plan[field]:
                 raise ValueError(f'cohort recovery must preserve registered {field}')
+        if plan.get('research_organization') != previous_plan.get('research_organization'):
+            raise ValueError('cohort recovery must preserve registered research_organization')
+    organization, prepared_knowledge = _prepare_organization(plan, output, knowledge, previous_study)
+    agent_factory = agent_factory or (RegisteredOrganizationAgent if organization else CommonArchiveInquiryAgent)
     write_json(output / "protocol.json", plan)
     # Literal common input is saved once; no arm learns the other's live results.
-    write_json(output / "initial_archive.json", knowledge or {})
+    write_json(output / "initial_archive.json", prepared_knowledge or {})
     limits = InquiryLLMConfig(**plan["limits"])
     if laboratory_factory is None:
         laboratory_factory = lambda case: AnonymousHistoryLab(kind=case["kind"], seed=case["seed"])
@@ -139,8 +440,9 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
             result = json.loads((old_workspace / 'training.json').read_text())
             return {'case': case, 'arm': arm, 'result': result, 'initial_event_count': 0}
         agent = agent_factory(provider_factory(workspace), workspace,
-            arm=arm, knowledge=deepcopy(knowledge or {}), config=limits,
-            confirmation_seed=case["confirmation_seed"], source_task=not bool(knowledge))
+            arm=arm, knowledge=deepcopy(prepared_knowledge or {}), config=limits,
+            confirmation_seed=case["confirmation_seed"], source_task=False if organization else not bool(knowledge),
+            **({'research_organization': organization} if organization else {}))
         laboratory = laboratory_factory(case)
         prefix_account = {}
         if old_workspace and old_workspace.is_dir():
@@ -148,11 +450,11 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
             agent.restore_research(previous, old_workspace, laboratory,
                                    confirmation_seed=case['confirmation_seed'])
             agent.common_interface += resume_task
-            recovery = restore_pending_question_error(agent, laboratory, previous,
-                old_workspace, model=plan['model'])
+            recovery = (None if organization else restore_pending_question_error(agent, laboratory, previous,
+                old_workspace, model=plan['model']))
             prefix_account = {'prior_research_cost': deepcopy(agent.costs),
                               'resume_origin': str(old_workspace / 'active.json'),
-                              'recovered_paid_reply': recovery}
+                              **({'recovered_paid_reply': recovery} if recovery else {})}
             write_json(workspace / 'active.json', agent.result('researching'))
         elif prepare_prefix is None:
             prefix = laboratory.confirmation_actions(plan["prefix_rows"], Random(case["prefix_seed"]))
@@ -217,6 +519,8 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
             "cached_input_tokens": sum(item.get("cached_input_tokens") or 0 for item in usage),
             "calls_with_cache_hits": sum(bool(item.get("cached_input_tokens")) for item in usage),
             "archive": str(Path(result["workspace"]) / "archive.json")})
+        if organization:
+            records[-1]['research_organization'] = deepcopy(result['research_organization'])
         for field in ("historical_prefix_cost", "additional_cost", "prefix_origin",
                       "prior_research_cost", "continuation_cost", "resume_origin",
                       "recovered_paid_reply"):
@@ -225,7 +529,7 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
     live_events = [event for trial in trials
                    for event in trial["result"]["events"][trial["initial_event_count"]:]
                    if event.get("usage", {}).get("backend") not in
-                       {"common_paid_prefix", "restored_paid_prefix"}]
+                       {"common_paid_prefix", "restored_paid_prefix", ORGANIZATION_ORIGIN}]
     summary = {"study": plan["study"], "status": "completed", "trials": records,
                "evidence_kind": "real_external_model" if live_events and all(
                    event.get("usage", {}).get("backend") == "codex_cli" for event in live_events)

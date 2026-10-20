@@ -272,10 +272,12 @@ class PythonArchiveMethodLearner(PairedMethodLearner):
             and submitted.get('model_file') and 'source_preview' not in submitted)
         missing_execution_cost = (self.practice_trials and trial is self.practice_trials[-1]
             and 'continuation_cost' in trial and 'practice_execution_cost' not in summary)
+        missing_author_work = (self.practice_trials and trial is self.practice_trials[-1]
+            and trial.get('status') == 'author_work_request' and 'latest_author_work_request' not in summary)
         if ('research_steps' not in summary or
                 (summary.get('submission_count', 0) and 'latest_submitted_predictor' not in summary) or
                 ('paid_rows' in submitted and 'submission_evidence' not in submitted) or
-                missing_native_decision or missing_submitted_source or missing_execution_cost):
+                missing_native_decision or missing_submitted_source or missing_execution_cost or missing_author_work):
             if directory not in self._paid_execution_summaries:
                 path = self.workspace / directory / 'result.json'
                 self._paid_execution_summaries[directory] = (

@@ -109,21 +109,35 @@ def test_seed_reuses_original_archive_but_changed_case_fails_and_keeps_all_paid_
     changed = practice(learner, "case_b")
     assert stable["status"] == "completed" and stable["selected_prior_predictor"]
     assert stable["fresh_confirmation"]["passed"]
-    assert changed["status"] != "completed" and changed["fresh_confirmation"]["passed"] is False
-    assert changed["fresh_confirmation"]["mse"] > 1e-4
-    for result, payload in zip((stable, changed), prepared):
+    assert changed["status"] == "method_no_progress" and changed["fresh_confirmation"] is None
+    failed_submissions = [step["feedback"] for step in changed["steps"][1:]]
+    assert len(failed_submissions) == 2
+    assert all(step["mse"] > 1e-4 and "paid evidence contradicts this model" in step["error"]
+               and "fresh_confirmation" not in step for step in failed_submissions)
+    assert changed["no_progress"]["kind"] == "repeated_execution_error"
+    assert changed["current_source_coverage"] == {"confirmed_cases": ["case_a"],
+        "missing_cases": ["case_b"], "prior_reuse_cases": ["case_a"], "revised_cases": []}
+    for result, payload, observation_cost, compute_cost in zip(
+            (stable, changed), prepared, (96, 72), (168, 216)):
         assert payload["prefix_costs"]["observation_cost"] == 72
-        assert result["costs"]["observation_cost"] == 96
-        assert result["costs"]["compute_cost"] == 168
+        assert result["costs"]["observation_cost"] == observation_cost
+        assert result["costs"]["compute_cost"] == compute_cost
         assert result["costs"]["observation_cost"] == payload["laboratory"].costs["observation_cost"]
         assert result["costs"]["model_calls"] == result["costs"]["reported_tokens"] == 0
+        assert len(payload["agent"].rows) == observation_cost
+    assert not prepared[1]["agent"].confirmations
     for resource in ("observation_cost", "measurement_cost", "compute_cost", "python_execution_seconds"):
         assert learner.costs[resource] == stable["costs"][resource] + changed["costs"][resource]
     refused = publish(learner)
     assert refused["unconfirmed_cases"] == ["case_b"] and learner.model is None
     assert [item["case"] for item in refused["publication_practices"]] == ["case_b"]
+    retried = refused["publication_practices"][0]
+    assert retried["fresh_confirmation"] is None and retried["status"] == "method_no_progress"
+    assert retried["costs"]["observation_cost"] == 72 and retried["costs"]["compute_cost"] == 216
     assert len(prepared) == 3  # Explicit submission repays only the unsupported case.
-    assert learner.costs["observation_cost"] == 288
+    assert learner.costs["observation_cost"] == 240 and learner.costs["compute_cost"] == 600
+    for resource in ("observation_cost", "measurement_cost", "compute_cost", "python_execution_seconds"):
+        assert learner.costs[resource] == sum(trial["costs"][resource] for trial in learner.practice_trials)
 
 
 def test_repeated_case_keeps_the_same_prefix_but_buys_distinct_fresh_confirmations(tmp_path, archived_predictor):
@@ -179,9 +193,14 @@ def test_failed_publication_returns_first_actual_trace_then_explicit_edit_can_pu
     assert len(prepared) == 1 and learner.model is learner.published_source is None
     assert [item["case"] for item in refused["publication_practices"]] == ["case_b"]
     failed = refused["publication_practices"][0]
-    assert failed["fresh_confirmation"]["passed"] is False
-    assert any(step["feedback"].get("fresh_confirmation", {}).get("passed") is False
-               for step in failed["steps"])
+    assert failed["status"] == "method_no_progress" and failed["fresh_confirmation"] is None
+    assert failed["costs"]["observation_cost"] == 72 and failed["costs"]["compute_cost"] == 216
+    assert len(failed["steps"]) == 3
+    for step in failed["steps"][1:]:
+        assert step["feedback"]["mse"] > 1e-4
+        assert "paid evidence contradicts this model" in step["feedback"]["error"]
+        assert "fresh_confirmation" not in step["feedback"]
+    assert not prepared[0]["agent"].confirmations
     assert refused["unconfirmed_cases"] == ["case_a", "case_b"]
     old_source = (learner.workspace / METHOD_PATH).read_text()
     assert old_source == SEED_PYTHON_METHOD
@@ -190,7 +209,7 @@ def test_failed_publication_returns_first_actual_trace_then_explicit_edit_can_pu
     completed = publish(learner)
     assert completed["published"] == METHOD_PATH
     assert [item["case"] for item in completed["publication_practices"]] == ["case_b", "case_a"]
-    assert [trial["status"] for trial in learner.practice_trials] == ["method_stopped", "completed", "completed"]
+    assert [trial["status"] for trial in learner.practice_trials] == ["method_no_progress", "completed", "completed"]
     assert completed["current_source_coverage"]["prior_reuse_cases"] == ["case_a"]
     assert completed["current_source_coverage"]["revised_cases"] == ["case_b"]
     for resource in ("observation_cost", "measurement_cost", "compute_cost", "python_execution_seconds"):
@@ -254,24 +273,37 @@ def select_actions(spec, records, memory):
     feedback = practice(learner, "case_b")
     agent = prepared[0]["agent"]
     assert feedback["status"] == "method_stopped"
-    assert feedback["fresh_confirmation"]["passed"] is False
-    assert feedback["steps"] == agent.method_results
+    assert feedback["fresh_confirmation"] is None and not agent.confirmations
+    assert feedback["costs"]["observation_cost"] == 72 and feedback["costs"]["compute_cost"] == 72
+    assert len(agent.rows) == 72 and len(agent.observations) == 3
+    assert len(feedback["steps"]) == len(agent.method_results) == 2
     observed = json.loads((agent.workspace / "seen_method_results.json").read_text())
     state = json.loads((agent.workspace / "research_state.json").read_text())
-    assert observed == state["method_results"] == feedback["steps"][:-1]
+    recorded_steps = json.loads(json.dumps(agent.method_results))
+    assert observed == state["method_results"] == recorded_steps[:-1]
     step = feedback["steps"][0]
-    assert set(step) == {"step", "path", "proposal", "feedback"}
+    assert set(step) == {"step", "path", "proposal", "feedback", "evidence_before", "evidence_after"}
     assert step["proposal"] == {"model": archived_predictor["model"]}
-    assert step["feedback"]["fresh_confirmation"]["passed"] is False
-    assert "fresh confirmation failed" in step["feedback"]["error"]
-    assert "observations" not in step["feedback"]["fresh_confirmation"]
+    assert step["evidence_before"] == step["evidence_after"] == {"records": 3, "rows": 72}
+    assert step["feedback"]["mse"] > 1e-4
+    assert "paid evidence contradicts this model" in step["feedback"]["error"]
+    assert "fresh_confirmation" not in step["feedback"]
+    assert step["feedback"]["paid_residuals"]["evaluated_rows"] == 72
 
     persisted = json.loads((agent.workspace / "result.json").read_text())
-    assert persisted["method_results"] == feedback["steps"]
+    assert persisted["method_results"] == recorded_steps
+    assert learner.workspace / feedback["full_trace_file"] == agent.workspace / "result.json"
+    for compact, original in zip(feedback["steps"], persisted["method_results"]):
+        for key in ("step", "path", "proposal", "evidence_before", "evidence_after"):
+            assert compact[key] == original[key]
+        for key in ("error", "mse", "status", "reason"):
+            assert compact["feedback"].get(key) == original["feedback"].get(key)
+    assert persisted["method_results"][0]["feedback"]["paid_residuals"]["examples"]
     assert persisted["events"] == json.loads(json.dumps(agent.events))
     event = persisted["events"][0]
     assert event["action"] == "query" and event["arguments"] == {"path": METHOD_PATH}
-    assert event["feedback"]["fresh_confirmation"]["observations"]
+    assert event["feedback"]["error"] == step["feedback"]["error"]
+    assert "fresh_confirmation" not in event["feedback"]
     assert event["usage"] == {"backend": "frozen_program_execution", "total_tokens": 0}
 
 

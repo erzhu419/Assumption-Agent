@@ -14,6 +14,13 @@ import re
 import shutil
 
 from .online_inquiry_llm import COMMON_INTERFACE, open_assigned_question
+from .question_continuation import QUESTION_INTERFACE, step_question, pending_query_arguments
+from .question_routing import ROUTING_INTERFACE, route_research, continue_conditional_plan
+from .theory_consolidation import (
+    CONSOLIDATION_INTERFACE, LIBRARY_PATH, consolidate_research, transfer_theory,
+    INDEX_PATH, install_theory_library, install_theory_index, save_theory_index,
+    _save as save_theory_library,
+)
 from .inquiry_session import begin_session, enter_notebook, leave_notebook
 from .representation_inquiry import open_representation_inquiry, record_representation_return
 from .scientific_generalization import (
@@ -221,7 +228,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
 
     common_interface = (COMMON_ARCHIVE_INTERFACE + ONLINE_RESEARCH_INTERFACE
                         + OBSERVABLE_INTERFACE + CONDITIONAL_INTERFACE + EVIDENCE_INTERFACE
-                        + STRUCTURAL_RESEARCH_INTERFACE + NATIVE_CONDITION_INTERFACE)
+                        + STRUCTURAL_RESEARCH_INTERFACE + NATIVE_CONDITION_INTERFACE + QUESTION_INTERFACE
+                        + ROUTING_INTERFACE + CONSOLIDATION_INTERFACE)
 
     def __init__(self, *args, **kwargs):
         if kwargs.get("arm") not in {"code_react", "hegel"}:
@@ -234,6 +242,12 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         self.research_input_bindings = {}
         self.research_candidates = {}
         self.relation_research = {}
+        self.theory_index = install_theory_index(self, self.knowledge.get('theory_index'))
+        self.research_mission = {}
+        self.research_agenda = {}
+        self.theory_consolidation = install_theory_library(self, self.knowledge.get('theory_consolidation'))
+        if self.knowledge.get('theory_consolidation'):
+            save_theory_library(self)
         self.llm_inquiries = {}
         self._inquiry_stack = []
         self._active_question_id = None
@@ -454,6 +468,14 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         self.research_input_bindings = deepcopy(previous.get("research_input_bindings", {}))
         self.research_candidates = deepcopy(previous.get("research_candidates", {}))
         self.relation_research = deepcopy(previous.get("relation_research", {}))
+        install_theory_index(self, self.knowledge.get('theory_index'))
+        self.theory_index = deepcopy(previous.get('theory_index', state.get('theory_index', {})))
+        self.research_mission = deepcopy(previous.get('research_mission', state.get('research_mission', {})))
+        self.research_agenda = deepcopy(previous.get('research_agenda', state.get('research_agenda', {})))
+        library = source / LIBRARY_PATH
+        if library.is_file():
+            self._save(LIBRARY_PATH, library.read_text())
+            self.theory_consolidation = install_theory_library(self)
         self.llm_inquiries = deepcopy(previous.get('llm_inquiries', {}))
         self._inquiry_stack = deepcopy(previous.get('inquiry_stack', []))
         for frame in self._inquiry_stack:
@@ -1076,7 +1098,22 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
 
     def _open_question(self, question, experiment_path=None):
         """Reuse one live question; acquisition history is not a new assignment."""
-        return open_assigned_question(self, question, experiment_path)
+        if not isinstance(question, dict):
+            raise ValueError('research_question must be a JSON object')
+        old = next((q for q in self.questions if q['id'] == question['id']), None)
+        version = old.get('meaning_version', 1) if old else 1
+        current = open_assigned_question(self, question, experiment_path)
+        if current.get('meaning_version', 1) != version:
+            for revision in self.revisions:
+                if revision.get('question_id') == question['id']:
+                    revision.setdefault('question_meaning_version', version)
+        if current.get('meaning_version', 1) != version and question['id'] in self.relation_research:
+            # A historical bank remains recallable, but its support answers the
+            # old meaning. Keep its original position and all exported models.
+            key = f"{question['id']}@meaning{version}"
+            self.relation_research = {(key if name == question['id'] else name): value
+                                     for name, value in self.relation_research.items()}
+        return current
 
     def _return_revision_answer(self, question, record, answer):
         record_answer(self, question, answer)
@@ -1153,6 +1190,9 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
 
     def _execute(self, action, arguments, laboratory):
         arguments = deepcopy(arguments)
+        pending_parent = arguments.pop('pending_question', None) if action == 'query' else None
+        if pending_parent is not None:
+            arguments = pending_query_arguments(self, pending_parent)
         parent_research = self._parent_research()
         if any(frame['question'].get('origin') == 'host_execution_repair'
                for frame in self._inquiry_stack):
@@ -1210,6 +1250,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         rebuilding = None
         candidate_action = action in {"evaluate", "finish"} or (
             action == "run" and arguments.get("operator") == "refit")
+        claim = arguments.pop('claim', None) if candidate_action else None
         if candidate_action:
             model = arguments.get("model", "model.py")
             if "research_inputs" in arguments:
@@ -1220,7 +1261,21 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 except ValueError as error:
                     return {"error": str(error), "status": "dependency_unresolved",
                             "research_repairs": research_repairs(self)}
-        if action == "evaluate" and "component" in arguments:
+        if action == 'run' and arguments.get('operator') == 'theory_consolidation':
+            result = {'operator': 'theory_consolidation', **consolidate_research(self, arguments, laboratory, question)}
+            self._prepare_program_state()
+        elif action == 'run' and arguments.get('operator') == 'theory_transfer':
+            result = {'operator': 'theory_transfer', **transfer_theory(self, arguments, laboratory)}
+            self._prepare_program_state()
+        elif action == 'run' and arguments.get('operator') == 'research_route':
+            result = {'operator': 'research_route', **route_research(self, arguments, laboratory, question)}
+            self._prepare_program_state()
+        elif action == 'run' and arguments.get('operator') == 'research_step':
+            if question is None:
+                raise ValueError('research_step requires a named research_question')
+            result = {'operator': 'research_step', **step_question(self, question, laboratory)}
+            self._prepare_program_state()
+        elif action == "evaluate" and "component" in arguments:
             result = evaluate_component(self, arguments, laboratory, question)
         elif action == "evaluate" and arguments.get("target", "response") != "response":
             result = evaluate_observable(self, arguments, laboratory, question)
@@ -1289,7 +1344,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             if action == "run" and arguments.get("operator") == "refit":
                 evaluation = {**result.get("validation", result),
                               "evaluation_scope": "paid_trajectory_holdout"}
-            record_evaluation(self, arguments.get("model", "model.py"), evaluation)
+            record_evaluation(self, arguments.get("model", "model.py"), evaluation, claim=claim)
         if research_repairs(self):
             result["research_repairs"] = research_repairs(self)
         if (action in {"evaluate", "finish"} and "component" not in arguments
@@ -1300,7 +1355,18 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             # Answers produced by this action remain new to a later parent turn.
             question["reviewed_child_answers"] = reviewed_returns
             result["research_question_id"] = question["id"]
+            result['question_meaning_version'] = question.get('meaning_version', 1)
         self._record_parent_research(parent_research, action, arguments, result)
+        if pending_parent is not None and result.get('observations'):
+            parent = next(q for q in self.questions if q['id'] == pending_parent)
+            executed = {
+                'query': parent.pop('pending_query'),
+                'source': parent.pop('pending_query_source'),
+                'record_indices': deepcopy(result.get('record_indices', []))}
+            parent.setdefault('executed_pending_queries', []).append(executed)
+            conditional = continue_conditional_plan(self, parent, executed, result)
+            if conditional is not None:
+                result['conditional_continuation'] = conditional
         return result
 
     def _manifest_error(self, manifest, model):
@@ -1339,9 +1405,19 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             ("id", "question", "assignment", "parent_id", "depends_on", "status", "experiment_path",
              "answer", "child_answers", "evidence", "acquired_evidence", "revision_index",
              "executable_answer", "evidence_status", "check_results", "representation_diagnostic", "analysis_scope",
-             "evidence_readout_proposal")
+             "evidence_readout_proposal", "meaning_version", "kind", "context_ref", "query_semantics",
+             "answer_type", "answer_resolution_ref", "use_sites", "compilation", "semantic_answer",
+             "support_path_status", "pending_author_work", "pending_query", "pending_query_source",
+             "queue", "origin", "agenda_basis")
             if key in q} for q in self.questions]
         by_id = {question['id']: question for question in questions}
+        for summary, question in zip(questions, self.questions):
+            if question.get('routing_execution'):
+                execution = question['routing_execution']
+                summary['research_routing'] = {'version': execution['version'],
+                    'status': execution['result']['status'],
+                    'source': {'file': 'research_state.json',
+                               'question_id': question['id'], 'field': 'routing_execution'}}
         for index, event in self._executed_python_analyses():
             feedback = event['feedback']
             question = by_id.get(feedback.get('research_question_id'))
@@ -1810,6 +1886,11 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         state["research_candidates"] = deepcopy(self.research_candidates)
         state["research_input_bindings"] = deepcopy(self.research_input_bindings)
         state['relation_research'] = deepcopy(self.relation_research)
+        state['theory_index'] = deepcopy(self.theory_index)
+        state['research_mission'] = deepcopy(self.research_mission)
+        state['research_agenda'] = deepcopy(self.research_agenda)
+        if self.theory_consolidation:
+            state['theory_consolidation'] = {'file': LIBRARY_PATH}
         return state
 
     def _prepare_program_state(self):
@@ -1869,6 +1950,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             "methods": methods}, indent=2))
 
     def result(self, status):
+        if self.theory_index or getattr(self, '_theory_index_source_ref', None):
+            save_theory_index(self)
         result = super().result(status)
         result["experiment_comparisons"] = deepcopy(self.experiment_comparisons)
         result["observable_models"] = deepcopy(self.observable_models)
@@ -1877,6 +1960,11 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         result["research_candidates"] = deepcopy(self.research_candidates)
         result["research_input_bindings"] = deepcopy(self.research_input_bindings)
         result['relation_research'] = deepcopy(self.relation_research)
+        result['theory_index'] = deepcopy(self.theory_index)
+        result['research_mission'] = deepcopy(self.research_mission)
+        result['research_agenda'] = deepcopy(self.research_agenda)
+        if self.theory_consolidation:
+            result['theory_consolidation'] = {'file': LIBRARY_PATH}
         result['llm_inquiries'] = deepcopy(self.llm_inquiries)
         result['inquiry_stack'] = deepcopy(self._inquiry_stack)
         # A failed or unfinished source may already have authored a useful
@@ -1953,6 +2041,14 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                                 *deepcopy(self.questions)],
             "lessons": lessons,
         }
+        if self.theory_index or getattr(self, '_theory_index_source_ref', None):
+            result['outgoing_knowledge']['files'].pop(INDEX_PATH, None)
+            result['outgoing_knowledge']['theory_index'] = {
+                'file': str(self.workspace / INDEX_PATH), 'json_path': []}
+        if self.theory_consolidation:
+            result['outgoing_knowledge']['files'].pop(LIBRARY_PATH, None)
+            result['outgoing_knowledge']['theory_consolidation'] = {
+                'file': str(self.workspace / LIBRARY_PATH), 'json_path': []}
         for key in ("research_roles", "source_catalog", "archive_instructions"):
             if key in self.knowledge:
                 result["outgoing_knowledge"][key] = deepcopy(self.knowledge[key])

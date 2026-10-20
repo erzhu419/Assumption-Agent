@@ -1067,6 +1067,9 @@ def prepare_published_targets(study, output, *, baseline_study=None, evaluation_
         raise ValueError('preserve earlier attempts; resume the frozen target directory')
     plan, learned, publication = published_source(study)
     source = learned['method_source']
+    plan['runtime_snapshot'] = sorted(set(plan['runtime_snapshot']) |
+        {str(path.relative_to(ROOT)) for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
+        {'scripts/run_native_method_compilation.py'})
     if evaluation_registration:
         registration_path = Path(evaluation_registration).resolve()
         registration = read_json(registration_path)['frozen_evaluation_registration']
@@ -1094,6 +1097,8 @@ def prepare_published_targets(study, output, *, baseline_study=None, evaluation_
             registration['paired_baseline'])
         if baseline_source_plan['source'] != plan['source']:
             raise ValueError('published pair must use the same original archive')
+        plan['runtime_snapshot'] = sorted(set(plan['runtime_snapshot']) |
+                                         set(baseline_source_plan.get('runtime_snapshot', [])))
         baseline_count = len(baseline_publication['confirmed_cases'])
         new_target_count = len(registration['new_transfer_cases'])
         plan.update(old_target_ids=registration['regression_case_ids'],
@@ -1150,6 +1155,7 @@ def prepare_published_targets(study, output, *, baseline_study=None, evaluation_
         baseline_plan.update(transfer_cases=deepcopy(registration['new_transfer_cases']),
             old_target_ids=list(plan['old_target_ids']), limits=deepcopy(plan['limits']),
             method_steps=plan['method_steps'], evaluation=deepcopy(plan['evaluation']),
+            runtime_snapshot=deepcopy(plan['runtime_snapshot']),
             frozen_publication=baseline_publication,
             parameter_registration=deepcopy(plan['parameter_registration']),
             scope=f'Frozen published {baseline_count}-case method on the identical '
@@ -1167,8 +1173,11 @@ def prepare_published_targets(study, output, *, baseline_study=None, evaluation_
             'scope': 'Complete both published research arms before either terminal scoring.'}
     elif baseline_study:
         baseline_study = Path(baseline_study).resolve()
+        baseline_registration = read_json(baseline_study / 'protocol.json')
+        plan['runtime_snapshot'] = sorted(set(plan['runtime_snapshot']) |
+                                         set(baseline_registration.get('runtime_snapshot', [])))
         baseline_plan = deepcopy(plan)
-        acceptance = read_json(baseline_study / 'protocol.json')['accepted_draft']
+        acceptance = baseline_registration['accepted_draft']
         selected = read_json(baseline_study / 'accepted_draft.json')
         if selected['status'] != 'user_accepted_draft':
             raise ValueError('paired baseline requires the retained accepted draft')

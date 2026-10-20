@@ -188,6 +188,15 @@ def practice_execution_summary(result, directory, *, method_path=None):
         for key in ("error", "reason"):
             if key in feedback:
                 executed[key] = feedback[key]
+        if feedback.get('status') == 'author_work_request':
+            request = {key: deepcopy(feedback[key]) for key in (
+                'status', 'question_id', 'meaning_version', 'object_type', 'reason',
+                'required_contract', 'author_work_ref', 'bounded_result_ref',
+                'bounded_status', 'bounded_allowance') if key in feedback}
+            request['source_ref'] = {'file': summary['result_file'],
+                                     'json_path': ['method_results', index, 'feedback']}
+            executed['author_work_request'] = request
+            summary['latest_author_work_request'] = deepcopy(request)
         summary["research_steps"].append(executed)
         outcomes = [(feedback, ["method_results", index, "feedback"])]
         outcomes.extend((outcome, ["method_results", index, "feedback", "after_observation_results", j])
@@ -267,7 +276,7 @@ def candidate_execution_summary(summary):
         "status", "step_count", "action_counts", "submission_count", "confirmation_count",
         "last_action", "latest_confirmation", "last_execution_message", "result_file",
         "result_steps_field", "latest_retention_decision", "practice_execution_cost",
-        "latest_program_execution") if key in summary}
+        "latest_program_execution", "latest_author_work_request") if key in summary}
     for field in ("latest_evaluation", "latest_submission_paid_fit"):
         if field in summary:
             compact[field] = {key: deepcopy(summary[field][key]) for key in (

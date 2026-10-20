@@ -526,6 +526,10 @@ require_fit = sys.argv[3] == '1'
 dependencies = []
 research_bindings = []
 research_prediction_count = 0
+research_compute_budget = json.loads(sys.argv[4])
+
+class ResearchComputeBudgetExhausted(Exception):
+    pass
 
 def public_row(row):
     return {'features': row['features'], 'history': row.get('history', [])}
@@ -619,39 +623,52 @@ def load_model(directory, path, training=None):
                 if not inside:
                     raise ValueError('research_input_not_consumed: parameter outside bound region: ' + slot)
             relations = []
+            research_bindings.append({'model': path, 'inputs': inputs,
+                'actual_parameters': parameters, 'local_relations': relations})
             for slot, item in inputs.items():
                 if item.get('kind') != 'local_relations':
                     continue
                 checks = []
+                relation = {'slot': slot, 'revision_index': item['revision_index'],
+                    'version': item['version'], 'checks': checks}
+                relations.append(relation)
                 for check in item['checks']:
                     predicted = 0.
-                    for witness in check['witnesses']:
-                        predicted += witness['coefficient'] * float(predict_row(model, public_row(witness)))
+                    for index, witness in enumerate(check['witnesses']):
+                        if (research_compute_budget is not None
+                                and research_prediction_count >= research_compute_budget):
+                            relation['pending_check'] = {'id': check['id'],
+                                'completed_witnesses': index,
+                                'total_witnesses': len(check['witnesses']),
+                                'partial_predicted_value': predicted}
+                            raise ResearchComputeBudgetExhausted()
                         research_prediction_count += 1
+                        predicted += witness['coefficient'] * float(predict_row(model, public_row(witness)))
                     checks.append({'id': check['id'], 'scope': check.get('scope'),
                         'target': check['target'], 'measured_value': check['value'],
                         'predicted_value': predicted, 'residual': predicted - check['value'],
                         'evidence_status': check['status']})
-                relations.append({'slot': slot, 'revision_index': item['revision_index'],
-                    'version': item['version'], 'checks': checks})
-            research_bindings.append({'model': path, 'inputs': inputs,
-                'actual_parameters': parameters, 'local_relations': relations})
     return model, directory
 
-with contextlib.redirect_stdout(sys.stderr):
-    root = Path.cwd()
-    model, directory = load_model(root, str(Path(sys.argv[1]).relative_to(root)), Path(sys.argv[2]))
-    fit_available = callable(model.get('fit_features') if represented(model) else model.get('fit'))
-    with working_directory(directory):
-        representations = ([represent(model, row) for row in payload] if represented(model) else None)
-        predictions = None
-        if not require_fit or fit_available:
-            predictions = ([float(model['predict_features'](json.loads(json.dumps(features))))
-                            for features in representations]
-                           if representations is not None else [float(model['predict'](row)) for row in payload])
+fit_available, predictions, representations, model = None, None, None, {}
+truncated = False
+try:
+    with contextlib.redirect_stdout(sys.stderr):
+        root = Path.cwd()
+        model, directory = load_model(root, str(Path(sys.argv[1]).relative_to(root)), Path(sys.argv[2]))
+        fit_available = callable(model.get('fit_features') if represented(model) else model.get('fit'))
+        with working_directory(directory):
+            representations = ([represent(model, row) for row in payload] if represented(model) else None)
+            if not require_fit or fit_available:
+                predictions = ([float(model['predict_features'](json.loads(json.dumps(features))))
+                                for features in representations]
+                               if representations is not None else [float(model['predict'](row)) for row in payload])
+except ResearchComputeBudgetExhausted:
+    truncated = True
 print(json.dumps({'fit_available': fit_available, 'predictions': predictions,
                   'model_dependencies': dependencies, 'research_bindings': research_bindings,
                   'research_prediction_count': research_prediction_count,
+                  'truncated': truncated,
                   'representations': representations,
                   'training_representations': model.get('_training_representations')}, allow_nan=False))
 """
@@ -670,8 +687,16 @@ def python_model_context(workspace, model):
 
 
 def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30, risk_quantile=.5,
-                          require_fit=False, training_observations=None):
-    """Run a Python model on input rows; current evaluation targets stay outside."""
+                          require_fit=False, training_observations=None,
+                          research_compute_budget=None):
+    """Run input rows, optionally bounding extra bound-research witness predictions.
+
+    Candidate-row scoring is charged by the caller. The separate allowance
+    bounds research-input validation, including nested bound models.
+    """
+    if research_compute_budget is not None and (
+            type(research_compute_budget) is not int or research_compute_budget < 0):
+        raise ValueError('research_compute_budget must be a nonnegative integer')
     parts = Path(model).parts
     shared_submission = (len(parts) > 2 and parts[0] == "_submitted_models"
         and (Path(workspace) / parts[0] / parts[1]).is_symlink())
@@ -688,7 +713,8 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
             _copy_execution_context(source, copied, [inner])
             return evaluate_python_model(copied, inner, observations,
                 timeout_seconds=timeout_seconds, risk_quantile=risk_quantile,
-                require_fit=require_fit, training_observations=training_observations)
+                require_fit=require_fit, training_observations=training_observations,
+                research_compute_budget=research_compute_budget)
     workspace, model = python_model_context(workspace, model)
     payload = [{"features": row.features, "history": row.history} if hasattr(row, "features")
                else {"features": row["features"], "history": row.get("history", [])} for row in observations]
@@ -704,7 +730,7 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
             training.write_text(json.dumps([asdict(row) if hasattr(row, "features") else row
                                             for row in training_observations]), encoding="utf-8")
         code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training),
-                                             "1" if require_fit else "0"],
+                                             "1" if require_fit else "0", json.dumps(research_compute_budget)],
                                              json.dumps(payload), timeout_seconds, str(workspace))
         execution = json.loads(stdout) if code == 0 else None
         training_rows = (json.loads(training.read_text())
@@ -716,6 +742,10 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
         result["model_dependencies"] = execution["model_dependencies"]
         result["research_bindings"] = execution.get("research_bindings", [])
         result["research_prediction_count"] = execution.get("research_prediction_count", 0)
+        if execution.get('truncated'):
+            result.update(status='scoped_unknown', truncated=True,
+                          reason='research_compute_budget_exhausted')
+            return result
         representations = execution.get("representations")
         result["representation_diagnostic"] = (representation_ambiguity(representations, observations)
             if representations is not None else {"status": "not_exposed"})

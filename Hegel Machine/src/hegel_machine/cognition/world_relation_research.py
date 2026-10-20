@@ -130,6 +130,7 @@ def research_relation(binding, observations, previous=None, *, compute_budget=No
     fallback = initial_prediction(rows, .5)
     budget = compute_budget if compute_budget is not None else SearchBudget(50000)
     spent_before = budget.spent
+    bounded_search = bool(previous and previous.get("unknown_reason") == "incomplete_search")
 
     def scored_predictions(program, selected):
         if not budget.spend(len(selected)):
@@ -143,7 +144,9 @@ def research_relation(binding, observations, previous=None, *, compute_budget=No
         return scored_predictions(program, selected)[0]
 
     def fit(*, refit=False):
+        nonlocal bounded_search
         supplied = None if refit else binding.get("hypotheses")
+        bounded_search = not supplied and binding.get("basis") is None
         if supplied:
             programs = [Program.from_dict(value.get("program", value)).simplified() for value in supplied]
         elif binding.get("basis") is not None:
@@ -152,6 +155,8 @@ def research_relation(binding, observations, previous=None, *, compute_budget=No
                 raise ValueError("numerical comparison exceeds the bounded research allowance")
             programs = [_fit_linear(terms, rows).simplified()]
         else:
+            # The synthesis allowance searches a finite prefix of the language;
+            # failure of those proposals cannot refute the unrestricted family.
             allowance = SearchBudget(min(20000, budget.remaining // 2))
             generated = synthesize(rows, operations=binding.get("operations", ["refit", "composition", "relation"]),
                                    budget=allowance, max_history=binding.get("max_history", 0))
@@ -310,8 +315,10 @@ def research_relation(binding, observations, previous=None, *, compute_budget=No
 
     survivors = [item for item in result["candidates"] if item["status"] == "plausible"]
     if not survivors:
-        result["status"] = "refuted"
-        if result["diagnosis"] != "refit_needed":
+        result["status"] = "inconclusive" if bounded_search else "refuted"
+        if bounded_search:
+            result.update(diagnosis="incomplete_search", unknown_reason="incomplete_search")
+        elif result["diagnosis"] != "refit_needed":
             result["diagnosis"] = "candidate_family_refuted"
 
     supplied_probes = binding.get("probes", [])

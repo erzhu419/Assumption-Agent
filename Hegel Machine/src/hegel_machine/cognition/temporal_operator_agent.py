@@ -571,14 +571,17 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         try:
             validation = evaluate_python_model(context, inner_model, validation_rows,
                 timeout_seconds=max(.001, self.config.execution_seconds
-                    - self.costs["python_execution_seconds"]), require_fit=True)
+                    - self.costs["python_execution_seconds"]), require_fit=True,
+                research_compute_budget=self._remaining_compute())
             self.costs['compute_cost'] += validation.get('research_prediction_count', 0)
         finally:
             fitting_view([row for index in indices for row in self.observations[index]["rows"]], indices)
         candidate_path = str(context.relative_to(self.workspace) / inner_model)
         available = validation.get("fit_available")
         valid = validation.get("returncode") == 0 and validation.get("mse") is not None
-        if available is False:
+        if validation.get('truncated'):
+            status = 'refit_inconclusive_budget'
+        elif available is False:
             status = "refit_unavailable"
         elif not valid:
             status = "refit_execution_failed"

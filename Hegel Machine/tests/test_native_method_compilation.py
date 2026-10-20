@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 import json
 from pathlib import Path
+import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -403,6 +404,76 @@ def test_freeze_published_uses_small_support_and_registers_unopened_parameter_gr
     assert read_json(study / 'protocol.json') == old
     with pytest.raises(ValueError, match='preserve earlier attempts'):
         compilation.prepare_published_targets(study, output)
+
+
+@pytest.mark.parametrize('pair', ['none', 'published', 'accepted'])
+def test_published_freeze_saves_current_runtime_once_for_both_plans(
+        tmp_path, published_compilation, monkeypatch, pair):
+    study, output = published_compilation, tmp_path / 'new_frozen_targets'
+    old = read_json(study / 'protocol.json')
+    old['runtime_snapshot'] = ['scripts/old_main.py']
+    write_json(study / 'protocol.json', old)
+    publication = read_json(study / 'published_method.json')
+    root = tmp_path / 'current_checkout'
+    current = {
+        'src/hegel_machine/cognition/question_routing.py': '# current route\n',
+        'src/hegel_machine/cognition/new_question_module.py': '# newly added module\n',
+        'scripts/run_native_method_compilation.py': '# current preparation entry\n',
+        'scripts/old_main.py': '# retained main entry\n',
+        'scripts/old_baseline.py': '# retained baseline entry\n',
+    }
+    for name, content in current.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    monkeypatch.setattr(compilation, 'ROOT', root)
+    options = {}
+    if pair != 'none':
+        baseline = tmp_path / 'old_baseline'
+        if pair == 'published':
+            shutil.copytree(study, baseline)
+            baseline_old = deepcopy(old)
+            baseline_old['runtime_snapshot'] = ['scripts/old_baseline.py']
+            write_json(baseline / 'protocol.json', baseline_old)
+            registered = {
+                'required_practice_count': len(old['practice_cases']),
+                'regression_protocol': str(study / 'protocol.json'),
+                'regression_case_ids': [old['old_target_ids'][0]],
+                'regression_groups': {'original': [old['old_target_ids'][0]]},
+                'new_transfer_cases': [deepcopy(old['transfer_cases'][-1])],
+                'new_transfer_parameter_groups': 1, 'paired_baseline': str(baseline),
+                'limits': deepcopy(old['limits']), 'method_steps': old['method_steps'],
+                'evaluation': deepcopy(old['evaluation']),
+            }
+            registration = tmp_path / 'registered_targets.json'
+            write_json(registration, {'frozen_evaluation_registration': registered})
+            options['evaluation_registration'] = registration
+        else:
+            baseline_old = {'runtime_snapshot': ['scripts/old_baseline.py'],
+                'accepted_draft': {'basis': 'user_accepted_development_draft', 'practice_cases': []}}
+            write_json(baseline / 'protocol.json', baseline_old)
+            write_json(baseline / 'accepted_draft.json', {
+                'status': 'user_accepted_draft', 'method_source': '# old accepted method\n'})
+            options['baseline_study'] = baseline
+    plan, learned = compilation.prepare_published_targets(study, output, **options)
+    expected = set(current) - ({'scripts/old_baseline.py'} if pair == 'none' else set())
+    assert plan['runtime_snapshot'] == sorted(expected)
+    assert read_json(output / 'protocol.json')['runtime_snapshot'] == sorted(expected)
+    for name in expected:
+        assert (output / 'source_at_run' / name).read_text() == current[name]
+    if pair != 'none':
+        paired = output / plan['paired_baseline']['directory']
+        paired_plan = read_json(paired / 'protocol.json')
+        assert paired_plan['runtime_snapshot'] == plan['runtime_snapshot']
+        assert not (paired / 'source_at_run').exists()  # One shared source copy.
+        assert read_json(baseline / 'protocol.json') == baseline_old
+        assert paired_plan['limits'] == plan['limits']
+        assert paired_plan['transfer_cases'] == [
+            case for case in plan['transfer_cases'] if case['id'] not in plan['old_target_ids']]
+    assert learned['method_source'] == publication['source']
+    assert plan['limits'] == old['limits']
+    assert read_json(study / 'protocol.json') == old
+    assert read_json(study / 'published_method.json') == publication
 
 
 def test_published_freeze_requires_actual_same_source_confirmation(

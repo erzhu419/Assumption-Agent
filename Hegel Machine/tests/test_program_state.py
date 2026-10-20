@@ -85,10 +85,15 @@ def test_program_state_is_encoded_and_written_once_with_all_layer_fields(
         agent.research_candidates = {"shared/fit.py": {"status": "evaluated"}}
         agent.research_input_bindings = {"parameter": {"question_id": "local"}}
         agent.relation_research = {"relation": {"status": "inconclusive"}}
+        agent.theory_index = {'retained': {'version': 1, 'source_ref': {
+            'kind': 'relation_candidate', 'question_id': 'local',
+            'meaning_version': 1, 'round_index': 0, 'candidate_index': 0}}}
+        agent.research_mission = {'purpose': 'theory_learning', 'theory_learning_allocation': 10}
+        agent.research_agenda = {'selected_question_id': 'local', 'selected_queue': 'theory'}
         expected.update({name: deepcopy(getattr(agent, name)) for name in (
             "experiment_comparisons", "observable_models", "conditional_models",
             "model_dependencies", "research_candidates", "research_input_bindings",
-            "relation_research")})
+            "relation_research", "theory_index", "research_mission", "research_agenda")})
         expected["online_research"] = agent._online_research()
 
     expected = json.loads(json.dumps(expected))  # Observation histories become JSON arrays.

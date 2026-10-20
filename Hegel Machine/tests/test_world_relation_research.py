@@ -3,6 +3,7 @@ from copy import deepcopy
 import pytest
 
 from hegel_machine.cognition.language import Program
+from hegel_machine.cognition.models import Observation, SearchBudget
 from hegel_machine.cognition.world_relation_research import research_relation
 
 
@@ -54,6 +55,52 @@ def test_joint_mismatch_refits_without_erasing_frozen_counterexamples():
     assert second["fit_evidence"] == [0, 1, 2]
     assert second["validation_evidence"] == []
     assert all(item["validation_mse"] is None for item in second["candidates"])
+
+
+def test_unstarted_synthesis_is_unknown_not_a_refuted_family():
+    request = binding()
+    request.pop("hypotheses")
+    request["probes"] = []
+    budget = SearchBudget(1)
+    result = research_relation(request, [{"index": 0}, {"index": 1}], compute_budget=budget)
+
+    assert result["status"] == "inconclusive"
+    assert result["diagnosis"] == result["unknown_reason"] == "incomplete_search"
+    assert result["candidates"] == []
+    assert result["compute_cost"] == budget.spent == 0
+
+
+def test_failed_synthesis_prefix_does_not_refute_untried_language_on_continuation():
+    request = binding()
+    request.pop("hypotheses")
+    request["probes"] = []
+    request["rows"].append({"features": {"x": 2.}, "target": 4., "evidence": [2]})
+    public = [{"index": i} for i in range(3)]
+    first = research_relation(request, public, compute_budget=SearchBudget(6))
+
+    assert first["status"] == "inconclusive"
+    assert first["diagnosis"] == first["unknown_reason"] == "incomplete_search"
+    assert len(first["candidates"]) == 1
+    tried = first["candidates"][0]
+    assert tried["status"] == "refuted" and tried["fit_mse"] > 0
+    # The budget evaluated only a constant; an untried program fits these rows.
+    x = Program("feature", name="x")
+    untried = Program("mul", children=(x, x))
+    assert tried["program"] != untried.to_dict()
+    assert all(untried.predict(Observation(row["features"], row["target"])) == row["target"]
+               for row in request["rows"])
+
+    repeated = research_relation(request, public, first, compute_budget=SearchBudget(6))
+    assert repeated["status"] == "inconclusive"
+    assert repeated["diagnosis"] == repeated["unknown_reason"] == "incomplete_search"
+    assert repeated["candidates"] == first["candidates"]
+
+    # An explicitly declared affine basis is still tested as that bounded family.
+    request["basis"] = [x.to_dict()]
+    declared = research_relation(request, public, repeated)
+    assert declared["status"] == "refuted"
+    assert declared["diagnosis"] == "candidate_family_refuted"
+    assert "unknown_reason" not in declared
 
 
 def test_no_distinguishing_experiment_does_not_select_redundant_purchase():
@@ -206,4 +253,7 @@ def test_explicit_hypotheses_take_precedence_over_declared_basis():
     request["hypotheses"] = [Program("const", value=0.).to_dict()]
     result = research_relation(request, [{"index": i} for i in range(3)])
     assert result["status"] == "refuted"
+    assert result["diagnosis"] == "candidate_family_refuted"
+    assert "unknown_reason" not in result
+    assert all(item["status"] == "refuted" for item in result["candidates"])
     assert [item["program"] for item in result["candidates"]] == request["hypotheses"]

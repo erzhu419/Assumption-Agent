@@ -407,6 +407,8 @@ def compare_experiments(agent, models, experiments, laboratory, *, mse_threshold
 
 def complete_revision(agent, record, observations, record_indices, laboratory, question=None, *, error=None):
     """Score frozen predictions against purchased rows and return authored analysis."""
+    if question is not None:
+        record.update(question_id=question['id'], question_meaning_version=question.get('meaning_version', 1))
     record.update(observations=deepcopy(observations), record_indices=list(record_indices),
                   status='acquisition_failed' if error else 'observed')
     if error:
@@ -559,6 +561,7 @@ def analyze_paid_evidence(agent, path, laboratory, question=None, *, target='res
               'actions': [], 'forecasts': [], 'prior_fit': []}
     if question is not None:
         record['question_id'] = question['id']
+        record['question_meaning_version'] = question.get('meaning_version', 1)
     agent.revisions.append(record)
     return analyze_revision(agent, record, laboratory, question, path=path)
 
@@ -570,6 +573,11 @@ def analyze_revision(agent, record, laboratory, question=None, *, path=None):
     The original readout and every later executed revision remain inspectable.
     """
     path = path or record['proposal'].get('readout')
+    if (question is not None and record.get('question_meaning_version') is not None
+            and record['question_meaning_version'] != question.get('meaning_version', 1)):
+        record['answer_application'] = {'status': 'historical_meaning_only',
+            'question_id': question['id'], 'meaning_version': record['question_meaning_version']}
+        question = None
     paid_analysis = record.get('kind') == 'paid_evidence_analysis'
     if not path or not (record.get('observations') or paid_analysis and record.get('record_indices')):
         raise ValueError('analysis requires a readout path and an acquired revision')

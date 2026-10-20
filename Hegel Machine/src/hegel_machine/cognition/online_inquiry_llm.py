@@ -22,6 +22,7 @@ from .models import Observation
 from .proposers import _run
 from .inquiry_revision import REVISION_INTERFACE, prepare_revision, complete_revision
 from .executable_evidence import compare_paid_relations
+from .question_semantics import adopt_question_semantics
 
 
 ARMS = ("code_react", "textual_memory", "hegel")
@@ -36,13 +37,22 @@ def open_assigned_question(agent, question, experiment_path=None):
     if existing is None:
         if not question.get("question"):
             raise ValueError("a new research question needs its question text")
-        existing = InquiryLLMAgent._open_question(
-            agent, {"parent_id": None, "depends_on": [], **question}, experiment_path)
+        existing = InquiryLLMAgent._open_question(agent, adopt_question_semantics(
+            None, {"parent_id": None, "depends_on": [], **question}), experiment_path)
         existing["assignment"] = {key: deepcopy(existing[key])
                                   for key in ("id", "question", "parent_id", "depends_on")}
         existing["acquired_evidence"] = []
     else:
-        existing.update(deepcopy(question))
+        version = existing.get('meaning_version', 1)
+        merged = adopt_question_semantics(existing, question)
+        existing.clear()
+        existing.update(merged)
+        if existing['meaning_version'] != version:
+            for model, bindings in getattr(agent, 'research_input_bindings', {}).items():
+                if existing['id'] in bindings.values():
+                    state = getattr(agent, 'research_candidates', {}).setdefault(model, {})
+                    state.update(status='needs_rebuild', changed_question=existing['id'])
+                    state.pop('current_evaluation', None)
         if experiment_path:
             existing["experiment_path"] = experiment_path
     return existing
@@ -370,25 +380,31 @@ class InquiryLLMAgent:
                                              or not question.get("question")):
             return {"error": "state the live question (id, question, parent_id, depends_on) before program acquisition",
                     "executed_path": path, **self._provenance(path), **program_feedback}
-        requested = sum(laboratory.action_cost(action) for action in actions)
-        if requested > self.config.observation_budget - self.costs["observation_cost"]:
-            return {"error": "observation budget exhausted", "requested": requested,
-                    "executed_path": executed, "inherited_program": executed in self.inherited_files,
-                    "knowledge_sources": sources, **program_feedback}
-        revision_record = None
-        if revision is not None:
-            revision_record = prepare_revision(self, revision, actions, laboratory, experiment_path=executed)
-            if revision_record.get('error'):
-                self._prepare_program_state()
-                return {'error': revision_record['error'], 'revision': deepcopy(revision_record),
-                        'executed_path': executed, **program_feedback}
-        acquired, record_indices = [], []
         question_record = None
         if question:
             question_record = self._open_question(question, executed)
             if continuation_origin is not None:
                 question_record.update(after_observation=deepcopy(continuation),
                                        continuation_origin=continuation_origin)
+        requested = sum(laboratory.action_cost(action) for action in actions)
+        if requested > self.config.observation_budget - self.costs["observation_cost"]:
+            return {"error": "observation budget exhausted", "requested": requested,
+                    "executed_path": executed, "inherited_program": executed in self.inherited_files,
+                    "knowledge_sources": sources, "question": deepcopy(question_record),
+                    **program_feedback}
+        revision_record = None
+        if revision is not None:
+            if isinstance(revision, dict) and "readout" in arguments:
+                revision.setdefault("readout", deepcopy(arguments["readout"]))
+            revision_record = prepare_revision(self, revision, actions, laboratory, experiment_path=executed)
+            if question_record is not None:
+                revision_record.update(question_id=question_record['id'],
+                    question_meaning_version=question_record.get('meaning_version', 1))
+            if revision_record.get('error'):
+                self._prepare_program_state()
+                return {'error': revision_record['error'], 'revision': deepcopy(revision_record),
+                        'executed_path': executed, 'question': deepcopy(question_record), **program_feedback}
+        acquired, record_indices = [], []
         # Record each successful acquisition immediately, even if a later action
         # in the same requested batch is invalid.
         for action in actions:
@@ -442,7 +458,8 @@ class InquiryLLMAgent:
             raise ValueError("Python execution time budget exhausted")
         self.costs["compute_cost"] += len(self.rows)
         started = monotonic()
-        result = evaluate_python_model(self.workspace, model, self.rows, timeout_seconds=remaining)
+        result = evaluate_python_model(self.workspace, model, self.rows, timeout_seconds=remaining,
+            research_compute_budget=max(0, self.config.compute_budget - self.costs['compute_cost']))
         self.costs['compute_cost'] += result.get('research_prediction_count', 0)
         self.costs["python_execution_seconds"] += monotonic() - started
         predictions = result.pop("predictions", None)
@@ -450,12 +467,13 @@ class InquiryLLMAgent:
             result.update(_paid_prediction_scope(self.workspace, model, self.rows, predictions))
             result['paid_residuals'] = _prediction_residuals(
                 self.rows, predictions, model, evaluation_scope='paid_response_evaluation')
-            relations = compare_paid_relations(self.revisions, self.rows, predictions)
-            if relations['check_count']:
+            relations = compare_paid_relations(self.revisions, self.rows, predictions,
+                compute_budget=max(0, self.config.compute_budget - self.costs['compute_cost']))
+            if relations['check_count'] or relations['truncated']:
                 relations.update(model=model, workspace=str(self.workspace),
                                  evaluation_scope=result['evaluation_scope'])
                 result['paid_relation_diagnostic'] = relations
-                self.costs['compute_cost'] += relations['term_count']
+            self.costs['compute_cost'] += relations['term_count']
         return result
 
     def _evaluated_summary(self):
@@ -514,6 +532,10 @@ class InquiryLLMAgent:
                     return
                 comparison = self._score(retained_path)
                 result["retained_comparison"] = comparison
+                if comparison.get('mse') is None:
+                    result['retention_deferred'] = 'saved candidate comparison did not finish on current paid rows'
+                    record_decision('deferred', incumbent)
+                    return
                 retained.update(current_mse=comparison.get("mse"), evaluated_rows=len(self.rows))
                 _remember_paid_scope(retained, comparison)
                 incumbent = incumbent_summary()
@@ -585,7 +607,7 @@ class InquiryLLMAgent:
             result.update(executed_path=model, **self._provenance(model))
             self._retain_evaluation(model, result)
             result["evaluated_model"] = self._evaluated_summary()
-            if action == "finish" and result["returncode"] == 0:
+            if action == "finish" and result["returncode"] == 0 and not result.get('truncated'):
                 precondition = getattr(laboratory, "confirmation_precondition", None)
                 if callable(precondition):
                     error = precondition(result, mse_threshold=self.config.confirmation_mse_threshold)
@@ -625,7 +647,8 @@ class InquiryLLMAgent:
                 self.costs["compute_cost"] += n
                 started = monotonic()
                 remaining = self.config.execution_seconds - self.costs["python_execution_seconds"]
-                fresh = evaluate_python_model(self.workspace, model, rows, timeout_seconds=max(.001, remaining))
+                fresh = evaluate_python_model(self.workspace, model, rows, timeout_seconds=max(.001, remaining),
+                    research_compute_budget=max(0, self.config.compute_budget - self.costs['compute_cost']))
                 self.costs['compute_cost'] += fresh.get('research_prediction_count', 0)
                 self.costs["python_execution_seconds"] += monotonic() - started
                 predictions = fresh.pop("predictions", None)
