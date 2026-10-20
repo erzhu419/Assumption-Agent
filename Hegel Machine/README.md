@@ -1,5 +1,9 @@
 # Hegel Machine
 
+**2026-10-20 当前进展与说明。** 最新一轮于10月19日23:57主动以未决结束：三次实验新增176行，两套旧算法使用扩充数据重拟合，尚无新结构候选、原五折重评或新的独立确认。trial039仍是当前开发比较参照；原冻结成果单独保留。详见[当前总览与完整实验日志](docs/hegel_machine_executable_evidence_repair_20261013.md)、[假设、子研究与历史复用说明](docs/hegel_machine_hypothesis_research_guide_20261020.md)和[能力总入口](docs/hegel_machine_reuse_hub_20261006.md)。正式对照、开发过程、冻结迁移与测试结果使用各自分母，不能互相替代。
+
+仓库保存当前源码、测试、论文及有限结果证据。原始付费轨迹、完整实验现场、大参数和历史共享数据库保留在本地实验盘；文档中的绝对本地路径用于定位这些原件，不代表它们随Git上传。[历史归档清单](artifacts/storage_inventory_20261012/effective_history_result_20261018.json)记录1589项验证及旧包删除结果；恢复历史内容须保留完整共享库。[论文材料索引](paper/ARTIFACT_INDEX.md)区分读取结果、数值重放与新的模型调用，运行前应先确认所需材料和费用范围。
+
 2026-10-11，**论文已合并为单一PDF**：[完整论文及附录A–H](paper/manuscript.pdf)。统一Markdown/TeX源文件与参考文献，运行 `python3 scripts/build_manuscript.py` 即可重建。
 
 2026-10-07，**论文重新对齐原构想，补入泛函分析主线**：[主文3.2–3.3](paper/manuscript.md)明确假设空间与观测共同决定可区分性，递归子研究可改变父实验、表示和解释；[补充A.3/B.2](paper/manuscript.md)给出数学推导及冻结代码对应。已有测量、条件、随机性与简化实验回到主文5.1，保留/修复作为累计研究的支撑。未新增实验、未改变算法或既有正负结果。[材料索引](paper/ARTIFACT_INDEX.md)。

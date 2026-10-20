@@ -8,18 +8,88 @@ The existing code provider and Python predictor executor are shared by all arms.
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 import json
+from math import isfinite
 from pathlib import Path
 from random import Random
 import sys
 from time import monotonic
 
-from .code_agent import evaluate_python_model, retain_evaluated_python_model
+from .code_agent import (
+    _copy_model_file, evaluate_python_model, python_model_context, retain_evaluated_python_model,
+)
+from .checkpoint_storage import write_text_incrementally
 from .models import Observation
 from .proposers import _run
 from .inquiry_revision import REVISION_INTERFACE, prepare_revision, complete_revision
+from .executable_evidence import compare_paid_relations
 
 
 ARMS = ("code_react", "textual_memory", "hegel")
+
+
+def open_assigned_question(agent, question, experiment_path=None):
+    """Reuse one live question while retaining its original assignment."""
+    if not isinstance(question, dict):
+        raise ValueError("research_question must be a JSON object with id; "
+                         "include question text when opening a new question")
+    existing = next((q for q in agent.questions if q["id"] == question["id"]), None)
+    if existing is None:
+        if not question.get("question"):
+            raise ValueError("a new research question needs its question text")
+        existing = InquiryLLMAgent._open_question(
+            agent, {"parent_id": None, "depends_on": [], **question}, experiment_path)
+        existing["assignment"] = {key: deepcopy(existing[key])
+                                  for key in ("id", "question", "parent_id", "depends_on")}
+        existing["acquired_evidence"] = []
+    else:
+        existing.update(deepcopy(question))
+        if experiment_path:
+            existing["experiment_path"] = experiment_path
+    return existing
+
+
+def _prediction_residuals(rows, predictions, model, *, evaluation_scope, row_offset=0):
+    errors = [(prediction - row.target) ** 2 for prediction, row in zip(predictions, rows)]
+    indices = sorted(range(len(errors)), key=errors.__getitem__, reverse=True)[:3]
+    return {'evaluation_scope': evaluation_scope, 'model': model, 'evaluated_rows': len(rows),
+            'examples': [{'row_index': row_offset + index, **asdict(rows[index]),
+                          'prediction': predictions[index], 'squared_error': errors[index]}
+                         for index in indices]}
+
+
+def _paid_prediction_scope(workspace, model, rows, predictions):
+    workspace = Path(workspace).resolve()
+    context, _ = python_model_context(workspace, model)
+    training = context / 'model_observations.json'
+    if not training.exists():
+        training = context / 'observations.json'
+    scope = {'evaluation_scope': 'paid_evaluation', 'fitting_view': {'scope': 'unknown'}}
+    if not training.exists():
+        return scope
+    fitted = json.loads(training.read_text())
+    scope['fitting_view'].update(file=str(training.relative_to(workspace)), rows=len(fitted))
+    prefix = [{'features': row.features, 'target': row.target, 'history': list(row.history)}
+              for row in rows[:len(fitted)]]
+    if fitted != prefix:
+        return scope
+    count = len(fitted)
+    scope['fitting_view'].update(scope='current_paid_prefix',
+        response_row_range=[0, count - 1] if count else [])
+    scope['evaluation_scope'] = 'paid_fit' if count == len(rows) else 'paid_prediction'
+    if count < len(rows):
+        errors = [prediction - row.target for prediction, row in zip(predictions[count:], rows[count:])]
+        scope['later_readings'] = {'rows': len(errors),
+            'response_row_range': [count, len(rows) - 1],
+            'mse': sum(error ** 2 for error in errors) / len(errors),
+            'max_abs_error': max(abs(error) for error in errors)}
+    return scope
+
+
+def _remember_paid_scope(retained, result):
+    for key in ('evaluation_scope', 'fitting_view', 'later_readings'):
+        retained.pop(key, None)
+        if key in result:
+            retained[key] = deepcopy(result[key])
 
 
 @dataclass(frozen=True)
@@ -31,6 +101,7 @@ class InquiryLLMConfig:
     compute_budget: int = 100000
     confirmation_rows: int = 3
     confirmation_mse_threshold: float = 1e-10
+    run_timeout_seconds: float = 300.0
 
 
 POINT_LAB_INTERFACE = """This laboratory extends the ordinary Python research interface.
@@ -55,6 +126,11 @@ COMMON_INTERFACE = """\
 write {path:'model.py',code:'ordinary Python source'} creates or replaces a file.
 run {code:'ordinary Python source'} executes that source as a Python script.
 run {path:'fit.py'} executes an existing Python script in the task directory.
+Both forms default to limits.run_timeout_seconds per invocation so a long
+computation returns control before consuming the whole task allowance. Set
+timeout_seconds explicitly to request a longer or shorter computation, bounded
+by the remaining total Python allowance. A timeout returns execution feedback;
+files already written persist and you may revise or resume the work.
 The code key contains Python source; path names a file, not a shell command.
 Python execution has numpy/scipy available and returns stdout/stderr and exit code.
 For example, run {code:"import json; rows=json.load(open('observations.json')); print(len(rows))"}
@@ -62,14 +138,36 @@ inspects paid data. All paid response rows (features, target, history) are in
 observations.json and model_observations.json. Auxiliary experiment records are
 in laboratory_observations.json. Files and concise numerical results persist.
 evaluate {model:'model.py'} fits/scores ONLY already purchased response rows.
-An explicit successful evaluate retains the better executed candidate in
-evaluated_model.model. That path has its own saved files and fitting data; you
+paid_residuals returns up to three largest squared errors from that same scoring,
+with the evaluated model, exact paid row indices, controls/history and labels.
+These diagnose evaluation on paid rows, not a fresh confirmation or a scientific explanation.
+When earlier readouts contain executed response checks, paid_relation_diagnostic
+also compares this candidate's already computed predictions with those measured
+contrasts. It preserves their revision, declared scope and actual term rows;
+an old refuted expectation is not used as the target. This feedback requires no
+bind_research call and does not select a model or establish the author's interpretation.
+Its model/workspace identify the evaluated candidate, not the retained incumbent.
+historical_check and evidence_status describe the original hypothesis versus the
+measured data; residual describes this candidate's prediction minus that measurement.
+Use residuals across both historical statuses when diagnosing the current model.
+Successful paid scoring by evaluate or finish retains the better executed
+candidate in evaluated_model.model, even when finish cannot confirm it.
+retention_decision identifies which candidate was actually kept. Its incumbent
+is the comparison baseline, not necessarily the selected model; evaluated_model.selection
+retains the decision that installed the current saved source and fitting view.
+That path has its own saved files and fitting data; you
 can evaluate or finish it even after revising the original file. Candidates
 compete on the same paid rows. New observations require charged rescoring of
-the saved candidate before replacement. evaluated_model.support describes paid
-fit evidence, never fresh confirmation; retention does not submit a model.
+the saved candidate before replacement. fitting_view identifies its selected
+fitting rows; later_readings separately scores subsequently purchased rows when
+that fitting view matches the paid-row prefix. evaluated_model.support separates
+paid_fit, frozen paid_prediction, and paid_evaluation with unknown fitting scope.
+These statuses are never fresh confirmation; retention does not submit a model.
 model.py defines predict(row), where row['features'] contains public controls.
 row['history'] contains the preceding public controls within that experiment.
+Each row is one scalar supervised example: target labels the current step after
+that history, not every step in the history. Earlier steps have their own rows
+and targets; history itself contains controls, not response labels.
 Optional fit(observations) gets paid response rows, never terminal targets.
 fit must update the state used by predict; its return value is ignored.
 finish {model:'model.py',lesson:'...',manifest:'shared/knowledge.json'} freezes
@@ -79,6 +177,8 @@ charged to the same observation budget; reserve that many observations.
 Fresh confirmation passes only when mean squared error (MSE) is at most 1e-10.
 Reducing error relative to another model is not sufficient to meet this criterion.
 Failed confirmation returns counterexamples and you may revise if budget remains.
+fresh_confirmation.residuals preserves up to three largest prediction errors from
+that confirmation, with absolute paid-row indices and the frozen submitted model.
 Do not import hegel_machine, read this study's repository/artifacts, or access
 other arms. Those contain private implementation and held-out task parameters.
 No tools provide private settings or unpurchased target labels. When the task
@@ -136,7 +236,7 @@ class InquiryLLMAgent:
     common_interface = COMMON_INTERFACE
 
     def __init__(self, provider, workspace, *, arm, config=None, knowledge=None,
-                 confirmation_seed=9173, source_task=True):
+                 confirmation_seed=9173, source_task=True, paid_trace_references=None):
         if arm not in ARMS:
             raise ValueError(f"unknown arm: {arm}")
         self.provider, self.workspace, self.arm = provider, Path(workspace).resolve(), arm
@@ -147,7 +247,10 @@ class InquiryLLMAgent:
         for name, source in self.files.items():
             path = self.workspace / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(source, encoding="utf-8")
+            if paid_trace_references and name in paid_trace_references:
+                _copy_model_file(paid_trace_references[name], path)
+            else:
+                path.write_text(source, encoding="utf-8")
         self.inherited_files = set(self.files)
         self.events, self.observations, self.rows = [], [], []
         self.model, self.lesson, self.manifest = None, "", {}
@@ -164,25 +267,40 @@ class InquiryLLMAgent:
     def _write_evidence(self):
         records = [asdict(row) for row in self.rows]
         for filename in ("observations.json", "model_observations.json"):
-            (self.workspace / filename).write_text(json.dumps(records), encoding="utf-8")
-        (self.workspace / "laboratory_observations.json").write_text(
-            json.dumps(self.observations), encoding="utf-8")
+            write_text_incrementally(self.workspace / filename, json.dumps(records))
+        write_text_incrementally(self.workspace / "laboratory_observations.json",
+                                 json.dumps(self.observations))
 
-    def _python(self, command, payload=""):
+    def _python(self, command, payload="", *, timeout_seconds=None):
         remaining = self.config.execution_seconds - self.costs["python_execution_seconds"]
         if remaining <= 0:
             raise ValueError("Python execution time budget exhausted")
+        timeout = remaining
+        if timeout_seconds is not None:
+            timeout_seconds = float(timeout_seconds)
+            if not isfinite(timeout_seconds) or timeout_seconds <= 0:
+                raise ValueError("timeout_seconds must be positive and finite")
+            timeout = min(timeout_seconds, remaining)
         started = monotonic()
-        result = _run(command, payload, remaining, str(self.workspace))
-        self.costs["python_execution_seconds"] += monotonic() - started
-        return result
+        try:
+            return _run(command, payload, timeout, str(self.workspace))
+        finally:
+            self.costs["python_execution_seconds"] += monotonic() - started
+
+    def _program_state(self):
+        """Let specialized research interfaces contribute to the same state."""
+        return {'questions': self.questions, 'revisions': self.revisions,
+                'limits': asdict(self.config), 'costs': self.costs,
+                'evaluated_model': self._evaluated_summary()}
 
     def _prepare_program_state(self):
-        """Specialized research interfaces may expose their current feedback."""
-        state = {'questions': self.questions, 'revisions': self.revisions,
-                 'limits': asdict(self.config), 'costs': self.costs,
-                 'evaluated_model': self._evaluated_summary()}
-        (self.workspace / 'research_state.json').write_text(json.dumps(state), encoding='utf-8')
+        state = self._program_state()
+        write_text_incrementally(self.workspace / 'research_state.json', json.dumps(state))
+
+    def _program_memory(self, path, arguments):
+        """Give programs their actual invocation alongside inherited knowledge."""
+        return {**self.knowledge, 'program_path': path,
+                'program_arguments': deepcopy(arguments)}
 
     def _allows_analysis_only_query(self, continuation):
         return False
@@ -204,19 +322,30 @@ class InquiryLLMAgent:
         revision = deepcopy(arguments.get('revision'))
         continuation = deepcopy(arguments.get("after_observation", []))
         continuation_origin = "arguments" if "after_observation" in arguments else None
+        program_feedback = {}
         if path:
             self._prepare_program_state()
+            before = self.costs["python_execution_seconds"]
             code, stdout, stderr, timed_out = self._python(
                 [sys.executable, "-c", _PLAN_RUNNER, str(self.workspace / path)],
                 json.dumps({"spec": laboratory.public_spec(),
-                            "observations": self.observations, "memory": self.knowledge}))
+                            "observations": self.observations,
+                            "memory": self._program_memory(path, arguments)}))
+            # Capture the program itself before executing its proposed action.
+            # A returned stop may follow a substantial computation, while an
+            # evaluate/query proposal performs additional work in its handler.
+            program_feedback = {"program_execution": {
+                "path": path, "returncode": code, "timeout": timed_out,
+                "python_execution_seconds": self.costs["python_execution_seconds"] - before,
+                **({"stderr": stderr[-12000:]} if stderr else {})}}
             if code:
                 return {"returncode": code, "stderr": stderr[-12000:], "timeout": timed_out,
-                        "executed_path": path, "inherited_program": path in self.inherited_files}
+                        "executed_path": path, "inherited_program": path in self.inherited_files,
+                        **program_feedback}
             proposed = json.loads(stdout)
             handled = self._handle_program_proposal(proposed, laboratory)
             if handled is not None:
-                return handled
+                return {**handled, **program_feedback}
             actions = proposed.get("actions", []) if isinstance(proposed, dict) else proposed
             if isinstance(proposed, dict):
                 sources.extend(proposed.get("knowledge_sources", []))
@@ -240,19 +369,19 @@ class InquiryLLMAgent:
         if path and self.arm == "hegel" and (not isinstance(question, dict) or not question.get("id")
                                              or not question.get("question")):
             return {"error": "state the live question (id, question, parent_id, depends_on) before program acquisition",
-                    "executed_path": path, **self._provenance(path)}
+                    "executed_path": path, **self._provenance(path), **program_feedback}
         requested = sum(laboratory.action_cost(action) for action in actions)
         if requested > self.config.observation_budget - self.costs["observation_cost"]:
             return {"error": "observation budget exhausted", "requested": requested,
                     "executed_path": executed, "inherited_program": executed in self.inherited_files,
-                    "knowledge_sources": sources}
+                    "knowledge_sources": sources, **program_feedback}
         revision_record = None
         if revision is not None:
             revision_record = prepare_revision(self, revision, actions, laboratory, experiment_path=executed)
             if revision_record.get('error'):
                 self._prepare_program_state()
                 return {'error': revision_record['error'], 'revision': deepcopy(revision_record),
-                        'executed_path': executed}
+                        'executed_path': executed, **program_feedback}
         acquired, record_indices = [], []
         question_record = None
         if question:
@@ -270,7 +399,7 @@ class InquiryLLMAgent:
                         "executed_path": executed, "inherited_program": executed in self.inherited_files,
                         "knowledge_sources": sources, "record_indices": record_indices,
                         "after_observation": continuation, "continuation_origin": continuation_origin,
-                        "question": deepcopy(question_record)}
+                        "question": deepcopy(question_record), **program_feedback}
                 if revision_record is not None:
                     feedback['revision'] = complete_revision(self, revision_record, acquired, record_indices,
                         laboratory, question_record, error=str(error))
@@ -291,7 +420,7 @@ class InquiryLLMAgent:
                 "question": deepcopy(question_record),
                 "record_indices": record_indices, "after_observation": continuation,
                 "continuation_origin": continuation_origin,
-                "knowledge_sources": sources}
+                "knowledge_sources": sources, **program_feedback}
         if revision_record is not None:
             feedback['revision'] = complete_revision(self, revision_record, acquired, record_indices,
                 laboratory, question_record)
@@ -314,43 +443,89 @@ class InquiryLLMAgent:
         self.costs["compute_cost"] += len(self.rows)
         started = monotonic()
         result = evaluate_python_model(self.workspace, model, self.rows, timeout_seconds=remaining)
+        self.costs['compute_cost'] += result.get('research_prediction_count', 0)
         self.costs["python_execution_seconds"] += monotonic() - started
-        result.pop("predictions", None)
+        predictions = result.pop("predictions", None)
+        if predictions is not None:
+            result.update(_paid_prediction_scope(self.workspace, model, self.rows, predictions))
+            result['paid_residuals'] = _prediction_residuals(
+                self.rows, predictions, model, evaluation_scope='paid_response_evaluation')
+            relations = compare_paid_relations(self.revisions, self.rows, predictions)
+            if relations['check_count']:
+                relations.update(model=model, workspace=str(self.workspace),
+                                 evaluation_scope=result['evaluation_scope'])
+                result['paid_relation_diagnostic'] = relations
+                self.costs['compute_cost'] += relations['term_count']
         return result
 
     def _evaluated_summary(self):
         retained = self.evaluated_model
         if retained is None:
             return None
-        return {"model": str(Path("_evaluated_model") / retained["model"]),
+        summary = {"model": str(Path("_evaluated_model") / retained["model"]),
                 "source_model": retained.get("source_model", retained["model"]), "mse": retained["current_mse"],
                 "evaluated_rows": retained["evaluated_rows"], "current_paid_rows": len(self.rows),
-                "support": ("paid_fit" if retained["evaluated_rows"] == len(self.rows)
-                            else "new_paid_rows_unscored")}
+                "evaluation_scope": retained.get('evaluation_scope', 'paid_evaluation'),
+                "fitting_view": deepcopy(retained.get('fitting_view', {'scope': 'unknown'})),
+                "support": (retained.get('evaluation_scope', 'paid_evaluation')
+                            if retained["evaluated_rows"] == len(self.rows) else "new_paid_rows_unscored")}
+        if 'later_readings' in retained:
+            summary['later_readings'] = deepcopy(retained['later_readings'])
+        if 'selection' in retained:
+            summary['selection'] = deepcopy(retained['selection'])
+        return summary
 
     def _retain_evaluation(self, model, result):
         """Keep measured improvements while preserving the earlier fitting data."""
         if not self.rows or result["returncode"] != 0 or not isinstance(result.get("mse"), (int, float)):
             return
+        candidate = {'model': model, 'mse': result['mse'], 'evaluated_rows': len(self.rows),
+                     **{key: deepcopy(result[key]) for key in
+                        ('evaluation_scope', 'fitting_view') if key in result}}
+
+        def incumbent_summary():
+            summary = self._evaluated_summary()
+            return None if summary is None else {key: deepcopy(summary[key]) for key in
+                ('model', 'source_model', 'mse', 'evaluated_rows', 'evaluation_scope', 'fitting_view')}
+
+        def record_decision(status, incumbent):
+            selected = self._evaluated_summary()
+            result['retention_decision'] = {
+                'status': status, 'candidate': deepcopy(candidate), 'incumbent': incumbent,
+                'selected_model': selected['model'] if selected is not None else None,
+                'same_paid_rows': (incumbent['evaluated_rows'] == len(self.rows)
+                                   if incumbent is not None else None),
+                'scope': 'Paid scoring and retention only; no independent confirmation.'}
+
         retained = self.evaluated_model
+        incumbent = incumbent_summary()
         if retained is not None:
             retained_path = self._evaluated_summary()["model"]
             if model == retained_path:
                 retained.update(current_mse=result["mse"], evaluated_rows=len(self.rows))
+                _remember_paid_scope(retained, result)
+                record_decision('retained_rescored', incumbent)
                 return
             if retained["evaluated_rows"] != len(self.rows):
                 if (self.config.compute_budget - self.costs["compute_cost"] < len(self.rows)
                         or self.config.execution_seconds <= self.costs["python_execution_seconds"]):
                     result["retention_deferred"] = "insufficient budget to compare the saved candidate on current paid rows"
+                    record_decision('deferred', incumbent)
                     return
                 comparison = self._score(retained_path)
                 result["retained_comparison"] = comparison
                 retained.update(current_mse=comparison.get("mse"), evaluated_rows=len(self.rows))
+                _remember_paid_scope(retained, comparison)
+                incumbent = incumbent_summary()
             if retained["current_mse"] is not None and result["mse"] >= retained["current_mse"]:
+                record_decision('incumbent_retained', incumbent)
                 return
         self.evaluated_model = retain_evaluated_python_model(
             self.workspace, model, [], result["mse"])
         self.evaluated_model.update(current_mse=result["mse"], evaluated_rows=len(self.rows))
+        _remember_paid_scope(self.evaluated_model, result)
+        record_decision('candidate_retained', incumbent)
+        self.evaluated_model['selection'] = deepcopy(result['retention_decision'])
 
     def _execute(self, action, arguments, laboratory):
         if action == "query":
@@ -368,10 +543,22 @@ class InquiryLLMAgent:
             if "code" in arguments:
                 (self.workspace / path).parent.mkdir(parents=True, exist_ok=True)
                 (self.workspace / path).write_text(arguments["code"], encoding="utf-8")
-            code, stdout, stderr, timed_out = self._python([sys.executable, str(self.workspace / path)])
+            before = self.costs["python_execution_seconds"]
+            code, stdout, stderr, timed_out = self._python(
+                [sys.executable, str(self.workspace / path)],
+                timeout_seconds=arguments.get("timeout_seconds", self.config.run_timeout_seconds))
             result = {"returncode": code, "stdout": stdout[-12000:], "stderr": stderr[-12000:],
                       "timeout": timed_out, "executed_path": path,
+                      "execution_seconds": self.costs["python_execution_seconds"] - before,
+                      "remaining_execution_seconds": max(0., self.config.execution_seconds
+                          - self.costs["python_execution_seconds"]),
                       **self._provenance(path)}
+            if timed_out:
+                result["execution_notice"] = (
+                    "This computation reached its execution time limit. This is not a "
+                    "scientific evaluation of the model. Files already written persist; "
+                    "you can inspect progress, revise the computation, or explicitly "
+                    "request a longer timeout_seconds within the remaining allowance.")
             truncated = []
             for stream, output in (("stdout", stdout), ("stderr", stderr)):
                 output_path = f"{path}.{stream}.txt"
@@ -381,19 +568,23 @@ class InquiryLLMAgent:
                                f"{stream}_truncated": len(output) > 12000})
                 if len(output) > 12000:
                     truncated.append(stream)
+                    if stream == 'stdout':
+                        marker = '\n... middle omitted; complete output is saved ...\n'
+                        tail = 12000 - 6000 - len(marker)
+                        result[stream] = output[:6000] + marker + output[-tail:]
             if truncated:
                 result["output_notice"] = (
-                    "Only the last 12000 characters of " + ", ".join(truncated) +
-                    " are shown. Earlier output is saved in the corresponding *_file; "
+                    "Output previews are limited to 12000 characters: stdout keeps the "
+                    "beginning and end, while stderr keeps the end. Complete output is "
+                    "saved in the corresponding *_file; "
                     "read a selected range or compute a concise summary from that file.")
             return result
         if action in {"evaluate", "finish"}:
             model = arguments.get("model", "model.py")
             result = self._score(model)
             result.update(executed_path=model, **self._provenance(model))
-            if action == "evaluate":
-                self._retain_evaluation(model, result)
-                result["evaluated_model"] = self._evaluated_summary()
+            self._retain_evaluation(model, result)
+            result["evaluated_model"] = self._evaluated_summary()
             if action == "finish" and result["returncode"] == 0:
                 precondition = getattr(laboratory, "confirmation_precondition", None)
                 if callable(precondition):
@@ -435,8 +626,13 @@ class InquiryLLMAgent:
                 started = monotonic()
                 remaining = self.config.execution_seconds - self.costs["python_execution_seconds"]
                 fresh = evaluate_python_model(self.workspace, model, rows, timeout_seconds=max(.001, remaining))
+                self.costs['compute_cost'] += fresh.get('research_prediction_count', 0)
                 self.costs["python_execution_seconds"] += monotonic() - started
-                fresh.pop("predictions", None)
+                predictions = fresh.pop("predictions", None)
+                if predictions is not None:
+                    fresh['residuals'] = _prediction_residuals(
+                        rows, predictions, submitted['model'], evaluation_scope='fresh_confirmation',
+                        row_offset=len(self.rows))
                 passed = (fresh.get("returncode") == 0
                           and fresh.get("mse", float("inf")) <= self.config.confirmation_mse_threshold)
                 result["fresh_confirmation"] = {**fresh, "passed": passed, "rows": n,
@@ -492,9 +688,28 @@ class InquiryLLMAgent:
                 "session_knowledge": self.knowledge, "events": self.events,
                 "evaluated_model": self._evaluated_summary()}
 
+    def _before_model_turn(self, laboratory):
+        pass
+
+    def _after_model_turn(self, laboratory):
+        pass
+
+    def _terminal_status(self):
+        return None
+
     def run(self, laboratory, *, on_checkpoint=None):
         status = "model_call_budget_exhausted"
-        for step in range(self.costs["model_calls"], self.config.max_model_calls):
+        while True:
+            terminal = self._terminal_status()
+            if terminal:
+                status = terminal
+                break
+            opened_research = self._before_model_turn(laboratory)
+            if opened_research and on_checkpoint:
+                on_checkpoint(self.result("researching"))
+            if self.costs['model_calls'] >= self.config.max_model_calls:
+                break
+            step = self.costs['model_calls']
             if (not self.model and self.config.observation_budget - self.costs["observation_cost"]
                     < self.config.confirmation_rows):
                 status = "confirmation_budget_exhausted"
@@ -520,6 +735,7 @@ class InquiryLLMAgent:
                         "instruction": "Return exactly one research_action with action and arguments_json; "
                                        "arguments_json must encode the action's argument object. "
                                        "No action from the invalid reply was executed. This call was charged."}
+                    self._after_model_turn(laboratory)
                     if on_checkpoint:
                         on_checkpoint(self.result("researching"))
                     continue
@@ -534,6 +750,7 @@ class InquiryLLMAgent:
             self.events.append({"step": step, "action": decision["action"],
                                 "arguments": decision.get("arguments", {}),
                                 "feedback": feedback, "usage": usage})
+            self._after_model_turn(laboratory)
             if on_checkpoint:
                 on_checkpoint(self.result("researching"))
             if not isinstance(tokens, int):
@@ -545,10 +762,13 @@ class InquiryLLMAgent:
                 break
         return self.result(status)
 
-    def result(self, status):
+    def _shared_files(self):
         shared = self.workspace / "shared"
-        files = {str(path.relative_to(self.workspace)): path.read_text(encoding="utf-8")
-                 for path in shared.rglob("*") if path.is_file() and path.suffix in {".py", ".json", ".md", ".txt"}}
+        return {str(path.relative_to(self.workspace)): path.read_text(encoding="utf-8")
+                for path in shared.rglob("*") if path.is_file() and path.suffix in {".py", ".json", ".md", ".txt"}}
+
+    def result(self, status):
+        files = self._shared_files()
         for entry in [*self.manifest.get("hypotheses", []), *self.manifest.get("research_programs", [])]:
             if isinstance(entry, dict) and entry.get("path") and (self.workspace / entry["path"]).is_file():
                 files[entry["path"]] = (self.workspace / entry["path"]).read_text(encoding="utf-8")

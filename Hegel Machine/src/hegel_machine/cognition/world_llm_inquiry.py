@@ -4,6 +4,8 @@ from copy import deepcopy
 import json
 from time import monotonic
 
+from .inquiry_session import begin_session, enter_notebook, leave_notebook
+
 
 INQUIRY_INTERFACE = """
 run {operator:'inquire',question:{id:'q',question:'...',parent_id:'task',depends_on:[]},
@@ -611,25 +613,14 @@ def execute_llm_inquiry(agent, laboratory, arguments):
     if not proposal:
         for parent in agent._inquiry_stack:
             parent["delegated_children"].add(question["id"])
-    session = agent.llm_inquiries.setdefault(session_id, {
-        "question_id": question["id"], "notes": "", "events": [],
-        "invocations": 0, "model_calls": 0, "status": "open",
-    })
     # Proposal sessions follow a draft path across revised assignments. Keep
     # their current advice and new trials attached to this caller; old event
     # question IDs and earlier scientific answers retain their original scope.
-    session['question_id'] = question['id']
-    session["invocations"] += 1
     start_calls = agent.costs["model_calls"]
-    frame = {"question_id": question["id"], "question": question,
-             "assignment": deepcopy(question),
-             "call_limit": min(start_calls + calls, agent.limits["max_model_calls"],
-                               *(item["call_limit"] for item in agent._inquiry_stack)),
-             "stop_requested": False, "delegated_children": set()}
-    if "assignment" in arguments:
-        # Resuming the caller's research need must not overwrite the author's
-        # current scientific hypothesis or its already acquired answer.
-        frame["assignment"]["question"] = arguments["assignment"]
+    session, frame = begin_session(agent.llm_inquiries, agent._inquiry_stack, question,
+        start_calls=start_calls, calls=calls, total_calls=agent.limits['max_model_calls'],
+        session_id=session_id, assignment=arguments.get('assignment'))
+    frame['delegated_children'] = set()
     if proposal:
         draft = agent.workspace / path
         frame.update(stage="proposal", proposal_path=path, deferred_actions=[],
@@ -648,9 +639,7 @@ def execute_llm_inquiry(agent, laboratory, arguments):
     elif proposal and frame.get('response_path') and session.get('condition_research'):
         frame['condition_proposal'] = path
     notes_path = agent.workspace / "research_notes.md"
-    parent_notes = notes_path.read_text() if notes_path.exists() else None
-    frame["parent_notes"] = parent_notes
-    notes_path.write_text(session["notes"])
+    enter_notebook(agent.workspace, session, frame)
     parent_focus = agent.research_focus
     parent_proposal = agent._current_proposal
     agent.research_focus = None
@@ -793,11 +782,7 @@ def execute_llm_inquiry(agent, laboratory, arguments):
         agent._inquiry_stack.pop()
         agent.research_focus = parent_focus
         agent._current_proposal = parent_proposal
-        if parent_notes is None:
-            notes_path.unlink(missing_ok=True)
-        else:
-            notes_path.write_text(parent_notes)
-        session["status"] = status
+        leave_notebook(agent.workspace, session, frame, status)
         if proposal:
             session["proposal"] = _proposal_summary(agent, frame)
             declaration = {key: deepcopy(question[key])

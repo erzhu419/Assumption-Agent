@@ -495,8 +495,11 @@ def propose_experimental_conditional_coordinates(spec, rows, budget, *, basis,
         searches.sort(key=lambda family: min(_rank(result[0]) for _, result in family[4]))
         for gate, width, placement, brackets, found in searches:
             while budget.remaining >= price + reserve:
+                if min(result[0]["loss"] for _, result in found) <= 1e-12:
+                    break
                 winner = min(found, key=lambda pair: _rank(pair[1][0]))[0]
-                sampled = sorted({0, len(brackets) - 1, *(index for index, _ in found)})
+                visited = {index for index, _ in found}
+                sampled = sorted({0, len(brackets) - 1, *visited})
                 pos = sampled.index(winner)
                 adjacent = sampled[max(0, pos - 1):pos + 2]
                 midpoints = [(left + right) // 2 for left, right in zip(adjacent, adjacent[1:])
@@ -506,16 +509,23 @@ def propose_experimental_conditional_coordinates(spec, rows, budget, *, basis,
                 proposed = list(dict.fromkeys([*midpoints,
                     *(neighbors if (gate, width, placement, brackets) not in exploratory_families
                       or not midpoints else [])]))
-                before = budget.spent
+                proposed = [index for index in proposed if index not in visited]
+                if not proposed:
+                    # Joint branch fits need not be unimodal in the threshold.
+                    # A measured local minimum cannot exclude other paid
+                    # brackets while their original-response fits are affordable.
+                    proposed = next(([index] for index in range(len(brackets))
+                                     if index not in visited), [])
+                before = len(found)
                 for index in proposed:
-                    if any(previous == index for previous, _ in found):
-                        continue
+                    if budget.remaining < price + reserve:
+                        break
                     result = evaluate(gate, width, placement, brackets, index)
                     if result is not None:
                         found.append((index, result))
                     if result is not None and result[0]["loss"] <= 1e-12:
                         break
-                if (budget.spent == before or min(result[0]["loss"] for _, result in found) <= 1e-12):
+                if (len(found) == before or min(result[0]["loss"] for _, result in found) <= 1e-12):
                     break
             if min(result[0]["loss"] for _, result in found) <= 1e-12:
                 break

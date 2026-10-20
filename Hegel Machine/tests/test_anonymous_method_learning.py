@@ -101,6 +101,80 @@ def action(name, arguments):
             "usage": {"backend": "scripted_interface_test", "total_tokens": 1}}
 
 
+def test_author_native_contract_executes_in_frozen_practice(tmp_path):
+    """The authored method uses the live tool through the real practice executor."""
+    from hegel_machine.cognition.anonymous_method_learning import (
+        AnonymousResearchMethodLearner, EMPTY_METHOD)
+    from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+    from hegel_machine.cognition.structural_inquiry import NATIVE_CONDITION_INTERFACE
+    from scripts.experimental_design_control import ExperimentalDesignMethodAgent
+    from test_native_condition_inquiry import PaidConditionalLab, buy_fixture
+    from test_native_condition_research import random_sequence
+
+    class ConfirmingLab(PaidConditionalLab):
+        def confirmation_actions(self, count, rng):
+            return [{"kind": "trajectory", "channels": [],
+                     "sequence": random_sequence(rng.randrange(1_000_000), min(16, count - start))}
+                    for start in range(0, count, 16)]
+
+    # This is a scripted interface fixture, not an LLM-discovered strategy.
+    method = '''import json
+def select_actions(spec, records, memory):
+    steps = json.load(open('research_state.json'))['method_results']
+    if not steps:
+        return {'action': 'run', 'arguments': {
+            'operator': 'native_condition_research', 'max_compute': 500000,
+            'question': {'id': 'composition', 'question': 'Which paid condition composition fits?',
+                         'parent_id': 'task', 'depends_on': []},
+            'matched_pairs': [{'reference_record_index': 0, 'record_index': 1}]}}
+    if len(steps) == 1:
+        models = steps[-1]['feedback']['native_condition_research']['exported_models']
+        return min(models, key=lambda item: item['fit_mse'])['evaluate_action']
+    if len(steps) == 2:
+        return {'model': steps[-1]['proposal']['arguments']['model']}
+    return {'stop': 'No further scripted action.'}
+'''
+    limits = InquiryLLMConfig(observation_budget=300, confirmation_rows=32,
+        confirmation_mse_threshold=1e-8, compute_budget=2_000_000,
+        execution_seconds=60., max_model_calls=0, token_budget=0)
+    agents = []
+
+    def prepare(case, path, source, config):
+        agent = ExperimentalDesignMethodAgent(None, path, arm='hegel', source_task=False,
+            knowledge={}, config=config, confirmation_seed=case['confirmation_seed'])
+        lab = ConfirmingLab()
+        buy_fixture(agent, lab)
+        agent.bind_method(source)
+        agents.append((agent, lab))
+        return {'agent': agent, 'laboratory': lab, 'inherited_candidates': []}
+
+    author = AnonymousResearchMethodLearner(None, tmp_path / 'author',
+        knowledge={'files': {METHOD_PATH: EMPTY_METHOD}},
+        cases={'native_fixture': {'confirmation_seed': 1709}},
+        lab_factory=lambda case: ConfirmingLab(), config=limits,
+        practice_limits=limits, prepare_trial=prepare)
+    assert NATIVE_CONDITION_INTERFACE in author.common_interface
+    feedback = author._execute('write', {'path': METHOD_PATH, 'code': method}, author.interface)
+    practice = feedback['edit_practice']
+    assert practice['status'] == 'completed'
+    assert practice['fresh_confirmation']['passed']
+    assert practice['fresh_confirmation']['mse'] < 1e-8
+    assert practice['fresh_confirmation']['rows'] == 32
+    assert practice['costs']['observation_cost'] == 80 + 32
+    assert practice['costs']['model_calls'] == practice['costs']['reported_tokens'] == 0
+    assert len(practice['steps']) == 3
+    research, evaluation, submission = practice['steps']
+    assert research['feedback']['operator'] == 'native_condition_research'
+    assert evaluation['proposal']['action'] == 'evaluate'
+    assert submission['proposal']['model'] == evaluation['proposal']['arguments']['model']
+    assert practice['model'] == submission['proposal']['model']
+    agent, lab = agents[0]
+    assert agent.provider is None and lab.paid == 112
+    assert len(agent.confirmations) == 1
+    assert author.costs['observation_cost'] == 112
+    assert feedback['current_source_coverage']['confirmed_cases'] == ['native_fixture']
+
+
 def test_practice_publication_frozen_transfer_and_equal_live_archive(memoryless_source, tmp_path):
     output = tmp_path / "study"
     plan = protocol(memoryless_source, model="scripted-interface-only")

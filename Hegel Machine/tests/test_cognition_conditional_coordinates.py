@@ -6,7 +6,9 @@ from random import Random
 
 import pytest
 
-from hegel_machine.cognition.conditional_coordinates import propose_conditional_coordinates
+from hegel_machine.cognition.conditional_coordinates import (
+    propose_conditional_coordinates, propose_experimental_conditional_coordinates,
+)
 from hegel_machine.cognition.evaluation import loss
 from hegel_machine.cognition.language import Program
 from hegel_machine.cognition.knowledge_evolution import bind_answers
@@ -166,6 +168,49 @@ def test_unfunded_conditional_search_cannot_report_an_unpaid_candidate():
     claims = propose_conditional_coordinates(lab.spec, training, limited, basis=basis(lab.spec))
     assert limited.spent <= limited.limit
     assert all(claim['research_program']['search_compute'] <= limited.spent for claim in claims)
+
+
+def measured_condition_search(*, threshold=.37, discrete_gate=False, budget=None):
+    lab = ConditionalLab('paid_branch_response', 'temporal_outer', 5,
+                         threshold=threshold, discrete_gate=discrete_gate)
+    rows = purchased(lab, (5,), length=32)
+    evidence = [{'control': 'gate', 'gain': 1., 'width': 5,
+                 'placement': 'inside_window', 'threshold_interval': [-1., 1.]}]
+    work = budget if budget is not None else SearchBudget(100000)
+    claims = propose_experimental_conditional_coordinates(
+        lab.spec, rows, work, basis=basis(lab.spec), evidence=evidence)
+    return lab, rows, work, min(claims, key=lambda claim: claim['training_loss'])
+
+
+def test_experimental_threshold_search_escapes_paid_local_minimum():
+    # These paid trajectories give a nonunimodal joint-fit loss. Local
+    # refinement alone stops at MSE .0209988 despite an exact available fit.
+    lab, rows, work, best = measured_condition_search()
+    assert best['training_loss'] < 1e-12
+    assert loss(best['candidate'].program, rows, 0., .5) < 1e-12
+    step = conditional_step(best)
+    assert step['threshold_interval'][0] < .37 < step['threshold_interval'][1]
+    assert len(step['parameter_trials']) <= len({row.features['gate'] for row in rows}) - 1
+    assert len(lab.acquisitions) == 1
+    assert best['research_program']['search_compute'] == work.spent <= work.limit
+
+
+def test_experimental_threshold_fallback_respects_remaining_budget():
+    work = SearchBudget(3700, reserve=200)
+    _, rows, _, best = measured_condition_search(budget=work)
+    assert best['training_loss'] > 1e-3
+    assert 0 < work.spent <= work.limit - work.reserve
+    assert work.reserve == 200
+    assert len(conditional_step(best)['parameter_trials']) < len(rows) - 1
+
+
+def test_experimental_threshold_exact_fit_does_not_expand_remaining_brackets():
+    _, _, work, best = measured_condition_search(threshold=0., discrete_gate=True)
+    assert best['training_loss'] < 1e-12
+    # The three initial brackets already explain the paid data; the other
+    # brackets remain untested even with a large available search allowance.
+    assert len(conditional_step(best)['parameter_trials']) == 3
+    assert work.spent < work.limit // 10
 
 
 def test_discovered_boundaries_propose_a_new_legal_paid_control_trajectory():

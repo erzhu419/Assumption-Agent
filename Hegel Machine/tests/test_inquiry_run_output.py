@@ -3,7 +3,7 @@
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMAgent
 
 
-def test_large_python_streams_keep_complete_output_and_mark_tail_preview(tmp_path):
+def test_large_python_streams_keep_opening_analysis_and_final_diagnostics(tmp_path):
     agent = InquiryLLMAgent(None, tmp_path, arm="code_react")
     source = (
         "import sys\n"
@@ -19,11 +19,15 @@ def test_large_python_streams_keep_complete_output_and_mark_tail_preview(tmp_pat
         assert result[f"{stream}_file"] == f"scratch_000.py.{stream}.txt"
         complete = (tmp_path / result[f"{stream}_file"]).read_text()
         assert complete.startswith(first) and complete.endswith(last + "\n")
-        assert result[stream] == complete[-12000:]
-        assert len(result[stream]) == 12000 and first not in result[stream]
+        assert len(result[stream]) == 12000 and result[stream].endswith(last + '\n')
+        if stream == 'stdout':
+            assert result[stream].startswith(first)
+            assert 'middle omitted' in result[stream]
+        else:
+            assert result[stream] == complete[-12000:]
         assert result[f"{stream}_characters"] == len(complete)
         assert result[f"{stream}_truncated"] is True
-    assert "last 12000 characters" in result["output_notice"]
+    assert "beginning and end" in result["output_notice"]
 
 
 def test_explicit_script_output_paths_and_short_rerun_replace_previous_streams(tmp_path):

@@ -155,7 +155,8 @@ def predict(row):
     manifest["hypotheses"][0]["path"] = "model.py"
     source._execute("write", {"path": "shared/knowledge.json", "code": json.dumps(manifest)}, lab)
     host_records = ("active.json", "training.json", "archive.json", "evaluation.json",
-                    "result.json", "protocol.json", "summary.json")
+                    "result.json", "protocol.json", "summary.json",
+                    "interrupted_training.json", "interrupted_training_0877.json")
     checkpoint = json.dumps(source.result("researching"))
     for name in host_records:
         (source.workspace / name).write_text(checkpoint)
@@ -173,6 +174,7 @@ def predict(row):
         assert name not in memory["files"]
         assert f"_evaluated_model/{name}" not in memory["files"]
         assert not (source.workspace / "_evaluated_model" / name).exists()
+        assert (source.workspace / name).read_text() == checkpoint
 
     for arm in ("code_react", "hegel"):
         consumer = CommonArchiveInquiryAgent(None, tmp_path / arm, arm=arm,
@@ -235,3 +237,49 @@ def test_original_code_condition_and_new_public_contract_remain_distinct(tmp_pat
     assert "operator:'procedure'" in common
     assert "def select_actions(spec, observations, memory)" not in common
     assert "hysteresis" not in common.lower()
+
+
+@pytest.mark.parametrize("arm", ["code_react", "hegel"])
+def test_string_question_returns_feedback_then_accepts_authored_correction(tmp_path, arm):
+    # Real cohort replies Code005/004 and Code009/019 used this string where
+    # the existing interface requires a question object. Neither action ran.
+    identifier = "multivariate_latent_quadratic_update"
+    requests = []
+
+    class CorrectingProvider:
+        def next_action(self, request):
+            requests.append(deepcopy(request))
+            (tmp_path / "source" / "research_context.json").write_text(json.dumps(request))
+            actions = [
+                decision("evaluate", {"model": "model.py", "code": MODEL,
+                                      "research_question": identifier}),
+                decision("write", {"path": "model.py", "code": MODEL,
+                    "research_question": {**QUESTION, "id": identifier}}),
+                decision("finish", {"model": "model.py"}),
+            ]
+            return actions[len(requests) - 1]
+
+    agent = CommonArchiveInquiryAgent(CorrectingProvider(), tmp_path / "source",
+        arm=arm, source_task=False, config=configuration(max_model_calls=3))
+    assert len(agent.questions) == (1 if arm == "hegel" else 0)
+    result = agent.run(laboratory())
+    assert result["status"] == "completed"
+    assert result["fresh_confirmation"]["passed"]
+    error = result["events"][0]["feedback"]["error"]
+    assert error.startswith("ValueError:") and "JSON object" in error
+    assert requests[1]["events"][-1]["feedback"]["error"] == error
+    assert "model.py" not in requests[1]["files"]
+    assert len(result["events"]) == result["costs"]["model_calls"] == 3
+    assert result["costs"]["reported_tokens"] == 3
+    assert result["costs"]["observation_cost"] == 3
+    corrected = next(q for q in result["online_questions"] if q["id"] == identifier)
+    assert corrected["question"] == QUESTION["question"]
+
+    # The invalid paid reply remains in history and must not break resumption.
+    restored = CommonArchiveInquiryAgent(None, tmp_path / "restored", arm=arm,
+        source_task=False, config=configuration(max_model_calls=4))
+    restored.restore_research(result, agent.workspace, laboratory(),
+                              confirmation_seed=9173)
+    assert restored.events == result["events"]
+    assert restored.costs == result["costs"]
+    assert restored.questions == result["online_questions"]

@@ -6,12 +6,22 @@ This module supplies no world-specific law, target value or action mapping.
 
 from copy import deepcopy
 from math import isfinite
+from statistics import mean
 
-from .evaluation import initial_prediction, loss, predict
+from .evaluation import initial_prediction, predict
 from .language import Program
 from .models import Candidate, Observation, Probe, SearchBudget
 from .probing import choose_probe
 from .synthesis import _fit_linear, synthesize
+
+
+def _observation(row):
+    return Observation(row["features"], row.get("target", 0.), tuple(row.get("history", ())))
+
+
+def _finite_history(row):
+    return all(isfinite(float(value)) for point in row.get("history", ())
+               for value in point.values())
 
 
 def _empirical_prediction(binding, entries, rows, budget):
@@ -48,7 +58,7 @@ def _empirical_prediction(binding, entries, rows, budget):
     probes = []
     for proposal in binding.get("probes", []):
         spend(1)
-        prediction = predict(program, Observation(proposal["features"], 0.), fallback)
+        prediction = predict(program, _observation(proposal), fallback)
         probes.append({**deepcopy(proposal), "prediction": prediction})
     return {"program": program.to_dict(),
             "fit_mse": sum(item["error"] ** 2 for item in fitted) / len(fitted),
@@ -60,7 +70,7 @@ def _empirical_prediction(binding, entries, rows, budget):
             "evidence_use": "in_sample_fit_and_leave_one_out_reuse_not_fresh_confirmation"}
 
 
-def research_relation(binding, observations, previous=None):
+def research_relation(binding, observations, previous=None, *, compute_budget=None):
     """Fit, retain and distinguish a relation on explicitly cited public readings.
 
     ``previous`` is the last result. Its programs remain frozen while new rows
@@ -75,6 +85,9 @@ def research_relation(binding, observations, previous=None):
     take precedence, and a contradicted fit retains its declared basis. The
     ``operational_setting`` prediction objective additionally describes an
     empirical refit for physical testing; it does not change exact-law status.
+    Explicit row and probe histories are part of their numerical inputs. A
+    supplied SearchBudget shares the caller's account; compute_cost reports
+    only the work consumed by this call.
     """
     tolerance = float(binding.get("tolerance", 1e-6))
     if not isfinite(tolerance) or tolerance < 0:
@@ -93,8 +106,9 @@ def research_relation(binding, observations, previous=None):
                     or set(refs) != set(evidence)):
                 raise ValueError("conditioning_refs and outcome_refs must cover actual row evidence")
         values = [*row["features"].values(), row["target"]]
-        if not row["features"] or any(not isfinite(float(value)) for value in values):
-            raise ValueError("numerical rows need finite features and targets")
+        if (not row["features"] or any(not isfinite(float(value)) for value in values)
+                or not _finite_history(row)):
+            raise ValueError("numerical rows need finite features, histories and targets")
     evidence = sorted({index for row in entries for index in row["evidence"]})
     result = {"status": "inconclusive", "diagnosis": "numerical_evidence_needed",
               "candidates": [], "fit_rows": [], "fit_evidence": [],
@@ -112,14 +126,21 @@ def research_relation(binding, observations, previous=None):
     names = set(entries[0]["features"])
     if any(set(row["features"]) != names for row in entries):
         raise ValueError("all rows of a relation must bind the same feature names")
-    rows = [Observation(row["features"], row["target"]) for row in entries]
+    rows = [_observation(row) for row in entries]
     fallback = initial_prediction(rows, .5)
-    budget = SearchBudget(50000)
+    budget = compute_budget if compute_budget is not None else SearchBudget(50000)
+    spent_before = budget.spent
 
-    def score(program, selected):
+    def scored_predictions(program, selected):
         if not budget.spend(len(selected)):
             raise ValueError("numerical comparison exceeds the bounded research allowance")
-        return loss(program, selected, fallback, .5)
+        predictions = [predict(program, row, fallback) for row in selected]
+        errors = [(prediction - row.target) ** 2
+                  for prediction, row in zip(predictions, selected)]
+        return mean(errors), predictions, errors
+
+    def score(program, selected):
+        return scored_predictions(program, selected)[0]
 
     def fit(*, refit=False):
         supplied = None if refit else binding.get("hypotheses")
@@ -133,7 +154,7 @@ def research_relation(binding, observations, previous=None):
         else:
             allowance = SearchBudget(min(20000, budget.remaining // 2))
             generated = synthesize(rows, operations=binding.get("operations", ["refit", "composition", "relation"]),
-                                   budget=allowance, max_history=0)
+                                   budget=allowance, max_history=binding.get("max_history", 0))
             budget.spend(allowance.spent)
             programs = [candidate.program.simplified() for candidate in generated]
         fitted = [new_candidate(program) for program in dict.fromkeys(programs)]
@@ -145,7 +166,15 @@ def research_relation(binding, observations, previous=None):
                       validation_evidence=[])
 
     def new_candidate(program):
-        return {"program": program.to_dict(), "fit_mse": score(program, rows),
+        mse, predictions, errors = scored_predictions(program, rows)
+        worst = sorted(range(len(rows)), key=errors.__getitem__, reverse=True)[:3]
+        residuals = {"evaluation_scope": "paid_relation_fit", "evaluated_rows": len(rows),
+                     "examples": [{**deepcopy(entries[index]),
+                                   "prediction": predictions[index],
+                                   "residual": predictions[index] - rows[index].target,
+                                   "squared_error": errors[index]} for index in worst]}
+        return {"program": program.to_dict(), "fit_mse": mse,
+                "paid_fit_residuals": residuals,
                 "validation_mse": None, "fit_rows": deepcopy(entries),
                 "fit_evidence": evidence, "proposed_after": sorted(available)}
 
@@ -162,8 +191,7 @@ def research_relation(binding, observations, previous=None):
         return selected
 
     def measured(program, selected):
-        return score(program, [Observation(row["features"], row["target"])
-                               for row in selected]) if selected else None
+        return score(program, [_observation(row) for row in selected]) if selected else None
 
     def refs(selected):
         return sorted({index for row in selected for index in row["evidence"]})
@@ -224,6 +252,16 @@ def research_relation(binding, observations, previous=None):
         result["validation_evidence"] = sorted(validation_evidence)
         if newly_rejected:
             archive_rejected(newly_rejected)
+        if (basis_expanded and any(term not in (old_basis or []) for term in new_basis)
+                and not any(item["status"] == "plausible" for item in result["candidates"])):
+            # A declared larger family is a new trial after the frozen bank
+            # fails. Keep those failures rather than replacing them, and fit
+            # only once: the returned basis records this actual trial.
+            retained = result["candidates"]
+            fit(refit=True)
+            result["candidates"] = retained + [item for item in result["candidates"]
+                if not any(item["program"] == old["program"] for old in retained)]
+            result["diagnosis"] = "expanded_basis_requires_confirmation"
     else:
         if binding_changed:
             result.setdefault("binding_history", []).append({
@@ -274,12 +312,15 @@ def research_relation(binding, observations, previous=None):
     if not survivors:
         result["status"] = "refuted"
         if result["diagnosis"] != "refit_needed":
-            result["diagnosis"] = "representation_inadequate"
+            result["diagnosis"] = "candidate_family_refuted"
 
     supplied_probes = binding.get("probes", [])
     for proposal in supplied_probes:
         if set(proposal["features"]) != names or not proposal.get("actions"):
             raise ValueError("each experiment must bind every feature and executable actions")
+        if (any(not isfinite(float(value)) for value in proposal["features"].values())
+                or not _finite_history(proposal)):
+            raise ValueError("numerical probes need finite features and histories")
     if len(survivors) == 1:
         selected = survivors[0]
         program = selected["program"]
@@ -300,24 +341,28 @@ def research_relation(binding, observations, previous=None):
             result["diagnosis"] = "needs_confirmation"
         if not confirmation:
             proposal = next((item for item in supplied_probes
-                             if all(item["features"] != row["features"] for row in entries)), None)
+                             if all((item["features"], item.get("history", []))
+                                    != (row["features"], row.get("history", []))
+                                    for row in entries)), None)
             if proposal is not None:
+                if not budget.spend():
+                    raise ValueError("numerical comparison exceeds the bounded research allowance")
                 result["selected_probe"] = {**deepcopy(proposal), "purpose": "confirmation",
-                    "predictions": [Program.from_dict(program).predict(Observation(proposal["features"], 0.))]}
-                budget.spend()
+                    "predictions": [predict(Program.from_dict(program), _observation(proposal), fallback)]}
 
     if len(survivors) > 1:
         candidates = [Candidate(str(index), Program.from_dict(item["program"]), "world_relation")
                       for index, item in enumerate(survivors)]
         probes = []
         for index, proposal in enumerate(supplied_probes):
-            probes.append(Probe(str(index), (proposal["features"],)))
+            probes.append(Probe(str(index), (*proposal.get("history", ()), proposal["features"])))
         selected, separation = choose_probe(probes, candidates, fallback, budget, observations=rows)
         if selected is not None and separation > tolerance:
             proposal = deepcopy(supplied_probes[int(selected.probe_id)])
-            probe_row = Observation(proposal["features"], 0.)
-            predictions = [candidate.program.predict(probe_row) for candidate in candidates]
-            budget.spend(len(candidates))
+            probe_row = _observation(proposal)
+            if not budget.spend(len(candidates)):
+                raise ValueError("numerical comparison exceeds the bounded research allowance")
+            predictions = [predict(candidate.program, probe_row, fallback) for candidate in candidates]
             proposal.update(predictions=predictions, predicted_separation=separation, purpose="discrimination")
             result["selected_probe"] = proposal
             if result["diagnosis"] != "refit_needed":
@@ -326,5 +371,5 @@ def research_relation(binding, observations, previous=None):
             result["diagnosis"] = "observational_ambiguity"
     if binding.get("prediction_objective") == "operational_setting" and binding.get("basis") is not None:
         result["empirical_prediction"] = _empirical_prediction(binding, entries, rows, budget)
-    result["compute_cost"] = budget.spent
+    result["compute_cost"] = budget.spent - spent_before
     return result

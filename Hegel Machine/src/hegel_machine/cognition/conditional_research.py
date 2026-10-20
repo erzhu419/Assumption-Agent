@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 
 from .code_agent import _copy_model_context, python_model_context, retain_evaluated_python_model
-from .observable_research import _score, _update_support, return_model_answer
+from .observable_research import _saved_training_indices, _score, _update_support, return_model_answer
 from .online_inquiry_llm import _PLAN_RUNNER
 
 
@@ -37,6 +37,9 @@ conditional_models contains the retained components. New purchases rerun the
 frozen binding and test the frozen predictor if its bound rows changed. Paid fit
 is not independent confirmation. Features and labels extracted by the view are
 the author's interpretation of the cited observations.
+later_readings separately scores bound rows citing evidence outside the retained
+predictor's fitting evidence; failed later predictions cannot be diluted by its
+old fitted rows. The all-row mse remains available for candidate comparison.
 Use a component's retained model path in the existing bindings argument. Your
 parent constructs the component's input rows and calls it through bind_models.
 Final response confirmation still supplies only public controls and history;
@@ -81,6 +84,14 @@ def _indices(entries):
     return sorted({index for row in entries for index in row['evidence']})
 
 
+def _later_positions(entries, training_indices):
+    if training_indices is None:
+        return []
+    fitted = set(training_indices)
+    return [position for position, row in enumerate(entries)
+            if any(index not in fitted for index in row['evidence'])]
+
+
 def _return(agent, component, question=None):
     return_model_answer(agent, component, question,
                         entry=agent.conditional_models[component], kind='executable_conditional')
@@ -96,13 +107,14 @@ def _refresh(agent, laboratory, component):
         if entries == entry['bound_rows']:
             entry['available_observation_indices'] = available
             return None
-        result = _score(agent, entry['model'], entries, refit=False)
+        result = _score(agent, entry['model'], entries, refit=False,
+                        later_positions=_later_positions(entries, entry['training_observation_indices']))
     except ValueError as error:
         entry['support'] = 'needs_reassessment'
         result = {'error': str(error)}
     else:
         entry.update(bound_rows=deepcopy(entries), available_observation_indices=available)
-        _update_support(entry, result, _indices(entries))
+        _update_support(entry, result, _indices(entries), mse_threshold=agent.config.confirmation_mse_threshold)
     _return(agent, component)
     return {'component': component, 'evaluation': result, 'retained': deepcopy(entry)}
 
@@ -133,15 +145,18 @@ def evaluate_component(agent, arguments, laboratory, question=None):
         view, reassessment = supplied_view, None
         entries = _bind(agent, laboratory, component, view)
     frozen = '_evaluated_model' in Path(model).parts
+    indices = _indices(entries)
+    training_indices = (_saved_training_indices(agent, model, 'conditional_support.json', 'component', component)
+                        if frozen else indices)
     result = (deepcopy(reassessment['evaluation'])
               if incumbent and model == incumbent['model'] and reassessment
-              else _score(agent, model, entries, refit=not frozen))
-    indices = _indices(entries)
+              else _score(agent, model, entries, refit=not frozen,
+                          later_positions=_later_positions(entries, training_indices)))
     result.update(component=component, executed_path=model, observation_indices=indices)
     if reassessment:
         result['reassessment'] = reassessment
     if incumbent and model == incumbent['model']:
-        _update_support(incumbent, result, indices)
+        _update_support(incumbent, result, indices, mse_threshold=agent.config.confirmation_mse_threshold)
     elif result.get('returncode') == 0 and (
             incumbent is None or incumbent.get('mse') is None or result['mse'] < incumbent['mse']):
         version = 0 if incumbent is None else incumbent['version'] + 1
@@ -149,13 +164,6 @@ def evaluate_component(agent, arguments, laboratory, question=None):
         saved = retain_evaluated_python_model(agent.workspace, model, [], result['mse'],
             destination=agent.workspace / directory,
             training_observations=None if frozen else entries)
-        training_indices = indices
-        if frozen:
-            context, _ = python_model_context(agent.workspace, model)
-            support_path = context / 'conditional_support.json'
-            support = json.loads(support_path.read_text()) if support_path.exists() else {}
-            training_indices = (support.get('training_observation_indices')
-                                if support.get('component') == component else None)
         if incumbent is None:
             # The ordinary model snapshot already contains its authored view
             # and that view's helper files. Existing snapshots remain frozen.
@@ -179,7 +187,7 @@ def evaluate_component(agent, arguments, laboratory, question=None):
             'view': frozen_view, 'source_view': source_view, 'view_source': view_source,
             'bound_rows': deepcopy(entries), 'available_observation_indices': _available(agent.observations),
             'training_observation_indices': deepcopy(training_indices)}
-        _update_support(entry, result, indices)
+        _update_support(entry, result, indices, mse_threshold=agent.config.confirmation_mse_threshold)
         agent.conditional_models[component] = entry
         (agent.workspace / directory / 'conditional_support.json').write_text(json.dumps(entry), encoding='utf-8')
     if component in agent.conditional_models:

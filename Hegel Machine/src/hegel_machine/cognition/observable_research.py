@@ -25,6 +25,9 @@ observable_models holds independently retained predictors and their measured sup
 Retention freezes the files and fitting rows. It does not confirm the parent model.
 New readings of that target cause charged evaluation of the frozen old predictor;
 ordinary response-only purchases do not invalidate its measurement support.
+later_readings reports error on readings outside that predictor's saved fitting
+evidence, separately from the all-row mse. Both errors must meet the task tolerance
+for support, so a large old fit cannot hide a failed later prediction.
 
 To use one retained predictor in another, supply evaluate/finish arguments
 {model:'parent.py',bindings:{chosen_name:'exact retained model path'}}. The parent
@@ -45,7 +48,7 @@ def _indices(records, target):
             for item in record.get('measurements', []) if target in item['values']]
 
 
-def _score(agent, model, rows, *, refit):
+def _score(agent, model, rows, *, refit, later_positions=()):
     if not rows:
         raise ValueError('buy readings of the selected target before evaluating it')
     if agent.costs['compute_cost'] + len(rows) > agent.config.compute_budget:
@@ -57,16 +60,42 @@ def _score(agent, model, rows, *, refit):
     started = monotonic()
     result = evaluate_python_model(agent.workspace, model, rows, timeout_seconds=remaining,
                                   training_observations=rows if refit else None)
+    agent.costs['compute_cost'] += result.get('research_prediction_count', 0)
     agent.costs['python_execution_seconds'] += monotonic() - started
-    result.pop('predictions', None)
+    predictions = result.pop('predictions', None)
+    if predictions is not None and later_positions:
+        errors = [predictions[index] - (rows[index].target if hasattr(rows[index], 'target')
+                                        else rows[index]['target']) for index in later_positions]
+        result['later_readings'] = {'rows': len(errors),
+            'mse': sum(error ** 2 for error in errors) / len(errors),
+            'max_abs_error': max(abs(error) for error in errors)}
     return result
 
 
-def _update_support(entry, result, indices):
-    entry.update(mse=result.get('mse'), evaluated_observation_indices=list(indices))
+def _saved_training_indices(agent, model, filename, field, selected):
+    context, _ = python_model_context(agent.workspace, model)
+    path = context / filename
+    support = json.loads(path.read_text()) if path.exists() else {}
+    return support.get('training_observation_indices') if support.get(field) == selected else None
+
+
+def _later_positions(indices, training_indices):
+    if training_indices is None:
+        return []
+    fitted = set(training_indices)
+    return [position for position, index in enumerate(indices) if index not in fitted]
+
+
+def _update_support(entry, result, indices, *, mse_threshold=CONFIRMATION_MSE_THRESHOLD):
+    entry.update(mse=result.get('mse'), evaluated_observation_indices=list(indices),
+                 mse_threshold=mse_threshold, loss_kind='mse')
+    entry.pop('later_readings', None)
+    if 'later_readings' in result:
+        entry['later_readings'] = deepcopy(result['later_readings'])
     if result.get('returncode') != 0:
         entry['support'] = 'execution_failed'
-    elif result['mse'] > CONFIRMATION_MSE_THRESHOLD:
+    elif (result['mse'] > mse_threshold
+          or result.get('later_readings', {}).get('mse', 0.) > mse_threshold):
         entry['support'] = 'refuted_on_paid_rows'
     else:
         entry['support'] = ('paid_evaluation' if entry['training_observation_indices'] is None else
@@ -114,11 +143,12 @@ def refresh_observables(agent, laboratory):
         entry['support'] = 'needs_reassessment'
         try:
             result = _score(agent, entry['model'],
-                            laboratory.target_rows(agent.observations, target), refit=False)
+                            laboratory.target_rows(agent.observations, target), refit=False,
+                            later_positions=_later_positions(indices, entry['training_observation_indices']))
         except ValueError as error:
             result = {'error': str(error)}
         else:
-            _update_support(entry, result, indices)
+            _update_support(entry, result, indices, mse_threshold=agent.config.confirmation_mse_threshold)
         outcomes.append({'target': target, 'evaluation': result, 'retained': deepcopy(entry)})
         return_model_answer(agent, target)
     return outcomes
@@ -130,13 +160,16 @@ def evaluate_observable(agent, arguments, laboratory, question=None):
     indices = _indices(agent.observations, target)
     refresh = refresh_observables(agent, laboratory)
     retained_source = '_evaluated_model' in Path(model).parts
-    result = _score(agent, model, rows, refit=not retained_source)
+    training_indices = (_saved_training_indices(agent, model, 'observable_support.json', 'target', target)
+                        if retained_source else indices)
+    result = _score(agent, model, rows, refit=not retained_source,
+                    later_positions=_later_positions(indices, training_indices))
     result.update(target=target, executed_path=model, observation_indices=indices)
     if refresh:
         result['reassessments'] = refresh
     incumbent = agent.observable_models.get(target)
     if incumbent is not None and model == incumbent['model']:
-        _update_support(incumbent, result, indices)
+        _update_support(incumbent, result, indices, mse_threshold=agent.config.confirmation_mse_threshold)
     elif result.get('returncode') == 0:
         # Never compare a new fit with an old candidate scored on fewer rows.
         comparable = incumbent is None or incumbent['evaluated_observation_indices'] == indices
@@ -148,17 +181,10 @@ def evaluate_observable(agent, arguments, laboratory, question=None):
                 destination=agent.workspace / directory,
                 training_observations=None if retained_source else rows)
             # A previously frozen model retains its original paid fitting view.
-            training_indices = indices
-            if retained_source:
-                context, _ = python_model_context(agent.workspace, model)
-                support_file = context / 'observable_support.json'
-                support = json.loads(support_file.read_text()) if support_file.exists() else {}
-                training_indices = (support.get('training_observation_indices')
-                                    if support.get('target') == target else None)
             entry = {'target': target, 'version': version,
                 'model': str(directory / saved['model']), 'source_model': model,
                 'training_observation_indices': deepcopy(training_indices)}
-            _update_support(entry, result, indices)
+            _update_support(entry, result, indices, mse_threshold=agent.config.confirmation_mse_threshold)
             agent.observable_models[target] = entry
             (agent.workspace / directory / 'observable_support.json').write_text(json.dumps(entry))
         elif not comparable:

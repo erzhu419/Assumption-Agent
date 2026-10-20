@@ -33,6 +33,36 @@ def declaration(model, explicit):
     return {'model': model, 'lesson': 'Selected from paid evidence.'}
 
 
+@pytest.mark.parametrize('body,status,count', [
+    ("return {'stop': 'Computed, but no candidate was submitted.'}", 'method_stopped', 1),
+    ("raise ValueError('fixture calculation failed')", 'method_no_progress', 2),
+])
+def test_unsubmitted_practice_saves_its_final_state_without_new_evidence(
+        tmp_path, body, status, count):
+    source = f'''def select_actions(spec, records, memory):
+    total = sum(range(1000))
+    print('completed_work=' + str(total))
+    {body}
+'''
+    agent, lab = prepared(tmp_path, source)
+    agent._prepare_program_state()
+    assert json.loads((tmp_path / 'research_state.json').read_text())['method_results'] == []
+
+    result = agent.execute_method(lab, max_steps=3)
+    state = json.loads((tmp_path / 'research_state.json').read_text())
+
+    assert result['status'] == status
+    assert len(state['method_results']) == count
+    assert state['method_results'] == result['method_results']
+    assert state['costs'] == result['costs']
+    assert state['costs']['python_execution_seconds'] > 0
+    assert state['method_results'][-1]['feedback']['program_execution']['returncode'] == (
+        0 if status == 'method_stopped' else 1)
+    assert state['costs']['observation_cost'] == lab.paid == 0
+    assert result['fresh_confirmation'] is None and agent.confirmations == []
+    assert result['model'] is None
+
+
 def repair_program(explicit):
     return f'''import json
 def select_actions(spec, records, memory):

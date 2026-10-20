@@ -1,5 +1,7 @@
 # Hegel Machine review materials
 
+The 18 October 2026 working PDF adds Section 5.7, Table 10 and Appendix I.7: the frozen 14/14-practice procedure retains all 26 earlier targets and passes eight fresh window tasks across four parameter groups, versus 0/8 for the preceding 13/13 method. The earlier method stops normally without submitting a predictor. Complete paired costs, increased observation use on eight old composition tasks, and the separate learning ledger are included. Earlier boundary results and the packaged release remain unchanged.
+
 Local release: **paper-2026-10-12-v3** (12 October 2026).
 This revision adds the completed recurrent representation, method-transfer and
 live-continuation studies; the earlier v2 archive remains unchanged.
@@ -28,7 +30,7 @@ links point to an internal index of readable paths in this extracted bundle.
 
 Reading saved results, numerical replay and new language-model authorship
 are separate operations; consult `paper/ARTIFACT_INDEX.md` before replay.
-Use Python 3.10 or later. Tables 4–8 can be regenerated from included results
+Use Python 3.10 or later. Tables 4–10 can be regenerated from included results
 without model calls or third-party Python dependencies:
 
 ```bash

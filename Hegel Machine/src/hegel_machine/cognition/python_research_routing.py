@@ -220,7 +220,7 @@ def instrument_action(agent, spec, diagnosis="instrument_research"):
 def evaluate_action(agent, model, diagnosis, *, validated=False):
     """Use the last live call for scoring plus fresh confirmation when validated."""
     retained = agent._evaluated_summary()
-    comparison = len(agent.rows) if retained and retained["support"] != "paid_fit" else 0
+    comparison = len(agent.rows) if retained and retained["support"] == "new_paid_rows_unscored" else 0
     if validated and agent.config.max_model_calls - agent.costs["model_calls"] == 1:
         # finish already scores the candidate before buying fresh confirmation.
         # A separate evaluate would consume the only remaining live decision.

@@ -194,7 +194,7 @@ def _search(spec, rows, budget, *, basis, gates, support, max_candidates, eviden
     for width in widths[:3]:
         for logic in logics:
             for placement in placements:
-                if budget.remaining < price + reserve:
+                if not budget.can_spend(price + reserve):
                     break
                 evaluate(middle, width, logic, placement)
             if tested and min(fit["loss"] for fit, _ in tested.values()) <= 1e-12:

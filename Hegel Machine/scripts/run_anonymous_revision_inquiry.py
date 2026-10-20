@@ -22,6 +22,7 @@ from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
 from hegel_machine.cognition.code_agent import CodexCodeProvider, evaluate_python_model
 from hegel_machine.cognition.common_archive_inquiry import CommonArchiveInquiryAgent
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+from hegel_machine.cognition.proposers import _events
 from scripts.run_online_inquiry_llm import verify_codex_subscription, write_json
 
 
@@ -56,12 +57,68 @@ def protocol(*, kinds=("memoryless", "delay", "hysteresis"), cases=1,
     }
 
 
+def restore_pending_question_error(agent, laboratory, previous, workspace, *, model):
+    """Return the saved, paid declaration error without rerunning scientific work."""
+    workspace = Path(workspace)
+    call = previous['costs']['model_calls'] + 1
+    reply = workspace / f'code_action_{call:03d}.json'
+    trace = workspace / f'code_call_{call:03d}.jsonl'
+    payload = json.loads(reply.read_text())
+    arguments = json.loads(payload['arguments_json'], strict=False)
+    if payload.get('source_code') is not None:
+        arguments['code'] = payload['source_code']
+    if payload.get('research_question') is not None:
+        arguments['research_question'] = payload['research_question']
+    if 'research_notes' in payload:
+        arguments['notes'] = payload['research_notes']
+    declaration = arguments.get('research_question') or arguments.get('question')
+    if (payload['action'] != 'evaluate' or arguments.get('operator') is not None
+            or 'component' in arguments or arguments.get('target', 'response') != 'response'
+            or not isinstance(declaration, str) or not declaration
+            or previous.get('online_questions') or previous.get('model') is not None):
+        raise ValueError('recover only the saved pre-execution question-declaration failure')
+    events, _ = _events(trace.read_text())
+    completion = next((event for event in reversed(events)
+                       if event.get('type') == 'turn.completed'), None)
+    if completion is None:
+        raise ValueError('the pending paid reply has no completed usage record')
+    usage = {'backend': 'codex_cli', 'model': model, 'calls': 1,
+             **{name: completion['usage'].get(name)
+                for name in ('input_tokens', 'output_tokens', 'cached_input_tokens')}}
+    if not all(isinstance(usage[key], int) for key in ('input_tokens', 'output_tokens')):
+        raise ValueError('the pending paid reply has no reported token usage')
+    usage['total_tokens'] = usage['input_tokens'] + usage['output_tokens']
+    agent.costs['model_calls'] = call
+    agent.costs['reported_tokens'] += usage['total_tokens']
+    try:
+        agent._execute(payload['action'], arguments, laboratory)
+    except (ValueError, TypeError) as error:
+        feedback = {'error': f'{type(error).__name__}: {error}'}
+    else:
+        raise RuntimeError('malformed question must return before scientific execution')
+    agent.events.append({'step': call - 1, 'action': payload['action'],
+                         'arguments': arguments, 'feedback': feedback, 'usage': usage})
+    agent._after_model_turn(laboratory)
+    agent.provider.calls = call
+    return {'saved_reply': str(reply), 'saved_usage': str(trace), 'model_call': call,
+            'reported_tokens': usage['total_tokens'],
+            'scope': 'Saved paid reply charged once and returned as ordinary input feedback. '
+                'No predictor write, evaluation, acquisition or extra allowance.'}
+
+
 def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=None,
-              laboratory_factory=None, workers=1):
+              laboratory_factory=None, workers=1, agent_factory=CommonArchiveInquiryAgent,
+              previous_study=None, resume_task=''):
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     if (output / "protocol.json").exists():
         raise ValueError("use a fresh output directory to retain earlier developmental failures")
+    previous_study = Path(previous_study).resolve() if previous_study else None
+    if previous_study:
+        previous_plan = json.loads((previous_study / 'protocol.json').read_text())
+        for field in ('cases', 'arms', 'model', 'provider', 'limits', 'prefix_rows', 'evaluation'):
+            if plan[field] != previous_plan[field]:
+                raise ValueError(f'cohort recovery must preserve registered {field}')
     write_json(output / "protocol.json", plan)
     # Literal common input is saved once; no arm learns the other's live results.
     write_json(output / "initial_archive.json", knowledge or {})
@@ -77,12 +134,27 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
     def train(job):
         case, arm = job
         workspace = output / case["id"] / arm
-        agent = CommonArchiveInquiryAgent(provider_factory(workspace), workspace,
+        old_workspace = previous_study / case['id'] / arm if previous_study else None
+        if old_workspace and (old_workspace / 'training.json').is_file():
+            result = json.loads((old_workspace / 'training.json').read_text())
+            return {'case': case, 'arm': arm, 'result': result, 'initial_event_count': 0}
+        agent = agent_factory(provider_factory(workspace), workspace,
             arm=arm, knowledge=deepcopy(knowledge or {}), config=limits,
             confirmation_seed=case["confirmation_seed"], source_task=not bool(knowledge))
         laboratory = laboratory_factory(case)
         prefix_account = {}
-        if prepare_prefix is None:
+        if old_workspace and old_workspace.is_dir():
+            previous = json.loads((old_workspace / 'active.json').read_text())
+            agent.restore_research(previous, old_workspace, laboratory,
+                                   confirmation_seed=case['confirmation_seed'])
+            agent.common_interface += resume_task
+            recovery = restore_pending_question_error(agent, laboratory, previous,
+                old_workspace, model=plan['model'])
+            prefix_account = {'prior_research_cost': deepcopy(agent.costs),
+                              'resume_origin': str(old_workspace / 'active.json'),
+                              'recovered_paid_reply': recovery}
+            write_json(workspace / 'active.json', agent.result('researching'))
+        elif prepare_prefix is None:
             prefix = laboratory.confirmation_actions(plan["prefix_rows"], Random(case["prefix_seed"]))
             feedback = agent._execute("query", {"actions": prefix}, laboratory)
             if feedback.get("error"):
@@ -132,7 +204,9 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
             evaluation.pop("predictions", None)
         evaluation["passed"] = (evaluation.get("returncode") == 0 and
             evaluation.get("mse", float("inf")) <= plan["evaluation"]["mse_threshold"])
-        write_json(Path(result["workspace"]) / "evaluation.json", evaluation)
+        host_workspace = output / case['id'] / trial['arm']
+        host_workspace.mkdir(parents=True, exist_ok=True)
+        write_json(host_workspace / "evaluation.json", evaluation)
         usage = [event.get("usage", {}) for event in result["events"]
                  if event.get("usage", {}).get("backend") == "codex_cli"]
         records.append({"case": case["id"], "kind": case["kind"], "arm": trial["arm"],
@@ -144,7 +218,8 @@ def run_study(plan, output, *, provider_factory, knowledge=None, prepare_prefix=
             "calls_with_cache_hits": sum(bool(item.get("cached_input_tokens")) for item in usage),
             "archive": str(Path(result["workspace"]) / "archive.json")})
         for field in ("historical_prefix_cost", "additional_cost", "prefix_origin",
-                      "prior_research_cost", "continuation_cost", "resume_origin"):
+                      "prior_research_cost", "continuation_cost", "resume_origin",
+                      "recovered_paid_reply"):
             if field in result:
                 records[-1][field] = deepcopy(result[field])
     live_events = [event for trial in trials

@@ -70,7 +70,7 @@ class _Fitter:
         if terms in self.fits:
             return self.fits[terms]
         missing = sum(term not in self.columns for term in terms)
-        if (missing + 2) * self.count > self.budget.remaining:
+        if not self.budget.can_spend((missing + 2) * self.count):
             return None
         columns = [self.column(term) for term in terms]
         if any(column is None for column in columns):
@@ -87,6 +87,7 @@ class _Fitter:
         program = _sum_terms(terms, coefficients[1:], coefficients[0])
         self.budget.spend(self.count)
         measured = loss(program, self.rows, self.fallback, self.quantile)
+        self.budget.completed_fits += 1
         used = tuple(term for term, coefficient in zip(terms, coefficients[1:])
                      if abs(coefficient) >= 1e-8)
         result = {"terms": used, "program": program, "loss": measured,

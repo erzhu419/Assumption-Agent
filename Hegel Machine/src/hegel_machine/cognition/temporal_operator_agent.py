@@ -6,12 +6,11 @@ Both paths use the current paid observations and the same resource account.
 
 import json
 from copy import deepcopy
-from dataclasses import asdict
 from math import nextafter
 from pathlib import Path
 from time import monotonic
 
-from .code_agent import _copy_model_context, evaluate_python_model, python_model_context
+from .code_agent import _bound_model_contexts, _copy_model_context, evaluate_python_model, python_model_context
 from .history_revision import revise_history
 from .knowledge_evolution import bind_answers
 from .language import Program
@@ -59,7 +58,8 @@ an executable predictor and evaluate it before abandoning a promising numerical 
 The returned next_action is advice; you still decide whether to execute finish.
 run {operator:'refit',model:'archived/model.py',path:'shared/refitted'} keeps the
 same Python source and dependencies, and calls its existing fit(observations)
-on training trajectories from current paid evidence. Optional records:[3,4,5]
+or explicit-representation fit_features(features,targets) on training trajectories
+from current paid evidence. Optional records:[3,4,5]
 restricts both validation and the exported fitting view to those complete paid
 laboratory records. Omit records to use all paid records. It scores separate complete
 validation trajectories before making the refitted candidate available. Optional
@@ -68,6 +68,9 @@ a new directory; the returned predictor path includes its isolated fitting conte
 The original predictor is unchanged. Both usual observation files contain only
 training rows during validation. Afterwards the candidate's fitting view contains
 all selected paid rows for a later evaluate or finish that you choose explicitly.
+Measured local relations bound into fitting must not disclose those validation
+labels. If they do, choose training-only relation checks or different validation
+trajectories; ordinary all-paid evaluation and fresh confirmation remain available.
 No callable fit means refit_unavailable, not a rejected model family. A failed
 validation tests this fitting procedure on these trajectories; it does not prove
 that every parameter setting or every model in its family is inadequate. Use
@@ -124,7 +127,9 @@ among the longest paid trajectories are validation; the others are training.
 When selecting both longest records would leave only shorter training records,
 one long record stays in training and a shorter one takes its validation place.
 Records are never split across training and validation. Results identify both
-sets. These are paid-data comparisons, not fresh confirmation.
+sets. Identical paid reset records stay in one split, with their acquisition costs
+preserved. Validation status uses the task's confirmation MSE tolerance. These are
+paid-data comparisons, not fresh confirmation.
 instrument and response also accept records:[2,3,4] to restrict fitting to those
 complete paid laboratory records, retaining the rest of the observation history.
 For response, training, validation, the final refit and paid_meter_consistency all
@@ -291,12 +296,14 @@ def predict(row):
 '''
 
 
-def export_temporal_program(program):
+def export_temporal_program(program, *, feature_names=("u",)):
     """Export the learned control-history program without repository imports.
 
     Definition calls are expanded before export. Only the scalar and temporal
     operators used by the instrument/readout repertoire are implemented here.
     The exported predictor has no fitting hook and never reads response labels.
+    Callers adapting the same language to another control schema can explicitly
+    supply its feature names; the original interface remains restricted to u.
     """
     supported = {"const", "feature", "lag", "available", "if", "object_sum",
                  "accumulate", "event_delta", "window_sum", "abs", "not",
@@ -305,8 +312,9 @@ def export_temporal_program(program):
     def encode(node):
         if node.op not in supported:
             raise ValueError(f"unsupported temporal export operator: {node.op}")
-        if node.op in {"feature", "lag"} and node.name != "u":
-            raise ValueError("temporal predictors can read only control u")
+        if node.op in {"feature", "lag"} and node.name not in feature_names:
+            raise ValueError("temporal predictors can read only control "
+                             + ", ".join(feature_names))
         return (node.op, node.value, node.name, node.lag,
                 tuple(encode(child) for child in node.children))
 
@@ -338,11 +346,9 @@ class TemporalOperatorAgent(InquiryLLMAgent):
     def _state_research_advice(self):
         return self._current_research_advice
 
-    def _prepare_program_state(self):
-        state = {"operator_results": self.operator_results, "limits": asdict(self.config),
-                 "costs": self.costs, "exported_candidate_paths": self.candidate_paths,
-                 "evaluated_model": self._evaluated_summary(),
-                 "questions": self.questions, "revisions": self.revisions}
+    def _program_state(self):
+        state = super()._program_state()
+        state.update(operator_results=self.operator_results, exported_candidate_paths=self.candidate_paths)
         advice = self._state_research_advice()
         if advice is not None:
             state["research_advice"] = advice
@@ -353,7 +359,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 "tasks": [{"task_position": row["task_position"],
                            "status": row["research"]["status"]} for row in native["results"]],
                 "pending_revisits": [row["task_position"] for row in native["pending_revisits"]]}
-        (self.workspace / "research_state.json").write_text(json.dumps(state), encoding="utf-8")
+        return state
 
     def _allows_analysis_only_query(self, continuation):
         return bool(self.observations) and isinstance(continuation, list) and bool(continuation)
@@ -443,6 +449,20 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         indices = list(range(len(records))) if indices is None else indices
         if not indices:
             raise ValueError("buy complete trajectories before fitting a response")
+        # Repeated reset inputs stay together even when observed labels differ;
+        # target values must not decide whether an input leaks across a split.
+        groups = []
+        inputs = {index: [{"features": row["features"], "history": row.get("history", [])}
+                          for row in records[index]["rows"]] for index in indices}
+        for index in indices:
+            record = records[index]
+            group = next((group for group in groups
+                          if records[group[0]].get("action") == record.get("action")
+                          and inputs[group[0]] == inputs[index]), None)
+            if group is None:
+                groups.append([index])
+            else:
+                group.append(index)
         if "validation_records" in arguments:
             validation = self._record_indices(arguments["validation_records"])
             if not set(validation).issubset(indices):
@@ -450,20 +470,27 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             if not validation and len(indices) > 1:
                 raise ValueError("choose at least one whole validation trajectory")
         else:
-            count = min(2, len(indices) - 1)
-            longest = sorted(indices, key=lambda index: (len(records[index]["rows"]), index))
+            count = min(2, len(groups) - 1)
+            longest = sorted((group[-1] for group in groups),
+                             key=lambda index: (len(records[index]["rows"]), index))
             validation = sorted(longest[-count:]) if count else []
             if count == 2:
                 train_long, held_short = longest[-3], longest[-2]
                 if len(records[held_short]["rows"]) > len(records[train_long]["rows"]):
                     validation = sorted((set(validation) - {held_short}) | {train_long})
+        selected_validation = list(validation)
+        validation = sorted({index for group in groups if set(group).intersection(validation)
+                             for index in group})
         training = [index for index in indices if index not in validation]
         if not training:
-            raise ValueError("keep at least one whole trajectory for training")
+            raise ValueError("keep at least one distinct whole trajectory for training; "
+                             "identical reset records cannot cross the validation split")
         train_rows = [row for index in training for row in records[index]["rows"]]
         held_rows = [row for index in validation for row in records[index]["rows"]]
         return train_rows, held_rows, {"records": indices,
                                       "training_records": training, "validation_records": validation,
+                                      "requested_validation_records": selected_validation,
+                                      "duplicate_groups": [group for group in groups if len(group) > 1],
                                       "train_rows": len(train_rows), "holdout_rows": len(held_rows)}
 
     def _history(self, arguments):
@@ -494,7 +521,31 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         if not validation_rows:
             raise ValueError("refit comparison needs separate paid validation trajectories")
         model = arguments["model"]
-        source, _ = python_model_context(self.workspace, model)
+        source, source_model = python_model_context(self.workspace, model)
+        held = {row_id: row for index in split['validation_records']
+                for row_id, row in zip(self.observations[index]['row_indices'],
+                                       self.observations[index]['rows'])}
+        # Reuse actual bound dependencies; unrelated archive entries are not inputs.
+        for directory, inner in [(source, source_model), *_bound_model_contexts(source, source_model)]:
+            bindings_file = directory / 'model_research_inputs.json'
+            inputs = json.loads(bindings_file.read_text()).get(inner, {}) if bindings_file.exists() else {}
+            for slot, bound in inputs.items():
+                if bound.get('kind') != 'local_relations':
+                    continue
+                overlap = set()
+                for check in bound['checks']:
+                    for witness in check['witnesses']:
+                        row = held.get(witness['row'])
+                        # Row numbers alone belong to different tasks' archives.
+                        if (row is not None and witness['features'] == row['features']
+                                and list(witness.get('history', [])) == list(row.get('history', []))
+                                and witness['target'] == row['target']):
+                            overlap.add(witness['row'])
+                if overlap:
+                    raise ValueError(f'refit validation labels are already bound into fitting: '
+                        f'{inner}:{slot}, response rows {sorted(overlap)}. Select training-only '
+                        'relation checks or different validation_records; use all-paid evaluate '
+                        'or fresh confirmation for the corresponding evidence scope.')
         directory = Path(arguments.get("path", f"refits/candidate_{len(self.operator_results):04d}"))
         context = (self.workspace / directory / "_evaluated_model").resolve()
         if context.exists() or (source != self.workspace and context.is_relative_to(source)):
@@ -521,6 +572,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             validation = evaluate_python_model(context, inner_model, validation_rows,
                 timeout_seconds=max(.001, self.config.execution_seconds
                     - self.costs["python_execution_seconds"]), require_fit=True)
+            self.costs['compute_cost'] += validation.get('research_prediction_count', 0)
         finally:
             fitting_view([row for index in indices for row in self.observations[index]["rows"]], indices)
         candidate_path = str(context.relative_to(self.workspace) / inner_model)
@@ -530,7 +582,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             status = "refit_unavailable"
         elif not valid:
             status = "refit_execution_failed"
-        elif validation["mse"] <= 1e-10:
+        elif validation["mse"] <= self.config.confirmation_mse_threshold:
             status = "refit_supported_on_validation"
         else:
             status = "refit_inadequate_on_validation"
@@ -543,6 +595,8 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         return {"status": status, "path": candidate_path if available and valid else None,
                 "tested_model": candidate_path,
                 "source_model": model, "split": split, "validation": validation,
+                "validation_loss_kind": "mse",
+                "validation_mse_threshold": self.config.confirmation_mse_threshold,
                 "final_fitting_rows": len(train_rows) + len(validation_rows),
                 "paid_rows_at_refit": len(self.rows), "paid_records_at_refit": len(self.observations),
                 "evidence_scope": "Same-source fitting procedure assessed on separate paid trajectories; "
@@ -688,11 +742,12 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         refit = matching_refit(self, retained["model"]) if retained else None
         failed_validation = bool(refit and refit["status"] == "refit_inadequate_on_validation"
                                  and uses_refitted_training_view(self, retained["model"], refit))
-        supported = bool(retained and retained["support"] == "paid_fit"
+        scored = bool(retained and retained["support"] in {'paid_fit', 'paid_prediction', 'paid_evaluation'})
+        supported = bool(scored
                          and retained["mse"] is not None and retained["mse"] <= 1e-10
                          and not failed_validation)
         diagnosis = ("retained_response_fits_paid_evidence" if supported else
-                     "response_counterexample" if retained and retained["support"] == "paid_fit"
+                     "response_counterexample" if scored
                      else "no_current_evaluated_response")
         knowledge = self.workspace / "shared/legacy_knowledge.json"
         experience = json.loads(knowledge.read_text()).get("action_experience", {}) if knowledge.exists() else {}

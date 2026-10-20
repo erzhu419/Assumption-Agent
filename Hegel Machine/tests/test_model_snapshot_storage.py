@@ -132,11 +132,13 @@ def test_known_context_history_is_omitted_without_discarding_same_named_user_dat
     source = tmp_path / 'source'
     nested = 'archive/source_000/_evaluated_model'
     for directory in ('', nested):
-        for name in ('research_state.json', 'research_context.json', 'method_decision.json'):
+        for name in ('research_state.json', 'research_context.json', 'method_decision.json',
+                     'interrupted_training_0877.json'):
             write(source / directory, name, '{"host_history": true}')
         # Inside an ordinary data folder these names are model inputs, not
         # host records, even when the folder sits below an archived context.
-        for name in ('result.json', 'research_state.json', 'method_decision.json'):
+        for name in ('result.json', 'research_state.json', 'method_decision.json',
+                     'interrupted_training_0877.json'):
             write(source / directory, f'data/{name}', '3')
     write(source, 'archive/source_000/paid_trace.json', '{"events": ["actual old evidence"]}')
     write(source, f'{nested}/child.py', 'def predict(row): return 2.\n')
@@ -149,15 +151,182 @@ def predict(row):
     destination = tmp_path / 'candidate/_evaluated_model'
     retained = retain_evaluated_python_model(source, 'model.py', [], 0., destination=destination)
     for directory in ('', nested):
-        for name in ('research_state.json', 'research_context.json', 'method_decision.json'):
+        for name in ('research_state.json', 'research_context.json', 'method_decision.json',
+                     'interrupted_training_0877.json'):
             assert not (destination / directory / name).exists()
             assert (source / directory / name).read_text() == '{"host_history": true}'
-        for name in ('result.json', 'research_state.json', 'method_decision.json'):
+        for name in ('result.json', 'research_state.json', 'method_decision.json',
+                     'interrupted_training_0877.json'):
             assert (destination / directory / 'data' / name).read_text() == '3'
     assert (destination / 'archive/source_000/paid_trace.json').read_text() == (
         source / 'archive/source_000/paid_trace.json').read_text()
     assert evaluate_python_model(destination, retained['model'], [Observation({'u': 0.}, 6.)])['mse'] == 0
     assert python_model_context_matches(tmp_path / 'candidate', '_evaluated_model/model.py', source, 'model.py')
+
+
+@pytest.mark.parametrize('frozen_source', [False, True])
+@pytest.mark.parametrize('refit_directory', ['shared/generalization', 'shared/heldout', 'refits'])
+def test_successive_refits_do_not_copy_other_execution_contexts(
+        tmp_path, monkeypatch, frozen_source, refit_directory):
+    from test_temporal_python_refit import LawLab, make_agent, write_family
+
+    lab = LawLab()
+    agent = make_agent(tmp_path / 'source', lab)
+    write_family(agent)
+    archived_data = 'archive/source_000/_evaluated_model/data/result.json'
+    write(agent.workspace, archived_data, '7')
+    source = agent.workspace
+    model = 'model.py'
+    if frozen_source:
+        saved = retain_evaluated_python_model(source, model, [], 0.,
+            destination='_submitted_models/confirmation_0013/_evaluated_model')
+        source = Path(saved['workspace'])
+        model = str(source.relative_to(agent.workspace) / saved['model'])
+    prior = source / refit_directory / 'prior' / '_evaluated_model'
+    write(prior, 'shared/generalization/older/_evaluated_model/model.py',
+          'def predict(row): return -1.\n')
+    # The paid source and failed history stay available; only new snapshots prune them.
+    original = (prior / 'shared/generalization/older/_evaluated_model/model.py').read_text()
+    blocked = {prior}
+    original_scandir = os.scandir
+
+    def scandir(path):
+        if not isinstance(path, int):
+            assert Path(path) not in blocked, 'refit traversed a previous execution context'
+        return original_scandir(path)
+
+    monkeypatch.setattr(os, 'scandir', scandir)
+    if hasattr(Path, '_accessor'):
+        monkeypatch.setattr(Path._accessor, 'scandir', scandir)
+    before = agent.costs['observation_cost']
+    for index in range(3):
+        result = agent._execute('run', {'operator': 'refit', 'model': model,
+            'path': f'{refit_directory}/trial_{index}', 'validation_records': [2]}, lab)
+        assert result['status'] == 'refit_supported_on_validation', result
+        assert result['validation']['mse'] < 1e-20
+        candidate = agent.workspace / Path(result['path']).parent
+        assert (candidate / archived_data).read_text() == '7'
+        for directory in ('shared/generalization', 'shared/heldout', 'refits'):
+            assert not list((candidate / directory).rglob('_evaluated_model'))
+        blocked.add(candidate)
+    assert (prior / 'shared/generalization/older/_evaluated_model/model.py').read_text() == original
+    assert agent.costs['observation_cost'] == before
+    assert agent.model is None and not agent.confirmations
+
+
+def test_selected_refit_bindings_and_nested_dependencies_survive_snapshot_pruning(
+        tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    child = 'shared/generalization/selected/_evaluated_model'
+    grandchild = 'shared/heldout/nested/_evaluated_model'
+    write(source, 'parent.py', '''import json
+def bind_models(models):
+    global child
+    child = models['child']
+def predict(row):
+    return child(row) + json.load(open('archive/source_000/_evaluated_model/data/result.json'))
+''')
+    write(source, 'model_bindings.json', json.dumps({'parent.py': {'child': f'{child}/child.py'}}))
+    write(source, 'archive/source_000/_evaluated_model/data/result.json', '3')
+    write(source / child, 'child.py', '''def bind_models(models):
+    global nested
+    nested = models['nested']
+def predict(row): return nested(row) + 1.
+''')
+    write(source / child, 'model_bindings.json', json.dumps({'child.py': {'nested': f'{grandchild}/grand.py'}}))
+    write(source / child / grandchild, 'grand.py',
+          "import json\ndef predict(row): return json.load(open('parameter.json'))\n")
+    write(source / child / grandchild, 'parameter.json', '4')
+    unused = source / 'shared/generalization/unused/_evaluated_model'
+    nested_unused = source / child / 'shared/generalization/unused/_evaluated_model'
+    for directory in (unused, nested_unused):
+        write(directory, 'unused.bin', 'unrelated fitting history')
+    original_scandir = os.scandir
+
+    def scandir(path):
+        if not isinstance(path, int):
+            assert Path(path) not in {unused, nested_unused}, 'snapshot traversed an unrelated refit'
+        return original_scandir(path)
+
+    monkeypatch.setattr(os, 'scandir', scandir)
+    if hasattr(Path, '_accessor'):
+        monkeypatch.setattr(Path._accessor, 'scandir', scandir)
+    destination = tmp_path / 'candidate/_evaluated_model'
+    retained = retain_evaluated_python_model(source, 'parent.py', [], 0., destination=destination)
+    assert not (destination / unused.relative_to(source)).exists()
+    assert not (destination / nested_unused.relative_to(source)).exists()
+    assert (destination / child / grandchild / 'parameter.json').read_text() == '4'
+    assert python_model_context_matches(source, 'parent.py', destination, retained['model'])
+    write(unused, 'unused.bin', 'a different unrelated result')
+    assert python_model_context_matches(source, 'parent.py', destination, retained['model'])
+    scored = evaluate_python_model(destination, retained['model'], [Observation({'u': 0.}, 8.)])
+    assert scored['returncode'] == 0 and scored['mse'] == 0, scored
+    write(source / child / grandchild, 'parameter.json', '9')
+    assert not python_model_context_matches(source, 'parent.py', destination, retained['model'])
+
+
+def test_snapshot_pruning_does_not_change_research_restoration_filter(tmp_path):
+    model = tmp_path / 'shared/generalization/prior/_evaluated_model/model.py'
+    write(tmp_path, str(model.relative_to(tmp_path)), 'def predict(row): return 1.\n')
+    assert not code_agent._model_context_ignored(model, tmp_path)
+    assert code_agent._model_snapshot_ignored(model, tmp_path)
+
+
+def test_same_context_child_and_descendant_first_bindings_keep_their_models(tmp_path):
+    source = tmp_path / 'source'
+    ancestor = 'shared/generalization/ancestor/_evaluated_model'
+    descendant = f'{ancestor}/shared/heldout/grand/_evaluated_model'
+    write(source, 'parent.py', '''def bind_models(models):
+    global children
+    children = models
+def predict(row): return sum(child(row) for child in children.values())
+''')
+    write(source, 'child.py', '''def bind_models(models):
+    global grandchild
+    grandchild = models['grandchild']
+def predict(row): return grandchild(row)
+''')
+    write(source, 'model_bindings.json', json.dumps({
+        'parent.py': {'grandchild': f'{descendant}/grand.py', 'local': 'child.py',
+                      'ancestor': f'{ancestor}/ancestor.py'},
+        'child.py': {'grandchild': f'{descendant}/grand.py'}}))
+    write(source / ancestor, 'ancestor.py', 'def predict(row): return 2.\n')
+    write(source / descendant, 'grand.py',
+          "import json\ndef predict(row): return json.load(open('parameter.json'))\n")
+    write(source / descendant, 'parameter.json', '4')
+    destination = tmp_path / 'candidate/_evaluated_model'
+    saved = retain_evaluated_python_model(source, 'parent.py', [], 0., destination=destination)
+    assert (destination / ancestor / 'ancestor.py').is_file()
+    assert (destination / descendant / 'grand.py').is_file()
+    assert python_model_context_matches(source, 'parent.py', destination, saved['model'])
+    result = evaluate_python_model(destination, saved['model'], [Observation({'u': 0.}, 10.)])
+    assert result['returncode'] == 0 and result['mse'] == 0, result
+    write(source / descendant, 'parameter.json', '5')
+    assert not python_model_context_matches(source, 'parent.py', destination, saved['model'])
+
+
+def test_aggregate_copy_failure_keeps_count_and_first_actual_failure(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    write(source, 'model.py', 'def predict(row): return 1.\n')
+    write(source, 'shared/input.json', '3')
+    failures = []
+
+    def copytree(directory, destination, **kwargs):
+        failures.extend((str(directory / f'input_{index}.json'),
+                         str(destination / f'input_{index}.json'),
+                         '[Errno 28] No space left on device') for index in range(3))
+        raise code_agent.shutil.Error(failures)
+
+    monkeypatch.setattr(code_agent.shutil, 'copytree', copytree)
+    with pytest.raises(OSError) as caught:
+        retain_evaluated_python_model(source, 'model.py', [], 0.,
+                                     destination=tmp_path / 'candidate/_evaluated_model')
+    message = str(caught.value)
+    assert '3 paths' in message
+    assert all(value in message for value in failures[0])
+    assert failures[1][0] not in message and failures[2][0] not in message
+    assert len(message) < 1000
+    assert (source / 'model.py').read_text() == 'def predict(row): return 1.\n'
 
 
 @pytest.mark.parametrize('unsupported_errno', [errno.EOPNOTSUPP, errno.ENOTTY, errno.EXDEV])

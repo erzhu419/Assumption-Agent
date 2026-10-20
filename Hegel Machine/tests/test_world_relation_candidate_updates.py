@@ -210,6 +210,73 @@ def test_basis_expansion_keeps_incremental_supported_program_without_resubmissio
     assert expanded["basis"] == binding["basis"]
 
 
+@pytest.mark.parametrize("power", [2, 3])
+def test_refuted_bank_trials_expanded_basis_once_and_retains_old_failures(power):
+    binding = {"rows": [{"features": {"x": float(x)}, "target": float(x ** power),
+                         "evidence": [x]} for x in range(4)],
+               "basis": [X.to_dict()]}
+    first = research_relation(binding, public(4))
+    assert first["status"] == "refuted"
+    old = first["candidates"][0]
+    assert old["status"] == "refuted" and old["fit_mse"] > 1e-6
+
+    # Same paid rows, as in the author's lag-term revision: only the basis grows.
+    binding["basis"].append(SQUARE.to_dict())
+    expanded = research_relation(binding, public(4), first)
+    assert len(expanded["candidates"]) == 2
+    assert expanded["candidates"][0] == old
+    new = expanded["candidates"][1]
+    assert new["program"] != old["program"]
+    assert new["fit_evidence"] == new["proposed_after"] == list(range(4))
+    assert new["fit_rows"] == binding["rows"]
+    assert new["validation_mse"] is None
+    assert expanded["compute_cost"] == 8  # one fit and one score, four rows each
+    if power == 2:
+        assert new["fit_mse"] < 1e-12 and new["status"] == "plausible"
+        assert expanded["status"] == "inconclusive"
+        assert expanded["confirmation_evidence"] == []
+    else:
+        assert new["fit_mse"] > 1e-6 and new["status"] == "refuted"
+        assert expanded["status"] == "refuted"
+
+    repeated = research_relation(binding, public(4), expanded)
+    assert repeated["compute_cost"] == 0
+    assert len(repeated["candidates"]) == 2
+    assert repeated["candidates"][0] == old
+    assert repeated["candidates"][1]["program"] == new["program"]
+    assert repeated["candidates"][1]["fit_mse"] == new["fit_mse"]
+    assert repeated["basis"] == binding["basis"]
+
+
+def test_candidate_fit_residuals_reuse_scored_predictions_and_paid_citations(monkeypatch):
+    from hegel_machine.cognition import world_relation_research
+
+    binding = {"rows": [row(0., 0., 1), row(1., 3., 2), row(2., 7., 3)],
+               "hypotheses": [X.to_dict()]}
+    calls = []
+    original = world_relation_research.predict
+
+    def counted(program, observation, fallback):
+        calls.append(observation)
+        return original(program, observation, fallback)
+
+    monkeypatch.setattr(world_relation_research, "predict", counted)
+    result = research_relation(binding, public(4))
+    candidate = result["candidates"][0]
+    residuals = candidate["paid_fit_residuals"]
+    assert len(calls) == result["compute_cost"] == 3
+    assert residuals["evaluation_scope"] == "paid_relation_fit"
+    assert residuals["evaluated_rows"] == 3
+    assert [(example["evidence"], example["prediction"], example["target"],
+             example["residual"], example["squared_error"])
+            for example in residuals["examples"]] == [
+                ([0, 3], 2., 7., -5., 25.), ([0, 2], 1., 3., -2., 4.),
+                ([0, 1], 0., 0., 0., 0.)]
+    assert residuals["examples"][0]["conditioning_refs"] == [0]
+    assert residuals["examples"][0]["outcome_refs"] == [3]
+    assert candidate["fit_mse"] == pytest.approx(29 / 3)
+
+
 def test_rebinding_confirming_row_preserves_program_history_without_old_support():
     binding, confirmed = supported_incremental_square()
     # Correct the extraction of a previous confirmation, not a fitting row.

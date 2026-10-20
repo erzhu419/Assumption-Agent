@@ -1,3 +1,11 @@
+# Working manuscript update: 18 October 2026
+
+Section 5.7, Table 10 and Appendix I.7 add the completed 14/14 method's frozen 26/26 retention and new-window 8/8 result versus 0/8 for the preceding 13/13 method. Both arms share target definitions, initial evidence and ceilings; the baseline stops normally without a submitted model. The four apparatus groups have two dependent conditions each. Complete target costs, additional observation use on the old composition cohort, and separate source/author costs remain explicit. Compact saved artifacts total less than 1 MB; the author history is not duplicated. The single PDF includes the full appendix. The earlier packaged release remains unchanged.
+
+# Working manuscript update: 17 October 2026
+
+Section 5.6, Table 9 and Appendices I.5–I.6 include the published 12/12 boundary method's ten-task regression and fresh four-group paired transfer. The new procedure passes confirmation and terminal evaluation on 10/10 old tasks and 8/8 new tasks; the unchanged 11/12 draft confirms 4/8 of the same new tasks and passes 0/8 terminal evaluations. Old-task terminal errors, observations and charged computation are unchanged. New-task accuracy costs 7.26% more observations and 2.52 times the charged computation, with no target-time model calls. The earlier 11/12 draft's different four-target cohort remains reported at 2/4 terminal successes. The current Markdown, generated TeX and single PDF include these results. The packaged 12 October release below remains the earlier snapshot; no new release ZIP is created by this update.
+
 # Manuscript release: paper-2026-10-12-v3
 
 The paper is a framework contribution with controlled evidence for finite research operations. This revision incorporates completed evidence through 12 October 2026. The main text presents mechanism-level results; Appendices A–I retain development failures, complete cohorts and detailed costs in the same manuscript and PDF.

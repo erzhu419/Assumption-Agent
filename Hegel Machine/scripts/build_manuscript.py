@@ -158,7 +158,8 @@ class Manuscript:
         result = [r"\begingroup\small\setlength{\tabcolsep}{4pt}" + "\n",
             r"\renewcommand{\arraystretch}{1.18}" + "\n"]
         compact_table = bool(caption and caption.startswith(
-            (r"\textbf{Table 6.", r"\textbf{Table 8.", r"\textbf{Table F1.", r"\textbf{Table B2.")))
+            (r"\textbf{Table 6.", r"\textbf{Table 8.", r"\textbf{Table 10.",
+             r"\textbf{Table F1.", r"\textbf{Table B2.")))
         if len(rows) <= 4 or compact_table:
             # Keep this manuscript's two/three-row comparisons and captions
             # together, including recall outcomes and the control/learning map.

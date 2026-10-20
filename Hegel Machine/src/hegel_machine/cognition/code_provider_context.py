@@ -4,6 +4,9 @@ from copy import deepcopy
 from collections import Counter
 import json
 from pathlib import Path
+import re
+
+from .executable_evidence import PAID_RELATION_FIELD_MEANINGS
 
 
 _PROVIDER_CONTEXT_CHARACTERS = 1_000_000
@@ -14,7 +17,8 @@ def _saved_context_reference(value, field_path, full_content_file="research_cont
     if isinstance(value, dict):
         for key in ("step", "action", "operator", "status", "error", "returncode", "timeout",
                     "case", "directory", "written", "costs", "model", "fresh_confirmation",
-                    "current_source_coverage", "experimental_design", "full_trace_file"):
+                    "current_source_coverage", "experimental_design", "full_trace_file",
+                    "research_decision", "remaining_boundary", "boundary_update", "completion_reserve"):
             if key in value:
                 item = value[key]
                 reference[key] = (item if len(json.dumps(item)) <= 12000 else
@@ -43,21 +47,26 @@ def _bound_provider_context(context):
     if len(json.dumps(context)) <= _PROVIDER_CONTEXT_CHARACTERS:
         return context
     events = context.get("events", [])
-    sections = [(event, "feedback", ["events", index, "feedback"], "research_context.json")
+    event_offset = context.get('event_history', {}).get('preview_start', 0)
+    sections = [(event, "feedback", ["events", event_offset + index, "feedback"], "research_context.json")
                 for index, event in enumerate(events[:-1]) if "feedback" in event]
     sections.extend((context["files"], name, ["files", name], "research_context.json")
                     for name in context.get("files", {}))
     sections.extend((context["session_knowledge"], name, ["session_knowledge", name],
                      "research_context.json") for name in context.get("session_knowledge", {}))
     if events and "feedback" in events[-1]:
-        sections.append((events[-1], "feedback", ["events", len(events) - 1, "feedback"],
+        sections.append((events[-1], "feedback", ["events", event_offset + len(events) - 1, "feedback"],
                          "research_context.json"))
     # Final whole-request accounting also covers cumulative notes and other
-    # supplied sections. Keep the task contract and current account inline.
+    # supplied sections. Keep callable method choices with the task contract:
+    # their cumulative executions have already been compacted separately.
     sections.extend((context, name, [] if name == "method_decision" else [name],
                      "method_decision.json" if name == "method_decision" else "research_context.json")
-                    for name in context if name not in {
-                        "task_interface", "capabilities", "limits", "costs", "evidence"})
+                    for name in sorted(context, key=lambda name: name in {
+                        'online_research', 'parent_research_focus', 'research_dependency_focus',
+                        'llm_inquiry', 'events'}) if name not in {
+                        "task_interface", "capabilities", "limits", "costs", "evidence",
+                        "evidence_notebook", "method_decision"})
     for parent, key, path, filename in sections:
         value = parent[key]
         if len(json.dumps(value)) <= 12000:
@@ -91,6 +100,150 @@ def _file_contents_preview(files, field_path):
         for name, source in files.items()}
 
 
+def _reference_repeated_stdout(context, request):
+    """Reference exact old output blocks without repeating them as new text."""
+    previous = []
+    repeated = {}
+    offset = context.get('event_history', {}).get('preview_start', 0)
+    shown = {offset + index: event for index, event in enumerate(context.get('events', []))}
+    facts = context.get('evidence_notebook', {}).get('facts', {})
+    for index, event in enumerate(request.get('events', [])):
+        feedback = event.get('feedback', {})
+        text = feedback.get('stdout')
+        if not isinstance(text, str) or len(text) <= 2000:
+            continue
+        parts = [text]
+        sources = []
+        for original, reference in previous:
+            replaced = []
+            for part in parts:
+                if not isinstance(part, str) or original not in part:
+                    replaced.append(part)
+                    continue
+                pieces = part.split(original)
+                for position, piece in enumerate(pieces):
+                    if position:
+                        replaced.append(deepcopy(reference))
+                    if piece:
+                        replaced.append(piece)
+                if reference not in sources:
+                    sources.append(reference)
+            parts = replaced
+        if sources:
+            repeated[index] = {'parts': parts,
+                'characters': feedback.get('stdout_characters', len(text)),
+                'repeated_output_sources': deepcopy(sources)}
+            if feedback.get('stdout_file'):
+                repeated[index]['full_content_file'] = feedback['stdout_file']
+            else:
+                repeated[index].update(full_content_file='research_context.json',
+                    json_path=['events', index, 'feedback', 'stdout'])
+            if index in shown and 'stdout' in shown[index].get('feedback', {}):
+                shown[index]['feedback']['stdout'] = repeated[index]
+            fact = facts.get(f'analysis:{index}')
+            if fact is not None:
+                fact['stdout'] = deepcopy(repeated[index])
+        if feedback.get('stdout_file'):
+            reference = {'full_content_file': feedback['stdout_file'],
+                         'source_event_index': index}
+            count = feedback.get('stdout_characters', len(text))
+            if count > len(text):
+                reference['character_range'] = [count - len(text), count]
+        else:
+            reference = {'full_content_file': 'research_context.json',
+                         'json_path': ['events', index, 'feedback', 'stdout'],
+                         'source_event_index': index}
+        previous.append((text, reference))
+
+
+def _current_online_material(context, request):
+    """Keep active science inline, retaining old scripts as ordinary readable files."""
+    if 'online_research' not in context:
+        return
+    active = {'model_research_inputs.json', 'model_bindings.json'}
+    selected = request.get('evaluated_model') or {}
+    active.update(selected.get(key) for key in ('model', 'source_model'))
+    for event in request.get('events', [])[-6:]:
+        args, feedback = event.get('arguments', {}), event.get('feedback', {})
+        active.update(args.get(key) for key in ('path', 'model'))
+        active.update(feedback.get(key) for key in ('executed_path', 'written'))
+    for repair in request.get('research_repairs', []):
+        active.add(repair.get('model'))
+    for name in context.get('files', {}):
+        if name == 'research_notes.md':
+            context['files'][name] = {'full_content_file': 'research_context.json',
+                                      'json_path': ['files', name]}
+        elif name not in active:
+            context['files'][name] = {'full_content_file': name}
+    old_files = context.get('session_knowledge', {}).get('files', {})
+    for name in old_files:
+        old_files[name] = {'full_content_file': 'research_context.json',
+                           'json_path': ['session_knowledge', 'files', name]}
+    events = context.get('events', [])
+    # Each decision already carries one current notebook. Repeating the old
+    # authored versions beside real tool results made an obsolete row range
+    # look like several independent observations in the continuing run.
+    def reference_notes(value, path):
+        if isinstance(value, list):
+            for index, item in enumerate(value):
+                reference_notes(item, [*path, index])
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                if key in {'notes', 'research_notes'}:
+                    value[key] = {'full_content_file': 'research_context.json',
+                                  'json_path': [*path, key]}
+                else:
+                    reference_notes(item, [*path, key])
+
+    reference_notes(events, ['events'])
+    if len(events) > 8:
+        context['event_history'] = {'count': len(events), 'preview_start': len(events) - 8,
+            'full_content_file': 'research_context.json', 'json_path': ['events']}
+        context['events'] = events[-8:]
+    online = context['online_research']
+    questions = online.get('questions', [])
+    by_id = {question['id']: question for question in questions}
+    keep = {online.get('active_question'), *(q['id'] for q in questions[-4:])}
+    keep.update(item.get('question_id') for item in online.get('pending_analyses', []))
+    for returned in online.get('parent_returns', [])[-1:]:
+        keep.add(returned['parent_id'])
+        keep.update(answer.get('question_id') for answer in returned.get('answers', []))
+    pending = list(keep)
+    while pending:
+        question = by_id.get(pending.pop(), {})
+        for identifier in [question.get('parent_id'), *question.get('depends_on', [])]:
+            if identifier in by_id and identifier not in keep:
+                keep.add(identifier)
+                pending.append(identifier)
+    online['questions'] = [question if question['id'] in keep else {
+        'id': question['id'], 'status': question.get('status'),
+        'full_content_file': 'research_context.json',
+        'json_path': ['online_research', 'questions', index]}
+        for index, question in enumerate(questions)]
+    for index, record in enumerate(online.get('recent_paid_records', [])):
+        action = record.get('action')
+        compact = _compact_trajectory_action(action)
+        if compact != action:
+            record['action'] = {**compact, 'full_content_file': 'research_context.json',
+                'json_path': ['online_research', 'recent_paid_records', index, 'action']}
+    if 'evidence_notebook' in context:
+        # Runtime facts and the one current interpretation belong together,
+        # ahead of archived programs, raw histories and older decisions.
+        current = {name: context[name] for name in ('evidence_notebook', 'research_notes')
+                   if name in context}
+        current.update(context)
+        context.clear()
+        context.update(current)
+    context['context_notice'] = (
+        'Only active files and the latest eight actions are inline. All older code, '
+        'complete trajectories and stdout remain at their file paths; the full '
+        'decision history is in research_context.json. Previews are not full trajectories. '
+        'Computed checks, regions and representation witnesses in online_research and '
+        'research_repairs and evidence_notebook are execution results; research_notes is '
+        'the current authored interpretation. Older notebooks remain in the full decision '
+        'history and are not additional observations.')
+
+
 def _compact_trajectory_action(action):
     if not isinstance(action, dict) or action.get("kind") != "trajectory":
         return action
@@ -101,6 +254,127 @@ def _compact_trajectory_action(action):
     return {**{key: value for key, value in action.items() if key != "sequence"},
             "sequence_rows": len(sequence),
             "controls": sorted({name for point in sequence for name in point})}
+
+
+def _compact_numeric_research(value, field_path):
+    """Keep numerical research decisions, sharing their archived executable bodies."""
+    if isinstance(value, list):
+        return [_compact_numeric_research(item, [*field_path, index])
+                for index, item in enumerate(value)]
+    if not isinstance(value, dict):
+        return value
+    compact = {}
+    for key, item in value.items():
+        path = [*field_path, key]
+        if key == 'reviewed_child_answers' and len(json.dumps(item)) > 12000:
+            compact[key] = _saved_context_reference(item, path)
+        elif key == 'child_answers' and isinstance(item, list):
+            reviewed = value.get('reviewed_child_answers', [])
+            latest = {answer.get('question_id'): index for index, answer in enumerate(item)}
+            compact[key] = []
+            for index, answer in enumerate(item):
+                answer_path = [*path, index]
+                if index == len(item) - 1 or (answer not in reviewed
+                        and index == latest[answer.get('question_id')]):
+                    compact[key].append(_compact_numeric_research(answer, answer_path))
+                else:
+                    summary = _compact_numeric_research({name: answer[name] for name in (
+                        'question_id', 'status', 'authored_status', 'evidence_status',
+                        'revision_index', 'scope', 'analysis_scope', 'check_results') if name in answer},
+                        answer_path)
+                    if isinstance(answer.get('answer'), str):
+                        summary['answer'] = answer['answer']
+                    compact[key].append({**summary, **_saved_context_reference(answer, answer_path)})
+        elif key in ('check_results', 'checks') and isinstance(item, list) and len(json.dumps(item)) > 12000:
+            groups = {}
+            for index, check in enumerate(item):
+                groups.setdefault(check.get('status'), []).append(index)
+            indices = sorted({index for group in groups.values() for index in (group[0], group[-1])})
+            compact[key] = {**_saved_context_reference(item, path),
+                'status_counts': dict(Counter(check.get('status') for check in item)),
+                'preview': [_compact_numeric_research(item[index], [*path, index]) for index in indices]}
+        elif key in ('program', 'selected_program') and isinstance(item, dict):
+            compact[key] = _saved_context_reference(item, path)
+        elif key == 'history' and isinstance(item, list) and item:
+            compact['history_length'] = len(item)
+            compact[key] = _saved_context_reference(item, path)
+        elif (isinstance(item, list) and len(json.dumps(item)) > 12000
+              and (key.endswith('_evidence') or key in {
+                  'evidence', 'acquired_evidence', 'available_evidence', 'unreviewed_evidence',
+                  'row_indices', 'bound_rows', 'rows', 'answer_observations', 'witnesses'})):
+            compact[key] = {**_saved_context_reference(item, path),
+                'preview': [_compact_numeric_research(_row_preview(item[index])
+                    if isinstance(item[index], dict) else item[index], [*path, index])
+                    for index in _preview_indices(len(item))]}
+        elif key in ('executions', 'executed_analyses') and isinstance(item, list) and len(item) > 8:
+            compact[key] = {**_saved_context_reference(item, path),
+                'preview_start': len(item) - 8,
+                'latest': [_compact_numeric_research(entry, [*path, index])
+                           for index, entry in enumerate(item[-8:], start=len(item) - 8)]}
+        else:
+            compact[key] = _compact_numeric_research(item, path)
+    return compact
+
+
+def _current_numeric_research(context, request):
+    """Prevent accumulated paid facts from displacing the live parent handoff."""
+    notebook = context.get('evidence_notebook', {})
+    facts = notebook.get('facts', {})
+    if not facts or len(json.dumps(facts)) <= 12000:
+        return
+    events = request.get('events', [])
+    keep = set(range(max(0, len(events) - 8), len(events)))
+    cited = [(int(start), int(end or start)) for start, end in re.findall(
+        r'\banalysis:(\d+)(?:\s*[-–]\s*(\d+))?', request.get('research_notes', ''))]
+    online = request.get('online_research', {})
+    returned_questions = set()
+    for returned in online.get('parent_returns', []):
+        answers = returned.get('answers', [])
+        if answers:
+            returned_questions.add(answers[-1].get('question_id'))
+    focus = request.get('parent_research_focus', {})
+    returned_questions.add(focus.get('returned_research', {}).get('question_id'))
+    returned_questions.discard(None)
+    current_questions = {online.get('active_question'), focus.get('question_id'), focus.get('parent_id')}
+    for question in online.get('questions', []):
+        if question.get('id') not in current_questions:
+            continue
+        answers = question.get('child_answers', [])
+        if answers:
+            returned_questions.add(answers[-1].get('question_id'))
+    for name, fact in facts.items():
+        path = ['evidence_notebook', 'facts', name]
+        if fact.get('kind') == 'executed_structural_research':
+            facts[name] = _compact_numeric_research(fact, path)
+        elif fact.get('kind') == 'executed_python_analysis':
+            index = fact['event_index']
+            current = (index in keep or any(start <= index <= end for start, end in cited)
+                       or fact.get('research_question_id') in returned_questions)
+            if not current:
+                for key in ('stdout', 'stderr'):
+                    if key in fact:
+                        if fact.get(f'{key}_file'):
+                            reference = {'full_content_file': fact[f'{key}_file'],
+                                'characters': fact.get(f'{key}_characters', len(fact[key]))}
+                        else:
+                            reference = _saved_context_reference(fact[key], [*path, key])
+                        reference.pop('preview', None)
+                        reference.pop('tail', None)
+                        fact[key] = reference
+    for name in ('online_research', 'parent_research_focus', 'research_dependency_focus',
+                 'llm_inquiry', 'relation_research', 'research_repairs'):
+        if name in context:
+            context[name] = _compact_numeric_research(context[name], [name])
+    offset = context.get('event_history', {}).get('preview_start', 0)
+    context['events'] = [_compact_numeric_research(event, ['events', offset + index])
+                         for index, event in enumerate(context.get('events', []))]
+    repairs = request.get('research_repairs')
+    for index, event in enumerate(context['events'], start=offset):
+        if repairs and request['events'][index].get('feedback', {}).get('research_repairs') == repairs:
+            event['feedback']['research_repairs'] = _saved_context_reference(repairs, ['research_repairs'])
+    context['context_notice'] += (
+        ' Large numerical check sets retain verdict counts and actual examples; complete '
+        'checks, control histories and executable programs remain at their cited JSON paths.')
 
 
 def _compact_trajectory_payload(value):
@@ -125,10 +399,12 @@ def _compact_trajectory_payload(value):
                                      for index in _preview_indices(len(measurements))]}
 
 
-def _compact_practice_feedback(value, field_path):
+def _compact_practice_feedback(value, field_path, full_content_file="research_context.json", *, previews=None):
     """Keep the complete practice chronology without repeated evidence snapshots."""
+    if previews is None:
+        previews = {}
     if isinstance(value, list):
-        return [_compact_practice_feedback(item, [*field_path, index])
+        return [_compact_practice_feedback(item, [*field_path, index], full_content_file, previews=previews)
                 for index, item in enumerate(value)]
     if not isinstance(value, dict):
         return value
@@ -143,16 +419,78 @@ def _compact_practice_feedback(value, field_path):
         # retain candidate errors, paid fits and selection decisions inline.
         if forecast and key == "source" and isinstance(item, dict):
             compact[key] = {"model": item.get("model"), "files": list(item.get("files", {})),
-                            "full_content_file": "research_context.json", "json_path": path}
+                            "full_content_file": full_content_file, "json_path": path}
         elif forecast and key in ("prediction_inputs", "predictions") and isinstance(item, list):
             compact[key] = {"count": len(item),
-                            "full_content_file": "research_context.json", "json_path": path}
+                            "full_content_file": full_content_file, "json_path": path}
             if key == "predictions":
                 compact[key]["preview"] = [item[index] for index in _preview_indices(len(item))]
         # These are the actual proposals, including any invalid arguments. Do
         # not summarize them as if they were duplicate observation records.
         elif key in ("action", "arguments", "proposal", "program_action", "next_action"):
             compact[key] = item
+        elif key == "paid_residuals" and isinstance(item, dict):
+            examples = item.get('examples', [])
+            compact[key] = {name: detail for name, detail in item.items() if name != 'examples'}
+            compact[key]['example_count'] = len(examples)
+            prior = previews.setdefault(key, [])
+            if item in prior:
+                compact[key]['examples'] = {'count': len(examples),
+                    'full_content_file': full_content_file, 'json_path': [*path, 'examples']}
+            else:
+                compact[key]['examples'] = [
+                    {**_row_preview(examples[index]), 'full_content_file': full_content_file,
+                     'json_path': [*path, 'examples', index]}
+                    for index in _preview_indices(len(examples))]
+                prior.append(item)
+        elif key == "paid_relation_diagnostic" and isinstance(item, dict):
+            compact[key] = {name: detail for name, detail in item.items() if name != 'revisions'}
+            # Restored paid results predate candidate attribution in this field.
+            # Its sibling residuals come from the same score, unlike evaluated_model
+            # which may name the retained incumbent. Leave original records intact.
+            scored = value.get('paid_residuals') or {}
+            if 'model' not in compact[key] and scored.get('model'):
+                compact[key]['model'] = scored['model']
+            if 'evaluation_scope' not in compact[key] and value.get('evaluation_scope'):
+                compact[key]['evaluation_scope'] = value['evaluation_scope']
+            compact[key]['field_meanings'] = dict(PAID_RELATION_FIELD_MEANINGS)
+            compact[key]['evaluation_feedback'] = {
+                'full_content_file': full_content_file, 'json_path': list(field_path)}
+            compact[key]['revisions'] = []
+            prior = previews.setdefault(key, [])
+            repeated = item in prior
+            if not repeated:
+                prior.append(item)
+            for revision_index, revision in enumerate(item.get('revisions', [])):
+                examples = revision.get('examples', [])
+                preview = {name: detail for name, detail in revision.items() if name != 'examples'}
+                preview['example_count'] = len(examples)
+                if repeated:
+                    preview['examples'] = {'count': len(examples), 'full_content_file': full_content_file,
+                        'json_path': [*path, 'revisions', revision_index, 'examples']}
+                    compact[key]['revisions'].append(preview)
+                    continue
+                preview['examples'] = []
+                for index in _preview_indices(len(examples)):
+                    example = _row_preview(examples[index])
+                    if 'historical_check' not in example and 'evidence_status' in example:
+                        example['historical_check'] = {'status': example['evidence_status']}
+                    location = [*path, 'revisions', revision_index, 'examples', index]
+                    if 'terms' in example:
+                        example['terms'] = {'count': len(example['terms']),
+                            'full_content_file': full_content_file,
+                            'json_path': [*location, 'terms']}
+                    example.update(full_content_file=full_content_file, json_path=location)
+                    preview['examples'].append(example)
+                compact[key]['revisions'].append(preview)
+        elif key == "native_condition_research" and isinstance(item, dict):
+            compact[key] = _saved_context_reference(item, path, full_content_file)
+            for name in ('round_index', 'compute_cost', 'finite_prior'):
+                if name in item:
+                    compact[key][name] = item[name]
+            compact[key]['candidates'] = [{name: candidate[name] for name in
+                ('model', 'source', 'fit_mse', 'evaluate_action') if name in candidate}
+                for candidate in item.get('candidates', [])]
         elif key == "research_advice" and isinstance(item, dict):
             advice = {name: detail for name, detail in item.items()
                       if name not in ("decision", "evidence_scope")
@@ -160,9 +498,9 @@ def _compact_practice_feedback(value, field_path):
             if isinstance(item.get("decision"), dict):
                 advice["decision"] = {name: detail for name, detail in item["decision"].items()
                                       if name in ("selected_action", "reason")}
-            compact[key] = _compact_practice_feedback(advice, path)
+            compact[key] = _compact_practice_feedback(advice, path, full_content_file, previews=previews)
         else:
-            compact[key] = _compact_practice_feedback(item, path)
+            compact[key] = _compact_practice_feedback(item, path, full_content_file, previews=previews)
     if "steps" in value and value.get("directory"):
         compact["full_trace_file"] = str(Path(value["directory"]) / "result.json")
     return compact
@@ -504,11 +842,51 @@ def _compact_world_execution(value, field_path, full_content_file='research_cont
     return result
 
 
+def _method_decision_preview(decision):
+    """Retain callable methods when cumulative execution traces exceed the prompt."""
+    for section in ('methods', 'research_options'):
+        for index, method in enumerate(decision.get(section, [])):
+            executions = method.get('current_executions', [])
+            if len(json.dumps(executions)) <= 12000:
+                continue
+            path = [section, index, 'current_executions']
+            latest = []
+            for offset, execution in enumerate(executions[-2:], start=len(executions) - 2):
+                latest.append({key: value if len(json.dumps(value)) <= 12000 else
+                    _saved_context_reference(value, [*path, offset, key], 'method_decision.json')
+                    for key, value in execution.items()})
+            method['current_executions'] = {
+                **_saved_context_reference(executions, path, 'method_decision.json'),
+                'preview_start': len(executions) - len(latest), 'latest': latest}
+    return decision
+
+
+def load_code_context(workspace):
+    """Load a saved request, expanding its repeated inherited file references."""
+    context = json.loads((Path(workspace) / "research_context.json").read_text())
+    inherited = context.get("session_knowledge", {}).get("files", {})
+    for name, value in context.get("files", {}).items():
+        if value == {"full_content_file": "research_context.json",
+                     "json_path": ["session_knowledge", "files", name]}:
+            context["files"][name] = inherited[name]
+    return context
+
+
 def prepare_code_context(workspace, request, *, schema, instructions):
     """Persist the full request and return the compact provider-facing copy."""
     workspace = Path(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "research_context.json").write_text(json.dumps(request), encoding="utf-8")
+    inherited = request.get("session_knowledge", {}).get("files", {})
+    stored = request
+    if inherited and "files" in request:
+        stored = {**request, "files": dict(request["files"])}
+        for name, value in request["files"].items():
+            reference = {"full_content_file": "research_context.json",
+                         "json_path": ["session_knowledge", "files", name]}
+            if (name in inherited and value == inherited[name]
+                    and len(json.dumps(value)) > len(json.dumps(reference))):
+                stored["files"][name] = reference
+    (workspace / "research_context.json").write_text(json.dumps(stored), encoding="utf-8")
     (workspace / "code_action_schema.json").write_text(json.dumps(schema), encoding="utf-8")
     (workspace / "code_agent_instructions.txt").write_text(instructions, encoding="utf-8")
     context = deepcopy(request)
@@ -532,8 +910,11 @@ def prepare_code_context(workspace, request, *, schema, instructions):
     for index, event in enumerate(events):
         arguments = event.get("arguments", {})
         latest = index == len(events) - 1
+        source = arguments.get('code')
+        recent_source = (index >= len(events) - 8
+                         and isinstance(source, str) and len(source) <= 12000)
         compact_arguments = {key: value for key, value in arguments.items()
-                             if key != "sequence" and (key != "code" or latest)}
+                             if key != "sequence" and (key != "code" or latest or recent_source)}
         if "sequence" in arguments:
             compact_arguments["sequence_rows"] = len(arguments["sequence"])
         if "code" in arguments:
@@ -580,10 +961,15 @@ def prepare_code_context(workspace, request, *, schema, instructions):
             {name: code for name, code in context["files"].items() if name not in archive_paths},
             ["files"])
     if "method_decision.json" in request.get("files", {}):
-        context = {"method_decision": json.loads(request["files"]["method_decision.json"]), **context}
+        context = {"method_decision": _method_decision_preview(
+            json.loads(request["files"]["method_decision.json"])), **context}
         for name in ("method_decision.json", "method_candidates.json", "resume_context.json"):
             if name in context["files"]:
                 context["files"][name] = {"full_content_file": name}
+    _current_online_material(context, request)
+    if trajectory_records:
+        _current_numeric_research(context, request)
+    _reference_repeated_stdout(context, request)
     if context.get('evidence', {}).get('observations_file') == 'laboratory_observations.json' and not trajectory_records:
         # Cumulative questions cite the same physical records repeatedly. Keep
         # each identical preview once across the request; every citation still
@@ -669,4 +1055,22 @@ def prepare_code_context(workspace, request, *, schema, instructions):
         if 'method_decision' in context:
             context['method_decision'] = _compact_world_execution(
                 context['method_decision'], [], 'method_decision.json', previews=previews)
-    return _bound_provider_context(context)
+    context = _bound_provider_context(context)
+
+    def point_to_saved_source(value):
+        if isinstance(value, dict):
+            path = value.get('json_path', [])
+            if (value.get('full_content_file') == 'research_context.json'
+                    and len(path) == 2 and path[0] == 'files'
+                    and isinstance(stored.get('files', {}).get(path[1]), dict)):
+                reference = stored['files'][path[1]]
+                if reference.get('json_path') == ['session_knowledge', 'files', path[1]]:
+                    value['json_path'] = list(reference['json_path'])
+            for item in value.values():
+                point_to_saved_source(item)
+        elif isinstance(value, list):
+            for item in value:
+                point_to_saved_source(item)
+
+    point_to_saved_source(context)
+    return context

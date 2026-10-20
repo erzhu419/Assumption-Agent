@@ -6,6 +6,7 @@ both frozen methods finish research before either receives terminal evaluation.
 """
 
 import argparse
+import ast
 from copy import deepcopy
 from dataclasses import replace
 import json
@@ -19,9 +20,11 @@ sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 
 from hegel_machine.cognition.anonymous_method_learning import AnonymousResearchMethodLearner
 from hegel_machine.cognition.anonymous_research_archive import load_research_archive
-from hegel_machine.cognition.code_agent import CodexCodeProvider, python_model_context_matches
+from hegel_machine.cognition.code_agent import (
+    CodexCodeProvider, _copy_model_context, python_model_context_matches)
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH, register_published_method
+from hegel_machine.cognition.temporal_paired_practice import practice_execution_summary
 from scripts.run_anonymous_method_learning import laboratory, trial_preparer, frozen_transfers, score_frozen
 from scripts.run_legacy_session_llm import total_costs
 from scripts.run_online_inquiry_llm import verify_codex_subscription, write_json
@@ -463,6 +466,25 @@ def repair_protocol(source, old, repair_study, *, model):
             'scripts/run_temporal_counterexample_learning.py', 'scripts/run_anonymous_revision_choice.py'})}
 
 
+def _merge_author_source_catalog(author, entries):
+    """Keep author-only source metadata in its existing catalogue, once per ID."""
+    catalog = deepcopy(author.knowledge.get('source_catalog', []))
+    positions = {entry['id']: index for index, entry in enumerate(catalog)}
+    for entry in entries:
+        if entry['id'] in positions:
+            catalog[positions[entry['id']]] = deepcopy(entry)
+        else:
+            positions[entry['id']] = len(catalog)
+            catalog.append(deepcopy(entry))
+    text = json.dumps(catalog, indent=2)
+    (author.workspace / 'source_catalog.json').write_text(text)
+    author.files['source_catalog.json'] = text
+    # InquiryLLMAgent owns a deep copy. The practice closure and future targets
+    # retain their original knowledge; only the author's metadata changes here.
+    author.knowledge['source_catalog'] = catalog
+    author.knowledge.setdefault('files', {})['source_catalog.json'] = text
+
+
 def attach_repair_archive(author, repair_study):
     """Materialize author-only experience once; keep practice knowledge unchanged."""
     added, records = load_research_archive(repair_study)
@@ -483,16 +505,7 @@ def attach_repair_archive(author, repair_study):
         for key in ('directory', 'model', 'model_context_directory'):
             if entry.get(key) is not None:
                 entry[key] = prefix + entry[key]
-    catalog = [*author.knowledge['source_catalog'], *catalog]
-    # The provider saves full request context. Index these large source files on
-    # disk instead of reserializing their complete contents at every author turn.
-    text = json.dumps(catalog, indent=2)
-    (author.workspace / 'source_catalog.json').write_text(text)
-    author.files['source_catalog.json'] = text
-    # The author owns a deep copy; its practice closure retains the original
-    # knowledge. Keep both request indexes consistent without adding file data.
-    author.knowledge['source_catalog'] = catalog
-    author.knowledge['files']['source_catalog.json'] = text
+    _merge_author_source_catalog(author, catalog)
     return records
 
 
@@ -545,29 +558,151 @@ def attach_online_research_experience(author, experience):
             or not (result.get('fresh_confirmation') or {}).get('passed')):
         raise ValueError('method compilation requires an independently confirmed online result')
     view = author.workspace / 'online_research_experience'
-    view.mkdir()
+    view.mkdir(exist_ok=True)
     names = {'shared', 'training.json', 'archive.json', 'laboratory_observations.json',
-        'research_state.json', 'research_context.json', 'research_trace.json'}
+        'research_state.json', 'research_context.json', 'research_trace.json', 'method_decision.json'}
     names.add(Path(result['model']).parts[0])
     available = []
     for name in sorted(names):
         origin = source / name
         if origin.exists():
-            (view / name).symlink_to(origin, target_is_directory=origin.is_dir())
+            target = view / name
+            if not target.exists():
+                target.symlink_to(origin, target_is_directory=origin.is_dir())
             available.append(str(Path(view.name) / name))
     evidence = {'training': str(Path(view.name) / 'training.json'),
         'model': str(Path(view.name) / result['model']), 'files': available,
-        'costs': result['costs'], 'fresh_confirmation': result['fresh_confirmation'],
+        'costs': result['costs'],
+        'fresh_confirmation': {key: result['fresh_confirmation'][key]
+            for key in ('passed', 'mse', 'rows', 'mse_threshold') if key in result['fresh_confirmation']},
+        'fresh_confirmation_source': {'file': str(Path(view.name) / 'training.json'),
+                                      'json_path': ['fresh_confirmation']},
         'use': 'Previously paid online research for method compilation. Read these references only; '
             'all fitting, observations and unsuccessful hypotheses belong to the source task. '
             'This supplies no practice support. Only the newly published self-contained method '
             'and original archive transfer; neither this fitted model nor its observations transfer.'}
-    text = json.dumps(evidence, indent=2)
+    # The source workspace contains failed old procedures as well as a confirmed
+    # predictor. Keep their existing execution facts together, rather than making
+    # the author infer publication from the shared directory's location.
+    execution = {'working_directory': view.name,
+        'path_scope': 'Paths and JSON references in this section are relative to working_directory.',
+        'trace_fields': {'online_actions': 'training.json.events',
+                         'procedure_steps': 'training.json.method_results'},
+        'confirmation_scope': 'The source confirmation supports its submitted predictor; '
+                              'it does not publish a research procedure.'}
+    decision_path = source / 'method_decision.json'
+    if decision_path.is_file():
+        decision = json.loads(decision_path.read_text())
+        execution['method_decision_file'] = 'method_decision.json'
+        execution['methods'] = []
+        for method in decision.get('methods', []):
+            # current_executions is a display projection and may contain saved
+            # references. Summarize the already-loaded canonical executions,
+            # preserving their global method_results indices and full feedback.
+            summary = practice_execution_summary(result, '.', method_path=method['path'])
+            continuation = (method.get('continuation') or {}).get('status')
+            if continuation is not None:
+                summary['status'] = continuation
+            summary.update(result_file='training.json', result_steps_field='method_results')
+            summary.pop('author_feedback_steps_field', None)
+            # This card already links the whole source procedure history and
+            # separately previews recent online actions; do not repeat all steps.
+            summary.pop('research_steps', None)
+            execution['methods'].append({
+                **{key: method[key] for key in ('id', 'path', 'source_unchanged') if key in method},
+                'prior_execution': {**{key: method.get('prior_execution', {})[key]
+                    for key in ('scope',) if key in method.get('prior_execution', {})},
+                    'cases': [{key: case[key] for key in ('case', 'status', 'fresh_confirmation')
+                               if key in case}
+                              for case in method.get('prior_execution', {}).get('cases', [])]},
+                'execution_summary': summary})
+        execution['native_research'] = []
+        for index, option in enumerate(decision.get('research_options', [])):
+            if option.get('id') != 'native_condition_research':
+                continue
+            rounds = option.get('current_executions', [])
+            execution['native_research'].append({'id': option['id'],
+                'execution_count': len(rounds),
+                'source': {'file': 'method_decision.json', 'json_path': ['research_options', index]},
+                'recent_executions': [{
+                    **{key: item[key] for key in ('question_id', 'round_index', 'status', 'paid_rows', 'source')
+                       if key in item},
+                    'model_count': len(item.get('models', [])),
+                    'model_preview': [{key: model[key] for key in ('model', 'fit_mse', 'evaluate_action')
+                                       if key in model} for model in item.get('models', [])[:3]]}
+                    for item in rounds[-3:]]})
+        # Executable paths in the source card need the same read-only view as
+        # its state references. Exported candidates live outside shared/.
+        model_roots = {Path(model['model']).parts[0]
+            for research in execution['native_research']
+            for item in research['recent_executions']
+            for model in item['model_preview'] if model.get('model')}
+        for name in sorted(model_roots - names):
+            origin = source / name
+            if origin.exists():
+                target = view / name
+                if not target.exists():
+                    target.symlink_to(origin, target_is_directory=origin.is_dir())
+                available.append(str(Path(view.name) / name))
+    events = result.get('events', [])
+    start = max(0, len(events) - 12)
+    execution.update(online_event_count=len(events), online_preview_start=start, recent_online_actions=[])
+    for index, event in enumerate(events[start:], start=start):
+        arguments, feedback = event.get('arguments') or {}, event.get('feedback') or {}
+        action = {'event_index': index, 'step': event.get('step'), 'action': event.get('action'),
+            'arguments': {key: arguments[key] for key in ('operator', 'model', 'path') if key in arguments},
+            'feedback': {key: feedback[key] for key in ('status', 'mse', 'returncode', 'timeout')
+                         if key in feedback},
+            'source': {'file': 'training.json', 'json_path': ['events', index]}}
+        if feedback.get('error'):
+            action['feedback']['error'] = str(feedback['error'])[:1200]
+        if isinstance(feedback.get('fresh_confirmation'), dict):
+            confirmation = feedback['fresh_confirmation']
+            action['feedback']['fresh_confirmation'] = {key: confirmation[key]
+                for key in ('passed', 'mse', 'rows', 'mse_threshold') if key in confirmation}
+        execution['recent_online_actions'].append(action)
+    evidence['source_execution'] = execution
+    submitted = result['fresh_confirmation'].get('submitted_candidate')
+    if submitted:
+        # Keep this compact predictor context discoverable with ordinary rglob.
+        # A directory symlink silently hid its source from the author's actual
+        # inspection, which then read an unrelated archived predictor instead.
+        # Reuse the execution-context copier: fitting inputs remain together,
+        # while research histories stay in the read-only links above.
+        replay = view / 'confirmed_candidate' / '_evaluated_model'
+        model = _copy_model_context(source, submitted['model'], replay)
+        relative = replay.relative_to(author.workspace)
+        evidence['confirmed_candidate'] = {**deepcopy(submitted),
+            'model': str(relative / model), 'working_directory': str(relative)}
+        available.append(str(relative))
+    selected = evidence.get('confirmed_candidate', {})
+    model = selected.get('model', evidence['model'])
+    directory = selected.get('working_directory', str(Path(model).parent))
+    definitions = {node.name for node in ast.parse((author.workspace / model).read_text()).body
+                   if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    _merge_author_source_catalog(author, [{
+        'id': 'online_confirmed_source', 'directory': directory, 'model': model,
+        'paid_trace': evidence['training'], 'status': result['status'],
+        'fresh_confirmation': deepcopy(evidence['fresh_confirmation']),
+        'entry_points': [name for name in ('fit', 'fit_features', 'predict', 'predict_features',
+                                         'bind_models') if name in definitions],
+        'scope': 'Read-only author experience, absent from practice and target input archives.',
+        'program_reuse': 'The source program can be inspected and reused with new-task fitting. '
+            'Its saved coefficients, fitted state and observations belong to this source; '
+            'new task support requires fitting and testing on that task\'s paid evidence.'}])
+    evidence['source_catalog_entry'] = 'online_confirmed_source'
+    text = json.dumps(evidence, separators=(',', ':'))
     (author.workspace / 'online_research_experience.json').write_text(text)
     author.files['online_research_experience.json'] = text
     author.common_interface = (
         'online_research_experience.json indexes an independently confirmed online investigation. '
         'Inspect its paid actions, revisions, observations and final source through run. '
+        'Its confirmed_candidate, when present, references the submitted predictor together with '
+        'its saved fitting rows and working directory for replay. '
+        'source_execution separates the old procedure and its recorded support from ordinary '
+        'online actions, including their actual evaluation and confirmation outcomes. Its paths '
+        'are relative to the stated source working_directory. Predictor confirmation does not '
+        'establish publication or current support for a shared research procedure. '
         'Its references are read-only author experience. Generalize a self-contained research '
         'procedure and establish its support on every practice case using the existing publication '
         'rules. No source-task fitted model or observations will enter practices or targets.\n\n'

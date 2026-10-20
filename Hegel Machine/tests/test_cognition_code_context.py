@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from hegel_machine.cognition import code_agent
-from hegel_machine.cognition.code_provider_context import prepare_code_context
+from hegel_machine.cognition.code_provider_context import load_code_context, prepare_code_context
 
 
 def test_large_programs_are_retrievable_without_repeating_current_or_retained_bodies(tmp_path):
@@ -17,7 +17,7 @@ def test_large_programs_are_retrievable_without_repeating_current_or_retained_bo
                "session_knowledge": {"files": {"shared/model.py": source, "shared/old.py": old}}}
     context = prepare_code_context(tmp_path, request, schema={}, instructions="test")
     stored = json.loads((tmp_path / "research_context.json").read_text())
-    assert stored == request
+    assert load_code_context(tmp_path) == request
     assert "shared/model.py" not in context["session_knowledge"]["files"]
     for descriptor, expected in ((context["files"]["shared/model.py"], source),
                                  (context["session_knowledge"]["files"]["shared/old.py"], old)):
@@ -132,7 +132,7 @@ def test_context_keeps_latest_code_and_earlier_concise_fit_results(tmp_path, lat
     context = prepare_code_context(tmp_path, request, schema={}, instructions="test only")
 
     previous, latest = context["events"]
-    assert previous["arguments"] == {"path": "scratch_000.py"}
+    assert previous["arguments"] == {"path": "scratch_000.py", "code": "print('candidate fit results')"}
     assert previous["feedback"]["stdout"] == diagnostic
     assert latest["arguments"] == {"path": "scratch_001.py", "code": code}
     assert latest["feedback"]["stdout"] == latest_stdout
@@ -172,9 +172,43 @@ def test_recent_event_window_uses_actual_executor_paths_without_renumbering(tmp_
 
     for expected, actual in zip(events, context["events"]):
         assert actual["arguments"]["path"] == expected["feedback"]["executed_path"]
-    assert "code" not in context["events"][0]["arguments"]
+    assert context["events"][0]["arguments"]["code"] == events[0]["arguments"]["code"]
     assert context["events"][-1]["arguments"]["code"] == events[-1]["arguments"]["code"]
     assert request == original
+
+
+def test_recent_successful_source_survives_later_error_and_bulk_archive_compaction(tmp_path):
+    repaired = "print(sum([1, 2]))\n"
+    failed = "print(sum(1, 2))\n"
+    large = '# retained generated coefficients\n' * 500
+    events = [{'action': 'run', 'arguments': {'code': f'print({index})'},
+               'feedback': {'returncode': 0, 'stdout': str(index),
+                            'executed_path': f'scratch_{index:03d}.py'}}
+              for index in range(8)]
+    events.extend([
+        {'action': 'write', 'arguments': {'path': 'shared/large.py', 'code': large},
+         'feedback': {'written': 'shared/large.py'}},
+        {'action': 'run', 'arguments': {'code': repaired},
+         'feedback': {'returncode': 0, 'stdout': '3\n', 'executed_path': 'scratch_009.py'}},
+        {'action': 'run', 'arguments': {'code': failed},
+         'feedback': {'returncode': 1, 'stdout': '', 'executed_path': 'scratch_010.py',
+                      'stderr': "TypeError: 'int' object is not iterable"}},
+    ])
+    request = {'online_research': {'questions': []}, 'events': events,
+        'files': {f'archive/source_{index:05d}/research/snapshot_{index:05d}/retained_model.py': '# old\n'
+                  for index in range(12000)}}
+
+    context = prepare_code_context(tmp_path, request, schema={}, instructions='test')
+
+    assert len(context['events']) == 8
+    assert context['events'][-2]['arguments']['code'] == repaired
+    assert context['events'][-2]['feedback']['stdout'] == '3\n'
+    assert context['events'][-1]['arguments']['code'] == failed
+    assert context['events'][-1]['feedback']['stderr'] == "TypeError: 'int' object is not iterable"
+    assert context['events'][-3]['arguments'] == {'path': 'shared/large.py'}
+    assert context['files'] == {'full_content_file': 'research_context.json', 'json_path': ['files']}
+    assert len(json.dumps(context)) <= 1_000_000
+    assert json.loads((tmp_path / 'research_context.json').read_text()) == request
 
 
 def test_trajectory_preview_compacts_repeated_history_without_changing_paid_files(tmp_path):

@@ -17,7 +17,9 @@ from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
 from hegel_machine.cognition.anonymous_method_learning import (
     AnonymousPreparedMethodAgent, AnonymousResearchMethodLearner, EMPTY_METHOD)
 from hegel_machine.cognition.anonymous_research_archive import load_research_archive
-from hegel_machine.cognition.code_agent import CodexCodeProvider, evaluate_python_model
+from hegel_machine.cognition.code_agent import (
+    CodexCodeProvider, archived_paid_trace_references, evaluate_python_model,
+)
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH, register_published_method
 from scripts.run_anonymous_revision_inquiry import run_study
@@ -113,6 +115,9 @@ def protocol(source_root, *, model='gpt-6-luna', timeout_seconds=300.):
 
 
 def laboratory(case):
+    if case.get('kind') == 'nested_response':
+        from scripts.run_nonlinear_mechanism_revision import laboratory as nested_laboratory
+        return nested_laboratory(case)
     if case.get('kind') == 'conditional_window':
         from scripts.run_conditional_discovery_study import laboratory as conditional_laboratory
         return conditional_laboratory(case)
@@ -123,6 +128,7 @@ def laboratory(case):
 
 
 def trial_preparer(knowledge, sources, reference_archive, *, agent_type=AnonymousPreparedMethodAgent):
+    paid_traces = archived_paid_trace_references(knowledge.get('files', {}), reference_archive)
     candidates = []
     for source in sources:
         if source.get('model'):
@@ -138,9 +144,11 @@ def trial_preparer(knowledge, sources, reference_archive, *, agent_type=Anonymou
                        'max_model_calls', 'token_budget'} else value
             for key, value in overrides.items()})
         agent = agent_type(None, path, arm='hegel', knowledge=deepcopy(knowledge),
-            source_task=False, config=limits, confirmation_seed=case['confirmation_seed'])
+            source_task=False, config=limits, confirmation_seed=case['confirmation_seed'],
+            paid_trace_references=paid_traces)
         lab = laboratory(case)
-        if 'apparatus_seed' in case and case.get('kind') != 'conditional_window':
+        if ('apparatus_seed' in case
+                and case.get('kind') not in {'conditional_window', 'nested_response'}):
             from scripts.run_anonymous_online_research import prepare_representation_prefix
             prepare_representation_prefix(agent, lab, case)
         else:

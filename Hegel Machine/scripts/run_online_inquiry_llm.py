@@ -29,6 +29,7 @@ from hegel_machine.cognition.online_inquiry_llm import (
 from hegel_machine.cognition.responses_code_provider import ResponsesCodeProvider
 from hegel_machine.cognition.chat_completions_code_provider import ChatCompletionsCodeProvider
 from hegel_machine.cognition.code_agent import CodexCodeProvider
+from hegel_machine.cognition.checkpoint_storage import write_chunks_incrementally
 from scripts.run_online_inquiry_study import cohort_protocol, make_lab
 
 
@@ -50,7 +51,30 @@ def load_provider_environment(path, *, base_url=None, env_key="RUOLI_GPT_KEY"):
 
 
 def write_json(path, value):
-    Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    path = Path(path)
+    bulk_export = path.name in {'active.json', 'training.json', 'result.json'}
+    encoder = json.JSONEncoder(indent=None if bulk_export else 2,
+        separators=(',', ':') if bulk_export else None, allow_nan=False)
+
+    def chunks():
+        yield from encoder.iterencode(value)
+        yield '\n'
+
+    write_chunks_incrementally(path, chunks())
+
+
+def final_checkpoint_alias(final_path, checkpoint_path):
+    """Point a finished run's checkpoint at its already-written final result."""
+    final_path, checkpoint_path = Path(final_path), Path(checkpoint_path)
+    if not final_path.is_file():
+        raise FileNotFoundError(final_path)
+    temporary = checkpoint_path.with_name(checkpoint_path.name + '.alias')
+    try:
+        temporary.symlink_to(os.path.relpath(final_path.absolute(),
+                                            checkpoint_path.parent.absolute()))
+        temporary.replace(checkpoint_path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def verify_codex_subscription():

@@ -7,6 +7,7 @@ import errno
 import fcntl
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -18,6 +19,8 @@ from .models import Observation, Probe
 from .evaluation import point_loss
 from .proposers import _events, _run
 from .code_provider_context import prepare_code_context
+from .checkpoint_storage import clone_or_copy, write_text_incrementally
+from .representation_diagnostics import REPRESENTATION_INTERFACE, representation_ambiguity
 
 
 @dataclass(frozen=True)
@@ -115,6 +118,9 @@ Read those files through a run action when needed. Print concise results instead
 Choose experiments, repair errors, and finish within the available calls and resources.
 """
 
+_INSTRUCTIONS += REPRESENTATION_INTERFACE
+_TASK_INTERFACE_INSTRUCTIONS += REPRESENTATION_INTERFACE
+
 
 _CODEX_SOURCE_INSTRUCTIONS = """\nJSON RESPONSE FORMAT:
 Include source_code in every final JSON response. When write or run supplies code,
@@ -159,7 +165,25 @@ class CodexCodeProvider:
                 "type": "string", "description": "Complete concise current research notebook: observed evidence, "
                 "working explanation, unresolved alternatives, predictions and next experiment."}
             action_schema["required"].append("research_notes")
-            instruction_text += """\nInclude research_notes in every final JSON response alongside action and arguments_json.
+            if 'evidence_notebook' in request:
+                action_schema['properties']['research_notes']['description'] = (
+                    'Current scientific interpretation and open hypotheses, citing evidence_notebook references; '
+                    'the runtime preserves the empirical facts separately.')
+                instruction_text += """\nInclude research_notes in every final JSON response. Each decision starts a fresh
+session. evidence_notebook is empirical memory rendered from the actual executed
+records; research_notes is the prior author's interpretation and can be wrong.
+Use the evidence references (revision:N, record:N, confirmation:N, analysis:N) when carrying
+a finding into the new notebook. The referenced record already supplies its rows,
+prediction cutoff and measured result; do not reconstruct that association from
+the old notebook or attach its forecasts to a different acquisition.
+Correct any conflicting prior interpretation from these records. Preserve useful
+working hypotheses, unresolved alternatives and the next step in research_notes.
+An intended action is not an observed result. Prior failed attempts and full source
+records remain on disk. You choose the scientific interpretation and next action.
+Put notebook text only in this top-level field, not arguments_json.
+"""
+            else:
+                instruction_text += """\nInclude research_notes in every final JSON response alongside action and arguments_json.
 Each decision starts a fresh model session. Carry forward a concise COMPLETE current notebook,
 not merely a change log: preserve useful observed results and their evidence indices, working
 explanations, unresolved alternatives, predictions and the next experiment. Update it from the
@@ -495,11 +519,33 @@ this final write action is executed.
         return {"action": payload["action"], "arguments": arguments, "usage": usage}
 
 
-_MODEL_RUNNER = """import contextlib, json, os, runpy, sys
+_MODEL_RUNNER = """import contextlib, json, math, os, runpy, sys
 from pathlib import Path
 payload = json.load(sys.stdin)
 require_fit = sys.argv[3] == '1'
 dependencies = []
+research_bindings = []
+research_prediction_count = 0
+
+def public_row(row):
+    return {'features': row['features'], 'history': row.get('history', [])}
+
+def represented(model):
+    present = callable(model.get('predict_features'))
+    if present and not callable(model.get('represent')):
+        raise ValueError('an explicit representation needs represent and predict_features')
+    return present
+
+def represent(model, row):
+    value = model['represent'](public_row(row))
+    # This is also the value passed downstream: numeric JSON is the shared
+    # authored representation contract, without current evaluation labels.
+    return json.loads(json.dumps(value, allow_nan=False))
+
+def predict_row(model, row):
+    if represented(model):
+        return model['predict_features'](represent(model, row))
+    return model['predict'](row)
 
 @contextlib.contextmanager
 def working_directory(directory):
@@ -520,9 +566,16 @@ def model_context(directory, model):
     return directory, str(model)
 
 def load_model(directory, path, training=None):
+    global research_prediction_count
     directory, path = model_context(directory, path)
     with working_directory(directory):
         model = runpy.run_path(str(directory / path))
+        inputs_file = directory / 'model_research_inputs.json'
+        inputs = json.loads(inputs_file.read_text()).get(path, {}) if inputs_file.exists() else {}
+        if inputs:
+            if not callable(model.get('bind_research')):
+                raise ValueError('research_input_not_consumed: model needs bind_research(inputs)')
+            model['bind_research'](inputs)
         bindings_file = directory / 'model_bindings.json'
         bindings = json.loads(bindings_file.read_text()).get(path, {}) if bindings_file.exists() else {}
         predictors = {}
@@ -533,26 +586,74 @@ def load_model(directory, path, training=None):
             def predict_child(row, child=child, child_directory=child_directory, record=record):
                 record['calls'] += 1
                 with working_directory(child_directory):
-                    return child['predict'](row)
+                    return predict_row(child, row)
             predictors[slot] = predict_child
         if bindings:
             model['bind_models'](predictors)
-        if callable(model.get('fit')):
+        fitting = model.get('fit_features') if represented(model) else model.get('fit')
+        if callable(fitting):
             fitting_path = training or directory / 'model_observations.json'
             if not fitting_path.exists():
                 fitting_path = directory / 'observations.json'
-            model['fit'](json.loads(fitting_path.read_text()))
+            training_rows = json.loads(fitting_path.read_text())
+            if represented(model):
+                features = [represent(model, row) for row in training_rows]
+                fitting(json.loads(json.dumps(features)), [row['target'] for row in training_rows])
+                model['_training_representations'] = features
+            else:
+                fitting(training_rows)
+        if inputs:
+            regions = {slot: item for slot, item in inputs.items()
+                       if item.get('kind') == 'parameter_region'}
+            if regions and not callable(model.get('get_parameters')):
+                raise ValueError('research_input_not_consumed: model needs get_parameters()')
+            parameters = model['get_parameters']() if regions else {}
+            for slot, item in regions.items():
+                value = parameters.get(slot)
+                region = item['region']
+                if not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ValueError('research_input_not_consumed: missing finite parameter for ' + slot)
+                lower, upper = region['lower'], region['upper']
+                inside = ((value >= lower if region.get('lower_closed', True) else value > lower)
+                          and (value <= upper if region.get('upper_closed', True) else value < upper))
+                if not inside:
+                    raise ValueError('research_input_not_consumed: parameter outside bound region: ' + slot)
+            relations = []
+            for slot, item in inputs.items():
+                if item.get('kind') != 'local_relations':
+                    continue
+                checks = []
+                for check in item['checks']:
+                    predicted = 0.
+                    for witness in check['witnesses']:
+                        predicted += witness['coefficient'] * float(predict_row(model, public_row(witness)))
+                        research_prediction_count += 1
+                    checks.append({'id': check['id'], 'scope': check.get('scope'),
+                        'target': check['target'], 'measured_value': check['value'],
+                        'predicted_value': predicted, 'residual': predicted - check['value'],
+                        'evidence_status': check['status']})
+                relations.append({'slot': slot, 'revision_index': item['revision_index'],
+                    'version': item['version'], 'checks': checks})
+            research_bindings.append({'model': path, 'inputs': inputs,
+                'actual_parameters': parameters, 'local_relations': relations})
     return model, directory
 
 with contextlib.redirect_stdout(sys.stderr):
     root = Path.cwd()
     model, directory = load_model(root, str(Path(sys.argv[1]).relative_to(root)), Path(sys.argv[2]))
-    fit_available = callable(model.get('fit'))
+    fit_available = callable(model.get('fit_features') if represented(model) else model.get('fit'))
     with working_directory(directory):
-        predictions = ([float(model['predict'](row)) for row in payload]
-                       if not require_fit or fit_available else None)
+        representations = ([represent(model, row) for row in payload] if represented(model) else None)
+        predictions = None
+        if not require_fit or fit_available:
+            predictions = ([float(model['predict_features'](json.loads(json.dumps(features))))
+                            for features in representations]
+                           if representations is not None else [float(model['predict'](row)) for row in payload])
 print(json.dumps({'fit_available': fit_available, 'predictions': predictions,
-                  'model_dependencies': dependencies}, allow_nan=False))
+                  'model_dependencies': dependencies, 'research_bindings': research_bindings,
+                  'research_prediction_count': research_prediction_count,
+                  'representations': representations,
+                  'training_representations': model.get('_training_representations')}, allow_nan=False))
 """
 
 
@@ -565,12 +666,29 @@ def python_model_context(workspace, model):
         boundary = snapshots[-1] + 1
         workspace = workspace / Path(*model.parts[:boundary])
         model = Path(*model.parts[boundary:])
-    return workspace, str(model)
+    return workspace.resolve(), str(model)
 
 
 def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30, risk_quantile=.5,
                           require_fit=False, training_observations=None):
     """Run a Python model on input rows; current evaluation targets stay outside."""
+    parts = Path(model).parts
+    shared_submission = (len(parts) > 2 and parts[0] == "_submitted_models"
+        and (Path(workspace) / parts[0] / parts[1]).is_symlink())
+    source, inner = python_model_context(workspace, model)
+    shared_submission = shared_submission or any(
+        path.parent.name == "_submitted_models" and path.is_symlink()
+        for context, _ in _bound_model_contexts(source, inner)
+        for path in (context, *context.parents))
+    if shared_submission:
+        # A restored historical submission stays read-only. Its authored fit
+        # may write parameters, so execute only the selected context privately.
+        with TemporaryDirectory(prefix="hegel-submitted-fit-") as temporary:
+            copied = Path(temporary) / "snapshot"
+            _copy_execution_context(source, copied, [inner])
+            return evaluate_python_model(copied, inner, observations,
+                timeout_seconds=timeout_seconds, risk_quantile=risk_quantile,
+                require_fit=require_fit, training_observations=training_observations)
     workspace, model = python_model_context(workspace, model)
     payload = [{"features": row.features, "history": row.history} if hasattr(row, "features")
                else {"features": row["features"], "history": row.get("history", [])} for row in observations]
@@ -588,12 +706,23 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
         code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training),
                                              "1" if require_fit else "0"],
                                              json.dumps(payload), timeout_seconds, str(workspace))
+        execution = json.loads(stdout) if code == 0 else None
+        training_rows = (json.loads(training.read_text())
+                         if execution and execution.get("training_representations") is not None else [])
     result = {"returncode": code, "stderr": stderr, "timeout": timed_out,
               "risk_quantile": risk_quantile, "loss_kind": "mse" if risk_quantile == .5 else "pinball"}
     if code == 0:
-        execution = json.loads(stdout)
         predictions = execution["predictions"]
         result["model_dependencies"] = execution["model_dependencies"]
+        result["research_bindings"] = execution.get("research_bindings", [])
+        result["research_prediction_count"] = execution.get("research_prediction_count", 0)
+        representations = execution.get("representations")
+        result["representation_diagnostic"] = (representation_ambiguity(representations, observations)
+            if representations is not None else {"status": "not_exposed"})
+        training_representations = execution.get("training_representations")
+        if training_representations is not None:
+            result["training_representation_diagnostic"] = representation_ambiguity(
+                training_representations, training_rows, scope="selected_fitting_rows")
         if require_fit:
             result["fit_available"] = execution["fit_available"]
             if predictions is None:
@@ -608,20 +737,51 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
     return result
 
 
+def _archived_paid_trace(path):
+    path = Path(path)
+    return path.name == "paid_trace.json" and path.parent.parent.name == "archive"
+
+
+def archived_paid_trace_references(files, reference_archive, *, source_workspace=None):
+    """Keep identical immutable source traces once in the existing reference archive."""
+    reference_archive = Path(reference_archive).resolve()
+    references, originals = {}, []
+    source_traces = [(Path(source_workspace) / name, content)
+                     for name, content in files.items() if _archived_paid_trace(name)] \
+        if source_workspace is not None else []
+    for name, content in files.items():
+        if not _archived_paid_trace(name):
+            continue
+        original = next((path for text, path in originals if text == content), None)
+        if original is None:
+            original = reference_archive / name
+            if original.is_file():
+                if original.read_text(encoding="utf-8") != content:
+                    raise ValueError(f"Reference archive has different paid evidence: {original}")
+            else:
+                original.parent.mkdir(parents=True, exist_ok=True)
+                # Historical cleanup may remove a repeated nested path while
+                # retaining the same trace at another declared archive path.
+                source = next((path for path, text in source_traces if text == content
+                               and path.is_file() and path.read_text(encoding="utf-8") == content), None)
+                if source is not None:
+                    original.symlink_to(source.resolve())
+                else:
+                    original.write_text(content, encoding="utf-8")
+            originals.append((content, original))
+        references[name] = original.resolve()
+    return references
+
+
 def _copy_model_file(source, destination):
     """Keep writable files independent, sharing disk extents where supported."""
-    clone_supported = True
-    with open(source, "rb") as original, open(destination, "wb") as copied:
-        try:
-            fcntl.ioctl(copied.fileno(), 0x40049409, original.fileno())  # FICLONE
-        except OSError as error:
-            if error.errno not in {errno.EOPNOTSUPP, errno.ENOTTY, errno.EXDEV}:
-                raise
-            clone_supported = False
-    if not clone_supported:
-        return shutil.copy2(source, destination)
-    shutil.copystat(source, destination)
-    return destination
+    if _archived_paid_trace(source):
+        # Prior source evidence is immutable. Fits may write model/configuration
+        # files, so only the paid trace references its retained original.
+        Path(destination).unlink(missing_ok=True)
+        Path(destination).symlink_to(Path(source).resolve())
+        return destination
+    return clone_or_copy(source, destination)
 
 
 def _model_context_ignored(path, context_root):
@@ -632,19 +792,52 @@ def _model_context_ignored(path, context_root):
     return ((path.parent == context_root or path.parent.name == "_evaluated_model")
             and (path.name in {"code_agent_instructions.txt", "research_context.json",
                                "research_state.json", "method_decision.json", "active.json",
-                               "training.json", "archive.json", "evaluation.json", "result.json",
+                               "training.json", "interrupted_training.json", "archive.json", "evaluation.json", "result.json",
                                "protocol.json", "summary.json"}
+                 or (path.name.startswith("interrupted_training_") and path.suffix == ".json"
+                     and path.stem.removeprefix("interrupted_training_").isdigit())
                  or path.name.startswith(("code_action_", "code_call_"))))
+
+
+def _model_snapshot_ignored(path, context_root):
+    if _model_context_ignored(path, context_root):
+        return True
+    parts = path.relative_to(context_root).parts
+    # Other execution contexts are not inputs of this predictor. Keep inherited
+    # archives; explicitly bound children are copied separately from their roots.
+    return bool(parts and parts[0] != "archive" and "_evaluated_model" in parts)
+
+
+def _bound_model_contexts(directory, model):
+    bindings_file = directory / "model_bindings.json"
+    bindings = json.loads(bindings_file.read_text()).get(model, {}) if bindings_file.exists() else {}
+    for child_path in bindings.values():
+        context, inner = python_model_context(directory, child_path)
+        parts = Path(child_path).parts
+        snapshots = [index for index, part in enumerate(parts) if part == "_evaluated_model"]
+        if snapshots:
+            # Preserve the declared placement while copying a linked historical
+            # submission into a new writable execution context.
+            context = Path(directory) / Path(*parts[:snapshots[-1] + 1])
+        yield context, inner
+        yield from _bound_model_contexts(context, inner)
 
 
 def _copy_model_context(workspace, model, destination):
     source, model = python_model_context(workspace, model)
+    _copy_execution_context(source, destination, [model])
+    return model
+
+
+def _copy_execution_context(source, destination, models):
+    """Copy one execution root and its selected declared model dependencies."""
+    source = Path(source).resolve()
     destination = Path(destination).resolve()
     if source == destination:
-        return model
+        return
 
     def ignored(directory, names):
-        return {name for name in names if _model_context_ignored(Path(directory) / name, source)}
+        return {name for name in names if _model_snapshot_ignored(Path(directory) / name, source)}
 
     # Archives can live inside the source workspace. Stage outside that source
     # before installing the copy, so it never recursively copies itself.
@@ -661,27 +854,29 @@ def _copy_model_context(workspace, model, destination):
                 continue
             target = staged / path.name
             if path.is_dir():
-                shutil.copytree(path, target, ignore=ignored, copy_function=_copy_model_file)
+                try:
+                    shutil.copytree(path, target, ignore=ignored, copy_function=_copy_model_file)
+                except shutil.Error as error:
+                    failures = error.args[0]
+                    failed_source, failed_target, cause = failures[0]
+                    raise OSError(f"Model context copy failed for {len(failures)} paths; "
+                        f"first source={failed_source}; destination={failed_target}; cause={cause}") from None
             else:
                 _copy_model_file(path, target)
         # Target revisions can call an earlier retained target. Copy only
         # their declared contexts when the enclosing archive was skipped.
-        bindings_file = source / "model_bindings.json"
-        bindings = json.loads(bindings_file.read_text()).get(model, {}) if bindings_file.exists() else {}
-        for child_path in bindings.values():
-            child_context, _ = python_model_context(source, child_path)
+        children = (child for model in models for child in _bound_model_contexts(source, model))
+        for child_context, inner in sorted(children, key=lambda item: len(item[0].parts)):
             if child_context == source:
                 continue
             target = staged / child_context.relative_to(source)
             if not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(child_context, target,
-                                ignore=ignored, copy_function=_copy_model_file)
+                _copy_model_context(child_context, inner, target)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             shutil.rmtree(destination)
         shutil.move(str(staged), str(destination))
-    return model
 
 
 def retain_evaluated_python_model(workspace, model, channels, training_mse, *,
@@ -695,7 +890,7 @@ def retain_evaluated_python_model(workspace, model, channels, training_mse, *,
         training_text = json.dumps([asdict(row) if hasattr(row, "features") else row
                                     for row in training_observations])
         for filename in ("model_observations.json", "observations.json"):
-            (retained / filename).write_text(training_text, encoding="utf-8")
+            write_text_incrementally(retained / filename, training_text)
     return {"workspace": str(retained), "model": model, "source_model": source_model,
             "selected_channels": list(channels),
             "training_mse": training_mse, "model_source": (retained / model).read_text(),
@@ -719,21 +914,66 @@ def archive_confirmed_python_model(agent, destination):
             "training_rows": len(json.loads(training.read_text()))}
 
 
+def _python_model_context_files(directory):
+    directory = Path(directory)
+    files = {}
+    for root, directories, names in os.walk(directory):
+        directories[:] = [name for name in directories
+            if not _model_snapshot_ignored(Path(root) / name, directory)]
+        for name in names:
+            path = Path(root) / name
+            if path.is_file() and not _model_snapshot_ignored(path, directory):
+                files[path.relative_to(directory)] = path
+    return files
+
+
+def python_model_context_changes(workspace, model, snapshot_workspace, inner_model):
+    """Keep transient candidate differences against an existing retained context.
+
+    Rejected evaluations have no snapshot of their own. Store only their changed
+    input bytes for the next procedure step, without duplicating the unchanged
+    archive or writing another predictor context.
+    """
+    current, model = python_model_context(workspace, model)
+    submitted = _python_model_context_files(current)
+    original = _python_model_context_files(snapshot_workspace)
+    changes = {path: None for path in original.keys() - submitted.keys()}
+    for name, path in submitted.items():
+        reference = original.get(name)
+        if reference is not None and path.resolve() == reference.resolve():
+            continue  # The immutable paid trace already shares its original.
+        content = path.read_bytes()
+        if reference is None or content != reference.read_bytes():
+            changes[name] = content
+    dependencies = {}
+    for child_context, inner in _bound_model_contexts(current, model):
+        if child_context != current and _model_snapshot_ignored(child_context, current):
+            name = child_context.relative_to(current)
+            dependencies[name] = python_model_context_changes(
+                child_context, inner, Path(snapshot_workspace) / name, inner)
+    return {"model": model, "retained_model": inner_model,
+            "files": changes, "dependencies": dependencies}
+
+
 def python_model_context_matches(workspace, model, snapshot_workspace, inner_model):
     """Decide whether a submitted archive still contains the original predictor context."""
     current, model = python_model_context(workspace, model)
     if model != inner_model:
         return False
 
-    def context_files(directory):
-        directory = Path(directory)
-        return {path.relative_to(directory): path for path in directory.rglob("*")
-            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
-            and not _model_context_ignored(path, directory)}
-
-    submitted, original = context_files(current), context_files(snapshot_workspace)
-    return (submitted.keys() == original.keys()
-        and all(submitted[path].read_bytes() == original[path].read_bytes() for path in original))
+    submitted = _python_model_context_files(current)
+    original = _python_model_context_files(snapshot_workspace)
+    if (submitted.keys() != original.keys()
+            or any(submitted[path].read_bytes() != original[path].read_bytes() for path in original)):
+        return False
+    # Explicitly selected contexts are executable dependencies, even though
+    # unrelated generated contexts were omitted from the enclosing snapshot.
+    for child_context, inner in _bound_model_contexts(current, model):
+        if child_context != current and _model_snapshot_ignored(child_context, current):
+            retained_context = Path(snapshot_workspace) / child_context.relative_to(current)
+            if not python_model_context_matches(child_context, inner, retained_context, inner):
+                return False
+    return True
 
 
 class CodeAgent:
@@ -865,6 +1105,7 @@ class CodeAgent:
             started = monotonic()
             result = evaluate_python_model(self.workspace, model, observations,
                 timeout_seconds=remaining, risk_quantile=laboratory.spec.risk_quantile)
+            self.costs["compute_cost"] += result.get("research_prediction_count", 0)
             self.costs["python_execution_seconds"] += monotonic() - started
             result.pop("predictions", None)
             if action == "evaluate" and result["returncode"] == 0:

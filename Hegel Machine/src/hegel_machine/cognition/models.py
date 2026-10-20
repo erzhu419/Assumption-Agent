@@ -54,6 +54,9 @@ class SearchBudget:
     # caller explicitly releases it; the total limit and accounting remain
     # unchanged.
     reserve: int = 0
+    denied_requests: int = field(default=0, init=False, repr=False)
+    last_denied_request: dict[str, int] | None = field(default=None, init=False, repr=False)
+    completed_fits: int = field(default=0, init=False, repr=False)
 
     @property
     def remaining(self) -> int:
@@ -69,10 +72,20 @@ class SearchBudget:
         self.reserve = 0
         return held
 
-    def spend(self, units: int = 1) -> bool:
+    def can_spend(self, units: int) -> bool:
+        """Check work before starting it, retaining an actual allocation shortfall."""
         if units < 0:
             raise ValueError("budget units must be nonnegative")
         if units > self.remaining:
+            self.denied_requests += 1
+            self.last_denied_request = {"required_compute": units,
+                "available_compute": self.remaining,
+                "additional_compute": units - self.remaining}
+            return False
+        return True
+
+    def spend(self, units: int = 1) -> bool:
+        if not self.can_spend(units):
             return False
         self.spent += units
         return True

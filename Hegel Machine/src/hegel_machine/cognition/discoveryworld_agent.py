@@ -8,6 +8,7 @@ receives a scenario solver or the evaluation scorecard.
 from copy import deepcopy
 import ast
 import json
+from math import isfinite
 import sys
 from time import monotonic
 
@@ -324,6 +325,7 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
         self._python_runs = 0
         self._current_proposal = None
         self._procedure_confirmation_allowed = True
+        self._acquisition_review = None
         self.llm_inquiries, self._inquiry_stack = {}, []
         self._on_checkpoint = None
         self.started = monotonic()
@@ -372,12 +374,17 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
         return {**record, **self._action_observation(record),
                 "observation": self._public_observation(record["observation"])}
 
-    def _python(self, command, payload=""):
+    def _python(self, command, payload="", *, timeout_seconds=None):
         remaining = min(self.limits["python_seconds_per_call"],
                         self.limits["python_seconds_per_task"] - self.costs["python_execution_seconds"],
                         self.limits["task_wall_seconds"] - (monotonic() - self.started))
         if remaining <= 0:
             raise ValueError("Python or episode wall-time budget exhausted")
+        if timeout_seconds is not None:
+            timeout_seconds = float(timeout_seconds)
+            if not isfinite(timeout_seconds) or timeout_seconds <= 0:
+                raise ValueError("timeout_seconds must be positive and finite")
+            remaining = min(remaining, timeout_seconds)
         started = monotonic()
         try:
             return _run(command, payload, remaining, str(self.workspace))

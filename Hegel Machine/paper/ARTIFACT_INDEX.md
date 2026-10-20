@@ -1,5 +1,18 @@
 # Experimental materials
 
+## Window-method revision and retained abilities (18 October 2026)
+
+Section 5.7, Table 10 and Appendix I.7 use the [registered protocol](../artifacts/luna_window_parameter_transfer_20261017/protocol.json), [complete outcomes and learning ledger](../artifacts/luna_window_parameter_transfer_20261017/summary.json), [fourteen-practice publication](../artifacts/luna_window_parameter_transfer_20261017/published_result.json), and [frozen procedure](../artifacts/luna_window_parameter_transfer_20261017/published_method.py). The [prior thirteen-case source](../artifacts/luna_window_parameter_transfer_20261017/baseline_13of13/published_method.py) and [eight paired failures](../artifacts/luna_window_parameter_transfer_20261017/baseline_13of13/summary.json) are retained. All 26 old targets and eight new window targets pass with the new method; the earlier method stops without a model on 0/8 new successes. Four parameter groups each contain two dependent weight conditions. The fixed source predictor also passes 0/8. Target execution uses zero LLM calls.
+
+These small files reproduce the table and describe the complete protocol; they do not duplicate the 298-practice author archive or full target workspaces. Reading them and running `python3 scripts/regenerate_manuscript_tables.py` makes no model or environment calls. A new numerical replay uses `scripts/run_native_method_compilation.py` and the full checkout's original source archive and runtime, referenced in the saved protocol. The provided Python source is the frozen research procedure, not a self-contained copy of the entire runtime.
+
+
+## Frozen boundary-method transfer (17 October 2026)
+
+Section 5.6 and Appendix I.5 use the [saved protocol](../artifacts/luna_accepted_boundary_transfer_20261016/protocol.json), [outcomes](../artifacts/luna_accepted_boundary_transfer_20261016/summary.json), [accepted draft and practice support](../artifacts/luna_accepted_boundary_transfer_20261016/accepted_draft.json), and [unchanged Luna procedure](../artifacts/luna_accepted_boundary_transfer_20261016/accepted_method.py). These small files are copied from the completed run; full paid trial histories remain in the research archive. Table 9 regenerates from the saved summary without executing an experiment. Old-task confirmation/terminal success is 10/10; new-task confirmation is 4/4 and terminal success 2/4 across two parameter groups. The frozen source-answer control is 0/4. The source was accepted at 11/12 development support, with the later rejected draft and its costs retained in the protocol; this is not an autonomous all-case publication. Full numerical replay uses the existing `run_native_method_compilation.py --resume-targets` entry and requires the original archives referenced by the protocol.
+
+The subsequent published 12/12 method is evaluated separately in Section 5.6 and Appendix I.6: [fresh four-group protocol](../artifacts/luna_adaptive_boundary_transfer_20261017/protocol.json), [all outcomes and cost ledgers](../artifacts/luna_adaptive_boundary_transfer_20261017/summary.json), [unchanged published procedure](../artifacts/luna_adaptive_boundary_transfer_20261017/published_method.py), and [publication with twelve same-source practice records](../artifacts/luna_adaptive_boundary_transfer_20261017/published_result.json). Its old ten targets pass confirmation and terminal evaluation with unchanged individual errors, observations and charged computation. On eight new targets from four independent parameter groups, it passes 8/8 confirmations and terminal tests; the [paired old draft](../artifacts/luna_adaptive_boundary_transfer_20261017/baseline_11of12/accepted_method.py) confirms 4/8 and passes 0/8 terminal tests. Its [selection record](../artifacts/luna_adaptive_boundary_transfer_20261017/baseline_11of12/accepted_draft.json) and [original four-target summary](../artifacts/luna_adaptive_boundary_transfer_20261017/baseline_11of12/summary.json) preserve the earlier cohort separately. The fixed source-answer control is 0/8. Both arms finish research before terminal scoring and make no target-time LLM calls. Table 9 regenerates both cohorts from these small saved files; full paid histories and replay archives remain in the research archive.
+
 Open [manuscript.md](manuscript.md) for the complete paper, including Appendices A–I. Links preserve the extracted project's directory layout. Existing results, numerical replay, and new language-model authorship are different operations; the package records which is available.
 
 ## Recurrent representation, method transfer and continuation — §5.5 / Appendix I
@@ -67,7 +80,7 @@ authored proposal is distinct from resampling the model's adoption decision.
 
 ## Reading and execution
 
-Run commands from the project or extracted package root. The included [table generator](../scripts/regenerate_manuscript_tables.py) regenerates main Tables 4–7 directly from saved result and protocol JSON. It uses only the Python standard library and makes no simulator or model calls. The main-document builder uses the same table bodies before rendering, so editing narrative text cannot silently become the numerical data source:
+Run commands from the project or extracted package root. The included [table generator](../scripts/regenerate_manuscript_tables.py) regenerates main Tables 4–10 directly from saved result and protocol JSON. It uses only the Python standard library and makes no simulator or model calls. The main-document builder uses the same table bodies before rendering, so editing narrative text cannot silently become the numerical data source:
 
 ```bash
 python3 scripts/regenerate_manuscript_tables.py --output /tmp/hegel-tables.md --json-output /tmp/hegel-tables.json
@@ -116,7 +129,7 @@ The [method-revision runner](../scripts/run_temporal_counterexample_learning.py)
 
 ## Package and limitations
 
-The fixed local manuscript release is **paper-2026-10-11-v2**. Its [reviewer instructions](README.md) give the short replay route; [finalization record](FINALIZATION.md) states the experimental freeze and publication metadata status.
+The fixed local manuscript release is **paper-2026-10-12-v3**. Its [reviewer instructions](README.md) give the short replay route; [finalization record](FINALIZATION.md) states the experimental freeze and publication metadata status.
 
 Preview or create the selective bundle after the combined PDF has been compiled:
 
@@ -125,7 +138,7 @@ python3 scripts/package_manuscript_evidence.py --dry-run
 python3 scripts/package_manuscript_evidence.py
 ```
 
-The output is `paper/releases/hegel_machine_paper_2026-10-11_v2.zip`. The packager creates a new archive and leaves an existing release untouched. For a later revision, update both its `RELEASE` identifier and default output filename, together with the release documents; changing `--output` alone does not change the recorded release identifier. Extract it as one directory and open `paper/ARTIFACT_INDEX.md`; relative Markdown links retain the project layout. The bundle contains the combined manuscript MD/TeX/PDF, figures, linked local evidence, saved source files and the local Python dependencies of linked analysis scripts. `paper/README.md` identifies the Markdown editing source and gives the command for the included [document builder](../scripts/build_manuscript.py). `paper/BUNDLE_CONTENTS.json` lists the included paths and distinguishes current source files.
+The output is `paper/releases/hegel_machine_paper_2026-10-12_v3.zip`. The packager creates a new archive and leaves an existing release untouched. For a later revision, update both its `RELEASE` identifier and default output filename, together with the release documents; changing `--output` alone does not change the recorded release identifier. Extract it as one directory and open `paper/ARTIFACT_INDEX.md`; relative Markdown links retain the project layout. The bundle contains the combined manuscript MD/TeX/PDF, figures, linked local evidence, saved source files and the local Python dependencies of linked analysis scripts. `paper/README.md` identifies the Markdown editing source and gives the command for the included [document builder](../scripts/build_manuscript.py). `paper/BUNDLE_CONTENTS.json` lists the included paths and distinguishes current source files.
 
 This is a selective review bundle. Large unlinked case records, raw provider logs, environments, credentials, CSV datasets and checkpoints are excluded. Original result JSON may contain absolute provenance paths from the research machine; these are preserved, not presented as portable links. Analysis or replay requiring those omitted archives needs the complete checkout and path rebinding. Partial snapshots and current dependencies are identified above. The package supplies inspectable evidence and the available replay entry points; it is not an immutable full-environment reproduction or a permanent external repository.
 

@@ -5,14 +5,16 @@ import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from random import Random
 import subprocess
 import sys
 import time
 
-from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from scripts.run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime
 
 
 def laboratory(task):
@@ -21,6 +23,16 @@ def laboratory(task):
 
     class NestedScalarLab:
         channels = ()
+        task_interface = """Investigate an unknown apparatus through its public controls.
+query {actions:[{kind:'trajectory',sequence:[{control_name:number,...},...],channels:[]},...]}
+buys one response per supplied control step. Each trajectory starts independently
+at the apparatus reset state. Supply every public control within its bounds and
+respect max_probe_length. There are no auxiliary measurement channels.
+Write Python predict(row) using row['features'] and row['history']; history
+contains only preceding controls since reset, never past response targets.
+Fresh confirmation and terminal prediction use independent control trajectories
+within the same public bounds and horizon. The apparatus is fixed per episode.
+"""
 
         def __init__(self):
             rng = Random(task['apparatus_seed'])
@@ -35,6 +47,90 @@ def laboratory(task):
         def spec_for(self, channels=()):
             assert not channels
             return self.spec
+
+        def public_spec(self):
+            return {"controls": list(self.spec.feature_names),
+                "feature_bounds": {name: list(bounds)
+                    for name, bounds in self.spec.feature_bounds.items()},
+                "action_kinds": ["trajectory"], "channels": [],
+                "max_probe_length": self.spec.max_probe_length,
+                "observation_cost_per_row": 1,
+                "reset": "Every trajectory starts from the apparatus reset state.",
+                "prediction_contract": "Current and preceding controls only; no past targets."}
+
+        def action_cost(self, action):
+            if action.get("kind") != "trajectory":
+                raise ValueError("the available action kind is trajectory")
+            sequence = action.get("sequence")
+            if not isinstance(sequence, list) or not 1 <= len(sequence) <= self.spec.max_probe_length:
+                raise ValueError("trajectory length must respect the public maximum probe length")
+            if action.get("channels", []) != []:
+                raise ValueError("the apparatus has no auxiliary channels")
+            for point in sequence:
+                if not isinstance(point, dict) or set(point) != set(self.spec.feature_names):
+                    raise ValueError("each step must supply exactly the public controls")
+                for name, (low, high) in self.spec.feature_bounds.items():
+                    if not isinstance(point[name], (int, float)) or not low <= point[name] <= high:
+                        raise ValueError(f"control {name} must be a number within its public bounds")
+            return len(sequence)
+
+        def prediction_rows(self, action):
+            """Construct control-only forecasts without consulting the apparatus."""
+            self.action_cost(action)
+            history, rows = [], []
+            for point in action["sequence"]:
+                rows.append(Observation(dict(point), 0., tuple(deepcopy(history))))
+                history.append(dict(point))
+            return rows
+
+        def execute(self, action):
+            count = self.action_cost(action)
+            first = self.observation_cost
+            probe = Probe(f"inquiry_{len(self.acquisitions)}", tuple(deepcopy(action["sequence"])))
+            batch = self.acquire(probe)
+            rows = [Observation(dict(row.features), row.target,
+                tuple({name: point[name] for name in self.spec.feature_names}
+                      for point in row.history)) for row in batch.observations]
+            return {"observation_index": first, "row_indices": list(range(first, first + count)),
+                "action": deepcopy(action), "rows": [asdict(row) for row in rows],
+                "measurements": [], "observation_cost": batch.observation_cost,
+                "measurement_cost": batch.measurement_cost}
+
+        def observation_rows(self, record):
+            return [Observation(dict(row["features"]), row["target"], tuple(deepcopy(row["history"])))
+                    for row in record["rows"]]
+
+        @staticmethod
+        def confirmation_precondition(score, *, mse_threshold):
+            from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
+            return AnonymousHistoryLab.confirmation_precondition(score, mse_threshold=mse_threshold)
+
+        def confirmation_actions(self, n, rng):
+            actions = []
+            while n > 0:
+                count = min(n, self.spec.max_probe_length)
+                actions.append({"kind": "trajectory", "channels": [],
+                    "sequence": [{name: rng.uniform(*bounds)
+                        for name, bounds in self.spec.feature_bounds.items()} for _ in range(count)]})
+                n -= count
+            return actions
+
+        def evaluation_rows(self, *, length=256, seed=1000003):
+            separate = laboratory({**task, "noise_seed": seed})
+            return [row for action in separate.confirmation_actions(length, Random(seed))
+                    for row in separate.observation_rows(separate.execute(action))]
+
+        def restore_paid_account(self, observations, costs):
+            """Restore paid records and the noise stream, without repeating physics."""
+            if self.observation_cost or self.acquisitions:
+                raise ValueError("restore the paid account only into a fresh apparatus")
+            self.observation_cost = costs["observation_cost"]
+            self.acquisitions = [{"probe_id": f"inquiry_{index}",
+                "sequence": deepcopy(record["action"]["sequence"]), "channels": []}
+                for index, record in enumerate(observations)]
+            if task.get("noise_sigma", 0.):
+                for _ in range(self.observation_cost):
+                    self._noise.gauss(0., task["noise_sigma"])
 
         @property
         def costs(self):

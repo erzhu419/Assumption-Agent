@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+from math import isfinite
 import os
 from pathlib import Path
 from statistics import pvariance
@@ -30,9 +31,37 @@ a refit using the new labels. This diagnostic is separate from fresh finish.
 Optional readout defines readout(result,public_spec,memory). result includes the
 proposal, prior_fit, forecasts, observations and record_indices. Each forecast
 has model, predictions, prediction_inputs and, after acquisition, prospective_mse.
+Each returned observation has record_index, its position in the complete
+laboratory_observations.json array. observation_index is the first response row
+ID, not the record ID; row_indices lists that experiment's response row IDs.
+analysis_scope names the actual purchased records, inclusive response-row ranges,
+forecast models and their original paid cutoff. Reanalyzing an old revision keeps
+that experiment fixed; newer_paid_row_count identifies later rows outside it.
+For a different purchased query without frozen forecasts, use analyze_evidence
+with record_indices:[...] from laboratory_observations.json instead of an old
+revision index. recent_paid_records exposes the same record IDs and row ranges.
+Each record reference includes control_runs: consecutive equal public inputs,
+with inclusive step ranges starting from the reset. initial_history_length
+locates the first response in that sequence. These are actual inputs, not
+author-assigned experiment roles. Check the whole trajectory before interpreting
+a contrast as isolated interventions; numerical checks only evaluate its sum.
+Evidence for analyze_evidence must belong to those selected records; include both
+old and new record IDs when comparing their responses.
 Return {status:'supported'|'refuted'|'inconclusive',answer:...,evidence:[row IDs]}.
 The answer is authored analysis, not a runtime claim of truth. It returns to the
 query question and parent; a negative child answer can inform further research.
+Optional checks make particular local relations executable. For example,
+checks:[{id:'contrast',terms:[{row:0,coefficient:1},{row:1,coefficient:-1}],
+relation:'eq',expected:0,atol:1e-9,scope:{...}}] compares the weighted sum of
+actual purchased target labels with expected. Row IDs must be cited in evidence;
+relations are eq/le/ge/lt/gt (strict comparisons require a gap greater than atol).
+Each check retains its scope, numerical result and raw paid witnesses. The runtime
+does not infer a global law from a local relation. authored_answer remains intact;
+check_results and evidence_status distinguish supported/refuted/inconclusive
+numerical checks from not_checked prose. Violated checks cannot return supported
+state. Without checks, legacy authored status remains authored and cannot support
+a managed parameter input. Extra answer fields such as parameter_region and scope
+are carried to the parent together with the executed checks.
 Queries returned by compare_experiments name saved predictors with their own
 fitting contexts. proposal.original_models maps those executable paths back to
 the originally offered paths; later paid labels do not change their fitting view.
@@ -86,6 +115,10 @@ def _forecast_models(agent, models, rows, forecasts, *, model_contexts=None):
             forecast['execution_model'] = execution_model
         forecasts.append(forecast)
         try:
+            prepare = getattr(agent, '_prepare_research_model', None)
+            update = prepare(execution_model) if callable(prepare) else None
+            if update is not None:
+                forecast['research_input_update'] = update
             forecast['source'] = _sources(agent, execution_model)
             remaining = agent.config.execution_seconds - agent.costs['python_execution_seconds']
             if remaining <= 0:
@@ -94,6 +127,7 @@ def _forecast_models(agent, models, rows, forecasts, *, model_contexts=None):
             started = monotonic()
             try:
                 result = evaluate_python_model(agent.workspace, execution_model, rows, timeout_seconds=remaining)
+                agent.costs['compute_cost'] += result.get('research_prediction_count', 0)
             finally:
                 agent.costs['python_execution_seconds'] += monotonic() - started
             # Placeholder target errors are not scientific results.
@@ -112,12 +146,16 @@ def _compare_paid_models(agent, models, prior_fit, *, model_contexts=None,
             break
         execution_model = (model_contexts or {}).get(model, model)
         try:
+            prepare = getattr(agent, '_prepare_research_model', None)
+            update = prepare(execution_model) if callable(prepare) else None
             if target == 'response':
                 score = agent._score(execution_model)
                 agent._retain_evaluation(execution_model, score)
             else:
                 from .observable_research import evaluate_observable
                 score = evaluate_observable(agent, {'target': target, 'model': execution_model}, laboratory)
+            if update is not None:
+                score['research_input_update'] = update
             prior_fit.append({'model': model, **score})
         except (ValueError, TypeError, KeyError, OSError) as error:
             prior_fit.append({'model': model, 'error': f'{type(error).__name__}: {error}'})
@@ -131,6 +169,10 @@ def _comparison_contexts(agent, models, record, *, target='response', laboratory
         candidate = {'source_model': model}
         record['candidate_contexts'].append(candidate)
         try:
+            prepare = getattr(agent, '_prepare_research_model', None)
+            update = prepare(model) if callable(prepare) else None
+            if update is not None:
+                candidate['research_input_update'] = update
             directory, inner = python_model_context(agent.workspace, model)
             if not (directory / inner).is_file():
                 raise FileNotFoundError(model)
@@ -386,6 +428,141 @@ def complete_revision(agent, record, observations, record_indices, laboratory, q
     return deepcopy(record)
 
 
+def _check_local_relations(agent, answer, target):
+    """Recompute only the author's declared relations on actually paid labels."""
+    checks = answer.get('checks', [])
+    if not isinstance(checks, list):
+        return [{'status': 'inconclusive', 'error': 'checks must be a list'}], 'inconclusive'
+    readings = ({} if target == 'response' else {
+        item['observation_index']: item['values'][target]
+        for record in agent.observations for item in record.get('measurements', [])
+        if target in item['values']})
+    results = []
+    for check in checks:
+        result = {'declaration': deepcopy(check), 'status': 'inconclusive'}
+        results.append(result)
+        try:
+            if not isinstance(check, dict) or not check.get('id'):
+                raise ValueError('each check needs an id')
+            result.update(id=check['id'], scope=deepcopy(check.get('scope', answer.get('scope'))),
+                          target=target, witnesses=[])
+            terms = check['terms']
+            if not isinstance(terms, list) or not terms:
+                raise ValueError('a check needs nonempty terms')
+            expected, tolerance = float(check['expected']), float(check.get('atol', 1e-9))
+            if not isfinite(expected) or not isfinite(tolerance) or tolerance < 0:
+                raise ValueError('expected and nonnegative atol must be finite')
+            if agent.costs['compute_cost'] + len(terms) > agent.config.compute_budget:
+                raise ValueError('local evidence check compute budget exhausted')
+            value = 0.
+            for term in terms:
+                index, coefficient = term['row'], float(term.get('coefficient', 1.))
+                if type(index) is not int or index not in answer['evidence']:
+                    raise ValueError('check rows must be cited paid evidence')
+                if not isfinite(coefficient):
+                    raise ValueError('check coefficients must be finite')
+                row = agent.rows[index]
+                observed = row.target if target == 'response' else readings[index]
+                result['witnesses'].append({'row': index, 'coefficient': coefficient,
+                    'features': deepcopy(row.features), 'history': deepcopy(row.history),
+                    'target': observed})
+                value += coefficient * observed
+            agent.costs['compute_cost'] += len(terms)
+            residual = value - expected
+            predicates = {'eq': abs(residual) <= tolerance, 'le': residual <= tolerance,
+                          'ge': residual >= -tolerance, 'lt': residual < -tolerance,
+                          'gt': residual > tolerance}
+            relation = check['relation']
+            if relation not in predicates or not isfinite(value):
+                raise ValueError('check requires a finite value and eq/le/ge/lt/gt relation')
+            result.update(value=value, expected=expected, residual=residual, atol=tolerance,
+                          relation=relation, status='satisfied' if predicates[relation] else 'violated')
+        except (ValueError, TypeError, KeyError, IndexError) as error:
+            result['error'] = f'{type(error).__name__}: {error}'
+    status = ('not_checked' if not results else
+              'refuted' if any(item['status'] == 'violated' for item in results) else
+              'supported' if all(item['status'] == 'satisfied' for item in results) else 'inconclusive')
+    return results, status
+
+
+def _index_ranges(indices):
+    """Keep a row selection exact and readable without repeating every row ID."""
+    ranges = []
+    for index in sorted(set(indices)):
+        if ranges and index == ranges[-1][1] + 1:
+            ranges[-1][1] = index
+        else:
+            ranges.append([index, index])
+    return ranges
+
+
+def readout_record_references(observations, record_indices):
+    """Expose actual experiment inputs alongside unambiguous evidence addresses."""
+    references = []
+    for index, observation in zip(record_indices, observations):
+        rows = observation['rows']
+        history = rows[0].get('history', []) if rows else []
+        runs = []
+        for step, controls in enumerate([*history, *(row['features'] for row in rows)]):
+            if runs and runs[-1]['controls'] == controls:
+                runs[-1]['steps'][1] = step
+            else:
+                runs.append({'steps': [step, step], 'controls': deepcopy(controls)})
+        references.append({'record_index': index,
+            'observation_index': observation['observation_index'],
+            'response_row_ranges': _index_ranges(observation['row_indices']),
+            'initial_history_length': len(history), 'control_runs': runs})
+    return references
+
+
+def revision_evidence_scope(agent, record):
+    """Describe this saved experiment, independently of the latest paid query."""
+    proposal = record.get('proposal')
+    observations = (record.get('observations', [])
+                    if record.get('kind') != 'paid_evidence_analysis' else
+                    [agent.observations[i] for i in record['record_indices']])
+    indices = [index for observation in observations for index in observation['row_indices']]
+    last = max(indices, default=-1)
+    return {
+        'revision_index': record['index'],
+        'revision_id': proposal.get('id') if isinstance(proposal, dict) else None,
+        'kind': record.get('kind', 'prospective_revision'),
+        'target': record.get('target', 'response'),
+        'record_indices': list(record.get('record_indices', [])),
+        'record_references': readout_record_references(observations, record.get('record_indices', [])),
+        'response_row_ranges': _index_ranges(indices), 'response_row_count': len(indices),
+        'paid_rows_at_analysis': len(agent.rows),
+        'newer_paid_row_count': max(0, len(agent.rows) - last - 1),
+        'forecast_evidence_cutoff': (deepcopy(record.get('evidence_cutoff'))
+                                     if record.get('forecasts') else None),
+        'forecast_results': [{key: deepcopy(forecast[key]) for key in
+                             ('model', 'prospective_mse', 'scored_rows', 'complete_experiment', 'error')
+                             if key in forecast} for forecast in record.get('forecasts', [])],
+    }
+
+
+def analyze_paid_evidence(agent, path, laboratory, question=None, *, target='response',
+                          record_indices=None):
+    """Return a local analysis of existing observations without another query."""
+    if not agent.observations:
+        raise ValueError('analysis requires existing paid observations')
+    selected = (list(range(len(agent.observations))) if record_indices is None else record_indices)
+    if (not isinstance(selected, list) or not selected
+            or any(type(index) is not int or not 0 <= index < len(agent.observations)
+                   for index in selected) or len(set(selected)) != len(selected)):
+        raise ValueError('record_indices must identify distinct existing paid observation records')
+    record = {'index': len(agent.revisions), 'kind': 'paid_evidence_analysis',
+              'proposal': {'id': f'paid_analysis_{len(agent.revisions)}',
+                           'affected_object': 'local_claim', 'readout': path},
+              'target': target, 'status': 'observed', 'record_indices': list(selected),
+              'evidence_cutoff': {'records': len(agent.observations), 'rows': len(agent.rows)},
+              'actions': [], 'forecasts': [], 'prior_fit': []}
+    if question is not None:
+        record['question_id'] = question['id']
+    agent.revisions.append(record)
+    return analyze_revision(agent, record, laboratory, question, path=path)
+
+
 def analyze_revision(agent, record, laboratory, question=None, *, path=None):
     """Run an authored readout on this experiment's saved predictions and evidence.
 
@@ -393,20 +570,30 @@ def analyze_revision(agent, record, laboratory, question=None, *, path=None):
     The original readout and every later executed revision remain inspectable.
     """
     path = path or record['proposal'].get('readout')
-    if not path or not record.get('observations'):
+    paid_analysis = record.get('kind') == 'paid_evidence_analysis'
+    if not path or not (record.get('observations') or paid_analysis and record.get('record_indices')):
         raise ValueError('analysis requires a readout path and an acquired revision')
     source = ((agent.workspace / path).read_text(encoding='utf-8')
               if path != record['proposal'].get('readout') or record.get('analysis_attempts')
               else record.get('readout_source') or (agent.workspace / path).read_text(encoding='utf-8'))
-    attempt = {'path': path, 'source': source, 'paid_rows': len(agent.rows)}
+    scope = record['analysis_scope'] = revision_evidence_scope(agent, record)
+    attempt = {'path': path, 'source': source, 'paid_rows': len(agent.rows),
+               'analysis_scope': deepcopy(scope)}
     record.setdefault('analysis_attempts', []).append(attempt)
     record.pop('readout_error', None)
     try:
         agent._prepare_program_state()
+        # Add the existing archive-position ID only to the transient readout input;
+        # paid records and their original response-row IDs stay unchanged.
+        observations = ([agent.observations[i] for i in record['record_indices']]
+                        if paid_analysis else record['observations'])
+        readout_input = {**record, 'observations': [
+            {**observation, 'record_index': index}
+            for index, observation in zip(record['record_indices'], observations)]}
         code, stdout, stderr, timed_out = agent._python(
             [sys.executable, '-c', _READOUT_RUNNER], json.dumps({
                 'source': source, 'path': path,
-                'result': record, 'spec': laboratory.public_spec(), 'memory': agent.knowledge}))
+                'result': readout_input, 'spec': laboratory.public_spec(), 'memory': agent.knowledge}))
         execution = {'returncode': code, 'stderr': stderr, 'timeout': timed_out}
         record['readout_execution'] = execution
         attempt['execution'] = deepcopy(execution)
@@ -421,11 +608,33 @@ def analyze_revision(agent, record, laboratory, question=None, *, path=None):
         if (not isinstance(evidence, list) or not evidence
                 or any(type(i) is not int or not 0 <= i < len(agent.rows) for i in evidence)):
             raise ValueError('readout evidence must reference actual paid response row indices')
+        if paid_analysis:
+            selected_rows = {index for observation in readout_input['observations']
+                             for index in observation['row_indices']}
+            outside = sorted(set(evidence) - selected_rows)
+            if outside:
+                raise ValueError('readout evidence must reference rows in the selected paid '
+                                 f'observation records; outside row IDs: {outside}')
         record['authored_answer'] = deepcopy(answer)
         record['analysis_is_agent_authored'] = True
+        checks, evidence_status = _check_local_relations(agent, answer, record.get('target', 'response'))
+        record.update(check_results=deepcopy(checks), evidence_status=evidence_status)
+        attempt.update(check_results=deepcopy(checks), evidence_status=evidence_status)
+        answer_scope = {**scope, 'cited_response_row_ranges': _index_ranges(evidence)}
+        answer = {**answer, 'authored_status': answer['status'],
+                  'evidence_status': evidence_status, 'check_results': checks,
+                  'analysis_scope': deepcopy(answer_scope)}
+        if evidence_status == 'refuted':
+            answer['status'] = 'refuted'
+        elif evidence_status == 'inconclusive' and answer['status'] == 'supported':
+            answer['status'] = 'inconclusive'
+        record['returned_answer'] = deepcopy(answer)
         if question is not None:
-            question.update({key: deepcopy(answer[key]) for key in ('status', 'answer', 'evidence')})
-            question['reviewed_through_observation'] = len(agent.rows) - 1
+            question.update({key: deepcopy(answer[key]) for key in (
+                'status', 'answer', 'evidence', 'authored_status', 'evidence_status', 'check_results',
+                'analysis_scope')})
+            question['reviewed_through_observation'] = max(
+                question.get('reviewed_through_observation', -1), max(evidence))
             question['revision_index'] = record['index']
             returned = getattr(agent, '_return_revision_answer', None)
             if callable(returned):

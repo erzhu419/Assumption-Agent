@@ -6,6 +6,7 @@ from random import Random
 import pytest
 
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+from hegel_machine.cognition.anonymous_method_learning import paid_scene_trial_preparer
 from hegel_machine.cognition.python_method_learning import PythonArchiveMethodLearner
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH
 
@@ -73,6 +74,19 @@ def test_practice_cannot_exceed_remaining_author_account(tmp_path, monkeypatch):
     limits = calls[0]['limits']
     assert (limits.observation_budget, limits.compute_budget, limits.execution_seconds) == (400, 200000, 50.)
     assert limits.confirmation_rows == 96
+
+
+def test_restored_scene_can_use_exactly_remaining_confirmation_allowance(tmp_path, monkeypatch):
+    requested = InquiryLLMConfig(observation_budget=576, confirmation_rows=96,
+        compute_budget=250000, execution_seconds=300., max_model_calls=0, token_budget=0)
+    learner, calls = make_learner(tmp_path, monkeypatch, requested)
+    restored = paid_scene_trial_preparer({}, tmp_path / 'retained.json', lambda _: PublicLab())
+    learner.prepare_trial.initial_observation_cost = restored.initial_observation_cost
+    learner.costs['observation_cost'] = learner.config.observation_budget - 96
+    outcome = learner._practice('sample')
+    assert outcome['status'] == 'method_stopped'
+    assert len(calls) == 1
+    assert calls[0]['limits'].observation_budget == calls[0]['limits'].confirmation_rows == 96
 
 
 @pytest.mark.parametrize('exhausted', ['author_observations', 'author_compute', 'practice_observations'])

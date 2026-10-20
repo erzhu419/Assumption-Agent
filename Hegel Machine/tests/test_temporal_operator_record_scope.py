@@ -50,7 +50,8 @@ def test_selected_current_records_repair_drift_without_reusing_old_labels(tmp_pa
     result = operator(agent, lab, "response", instrument="current.json", records=[3, 4, 5])
     assert result["split"] == {"records": [3, 4, 5], "training_records": [3],
                                "validation_records": [4, 5], "train_rows": 24,
-                               "holdout_rows": 48}
+                               "holdout_rows": 48, "requested_validation_records": [4, 5],
+                               "duplicate_groups": []}
     diagnostic = result["paid_meter_consistency"]
     assert diagnostic["records"] == [3, 4, 5]
     assert diagnostic["measured_rows"] == diagnostic["scored_rows"] == 72
