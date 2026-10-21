@@ -20,6 +20,38 @@ from .temporal_paired_method import FROZEN_METHOD_INTERFACE, execute_procedure
 from .temporal_paired_practice import practice_execution_summary
 
 
+def compact_workspace_result(agent, result):
+    """Reuse the practice result protocol while retaining complete execution files on disk."""
+    result["outgoing_knowledge"].pop("files")
+    result["outgoing_knowledge"]["workspace"] = str(agent.workspace)
+    # Practice evidence remains in its workspace. Its outgoing history is
+    # a view of the complete restorable questions, not another bank copy.
+    inherited = len(agent.knowledge.get("question_traces", []))
+    traces = result["outgoing_knowledge"]["question_traces"]
+    state_path = agent.workspace / "research_state.json"
+    saved_questions = (json.loads(state_path.read_text())["questions"]
+        if state_path.is_file() and any("native_condition_research" in question
+            for question in agent.questions) else [])
+    for index, question in enumerate(agent.questions):
+        if ("native_condition_research" in question and index < len(saved_questions)
+                # JSON arrays also represent the native engine's tuples.
+                and json.loads(json.dumps(question["native_condition_research"]))
+                    == saved_questions[index].get("native_condition_research")):
+            reference = {
+                "full_content_file": "research_state.json",
+                "json_path": ["questions", index, "native_condition_research"],
+                "round_count": len(question["native_condition_research"]),
+            }
+            traces[inherited + index]["native_condition_research"] = deepcopy(reference)
+            result["online_questions"][index]["native_condition_research"] = reference
+    result["inherited_files_changed"] = sorted(
+        name for name in agent.inherited_files
+        if (agent.workspace / name).is_file()
+        and (agent.workspace / name).read_text(encoding="utf-8") != agent.knowledge["files"][name])
+    result["knowledge_protocol"] = "method_practice_workspace"
+    return result
+
+
 EMPTY_METHOD = '''def select_actions(spec, records, memory):
     return {'stop': 'No research method has been authored yet.'}
 '''
@@ -190,35 +222,7 @@ class AnonymousPreparedMethodAgent(CommonArchiveInquiryAgent, PreparedPythonMeth
         return {}
 
     def result(self, status):
-        result = super().result(status)
-        result["outgoing_knowledge"].pop("files")
-        result["outgoing_knowledge"]["workspace"] = str(self.workspace)
-        # Practice evidence remains in its workspace. Its outgoing history is
-        # a view of the complete restorable questions, not another bank copy.
-        inherited = len(self.knowledge.get("question_traces", []))
-        traces = result["outgoing_knowledge"]["question_traces"]
-        state_path = self.workspace / "research_state.json"
-        saved_questions = (json.loads(state_path.read_text())["questions"]
-            if state_path.is_file() and any("native_condition_research" in question
-                for question in self.questions) else [])
-        for index, question in enumerate(self.questions):
-            if ("native_condition_research" in question and index < len(saved_questions)
-                    # JSON arrays also represent the native engine's tuples.
-                    and json.loads(json.dumps(question["native_condition_research"]))
-                        == saved_questions[index].get("native_condition_research")):
-                reference = {
-                    "full_content_file": "research_state.json",
-                    "json_path": ["questions", index, "native_condition_research"],
-                    "round_count": len(question["native_condition_research"]),
-                }
-                traces[inherited + index]["native_condition_research"] = deepcopy(reference)
-                result["online_questions"][index]["native_condition_research"] = reference
-        result["inherited_files_changed"] = sorted(
-            name for name in self.inherited_files
-            if (self.workspace / name).is_file()
-            and (self.workspace / name).read_text(encoding="utf-8") != self.knowledge["files"][name])
-        result["knowledge_protocol"] = "method_practice_workspace"
-        return result
+        return compact_workspace_result(self, super().result(status))
 
     def _attach_research_advice(self, action, arguments, result, laboratory):
         result.pop("available_research_action", None)

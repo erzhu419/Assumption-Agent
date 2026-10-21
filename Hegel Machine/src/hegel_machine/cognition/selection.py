@@ -1,6 +1,6 @@
 """Representative experiments and prospective comparison of executable models."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from random import Random
 from statistics import mean
 
@@ -39,10 +39,11 @@ def representative_probe(spec, *, seed, index, remaining, used=(), candidates=()
 class AssessedCandidate:
     candidate: Candidate
     score: float
-    reference_loss: float
+    reference_loss: float | None
     evidence_loss: float
     fresh_loss: float | None = None
     origins: tuple[Candidate, ...] = ()
+    assessment_scope: dict | None = None
 
 
 def rank_candidates(candidates, observations, reference, *, fallback, q, budget,
@@ -138,6 +139,77 @@ def retain_history_frontier(ranked, observations, *, maximum):
     return selected, {"history_frontier": frontier}
 
 
+def retain_research_comparison_pool(assessed, public_predictions, *, maximum):
+    """Retain research alternatives without changing task ranking or adoption.
+
+    ``public_predictions`` maps expanded Programs to complete prediction tuples
+    on the same declared public panel. Missing entries and None are UNKNOWN.
+    The caller has already charged these forecasts and the evidence assessment
+    to its existing budget; this function never evaluates a Program. A panel
+    signature is finite behavior, not a claim of global program equivalence.
+    """
+    by_program = {}
+    for row in assessed:
+        by_program.setdefault(row.candidate.program.expanded(), []).append(row)
+    positions = {id(row): index for index, row in enumerate(assessed)}
+    evidence_key = lambda row: (row.evidence_loss, row.candidate.program.size, positions[id(row)])
+    unique, clones = [], []
+    for program, rows in by_program.items():
+        representative = min(rows, key=evidence_key)
+        origins = []
+        for row in rows:
+            for origin in row.origins or (row.candidate,):
+                if all(prior.candidate_id != origin.candidate_id for prior in origins):
+                    origins.append(origin)
+        retained = replace(representative, origins=tuple(origins))
+        positions[id(retained)] = positions[id(representative)]
+        unique.append(retained)
+        if len(rows) > 1 or len(origins) > 1:
+            clones.append({'representative_id': retained.candidate.candidate_id,
+                           'origin_ids': [origin.candidate_id for origin in origins]})
+    groups, unknown = {}, []
+    for row in unique:
+        predictions = public_predictions.get(row.candidate.program.expanded())
+        if predictions is None:
+            unknown.append(row.candidate.candidate_id)
+        else:
+            groups.setdefault(tuple(predictions), []).append(row)
+    selected, reasons, covered = [], {}, set()
+
+    def retain(row, reason):
+        if row in selected:
+            reasons[row.candidate.candidate_id].append(reason)
+        elif len(selected) < maximum:
+            selected.append(row)
+            reasons[row.candidate.candidate_id] = [reason]
+            signature = public_predictions.get(row.candidate.program.expanded())
+            if signature is not None:
+                covered.add(tuple(signature))
+
+    if unique and maximum > 0:
+        retain(min(unique, key=evidence_key), 'minimum_evidence_loss')
+        retain(min(unique, key=lambda row: (
+            row.candidate.program.size, row.evidence_loss, positions[id(row)])), 'minimum_complexity')
+        representatives = [(signature, min(rows, key=evidence_key)) for signature, rows in groups.items()]
+        for signature, row in sorted(representatives, key=lambda item: evidence_key(item[1])):
+            if signature not in covered:
+                retain(row, 'different_public_behavior')
+        for row in unique:
+            retain(row, 'task_rank_fill')
+    details = {'pool_kind': 'research_comparison_only', 'maximum': maximum,
+        'input_candidate_count': len(assessed), 'unique_program_count': len(unique),
+        'expanded_clone_groups': clones, 'unknown_prediction_ids': unknown,
+        'public_behavior_groups': [{'candidate_ids': [row.candidate.candidate_id for row in rows],
+            'representative_id': min(rows, key=evidence_key).candidate.candidate_id,
+            'retained': signature in covered} for signature, rows in groups.items()],
+        'retained': [{'candidate_id': row.candidate.candidate_id,
+            'reasons': reasons[row.candidate.candidate_id],
+            'evidence_loss': row.evidence_loss, 'complexity': row.candidate.program.size,
+            'assessment_scope': row.assessment_scope} for row in selected],
+        'prediction_compute_cost': 0, 'task_adoption_evaluated': False}
+    return selected, details
+
+
 def _current_terms(program):
     if program.op == "call" and program.history_depth:
         return _current_terms(program.expanded())
@@ -216,7 +288,7 @@ def warm_start_candidates(candidates, observations, *, budget, q, complexity_wei
 
 
 def screen_candidates(candidates, observations, reference, *, fallback, q, budget,
-                      complexity_weight, maximum, incumbent=None):
+                      complexity_weight, maximum, incumbent=None, assessment_sink=None):
     """Screen a broad pool before the controller measures its shortlist fully."""
     total = len({candidate.program for candidate in candidates})
     unresolved = {candidate.program for candidate in candidates
@@ -265,6 +337,14 @@ def screen_candidates(candidates, observations, reference, *, fallback, q, budge
         sample = observations
     ranked = rank_candidates(candidates, sample, [], fallback=fallback, q=q,
                              budget=budget, complexity_weight=complexity_weight)
+    if assessment_sink is not None:
+        for row in ranked:
+            row.assessment_scope = {'kind': 'complete_evidence' if sample_count == len(observations)
+                                    else 'sampled_evidence',
+                'observation_count': len(observations),
+                'assessed_row_indices': list(range(len(observations)))
+                    if sample_count == len(observations) else sorted(indices)}
+        assessment_sink.extend(ranked)
     if not ranked:
         return []
     if sample_count == len(observations):
@@ -282,6 +362,9 @@ def screen_candidates(candidates, observations, reference, *, fallback, q, budge
         empirical = loss(row.candidate.program, observations, fallback, q)
         row.evidence_loss = row.reference_loss = empirical
         row.score = empirical + complexity_weight * row.candidate.program.size
+        if assessment_sink is not None:
+            row.assessment_scope = {'kind': 'complete_evidence', 'observation_count': len(observations),
+                                    'assessed_row_indices': list(range(len(observations)))}
         checked.add(row.candidate.program)
         structures.add(key)
         if len(checked) >= min(2, maximum - 1):

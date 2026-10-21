@@ -9,6 +9,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import re
+from types import SimpleNamespace
 
 
 MATERIAL_KINDS = {
@@ -101,11 +102,200 @@ def load_episode_sources(references, workspace):
              'episode': loaded['value']} for loaded in load_source_values(references, workspace)]
 
 
+def load_common_sources(references, workspace):
+    """Read actual Common sources using their existing index and Episode extractor.
+
+    Source references address research_state.json or a saved Common result.
+    Optional source_theory_ids names local IDs, including an explicit empty list.
+    Qualified IDs distinguish containers; only original declared source identity
+    determines independence. Programs and paid records stay at their old addresses.
+    """
+    from .language import Program
+    from .question_routing import resolved_theories
+    from .theory_consolidation import (
+        LIBRARY_PATH, _absolute_reference, _anchor_file_references,
+        install_theory_index, install_theory_library,
+    )
+
+    result = {key: [] for key in ('episodes', 'materials', 'conflicts', 'unique_support_sources',
+                                  'theories', 'theory_ids', 'source_refs', 'author_work')}
+
+    def identity(context):
+        return (str(context.get('source_id') or context.get('episode'))
+                if isinstance(context, dict) and (context.get('source_id') or context.get('episode')) else None)
+
+    def append(field, entry):
+        if entry not in result[field]:
+            result[field].append(entry)
+
+    for loaded in load_source_values(references, workspace):
+        reference = _absolute_reference(loaded['source_ref'], workspace)
+        append('source_refs', reference)
+        value = loaded['value']
+        training, training_ref = None, None
+        if isinstance(value, dict) and 'online_questions' in value:
+            training, training_ref = value, reference
+            source_workspace = Path(value['workspace']).resolve()
+            state_ref = {'file': str(source_workspace / 'research_state.json'), 'json_path': []}
+            state = load_source_values([state_ref], workspace)[0]['value']
+        elif isinstance(value, dict) and 'questions' in value and 'theory_index' in value:
+            state, state_ref = value, {'file': reference['file'], 'json_path': _path(reference)}
+            source_workspace = Path(reference['file']).parent
+            path = source_workspace / 'training.json'
+            if path.is_file():
+                training_ref = {'file': str(path), 'json_path': []}
+                training = load_source_values([training_ref], workspace)[0]['value']
+        else:
+            append('author_work', {'type': 'AuthorWorkRequest', 'reason': 'common_research_state_required',
+                                   'source_ref': reference})
+            continue
+        observations = (training or {}).get('paid_observations')
+        if observations is None:
+            path = source_workspace / 'laboratory_observations.json'
+            observations = load_source_values([{'file': str(path), 'json_path': []}], workspace)[0]['value']
+        criterion_source = (training_ref if training is not None
+            and 'confirmation_mse_threshold' in training.get('limits', {}) else state_ref)
+        source_limits = (training if criterion_source is training_ref else state).get('limits', {})
+        proxy = SimpleNamespace(workspace=source_workspace, questions=state['questions'],
+            revisions=state.get('revisions', []), relation_research=state.get('relation_research', {}),
+            events=(training or state).get('events', []), observations=observations,
+            theory_index=state.get('theory_index', {}), theory_consolidation={},
+            config=SimpleNamespace(**source_limits),
+            _criterion_source_ref={'file': criterion_source['file'], 'json_path': [*_path(criterion_source),
+                'limits', 'confirmation_mse_threshold']})
+        snapshots = install_theory_index(proxy, {**state_ref,
+            'json_path': [*_path(state_ref), 'theory_index']})
+        if (source_workspace / LIBRARY_PATH).is_file():
+            proxy.theory_consolidation = install_theory_library(proxy)
+        resolved = {theory['id']: theory for theory in resolved_theories(proxy)}
+        versions = _question_versions(proxy)
+        requested = reference.get('source_theory_ids')
+        selected = list(proxy.theory_index) if requested is None else requested
+        native, groups = {}, {}
+        for identifier in selected:
+            declaration = proxy.theory_index.get(identifier, {})
+            source = declaration.get('source_ref', {})
+            if source.get('kind') != 'native_candidate':
+                if requested is not None:
+                    append('author_work', {'type': 'AuthorWorkRequest', 'reason': 'registered_native_source_required',
+                        'source_ref': reference, 'theory_id': identifier})
+                continue
+            owner = source['question_id'], source.get('meaning_version', 1)
+            native[identifier] = declaration
+            groups.setdefault(owner, []).append(identifier)
+
+        def anchored(value):
+            if isinstance(value, list):
+                return [anchored(item) for item in value]
+            if not isinstance(value, dict):
+                return deepcopy(value)
+            entry = {key: anchored(item) for key, item in value.items()}
+            if entry.get('file') == 'research_state.json':
+                entry.update(file=state_ref['file'], json_path=[*_path(state_ref), *_path(entry)])
+                entry.pop('field', None)
+            elif entry.get('file') == 'research_context.json' and training_ref:
+                entry.update(file=training_ref['file'], json_path=[*_path(training_ref), *_path(entry)])
+                entry.pop('field', None)
+            return _anchor_file_references(entry, source_workspace)
+
+        namespace = state_ref['file']
+        qualified = lambda identifier: f'{namespace}::{identifier}'
+        # First retain the actual banks, failures and revisions even when the
+        # caller explicitly selects no theories from this source.
+        original_index = proxy.theory_index
+        proxy.theory_index = {}
+        declared_ids = {identity(item.get('context_ref')) for item in original_index.values()}
+        declared_ids.discard(None)
+        proxy.research_source_id = next(iter(declared_ids)) if len(declared_ids) == 1 else None
+        base = extract_episodes(proxy)
+        by_episode = {episode['episode_id']: episode for episode in base['episodes']}
+        for owner, identifiers in groups.items():
+            retained = versions.get(owner)
+            source_ids = {identity(native[identifier].get('context_ref')) for identifier in identifiers}
+            source_ids.discard(None)
+            if retained:
+                question, question_ref = retained
+                for context in (question.get('context_ref'), question.get('theory_target', {}).get('context_ref')):
+                    if identity(context):
+                        source_ids.add(identity(context))
+            reason = ('unavailable_retained_meaning' if retained is None else
+                      'source_identity_required' if not source_ids else
+                      'conflicting_source_identity' if len(source_ids) != 1 else None)
+            eligible = []
+            retained_failures = []
+            for identifier in identifiers:
+                theory = resolved.get(identifier, {})
+                required = []
+                if not reason and theory.get('program') and theory.get('source_status') != 'unavailable_retained_version':
+                    for name, _ in Program.from_dict(theory['program']).observed_variables():
+                        signatures = theory.get('role_signature') or {}
+                        contract = signatures.get(name) if isinstance(signatures, dict) else None
+                        required.extend(f'role_signature.{name}.{key}' for key in ('role', 'unit', 'time')
+                                        if not isinstance(contract, dict) or contract.get(key) is None)
+                    required.extend(key for key in ('output_unit', 'context_ref') if theory.get(key) is None)
+                unavailable = not theory.get('program') or theory.get('source_status') == 'unavailable_retained_version'
+                if reason or required or unavailable:
+                    append('author_work', {'type': 'AuthorWorkRequest',
+                        'reason': reason or ('native_program_unavailable' if unavailable else 'typed_source_contract_required'),
+                        'theory_id': identifier, 'source_ref': reference, 'required': required})
+                    continue
+                snapshot = deepcopy(snapshots[identifier])
+                snapshot['id'] = qualified(identifier)
+                snapshot['episode_ref'] = {'question_id': owner[0], 'meaning_version': owner[1],
+                                          'source_ref': anchored(question_ref)}
+                for key in ('compatible', 'scope_refutation'):
+                    if key in theory:
+                        snapshot[key] = anchored(theory[key])
+                for failed_ref in theory.get('scope_refutation', {}).get('counterexample_refs', []):
+                    failed_ref = anchored(failed_ref)
+                    if failed_ref not in snapshot.setdefault('counterexample_refs', []):
+                        snapshot['counterexample_refs'].append(failed_ref)
+                    if failed_ref not in retained_failures:
+                        retained_failures.append(failed_ref)
+                append('theories', snapshot)
+                append('theory_ids', snapshot['id'])
+                eligible.append(identifier)
+            if eligible:
+                proxy.theory_index = {identifier: original_index[identifier] for identifier in eligible}
+                proxy.research_source_id = next(iter(source_ids))
+                for episode in extract_episodes(proxy)['episodes']:
+                    if any(identifier in eligible for identifier in episode['theory_ids']):
+                        episode['failure_refs'].extend(retained_failures)
+                        by_episode[episode['episode_id']] = episode
+        for episode in by_episode.values():
+            episode = anchored(episode)
+            account_ref = training_ref if training is not None else state_ref
+            episode['cost_refs'].append({**account_ref, 'json_path': [*_path(account_ref), 'costs']})
+            episode['cost_scope'] = 'whole_Common_source_account_not_additive_per_question'
+            if training is not None and 'status' in training:
+                episode['source_outcome_ref'] = {**training_ref,
+                    'json_path': [*_path(training_ref), 'status']}
+                if training['status'] != 'completed':
+                    episode['failure_refs'].append(deepcopy(episode['source_outcome_ref']))
+            episode['episode_id'] = qualified(episode['episode_id'])
+            episode['theory_ids'] = [qualified(identifier) for identifier in episode['theory_ids']]
+            for program_ref in episode['program_refs']:
+                if program_ref.get('theory_id'):
+                    program_ref['theory_id'] = qualified(program_ref['theory_id'])
+            append('episodes', episode)
+        for field in ('materials', 'conflicts', 'unique_support_sources'):
+            for entry in base[field]:
+                entry = anchored(entry)
+                if entry.get('episode_id'):
+                    entry['episode_id'] = qualified(entry['episode_id'])
+                append(field, entry)
+    result['status'] = 'UNKNOWN' if result['author_work'] else 'completed'
+    return result
+
+
 def resolve_program_sources(agent, references, retained_episodes=None):
     """Reuse loaded Episodes or live state before reading another small source."""
     state = {'questions': agent.questions, 'revisions': agent.revisions,
              'theory_index': getattr(agent, 'theory_index', {}),
              'relation_research': getattr(agent, 'relation_research', {})}
+    criterion = getattr(getattr(agent, 'config', None), 'confirmation_mse_threshold', None)
+    if criterion is not None:
+        state['limits'] = {'confirmation_mse_threshold': criterion}
     values, missing = [], []
     for original in references:
         reference = _canonical(original)
@@ -116,6 +306,10 @@ def resolve_program_sources(agent, references, retained_episodes=None):
             path = _path(reference)[len(_path(retained['source_ref'])):]
         elif reference.get('file') == 'research_state.json' and not reference.get('archive'):
             value, path = state, _path(reference)
+        elif reference.get('file') == 'research_context.json' and not reference.get('archive'):
+            value, path = {'events': agent.events}, _path(reference)
+        elif reference.get('file') == 'laboratory_observations.json' and not reference.get('archive'):
+            value, path = agent.observations, _path(reference)
         else:
             values.append(None)
             missing.append((len(values) - 1, reference))
@@ -212,7 +406,7 @@ def _new_episode(identifier, source_id, question, reference):
             or question.get('unresolved_scope') or {'status': 'not_independently_confirmed'})}
 
 
-def extract_episodes(agent, materials=None, retained_episodes=None):
+def extract_episodes(agent, materials=None, retained_episodes=None, *, excluded_theory_ids=()):
     """Extract real question meanings and classify only the supplied materials.
 
     Returns small episode/material records without mutating the agent or reading
@@ -328,6 +522,8 @@ def extract_episodes(agent, materials=None, retained_episodes=None):
     # Declarations supply typed interfaces and source addresses. They do not
     # manufacture executed changes, independent results or scientific support.
     for identifier, theory in getattr(agent, 'theory_index', {}).items():
+        if identifier in excluded_theory_ids:
+            continue
         source = theory.get('source_ref', {})
         owner = source.get('question_id') or theory.get('episode_ref', {}).get('question_id')
         meaning = source.get('meaning_version', theory.get('episode_ref', {}).get('meaning_version', 1))
@@ -468,6 +664,17 @@ def extract_episodes(agent, materials=None, retained_episodes=None):
                     'authored_status': 'supported', 'check_status': 'violated',
                     'actual_value': check.get('value'), 'expected': check.get('expected')})
 
+    # Export paths identify saved native Programs, independently of ranked slots.
+    native_models = {}
+    for identity, (question, reference) in versions.items():
+        models = native_models.setdefault(identity, {})
+        for round_index, round_ in enumerate(question.get('native_condition_research', [])):
+            for candidate_index, candidate in enumerate(round_.get('candidates', [])):
+                if candidate.get('model') and candidate.get('program') is not None:
+                    models.setdefault(candidate['model'], []).append((candidate['program'],
+                        _child_ref(reference, 'native_condition_research', round_index,
+                                   'candidates', candidate_index, 'program')))
+
     # Real executed evaluation is distinct from a candidate declaration and
     # from a text note saying it was adopted.
     for index, event in enumerate(getattr(agent, 'events', [])):
@@ -478,6 +685,73 @@ def extract_episodes(agent, materials=None, retained_episodes=None):
             continue
         current = episode(identifier, meaning)
         reference = {'file': 'research_context.json', 'json_path': ['events', index]}
+        if feedback.get('operator') == 'research_choice':
+            models = native_models.get((identifier, meaning), {})
+            for evaluation_index, evaluation in enumerate(feedback.get('evaluations', [])):
+                decision = evaluation.get('retention_decision', {})
+                incumbent, candidate = decision.get('incumbent') or {}, decision.get('candidate') or {}
+                before = models.get(incumbent.get('source_model'), [])
+                after = models.get(candidate.get('model'), [])
+                paid_rows = candidate.get('evaluated_rows')
+                if (decision.get('status') != 'candidate_retained'
+                        or decision.get('same_paid_rows') is not True
+                        or evaluation.get('returncode') != 0
+                        or len(before) != 1 or len(after) != 1
+                        or before[0][0] == after[0][0]
+                        or type(paid_rows) is not int or paid_rows <= 0
+                        or incumbent.get('evaluated_rows') != paid_rows
+                        or feedback.get('paid_rows') != paid_rows):
+                    continue
+                records, rows = [], 0
+                for record_index, record in enumerate(getattr(agent, 'observations', [])):
+                    rows += len(record.get('rows', []))
+                    if rows > paid_rows:
+                        break
+                    records.append(record_index)
+                    if rows == paid_rows:
+                        break
+                if rows != paid_rows:
+                    continue
+                action_ref = _child_ref(reference, 'feedback', 'evaluations', evaluation_index,
+                                        'retention_decision')
+                evidence_refs = _record_references(agent, records)
+                cost_refs = [_child_ref(reference, 'feedback', key) for key in
+                             ('compute_cost', 'python_execution_seconds') if key in feedback]
+                # Reuse the actual same-prefix score, not a prediction rerun or
+                # the cached last adoption summary. Missing checks stay unknown.
+                before_scores = [(position, score) for position, score in enumerate(feedback['evaluations'])
+                    if score.get('path') == incumbent.get('source_model')
+                    and score.get('returncode') == 0 and score.get('loss_kind') == 'mse'
+                    and score.get('mse') == incumbent.get('mse')
+                    and score.get('paid_residuals', {}).get('evaluated_rows') == paid_rows]
+                comparison = {'status': 'UNKNOWN', 'reason': 'unique_saved_before_paid_evaluation_required'}
+                if len(before_scores) == 1:
+                    comparison = {'status': 'UNKNOWN', 'reason': 'saved_after_paid_mse_evaluation_required'}
+                    if (evaluation.get('loss_kind') == 'mse'
+                            and evaluation.get('paid_residuals', {}).get('evaluated_rows') == paid_rows):
+                        comparison = {'status': 'UNKNOWN', 'reason': 'original_paid_mse_criterion_required'}
+                        if getattr(getattr(agent, 'config', None), 'confirmation_mse_threshold', None) is not None:
+                            comparison = {'before_evaluation_ref': _child_ref(reference,
+                                'feedback', 'evaluations', before_scores[0][0]),
+                                'after_evaluation_ref': _child_ref(reference, 'feedback', 'evaluations', evaluation_index),
+                                'criterion_ref': deepcopy(getattr(agent, '_criterion_source_ref',
+                                    _ref('limits', 'confirmation_mse_threshold')))}
+                current['actual_changes'].append({'kind': 'retained_program_replaced',
+                    'before_ref': deepcopy(before[0][1]), 'source_ref': deepcopy(after[0][1]),
+                    'action_ref': action_ref, 'evidence_refs': evidence_refs, 'cost_refs': cost_refs,
+                    'source_comparison': comparison,
+                    'cost_scope': 'whole_research_choice_not_additive_per_revision',
+                    'scope': {'decision_scope': decision.get('scope'),
+                        'same_paid_rows': True, 'evaluated_rows': paid_rows,
+                        'paid_cutoff': {'records': len(records), 'rows': paid_rows},
+                        'record_indices': records,
+                        'before_evaluation_scope': incumbent.get('evaluation_scope'),
+                        'after_evaluation_scope': candidate.get('evaluation_scope'),
+                        'independent_confirmation': False}})
+                current['change_evidence'].extend(evidence_refs)
+                current['cost_refs'].extend(cost_refs)
+                current['adoption']['occurred'] = True
+                current['adoption']['execution_refs'].append(action_ref)
         if feedback.get('error') or feedback.get('returncode', 0) != 0:
             current['failure_refs'].append(reference)
         if (event.get('action') in {'evaluate', 'finish'} and feedback.get('returncode') == 0

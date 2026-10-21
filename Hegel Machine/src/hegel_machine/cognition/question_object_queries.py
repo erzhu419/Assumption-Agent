@@ -84,6 +84,8 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
     allocation with compute/max_groups. Returned objects and inverse mappings
     remain in shared/theory_library.json; no Program or paid rows are copied.
     The consolidation operator already charges ``compute_cost`` to the agent.
+    ``object_type='program_revision_relation'`` requests joint before/after
+    reconstruction, rather than accepting an after-only construction object.
     """
     from .question_routing import resolved_theories
     from .theory_consolidation import consolidate_research
@@ -95,6 +97,9 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
         return {**base, 'status': 'author_work_request', 'object_type': 'typed_shared_structure',
                 'reason': reason, **extra}
 
+    object_type = query.get('object_type')
+    if object_type not in (None, 'program_revision_relation'):
+        return author('unsupported_shared_construction_object_type', requested_object_type=object_type)
     references = query.get('typed_program_refs')
     if not isinstance(references, list) or len(references) < 2:
         return author('at_least_two_typed_program_refs_required')
@@ -130,7 +135,7 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
     arguments = {'source_theory_ids': selected, 'allocation': deepcopy(allocation),
         'theme': f'FindSharedStructure:{question["id"]}@{question.get("meaning_version", 1)}',
         'mission': mission if mission is not None else agent.research_mission}
-    for field in ('context_family_ref', 'episode_sources', 'materials', 'counterexamples'):
+    for field in ('context_family_ref', 'episode_sources', 'materials', 'counterexamples', 'object_type'):
         if field in query:
             arguments[field] = deepcopy(query[field])
     result = consolidate_research(agent, arguments, lab, question)
@@ -139,6 +144,8 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
         return {**base, 'status': 'research_deferred', 'reason': result['reason']}
     abstractions = []
     for frozen in result['frozen_candidates']:
+        if object_type is not None and frozen['kind'] != object_type:
+            continue
         identifier = frozen['candidate_id']
         candidate = agent.theory_consolidation['candidates'][identifier]
         reference = {'file': result['library_path'], 'json_path': ['candidates', identifier],

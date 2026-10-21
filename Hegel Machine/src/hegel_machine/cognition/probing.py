@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from math import exp
 from statistics import mean, pvariance
 from random import Random
@@ -719,9 +720,106 @@ def value_forecast_experiments(reference_predictions, experiments, *, weights,
     return result
 
 
+def choose_question_probe(probes, candidates, fallback, budget, *, spec, selection_contract,
+                          observation_budget, public_prediction_rows=None):
+    """Feed the registered native panel into the existing PR2 selector.
+
+    This supplies no scientific question, units or role mapping. Public rows
+    contain controls only; actual targets remain behind ``environment.observe``.
+    The returned Probe is one of the caller's original affordable interventions.
+    """
+    from .question_selection import select_question_plan, _query_matches_actions
+
+    question = selection_contract.get('question', {})
+    roles, unit = selection_contract.get('role_signature'), selection_contract.get('output_unit')
+    experiments = selection_contract.get('experiments')
+
+    def unresolved(reason, *, author=False, **details):
+        return None, {'status': 'author_work_request' if author else 'scoped_unknown',
+            'reason': reason, 'compute_cost': 0, 'evidence': [], 'support_updated': False, **details}
+
+    if (not question.get('query_semantics', {}).get('query_expression')
+            or question.get('context_ref') is None or not roles or unit is None or not experiments):
+        return unresolved('native_pr2_requires_explicit_query_context_roles_unit_and_panel', author=True)
+    if isinstance(question['context_ref'], dict) and question['context_ref'].get('task_id', spec.task_id) != spec.task_id:
+        return unresolved('native_pr2_task_context_mismatch')
+    evaluation = question['query_semantics'].get('evaluation')
+    if evaluation is not None and evaluation.get('fallback') != fallback:
+        return unresolved('native_pr2_retained_fallback_mismatch')
+    if public_prediction_rows is None:
+        controls = set(spec.feature_bounds) or set(spec.feature_names)
+        if controls != set(spec.feature_names):
+            return unresolved('native_pr2_public_measurement_constructor_required', author=True)
+
+        def public_prediction_rows(action):
+            sequence = action.get('sequence')
+            if action.get('kind') != 'trajectory' or action.get('channels', []) or not sequence:
+                raise ValueError('native PR2 requires a public trajectory')
+            if len(sequence) > spec.max_probe_length or any(set(point) != controls for point in sequence):
+                raise ValueError('native PR2 requires complete public controls')
+            if spec.feature_bounds:
+                if any(not spec.feature_bounds[name][0] <= point[name] <= spec.feature_bounds[name][1]
+                       for point in sequence for name in controls):
+                    raise ValueError('native PR2 controls outside public ranges')
+            elif not any(tuple(sequence) == probe.sequence for probe in
+                         (*spec.initial_probes, *spec.available_probes, *probes)):
+                raise ValueError('native PR2 trajectory outside the finite public panel')
+            return [Observation(dict(point), 0., tuple(dict(prior) for prior in sequence[:index]))
+                    for index, point in enumerate(sequence)]
+
+    # The task readout is also a public binding, not an unchecked model input.
+    def readouts(value):
+        if isinstance(value, dict):
+            if value.get('op') == 'Readout' and 'finite_readouts' not in value:
+                yield value
+            else:
+                for item in value.values():
+                    yield from readouts(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from readouts(item)
+
+    for readout in readouts(question['query_semantics']['query_expression']):
+        action = readout.get('binding', {}).get('action')
+        if not isinstance(action, dict) or not _query_matches_actions(readout, [action], public_prediction_rows):
+            return unresolved('native_pr2_task_public_row_mismatch')
+    mapped, panel, excluded = {}, [], []
+    for plan in experiments:
+        actions = plan.get('actions', [])
+        probe = next((probe for probe in probes if len(actions) == 1
+            and actions[0].get('kind') == 'trajectory' and not actions[0].get('channels', [])
+            and tuple(actions[0].get('sequence', [])) == probe.sequence), None)
+        reason = ('native_conditional_continuation_not_declared' if plan.get('branches') else
+                  'outside_current_native_probe_panel' if probe is None else
+                  'native_pr2_observation_quote_mismatch' if plan.get('observation_cost') != probe.cost else None)
+        if reason:
+            excluded.append({'id': plan.get('id'), 'reason': reason})
+        else:
+            panel.append(plan)
+            mapped[plan['id']] = probe
+    if not panel:
+        return unresolved('no_registered_native_intervention', excluded=excluded)
+    theories = [{'id': f'native:{index}:{candidate.candidate_id}', 'program': candidate.program.to_dict(),
+        'role_signature': deepcopy(roles), 'output_unit': unit,
+        'context_ref': deepcopy(question['context_ref']), 'support': {'status': 'candidate', 'evidence': []}}
+        for index, candidate in enumerate(candidates)]
+    selection = select_question_plan(question, theories, panel,
+        context={'context_ref': question['context_ref'], 'output_unit': unit},
+        compute_budget=budget.remaining, observation_budget=observation_budget,
+        public_prediction_rows=public_prediction_rows,
+        exploration_policy=selection_contract.get('exploration_policy'))
+    budget.spend(selection['compute_cost'])
+    selection['excluded'].extend(excluded)
+    selection['native_candidate_refs'] = [{'theory_id': theory['id'], 'candidate_id': candidate.candidate_id}
+        for theory, candidate in zip(theories, candidates)]
+    selected = selection.get('selected_experiment')
+    return (mapped[selected['id']] if selected is not None else None), selection
+
+
 def choose_valuable_probe(probes: list[Probe], candidates: list[Candidate], fallback: float,
                           budget: SearchBudget, *, observations: list[Observation],
-                          spec: TaskSpec, queried_probes=(), max_compute=None, simulator=None) -> tuple[Probe | None, dict]:
+                          spec: TaskSpec, queried_probes=(), max_compute=None, simulator=None,
+                          reviewed_research_pool=None) -> tuple[Probe | None, dict]:
     """Select expected reference-task risk reduction per acquired observation.
 
     This is a bounded finite-model approximation, using at most four weighted
@@ -729,6 +827,9 @@ def choose_valuable_probe(probes: list[Probe], candidates: list[Candidate], fall
     resolves ties and supports experiments before a useful competitor exists.
     At most one fifth of remaining compute, capped at 1200 units, is spent here.
     Units include prediction evaluations and cached response/loss comparisons.
+    An explicit ``reviewed_research_pool`` is the caller's already qualified,
+    at-most-four-candidate design pool. It retains that common research order
+    rather than repeating the task shortlist's first-eight/top-four filter.
     """
     before = budget.spent
     allowance = min(1200, budget.remaining // 5) if max_compute is None else min(max_compute, budget.remaining)
@@ -738,6 +839,11 @@ def choose_valuable_probe(probes: list[Probe], candidates: list[Candidate], fall
                "expected_risk_reduction": 0.0, "value_per_observation": 0.0,
                "reference_design": "fixed_public_interior_stratified_trajectories",
                "evaluated_probes": [], "compute_cost": 0}
+    if reviewed_research_pool is not None:
+        if len(reviewed_research_pool) > 4:
+            raise ValueError('reviewed research pool must contain at most four candidates')
+        details['candidate_input_kind'] = 'reviewed_research_pool'
+        details['reviewed_candidate_ids'] = [candidate.candidate_id for candidate in reviewed_research_pool]
     queried = {_sequence_key(probe) for probe in queried_probes}
     eligible, seen = [], set(queried)
     for probe in probes:
@@ -778,18 +884,19 @@ def choose_valuable_probe(probes: list[Probe], candidates: list[Candidate], fall
                                     -coverage[probe.probe_id]["distinct_control_histories"], probe.cost))
     selected = eligible[0]
     unique_candidates = []
-    for candidate in candidates:
+    for candidate in candidates if reviewed_research_pool is None else reviewed_research_pool:
         if all(candidate.program != previous.program for previous in unique_candidates):
             unique_candidates.append(candidate)
     fitted = []
-    for candidate in unique_candidates[:8]:
+    for candidate in unique_candidates[:8] if reviewed_research_pool is None else unique_candidates:
         if not training or not work.spend(len(training)):
             break
         values = [predict(candidate.program, row, fallback) for row in training]
         measured = mean(_task_loss(value, row.target, spec) for value, row in zip(values, training))
         residual_mse = mean((value - row.target) ** 2 for value, row in zip(values, training))
         fitted.append((measured, residual_mse, candidate))
-    fitted.sort(key=lambda item: (item[0], item[2].program.size))
+    if reviewed_research_pool is None:
+        fitted.sort(key=lambda item: (item[0], item[2].program.size))
     count = min(4, len(fitted))
     references = _reference_probes(spec, ranges, max((item[2].program.history_depth for item in fitted[:count]), default=0))
     reference_rows = sum(probe.cost for probe in references)
@@ -798,11 +905,15 @@ def choose_valuable_probe(probes: list[Probe], candidates: list[Candidate], fall
     simulation_work = 2 if simulator is not None and simulator.current else 0
     while count > 1 and len(scenarios) * (count + count * count + simulation_work * count) * (reference_rows + query_rows) > work.remaining:
         count -= 1
+    if reviewed_research_pool is not None:
+        details['unvalued_candidate_ids'] = [candidate.candidate_id for candidate in unique_candidates
+            if all(candidate.program != item[2].program for item in fitted[:count])]
     if count > 1:
         fitted = fitted[:count]
         base_loss = mean(_task_loss(fallback, row.target, spec) for row in training)
-        temperature = max(fitted[0][0], base_loss * 0.05, 1e-8)
-        raw_weights = [exp(-min(700.0, (item[0] - fitted[0][0]) / temperature)) for item in fitted]
+        best_fit_loss = min(item[0] for item in fitted)
+        temperature = max(best_fit_loss, base_loss * 0.05, 1e-8)
+        raw_weights = [exp(-min(700.0, (item[0] - best_fit_loss) / temperature)) for item in fitted]
         weights = [value / sum(raw_weights) for value in raw_weights]
         noise_scale = max(min(item[1] for item in fitted),
                           pvariance(row.target for row in training) * 1e-6, 1e-8)

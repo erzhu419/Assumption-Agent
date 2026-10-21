@@ -3,6 +3,7 @@
 from copy import deepcopy
 from itertools import combinations
 from math import isfinite
+from random import Random
 
 from .evaluation import predict
 from .language import Program
@@ -10,6 +11,7 @@ from .models import Observation
 from .question_queries import evaluate_on_model, numeric_answer_distance
 from .question_semantics import native_evaluation_contract
 from .retained_forecasts import retained_forecast_predictor
+from .selection import retain_research_comparison_pool
 from .world_experiment_choice import forecast_equivalence_classes
 
 
@@ -21,8 +23,152 @@ def _frozen(value):
     return value
 
 
+def _retain_question_research_comparison(result, evaluated, programs, plans, question, comparison):
+    """Choose comparison votes from the already charged task/panel cache."""
+    assessed, unknown = [], deepcopy(comparison.get('unknown', []))
+    for row in comparison['assessed']:
+        identifier = row.candidate.candidate_id
+        if identifier not in evaluated:
+            continue  # Scientific, context and unit exclusions remain exclusions.
+        if programs.get(identifier) != row.candidate.program:
+            unknown.append({'id': identifier, 'reason': 'prepared_program_assessment_mismatch'})
+            continue
+        assessed.append(row)
+    assessed_ids = {row.candidate.candidate_id for row in assessed}
+    mandatory = set(comparison.get('mandatory_theory_ids', []))
+    mandatory.update(question.get('candidate_theory_ids') or [])
+    query = question.get('query_semantics', {}).get('query_expression', {})
+    if query.get('op') == 'FindDistinguishingExperiment':
+        mandatory.update(ref['id'] for ref in query.get('claim_refs', []))
+    # Opaque Python columns and models without a qualified same-scope score
+    # keep their original votes, even if that exceeds the research subpool cap.
+    mandatory.update(identifier for identifier in evaluated if identifier not in assessed_ids)
+    reported_unknown = {entry['id'] for entry in unknown}
+    unknown.extend({'id': identifier, 'reason': 'no_qualified_same_scope_assessment'}
+                   for identifier in evaluated
+                   if identifier not in assessed_ids and identifier not in reported_unknown)
+    public_predictions = {}
+    for row in assessed:
+        entry = evaluated[row.candidate.candidate_id]
+        public_predictions[row.candidate.program.expanded()] = (
+            tuple(_frozen(entry['predictions'][plan['id']]) for plan in plans)
+            if entry['known'] and all(plan['id'] in entry['predictions'] for plan in plans) else None)
+    retained, details = retain_research_comparison_pool(
+        assessed, public_predictions, maximum=comparison['maximum'])
+    selected_ids = mandatory | {row.candidate.candidate_id for row in retained}
+    selected = {identifier: entry for identifier, entry in evaluated.items() if identifier in selected_ids}
+    details.update({key: deepcopy(comparison[key]) for key in (
+        'status', 'scope', 'assessment_refs', 'assessment_basis_ref', 'row_count') if key in comparison})
+    details.update({'mandatory_theory_ids': [identifier for identifier in evaluated if identifier in mandatory],
+        'selected_theory_ids': list(selected), 'selected_theory_count': len(selected),
+        'eligible_theory_count': len(evaluated), 'unknown': unknown,
+        'assessment_scope': 'qualified_assessed_subpool',
+        'all_pool_optimality_established': False, 'support_updated': False})
+    result['research_comparison'] = details
+    return selected
+
+
 def _cost(plan):
     return tuple(plan.get(key, 0) for key in ('observation_cost', 'compute_cost', 'model_cost'))
+
+
+def validate_exploration_policy(policy):
+    if policy is not None and (not isinstance(policy, dict)
+            or policy.get('kind') != 'seeded_legal' or type(policy.get('seed')) is not int):
+        raise ValueError('exploration_policy needs kind seeded_legal and an integer seed')
+    return policy
+
+
+def _physical_plan(plan):
+    branches = [_frozen({'when': branch['when'], 'actions': branch['actions']})
+                for branch in plan.get('branches', [])]
+    # Branches are matched by their conditions, not by their declaration order.
+    return _frozen({'actions': plan['actions'], 'branches': sorted(branches, key=repr)})
+
+
+def _hard_prediction_failure(answer):
+    return (answer.get('status') == 'invalid_experiment_binding' or answer.get('reason') in {
+        'premise_unknown', 'unknown_due_to_uncertain_mapping',
+        'unknown_due_to_opaque_program_semantics', 'undefined_distribution_or_answer_test'}
+        or answer.get('detail') == 'context_ref')
+
+
+def _partial_prediction_scores(result, evaluated, plans, answer_atol):
+    """Use one task-known pair universe; missing cells never become negative evidence."""
+    members = {}
+    for identifier, entry in evaluated.items():
+        if not entry.get('task_known'):
+            result['groups'].append({'id': f"group_{len(result['groups']):03d}",
+                'theory_ids': [identifier], 'known': False,
+                'unknown_reason': entry.get('unknown', entry['task']).get('reason')})
+            continue
+        signature = (_frozen(entry['task']['value']), entry['task'].get('units'), tuple(
+            _frozen(entry['predictions'][plan['id']]) if plan['id'] in entry['predictions']
+            else ('unknown', entry['prediction_key']) for plan in plans))
+        if signature in members:
+            members[signature]['theory_ids'].append(identifier)
+            continue
+        group = {'id': f"group_{len(result['groups']):03d}", 'theory_ids': [identifier],
+            'task_answer': deepcopy(entry['task']['value']), 'known': True,
+            'panel_predictions': deepcopy(entry['predictions']),
+            'prediction_status': deepcopy(entry['prediction_status'])}
+        members[signature] = group
+        result['groups'].append(group)
+    groups = [group for group in result['groups'] if group['known']]
+    comparable, unknown, separated = ({plan['id']: [] for plan in plans} for _ in range(3))
+    universe = []
+    for left, right in combinations(groups, 2):
+        pair = [left['id'], right['id']]
+        distance = numeric_answer_distance(left['task_answer'], right['task_answer'])
+        relevant = (distance > answer_atol if distance is not None and answer_atol is not None
+                    else left['task_answer'] != right['task_answer'])
+        if relevant:
+            universe.append(pair)
+        known_plans, unknown_plans, distinguishing = [], [], []
+        for plan in plans:
+            name = plan['id']
+            if name not in left['panel_predictions'] or name not in right['panel_predictions']:
+                unknown_plans.append(name)
+                if relevant:
+                    unknown[name].append(pair)
+                continue
+            known_plans.append(name)
+            if relevant:
+                comparable[name].append(pair)
+            if _separates(left['panel_predictions'][name], right['panel_predictions'][name], plan):
+                distinguishing.append(name)
+                if relevant:
+                    separated[name].append(pair)
+        result['pairwise_edges'].append({'left': left['id'], 'right': right['id'],
+            'different_task_answer': relevant, 'experiments': distinguishing,
+            'comparable_experiments': known_plans, 'unknown_experiments': unknown_plans})
+    task_unknown = [identifier for identifier, entry in evaluated.items() if not entry.get('task_known')]
+    common = [pair for pair in universe if all(pair in comparable[plan['id']] for plan in plans)]
+    blocked = [plan['id'] for plan in plans if any(
+        _hard_prediction_failure(entry.get('prediction_status', {}).get(plan['id'], {}))
+        for entry in evaluated.values())]
+    task_blocked = any(_hard_prediction_failure(entry['task']) for entry in evaluated.values())
+    complete = not task_unknown and not blocked and not task_blocked and all(
+        len(group['panel_predictions']) == len(plans) for group in groups)
+    result['prediction_coverage'] = {'scope': 'task_answer_known_subpool', 'complete': complete,
+        'task_unknown_theory_ids': task_unknown, 'pair_denominator': len(universe),
+        'task_relevant_pairs': universe, 'common_comparable_pairs': common,
+        'common_comparable_pair_count': len(common), 'contract_blocked_plans': blocked,
+        'task_contract_blocked': task_blocked,
+        'plans': [{'id': plan['id'], 'comparable_pairs': comparable[plan['id']],
+                   'unknown_pairs': unknown[plan['id']]} for plan in plans]}
+    for plan in plans:
+        name = plan['id']
+        result['scores'].append({'experiment_id': name, 'separated_pairs': len(separated[name]),
+            'effective_pairs': len(universe), 'comparable_pairs': len(comparable[name]),
+            'unknown_pairs': len(unknown[name]), 'common_comparable_pairs': len(common),
+            'G': len(separated[name]) / max(1, len(universe)),
+            'G_upper': (len(separated[name]) + len(unknown[name])) / max(1, len(universe)),
+            'selection_basis': 'confirmed_separation_lower_bound', 'partial': not complete,
+            'declared_cost': list(_cost(plan))})
+    if not complete:
+        result['unknown_reason'] = 'incomplete_candidate_predictions'
+    return universe, blocked, task_blocked
 
 
 def _tolerance(value):
@@ -81,8 +227,9 @@ def diagnose_experiment_ties(selection, experiment_ids=None):
     Full forecast signatures retain a conditional plan's branch identity.
     """
     identifiers = list(selection['tied_experiments'] if experiment_ids is None else experiment_ids)
-    groups = [group for group in selection['groups'] if group['known']]
-    unknown = [group['id'] for group in selection['groups'] if not group['known']]
+    groups = [group for group in selection['groups'] if group['known'] and all(
+        name in group['panel_predictions'] for name in identifiers)]
+    unknown = [group['id'] for group in selection['groups'] if group not in groups]
     result = {'scope': 'completed_candidate_predictions',
         'status': 'partial_unknown' if unknown else 'complete', 'unknown_group_ids': unknown,
         'known_signature_group_count': len(groups),
@@ -131,7 +278,8 @@ def diagnose_experiment_ties(selection, experiment_ids=None):
 
 def select_question_plan(question, theories, experiments, *, context=None,
                          compute_budget=None, observation_budget=None,
-                         public_prediction_rows=None):
+                         public_prediction_rows=None, exploration_policy=None,
+                         research_comparison=None):
     """Prepare an action without fitting, acquiring evidence, or changing support.
 
     ``tolerance`` bounds each forecast, so two forecasts separate beyond twice
@@ -159,7 +307,13 @@ def select_question_plan(question, theories, experiments, *, context=None,
     UNKNOWN here; unequal empirical weights are not a stable discriminator.
     A prediction-based tie includes ``tie_diagnostics`` comparing coverage,
     pairwise separation, exact partitions and candidate predictions separately.
+    ``seeded_legal`` permits a marked operational choice within epistemic ties
+    and uses a common task-known pair denominator for incomplete predictions.
+    ``research_comparison`` reuses scoped paid assessments and cached panel
+    forecasts to retain research alternatives. Explicit and unassessed theories
+    remain mandatory; task adoption and scientific support are unchanged.
     """
+    validate_exploration_policy(exploration_policy)
     if public_prediction_rows is not None and not callable(public_prediction_rows):
         raise TypeError('public_prediction_rows must be callable or None')
     if compute_budget is not None and (type(compute_budget) is not int or compute_budget < 0):
@@ -203,8 +357,23 @@ def select_question_plan(question, theories, experiments, *, context=None,
         tied = [plan for plan in options if _cost(plan) == cheapest]
         result['tied_experiments'] = [plan['id'] for plan in tied]
         result['status'] = 'tied' if len(tied) > 1 else 'direct_action_available' if direct else 'selected'
-        if len(tied) == 1:
-            selected = tied[0]
+        selected = tied[0] if len(tied) == 1 else None
+        if exploration_policy is not None:
+            physical = {}
+            for plan in tied:
+                physical.setdefault(_physical_plan(plan), []).append(plan)
+            choices = [physical[key] for key in sorted(physical, key=repr)]
+            alternatives = Random(exploration_policy['seed']).choice(choices)
+            selected = alternatives[0]
+            result['operational_decision'] = {'policy': deepcopy(exploration_policy),
+                'scope': 'declared_legal_finite_plans', 'epistemic_status': result['status'],
+                'selected_experiment_id': selected['id'], 'physical_option_count': len(choices),
+                'physical_options': [{'representative_id': items[0]['id'],
+                    'alias_ids': [item['id'] for item in items],
+                    'same_prediction_contract': len({_frozen({key: value for key, value in item.items()
+                        if key not in {'id', 'actions'}}) for item in items}) == 1} for items in choices],
+                'support_updated': False, 'all_pool_optimality_established': False}
+        if selected is not None:
             result['selected_experiment'] = deepcopy(selected)
             result['query_arguments'] = {'actions': deepcopy(selected['actions'])}
             if selected.get('branches'):
@@ -252,7 +421,7 @@ def select_question_plan(question, theories, experiments, *, context=None,
     current_unit = declared_units.get('units', declared_units.get('output_unit'))
     if current_unit is None and isinstance(current_context, dict):
         current_unit = current_context.get('units', current_context.get('output_unit'))
-    evaluated, cache, ids = {}, {}, set()
+    evaluated, cache, ids, programs = {}, {}, set(), {}
     for theory in theories:
         identifier = theory['id']
         if identifier in ids:
@@ -278,6 +447,8 @@ def select_question_plan(question, theories, experiments, *, context=None,
                 'reason': 'retained_forecast_unavailable'}, 'known': False, 'predictions': {}}
             continue
         program = None if table is not None else Program.from_dict(theory['program'])
+        if program is not None:
+            programs[identifier] = program
         computation = (('retained_forecast', _frozen(table['prediction_inputs']), tuple(table['predictions']))
                        if table is not None else program)
         key = (computation, _frozen(theory.get('role_signature')), theory.get('output_unit'),
@@ -319,38 +490,77 @@ def select_question_plan(question, theories, experiments, *, context=None,
             return answer
 
         task = forward(query)
-        entry = {'task': task, 'predictions': {}, 'known': task['status'] == 'answered'}
+        entry = {'task': task, 'predictions': {}, 'known': task['status'] == 'answered',
+                 'prediction_status': {}, 'prediction_key': identifier}
         if entry['known'] and isinstance(task['value'], dict):
             entry.update(known=False, unknown={'reason': 'undefined_distribution_or_answer_test'})
-        if entry['known']:
+        entry['task_known'] = entry['known']
+
+        def forecast(plan):
+            first = forward(plan['query'])
+            if first['status'] != 'answered':
+                return None, first
+            if numeric_answer_distance(first['value'], first['value']) is None:
+                return None, {'reason': 'undefined_distribution_or_answer_test'}
+            signature = (first['value'],)
+            if plan.get('branches'):
+                branches = [(index, branch) for index, branch in enumerate(plan['branches'])
+                            if (distance := numeric_answer_distance(first['value'], branch['when']['value']))
+                            is not None and distance <= branch['when']['atol']]
+                if len(branches) != 1:
+                    return None, {'reason': 'unresolved_conditional_branch'}
+                index, branch = branches[0]
+                second = forward(branch['query'])
+                if second['status'] != 'answered':
+                    return None, second
+                if numeric_answer_distance(second['value'], second['value']) is None:
+                    return None, {'reason': 'undefined_distribution_or_answer_test'}
+                signature = (first['value'], index, second['value'])
+            return signature, None
+
+        if entry['task_known']:
             for plan in plans:
-                first = forward(plan['query'])
-                if first['status'] != 'answered':
-                    entry.update(known=False, unknown=first)
-                    break
-                if numeric_answer_distance(first['value'], first['value']) is None:
-                    entry.update(known=False, unknown={'reason': 'undefined_distribution_or_answer_test'})
-                    break
-                signature = (first['value'],)
-                if plan.get('branches'):
-                    branches = [(index, branch) for index, branch in enumerate(plan['branches'])
-                                if (distance := numeric_answer_distance(first['value'], branch['when']['value']))
-                                is not None and distance <= branch['when']['atol']]
-                    if len(branches) != 1:
-                        entry.update(known=False, unknown={'reason': 'unresolved_conditional_branch'})
+                signature, error = forecast(plan)
+                if error is not None:
+                    entry.update(known=False, unknown=error)
+                    entry['prediction_status'][plan['id']] = {key: deepcopy(error[key])
+                        for key in ('status', 'reason', 'detail') if key in error}
+                    if exploration_policy is None:
                         break
-                    index, branch = branches[0]
-                    second = forward(branch['query'])
-                    if second['status'] != 'answered':
-                        entry.update(known=False, unknown=second)
-                        break
-                    if numeric_answer_distance(second['value'], second['value']) is None:
-                        entry.update(known=False, unknown={'reason': 'undefined_distribution_or_answer_test'})
-                        break
-                    signature = (first['value'], index, second['value'])
-                entry['predictions'][plan['id']] = signature
+                else:
+                    entry['predictions'][plan['id']] = signature
+                    entry['prediction_status'][plan['id']] = {'status': 'answered'}
         cache[key] = entry
         evaluated[identifier] = entry
+    if research_comparison is not None:
+        evaluated = _retain_question_research_comparison(
+            result, evaluated, programs, plans, question, research_comparison)
+    if exploration_policy is not None:
+        pairs, blocked, task_blocked = _partial_prediction_scores(result, evaluated, plans, answer_atol)
+        result['next_work'] = {'kind': 'complete_candidate_predictions',
+            'task_unknown_theory_ids': result['prediction_coverage']['task_unknown_theory_ids'],
+            'missing_plan_predictions': {plan['id']: [identifier for identifier, entry in evaluated.items()
+                if plan['id'] not in entry['predictions']] for plan in plans}}
+        allowed = [(plan, score) for plan, score in zip(plans, result['scores']) if plan['id'] not in blocked]
+        if task_blocked:
+            result['unknown_reason'] = 'unresolved_task_contract'
+        elif not evaluated:
+            result['unknown_reason'] = 'no_compatible_candidates'
+        elif not pairs:
+            result['unknown_reason'] = 'no_task_answer_disagreement'
+        elif allowed and (best := max(score['G'] for _, score in allowed)) > 0:
+            choose([plan for plan, score in allowed if score['G'] == best])
+        else:
+            result['unknown_reason'] = 'no_legal_discriminating_witness' if blocked else 'no_discriminating_witness'
+        if result['selected_experiment'] is None:
+            result['next_work']['reason'] = result['unknown_reason']
+            if result['prediction_coverage']['complete']:
+                result['next_work']['kind'] = 'construct_or_validate_candidates'
+        elif result['prediction_coverage']['complete']:
+            result.pop('next_work')
+        if result['status'] == 'tied':
+            result['tie_diagnostics'] = diagnose_experiment_ties(result)
+        return result
     known = {identifier: entry for identifier, entry in evaluated.items() if entry['known']}
     columns = [{'predictions': {identifier: (_frozen(evaluated[identifier]['task']['value']),
                   evaluated[identifier]['task'].get('units')) for identifier in known}}]

@@ -20,9 +20,11 @@ from .memory import KnowledgeLibrary
 from .models import ActionRecord, Candidate, EpisodeResult, Observation, Probe, ResearchConfig, SearchBudget, TaskSpec
 from .planning import RevisionPlan, execute_revision_plan, revision_plans
 from .research_graph import ResearchGraph
-from .probing import choose_probe, choose_valuable_probe, construct_probes, observed_classes, transition_probe, transition_outcome, _trajectory_predictions
+from .probing import (choose_probe, choose_valuable_probe, choose_question_probe, construct_probes,
+                      observed_classes, transition_probe, transition_outcome, _trajectory_predictions)
 from .experiment_simulator import ExperimentSimulator
-from .selection import PlanAllocation, rank_candidates, representative_probe, warm_start_candidates, screen_candidates, retain_history_frontier
+from .selection import (PlanAllocation, rank_candidates, representative_probe, warm_start_candidates,
+                        screen_candidates, retain_history_frontier, retain_research_comparison_pool)
 from .sparse_search import sparse_candidates
 from .synthesis import _terms, synthesize
 from .uncertainty import action_and_interval, decision_loss, fit_decision_model, select_decision_plan, risk_calibration_quote
@@ -39,6 +41,115 @@ class LearningEnvironment(Protocol):
 
 
 ALL_OPERATIONS = ("refit", "representation", "relation", "composition", "robustification", "idealization")
+
+
+def _research_comparison(assessed, task_candidates, spec, observations, *, seed, turn,
+                         remaining, maximum, fallback, budget, used=(), prediction_sink=None):
+    """Fund a public forecast panel for experiment design, separate from adoption."""
+    panel = representative_probe(spec, seed=seed, index=turn, remaining=remaining,
+                                 candidates=task_candidates, adaptive_horizon=False, used=used)
+    predictions = {}
+    if panel is not None:
+        for row in assessed:
+            program = row.candidate.program.expanded()
+            if program in predictions:
+                continue
+            if not budget.spend(panel.cost):
+                break
+            predictions[program] = tuple(_trajectory_predictions(row.candidate, panel, fallback, observations))
+    if prediction_sink is not None:
+        prediction_sink.update(predictions)
+    retained, details = retain_research_comparison_pool(assessed, predictions, maximum=maximum)
+    details.update(task_candidate_ids=[candidate.candidate_id for candidate in task_candidates],
+                   panel_probe=asdict(panel) if panel else None,
+                   compute_cost=budget.spent,
+                   use='representative_experiment_design', adoption_changed=False)
+    # Preserve every candidate required by the unchanged task comparison.
+    candidates = list(task_candidates)
+    for row in retained:
+        if all(row.candidate.program != candidate.program for candidate in candidates):
+            candidates.append(row.candidate)
+    return candidates, details
+
+
+def _refresh_active_research_pool(task_assessed, candidates, public_predictions,
+                                  observations, reference, fresh, *, budget, maximum,
+                                  fallback, q, complexity_weight, minimum_improvement,
+                                  fresh_weight=.5):
+    """Review design alternatives on the actual paid comparison, not screening samples.
+
+    Task assessments are reused without modifying their ranking or adoption.
+    Missing full assessments stay UNKNOWN and cannot vote in this research pool.
+    The loss tolerance only qualifies this finite comparison, not a scientific
+    family or a permanent transfer refutation.
+    """
+    start = budget.spent
+    measured = {row.candidate.program.expanded(): row for row in task_assessed}
+    unique = {}
+    for candidate in candidates:
+        unique.setdefault(candidate.program.expanded(), candidate)
+    extras = [candidate for program, candidate in unique.items() if program not in measured]
+    checked = rank_candidates(extras, observations, reference, fresh=fresh,
+        fresh_weight=fresh_weight, fallback=fallback, q=q, budget=budget,
+        complexity_weight=complexity_weight)
+    measured.update((row.candidate.program.expanded(), row) for row in checked)
+    complete = [measured[program] for program in unique if program in measured]
+    fields = ('evidence_loss', 'reference_loss', 'fresh_loss')
+    best = {field: min((getattr(row, field) for row in complete
+                       if getattr(row, field) is not None), default=None) for field in fields}
+    compatible, failures = [], []
+    scope = {'observations': len(observations), 'reference': len(reference), 'fresh': len(fresh)}
+    for row in complete:
+        violated = [field for field in fields if getattr(row, field) is not None
+                    and getattr(row, field) > best[field] + minimum_improvement]
+        if violated:
+            failures.append({'candidate_id': row.candidate.candidate_id,
+                'status': 'outside_research_loss_tolerance', 'violated_losses': violated,
+                'losses': {field: getattr(row, field) for field in fields},
+                'evidence_scope': scope, 'scientific_family_refuted': False})
+        else:
+            compatible.append(row)
+    retained, retention = retain_research_comparison_pool(
+        compatible, public_predictions, maximum=maximum)
+    details = {'status': 'complete' if len(complete) == len(unique) else 'partial_unknown',
+        'input_candidate_ids': [candidate.candidate_id for candidate in unique.values()],
+        'reused_task_candidate_ids': [row.candidate.candidate_id for row in complete
+            if row in task_assessed],
+        'fully_reviewed_candidate_ids': [row.candidate.candidate_id for row in complete],
+        'unknown_candidate_ids': [candidate.candidate_id for program, candidate in unique.items()
+                                  if program not in measured],
+        'scoped_failures': failures, 'loss_tolerance': minimum_improvement,
+        'criterion': 'finite_research_loss_heuristic_best_plus_minimum_improvement',
+        'statistical_refutation_established': False,
+        'prediction_semantics': 'native_predict_on_acquired_row_history',
+        'best_losses': best, 'evidence_scope': scope, 'retention': retention,
+        'compute_cost': budget.spent-start, 'task_adoption_changed': False}
+    return [row.candidate for row in retained], {row.candidate.program: row for row in retained}, details
+
+
+def _check_active_research_predictions(candidates, fresh, *, observation_offset, budget,
+                                       fallback, q, minimum_improvement):
+    """Check the acquired intervention, keeping scoped failures and incomplete work."""
+    start = budget.spent
+    checked = rank_candidates(candidates, fresh, [], fallback=fallback, q=q,
+        budget=budget, complexity_weight=0.) if fresh else []
+    best = min((row.evidence_loss for row in checked), default=None)
+    values = {row.candidate.program.expanded(): row for row in checked}
+    result = {'status': 'complete' if len(values) == len(candidates) else 'partial_unknown',
+        'evidence_ref': {'field': 'observations',
+            'row_indices': list(range(observation_offset, observation_offset+len(fresh)))},
+        'loss_tolerance': minimum_improvement, 'best_loss': best,
+        'criterion': 'finite_research_loss_heuristic_best_plus_minimum_improvement',
+        'statistical_refutation_established': False,
+        'prediction_semantics': 'native_predict_on_acquired_row_history',
+        'checks': [], 'compute_cost': budget.spent-start, 'task_adoption_changed': False}
+    for candidate in candidates:
+        row = values.get(candidate.program.expanded())
+        result['checks'].append({'candidate_id': candidate.candidate_id,
+            'status': ('UNKNOWN' if row is None else 'outside_research_loss_tolerance'
+                       if row.evidence_loss > best + minimum_improvement else 'within_research_loss_tolerance'),
+            'loss': row.evidence_loss if row else None, 'scientific_family_refuted': False})
+    return result
 
 
 def _representation_work(observations, spec, max_history):
@@ -105,8 +216,11 @@ class CognitiveAgent:
         self.library = library if library is not None else KnowledgeLibrary()
         self.proposer = proposer
 
-    def run(self, environment: LearningEnvironment, *, research_state=None):
+    def run(self, environment: LearningEnvironment, *, research_state=None, research_selection=None):
         config, spec = self.config, environment.spec
+        if research_selection is not None and (not config.active_probes or config.strategy == 'fixed'
+                                               or spec.decision_costs is not None):
+            raise ValueError('native PR2 requires the active scalar-response research path')
         workspace = (ResearchWorkspace.from_dict(research_state) if research_state is not None
                      else ResearchWorkspace(spec.task_id))
         if workspace.task_id != spec.task_id:
@@ -781,9 +895,10 @@ class CognitiveAgent:
                                             compute_cost=local.spent-repair_cost, details={"candidates": len(warm)}))
             before = compute.spent
             local = SearchBudget(min(screening_allowance, max(0, compute.remaining - comparison_reserve)))
+            research_assessed = []
             screening = screen_candidates(pool, observations, reference, fallback=fallback, q=spec.risk_quantile,
                                           budget=local, complexity_weight=config.complexity_weight, maximum=slots,
-                                          incumbent=incumbent.program)
+                                          incumbent=incumbent.program, assessment_sink=research_assessed)
             compute.spend(local.spent)
             actions.append(ActionRecord(turn, "screen_candidates", "Retain promising executable alternatives for a new experiment",
                                         compute_cost=compute.spent-before, details={"candidates": len(screening)}))
@@ -802,9 +917,26 @@ class CognitiveAgent:
                     short.append(retained)
             short.sort(key=lambda candidate: candidate.program != incumbent.program)
 
+            design_candidates, design_predictions = short, {}
+            research_design = False
+            if (config.active_probes and config.strategy != 'fixed'
+                    and spec.decision_costs is None and not decision_experiment):
+                design_work = SearchBudget(min(probe_allowance // 2,
+                    max(0, compute.remaining - comparison_reserve)))
+                design_candidates, design_details = _research_comparison(
+                    research_assessed, short, spec, observations, seed=config.seed, turn=turn,
+                    remaining=observation_limit-observation_cost, maximum=slots,
+                    fallback=fallback, budget=design_work, used=queried,
+                    prediction_sink=design_predictions)
+                research_design = True
+                compute.spend(design_work.spent)
+                probe_allowance -= design_work.spent
+                actions.append(ActionRecord(turn, 'research_comparison_pool',
+                    'Retain evidence, complexity and public prediction alternatives for experiment design',
+                    compute_cost=design_work.spent, details=design_details))
             representative = (decision_experiment["reference_probes"][0] if decision_experiment else representative_probe(spec, seed=config.seed, index=turn,
                             remaining=observation_limit-observation_cost, used=queried,
-                            candidates=short, adaptive_horizon=config.adaptive_horizon))
+                            candidates=design_candidates, adaptive_horizon=config.adaptive_horizon))
             # An acquired experiment must have a funded comparison. Candidate
             # generation and query selection cannot borrow this allocation.
             reference_cost = (sum(probe.cost for probe in decision_experiment["reference_probes"])
@@ -963,14 +1095,38 @@ class CognitiveAgent:
             active_remaining = max(0, observation_limit-observation_cost - len(fresh_reference))
             if spec.decision_costs is None and local_turn == config.max_rounds-1:
                 active_remaining = 0
-            transition_work = SearchBudget(min(probe_allowance // 2, compute.remaining))
+            # Task ranking/adoption above keeps its original shortlist. Only
+            # fully checked paid-evidence alternatives may design interventions.
+            active_candidates, active_assessed, reviewed_research_pool = short, assessed, None
+            task_tail_reserve = len(short) * (2 * len(observations) + len(fresh_reference))
+            if research_design and active_remaining:
+                review_work = SearchBudget(min(probe_allowance,
+                    max(0, compute.remaining-task_tail_reserve)))
+                active_candidates, reviews, review_details = _refresh_active_research_pool(
+                    assessed, design_candidates, design_predictions, observations,
+                    [*reference, *fresh_reference] if prospective else [], fresh_reference,
+                    budget=review_work, maximum=min(4, slots), fallback=fallback,
+                    q=spec.risk_quantile, complexity_weight=config.complexity_weight,
+                    minimum_improvement=config.minimum_improvement,
+                    fresh_weight=fresh_weight if prospective else 0.)
+                compute.spend(review_work.spent)
+                probe_allowance -= review_work.spent
+                active_assessed = list(reviews.values())
+                reviewed_research_pool = active_candidates
+                actions.append(ActionRecord(turn, 'review_active_research_pool',
+                    'Check research alternatives against the actual paid comparison before planning interventions',
+                    compute_cost=review_work.spent, details=review_details))
+            before = compute.spent
+            transition_work = SearchBudget(min(probe_allowance // 2,
+                max(0, compute.remaining-task_tail_reserve) if research_design else compute.remaining))
             transition, transition_details = None, {}
             probe_evidence = [*observations, *fresh_reference]
             probe_losses = {row.candidate.program:
                 (row.evidence_loss * len(observations) + row.fresh_loss * len(fresh_reference))
-                / len(probe_evidence) for row in assessed}
+                / len(probe_evidence) for row in active_assessed}
             if config.transition_probes and config.active_probes and config.strategy != "fixed":
-                transition, transition_details = transition_probe(spec, [incumbent, *short[:3]], probe_evidence,
+                transition, transition_details = transition_probe(spec,
+                    active_candidates if research_design else [incumbent, *short[:3]], probe_evidence,
                     budget=transition_work, remaining=active_remaining, round_number=turn, used=queried,
                     joint_controls=config.joint_state_probes,
                     evidence_losses=probe_losses, followup_observation_cost=len(fresh_reference),
@@ -982,15 +1138,16 @@ class CognitiveAgent:
                 and chosen.reference_loss <= config.minimum_improvement
                 and chosen.evidence_loss <= config.minimum_improvement
                 and chosen.fresh_loss <= config.minimum_improvement)
-            if reuse_confirmed and not workspace.requested_method:
+            if reuse_confirmed and not workspace.requested_method and research_selection is None:
                 actions.append(ActionRecord(turn, "plan_experiment", "Transferred knowledge explains the existing and newly acquired trajectory",
                                             compute_cost=compute.spent-before,
                                             details={"policy": "supported_transfer_stop", "memory_id": incumbent.memory_id}))
             else:
                 recalled_probes = []
                 if config.use_memory and config.active_probes and config.strategy != "fixed":
-                    recall_work = SearchBudget(min(160, max(0, probe_allowance-transition_work.spent)))
-                    recalled_probes = self.library.experiments.propose(spec, short, probe_evidence,
+                    recall_work = SearchBudget(min(160, max(0, probe_allowance-transition_work.spent),
+                        max(0, compute.remaining-task_tail_reserve) if research_design else compute.remaining))
+                    recalled_probes = self.library.experiments.propose(spec, active_candidates, probe_evidence,
                         fallback=fallback, budget=recall_work, remaining=active_remaining, used=queried,
                         evidence_losses=probe_losses, boundary_proposal=(transition, transition_details))
                     compute.spend(recall_work.spent)
@@ -999,20 +1156,37 @@ class CognitiveAgent:
                         actions.append(ActionRecord(turn, "recall_experiment", "Rebind previously useful interventions and test their current distinguishing power",
                             compute_cost=recall_work.spent, details={"experiments": self.library.experiments.last_recall}))
                 affordable = [p for p in [*recalled_probes, *spec.available_probes, *llm_probes,
-                              *(construct_probes(spec, short, round_number=turn, seed=config.seed, max_history=config.max_history)
+                              *(construct_probes(spec, active_candidates, round_number=turn, seed=config.seed, max_history=config.max_history)
                                 if config.synthesize_probes else [])]
                               if p.cost <= active_remaining and all(p.sequence != old.sequence for old in queried)]
-                experiment_details, active = {}, None
-                local = SearchBudget(min(probe_allowance-transition_work.spent, compute.remaining))
+                extra = (representative_probe(spec, seed=config.seed, index=turn + 1000,
+                    remaining=active_remaining, used=queried, candidates=[incumbent],
+                    adaptive_horizon=config.adaptive_horizon)
+                    if config.active_probes and config.strategy != 'fixed' else None)
+                experiment_details, active, question_selection = {}, None, None
+                intervention_check_reserve = (len(active_candidates) * max((probe.cost for probe in
+                    [*affordable, *([transition] if transition else []), *([extra] if extra else [])]), default=0)
+                    if research_design else 0)
+                local = SearchBudget(max(0, min(probe_allowance-transition_work.spent-intervention_check_reserve,
+                    compute.remaining-task_tail_reserve-intervention_check_reserve
+                    if research_design else compute.remaining)))
                 if affordable and config.active_probes and config.strategy != "fixed":
-                    if config.experiment_policy == "task_value":
-                        active, experiment_details = choose_valuable_probe(affordable, short, fallback, local,
+                    if research_selection is not None:
+                        active, question_selection = choose_question_probe(
+                            affordable, active_candidates, fallback, local, spec=spec,
+                            selection_contract=research_selection, observation_budget=active_remaining,
+                            public_prediction_rows=getattr(environment, 'prediction_rows', None))
+                        experiment_details = {'policy': 'pr2_question_selection'}
+                    elif config.experiment_policy == "task_value":
+                        active, experiment_details = choose_valuable_probe(affordable, active_candidates, fallback, local,
                                      observations=[*observations, *fresh_reference], spec=spec, queried_probes=queried,
-                                     max_compute=local.remaining, simulator=simulator)
+                                     max_compute=local.remaining, simulator=simulator,
+                                     reviewed_research_pool=reviewed_research_pool)
                     else:
-                        active, value = choose_probe(affordable, short, fallback, local, observations=observations)
+                        active, value = choose_probe(affordable, active_candidates, fallback, local,
+                            observations=probe_evidence if research_design else observations)
                         experiment_details = {"disagreement": value, "policy": "disagreement"}
-                elif affordable:
+                elif affordable and research_selection is None:
                     active = rng.choice(affordable)
                     experiment_details = {"policy": "random"}
                 if active is not None:
@@ -1022,6 +1196,11 @@ class CognitiveAgent:
                         experiment_details = {**experiment_details, **recalled["design"]}
                 compute.spend(local.spent)
                 if config.active_probes and config.strategy != "fixed":
+                    # These are quotes, not debits. The original action policy
+                    # must leave the selected intervention's actual checks funded.
+                    check_units = len(active_candidates)+len(short)+1 if research_design else 1
+                    action_compute_remaining = (max(0, compute.remaining-task_tail_reserve)
+                        if research_design else max(0, learning_limit-compute.spent))
                     transferred_conflict = any(r.candidate.memory_id and r.evidence_loss <= config.minimum_improvement
                         and r.fresh_loss is not None and r.fresh_loss > config.minimum_improvement for r in assessed)
                     condition = ("transfer_counterexample" if transferred_conflict else
@@ -1029,16 +1208,13 @@ class CognitiveAgent:
                                  "new_counterexample" if chosen.fresh_loss > config.minimum_improvement else "adequate")
                     action_policy.set_condition(condition)
                     options = []
-                    if transition is not None:
-                        options.append(ActionOption("transition", transition.cost, transition.cost,
+                    if transition is not None and research_selection is None:
+                        options.append(ActionOption("transition", transition.cost, transition.cost*check_units,
                                                     (transition, transition_details)))
                     if active is not None:
-                        options.append(ActionOption("task_value", active.cost, active.cost, (active, experiment_details)))
-                    extra = representative_probe(spec, seed=config.seed, index=turn + 1000,
-                        remaining=active_remaining, used=queried, candidates=[incumbent],
-                        adaptive_horizon=config.adaptive_horizon)
-                    if extra is not None:
-                        options.append(ActionOption("representative", extra.cost, extra.cost, (extra, {})))
+                        options.append(ActionOption("task_value", active.cost, active.cost*check_units, (active, experiment_details)))
+                    if extra is not None and research_selection is None:
+                        options.append(ActionOption("representative", extra.cost, extra.cost*check_units, (extra, {})))
                     if local_turn < config.max_rounds - 1 and max(chosen.evidence_loss, chosen.fresh_loss) > config.minimum_improvement:
                         options.append(ActionOption("refit", 0, 2 * len(observations)))
                         if representation_work:
@@ -1053,6 +1229,19 @@ class CognitiveAgent:
                                 and observation_limit - observation_cost >= min(8, spec.max_probe_length)
                                 and next_continuous_work + next_comparison <= learning_limit - compute.spent):
                             options.append(ActionOption("continuous_state", 0, next_continuous_work))
+                    if research_design:
+                        available_checks = max(0, probe_allowance-transition_work.spent-local.spent)
+                        unfunded = [option for option in options if option.name in
+                            {'transition', 'task_value', 'representative'}
+                            and option.observation_cost*len(active_candidates) > available_checks]
+                        options = [option for option in options if option not in unfunded]
+                        if unfunded:
+                            actions.append(ActionRecord(turn, 'defer_research_intervention',
+                                'Leave interventions with unfunded research prediction checks unexecuted',
+                                details={'status': 'UNKNOWN', 'available_compute': available_checks,
+                                    'plans': [{'action': option.name,
+                                        'required_compute': option.observation_cost*len(active_candidates)}
+                                        for option in unfunded]}))
                     selected_method = None
                     selection_profile = method_profile(spec, observations, incumbent, method_trace,
                         residual_loss=chosen.evidence_loss, reference_loss=chosen.fresh_loss,
@@ -1060,25 +1249,25 @@ class CognitiveAgent:
                         boundary_evidence=transition_details)
                     options = [option for option in options if method_applicability(None, selection_profile, option.name)["can_try"]]
                     ordinary = action_policy.choose(options, observation_remaining=active_remaining,
-                        compute_remaining=max(0, learning_limit-compute.spent),
+                        compute_remaining=action_compute_remaining,
                         minimum_improvement=config.minimum_improvement)
                     request = workspace.requested_method
                     if request:
                         selected_method = next((option for option in options if option.name == request["name"]
                             and option.observation_cost <= active_remaining
-                            and option.compute_cost <= max(0, learning_limit-compute.spent)), None)
+                            and option.compute_cost <= action_compute_remaining), None)
                         if selected_method:
                             self.library.methods.last_choice = dict(request)
                             workspace.requested_method = {}
                     if config.use_memory and config.learn_research_policy:
                         selected_method = selected_method or self.library.methods.choose(action_policy.context, research_context(spec, observations),
                             options, method_trace, task_id=spec.task_id, observation_remaining=active_remaining,
-                            compute_remaining=max(0, learning_limit-compute.spent),
+                            compute_remaining=action_compute_remaining,
                             profile=selection_profile, ordinary=ordinary,
                             ordinary_evidence=action_policy.last_decision)
                     selected = selected_method or ordinary
                     revision_options = [option for option in options if option.observation_cost <= active_remaining
-                        and option.compute_cost <= max(0, learning_limit-compute.spent)]
+                        and option.compute_cost <= action_compute_remaining]
                     method_revision = self.library.methods.revise_plan(selection_profile, revision_options, trace=method_trace)
                     if selected and method_revision and selected.name in method_revision["excluded_actions"]:
                         successor = next(option for option in options if option.name == method_revision["action"])
@@ -1096,7 +1285,7 @@ class CognitiveAgent:
                             "quoted_observation_cost": selected.observation_cost,
                             "quoted_compute_cost": selected.compute_cost,
                             "observation_remaining": active_remaining,
-                            "compute_remaining": max(0, learning_limit-compute.spent)}
+                            "compute_remaining": action_compute_remaining}
                     active, experiment_details = selected.payload if selected and selected.payload else (None, {})
                     experiment_details = {**experiment_details, "action_policy": dict(action_policy.last_decision)}
                     if selected_method:
@@ -1114,6 +1303,17 @@ class CognitiveAgent:
                                     min(config.max_history, previous_data.get("max_history", 0))
                                     or current_data["coverage"] != previous_data.get("coverage")):
                                 pending_actions[-1]["requires_actions"] = [preparation["action"]]
+                if research_selection is not None:
+                    experiment_details['policy'] = 'pr2_question_selection'
+                    experiment_details['question_selection'] = question_selection or {
+                        'status': 'scoped_unknown', 'reason': 'no_affordable_native_intervention',
+                        'compute_cost': 0, 'evidence': [], 'support_updated': False}
+                    planned = experiment_details['question_selection'].get('selected_experiment')
+                    experiment_details['question_selection']['native_execution'] = {
+                        'status': ('prepared' if active is not None else 'prepared_not_executed')
+                            if planned else 'not_prepared',
+                        'actual_action': action_policy.last_decision.get('selected_action'),
+                        'observation_cost': 0}
                 actions.append(ActionRecord(turn, "plan_experiment", "Choose additional observations for task value and unresolved structure",
                                             compute_cost=compute.spent-before, details=experiment_details))
                 # Freeze the observation-channel forecast only from the unused
@@ -1121,17 +1321,37 @@ class CognitiveAgent:
                 # its existing reservation, including on small continuations.
                 simulation_forecast = None
                 simulation_before = local.spent
-                if active is not None and local.remaining >= active.cost * (1 + max(1, 2 * (len(simulator.candidates) + bool(simulator.current)))):
-                    local.spend(active.cost)
+                simulation_work = (SearchBudget(min(local.remaining,
+                    max(0, compute.remaining-task_tail_reserve-active.cost*check_units)))
+                    if research_design and active is not None else local)
+                if active is not None and simulation_work.remaining >= active.cost * (1 + max(1, 2 * (len(simulator.candidates) + bool(simulator.current)))):
+                    simulation_work.spend(active.cost)
                     simulation_forecast = simulator.forecast(active,
                         _trajectory_predictions(incumbent, active, fallback, observations),
-                        baseline_variance=max(chosen.evidence_loss, 1e-8), budget=local)
+                        baseline_variance=max(chosen.evidence_loss, 1e-8), budget=simulation_work)
+                    if simulation_work is not local:
+                        local.spend(simulation_work.spent)
                     compute.spend(local.spent-simulation_before)
                     actions.append(ActionRecord(turn, "forecast_experiment_observations",
                         "Predict the real trajectory with the current and proposed observation models",
                         compute_cost=local.spent-simulation_before,
                         details={"probe_id": active.probe_id, "forecast": simulation_forecast}))
                 fresh_active = acquire(active, turn, "Distinguish remaining explanations with an affordable intervention", design=experiment_details)
+                if research_selection is not None and fresh_active:
+                    experiment_details['question_selection']['native_execution'].update(
+                        status='executed', probe_id=active.probe_id, observation_cost=active.cost,
+                        evidence_ref={'field': 'observations', 'row_indices': list(range(
+                            len(observations)+len(fresh_reference), len(observations)+len(fresh_reference)+len(fresh_active)))})
+                if research_design and fresh_active:
+                    check_work = SearchBudget(len(active_candidates)*len(fresh_active))
+                    checks = _check_active_research_predictions(active_candidates, fresh_active,
+                        observation_offset=len(observations)+len(fresh_reference), budget=check_work,
+                        fallback=fallback, q=spec.risk_quantile,
+                        minimum_improvement=config.minimum_improvement)
+                    compute.spend(check_work.spent)
+                    actions.append(ActionRecord(turn, 'check_active_research_predictions',
+                        'Retain actual intervention losses and scoped research-pool failures',
+                        compute_cost=check_work.spent, details=checks))
                 if simulation_forecast and fresh_active:
                     simulator.observe(simulation_forecast, fresh_active, budget=SearchBudget(0))
                 fresh = [*fresh_reference, *fresh_active]
@@ -1150,7 +1370,8 @@ class CognitiveAgent:
                 # spare work turns a useful intervention into future knowledge.
                 memory_work = SearchBudget(min(96, max(0, compute.remaining -
                     len(short) * (len(observations) + len(fresh)) - len(observations) - len(fresh))))
-                learned_experiment = self.library.experiments.record(spec, short, observations,
+                learned_experiment = self.library.experiments.record(spec,
+                    active_candidates if research_design and fresh_active else short, observations,
                     active if fresh_active else representative,
                     fresh_active or (fresh_reference[:representative.cost] if decision_experiment else fresh_reference),
                     fallback=fallback, budget=memory_work,

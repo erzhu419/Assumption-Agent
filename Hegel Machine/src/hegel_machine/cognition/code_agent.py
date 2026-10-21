@@ -949,7 +949,9 @@ def _python_model_context_files(directory):
     files = {}
     for root, directories, names in os.walk(directory):
         directories[:] = [name for name in directories
-            if not _model_snapshot_ignored(Path(root) / name, directory)]
+            if not (Path(root) == directory and name in {
+                "_evaluated_model", "_target_work", "_experiment_models", "_submitted_models"})
+            and not _model_snapshot_ignored(Path(root) / name, directory)]
         for name in names:
             path = Path(root) / name
             if path.is_file() and not _model_snapshot_ignored(path, directory):

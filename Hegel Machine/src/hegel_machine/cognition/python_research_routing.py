@@ -15,6 +15,36 @@ from .temporal_research import TEMPORAL_LIMITS
 TOLERANCE = 1e-10
 
 
+def ordinary_forecast_models(agent, question):
+    """The finite author's existing complete catalog, never a fitted subset."""
+    contract = agent.knowledge.get('finite_native_author') or {}
+    owner = contract.get('question') or {}
+    if (owner.get('id') != question.get('id')
+            or owner.get('meaning_version', 1) != question.get('meaning_version', 1)
+            or not contract.get('predictor_catalog_ref')):
+        return []
+    models = contract.get('predictor_paths')
+    return list(dict.fromkeys(models)) if isinstance(models, list) else []
+
+
+def ordinary_paid_assessment_refs(agent, question, models):
+    """Point to the existing same-cutoff evaluations, without re-scoring fits."""
+    references = {}
+    for index, result in reversed(list(enumerate(agent.method_results))):
+        feedback = result.get('feedback', {})
+        if (feedback.get('operator') != 'research_choice'
+                or feedback.get('research_question_id') != question['id']
+                or feedback.get('question_meaning_version', 1) != question.get('meaning_version', 1)
+                or feedback.get('paid_rows') != len(agent.rows)):
+            continue
+        for position, evaluation in enumerate(feedback.get('evaluations', [])):
+            model = evaluation.get('path')
+            if model in models and model not in references:
+                references[model] = {'file': str(agent.workspace / 'research_state.json'),
+                    'json_path': ['method_results', index, 'feedback', 'evaluations', position]}
+    return references
+
+
 def matching_refit(agent, model):
     """A rewritten predictor must not inherit the previous source's diagnosis."""
     source, inner = python_model_context(agent.workspace, model)
@@ -96,6 +126,9 @@ def revision_action(agent, retained, spec):
 
 def instrument_action(agent, spec, diagnosis="instrument_research"):
     """Continue an already opened calibration question without restarting refit."""
+    meter = next((item for item in spec.get("channels", []) if item["name"] == "meter"), None)
+    if meter is None:
+        return {"diagnosis": "instrument_channel_unavailable"}
     rows, confirmation = len(agent.rows), agent.config.confirmation_rows
     index = len(agent.operator_results)
     fitted = next((result for result in reversed(agent.operator_results)
@@ -119,7 +152,7 @@ def instrument_action(agent, spec, diagnosis="instrument_research"):
         sequence = record["action"]["sequence"]
         if len(sequence) >= 6 and sequence not in controls:
             controls.append(deepcopy(sequence))
-    meter_cost = next(item["cost_per_row"] for item in spec["channels"] if item["name"] == "meter")
+    meter_cost = meter["cost_per_row"]
 
     if fitted is None:
         if metered:

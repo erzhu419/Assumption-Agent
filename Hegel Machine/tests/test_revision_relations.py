@@ -8,6 +8,7 @@ from hegel_machine.cognition.language import Definition, Program
 from hegel_machine.cognition.models import Observation
 from hegel_machine.cognition.revision_relations import (
     consolidate_revision_relations, instantiate_relation, propose_relation,
+    propose_revision,
 )
 
 
@@ -260,3 +261,112 @@ def test_learned_unary_prefilter_preserves_the_small_complete_binding_result():
     assert [Program.from_dict(item['program']) for item in filtered['proposals']] == expected
     assert components == original and filtered['affects_existing_candidates'] is False
     assert filtered['status'] == 'completed' and filtered['actual_compute_cost'] <= 1000
+
+
+def edit_sources():
+    old = [Program('abs', children=(feature(),)), binary('sub', feature(), constant(3))]
+    result = []
+    for index, before in enumerate(old):
+        after = binary('add', before, constant(index + 1))
+        row = {'features': {'u': 2.}, 'target': after.predict(Observation({'u': 2.}, 0.)), 'history': []}
+        result.append(revision(str(index), after, before_program=before.to_dict(), counterexamples=[{
+            'source_ref': {'file': 'paid_fixture.json', 'json_path': [index]},
+            'observation': row, 'tolerance': 0.}]))
+    return result
+
+
+def edit_candidate(sources=None):
+    compiled = consolidate_revision_relations(sources or edit_sources())
+    assert compiled['status'] == 'completed'
+    return next(item for item in compiled['candidates'] if item['kind'] == 'program_revision_relation')
+
+
+def test_joint_revision_reconstructs_both_sides_and_anchors_the_real_parent():
+    sources = edit_sources()
+    candidate = edit_candidate(sources)
+    assert all(item['before_exact'] and item['after_exact'] for item in candidate['source_reconstruction'])
+    assert candidate['parent_holes'] == ['hole_0']
+    assert candidate['before_pattern']['op'] == 'arg'
+    assert Definition.from_dict(candidate['definition']).body.children[0].name == 'hole_0'
+    parent = component('current_parent', binary('max', feature(), constant(0)))
+    pool = [component('one', constant(1)), component('two', constant(2)), component('old', feature())]
+    checks = [{'source_ref': {'file': 'paid_target.json', 'json_path': [0]},
+               'observation': {'features': {'u': 2.}, 'target': 3., 'history': []}, 'tolerance': 0.}]
+    proposed = propose_revision(candidate, parent, pool, evidence_checks=checks)
+    assert proposed['status'] == 'completed' and proposed['attempted_bindings'] == len(pool)
+    assert proposed['parent_binding']['remaining_holes'] == ['hole_1']
+    assert all(item['bindings']['hole_0']['component_id'] == 'current_parent' for item in proposed['proposals'])
+    assert all(not item['support_updated'] for item in proposed['proposals'])
+    changed = propose_revision(candidate, component('another_parent', Program('abs', children=(feature(),))),
+                               pool, evidence_checks=checks)
+    first = Program.from_dict(proposed['proposals'][0]['program'])
+    second = Program.from_dict(changed['proposals'][0]['program'])
+    assert first.predict(Observation({'u': -2.}, 0.)) != second.predict(Observation({'u': -2.}, 0.))
+    assert all('program' not in item and 'bindings' not in item for item in candidate['source_bindings'])
+    known = deepcopy(checks)
+    known[0]['observation']['target'] = 2.
+    assert propose_revision(candidate, parent, pool, evidence_checks=known)['status'] == 'not_applicable'
+    altered = deepcopy(sources)
+    for source in altered:
+        row = source['counterexamples'][0]['observation']
+        row['target'] = Program.from_dict(source['before_program']).predict(Observation(row['features'], 0.))
+    unsupported = propose_revision(edit_candidate(altered), parent, pool, evidence_checks=checks)
+    assert unsupported['status'] == 'UNKNOWN' and unsupported['reason'] == 'source_measured_discrepancy_required'
+
+
+def test_timeless_parent_is_compatible_with_a_clocked_source_without_erasing_real_clocks():
+    before = [constant(1.), binary('ge', feature(), constant(0.))]
+    records = []
+    for index, old in enumerate(before):
+        after = binary('add', old, feature())
+        records.append(revision(str(index), after, before_program=old.to_dict(), counterexamples=[{
+            'source_ref': {'file': 'paid_fixture.json', 'json_path': [index]},
+            'observation': {'features': {'u': 2.}, 'target': 3., 'history': []}}]))
+    candidate = edit_candidate(records)
+    assert all(item['before_exact'] and item['after_exact'] for item in candidate['source_reconstruction'])
+    assert candidate['parent_holes']
+    conflicting = deepcopy(records)
+    # Both source expressions now depend on genuinely different declared clocks.
+    conflicting[0]['before_program'] = feature().to_dict()
+    conflicting[0]['role_signature']['u']['time'] = 'other_clock'
+    result = consolidate_revision_relations(conflicting)
+    assert not any(item['kind'] == 'program_revision_relation' for item in result['candidates'])
+    assert any(item['reason'] == 'incompatible_subtree_unit_or_time' for item in result['excluded'])
+
+
+def test_fixed_and_relational_history_explanations_stay_competing_and_empirical():
+    condition = Program('available', lag=1)
+    lag = Program('lag', name='u', lag=1)
+    sources = [revision(str(index), Program('if', children=(condition, before, startup)),
+        before_program=before.to_dict(), counterexamples=[{
+            'source_ref': {'file': 'paid_startup.json', 'json_path': [index]},
+            'observation': {'features': {'u': 2.}, 'target': 2., 'history': []}}])
+        for index, (before, startup) in enumerate([(lag, feature()),
+            (binary('mul', constant(2), lag), Program('abs', children=(feature(),)))])]
+    candidate = edit_candidate(sources)
+    assert len(candidate['constraint_hypotheses']) >= 2
+    assert all(item['status'] == 'empirical_candidate' for item in candidate['constraint_hypotheses'])
+    parent = component('parent_two', Program('lag', name='u', lag=2))
+    checks = [{'source_ref': {'file': 'target_startup.json', 'json_path': [0]},
+        'observation': {'features': {'u': 2.}, 'target': 2., 'history': []}}]
+    proposed = propose_revision(candidate, parent, [component('current', feature())], evidence_checks=checks)
+    assert proposed['status'] == 'completed' and proposed['proposals']
+    assert all(Program.from_dict(item['program']).children[0].lag == 2 for item in proposed['proposals'])
+    assert all(item['constraint_hypothesis'] != 'observed_fixed' for item in proposed['proposals'])
+    assert not candidate['global_support'] and not candidate['independent_confirmation']
+
+
+def test_bounded_component_search_round_robins_and_resumes_a_small_cursor():
+    candidate = relation()
+    lag = Program('lag', name='u', lag=1)
+    components = [component('mature0', lag), component('mature1', binary('mul', constant(2), lag)),
+        component('mature2', binary('add', lag, feature())), component('startup0', feature()),
+        component('startup1', constant(0)), component('startup2', Program('abs', children=(feature(),)))]
+    first = propose_relation(candidate, components, allocation={'compute': 100})
+    assert first['status'] == 'UNKNOWN' and first['budget_exhausted']
+    assert len({item['bindings']['hole_0']['component_id'] for item in first['proposals']}) > 1
+    resumed = propose_relation(candidate, components, allocation={'compute': 100}, cursor=first['cursor'])
+    assert resumed['cursor'] != first['cursor']
+    assert first['actual_compute_cost'] <= 100 and resumed['actual_compute_cost'] <= 100
+    assert {str(item['program']) for item in first['proposals']}.isdisjoint(
+        {str(item['program']) for item in resumed['proposals']})

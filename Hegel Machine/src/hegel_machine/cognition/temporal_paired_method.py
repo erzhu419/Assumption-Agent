@@ -270,7 +270,7 @@ adds no scientific support: fresh predictive confirmation still determines adopt
         evidence_before = self._program_evidence()
         try:
             feedback = super()._query(arguments, laboratory)
-        except (ValueError, TypeError, KeyError, OSError) as error:
+        except (ValueError, TypeError, KeyError, OSError, StopIteration) as error:
             feedback = {"error": f"{type(error).__name__}: {error}", "executed_path": path}
         self.method_results.append({"step": len(self.method_results), "path": path,
             "proposal": deepcopy(self._current_proposal), "feedback": self._compact_feedback(feedback),
@@ -344,12 +344,15 @@ def _acquisition_only(proposed):
 
 
 def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmation=True,
-                      record_events=False, on_checkpoint=None, query_arguments=None):
+                      record_events=False, on_checkpoint=None, query_arguments=None,
+                      before_step=None, after_step=None):
     """Run the existing procedure protocol on this agent's evidence and account.
 
     Frozen replay records its own zero-LLM events and permits the authored method
     to react to failures. A live invocation keeps substeps in method_results and
-    returns on failure, leaving the calling LLM the revision decision.
+    returns on failure, leaving the calling LLM the revision decision. Registered
+    finite authors can supply the same organization hooks as the model loop;
+    hook costs and the completed action are checkpointed on this agent's account.
     """
     if not isinstance(max_steps, int) or max_steps < 1:
         raise ValueError("max_steps must be a positive integer")
@@ -377,6 +380,15 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
             if exhausted is not None:
                 status = exhausted
                 break
+            if before_step is not None:
+                opened = before_step(laboratory)
+                if opened and on_checkpoint:
+                    on_checkpoint(agent.result("researching"))
+                terminal = agent._procedure_terminal_status()
+                exhausted = agent._procedure_budget_status()
+                if terminal is not None or exhausted is not None:
+                    status = terminal if terminal is not None else exhausted
+                    break
             agent._current_proposal = None
             agent._procedure_evaluation_unchanged = False
             review = agent._acquisition_review
@@ -388,16 +400,20 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
                     if source != review["source"]:
                         review.update(source=source, steps=[])
                 feedback = agent._execute("query", arguments, laboratory)
-            except (ValueError, TypeError, KeyError, OSError) as error:
+            except (ValueError, TypeError, KeyError, OSError, StopIteration) as error:
                 feedback = {"error": f"{type(error).__name__}: {error}", "executed_path": path}
             entry = {"step": step, "action": "query", "arguments": arguments,
                      "proposal": deepcopy(agent._current_proposal),
                      "feedback": agent._compact_feedback(feedback)}
             steps.append(entry)
+            recorded_event = None
             if record_events:
-                agent.events.append({"step": step, "action": "query", "arguments": arguments,
+                recorded_event = {"step": step, "action": "query", "arguments": arguments,
                     "feedback": deepcopy(feedback),
-                    "usage": {"backend": "frozen_program_execution", "total_tokens": 0}})
+                    "usage": {"backend": "frozen_program_execution", "total_tokens": 0}}
+                agent.events.append(recorded_event)
+            if after_step is not None:
+                after_step(laboratory)
             if on_checkpoint:
                 on_checkpoint(agent.result("researching"))
             terminal = agent._procedure_terminal_status()
@@ -495,7 +511,7 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
                 if getattr(agent, "method_results", None):
                     agent.method_results[-1]["feedback"]["no_progress"] = deepcopy(no_progress)
                 if record_events:
-                    agent.events[-1]["feedback"]["no_progress"] = deepcopy(no_progress)
+                    recorded_event["feedback"]["no_progress"] = deepcopy(no_progress)
                 if on_checkpoint:
                     on_checkpoint(agent.result(status))
                 break

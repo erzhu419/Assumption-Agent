@@ -9,10 +9,12 @@ from copy import deepcopy
 from dataclasses import replace
 
 from .language import Program
+from .research_episodes import _child_ref
+from .research_assessments import research_comparison_basis, resolve_research_comparison
 from .question_agenda import (adopt_research_mission, build_agenda, debit_mission_compute,
     effective_question_mission, generate_questions, mission_compute_remaining, mission_contract,
     has_executable_query, merge_question_proposal, question_work_basis)
-from .question_continuation import step_question, _versioned_support
+from .question_continuation import step_question, _versioned_support, executed_plan_records
 from .question_selection import select_question_plan
 from .question_queries import evaluate_on_evidence, numeric_answer_distance
 from .theory_matching import match_theories, prepare_theories_for_question
@@ -31,9 +33,22 @@ json_path:['experiment_comparisons',0,'forecasts',0],model:<saved model path>}.
 Only those saved public-row predictions are runnable, through the existing
 query interpreter. This finite table is not a scientific Program, has no
 structural match or inherited confirmation, and is not a PR3 induction source.
+For the finite native author's question, its complete predictor_paths catalog
+is also forecast automatically on the declared public task and panel inputs.
+Each Python fit uses its retained original training view in an independent
+writable context; public rows supply no training labels. Columns share frozen
+context and input references. Worker time and candidate-row/research-witness
+compute consume the current mission's remaining budgets. Failed or unfunded
+columns remain UNKNOWN. Repeating unchanged inputs reuses the saved columns.
+Explicit candidate_theory_ids and FindDistinguishingExperiment claim rosters
+keep their exact membership and do not gain these automatic entries.
 experiments contain id, original public actions, an executable query, tolerance
 and observation_cost. Selection preserves ties and independent theories; it is
 a finite-pool heuristic. A unique selection prepares the parent's pending_query.
+An explicit exploration_policy {kind:'seeded_legal',seed:<integer>} also permits
+an operational choice among tied legal plans or partially predicted candidates;
+ties, missing predictions and finite-pool coverage remain in the result. This
+policy is part of the cached execution contract, not evidence of superiority.
 library_path fixes the frozen library used by automatic recall; working
 declarations remain available and the selected library is never overwritten.
 query {pending_question:'parent'} executes that plan through the normal frozen
@@ -45,6 +60,14 @@ work remain visible; an unavailable provider never prevents local computation.
 candidate_theory_ids explicitly declares this question's finite comparison
 pool. Other indexed Programs remain available as components and retained
 evidence. An unavailable requested theory leaves the comparison UNKNOWN.
+An optional research_comparison={maximum:<integer>,assessment_basis_ref:<JSON ref>}
+reuses complete paid fit MSEs on the exact evidence_checks and risk_quantile=.5
+of a retained relation-transfer execution.request_basis. It retains a bounded
+Program research pool within the ordinary comparison; every explicitly named
+candidate and every explicit FindDistinguishingExperiment claim stays mandatory.
+Unassessed and opaque entries retain their original place. Its paid assessments
+do not supply reference or future evidence, scientific support, or task adoption.
+Public task/panel predictions still consume the ordinary selection budget.
 With a typed theory_target, frozen library objects are recalled within the
 task's remaining compute or an explicit allocation through the existing
 optional transfer operator. Theory/method missions keep their funded limits. Explicit finite
@@ -130,11 +153,16 @@ def resolved_theories(agent, *, pending_theory=None):
         theory.pop('scope_refutation', None)
         reference = theory.get('source_ref')
         if reference:
-            owner = next((q for q in agent.questions if q['id'] == reference['question_id']), None)
+            owner_index = next((index for index, q in enumerate(agent.questions)
+                                if q['id'] == reference['question_id']), None)
+            owner = agent.questions[owner_index] if owner_index is not None else None
+            owner_path = ['questions', owner_index]
             meaning = reference.get('meaning_version', 1)
             if owner and owner.get('meaning_version', 1) != meaning:
-                owner = next((snapshot for snapshot in owner.get('meaning_history', [])
-                              if snapshot['meaning_version'] == meaning), None)
+                old_index = next((index for index, snapshot in enumerate(owner.get('meaning_history', []))
+                                  if snapshot['meaning_version'] == meaning), None)
+                owner = owner['meaning_history'][old_index] if old_index is not None else None
+                owner_path.extend(['meaning_history', old_index])
             source = None
             if reference['kind'] == 'native_candidate' and owner:
                 rounds = owner.get('native_condition_research', [])
@@ -142,6 +170,14 @@ def resolved_theories(agent, *, pending_theory=None):
                     pool = rounds[reference['round_index']].get('candidates', [])
                     if 0 <= reference['candidate_index'] < len(pool):
                         source = pool[reference['candidate_index']]
+                        program_ref = theory.get('program_source_ref', {})
+                        tail = ['native_condition_research', reference['round_index'],
+                                'candidates', reference['candidate_index'], 'program']
+                        if (program_ref.get('file') == 'research_state.json'
+                                and program_ref.get('json_path', [])[:2] == ['questions', owner_index]
+                                and program_ref['json_path'][-len(tail):] == tail):
+                            theory['program_source_ref'] = {'file': 'research_state.json',
+                                                          'json_path': [*owner_path, *tail]}
             elif reference['kind'] == 'relation_candidate':
                 bank = {}
                 event_index = reference.get('event_index')
@@ -185,7 +221,7 @@ def resolved_theories(agent, *, pending_theory=None):
             result.append(theory)
 
     transfers = getattr(agent, 'theory_consolidation', {}).get('transfers', [])
-    refutations = []
+    refutations, library_documents = [], {}
     for theory, theory_ref in versions:
         if not theory.get('program') or not (theory.get('compatible') is False
                 or theory.get('support', {}).get('status') in {'refuted', 'contradicted_in_scope'}):
@@ -204,11 +240,20 @@ def resolved_theories(agent, *, pending_theory=None):
             if not same_version or transfer.get('binding', {}).get('context_ref') != theory.get('context_ref'):
                 continue
             references.extend(deepcopy(transfer.get('retained_counterexample_refs', [])))
+            transfer_ref = None
+            if transfer.get('paid_mse_check', {}).get('status') == 'failed':
+                from .theory_consolidation import library_entry_reference
+                transfer_ref = library_entry_reference(agent, 'transfers', index,
+                                                       documents=library_documents)
+                references.append(_child_ref(transfer_ref, 'paid_mse_check'))
             for check_index, check in enumerate(transfer.get('checks', [])):
                 if check.get('status') != 'failed' or check.get('context_ref') != theory.get('context_ref'):
                     continue
                 from .theory_consolidation import library_entry_reference
-                references.append(library_entry_reference(agent, 'transfers', index, 'checks', check_index))
+                if transfer_ref is None:
+                    transfer_ref = library_entry_reference(agent, 'transfers', index,
+                                                           documents=library_documents)
+                references.append(_child_ref(transfer_ref, 'checks', check_index))
                 if check.get('source_ref') and check['source_ref'] not in references:
                     references.append(deepcopy(check['source_ref']))
         if (references and theory.get('context_ref') is not None
@@ -286,7 +331,7 @@ def _basis(agent, question, mission):
     mission = effective_question_mission(question, mission)
     library_path = question.get('frozen_library_path', LIBRARY_PATH)
     use_paths = [use.get('path', use.get('model')) for use in question.get('use_sites', [])]
-    return {'meaning_version': question.get('meaning_version', 1),
+    basis = {'meaning_version': question.get('meaning_version', 1),
         'query': deepcopy(question.get('query_semantics')), 'context': deepcopy(question.get('context_ref')),
         'answer_type': question.get('answer_type'), 'resolution': deepcopy(question.get('answer_resolution_ref')),
         'candidate_theory_ids': deepcopy(question.get('candidate_theory_ids')),
@@ -302,6 +347,7 @@ def _basis(agent, question, mission):
         'parameter_answer_version': question.get('executable_answer', {}).get('version'),
         'target': deepcopy(question.get('theory_target')),
         'experiments': deepcopy(question.get('resolution_experiments', [])),
+        'exploration_policy': deepcopy(question.get('exploration_policy')),
         'required_premises': deepcopy(question.get('required_premises', [])),
         'premise_statuses': deepcopy(question.get('premise_statuses', {})),
         'support_available': _versioned_support(agent, question)[0],
@@ -313,6 +359,9 @@ def _basis(agent, question, mission):
                          or any(q['id'] == ref['question_id'] for path in question.get('support_paths', []) for ref in path)],
         'paid_cutoff': [len(agent.observations), len(agent.rows)], 'mission': mission_contract(mission),
         'compute_limit': agent.config.compute_budget}
+    if question.get('research_comparison') is not None:
+        basis['research_comparison'] = research_comparison_basis(agent, question)
+    return basis
 
 
 def pending_selection_current(agent, parent):
@@ -349,7 +398,8 @@ def _prepare_selection(agent, question, selection, version):
             parent.setdefault('pending_query_history', []).append(deepcopy(old))
         parent['pending_query'] = pending
     parent['pending_query_source'] = {'kind': 'question_selection', 'question_id': question['id'],
-        'meaning_version': question.get('meaning_version', 1), 'routing_version': version}
+        'meaning_version': question.get('meaning_version', 1), 'routing_version': version,
+        'experiment_id': experiment['id']}
     return {'status': 'parent_query_prepared', 'parent_id': parent_id,
             'experiment_id': experiment['id'], 'changed': old != pending,
             'parent_revision_completed': old != pending}
@@ -411,6 +461,8 @@ def _distinguishing_answer(question, result):
         'candidate_completeness': 'not_established',
         'reason': result.get('reason', selection.get('unknown_reason')),
         'tied_experiments': deepcopy(selection.get('tied_experiments', []))}
+    if selection.get('operational_decision') is not None:
+        answer['operational_decision'] = deepcopy(selection['operational_decision'])
     if selected is not None and selection['status'] == 'selected':
         answer.update(status='answered', value={'kind': 'finite_experiment_plan',
             'experiment_id': selected['id'], 'actions': deepcopy(selected['actions']),
@@ -445,7 +497,8 @@ def continue_conditional_plan(agent, parent, executed, purchased):
     mission = effective_question_mission(question, agent.research_mission)
     before_compute = agent.costs['compute_cost']
     outcome = evaluate_on_evidence(plan['query'], agent.observations, context=question.get('context_ref'),
-        compute_budget=mission_compute_remaining(agent, mission))
+        compute_budget=mission_compute_remaining(agent, mission),
+        record_bindings=executed_plan_records(agent, question))
     agent.costs['compute_cost'] += outcome['compute_cost']
     debit_mission_compute(agent, mission, before_compute)
     fresh = {index for record in purchased.get('observations', []) for index in record.get('row_indices', [])}
@@ -479,6 +532,7 @@ def route_research(agent, arguments, laboratory, question=None):
         for source, target in [('experiments', 'resolution_experiments'), ('target', 'theory_target'),
                                ('allowed_mappings', 'allowed_mappings'),
                                ('candidate_theory_ids', 'candidate_theory_ids'),
+                               ('research_comparison', 'research_comparison'),
                                ('library_path', 'frozen_library_path')]:
             if source in arguments:
                 question[target] = deepcopy(arguments[source])
@@ -512,6 +566,8 @@ def route_research(agent, arguments, laboratory, question=None):
         return {'status': 'research_deferred', 'agenda': agenda, 'new_compute_cost': 0}
     if 'library_path' in arguments:
         question['frozen_library_path'] = arguments['library_path']
+    if 'exploration_policy' in arguments:
+        question['exploration_policy'] = deepcopy(arguments['exploration_policy'])
     mission = effective_question_mission(question, mission)
     distinguishing = question.get('query_semantics', {}).get('query_expression', {}).get(
         'op') == 'FindDistinguishingExperiment'
@@ -549,6 +605,18 @@ def route_research(agent, arguments, laboratory, question=None):
     recalled = ({'status': 'not_needed_explicit_claim_pool', 'generated_theory_ids': [],
                  'new_compute_cost': 0} if distinguishing else
                 recall_frozen_theories(agent, question, {**arguments, 'mission': mission}))
+    python_forecasts = {'status': 'not_needed', 'new_compute_cost': 0,
+                        'new_python_execution_seconds': 0., 'support_updated': False}
+    if not distinguishing and comparison_question.get('candidate_theory_ids') is None:
+        from .python_research_routing import ordinary_forecast_models
+        from .retained_forecasts import prepare_python_forecasts
+        models = ordinary_forecast_models(agent, question)
+        if models:
+            before_forecasts = agent.costs['compute_cost']
+            python_forecasts = prepare_python_forecasts(agent, question, laboratory, models,
+                compute_budget=mission_compute_remaining(agent, mission))
+            register_theories(agent, python_forecasts.pop('theories'))
+            debit_mission_compute(agent, mission, before_forecasts)
     pool = resolved_theories(agent)
     allowance = mission_compute_remaining(agent, mission)
     if comparison_question.get('candidate_theory_ids') is not None:
@@ -561,12 +629,19 @@ def route_research(agent, arguments, laboratory, question=None):
                     'missing_theory_ids': missing, 'frozen_recall': recalled,
                     'new_compute_cost': agent.costs['compute_cost'] - start}
         pool = [theory for theory in pool if theory['id'] in requested]
+    else:
+        # Automatically saved columns belong to this question and meaning.
+        # Other explicit declarations retain their original matching rules.
+        pool = [theory for theory in pool if not theory.get('forecast_scope') or (
+            theory['forecast_scope']['question_id'] == question['id']
+            and theory['forecast_scope']['meaning_version'] == question.get('meaning_version', 1))]
     basis = _basis(agent, question, mission)
     previous = question.get('routing_execution')
     if previous and previous['basis'] == basis:
         incomplete = previous['result'].get('status') in {'scoped_unknown', 'UNKNOWN_MATCH'}
         if not incomplete or allowance <= previous['allowance']:
             return {**deepcopy(previous['result']), 'cache_hit': True, 'frozen_recall': recalled,
+                    'python_forecasts': python_forecasts,
                     'new_compute_cost': agent.costs['compute_cost'] - start}
     before_compute = agent.costs['compute_cost']
     matching = match_theories(comparison_question, pool, target=question.get('theory_target'),
@@ -583,6 +658,14 @@ def route_research(agent, arguments, laboratory, question=None):
     answer = ({'status': 'scoped_unknown', 'reason': 'finite_experiment_search'} if distinguishing else
               prior_answer_execution or step_question(agent, question, laboratory, mission=mission))
     prepared = prepare_theories_for_question(comparison_question, pool, matching)
+    unavailable_python_ids = {item['id'] for item in prepared['blocked']
+                              if item['reason'] == 'retained_forecast_unavailable'}
+    # These automatic columns were declared with this exact typed target. Their
+    # failed/unfunded executions stay in the selector as UNKNOWN, rather than
+    # turning the known subset into apparent complete catalog coverage.
+    selection_theories = [*prepared['theories'], *(theory for theory in pool
+        if theory['id'] in unavailable_python_ids
+        and theory.get('forecast_scope', {}).get('kind') == 'ordinary_python_catalog')]
     work = []
     if not answer.get('parent_revision_completed'):
         for blocked in prepared['blocked']:
@@ -613,17 +696,21 @@ def route_research(agent, arguments, laboratory, question=None):
     if (experiments and not answered and answer.get('reason') != 'premise_unknown'
             and answer.get('status') not in {'answer_applied', 'reused_answer'}):
         before_compute = agent.costs['compute_cost']
-        selection = select_question_plan(comparison_question, prepared['theories'], experiments,
+        research_comparison = resolve_research_comparison(agent, comparison_question, selection_theories)
+        selection = select_question_plan(comparison_question, selection_theories, experiments,
             context=question.get('context_ref'),
             compute_budget=mission_compute_remaining(agent, mission),
             observation_budget=max(0, agent.config.observation_budget - agent.costs['observation_cost']),
-            public_prediction_rows=getattr(laboratory, 'prediction_rows', None))
+            public_prediction_rows=getattr(laboratory, 'prediction_rows', None),
+            exploration_policy=question.get('exploration_policy'),
+            **({'research_comparison': research_comparison} if research_comparison is not None else {}))
         agent.costs['compute_cost'] += selection.get('compute_cost', 0)
         debit_mission_compute(agent, mission, before_compute)
     version = (previous or {}).get('version', 0) + 1
     result = {'status': answer['status'], 'question_id': question['id'], 'matching': matching,
               'answer_execution': answer, 'selection': selection, 'cache_hit': False,
               'frozen_recall': recalled,
+              'python_forecasts': python_forecasts,
               'binding_work': prepared['blocked'], 'prepared_bindings': prepared['prepared'],
               'executed_reuse_work': work,
               'new_compute_cost': agent.costs['compute_cost'] - start}

@@ -5,12 +5,18 @@ Both paths use the current paid observations and the same resource account.
 """
 
 import json
+import inspect
+import sys
 from copy import deepcopy
+from dataclasses import asdict
 from math import nextafter
 from pathlib import Path
 from time import monotonic
 
-from .code_agent import _bound_model_contexts, _copy_model_context, evaluate_python_model, python_model_context
+from .code_agent import (
+    _MODEL_RUNNER, _bound_model_contexts, _copy_model_context, evaluate_python_model,
+    python_model_context, python_model_context_matches,
+)
 from .history_revision import revise_history
 from .knowledge_evolution import bind_answers
 from .language import Program
@@ -730,11 +736,151 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             current = self._evaluated_summary()
             models = [current["model"]] if current else []
         models = list(models) + validated_candidates(self)
-        # Explicit comparison owns scoring. Automatic feedback uses the same
-        # decision below without recursively scoring those candidates again.
-        evaluations = [{"path": path, **super(TemporalOperatorAgent, self)._execute(
-                            "evaluate", {"model": path}, None)} for path in dict.fromkeys(models)]
-        return self._python_research_decision(self._evaluated_summary(), spec, evaluations=evaluations)
+        # Keep complete executions by reference. A path, row count, or printed
+        # fit error alone does not establish the execution inputs of an old score.
+        previous = getattr(self, "_paid_python_comparison", None)
+        self._paid_python_comparison = self._paid_python_score_scope(spec)
+        try:
+            evaluations = [{"path": path, **super(TemporalOperatorAgent, self)._execute(
+                                "evaluate", {"model": path}, None)} for path in dict.fromkeys(models)]
+        finally:
+            self._paid_python_comparison = previous
+        result = self._python_research_decision(self._evaluated_summary(), spec, evaluations=evaluations)
+        result.update(
+            reused_score_count=sum(item["paid_score_reuse"]["status"] == "reused"
+                                   for item in evaluations),
+            new_scored_count=sum(item["paid_score_reuse"]["status"] == "newly_scored"
+                                 for item in evaluations),
+            retained_comparison_score_counts={
+                status: sum(item.get("retained_comparison", {}).get("paid_score_reuse", {}).get("status") == status
+                            for item in evaluations)
+                for status in ("reused", "newly_scored")})
+        return result
+
+    def _paid_python_score_scope(self, spec):
+        from .research_episodes import SEMANTIC_FIELDS
+
+        directory = self.workspace / "_paid_python_scores/_evaluated_model"
+        directory.mkdir(parents=True, exist_ok=True)
+        index_file = directory / "assessments.json"
+        index = json.loads(index_file.read_text()) if index_file.exists() else {
+            "scopes": [], "assessments": [], "contexts": []}
+        active = getattr(self, "_active_question_id", None)
+        question = next((item for item in self.questions if item["id"] == active), None)
+        if question is None and self.questions:
+            question = self.questions[-1]
+        basis = {
+            "rows": [asdict(row) if hasattr(row, "features") else deepcopy(row) for row in self.rows],
+            "public_spec": deepcopy(spec),
+            "question": ({key: deepcopy(question[key]) for key in
+                ("id", "meaning_version", *SEMANTIC_FIELDS) if key in question}
+                if question is not None else None),
+            "revisions": deepcopy(self.revisions),
+            "evaluation_contract": {"loss_kind": "mse", "risk_quantile": .5,
+                "training_view": "model_observations.json_or_observations.json",
+                "rows": "all_current_paid_rows", "require_fit": False,
+                "python_executable": sys.executable, "python_version": sys.version,
+                "runner_source": _MODEL_RUNNER,
+                "evaluator_source": inspect.getsource(evaluate_python_model)},
+        }
+        # The evaluator transports rows as JSON too; histories restored from a
+        # tuple or a JSON list describe the same ordered execution input.
+        basis = json.loads(json.dumps(basis))
+        scope_ref = None
+        scopes = {}
+        for reference in index["scopes"]:
+            scopes[reference["file"]] = json.loads(Path(reference["file"]).read_text())
+            if scopes[reference["file"]] == basis:
+                scope_ref = reference
+        if scope_ref is None:
+            path = directory / f"scope_{len(index['scopes']):04d}.json"
+            path.write_text(json.dumps(basis), encoding="utf-8")
+            scope_ref = {"file": str(path), "json_path": []}
+            index["scopes"].append(scope_ref)
+            index_file.write_text(json.dumps(index), encoding="utf-8")
+        scopes[scope_ref["file"]] = basis
+        assessments, contexts = {}, {}
+        for reference in index["assessments"]:
+            assessment = json.loads(Path(reference["file"]).read_text())
+            assessments.setdefault(assessment["model"], []).append((reference, assessment))
+        for context in index["contexts"]:
+            contexts.setdefault(context["source_workspace"], []).append(context)
+        return {"directory": directory, "index_file": index_file, "index": index,
+                "scope_ref": scope_ref, "basis": basis, "scopes": scopes,
+                "assessments": assessments, "contexts": contexts}
+
+    def _score(self, model):
+        comparison = getattr(self, "_paid_python_comparison", None)
+        if comparison is None:
+            return super()._score(model)
+        index = comparison["index"]
+        reason = "no_retained_complete_execution_basis"
+        for reference, assessment in reversed(comparison["assessments"].get(model, [])):
+            scope = comparison["scopes"][assessment["scope_ref"]["file"]]
+            if scope != comparison["basis"]:
+                reason = "paid_rows_or_question_contract_changed"
+                continue
+            context = assessment["execution_context"]
+            if not python_model_context_matches(self.workspace, model, context["workspace"], context["model"]):
+                reason = "python_execution_context_changed"
+                continue
+            # Adoption is performed by the ordinary evaluate caller against its
+            # current incumbent, never by replaying an earlier retention decision.
+            return {**deepcopy(assessment["result"]), "paid_score_reuse": {
+                "status": "reused", "assessment_ref": {**reference, "json_path": ["result"]},
+                "execution_basis_ref": reference, "scope_ref": assessment["scope_ref"],
+                "original_costs": deepcopy(assessment["execution_costs"]),
+                "additional_scoring_compute": 0, "additional_scoring_python_seconds": 0.}}
+
+        if not self.rows or self._remaining_compute() < len(self.rows):
+            return super()._score(model)  # Preserve the original budget error without a new context copy.
+
+        # Existing model-context copying shares filesystem blocks, including
+        # immutable paid-trace references. Reuse one matching context for other
+        # programs with the same actual execution root and declared dependencies.
+        source, inner = python_model_context(self.workspace, model)
+        context = None
+        for retained in reversed(comparison["contexts"].get(str(source), [])):
+            if python_model_context_matches(
+                    self.workspace, model, retained["workspace"], inner):
+                context = {"workspace": retained["workspace"], "model": inner}
+                break
+        if context is None:
+            destination = comparison["directory"] / f"context_{len(index['contexts']):04d}"
+            inner = _copy_model_context(self.workspace, model, destination)
+            context = {"workspace": str(destination), "model": inner}
+            retained = {"source_workspace": str(source), **context}
+            index["contexts"].append(retained)
+            comparison["contexts"].setdefault(str(source), []).append(retained)
+        before_compute = self.costs["compute_cost"]
+        before_seconds = self.costs["python_execution_seconds"]
+        result = super()._score(model)
+        costs = {"compute_cost": self.costs["compute_cost"] - before_compute,
+                 "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds}
+        complete = (result.get("returncode") == 0 and not result.get("truncated")
+                    and not result.get("paid_relation_diagnostic", {}).get("truncated")
+                    and isinstance(result.get("mse"), (int, float)))
+        stable = complete and python_model_context_matches(
+            self.workspace, model, context["workspace"], context["model"])
+        reuse = {"status": "newly_scored", "reuse_miss_reason": reason,
+                 "reusable": bool(stable), "execution_costs": costs,
+                 "scope_ref": comparison["scope_ref"]}
+        if stable:
+            path = comparison["directory"] / f"assessment_{len(index['assessments']):06d}.json"
+            assessment = {"model": model, "source_workspace": str(source),
+                "scope_ref": comparison["scope_ref"], "execution_context": context,
+                "execution_costs": costs, "result": deepcopy(result)}
+            path.write_text(json.dumps(assessment), encoding="utf-8")
+            reference = {"file": str(path), "json_path": []}
+            index["assessments"].append(reference)
+            comparison["assessments"].setdefault(model, []).append((reference, assessment))
+            reuse.update(assessment_ref={**reference, "json_path": ["result"]},
+                         execution_basis_ref=reference)
+        else:
+            reuse["unavailable_reason"] = ("execution_context_changed_during_scoring"
+                if complete else "incomplete_or_failed_execution")
+        comparison["index_file"].write_text(json.dumps(index), encoding="utf-8")
+        return {**result, "paid_score_reuse": reuse}
 
     def _python_research_decision(self, retained, spec, *, evaluations=(), repair=None):
         from .action_policy import ActionOption, ResearchActionPolicy

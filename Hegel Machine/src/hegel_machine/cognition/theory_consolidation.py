@@ -1,7 +1,9 @@
 """Connect retained Episodes and frozen abstractions to Common's Program pool."""
 
 from copy import deepcopy
+from dataclasses import replace
 import json
+from math import isfinite, sqrt
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,7 +12,7 @@ from .language import Program
 from .models import Observation, SearchBudget
 from .research_episodes import (
     extract_episodes, resolve_program_sources, _canonical, _contains_reference, _path, _source_id,
-    load_source_values,
+    load_source_values, load_common_sources,
 )
 from .theory_induction import consolidate_theories
 from .question_agenda import (
@@ -33,6 +35,9 @@ typed ordered Program families with source reconstruction and counterexample
 checks. context_family_ref explicitly declares a structural comparison topic,
 not shared physical support. counterexamples is keyed by source theory id; each
 item contains source_ref, retained observation, context_ref and tolerance.
+common_source_refs addresses original Common research_state/training JSON. Its
+source_theory_ids select original local IDs; qualified IDs retain physical source
+identity and original evidence addresses while avoiding cross-workspace overwrite.
 Unknowns, failed episodes and numerical/text conflicts remain in the library.
 Frozen candidates live in shared/theory_library.json; encoding costs include
 the complete definition, selector, mappings, parameters and exceptions.
@@ -51,6 +56,17 @@ index; later outcomes remain referenced and never score the cutoff Program.
 For a program_context_relation, theory_transfer takes component_theory_ids,
 instantiates the frozen Definition on the finite typed pool and registers each
 valid concrete Program. The relation is not asserted to be a before/after edit.
+For a program_revision_relation, parent_theory_id fixes the actual before
+Program. Optional fitting {operations:[...],risk_quantile:0.5,max_history:4,
+max_structures:8} reuses the old grammar without fitting subprograms to world
+labels: only open-hole constant slots are fitted inside the complete after.
+The same configuration is theory_target.revision_fitting during automatic recall.
+These are fits on declared paid evidence, never independent confirmation.
+Paid checks may omit observation when source_ref addresses the retained row and
+criterion={kind:'paid_mse',evaluated_rows:N,mse_threshold:tau,criterion_ref:...}.
+Rows are resolved only in working memory; the complete checked prefix uses its
+original mean squared error threshold. sqrt(N*tau) only triggers sufficient
+single-row failure witnesses and does not replace the aggregate criterion.
 research_route also recalls frozen objects automatically when theory_target
 declares role_signature/output_unit/context_ref, using the remaining task
 compute or an explicit allocation. Theory/method missions retain their funded
@@ -164,7 +180,7 @@ def _library_document(agent):
     return document
 
 
-def library_entry_reference(agent, field, key, *parts):
+def library_entry_reference(agent, field, key, *parts, documents=None):
     """Address inherited checks at their source and new checks at their local index."""
     reference = {'file': LIBRARY_PATH, 'json_path': [field, key, *parts]}
     source = getattr(agent, '_theory_library_source_ref', None)
@@ -182,9 +198,13 @@ def library_entry_reference(agent, field, key, *parts):
     else:
         source_key = key
     # The frozen source may itself be a target delta. Follow its own addresses.
+    documents = {} if documents is None else documents
     while True:
-        document = _anchor_file_references(load_source_values([source], agent.workspace)[0]['value'],
-                                           _reference_workspace(source))
+        location = (source['file'], tuple(_path(source)), source.get('workspace'))
+        if location not in documents:
+            documents[location] = _anchor_file_references(
+                load_source_values([source], agent.workspace)[0]['value'], _reference_workspace(source))
+        document = documents[location]
         entries = document.get(field, [] if field in _LIBRARY_LISTS else {})
         if field in _LIBRARY_LISTS and value in entries:
             source_key = entries.index(value)
@@ -296,7 +316,10 @@ def _allocation(agent, arguments, question=None):
     compute = min(funding, requested, mission_compute_remaining(agent, mission))
     if type(compute) is not int or compute < 0:
         raise ValueError('theory allocation needs nonnegative integer compute')
-    return {'compute': compute, 'max_groups': arguments.get('allocation', {}).get('max_groups', 16)}
+    allocation = {'compute': compute, 'max_groups': arguments.get('allocation', {}).get('max_groups', 16)}
+    if 'parameter_relations' in arguments.get('allocation', {}):
+        allocation['parameter_relations'] = deepcopy(arguments['allocation']['parameter_relations'])
+    return allocation
 
 
 def _merge_intake(library, intake):
@@ -339,40 +362,112 @@ def _merge_intake(library, intake):
             episodes[previous] = deepcopy(episode)
 
 
+def _retained_trigger_examples(agent, entries, retained):
+    """Resolve retained comparison refs; keep paid rows only in compile memory."""
+    references, work = [], []
+    for entry in entries:
+        comparison = entry.get('source_comparison')
+        if not comparison:
+            continue
+        if comparison.get('status') == 'UNKNOWN':
+            entry['trigger_obligations'] = [{'status': 'UNKNOWN', 'reason': comparison['reason'],
+                'source_ref': deepcopy(entry['action_ref'])}]
+            continue
+        start = len(references)
+        references.extend(comparison[key] for key in
+            ('before_evaluation_ref', 'after_evaluation_ref', 'criterion_ref'))
+        references.extend(comparison['paid_observation_refs'])
+        work.append((entry, start, len(comparison['paid_observation_refs'])))
+    values = resolve_program_sources(agent, references, retained)
+    for entry, start, count in work:
+        comparison = entry['source_comparison']
+        before, after, threshold = values[start:start + 3]
+        n = comparison['scope'].get('evaluated_rows')
+        reason = 'retained_paid_mse_scope_or_criterion_unavailable'
+        valid = (type(n) is int and n > 0 and isinstance(threshold, (int, float))
+            and isfinite(threshold) and threshold >= 0 and comparison['scope'].get('same_paid_rows') is True
+            and all(score.get('returncode') == 0 and score.get('loss_kind') == 'mse'
+                and score.get('paid_residuals', {}).get('evaluated_rows') == n for score in (before, after)))
+        if valid:
+            reason = 'saved_single_residual_paid_mse_failure_witness_unavailable'
+            for index, residual in enumerate(before['paid_residuals'].get('examples', [])):
+                error = residual.get('squared_error')
+                if (not isinstance(error, (int, float)) or not isfinite(error) or error <= n * threshold
+                        or type(residual.get('row_index')) is not int or not 0 <= residual['row_index'] < n):
+                    continue
+                for record_ref, record in zip(comparison['paid_observation_refs'], values[start + 3:start + 3 + count]):
+                    indices = record.get('row_indices', [])
+                    if residual['row_index'] not in indices:
+                        continue
+                    offset = indices.index(residual['row_index'])
+                    observation = record['rows'][offset]
+                    if any(observation.get(key, []) != residual.get(key, [])
+                           for key in ('features', 'history', 'target')):
+                        continue
+                    row_ref = {**deepcopy(record_ref), 'json_path': [*_path(record_ref), 'rows', offset]}
+                    prior_ref = comparison['before_evaluation_ref']
+                    criterion = {**deepcopy(comparison), 'kind': 'paid_mse_single_residual_witness',
+                        'threshold': threshold, 'evaluated_rows': n,
+                        'evaluated_rows_ref': {**deepcopy(prior_ref),
+                            'json_path': [*_path(prior_ref), 'paid_residuals', 'evaluated_rows']},
+                        'before_residual_ref': {**deepcopy(prior_ref),
+                            'json_path': [*_path(prior_ref), 'paid_residuals', 'examples', index]},
+                        'paid_row_ref': row_ref, 'sufficiency': 'one_row_proves_paid_mse_failure_only'}
+                    entry.setdefault('counterexamples', []).append({'source_ref': row_ref,
+                        'observation': deepcopy(observation), 'tolerance': sqrt(n * threshold), 'criterion': criterion})
+                    reason = None
+                    break
+                if reason is None:
+                    break
+        if reason:
+            entry['trigger_obligations'] = [{'status': 'UNKNOWN', 'reason': reason,
+                'source_ref': deepcopy(entry['action_ref'])}]
+
+
 def _revision_entries(agent, episodes, pool, retained):
     pending, references = [], []
     for episode in episodes:
         declaration = pool[episode['theory_id']]
         declared_ref = declaration.get('program_source_ref')
+        if declared_ref:
+            declared_ref = _absolute_reference(declared_ref, agent.workspace)
         for index, change in enumerate(episode.get('actual_changes', [])):
             if not change.get('before_ref'):
                 continue
             after_ref = change['source_ref']
-            if declared_ref and 'actions' in _path(declared_ref) and not (
-                    _contains_reference(after_ref, declared_ref)
-                    and _contains_reference(declared_ref, after_ref)):
+            actual_after = _absolute_reference(after_ref, agent.workspace)
+            if declared_ref and not (
+                    _contains_reference(actual_after, declared_ref)
+                    and _contains_reference(declared_ref, actual_after)):
                 continue
             entry = {key: deepcopy(episode[key]) for key in (
                 'source_id', 'theory_id', 'role_signature', 'output_unit', 'context_ref',
-                'context_family_ref', 'evidence_refs', 'cost_refs', 'failure_refs', 'source_cutoff') if key in episode}
+                'context_family_ref', 'evidence_refs', 'cost_refs', 'failure_refs', 'source_cutoff',
+                'counterexamples') if key in episode}
             entry.update(episode_id=f'{episode["episode_id"]}:revision{index}',
                 source_ref=deepcopy(after_ref), before_ref=deepcopy(change['before_ref']),
                 after_ref=deepcopy(after_ref), action_ref=deepcopy(change.get('action_ref')),
                 source_outcomes={key: deepcopy(episode[key]) for key in (
                     'status', 'costs', 'cost_scope', 'independent_results', 'retained_later_outcome_refs')
                     if key in episode})
+            if 'source_comparison' in change:
+                entry['source_comparison'] = {**deepcopy(change['source_comparison']),
+                    'scope': deepcopy(change.get('scope', {})),
+                    'paid_observation_refs': deepcopy(change.get('evidence_refs', []))}
             pending.append(entry)
             references.extend([change['before_ref'], after_ref])
     values = resolve_program_sources(agent, references, retained)
     for index, entry in enumerate(pending):
         entry['before_program'], entry['after_program'] = values[index * 2:index * 2 + 2]
+    _retained_trigger_examples(agent, pending, retained)
     return pending
 
 
 def _same_frozen_candidate(old, new):
     fields = ('kind', 'instances', 'source_bindings', 'role_signature', 'parameter_paths',
               'scope', 'source_evidence_refs', 'source_outcomes', 'counterexample_checks',
-              'blocked_transfer_bindings', 'learned_constraints', 'holes')
+              'blocked_transfer_bindings', 'learned_constraints', 'holes', 'before_pattern',
+              'constraint_hypotheses', 'trigger_checks', 'parameter_relations')
     if not all(old.get(key) == new.get(key) for key in fields):
         return False
     if new.get('definition') is not None:
@@ -420,28 +515,39 @@ def _new_local_materials(agent, library):
 def consolidate_research(agent, arguments, laboratory=None, question=None):
     from .question_routing import register_theories, resolved_theories
 
+    object_type = arguments.get('object_type')
+    if object_type not in (None, 'program_revision_relation'):
+        raise ValueError('unsupported shared construction object_type')
     register_theories(agent, arguments.get('theories', []))
     allocation = _allocation(agent, arguments, question)
     if allocation is None:
         return {'status': 'research_deferred', 'reason': 'theory_allocation_missing', 'new_compute_cost': 0}
+    common = load_common_sources(arguments.get('common_source_refs', []), agent.workspace)
+    register_theories(agent, common['theories'])
     library = agent.theory_consolidation
     mission = effective_question_mission(question, arguments.get('mission', agent.research_mission)
                                          if question is not None else agent.research_mission)
     library.setdefault('candidates', {})
     library.setdefault('executions', {})
     new_materials, material_source, material_cursor = _new_local_materials(agent, library)
-    selected = arguments.get('source_theory_ids', list(agent.theory_index))
+    selected = arguments.get('source_theory_ids',
+        [theory['id'] for theory in common['theories']] if arguments.get('common_source_refs')
+        else list(agent.theory_index))
     pool = {theory['id']: theory for theory in resolved_theories(agent)}
     theme = arguments.get('theme', (question or {}).get('id', 'retained_programs'))
     request_basis = {key: deepcopy(arguments.get(key)) for key in (
-        'source_theory_ids', 'materials', 'episode_sources', 'counterexamples', 'context_family_ref', 'allocation')}
-    request_basis.update(source_id=_source_id(agent), sources=[{key: deepcopy(pool[identifier].get(key)) for key in (
+        'source_theory_ids', 'materials', 'episode_sources', 'common_source_refs',
+        'counterexamples', 'context_family_ref', 'allocation', 'object_type')}
+    request_basis.update(question_meaning=({'id': question['id'],
+        'meaning_version': question.get('meaning_version', 1)} if question is not None else None),
+        source_id=_source_id(agent), sources=[{key: deepcopy(pool[identifier].get(key)) for key in (
         'id', 'version', 'source_ref', 'source_status', 'compatible')} for identifier in selected if identifier in pool],
         paid_cutoff=[len(agent.observations), len(agent.rows)],
         revisions=[{key: deepcopy(revision.get(key)) for key in ('index', 'status', 'evidence_status', 'check_results')}
                    for revision in agent.revisions], max_groups=allocation['max_groups'],
         theory_allocation=deepcopy(mission.get('allocation', mission.get('theory_learning_allocation'))),
-        episode_file_versions=_episode_file_versions(agent, arguments.get('episode_sources', [])),
+        episode_file_versions=_episode_file_versions(agent,
+            [*arguments.get('episode_sources', []), *arguments.get('common_source_refs', [])]),
         native_versions=[{'question_id': q['id'], 'meaning_version': q.get('meaning_version', 1),
             'rounds': [{key: deepcopy(round_.get(key)) for key in ('round_index', 'status')}
                        for round_ in q.get('native_condition_research', [])]} for q in agent.questions
@@ -450,7 +556,8 @@ def consolidate_research(agent, arguments, laboratory=None, question=None):
     if (previous and previous['request_basis'] == request_basis and
             (previous['result']['status'] != 'UNKNOWN' or allocation['compute'] <= previous['allowance'])):
         if new_materials:
-            _merge_intake(library, extract_episodes(agent, new_materials))
+            _merge_intake(library, extract_episodes(agent, new_materials,
+                excluded_theory_ids=common['theory_ids']))
             library.setdefault('material_cursors', {})[material_source] = material_cursor
             _save(agent)
         result = {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0,
@@ -460,7 +567,9 @@ def consolidate_research(agent, arguments, laboratory=None, question=None):
     from .research_episodes import load_episode_sources
     retained = load_episode_sources(arguments.get('episode_sources', []), agent.workspace)
     intake = extract_episodes(agent, [*new_materials, *arguments.get('materials', [])],
-                              retained_episodes=retained)
+                              retained_episodes=retained, excluded_theory_ids=common['theory_ids'])
+    for field in ('episodes', 'materials', 'conflicts', 'unique_support_sources'):
+        intake[field].extend(common[field])
     _merge_intake(library, intake)
     library.setdefault('material_cursors', {})[material_source] = material_cursor
     episodes = []
@@ -487,21 +596,33 @@ def consolidate_research(agent, arguments, laboratory=None, question=None):
                 entry['context_family_ref'] = deepcopy(arguments['context_family_ref'])
             episodes.append(entry)
     serial = len(library['candidates'])
-    computed = consolidate_theories(episodes, allocation=allocation, candidate_id=f'consolidated:{serial}')
-    revisions = _revision_entries(agent, episodes, pool, retained)
-    if revisions:
+    if object_type == 'program_revision_relation':
         from .revision_relations import consolidate_revision_relations
-        relations = consolidate_revision_relations(revisions, allocation={
-            'compute': max(0, allocation['compute'] - computed['actual_compute_cost']),
-            'max_groups': max(0, allocation['max_groups'] - len(computed['candidates']))},
-            candidate_id=f'consolidated:{serial}:relation')
-        computed['candidates'].extend(relations['candidates'])
-        computed['excluded'].extend(relations['excluded'])
-        computed['author_work'].extend(relations['author_work'])
-        computed['actual_compute_cost'] += relations['actual_compute_cost']
-        computed['budget_exhausted'] = computed['budget_exhausted'] or relations['budget_exhausted']
-        if computed['budget_exhausted']:
-            computed['status'] = 'UNKNOWN'
+        revisions = _revision_entries(agent, episodes, pool, retained)
+        computed = consolidate_revision_relations(revisions,
+            allocation=allocation, candidate_id=f'consolidated:{serial}:relation', object_type=object_type)
+    else:
+        computed = consolidate_theories(episodes, allocation=allocation, candidate_id=f'consolidated:{serial}')
+        revisions = _revision_entries(agent, episodes, pool, retained)
+        if revisions:
+            from .revision_relations import consolidate_revision_relations
+            relations = consolidate_revision_relations(revisions, allocation={
+                'compute': max(0, allocation['compute'] - computed['actual_compute_cost']),
+                'max_groups': max(0, allocation['max_groups'] - len(computed['candidates']))},
+                candidate_id=f'consolidated:{serial}:relation')
+            computed['candidates'].extend(relations['candidates'])
+            computed['excluded'].extend(relations['excluded'])
+            computed['author_work'].extend(relations['author_work'])
+            computed['parameter_relation_searches'] = relations.get('parameter_relation_searches', [])
+            computed['actual_compute_cost'] += relations['actual_compute_cost']
+            computed['budget_exhausted'] = computed['budget_exhausted'] or relations['budget_exhausted']
+            if computed['budget_exhausted']:
+                computed['status'] = 'UNKNOWN'
+    computed['author_work'].extend(common.get('author_work', []))
+    computed['author_work'].extend({**deepcopy(item), 'type': 'AuthorWorkRequest',
+        'episode_id': entry['episode_id']} for entry in revisions for item in entry.get('trigger_obligations', []))
+    if common.get('status') == 'UNKNOWN':
+        computed['status'] = 'UNKNOWN'
     before_compute = agent.costs['compute_cost']
     agent.costs['compute_cost'] += computed['actual_compute_cost']
     debit_mission_compute(agent, mission, before_compute)
@@ -526,6 +647,7 @@ def consolidate_research(agent, arguments, laboratory=None, question=None):
         'conflict_count': len(library['conflicts']),
         'support_source_count': len(library['unique_support_sources']),
         'excluded': computed['excluded'], 'author_work': computed['author_work'],
+        'parameter_relation_searches': computed.get('parameter_relation_searches', []),
         'budget_exhausted': computed['budget_exhausted'],
         'cache_hit': False, 'new_compute_cost': computed['actual_compute_cost'],
         'support_updated': False, 'new_observations': 0, 'llm_calls': 0}
@@ -560,6 +682,8 @@ def _retained_binding_failures(agent, library, path, binding):
         retained = {key: value for key, value in record['binding'].items() if key != 'library_path'}
         if record['status'] != 'refuted' or retained != wanted:
             continue
+        if record.get('paid_mse_check', {}).get('status') == 'failed':
+            references.append(library_entry_reference(proxy, 'transfers', index, 'paid_mse_check'))
         for position, check in enumerate(record.get('checks', [])):
             if check['status'] == 'failed' and check.get('context_ref') == binding['context_ref']:
                 references.append(library_entry_reference(proxy, 'transfers', index, 'checks', position))
@@ -575,7 +699,7 @@ def transfer_theory(agent, arguments, laboratory=None):
     if path == LIBRARY_PATH:
         agent.theory_consolidation = library
     candidate = library['candidates'][arguments['candidate_id']]
-    if candidate['kind'] == 'program_context_relation':
+    if candidate['kind'] in {'program_context_relation', 'program_revision_relation'}:
         return _transfer_relation(agent, arguments, candidate, path, source_library=library)
     if candidate['kind'] == 'shared_subexpression':
         return {'status': 'author_work_request', 'reason': 'parent_composition_required_for_shared_fragment'}
@@ -607,6 +731,9 @@ def recall_frozen_theories(agent, question, arguments):
     """
     from .question_routing import resolved_theories
 
+    comparison_rows = arguments.get('allocation', {}).get('comparison_rows', 0)
+    if type(comparison_rows) is not int or comparison_rows < 0:
+        raise ValueError('comparison_rows must be a nonnegative integer')
     path = arguments.get('library_path', question.get('frozen_library_path', LIBRARY_PATH))
     candidates = read_theory_library(agent, path).get('candidates', {})
     if not candidates:
@@ -628,14 +755,19 @@ def recall_frozen_theories(agent, question, arguments):
     components = [item for item in resolved_theories(agent) if not item['id'].startswith(prefix)]
     checks = deepcopy(target.get('evidence_checks', arguments.get('evidence_checks', [])))
     basis = {'target': deepcopy(target), 'checks': checks, 'library_path': path,
+        'parent_theory_id': arguments.get('parent_theory_id', target.get('parent_theory_id')),
+        'fitting': deepcopy(arguments.get('fitting', target.get('revision_fitting'))),
         'method_ref': 'hegel_machine.cognition.abstractions.AbstractTemplate.mappings',
         'candidates': [{'id': key, 'version': item['version']} for key, item in candidates.items()],
         'components': [{key: deepcopy(item.get(key)) for key in (
             'id', 'version', 'source_ref', 'source_status', 'compatible')} for item in components]}
+    if comparison_rows:
+        basis['comparison_rows'] = comparison_rows
     previous = question.get('frozen_recall_execution')
     if (previous and previous['basis'] == basis and
             (previous['result']['status'] != 'UNKNOWN' or allocation['compute'] <= previous['allowance'])):
-        return {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0}
+        return {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0,
+                'reserved_comparison_compute': 0}
     start = agent.costs['compute_cost']
     budget = SearchBudget(allocation['compute'])
     generated, work, author_work, excluded = [], [], [], []
@@ -650,13 +782,21 @@ def recall_frozen_theories(agent, question, arguments):
     def apply(inputs, identifier, *, mapping=None, binding_index=None):
         nonlocal incomplete
         inputs['library_path'] = path
-        inputs['allocation'] = {'compute': budget.remaining}
+        inputs['allocation'] = {'compute': budget.remaining,
+                                **({'comparison_rows': comparison_rows} if comparison_rows else {})}
         applied = transfer_theory(agent, inputs)
         budget.spend(applied['new_compute_cost'])
+        budget.reserve += applied.get('reserved_comparison_compute', 0)
         entries = applied.get('generated_theories', [applied])
         item = {'candidate_id': identifier, 'status': applied['status'],
             'theory_ids': [entry['theory_id'] for entry in entries if entry.get('theory_id')],
             'new_compute_cost': applied['new_compute_cost']}
+        if applied.get('reserved_comparison_compute'):
+            item['reserved_comparison_compute'] = applied['reserved_comparison_compute']
+        if applied.get('reason'):
+            item['reason'] = applied['reason']
+        author_work.extend({**deepcopy(request), 'candidate_id': identifier}
+                           for request in applied.get('author_work', []))
         if mapping is not None:
             item.update(mapping=deepcopy(mapping), binding_index=binding_index)
         work.append(item)
@@ -722,7 +862,16 @@ def recall_frozen_theories(agent, question, arguments):
                     author_work.append({'candidate_id': identifier, 'type': 'AuthorWorkRequest',
                                         'reason': 'typed_injective_role_mapping_required'})
                 continue
-            elif candidate['kind'] == 'program_context_relation':
+            elif candidate['kind'] in {'program_context_relation', 'program_revision_relation'}:
+                if candidate['kind'] == 'program_revision_relation':
+                    inputs['parent_theory_id'] = arguments.get('parent_theory_id', target.get('parent_theory_id'))
+                    if arguments.get('fitting', target.get('revision_fitting')) is not None:
+                        inputs['fitting'] = deepcopy(arguments.get('fitting', target.get('revision_fitting')))
+                    if not inputs['parent_theory_id']:
+                        author_work.append({'candidate_id': identifier, **deepcopy(
+                            target.get('parent_binding_obligation') or {
+                                'type': 'AuthorWorkRequest', 'reason': 'actual_revision_parent_required'})})
+                        continue
                 fixed_roles = candidate.get('fixed_role_signature', {})
                 if not charge(len(fixed_roles)):
                     incomplete = True
@@ -736,7 +885,7 @@ def recall_frozen_theories(agent, question, arguments):
                     break
                 inputs['component_theory_ids'] = [item['id'] for item in components
                     if item.get('program') and item.get('context_ref') == target['context_ref']]
-                if not inputs['component_theory_ids']:
+                if not inputs['component_theory_ids'] and candidate['kind'] != 'program_revision_relation':
                     author_work.append({'candidate_id': identifier, 'type': 'AuthorWorkRequest',
                                         'reason': 'typed_target_components_required'})
                     continue
@@ -749,10 +898,63 @@ def recall_frozen_theories(agent, question, arguments):
               else 'completed', 'generated_theory_ids': _unique(generated), 'work': work,
         'author_work': author_work, 'excluded': excluded,
         'new_compute_cost': agent.costs['compute_cost'] - start,
+        'reserved_comparison_compute': budget.reserve,
         'cache_hit': False, 'support_updated': False, 'independent_confirmation': False}
     debit_mission_compute(agent, mission, start)
     question['frozen_recall_execution'] = {'basis': basis, 'allowance': allocation['compute'],
                                           'result': deepcopy(result)}
+    return result
+
+
+def _resolve_paid_checks(agent, examples):
+    """Resolve explicitly declared paid-row references without persisting rows."""
+    result = []
+    for example in examples:
+        item = deepcopy(example)
+        if 'observation' in item:
+            result.append(item)
+            continue
+        criterion = item.get('criterion', {})
+        reason = 'retained_paid_row_and_mse_criterion_required'
+        if (item.get('source_ref') and criterion.get('kind') == 'paid_mse'
+                and criterion.get('criterion_ref')):
+            try:
+                observation, threshold = resolve_program_sources(agent, [
+                    item['source_ref'], criterion['criterion_ref']])
+            except (KeyError, IndexError, OSError):
+                observation, threshold = None, None
+            n = criterion.get('evaluated_rows')
+            if (isinstance(observation, dict) and 'features' in observation and 'target' in observation
+                    and type(n) is int and n > 0 and type(threshold) in (int, float)
+                    and isfinite(threshold) and threshold >= 0
+                    and threshold == criterion.get('mse_threshold')):
+                item.update(observation=deepcopy(observation), tolerance=sqrt(n * threshold))
+            else:
+                item['resolution_reason'] = reason
+        else:
+            item['resolution_reason'] = reason
+        result.append(item)
+    return result
+
+
+def _paid_mse_result(examples, checks):
+    """Consume the original aggregate gate using only already paid predictions."""
+    aggregate = [item.get('criterion') for item in examples
+                 if item.get('criterion', {}).get('kind') == 'paid_mse']
+    if not aggregate:
+        return None
+    criterion = aggregate[0]
+    result = {**deepcopy(criterion), 'status': 'UNKNOWN', 'scope': 'retained_paid_evaluation',
+              'independent_confirmation': False}
+    n = criterion.get('evaluated_rows')
+    if (type(n) is not int or n <= 0 or len(examples) != n or len(checks) != n
+            or len(aggregate) != n or any(item != criterion for item in aggregate)
+            or len(_unique(item['source_ref'] for item in examples)) != n
+            or any(check['status'] not in {'passed', 'failed'} for check in checks)):
+        result['reason'] = 'complete_same_scope_paid_predictions_required'
+        return result
+    mse = sum((check['prediction'] - check['actual']) ** 2 for check in checks) / n
+    result.update(mse=mse, status='passed' if mse <= criterion['mse_threshold'] else 'failed')
     return result
 
 
@@ -767,16 +969,32 @@ def _checked_transfer(agent, arguments, candidate, program, binding, *, compute_
     preceding = [item for item in agent.theory_consolidation.get('transfers', []) if item['binding'] == binding]
     blocked = blocked or bool(retained_counterexample_refs) or any(item['status'] == 'refuted' for item in preceding)
     check_basis = deepcopy(arguments.get('evidence_checks', []))
-    cached = next((item for item in reversed(preceding) if item['check_basis'] == check_basis), None)
-    if cached and (not blocked or cached['status'] == 'refuted') and cached['theory_id'] == arguments['theory_id']:
+    cached = next((item for item in reversed(preceding) if item['check_basis'] == check_basis
+                   and item['theory_id'] == arguments['theory_id']), None)
+    available = max(0, agent.config.compute_budget - agent.costs['compute_cost'])
+    if compute_allowance is not None:
+        available = min(available, max(0, compute_allowance))
+    pending = cached and cached['status'] == 'UNKNOWN' and any(
+        check['status'] == 'UNKNOWN' for check in cached['checks'])
+    if cached and (not blocked or cached['status'] == 'refuted') and (not pending or not available):
         return {**deepcopy(cached), 'cache_hit': True, 'candidate_pool_changed': False,
                 'new_compute_cost': 0, 'new_observations': 0, 'llm_calls': 0,
                 'source_reconstruction_preserved': True}
     checks, spent, unknown = [], 0, False
-    for example in arguments.get('evidence_checks', []):
+    examples = _resolve_paid_checks(agent, arguments.get('evidence_checks', []))
+    for index, example in enumerate(examples):
+        if cached and cached['checks'][index]['status'] in {'passed', 'failed'}:
+            checks.append(deepcopy(cached['checks'][index]))
+            blocked = blocked or checks[-1]['status'] == 'failed'
+            continue
         if example['context_ref'] != context:
             checks.append({'source_ref': deepcopy(example['source_ref']), 'status': 'UNKNOWN',
                            'reason': 'check_context_mismatch'})
+            unknown = True
+            continue
+        if 'observation' not in example:
+            checks.append({'source_ref': deepcopy(example.get('source_ref')), 'status': 'UNKNOWN',
+                           'reason': example['resolution_reason']})
             unknown = True
             continue
         payload = example['observation']
@@ -803,6 +1021,10 @@ def _checked_transfer(agent, arguments, candidate, program, binding, *, compute_
         checks.append({**check, 'status': 'passed' if passed else 'failed',
             'prediction': answer['value'], 'actual': row.target, 'tolerance': example.get('tolerance', 1e-8)})
         blocked = blocked or not passed
+    aggregate = _paid_mse_result(examples, checks)
+    if aggregate:
+        blocked = blocked or aggregate['status'] == 'failed'
+        unknown = unknown or aggregate['status'] == 'UNKNOWN'
     identifier = arguments['theory_id']
     declaration = {'id': identifier, 'program': program.to_dict(),
         'family_id': candidate['id'], 'role_signature': deepcopy(target_roles),
@@ -825,6 +1047,8 @@ def _checked_transfer(agent, arguments, candidate, program, binding, *, compute_
               'binding': binding, 'status': status,
               'checks': checks, 'check_basis': check_basis,
               'support_updated': False, 'independent_confirmation': False}
+    if aggregate:
+        record['paid_mse_check'] = aggregate
     if retained_counterexample_refs:
         record['retained_counterexample_refs'] = deepcopy(retained_counterexample_refs)
     if scoped_failure:
@@ -834,6 +1058,7 @@ def _checked_transfer(agent, arguments, candidate, program, binding, *, compute_
         transfers.append(record)
     _save(agent)
     return {'status': status, 'theory_id': identifier, 'binding': binding, 'checks': checks,
+            **({'paid_mse_check': aggregate} if aggregate else {}),
             **({'retained_counterexample_refs': deepcopy(retained_counterexample_refs)}
                if retained_counterexample_refs else {}),
             **({'scope_refutation': deepcopy(scoped_failure)} if scoped_failure else {}),
@@ -842,13 +1067,56 @@ def _checked_transfer(agent, arguments, candidate, program, binding, *, compute_
             'independent_confirmation': False, 'new_observations': 0, 'llm_calls': 0}
 
 
+def _native_parent_components(agent, parent, available=()):
+    """Expose already fitted siblings of this exact native parent by reference."""
+    from .question_routing import register_theories
+    reference = (parent or {}).get('source_ref', {})
+    if reference.get('kind') != 'native_candidate' or not parent.get('program'):
+        return []
+    owner = next((question for question in agent.questions if question['id'] == reference['question_id']), None)
+    meaning = reference.get('meaning_version', 1)
+    if owner and owner.get('meaning_version', 1) != meaning:
+        owner = next((old for old in owner.get('meaning_history', []) if old['meaning_version'] == meaning), None)
+    if owner is None or owner.get('context_ref', parent['context_ref']) != parent['context_ref']:
+        return []
+    rounds = owner.get('native_condition_research', [])
+    if not 0 <= reference['round_index'] < len(rounds):
+        return []
+    declarations, retained_ids = [], []
+    round_ = rounds[reference['round_index']]
+    registered = {item['theory_id']: item['version'] for item in
+                  round_.get('native_theory_registration', {}).get('registered', [])}
+    for index, source in enumerate(round_.get('candidates', [])):
+        if index == reference['candidate_index'] or not source.get('program'):
+            continue
+        source_ref = {**deepcopy(reference), 'candidate_index': index}
+        existing = next((item for item in available
+            if item.get('source_ref') == source_ref and item.get('program') == source['program']
+            and registered.get(item['id']) == item.get('version')), None)
+        if existing:
+            retained_ids.append(existing['id'])
+            continue
+        identifier = (f'native_component:{reference["question_id"]}@meaning{meaning}:'
+                      f'round{reference["round_index"]}:candidate{index}')
+        declarations.append({'id': identifier, 'source_ref': source_ref,
+            **{key: deepcopy(parent[key]) for key in ('role_signature', 'output_unit', 'context_ref')},
+            'support': {'status': 'candidate', 'evidence': []}})
+    register_theories(agent, declarations)
+    return [*retained_ids, *(item['id'] for item in declarations)]
+
+
 def _transfer_relation(agent, arguments, candidate, path, *, source_library=None):
     from .question_routing import resolved_theories
-    from .revision_relations import instantiate_relation, propose_relation
+    from .revision_relations import instantiate_relation, propose_relation, propose_revision
 
     pool = {theory['id']: theory for theory in resolved_theories(agent)}
+    native_ids = []
+    if candidate['kind'] == 'program_revision_relation':
+        native_ids = _native_parent_components(agent, pool.get(arguments.get('parent_theory_id')), pool.values())
+        if native_ids:
+            pool = {theory['id']: theory for theory in resolved_theories(agent)}
     binding_ids = arguments.get('component_bindings')
-    identifiers = arguments.get('component_theory_ids', [])
+    identifiers = _unique([*arguments.get('component_theory_ids', []), *native_ids])
     if binding_ids:
         identifiers = _unique([*identifiers, *binding_ids.values()])
     excluded, components = [], []
@@ -860,7 +1128,7 @@ def _transfer_relation(agent, arguments, candidate, path, *, source_library=None
             excluded.append({'id': identifier, 'reason': 'component_context_mismatch'})
         else:
             components.append(component)
-    if not components:
+    if not components and candidate['kind'] != 'program_revision_relation':
         return {'status': 'UNKNOWN', 'reason': 'no_typed_components_available',
             'generated_theories': [], 'excluded': excluded, 'new_compute_cost': 0,
             'new_observations': 0, 'llm_calls': 0, 'support_updated': False}
@@ -869,21 +1137,39 @@ def _transfer_relation(agent, arguments, candidate, path, *, source_library=None
     if type(requested) is not int or requested < 0:
         raise ValueError('relation transfer compute must be a nonnegative integer')
     allowance = min(requested, max(0, agent.config.compute_budget - agent.costs['compute_cost']))
+    direct_mission = None
+    if 'mission' in arguments:
+        agent.research_mission = adopt_research_mission(agent.research_mission, arguments['mission'])
+        direct_mission = agent.research_mission
+        allowance = min(allowance, mission_compute_remaining(agent, direct_mission))
+    before_transfer = agent.costs['compute_cost']
     allocation['compute'] = allowance
     basis = {key: deepcopy(arguments.get(key)) for key in (
         'component_theory_ids', 'component_bindings', 'role_signature', 'output_unit',
-        'context_ref', 'evidence_checks', 'allocation')}
+        'context_ref', 'evidence_checks', 'allocation', 'parent_theory_id', 'fitting')}
+    parent = pool.get(arguments.get('parent_theory_id'))
     basis.update(library_path=path, candidate_id=candidate['id'], candidate_version=candidate['version'],
+        parent={key: deepcopy(parent.get(key)) for key in ('id', 'version', 'source_ref', 'source_status')}
+               if parent else None,
         components=[{key: deepcopy(component.get(key)) for key in (
             'id', 'version', 'source_ref', 'compatible', 'source_status')} for component in components])
     cache_key = f'relation_transfer:{arguments["theory_id"]}'
     executions = agent.theory_consolidation.setdefault('executions', {})
     previous = executions.get(cache_key)
-    if (previous and previous['request_basis'] == basis and
+    same_work = previous and previous['request_basis'] == basis
+    if (same_work and previous.get('search_completed', True) and
             (previous['result']['status'] != 'UNKNOWN' or allowance <= previous['allowance'])):
         return {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0,
-                'candidate_pool_changed': False}
-    if binding_ids:
+                'candidate_pool_changed': False, 'reserved_comparison_compute': 0}
+    cursor = previous.get('cursor') if same_work else None
+    # Hold one complete retained check set inside the unchanged total allowance.
+    allocation['compute'] = max(0, allowance - len(arguments.get('evidence_checks', [])))
+    if candidate['kind'] == 'program_revision_relation':
+        working_checks = _resolve_paid_checks(agent, arguments.get('evidence_checks', []))
+        proposed = propose_revision(candidate, parent, components, allocation=allocation,
+            evidence_checks=working_checks, cursor=cursor,
+            fitting=arguments.get('fitting'))
+    elif binding_ids:
         available = {component['id']: component for component in components}
         if any(identifier not in available for identifier in binding_ids.values()):
             return {'status': 'UNKNOWN', 'reason': 'bound_component_unavailable',
@@ -892,8 +1178,14 @@ def _transfer_relation(agent, arguments, candidate, path, *, source_library=None
         proposed = instantiate_relation(candidate, {
             name: available[identifier] for name, identifier in binding_ids.items()}, allocation=allocation)
     else:
-        proposed = propose_relation(candidate, components, allocation=allocation)
+        proposed = propose_relation(candidate, components, allocation=allocation, cursor=cursor)
     agent.costs['compute_cost'] += proposed['actual_compute_cost']
+    comparison_reserve = proposed.get('reserved_comparison_compute', 0)
+    if comparison_reserve:
+        # The enclosing route owns restoration of its task configuration. Hold
+        # these units through matching/selection as well as retained checks.
+        agent.config = replace(agent.config,
+            compute_budget=agent.config.compute_budget - comparison_reserve)
     generated, spent, changed = [], proposed['actual_compute_cost'], False
     proposals = proposed['proposals']
     for index, proposal in enumerate(proposals):
@@ -901,15 +1193,27 @@ def _transfer_relation(agent, arguments, candidate, path, *, source_library=None
                 and proposal['output_unit'] != arguments['output_unit']):
             excluded.append({'reason': 'relation_output_unit_mismatch'})
             continue
-        identifier = arguments['theory_id'] if len(proposals) == 1 else f'{arguments["theory_id"]}:binding:{index}'
+        position = proposal.get('search_position')
+        if position is not None:
+            identifier = f'{arguments["theory_id"]}:binding:{position["layer"]}:{position["offset"]}'
+            if 'fit_index' in position:
+                identifier += f':fit:{position["fit_index"]}'
+        else:
+            identifier = arguments['theory_id'] if len(proposals) == 1 else f'{arguments["theory_id"]}:binding:{index}'
         binding = {'library_path': path, 'candidate_id': candidate['id'],
             'candidate_version': candidate['version'], 'components': deepcopy(proposal['bindings']),
             'context_ref': deepcopy(proposal['context_ref'])}
+        if proposal.get('parent_binding'):
+            binding.update(parent=deepcopy(proposal['parent_binding']),
+                           constraint_hypothesis=proposal['constraint_hypothesis'])
+        if 'fitting' in proposal:
+            binding['fitting'] = deepcopy(proposal['fitting'])
         inputs = {**arguments, 'theory_id': identifier,
             'role_signature': proposal['role_signature'], 'output_unit': proposal['output_unit'],
             'context_ref': proposal['context_ref']}
         result = _checked_transfer(agent, inputs, candidate,
-            Program.from_dict(proposal['program']), binding, compute_allowance=max(0, allowance - spent),
+            Program.from_dict(proposal['program']), binding,
+            compute_allowance=max(0, allowance - spent - comparison_reserve),
             retained_counterexample_refs=_retained_binding_failures(
                 agent, source_library or {}, path, binding))
         spent += result['new_compute_cost']
@@ -917,7 +1221,11 @@ def _transfer_relation(agent, arguments, candidate, path, *, source_library=None
         generated.append({'theory_id': identifier, 'version': agent.theory_index[identifier]['version'],
             'status': result['status'], 'binding': binding,
             'constraint_checks': deepcopy(proposal.get('constraint_checks', [])),
+            **({'parent_binding': deepcopy(proposal['parent_binding']),
+                'constraint_hypothesis': proposal['constraint_hypothesis']} if proposal.get('parent_binding') else {}),
             'checks': result.get('checks', []), 'source_reconstruction_preserved': True})
+        if result.get('paid_mse_check'):
+            generated[-1]['paid_mse_check'] = deepcopy(result['paid_mse_check'])
     unknown = proposed['budget_exhausted'] or proposed['status'] == 'UNKNOWN'
     status = ('UNKNOWN' if unknown else 'candidates_registered' if any(
         item['status'] == 'candidate_registered' for item in generated) else
@@ -925,7 +1233,23 @@ def _transfer_relation(agent, arguments, candidate, path, *, source_library=None
     result = {'status': status, 'generated_theories': generated,
         'candidate_pool_changed': changed, 'excluded': [*excluded, *proposed['excluded']],
         'new_compute_cost': spent, 'budget_exhausted': proposed['budget_exhausted'], 'cache_hit': False,
+        'reserved_comparison_compute': comparison_reserve,
+        'reason': proposed.get('reason'), 'parent_binding': proposed.get('parent_binding'),
+        **({'parameter_condition_context': deepcopy(proposed['parameter_condition_context'])}
+           if 'parameter_condition_context' in proposed else {}),
+        'retained_native_component_ids': native_ids,
+        'author_work': ([{'type': 'AuthorWorkRequest', 'reason': proposed['reason'],
+            **({'required': ['operations', 'risk_quantile', 'max_history', 'max_structures']}
+               if proposed['reason'] == 'finite_revision_fitting_contract_required' else {})}]
+            if proposed.get('reason') in {'typed_open_hole_components_or_fitting_contract_required',
+                                         'finite_revision_fitting_contract_required'} else []),
+        'incomplete_fit_positions': deepcopy(proposed.get('incomplete_fit_positions', [])),
+        'cursor': deepcopy(proposed.get('cursor')), 'search_completed': proposed.get('search_completed', True),
         'support_updated': False, 'independent_confirmation': False, 'new_observations': 0, 'llm_calls': 0}
     executions[cache_key] = {'request_basis': basis, 'allowance': allowance, 'result': deepcopy(result)}
+    executions[cache_key].update(cursor=deepcopy(proposed.get('cursor')),
+                                 search_completed=proposed.get('search_completed', True))
+    if direct_mission is not None:
+        debit_mission_compute(agent, direct_mission, before_transfer)
     _save(agent)
     return result

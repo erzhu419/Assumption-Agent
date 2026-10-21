@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Iterator, Sequence
+from copy import deepcopy
 from itertools import combinations
 from math import isfinite
 
@@ -103,7 +104,11 @@ def _fit_linear(terms: Sequence[Program], rows: Sequence[Observation]) -> Progra
 
 
 def _thresholds(term: Program, rows: Sequence[Observation]) -> list[float]:
-    values = sorted({term.predict(row) for row in rows})
+    return _threshold_values([term.predict(row) for row in rows])
+
+
+def _threshold_values(observed: Sequence[float]) -> list[float]:
+    values = sorted(set(observed))
     midpoints = [(left + right) / 2 for left, right in zip(values, values[1:])]
     if len(midpoints) <= 7:
         return midpoints
@@ -120,52 +125,112 @@ def _terms(rows: Sequence[Observation], max_history: int = 4) -> tuple[list[Prog
     return current, historical
 
 
+def _synthesis_terms(rows, max_history, seed_programs):
+    current, historical = _terms(rows, max_history)
+    intermediate = [program for program in seed_programs
+                    if program.op != "const" and program not in current + historical
+                    and program.minimum_history_depth <= min(len(row.history) for row in rows)]
+    return current, historical, intermediate, list(dict.fromkeys([*intermediate, *current, *historical]))
+
+
+def _relation_atoms(terms, thresholds_by_term):
+    # Interleave coordinates so one raw feature cannot consume every trial.
+    return [_binary(direction, term, _constant(thresholds[index]))
+        for index in range(max((len(values) for values in thresholds_by_term), default=0))
+        for term, thresholds in zip(terms, thresholds_by_term) if index < len(thresholds)
+        for direction in ("ge", "lt")]
+
+
 Proposal = tuple[Callable[[], Program], str]
 
 
-def synthesize(
-    observations: Sequence[Observation], *, operations: Sequence[str],
-    budget: SearchBudget, incumbent: Program | None = None,
-    risk_quantile: float = 0.5,
-    max_history: int = 4,
-    seed_programs: Sequence[Program] = (),
-) -> list[Candidate]:
-    if not observations:
-        return []
-    if not 0 < risk_quantile < 1:
-        raise ValueError("risk quantile must be between zero and one")
-    unknown = set(operations) - set(OPERATIONS)
-    if unknown:
-        raise ValueError(f"unknown cognitive operations: {sorted(unknown)}")
-    rows = tuple(observations)
-    current, historical = _terms(rows, max_history)
-    intermediate_terms = [program for program in seed_programs
-                          if program.op != "const" and program not in current + historical
-                          and program.minimum_history_depth <= min(len(row.history) for row in rows)]
-    all_terms = list(dict.fromkeys([*intermediate_terms, *current, *historical]))
-    binary_targets = all(row.target in (0.0, 1.0) for row in rows)
-    thresholds_by_term = [
-        sorted(_thresholds(term, rows), key=lambda value: abs(value - _quantile(
-            [term.predict(row) for row in rows], 0.5)))
-        for term in all_terms
-    ]
-    # Interleave coordinates so the first raw feature cannot consume every
-    # threshold trial before the search ever reaches another feature or lag.
-    atoms = [
-        _binary(direction, term, _constant(thresholds[index]))
-        for index in range(max((len(values) for values in thresholds_by_term), default=0))
-        for term, thresholds in zip(all_terms, thresholds_by_term)
-        if index < len(thresholds)
-        for direction in ("ge", "lt")
-    ]
-    scored: list[tuple[float, Program]] = []
-    for seed in seed_programs:
-        if seed.minimum_history_depth <= min(len(row.history) for row in rows) and budget.spend(len(rows)):
-            scored.append((_loss(seed, rows, risk_quantile), seed))
+class _FittedProposals:
+    """The original scientific fits used by the ordinary synthesis scheduler."""
 
+    def linear(self, terms, rows):
+        return _fit_linear(terms, rows)
+
+    def stump(self, atom, rows):
+        groups = [[row.target for row in rows if bool(atom.predict(row)) == side]
+                  for side in (True, False)]
+        predictions = [sum(group) / len(group) for group in groups]
+        return Program("if", children=(atom, _constant(predictions[0]), _constant(predictions[1])))
+
+    def robust(self, current, incumbent, rows, quantile, condition):
+        base = incumbent
+        if base is None or base.minimum_history_depth > min(len(row.history) for row in rows):
+            base = _fit_linear(current, rows)
+        residuals = [(row, row.target - base.predict(row)) for row in rows]
+        if condition is None:
+            offset = _constant(_quantile([value for _, value in residuals], quantile))
+        else:
+            groups = [[value for row, value in residuals if bool(condition.predict(row)) == side]
+                      for side in (True, False)]
+            offset = Program("if", children=(condition, _constant(_quantile(groups[0], quantile)),
+                                             _constant(_quantile(groups[1], quantile))))
+        return _binary("add", base, offset)
+
+
+class _UnfittedProposals:
+    """Expose the same factories' free constants, without solving a hole's labels."""
+
+    def __init__(self):
+        self.parameters = {}
+
+    def slot(self, initial=0.):
+        name = f"synthesis_parameter_{len(self.parameters)}"
+        self.parameters[name] = float(initial)
+        return Program("arg", name=name)
+
+    def linear(self, terms, rows):
+        program = self.slot()
+        for term in terms:
+            program = _binary("add", program, _binary("mul", self.slot(1.), term))
+        return program
+
+    def stump(self, atom, rows):
+        return Program("if", children=(atom, self.slot(), self.slot()))
+
+    def robust(self, current, incumbent, rows, quantile, condition):
+        base = incumbent
+        if base is None or base.minimum_history_depth > min(len(row.history) for row in rows):
+            base = self.linear(current, rows)
+        offset = self.slot() if condition is None else Program(
+            "if", children=(condition, self.slot(), self.slot()))
+        return _binary("add", base, offset)
+
+    def freeze(self, program):
+        paths = []
+
+        def visit(node, path=()):
+            if node.op == "arg" and node.name in self.parameters:
+                paths.append(path)
+                return _constant(self.parameters[node.name])
+            return Program(node.op, node.value, node.name, node.lag,
+                tuple(visit(child, (*path, index)) for index, child in enumerate(node.children)), node.definition)
+
+        return visit(program), tuple(paths)
+
+
+def _boolean_pool(scored):
+    # The original small beam per expression size; structure search supplies
+    # neutral scores, ordinary synthesis supplies its measured world losses.
+    by_size: dict[int, dict[Program, float]] = {}
+    for loss, program in scored:
+        if program.expanded().op in {"ge", "lt", "and", "or", "not"}:
+            by_size.setdefault(program.size, {})[program] = loss
+    return sorted((item for size, programs in by_size.items() if size <= 11
+        for item in sorted(((loss, program) for program, loss in programs.items()),
+                           key=lambda item: (item[0], item[1].describe()))[:4]),
+        key=lambda item: (item[0], item[1].size, item[1].describe()))
+
+
+def _proposal_generators(rows, current, historical, intermediate_terms, all_terms,
+                         atoms, binary_targets, incumbent, risk_quantile, scored,
+                         fitting, composition_state=None):
     def linear(terms: Sequence[Program], reason: str) -> Proposal:
         frozen = tuple(terms)
-        return lambda: _fit_linear(frozen, rows), reason
+        return lambda: fitting.linear(frozen, rows), reason
 
     def refits() -> Iterator[Proposal]:
         yield linear((), "fit a constant to observed targets")
@@ -194,10 +259,7 @@ def synthesize(
                 yield (lambda atom=atom: atom), "test an observed threshold relation"
             else:
                 def fit_stump(atom: Program = atom) -> Program:
-                    groups = [[row.target for row in rows if bool(atom.predict(row)) == side]
-                              for side in (True, False)]
-                    predictions = [sum(group) / len(group) for group in groups]
-                    return Program("if", children=(atom, _constant(predictions[0]), _constant(predictions[1])))
+                    return fitting.stump(atom, rows)
                 yield fit_stump, "fit a piecewise relation at an observed threshold"
         for left, right in combinations(all_terms, 2):
             if binary_targets:
@@ -217,31 +279,19 @@ def synthesize(
         if binary_targets:
             # Scores are filled by the shared scheduler. Keep all distinct
             # programs: equal predictions so far need not remain equal later.
-            attempted: set[Program] = set()
-            seed_index = 0
-            composition_count = 0
-            while True:
+            state = composition_state if composition_state is not None else {}
+            attempted = {Program.from_dict(item) for item in state.get("attempted", [])}
+            seed_index = state.get("seed_index", 0)
+            composition_count = state.get("composition_count", 0)
+            while not state.get("boolean_complete", False):
                 if seed_index < len(atoms) and composition_count % 3 == 0:
                     atom = atoms[seed_index]
                     seed_index += 1
                     composition_count += 1
+                    state.update(seed_index=seed_index, composition_count=composition_count)
                     yield lambda atom=atom: atom, "seed composition with an observed relation"
                     continue
-                by_size: dict[int, dict[Program, float]] = {}
-                for loss, program in scored:
-                    if program.expanded().op in {"ge", "lt", "and", "or", "not"}:
-                        by_size.setdefault(program.size, {})[program] = loss
-                # Preserve a small beam at each expression size. A useful
-                # intermediate relation can tie a shorter model's current loss
-                # and only become better after another composition.
-                pool = sorted(
-                    (item for size, programs in by_size.items() if size <= 11
-                     for item in sorted(
-                         ((loss, program) for program, loss in programs.items()),
-                         key=lambda item: (item[0], item[1].describe()),
-                     )[:4]),
-                    key=lambda item: (item[0], item[1].size, item[1].describe()),
-                )
+                pool = _boolean_pool(scored)
                 proposal = None
                 for _, parent in pool:
                     if parent.size > 11:
@@ -260,31 +310,31 @@ def synthesize(
                     if proposal is not None:
                         break
                 if proposal is None:
+                    state["boolean_complete"] = True
                     break
                 composition_count += 1
+                if composition_state is not None:
+                    state.setdefault("attempted", []).append(proposal.to_dict())
+                state["composition_count"] = composition_count
                 yield lambda proposal=proposal: proposal, "compose observed Boolean relations"
+        tail_index = 0
         for left, right in combinations(all_terms, 2):
-            interaction = _binary("mul", left, right)
-            yield linear(current + [interaction], "fit an interaction of observed coordinates")
+            if composition_state is None or not binary_targets or tail_index >= composition_state.get("tail_index", 0):
+                interaction = _binary("mul", left, right)
+                if composition_state is not None and binary_targets:
+                    composition_state["tail_index"] = tail_index + 1
+                yield linear(current + [interaction], "fit an interaction of observed coordinates")
+            tail_index += 1
         for term in all_terms:
-            yield linear(current + [_binary("mul", term, term)], "test a nonlinear coordinate composed from an observable")
+            if composition_state is None or not binary_targets or tail_index >= composition_state.get("tail_index", 0):
+                if composition_state is not None and binary_targets:
+                    composition_state["tail_index"] = tail_index + 1
+                yield linear(current + [_binary("mul", term, term)], "test a nonlinear coordinate composed from an observable")
+            tail_index += 1
 
     def robustifications() -> Iterator[Proposal]:
         def calibrated(condition: Program | None = None) -> Program:
-            base = incumbent
-            if base is None or base.minimum_history_depth > min(len(row.history) for row in rows):
-                base = _fit_linear(current, rows)
-            residuals = [(row, row.target - base.predict(row)) for row in rows]
-            if condition is None:
-                offset = _constant(_quantile([value for _, value in residuals], risk_quantile))
-            else:
-                groups = [[value for row, value in residuals if bool(condition.predict(row)) == side]
-                          for side in (True, False)]
-                offset = Program("if", children=(
-                    condition, _constant(_quantile(groups[0], risk_quantile)),
-                    _constant(_quantile(groups[1], risk_quantile)),
-                ))
-            return _binary("add", base, offset)
+            return fitting.robust(current, incumbent, rows, risk_quantile, condition)
         yield lambda: calibrated(), "calibrate risk from the empirical residual quantile"
         for atom in atoms:
             if atom.children[0].history_depth == 0:
@@ -299,11 +349,43 @@ def synthesize(
             yield linear(current, "test whether current evidence still requires historical state")
         yield linear((), "test whether the remaining structure can be replaced by a constant")
 
-    generators = {
+    return {
         "refit": refits, "representation": representations, "relation": relations,
         "composition": compositions, "robustification": robustifications,
         "idealization": idealizations,
     }
+
+
+def synthesize(
+    observations: Sequence[Observation], *, operations: Sequence[str],
+    budget: SearchBudget, incumbent: Program | None = None,
+    risk_quantile: float = 0.5,
+    max_history: int = 4,
+    seed_programs: Sequence[Program] = (),
+) -> list[Candidate]:
+    if not observations:
+        return []
+    if not 0 < risk_quantile < 1:
+        raise ValueError("risk quantile must be between zero and one")
+    unknown = set(operations) - set(OPERATIONS)
+    if unknown:
+        raise ValueError(f"unknown cognitive operations: {sorted(unknown)}")
+    rows = tuple(observations)
+    current, historical, intermediate_terms, all_terms = _synthesis_terms(rows, max_history, seed_programs)
+    binary_targets = all(row.target in (0.0, 1.0) for row in rows)
+    thresholds_by_term = [
+        sorted(_thresholds(term, rows), key=lambda value: abs(value - _quantile(
+            [term.predict(row) for row in rows], 0.5)))
+        for term in all_terms
+    ]
+    atoms = _relation_atoms(all_terms, thresholds_by_term)
+    scored: list[tuple[float, Program]] = []
+    for seed in seed_programs:
+        if seed.minimum_history_depth <= min(len(row.history) for row in rows) and budget.spend(len(rows)):
+            scored.append((_loss(seed, rows, risk_quantile), seed))
+
+    generators = _proposal_generators(rows, current, historical, intermediate_terms,
+        all_terms, atoms, binary_targets, incumbent, risk_quantile, scored, _FittedProposals())
     queue = deque((operation, generators[operation]()) for operation in dict.fromkeys(operations))
     candidates: list[Candidate] = []
     seen: set[tuple[str, Program]] = set()
@@ -331,3 +413,90 @@ def synthesize(
         ))
     measured_losses = {program: measured for measured, program in scored}
     return sorted(candidates, key=lambda candidate: (measured_losses[candidate.program], candidate.program.size))
+
+
+def iter_synthesis_structures(
+    observations: Sequence[Observation], *, operations: Sequence[str], budget: SearchBudget,
+    max_history: int = 4, seed_programs: Sequence[Program] = (), incumbent: Program | None = None,
+    cursor: dict | None = None,
+) -> Iterator[dict]:
+    """Yield unfitted structures from the ordinary six proposal families.
+
+    Each item contains a native ``program`` and only its free ``parameter_paths``;
+    observed thresholds and constants inside supplied seeds stay fixed. No hole
+    coefficient, stump value or residual quantile is fitted to world targets.
+    Targets only select the existing binary-task grammar. A caller can fit the
+    complete containing model on its correctly scoped world rows afterwards.
+
+    One unit pays for a proposal-factory attempt, including detecting exhaustion;
+    evaluating a public term for its threshold costs one unit per row.
+    ``cursor`` is mutated, JSON-serializable
+    search state and must be reused only with the same inputs and grammar. It
+    retains offsets plus the old Boolean beam's syntax, without rows or scores.
+    All families share the original round-robin order; Boolean beam ties use
+    neutral scores because this stream has no separately labelled hole task.
+    """
+    unknown = set(operations) - set(OPERATIONS)
+    if unknown:
+        raise ValueError(f"unknown cognitive operations: {sorted(unknown)}")
+    state = cursor if cursor is not None else {}
+    rows, names = tuple(observations), list(dict.fromkeys(operations))
+    if not rows or not names:
+        state.update(status="completed", budget_exhausted=False)
+        return
+    current, historical, intermediate, terms = _synthesis_terms(rows, max_history, seed_programs)
+    thresholds = state.setdefault("thresholds_by_term", [])
+    for term in terms[len(thresholds):]:
+        if not budget.spend(len(rows)):
+            state.update(status="UNKNOWN", budget_exhausted=True)
+            return
+        values = [term.predict(row) for row in rows]
+        median = _quantile(values, .5)
+        thresholds.append(sorted(_threshold_values(values), key=lambda value: abs(value - median)))
+    atoms = _relation_atoms(terms, thresholds)
+    binary = all(row.target in (0., 1.) for row in rows)
+    scored = [(0., Program.from_dict(item)) for item in state.get("frontier", [])]
+    if "frontier" not in state:
+        scored = [(0., seed) for seed in seed_programs
+                  if seed.minimum_history_depth <= min(len(row.history) for row in rows)]
+    positions = state.setdefault("positions", {})
+    exhausted = state.setdefault("exhausted_operations", [])
+    composition = state.setdefault("composition", {})
+    fitting = _UnfittedProposals()
+    generators = _proposal_generators(rows, current, historical, intermediate, terms,
+        atoms, binary, incumbent, .5, scored, fitting, composition_state=composition)
+    start = state.get("next_operation", 0)
+    ordered = names[start:] + names[:start]
+    queue = deque()
+    for name in ordered:
+        if name in exhausted:
+            continue
+        proposals = generators[name]()
+        if name != "composition" or not binary:
+            for _ in range(positions.get(name, 0)):
+                next(proposals, None)  # Factories are not executed or fitted.
+        queue.append((name, proposals))
+    while queue:
+        if not budget.spend(1):
+            state.update(status="UNKNOWN", budget_exhausted=True)
+            return
+        name, proposals = queue.popleft()
+        try:
+            factory, rationale = next(proposals)
+        except StopIteration:
+            exhausted.append(name)
+            continue
+        fitting.parameters.clear()
+        program, paths = fitting.freeze(factory())
+        index = positions.get(name, 0)
+        positions[name] = index + 1
+        state["next_operation"] = (names.index(name) + 1) % len(names)
+        scored.append((0., program))
+        scored[:] = _boolean_pool(scored)
+        state["frontier"] = [entry.to_dict() for _, entry in scored]
+        state.update(status="searching", budget_exhausted=False)
+        queue.append((name, proposals))
+        yield {"program": program, "parameter_paths": paths, "operation": name,
+            "rationale": rationale, "proposal_index": index,
+            "source_ref": {"kind": "synthesis_structure", "operation": name, "proposal_index": index}}
+    state.update(status="completed", budget_exhausted=False)

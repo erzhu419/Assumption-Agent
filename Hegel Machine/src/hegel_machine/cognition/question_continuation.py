@@ -43,6 +43,9 @@ use_sites [{kind:'choose_parent_experiment',parent_id:'parent',path:'plan.py'}]
 execute the existing select_actions program to prepare pending_query only.
 query {pending_question:'parent'} purchases that saved plan through the normal
 forecast-before-acquisition path. Changed plans keep their preceding version.
+Readout.record_index={experiment_id:'panel_id',action_index:0} refers to the
+actual pending purchase by this question and meaning, preserving strict public
+binding checks. A plan not yet executed has no measured answer.
 use_sites [{kind:'supply_component',model:'parent.py',slot:'chosen_slot'}] consume
 this question's current registered observable/conditional model_answer after its
 paid support and meaning have been checked. The existing parent bind_models
@@ -54,6 +57,20 @@ No parent use means an answer is available, not a completed parent revision.
 
 def _question(agent, identifier):
     return next(q for q in agent.questions if q['id'] == identifier)
+
+
+def executed_plan_records(agent, question):
+    """Actual first-step purchases made for this question's retained meaning."""
+    bindings = {}
+    for parent in agent.questions:
+        for executed in parent.get('executed_pending_queries', []):
+            source = executed['source']
+            if (source.get('kind') == 'question_selection' and source.get('stage') != 2
+                    and source.get('question_id') == question['id']
+                    and source.get('meaning_version') == question.get('meaning_version', 1)
+                    and source.get('experiment_id')):
+                bindings[source['experiment_id']] = list(executed['record_indices'])
+    return bindings
 
 
 def _versioned_support(agent, question, visiting=()):
@@ -378,10 +395,11 @@ def step_question(agent, question, laboratory, *, mission=None):
     if operation == 'FindDistinguishingExperiment':
         from .question_routing import find_distinguishing_experiment
         return find_distinguishing_experiment(agent, question, laboratory, mission=mission)
+    record_bindings = executed_plan_records(agent, question)
     basis = {'meaning_version': question.get('meaning_version', 1),
              'paid_records': len(agent.observations), 'paid_rows': len(agent.rows),
              'query': deepcopy(compiled.get('query')), 'context': deepcopy(question.get('context_ref')),
-             'region_version': region.get('version')}
+             'region_version': region.get('version'), 'record_bindings': record_bindings}
     cached = question.get('query_execution')
     if operation == 'FindSharedStructure':
         from .question_object_queries import evaluate_shared_structure
@@ -405,7 +423,7 @@ def step_question(agent, question, laboratory, *, mission=None):
         before_compute = agent.costs['compute_cost']
         answer = evaluate_on_evidence(compiled['query'], agent.observations,
             context=question.get('context_ref'),
-            compute_budget=mission_compute_remaining(agent, mission))
+            compute_budget=mission_compute_remaining(agent, mission), record_bindings=record_bindings)
         agent.costs['compute_cost'] += answer.get('compute_cost', 0)
         debit_mission_compute(agent, mission, before_compute)
         question['query_execution'] = {'basis': basis, 'answer': deepcopy(answer)}

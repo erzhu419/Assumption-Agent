@@ -61,11 +61,13 @@ def endpoint_difference(actions, first_record):
     return {'op': 'Difference', 'left': readout(0), 'right': readout(1)}
 
 
-def full_panel_readout(actions, first_record):
-    """An ordered finite vector, using every original row in both trajectories."""
+def full_panel_readout(actions, first_record, *, context=None, units=None):
+    """An ordered vector of every declared trajectory row in its public scope."""
+    context = CONTEXT if context is None else context
+    units = UNIT if units is None else units
     return {'op': 'Readout', 'statistic_ref': {'kind': 'vector'}, 'finite_readouts': [
         {'op': 'Readout', 'record_index': first_record + index, 'step': step,
-         'target': 'response', 'context_ref': deepcopy(CONTEXT), 'units': UNIT,
+         'target': 'response', 'context_ref': deepcopy(context), 'units': units,
          'binding': {'action': deepcopy(action), 'features': deepcopy(point),
                      'history': deepcopy(action['sequence'][:step])}}
         for index, action in enumerate(actions) for step, point in enumerate(action['sequence'])]}

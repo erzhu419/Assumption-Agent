@@ -4,6 +4,8 @@ Readout binds record_index/step to a complete action and public row. Model
 readouts use only that public binding; evidence readouts additionally verify it
 against the retained record. Neither path supplies the other's answer. These
 checks validate declared context, not the truth of arbitrary authored prose.
+An explicit record_index={experiment_id:...,action_index:...} uses that plan's
+actual purchased record supplied by Common; integer indices remain absolute.
 Readout with finite_readouts and statistic_ref.kind vector/mean/
 empirical_distribution reuses the scalar reader on each declared row. Vectors
 keep their declared order; empirical distributions describe only those rows.
@@ -58,11 +60,12 @@ def _context_value(context):
 
 
 class _Evaluation:
-    def __init__(self, observations, predictor, context, compute_budget):
+    def __init__(self, observations, predictor, context, compute_budget, record_bindings=None):
         if compute_budget is not None and (type(compute_budget) is not int or compute_budget < 0):
             raise ValueError('compute_budget must be a nonnegative integer or None')
         self.observations = observations
         self.predictor = predictor
+        self.record_bindings = record_bindings or {}
         self.context = context
         self.budget = compute_budget
         self.compute_cost = 0
@@ -99,7 +102,14 @@ class _Evaluation:
 
     def _readout(self, query):
         record_index, step = query.get('record_index'), query.get('step')
-        if type(record_index) is not int or record_index < 0 or type(step) is not int or step < 0:
+        planned = isinstance(record_index, dict)
+        if planned:
+            experiment, action_index = record_index.get('experiment_id'), record_index.get('action_index')
+            if (not isinstance(experiment, str) or not experiment
+                    or type(action_index) is not int or action_index < 0):
+                _invalid('invalid_record_or_step')
+        if ((not planned and (type(record_index) is not int or record_index < 0))
+                or type(step) is not int or step < 0):
             _invalid('invalid_record_or_step')
         binding = query.get('binding')
         if not isinstance(binding, dict) or not all(key in binding for key in ('action', 'features', 'history')):
@@ -122,6 +132,11 @@ class _Evaluation:
                 _unknown('unknown_due_to_unavailable_observation', detail='predictor_execution_failed',
                          error=f'{type(error).__name__}: {error}')
         else:
+            if planned:
+                records = self.record_bindings.get(experiment, [])
+                if action_index >= len(records):
+                    _unknown('unknown_due_to_missing_evidence', record_index=record_index)
+                record_index = records[action_index]
             if not isinstance(self.observations, (list, tuple)) or record_index >= len(self.observations):
                 _unknown('unknown_due_to_missing_evidence', record_index=record_index)
             record = self.observations[record_index]
@@ -268,12 +283,12 @@ class _Evaluation:
         _unknown('unknown_due_to_opaque_program_semantics', op=operation)
 
 
-def _evaluate(query, observations, predictor, context, compute_budget):
+def _evaluate(query, observations, predictor, context, compute_budget, record_bindings=None):
     if isinstance(query, dict) and 'query_semantics' in query:
         if context is None:
             context = query.get('context_ref')
         query = query['query_semantics'].get('query_expression')
-    evaluation = _Evaluation(observations, predictor, context, compute_budget)
+    evaluation = _Evaluation(observations, predictor, context, compute_budget, record_bindings)
     try:
         answer = evaluation.evaluate(query)
         result = {'status': 'answered', **answer}
@@ -289,6 +304,6 @@ def evaluate_on_model(query, predictor, *, context=None, compute_budget=None):
     return _evaluate(query, None, predictor, context, compute_budget)
 
 
-def evaluate_on_evidence(query, observations, *, context=None, compute_budget=None):
+def evaluate_on_evidence(query, observations, *, context=None, compute_budget=None, record_bindings=None):
     """Evaluate only matching actual records; unknown results never use a model."""
-    return _evaluate(query, observations, None, context, compute_budget)
+    return _evaluate(query, observations, None, context, compute_budget, record_bindings)

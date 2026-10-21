@@ -284,6 +284,7 @@ def consolidate_theories(episodes, *, allocation=None, candidate_id='induction')
     budget = SearchBudget(compute)
     groups, excluded, author_work, candidates = {}, [], [], []
     incomplete = False
+    grouping_completed = False
     try:
         for episode in episodes:
             _spend(budget)
@@ -323,6 +324,7 @@ def consolidate_theories(episodes, *, allocation=None, candidate_id='induction')
                         continue
                     fragment_record = _typed_record(episode, fragment, budget, path=path, fragment=True)
                     groups.setdefault(fragment_record['key'], []).append(fragment_record)
+        grouping_completed = True
         eligible = [records for records in groups.values() if len({r['episode']['episode_id'] for r in records}) > 1]
         for index, records in enumerate(eligible):
             if index >= max_groups:
@@ -333,11 +335,15 @@ def consolidate_theories(episodes, *, allocation=None, candidate_id='induction')
         incomplete = True
     grouped_ids = {instance['episode_id'] for candidate in candidates for instance in candidate['instances']}
     for records in groups.values():
+        budget_unknown = incomplete and (not grouping_completed or
+            len({record['episode']['episode_id'] for record in records}) > 1)
         for record in records:
             if record['episode']['episode_id'] not in grouped_ids:
                 author_work.append({'episode_id': record['episode']['episode_id'],
                                     'source_ref': deepcopy(record['episode'].get('source_ref')),
-                                    'type': 'AuthorWorkRequest', 'reason': 'no_compatible_ordered_typed_peer'})
+                                    'type': 'AuthorWorkRequest',
+                                    **({'status': 'UNKNOWN', 'reason': 'induction_budget_exhausted'}
+                                       if budget_unknown else {'reason': 'no_compatible_ordered_typed_peer'})})
     return {'status': 'UNKNOWN' if incomplete else 'completed', 'candidates': candidates,
             'groups': [{'episode_ids': _unique(record['episode']['episode_id'] for record in records),
                         'kind': 'shared_subexpression' if records[0]['fragment'] else 'typed_program_family'}

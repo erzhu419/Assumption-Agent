@@ -5,6 +5,7 @@ method is disabled before consolidation, transfer, or selection is called.
 """
 from copy import deepcopy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +15,7 @@ from hegel_machine.cognition.models import Observation
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.question_routing import resolved_theories
 from test_inquiry_revision import PublicLab
-from test_question_routing import CONTEXT, ROLES, SQUARE, future_question, probe, route, theory, scene as measured_scene
+from test_question_routing import CONTEXT, ROLES, SQUARE, future_question, native_round, probe, route, theory, scene as measured_scene
 
 
 MISSION = {'purpose': 'theory_learning', 'theory_learning_allocation': {'compute': 20000}}
@@ -481,4 +482,209 @@ def test_refuted_numeric_program_can_be_revised_as_a_component_without_inheritin
     assert resolved['same_failed_numeric_alias']['compatible'] is False
     assert resolved['failed_component']['compatible'] is False
     assert resolved['revised_failed_component']['compatible'] is True
+    assert_no_new_science(agent, lab)
+
+
+def test_joint_revision_uses_actual_source_refs_parent_and_checked_target_counterexample(tmp_path):
+    from test_revision_relations import edit_sources
+    from hegel_machine.cognition.question_routing import register_theories
+    agent, lab = agent_scene(tmp_path)
+    records, declarations, references, examples = [], [], [], {}
+    for index, original in enumerate(edit_sources()):
+        identifier = f'edit_source_{index}'
+        reference = {'file': 'actual_edits.json', 'json_path': ['episodes', index], 'action_cutoff': 0}
+        records.append({'task_id': identifier, 'program': original['after_program'],
+            'actions': [{'action': 'revise', 'compute_cost': 2, 'details': {
+                'before_program': original['before_program'], 'after_program': original['after_program']}}],
+            'questions': [], 'status': 'source_failed_outside_local_scope'})
+        declarations.append(theory(identifier, Program.from_dict(original['after_program']),
+            context_ref={**deepcopy(CONTEXT), 'source_id': identifier}, context_family_ref='local_edits',
+            episode_ref={'question_id': identifier, 'meaning_version': 1},
+            program_source_ref={**reference, 'json_path': ['episodes', index, 'actions', 0, 'details', 'after_program']}))
+        references.append(reference)
+        examples[identifier] = original['counterexamples']
+    agent._save('actual_edits.json', json.dumps({'episodes': records}))
+    agent._save('paid_fixture.json', json.dumps([record['counterexamples'][0]['observation'] for record in edit_sources()]))
+    built = agent._execute('run', {'operator': 'theory_consolidation', 'theme': 'local_parent_revision',
+        'theories': declarations, 'source_theory_ids': [item['id'] for item in declarations],
+        'episode_sources': references, 'counterexamples': examples, 'mission': deepcopy(MISSION),
+        'allocation': {'compute': 10000}}, lab)
+    assert built['status'] == 'completed'
+    candidate = next(item for item in agent.theory_consolidation['candidates'].values()
+                     if item['kind'] == 'program_revision_relation')
+    assert all(item['before_exact'] and item['after_exact'] for item in candidate['source_reconstruction'])
+    assert all(item['source_cutoff'] == {'action_index_inclusive': 0} for item in candidate['source_outcomes'])
+    parent = Program('max', children=(Program('feature', name='u'), Program('const', value=0.)))
+    register_theories(agent, [theory('parent', parent), theory('one', Program('const', value=1.)),
+                              theory('two', Program('const', value=2.))])
+    old_parent = deepcopy(agent.theory_index['parent'])
+    row = {'features': {'u': 2.}, 'target': 3., 'history': []}
+    agent._save('target_counterexample.json', json.dumps(row))
+    arguments = {'operator': 'theory_transfer', 'candidate_id': candidate['id'],
+        'theory_id': 'new_revision', 'parent_theory_id': 'parent', 'component_theory_ids': ['one', 'two'],
+        'context_ref': deepcopy(CONTEXT), 'output_unit': 'V', 'allocation': {'compute': 2000},
+        'evidence_checks': [{'source_ref': {'file': 'target_counterexample.json', 'json_path': []},
+            'context_ref': deepcopy(CONTEXT), 'observation': row, 'tolerance': 0.}]}
+    before = agent.costs['compute_cost']
+    result = agent._execute('run', deepcopy(arguments), lab)
+    assert result['status'] == 'candidates_registered'
+    assert {item['status'] for item in result['generated_theories']} == {'candidate_registered', 'refuted'}
+    assert result['parent_binding']['fixed_holes'] == {'hole_0': []}
+    assert agent.costs['compute_cost'] - before == result['new_compute_cost']
+    assert agent.theory_index['parent'] == old_parent
+    failed = next(item for item in result['generated_theories'] if item['status'] == 'refuted')
+    assert failed['checks'][0]['actual'] == 3. and failed['checks'][0]['prediction'] == 4.
+    costs = deepcopy(agent.costs)
+    again = agent._execute('run', deepcopy(arguments), lab)
+    assert again['cache_hit'] and agent.costs == costs
+    routed = route(agent, lab, question=future_question(agent), experiments=[probe(agent)])
+    accepted = next(item['theory_id'] for item in result['generated_theories'] if item['status'] == 'candidate_registered')
+    assert accepted in {identifier for group in routed['selection']['groups'] for identifier in group['theory_ids']}
+    assert routed['parent_use']['status'] == 'parent_query_prepared'
+    assert routed['selection']['support_updated'] is False
+    outgoing = agent.result('researching')['outgoing_knowledge']
+    frozen_bytes = (agent.workspace / 'shared/theory_library.json').read_bytes()
+    restored = CommonArchiveInquiryAgent(None, tmp_path / 'consumer', arm='hegel', source_task=False,
+        knowledge=outgoing, config=agent.config)
+    installed = restored.theory_consolidation['candidates'][candidate['id']]
+    assert installed['kind'] == 'program_revision_relation'
+    assert all(item['before_ref']['file'] == str(agent.workspace / 'actual_edits.json')
+               for item in installed['source_bindings'])
+    assert (agent.workspace / 'shared/theory_library.json').read_bytes() == frozen_bytes
+    assert_no_new_science(agent, lab)
+
+
+def test_partial_relation_transfer_persists_and_resumes_its_round_robin_cursor(tmp_path):
+    from test_revision_relations import relation, component, binary, feature, constant
+    from hegel_machine.cognition.question_routing import register_theories
+    from hegel_machine.cognition.theory_consolidation import _save
+    agent, lab = agent_scene(tmp_path)
+    candidate = {**relation(), 'version': 1}
+    agent.theory_consolidation = {'candidates': {candidate['id']: candidate}}
+    _save(agent)
+    lag = Program('lag', name='u', lag=1)
+    components = [component('m0', lag), component('m1', binary('mul', constant(2), lag)),
+        component('m2', binary('add', lag, feature())), component('s0', feature()),
+        component('s1', constant(0)), component('s2', Program('abs', children=(feature(),)))]
+    register_theories(agent, [theory(item['id'], Program.from_dict(item['program'])) for item in components])
+    arguments = {'operator': 'theory_transfer', 'candidate_id': candidate['id'], 'theory_id': 'bounded_context',
+        'component_theory_ids': [item['id'] for item in components], 'output_unit': 'V',
+        'context_ref': deepcopy(CONTEXT), 'allocation': {'compute': 100},
+        'mission': {'mission_id': 'bounded_revision_application', 'purpose': 'theory_learning',
+                    'theory_learning_allocation': {'compute': 250}}}
+    first = agent._execute('run', deepcopy(arguments), lab)
+    stored = json.loads((agent.workspace / 'shared/theory_library.json').read_text())
+    assert stored['executions']['relation_transfer:bounded_context']['cursor'] == first['cursor']
+    before = agent.costs['compute_cost']
+    resumed = agent._execute('run', deepcopy(arguments), lab)
+    assert not resumed['cache_hit'] and resumed['cursor'] != first['cursor']
+    assert resumed['new_compute_cost'] == agent.costs['compute_cost'] - before <= 100
+    assert first['status'] == 'UNKNOWN' and first['budget_exhausted']
+    assert first['new_compute_cost'] <= 100
+    old_ids = {item['theory_id'] for item in first['generated_theories']}
+    new_ids = {item['theory_id'] for item in resumed['generated_theories']}
+    assert old_ids.isdisjoint(new_ids) and old_ids | new_ids <= set(agent.theory_index)
+    assert agent.research_mission['resource_usage']['compute'] == first['new_compute_cost'] + resumed['new_compute_cost']
+    previous = agent.result('researching')
+    restored = CommonArchiveInquiryAgent(None, tmp_path / 'restored_cursor', arm='hegel',
+        source_task=False, config=agent.config)
+    lab.costs = {'observation_cost': 0}
+    restored.restore_practice_research(previous, agent.workspace, lab, confirmation_seed=17)
+    assert restored.theory_consolidation['executions']['relation_transfer:bounded_context']['cursor'] == resumed['cursor']
+    final = restored._execute('run', deepcopy(arguments), lab)
+    assert restored.research_mission['resource_usage']['compute'] == (
+        first['new_compute_cost'] + resumed['new_compute_cost'] + final['new_compute_cost']) <= 250
+    assert_no_new_science(agent, lab)
+
+
+def test_retained_t02_t03_keep_the_old_context_without_an_observed_parent_link(monkeypatch):
+    from hegel_machine.cognition.revision_relations import consolidate_revision_relations
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / 'scripts'))
+    from replay_cross_skeleton_relations import POINTER, load_source, source_declarations, source_ref
+    if not POINTER.is_file() or not Path(json.loads(POINTER.read_text())['archive']).is_file():
+        pytest.skip('The retained historical archive is not mounted')
+    payload, source = load_source(POINTER)  # One existing 1.7MB member, never materialized.
+    revisions = []
+    for declaration, (index, action) in zip(source_declarations(payload, source), ((1, 18), (2, 34))):
+        details = payload['episodes'][index]['actions'][action]['details']
+        revisions.append({'episode_id': payload['episodes'][index]['task_id'],
+            'source_id': declaration['context_ref']['episode'],
+            'before_program': details['before_program'], 'after_program': details['after_program'],
+            'before_ref': source_ref(source, f'episodes[{index}].actions[{action}].details.before_program'),
+            'after_ref': declaration['program_source_ref'],
+            **{key: declaration[key] for key in ('role_signature', 'output_unit', 'context_ref', 'context_family_ref')}})
+    result = consolidate_revision_relations(revisions, allocation={'compute': 3000})
+    assert result['status'] == 'completed' and not result['budget_exhausted']
+    assert 0 < result['actual_compute_cost'] <= 3000
+    assert [item['kind'] for item in result['candidates']] == ['program_context_relation']
+    assert any(item['reason'] == 'no_shared_parent_subprogram_in_revision' for item in result['excluded'])
+    assert all(item['exact'] for item in result['candidates'][0]['source_reconstruction'])
+
+
+def test_joint_revision_consumes_unregistered_fits_only_from_the_native_parent_bank(tmp_path):
+    from test_revision_relations import edit_candidate
+    from hegel_machine.cognition.question_routing import register_theories
+    from hegel_machine.cognition.theory_consolidation import _save
+    agent, lab = agent_scene(tmp_path)
+    candidate = {**edit_candidate(), 'version': 1}
+    agent.theory_consolidation = {'candidates': {candidate['id']: candidate}}
+    _save(agent)
+    parent = Program('max', children=(Program('feature', name='u'), Program('const', value=0.)))
+    retained_round = native_round(parent)
+    retained_round['candidates'] = [
+        {'program': parent.to_dict(), 'status': 'refuted', 'fit_mse': 1.},
+        {'program': Program('const', value=1.).to_dict(), 'fit_mse': 0.}]
+    later_round = native_round(Program('const', value=99.))
+    later_round['round_index'] = 1
+    agent._open_question({'id': 'native_fit', 'question': 'Retained fitted alternatives on this apparatus.',
+        'parent_id': 'task', 'depends_on': [], 'context_ref': deepcopy(CONTEXT),
+        'native_condition_research': [retained_round, later_round]})
+    declaration = theory('native_parent', parent, source_ref={'kind': 'native_candidate',
+        'question_id': 'native_fit', 'meaning_version': 1, 'round_index': 0, 'candidate_index': 0})
+    declaration.pop('program')
+    register_theories(agent, [declaration])
+    assert len(agent.theory_index) == 1
+    arguments = {'operator': 'theory_transfer', 'candidate_id': candidate['id'], 'theory_id': 'native_revised',
+        'parent_theory_id': 'native_parent', 'context_ref': deepcopy(CONTEXT), 'output_unit': 'V',
+        'allocation': {'compute': 1000}, 'evidence_checks': [{'source_ref': {'file': 'paid_target.json', 'json_path': [0]},
+            'context_ref': deepcopy(CONTEXT), 'observation': {'features': {'u': 2.}, 'target': 3., 'history': []},
+            'tolerance': 0.}]}
+    original_parent = deepcopy(agent.theory_index['native_parent'])
+    applied = agent._execute('run', arguments, lab)
+    assert applied['status'] == 'candidates_registered'
+    imported, = applied['retained_native_component_ids']
+    assert 'round0:candidate1' in imported and 'program' not in agent.theory_index[imported]
+    assert agent.theory_index[imported]['source_ref']['round_index'] == 0
+    assert agent.theory_index[imported]['support'] == {'status': 'candidate', 'evidence': []}
+    assert agent.theory_index['native_parent'] == original_parent
+    produced, = applied['generated_theories']
+    assert produced['checks'][0]['prediction'] == produced['checks'][0]['actual'] == 3.
+    assert produced['parent_binding']['component_id'] == 'native_parent'
+    assert_no_new_science(agent, lab)
+
+
+def test_automatic_revision_recall_preserves_the_missing_open_hole_author_request(tmp_path):
+    from test_revision_relations import edit_candidate, edit_sources
+    from hegel_machine.cognition.theory_consolidation import _save
+    agent, lab = agent_scene(tmp_path)
+    retained = edit_sources()
+    for index, source in enumerate(retained):
+        before = Program.from_dict(source['before_program'])
+        after = Program('mul', children=(before, Program('const', value=float(index + 1))))
+        source['after_program'] = after.to_dict()
+        source['counterexamples'][0]['observation']['target'] = after.predict(Observation({'u': 2.}, 0.))
+    frozen = {**edit_candidate(retained), 'version': 1}
+    agent.theory_consolidation = {'candidates': {frozen['id']: frozen}}
+    _save(agent)
+    parent = Program('max', children=(Program('feature', name='u'), Program('const', value=0.)))
+    question = future_question(agent)
+    question['theory_target'].update(parent_theory_id='parent', evidence_checks=[{
+        'source_ref': {'file': 'paid_target.json', 'json_path': [0]}, 'context_ref': deepcopy(CONTEXT),
+        'observation': {'features': {'u': 2.}, 'target': 3., 'history': []}, 'tolerance': 0.}])
+    result = route(agent, lab, question=question, theories=[theory('parent', parent)], experiments=[probe(agent)])
+    request, = result['frozen_recall']['author_work']
+    assert request == {'candidate_id': frozen['id'], 'type': 'AuthorWorkRequest',
+        'reason': 'typed_open_hole_components_or_fitting_contract_required'}
+    assert result['frozen_recall']['work'][0]['reason'] == request['reason']
+    assert not result['frozen_recall']['generated_theory_ids']
     assert_no_new_science(agent, lab)

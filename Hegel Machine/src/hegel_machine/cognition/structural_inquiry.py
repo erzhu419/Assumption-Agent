@@ -75,6 +75,11 @@ There is no top-level model_path. proposed_experiments items contain query_actio
 Candidate programs and selection decisions remain inline; complete research
 recipes are retained once in the question's native_condition_research rounds.
 Their full_content_file/json_path references identify the saved recipe.
+An explicit question.theory_target {role_signature:{coordinate:{role,unit,time}},
+output_unit,context_ref} also registers each typed candidate for the existing
+theory routes. native_theory_registration returns its exact source reference.
+Missing contracts return AuthorWorkRequest there; the executable native bank and
+ordinary evaluate_action remain available. A local fit does not confer support.
 This state records outcomes; your program still chooses its next action.
 """
 
@@ -450,6 +455,70 @@ def native_condition_summary(entry, question_index):
     return summary
 
 
+def _register_native_theories(agent, question, question_index, round_index):
+    """Index actual bank cells under the author's typed contract, without copying them."""
+    from .question_routing import register_theories
+
+    entry = question['native_condition_research'][round_index]
+    base = ['questions', question_index, 'native_condition_research', round_index]
+    target = question.get('theory_target') or {}
+    roles = target.get('role_signature')
+    roles = roles if isinstance(roles, dict) else {}
+    registered, missing = [], []
+    for index, candidate in enumerate(entry['candidates']):
+        program = Program.from_dict(candidate['program'])
+        features = sorted({name for name, _ in program.observed_variables()})
+        required = [key for key in ('output_unit', 'context_ref') if target.get(key) is None]
+        for name in features:
+            contract = roles.get(name)
+            for key in ('role', 'unit', 'time'):
+                if not isinstance(contract, dict) or contract.get(key) is None:
+                    required.append(f'role_signature.{name}.{key}')
+        source = {'kind': 'native_candidate', 'question_id': question['id'],
+            'meaning_version': question.get('meaning_version', 1),
+            'round_index': round_index, 'candidate_index': index}
+        program_ref = {'file': 'research_state.json',
+                       'json_path': [*base, 'candidates', index, 'program']}
+        if required:
+            missing.append({'source_ref': source, 'required': required})
+            continue
+        identifier = (f'native:{question["id"]}@meaning{source["meaning_version"]}'
+                      f':round{round_index}:candidate{index}')
+        declaration = {'id': identifier, 'source_ref': source,
+            'program_source_ref': program_ref,
+            'role_signature': {name: deepcopy(roles[name]) for name in features},
+            'output_unit': deepcopy(target['output_unit']),
+            'context_ref': deepcopy(target['context_ref']),
+            'support': {'status': 'candidate', 'independent_confirmation': False}}
+        for key in ('context_family_ref', 'declared_scope_ref', 'measured_coverage_ref'):
+            if key in target:
+                declaration[key] = deepcopy(target[key])
+        if 'parameter_paths' in candidate:
+            declaration['parameter_paths'] = deepcopy(candidate['parameter_paths'])
+        for key in ('failure_refs', 'counterexample_refs'):
+            if candidate.get(key):
+                declaration[key] = deepcopy(candidate[key])
+        if candidate.get('status') == 'refuted':
+            declaration['support']['status'] = 'refuted'
+        register_theories(agent, [declaration])
+        registered.append({'theory_id': identifier,
+            'version': agent.theory_index[identifier]['version'],
+            'source_ref': deepcopy(source), 'program_source_ref': program_ref})
+    result = {'status': ('partially_registered' if registered and missing else
+                        'author_work_request' if missing else
+                        'registered' if registered else 'no_candidates'),
+        'registered': registered, 'new_compute_cost': 0, 'support_updated': False}
+    if missing:
+        result['author_work_request'] = {'type': 'AuthorWorkRequest',
+            'status': 'author_work_request', 'object_type': 'native_theory_contract',
+            'question_id': question['id'],
+            'meaning_version': question.get('meaning_version', 1),
+            'reason': 'typed_native_candidate_contract_required',
+            'required_contract': {'question_field': 'theory_target', 'candidates': missing},
+            'source_ref': {'file': 'research_state.json', 'json_path': base}}
+    return result
+
+
 def execute_native_condition_research(agent, arguments, laboratory, question):
     """Run the existing finite scientific inner loop on this question's paid data."""
     if question is None:
@@ -586,9 +655,13 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
     result['round_index'] = len(rounds)
     result['exported_models'] = models
     rounds.append(deepcopy(result))
+    registration = _register_native_theories(agent, question, index, result['round_index'])
+    result['native_theory_registration'] = registration
+    rounds[-1]['native_theory_registration'] = deepcopy(registration)
     answer = {'operator': 'native_condition_research', 'status': 'inconclusive',
         'answer': {'status': result['status'], 'finite_prior': result['finite_prior'],
                    'models': deepcopy(models), 'matched_evidence': deepcopy(result['evidence']),
+                   'native_theory_registration': deepcopy(registration),
                    **{key: deepcopy(result[key]) for key in
                       ('research_decision', 'remaining_boundary', 'search_stages',
                        'compute_continuation', 'search_allowance_estimate') if key in result}},
@@ -597,5 +670,6 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
     agent._return_structural_answer(question, answer)
     return {'operator': 'native_condition_research', 'status': result['status'],
             'research_question_id': question['id'],
+            'native_theory_registration': registration,
             'native_condition_research': native_condition_summary(result, index),
             'returned_answer': answer}

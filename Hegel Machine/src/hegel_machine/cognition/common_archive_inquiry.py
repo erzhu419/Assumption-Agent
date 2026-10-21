@@ -1301,6 +1301,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                     "arguments": native_arguments, **result})
                 self._prepare_program_state()
                 raise
+            if question is not None:
+                result['question_meaning_version'] = question.get('meaning_version', 1)
             self.operator_results.append({"index": len(self.operator_results),
                 "arguments": native_arguments, **deepcopy(result)})
             self._prepare_program_state()

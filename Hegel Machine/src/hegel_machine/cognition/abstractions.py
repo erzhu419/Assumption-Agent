@@ -35,7 +35,7 @@ def _bind_constants(program: Program, bindings: dict[tuple[int, ...], float],
         return Program("const", value=float(bindings[path]))
     return Program(program.op, program.value, program.name, program.lag,
                    tuple(_bind_constants(child, bindings, path + (index,))
-                         for index, child in enumerate(program.children)))
+                         for index, child in enumerate(program.children)), program.definition)
 
 
 def _parameter_degree(program: Program) -> int:
@@ -49,6 +49,32 @@ def _parameter_degree(program: Program) -> int:
     if program.op == "mul":
         return sum(degrees)
     return 2 if any(degrees) else 0
+
+
+def _slot_degree(program: Program, parameter_paths) -> int:
+    """Dependence on selected constants, including lexical call arguments."""
+    selected = set(parameter_paths)
+
+    def degree(node, path=(), arguments=None):
+        if path is not None and path in selected:
+            return 1
+        if node.op == 'arg':
+            return (arguments or {}).get(node.name, 0)
+        children = [degree(child, None if path is None else (*path, index), arguments)
+                    for index, child in enumerate(node.children)]
+        if node.op == 'call':
+            return degree(node.definition.body, None, dict(zip(node.definition.arguments, children)))
+        if not any(children):
+            return 0
+        if node.op in {'add', 'sub'}:
+            return max(children)
+        if node.op == 'mul':
+            return sum(children)
+        if node.op == 'if' and children[0] == 0:
+            return max(children[1:])
+        return 2
+
+    return degree(program)
 
 
 @dataclass
@@ -266,23 +292,21 @@ def screen_template(template: AbstractTemplate, mapping: dict[str, str],
             "history_depth": program.history_depth, "fallback": fallback}
 
 
-def fit_template(template: AbstractTemplate, mapping: dict[str, str],
-                 observations: Sequence[Observation], budget: SearchBudget,
-                 risk_quantile: float = 0.5, *, report: dict[str, Any] | None = None) -> list[Program]:
-    """Fit constant slots and optional output calibration using only given rows.
-
-    Basis evaluations and every threshold/parameter trial consume candidate ×
-    row units, including trials that are discarded. No label outside this call
-    participates in fitting or parameter selection.
-    """
-    initial = template.instantiate(mapping)
-    variables = initial.observed_variables()
-    rows = [row for row in observations
-            if len(row.history) >= initial.minimum_history_depth
+def eligible_fitting_rows(program: Program, observations: Sequence[Observation]) -> list[Observation]:
+    """The existing complete-Program fitting domain, before any scoring."""
+    variables = program.observed_variables()
+    return [row for row in observations
+            if len(row.history) >= program.minimum_history_depth
             and all(lag > len(row.history) or name in (row.features if lag == 0 else row.history[-lag])
                     for name, lag in variables)]
+
+
+def _fit_slots(template, mapping, observations, budget, risk_quantile, *, report,
+               parameter_degree, calibrate):
+    initial = template.instantiate(mapping)
+    rows = eligible_fitting_rows(initial, observations)
     if not rows:
-        return []
+        return [], False, rows
     count = len(rows)
     programs: list[Program] = []
     measured_losses: dict[Program, float] = {}
@@ -300,11 +324,11 @@ def fit_template(template: AbstractTemplate, mapping: dict[str, str],
 
     best_loss = evaluate(initial)
     if best_loss is None:
-        return []
+        return [], False, rows
     programs.append(initial)
     best = initial
     parameters = list(template.parameters)
-    if parameters and _parameter_degree(template.pattern) <= 1 and budget.remaining >= (len(parameters) + 2) * count:
+    if parameters and parameter_degree <= 1 and budget.remaining >= (len(parameters) + 2) * count:
         base = template.instantiate(mapping, [0.0] * len(parameters))
         budget.spend(count)
         base_values = [base.predict(row) for row in rows]
@@ -342,7 +366,7 @@ def fit_template(template: AbstractTemplate, mapping: dict[str, str],
                         operand_rows = [row for row in rows
                                         if len(row.history) >= other.minimum_history_depth]
                         if not budget.spend(len(operand_rows)):
-                            return programs
+                            return programs, False, rows
                         ordered = sorted({other.predict(row) for row in operand_rows})
                         midpoints = [(left + right) / 2 for left, right in zip(ordered, ordered[1:])]
                         if len(midpoints) > 9:
@@ -354,7 +378,7 @@ def fit_template(template: AbstractTemplate, mapping: dict[str, str],
                     trial = template.instantiate(mapping, trial_parameters)
                     trial_loss = evaluate(trial)
                     if trial_loss is None:
-                        return programs
+                        return programs, False, rows
                     if trial_loss < best_loss:
                         best, best_loss, parameters = trial, trial_loss, trial_parameters
                         programs.append(best)
@@ -362,6 +386,8 @@ def fit_template(template: AbstractTemplate, mapping: dict[str, str],
             if not improved:
                 break
 
+    if not calibrate:
+        return programs, True, rows
     # A reusable nonlinear subexpression becomes an observed coordinate in an
     # ordinary new model. Its coefficients are refitted instead of copying old
     # predictions. Also permits a changed offset around a learned full theory.
@@ -375,4 +401,51 @@ def fit_template(template: AbstractTemplate, mapping: dict[str, str],
         combined = _fit_linear([*current, best], rows)
         if evaluate(combined) is not None and combined not in programs:
             programs.append(combined)
+    return programs, True, rows
+
+
+def fit_parameter_slots(template: AbstractTemplate, mapping: dict[str, str],
+                        observations: Sequence[Observation], budget: SearchBudget,
+                        q: float = 0.5, *, report: dict[str, Any] | None = None) -> list[Program]:
+    """Fit only declared const slots against the complete Program's targets.
+
+    Lexical Definition arguments keep repeated holes shared. Constants outside
+    ``parameter_paths`` and all operators/history offsets stay fixed. Linear
+    selected parameters use the existing basis solve; nonlinear dependence uses
+    the existing finite coordinate trials, with no global optimum claim. No
+    output calibration or extra current-feature model is appended.
+    """
+    for path in template.parameter_paths:
+        if _at(template.pattern, path).op != 'const':
+            raise ValueError('parameter_paths must select actual const slots')
+    started = budget.spent
+    local_report = report if report is not None else {}
+    local_report['losses'] = {}
+    local_report.pop('reason', None)
+    programs, completed, rows = _fit_slots(template, mapping, observations, budget, q,
+        report=local_report, parameter_degree=_slot_degree(template.pattern, template.parameter_paths),
+        calibrate=False)
+    local_report.update(status='completed' if completed else 'UNKNOWN',
+        search_completed=completed, budget_exhausted=not completed and bool(rows),
+        actual_fitted_rows=len(rows) if programs else 0, eligible_fitting_rows=len(rows),
+        actual_compute_cost=budget.spent - started,
+        parameter_scope='declared_const_slots_only', global_optimum_established=False,
+        scientific_support=False)
+    if not rows:
+        local_report['reason'] = 'no_executable_fitting_rows'
+    elif not completed:
+        local_report['reason'] = 'parameter_fitting_budget_exhausted'
     return programs
+
+
+def fit_template(template: AbstractTemplate, mapping: dict[str, str],
+                 observations: Sequence[Observation], budget: SearchBudget,
+                 risk_quantile: float = 0.5, *, report: dict[str, Any] | None = None) -> list[Program]:
+    """Fit constant slots and optional output calibration using only given rows.
+
+    Basis evaluations and every threshold/parameter trial consume candidate ×
+    row units, including trials that are discarded. No label outside this call
+    participates in fitting or parameter selection.
+    """
+    return _fit_slots(template, mapping, observations, budget, risk_quantile,
+        report=report, parameter_degree=_parameter_degree(template.pattern), calibrate=True)[0]
