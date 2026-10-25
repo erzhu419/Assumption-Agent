@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_text_incrementally
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine.cognition.code_agent import CodeAgentConfig, CodexCodeProvider
@@ -40,14 +42,16 @@ def main():
         session = CodeComparisonSession(WORKSPACE, state=state,
             provider_factory=lambda path: CodexCodeProvider(path, timeout_seconds=180))
         if args.phase == "second" and len(session.code.state["tasks"]) == 4:
-            with (ROOT / "artifacts/code_session_v026_first_four_20260909.json").open("x") as stream:
-                json.dump(state, stream, ensure_ascii=False, indent=2)
+            prior = ROOT / "artifacts/code_session_v026_first_four_20260909.json"
+            if prior.exists():
+                raise FileExistsError(prior)
+            write_text_incrementally(prior, json.dumps(state, ensure_ascii=False, indent=2), base=CHECKPOINT)
             for task in TASKS[4:]:
                 session.add_task(**task)
 
     def checkpoint(state=None):
         payload = state or session.to_dict()
-        CHECKPOINT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+        write_text_incrementally(CHECKPOINT, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
         code = payload["code"]
         active = code["active"]
         print(json.dumps({"phase": args.phase, "completed": len(code["results"]),

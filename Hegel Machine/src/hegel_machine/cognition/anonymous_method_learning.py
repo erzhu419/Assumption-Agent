@@ -9,6 +9,7 @@ from pathlib import Path
 from .common_archive_inquiry import (
     CommonArchiveInquiryAgent, ONLINE_RESEARCH_INTERFACE, _REFIT_INTERFACE,
 )
+from .checkpoint_storage import checkpoint_file_text, read_json_checkpoint, write_text_incrementally
 from .inquiry_revision import REVISION_INTERFACE
 from .observable_research import OBSERVABLE_INTERFACE
 from .conditional_research import CONDITIONAL_INTERFACE
@@ -27,9 +28,13 @@ def compact_workspace_result(agent, result):
     # Practice evidence remains in its workspace. Its outgoing history is
     # a view of the complete restorable questions, not another bank copy.
     inherited = len(agent.knowledge.get("question_traces", []))
-    traces = result["outgoing_knowledge"]["question_traces"]
+    # Checkpoints borrow the live question records. Detach only the containers
+    # whose native-bank field is replaced, retaining the large bank by reference.
+    traces = list(result["outgoing_knowledge"]["question_traces"])
+    result["outgoing_knowledge"]["question_traces"] = traces
+    result["online_questions"] = list(result["online_questions"])
     state_path = agent.workspace / "research_state.json"
-    saved_questions = (json.loads(state_path.read_text())["questions"]
+    saved_questions = (read_json_checkpoint(state_path, keys={"questions"})["questions"]
         if state_path.is_file() and any("native_condition_research" in question
             for question in agent.questions) else [])
     for index, question in enumerate(agent.questions):
@@ -42,12 +47,14 @@ def compact_workspace_result(agent, result):
                 "json_path": ["questions", index, "native_condition_research"],
                 "round_count": len(question["native_condition_research"]),
             }
-            traces[inherited + index]["native_condition_research"] = deepcopy(reference)
-            result["online_questions"][index]["native_condition_research"] = reference
+            traces[inherited + index] = {**traces[inherited + index],
+                "native_condition_research": deepcopy(reference)}
+            result["online_questions"][index] = {**result["online_questions"][index],
+                "native_condition_research": reference}
     result["inherited_files_changed"] = sorted(
         name for name in agent.inherited_files
         if (agent.workspace / name).is_file()
-        and (agent.workspace / name).read_text(encoding="utf-8") != agent.knowledge["files"][name])
+        and checkpoint_file_text(agent, agent.workspace / name) != agent.knowledge["files"][name])
     result["knowledge_protocol"] = "method_practice_workspace"
     return result
 
@@ -487,8 +494,9 @@ class SourceProcedureRepairLearner(AnonymousResearchMethodLearner):
                 'Current files and scores are in working_directory, not the author directory. '
                 'The training checkpoint contains every paid observation; successful confirmation '
                 'labels stay outside the predictor fitting files.'}
-        self.files['scene_source.json'] = json.dumps(current, indent=2)
-        (self.workspace / 'scene_source.json').write_text(self.files['scene_source.json'])
+        content = json.dumps(current, indent=2)
+        write_text_incrementally(self.workspace / 'scene_source.json', content)
+        self.files['scene_source.json'] = content
 
     def _request(self, laboratory):
         request = super()._request(laboratory)

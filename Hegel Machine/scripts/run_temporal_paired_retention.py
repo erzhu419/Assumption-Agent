@@ -118,6 +118,7 @@ def run_study(learned_result, output, *, provider_factory, auth_mode=None, worke
         plan["provider"]["auth_mode"] = auth_mode
     write_json(output / "protocol.json", plan)
     for name in ("scripts/run_temporal_paired_retention.py", "scripts/run_temporal_paired_method.py",
+                 "src/hegel_machine/cognition/checkpoint_storage.py",
                  "src/hegel_machine/cognition/temporal_paired_method.py",
                  "src/hegel_machine/cognition/temporal_method_learning.py",
                  "src/hegel_machine/cognition/temporal_operator_agent.py",

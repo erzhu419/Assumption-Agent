@@ -80,7 +80,7 @@ def bind_retained_native_parent(agent, question):
         reason = 'retained_native_export_unavailable'
         original = Path(export_ref['file']).read_bytes()
         imported = (agent.workspace / selected).read_bytes()
-        snapshot = (agent.workspace / retained['model']).read_bytes()
+        snapshot = (agent.workspace / agent._evaluated_summary()['model']).read_bytes()
         if original != imported or imported != snapshot:
             return request('retained_native_export_bytes_changed', catalog_ref=mapping_ref)
         if original != export_temporal_program(program, feature_names=tuple(roles)).encode('utf-8'):

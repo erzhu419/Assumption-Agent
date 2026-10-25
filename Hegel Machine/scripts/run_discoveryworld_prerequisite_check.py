@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from hegel_machine.cognition.code_agent import CodexCodeProvider
+from hegel_machine.cognition.code_agent import _copy_model_file, CodexCodeProvider
 from hegel_machine.cognition.discoveryworld_agent import DiscoveryWorldAgent
 from hegel_machine.cognition.discoveryworld_lab import DiscoveryWorldLab
 from scripts.run_discoveryworld_pilot import failed_result, summarize, write_json
@@ -151,7 +151,7 @@ def freeze_prefix(source, destination, *, prefix_calls=None):
         if prefix_calls is not None and name in authored:
             target.write_text(authored[name], encoding="utf-8")
         else:
-            shutil.copyfile(path, target)
+            _copy_model_file(path, target)
     prefix["copied_files"] = sorted(str(path.relative_to(files)) for path in files.rglob("*") if path.is_file())
     prefix["registered_files"] = sorted(registered)
     write_json(destination / "prefix.json", prefix)
@@ -179,7 +179,7 @@ def continue_arm(plan, arm, output):
     workspace = output / task["id"] / arm
     workspace.mkdir(parents=True)
     agent_workspace = workspace / "agent"
-    shutil.copytree(output / "prefix_files", agent_workspace)
+    shutil.copytree(output / "prefix_files", agent_workspace, copy_function=_copy_model_file)
     write_json(workspace / "active.json", {"task_id": task["id"], "arm": arm, "status": "replaying_prefix"})
     replay_matched = False
     try:

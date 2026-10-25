@@ -20,6 +20,8 @@ import traceback
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 OUTPUT = ROOT / "artifacts/mixed_research_investment_20260920"
 BASELINE = "artifacts/relation_kernel_composition_20260920/runtime/src"
 ARMS = ("baseline_v0106", "research_investment", "task_reset")
@@ -29,10 +31,7 @@ COSTS = ("observation_cost", "measurement_cost", "compute_cost")
 
 
 def save(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
-    temporary.replace(path)
+    write_json_checkpoint(path, payload, indent=None, ensure_ascii=False, allow_nan=True, separators=(',', ':'))
 
 
 def checkpoint(output, cohort, family, arm, seed):

@@ -29,7 +29,7 @@ from hegel_machine.cognition.online_inquiry_llm import (
 from hegel_machine.cognition.responses_code_provider import ResponsesCodeProvider
 from hegel_machine.cognition.chat_completions_code_provider import ChatCompletionsCodeProvider
 from hegel_machine.cognition.code_agent import CodexCodeProvider
-from hegel_machine.cognition.checkpoint_storage import write_chunks_incrementally
+from hegel_machine.cognition.checkpoint_storage import write_json_checkpoint as write_json
 from scripts.run_online_inquiry_study import cohort_protocol, make_lab
 
 
@@ -48,19 +48,6 @@ def load_provider_environment(path, *, base_url=None, env_key="RUOLI_GPT_KEY"):
     if not urlsplit(base).path:
         base += "/v1"
     return base
-
-
-def write_json(path, value):
-    path = Path(path)
-    bulk_export = path.name in {'active.json', 'training.json', 'result.json'}
-    encoder = json.JSONEncoder(indent=None if bulk_export else 2,
-        separators=(',', ':') if bulk_export else None, allow_nan=False)
-
-    def chunks():
-        yield from encoder.iterencode(value)
-        yield '\n'
-
-    write_chunks_incrementally(path, chunks())
 
 
 def final_checkpoint_alias(final_path, checkpoint_path):

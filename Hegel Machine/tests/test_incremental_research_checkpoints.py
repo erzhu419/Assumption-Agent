@@ -19,14 +19,14 @@ def test_restoration_seeds_state_but_does_not_publish_a_stale_result(
     original_result = (old.workspace / result_name).read_bytes()
     continued = agent_at(tmp_path / 'continued')
     writes = []
-    write = online_inquiry_llm.write_text_incrementally
+    write = online_inquiry_llm.write_json_checkpoint
 
-    def record_previous_state(path, text):
+    def record_previous_state(path, text, **kwargs):
         if path == continued.workspace / 'research_state.json':
             writes.append(path.read_bytes())
-        return write(path, text)
+        return write(path, text, **kwargs)
 
-    monkeypatch.setattr(online_inquiry_llm, 'write_text_incrementally', record_previous_state)
+    monkeypatch.setattr(online_inquiry_llm, 'write_json_checkpoint', record_previous_state)
     target = TemporalInquiryLab(task_index=1)
     monkeypatch.setattr(target, 'execute', lambda *_args, **_kwargs:
                         pytest.fail('restoring paid evidence must not purchase it again'))

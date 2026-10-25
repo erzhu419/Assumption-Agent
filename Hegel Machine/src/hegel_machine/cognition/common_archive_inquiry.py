@@ -14,6 +14,9 @@ import re
 import shutil
 
 from .online_inquiry_llm import COMMON_INTERFACE, open_assigned_question
+from .checkpoint_storage import (
+    write_text_incrementally, retain_checkpoint_sources, read_json_checkpoint,
+)
 from .question_continuation import QUESTION_INTERFACE, step_question, pending_query_arguments
 from .question_routing import ROUTING_INTERFACE, route_research, continue_conditional_plan
 from .theory_consolidation import (
@@ -42,7 +45,10 @@ from .evidence_readout_proposal import (
 from .anonymous_history_lab import AnonymousHistoryLab
 from .code_agent import (
     _archived_paid_trace, _bound_model_contexts, _copy_execution_context, _copy_model_file,
-    _model_context_ignored, python_model_context,
+    _model_context_ignored, python_model_context, literal_python_model_context_matches,
+)
+from .paid_score_history import (
+    restore_score_history_value, retain_event_history, restore_comparison_history,
 )
 from .code_provider_context import _saved_context_reference, load_code_context
 from .temporal_operator_agent import OPERATOR_INTERFACE
@@ -223,6 +229,238 @@ online_research.latest_comparison summarizes the most recent comparison.
 """
 
 
+def record_revision_comparison_failures(agent, question, comparison, *, source_ref,
+                                      comparison_question=None):
+    """Consume complete paid failures of exact exported revision instances.
+
+    The ordinary comparison has already executed. Its retained assessment owns
+    the actual Python context, ordered paid rows and residuals. No Program is
+    predicted or fitted here, and rejected drafts do not become adopted source
+    revisions. Existing incomplete point checks remain incomplete.
+    """
+    from dataclasses import asdict
+    from .language import Program
+    from .research_episodes import SEMANTIC_FIELDS, _child_ref, load_source_values, resolve_program_sources
+    from .temporal_operator_agent import export_temporal_program
+    from .theory_consolidation import (
+        _absolute_reference, _anchor_file_references, _reference_workspace,
+        library_entry_reference,
+    )
+
+    result = {'status': 'completed', 'new_refutation_count': 0, 'new_failure_record_count': 0,
+              'already_refuted_count': 0, 'already_recorded_count': 0,
+              'unknown': [], 'failure_refs': [], 'new_predictions': 0, 'new_fits': 0,
+              'support_updated': False, 'independent_confirmation': False}
+    exports = question.get('revision_candidate_exports', [])
+    if comparison.get('operator') != 'research_choice' or not exports:
+        return result
+    n = len(agent.rows)
+    documents, locations, resolved_check_bases = {}, {}, []
+    rows = json.loads(json.dumps([asdict(row) for row in agent.rows]))
+    consumer = question if comparison_question is None else comparison_question
+    expected_question = json.loads(json.dumps({key: consumer[key] for key in
+        ('id', 'meaning_version', *SEMANTIC_FIELDS) if key in consumer}))
+    target = question.get('theory_target', {})
+
+    def load(reference):
+        reference = _absolute_reference(reference, agent.workspace)
+        filename = reference['file']
+        if filename not in documents:
+            documents[filename] = load_source_values([
+                {**reference, 'json_path': []}], agent.workspace)[0]['value']
+        value = documents[filename]
+        for part in reference.get('json_path', []):
+            value = value[part]
+        return value
+
+    for index, evaluation in enumerate(comparison.get('evaluations', [])):
+        exported = [item for item in exports if item['model'] == evaluation.get('path')]
+        if not exported:
+            continue
+        # Saved assessments use the evaluator's JSON transport: an in-memory
+        # tuple history and its saved list are the same ordered paid input.
+        identity = exported[0]['theory_ref']
+        try:
+            evaluation = json.loads(json.dumps(restore_score_history_value(evaluation, load)))
+            if len(exported) != 1:
+                raise ValueError('unique_revision_export_required')
+            theory = agent.theory_index.get(identity['id'], {})
+            if (theory.get('version') != identity['version'] or not theory.get('program')
+                    or exported[0].get('program_source_ref', {}).get('version') != identity['version']):
+                raise ValueError('exact_exported_Program_version_required')
+            if (theory.get('context_ref') != target.get('context_ref')
+                    or theory.get('output_unit') != target.get('output_unit')
+                    or any(target.get('role_signature', {}).get(name) != contract
+                           for name, contract in theory.get('role_signature', {}).items())):
+                raise ValueError('same_revision_target_contract_required')
+            mse = evaluation.get('mse')
+            if (evaluation.get('returncode') != 0 or evaluation.get('truncated')
+                    or evaluation.get('loss_kind') != 'mse' or evaluation.get('risk_quantile') != .5
+                    or type(mse) not in (int, float) or not isfinite(mse)
+                    or evaluation.get('paid_residuals', {}).get('evaluated_rows') != n
+                    or comparison.get('paid_rows') != n):
+                raise ValueError('complete_paid_mse_execution_required')
+            execution_ref = evaluation.get('paid_score_reuse', {}).get('execution_basis_ref')
+            if not execution_ref:
+                raise ValueError('retained_paid_execution_reference_required')
+            assessment = load(execution_ref)
+            basis = load(assessment['scope_ref'])
+            model = exported[0]['model']
+            context = assessment['execution_context']
+            reuse = evaluation.get('paid_score_reuse', {})
+            alias = (assessment['model'] != model
+                and reuse.get('status') == 'reused'
+                and reuse.get('match_basis') == 'identical_closed_literal_execution'
+                and reuse.get('matched_model') == assessment['model']
+                and literal_python_model_context_matches(
+                    agent.workspace, model, context['workspace'], context['model']))
+            if (assessment['model'] != model and not alias) or basis['rows'] != rows:
+                raise ValueError('exact_current_paid_assessment_scope_required')
+            if basis['question'] != expected_question:
+                raise ValueError('exact_paid_assessment_question_meaning_required')
+            original = assessment['result']
+            if alias and 'paid_residuals' in original:
+                original = {**original, 'paid_residuals': {**original['paid_residuals'], 'model': model}}
+            differences = [key for key in ('returncode', 'mse', 'loss_kind', 'risk_quantile', 'paid_residuals')
+                           if original.get(key) != evaluation.get(key)]
+            if differences:
+                raise ValueError('exact_retained_paid_assessment_result_required:' + ','.join(differences))
+            actual_source = (Path(context['workspace']) / context['model']).read_bytes()
+            if actual_source != export_temporal_program(Program.from_dict(theory['program']),
+                    feature_names=tuple(target['role_signature'])).encode('utf-8'):
+                raise ValueError('scored_revision_Program_bytes_required')
+            # A restored raw index can still contain the original relative
+            # paid-row references. Its exact export ledger names the physical
+            # constructor record, so use that origin rather than the new host.
+            transfers = [(position, item) for position, item in enumerate(
+                agent.theory_consolidation.get('transfers', [])) if item.get('theory_ref') == identity]
+            binding = None
+            for position, item in transfers:
+                origin = library_entry_reference(agent, 'transfers', position, documents=locations)
+                supplied = _anchor_file_references(theory.get('consolidation_ref'),
+                                                   _reference_workspace(_absolute_reference(origin, agent.workspace)))
+                if _anchor_file_references(item.get('binding'), agent.workspace) == supplied:
+                    binding = supplied
+                    break
+            found = next(((position, item) for position, item in reversed(transfers)
+                if 'check_basis' in item
+                and _anchor_file_references(item.get('binding'), agent.workspace) == binding), None)
+            if found is None:
+                raise ValueError('exact_revision_transfer_binding_required')
+            position, transfer = found
+            examples = next((value for basis, value in resolved_check_bases
+                             if basis == transfer['check_basis']), None)
+            if examples is None:
+                examples = deepcopy(transfer['check_basis'])
+                references = []
+                for item in examples:
+                    references.extend([item['source_ref'], item['criterion']['criterion_ref']])
+                # Resolve the complete same-scope batch once. Anchored source
+                # criteria can address an original state much larger than a
+                # row; resolving each pair separately rereads that state N times.
+                for reference in references:
+                    path = Path(_absolute_reference(reference, agent.workspace)['file'])
+                    if path.parent == agent.workspace and path.name in {
+                            'research_state.json', 'laboratory_observations.json'}:
+                        reference['file'] = path.name
+                values = resolve_program_sources(agent, references)
+                for ri, item in enumerate(examples):
+                    if values[2 * ri + 1] != item['criterion'].get('mse_threshold'):
+                        raise ValueError('original_paid_mse_criterion_value_required')
+                    item['observation'] = values[2 * ri]
+                examples = json.loads(json.dumps(examples))
+                resolved_check_bases.append((transfer['check_basis'], examples))
+            criterion = examples[0].get('criterion', {}) if examples else {}
+            if (len(examples) != n or criterion.get('kind') != 'paid_mse'
+                    or criterion.get('evaluated_rows') != n or not criterion.get('criterion_ref')
+                    or criterion.get('mse_threshold') != agent.config.confirmation_mse_threshold
+                    or any(item.get('criterion') != criterion
+                           or item.get('context_ref') != theory['context_ref']
+                           or item.get('observation') != row for item, row in zip(examples, rows))):
+                raise ValueError('original_complete_paid_mse_criterion_and_rows_required')
+            if mse <= criterion['mse_threshold']:
+                continue
+            witness = next(((ri, saved) for ri, saved in enumerate(
+                evaluation['paid_residuals'].get('examples', []))
+                if type(saved.get('row_index')) is int and 0 <= saved['row_index'] < n
+                and type(saved.get('squared_error')) in (int, float)
+                and isfinite(saved['squared_error']) and saved['squared_error'] > n * criterion['mse_threshold']
+                and all(rows[saved['row_index']].get(key, []) == saved.get(key, [])
+                        for key in ('features', 'target', 'history'))), None)
+            if witness is None:
+                raise ValueError('saved_sufficient_single_residual_witness_unavailable')
+            score_ref = _child_ref(_absolute_reference(source_ref, agent.workspace), 'evaluations', index)
+            witness_ref = _child_ref(score_ref, 'paid_residuals', 'examples', witness[0])
+            failure = {'evaluation_ref': score_ref,
+                'assessment_ref': _child_ref(execution_ref, 'result'),
+                'execution_basis_ref': deepcopy(execution_ref), 'scope_ref': deepcopy(assessment['scope_ref']),
+                'witness_ref': witness_ref, 'paid_row_ref': deepcopy(examples[witness[1]['row_index']]['source_ref']),
+                'criterion_ref': deepcopy(criterion['criterion_ref']), 'evaluated_rows': n,
+                'sufficiency': 'one_saved_residual_proves_this_instance_paid_mse_failure_only'}
+            if any(item.get('ordinary_comparison_failure', {}).get('assessment_ref') == failure['assessment_ref']
+                   and _anchor_file_references(item.get('binding'), agent.workspace) == binding
+                   for _, item in transfers):
+                result['already_recorded_count'] += 1
+                continue
+            # Keep the old record and every unexecuted point check. This new
+            # aggregate fact is evidence about the same Program version, rather
+            # than a new executable version requiring another export/score.
+            prior_ref = library_entry_reference(agent, 'transfers', position, documents=locations)
+            record = {'theory_id': identity['id'], 'theory_ref': deepcopy(identity),
+                'binding': deepcopy(transfer['binding']), 'status': 'refuted',
+                'ordinary_comparison_failure': failure, 'prior_transfer_ref': prior_ref,
+                'checks_ref': _child_ref(prior_ref, 'checks'),
+                'check_basis_ref': _child_ref(prior_ref, 'check_basis'),
+                'support_updated': False, 'independent_confirmation': False,
+                'paid_mse_check': {**deepcopy(criterion), 'status': 'failed', 'mse': mse,
+                    'scope': 'retained_paid_evaluation', 'source_ref': score_ref,
+                    'independent_confirmation': False},
+                'retained_counterexample_refs': [score_ref, witness_ref]}
+            agent.theory_consolidation['transfers'].append(record)
+            was_refuted = (theory.get('compatible') is False
+                           or theory.get('support', {}).get('status') == 'refuted')
+            theory['compatible'] = False
+            theory.setdefault('support', {})['status'] = 'refuted'
+            # Persist the now-established physical constructor origin too;
+            # snapshotting a restored relative binding at the new host would
+            # otherwise redirect its old paid-row references.
+            theory['consolidation_ref'] = deepcopy(binding)
+            result['new_failure_record_count'] += 1
+            result['already_refuted_count' if was_refuted else 'new_refutation_count'] += 1
+            result['failure_refs'].append({'theory_ref': deepcopy(identity), 'evaluation_ref': score_ref})
+        except (KeyError, IndexError, TypeError, ValueError, OSError) as error:
+            result['unknown'].append({'theory_ref': deepcopy(identity), 'reason': str(error)})
+    if result['new_failure_record_count']:
+        save_theory_library(agent)
+        save_theory_index(agent)
+    if result['unknown']:
+        result['status'] = 'UNKNOWN'
+    return result
+
+
+def retained_checkpoint_result(previous, state):
+    """Use committed scientific state with result-only paid metadata.
+
+    The caller transfers the already decoded state to the restored agent. A
+    partially saved compact training result must not replace newer paid work.
+    """
+    if any(state['costs'][key] < value for key, value in previous['costs'].items()):
+        raise ValueError('research state account precedes its training result')
+    for key in ('observation_cost', 'measurement_cost', 'model_calls'):
+        if state['costs'][key] != previous['costs'][key]:
+            raise ValueError('research state requires paid acquisitions absent from training')
+    current = dict(previous)
+    current.update({key: state[key] for key in (
+        'costs', 'evaluated_model', 'method_results', 'program_contexts',
+        'experiment_comparisons', 'observable_models', 'conditional_models',
+        'model_dependencies', 'research_candidates', 'research_input_bindings',
+        'relation_research', 'theory_index', 'research_mission', 'research_agenda',
+        'theory_consolidation', 'research_organization') if key in state})
+    current['online_questions'] = state['questions']
+    current['revision_proposals'] = state['revisions']
+    return current
+
+
 class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
     """Use the old Python/procedure loop with equal executable persistence."""
 
@@ -259,7 +497,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             self._active_question_id = root["id"]
 
     def restore_research(self, previous, previous_workspace, laboratory, *, confirmation_seed,
-                         retained_comparison_reports=()):
+                         retained_comparison_reports=(), retained_state=None):
         """Continue saved fixed-apparatus research, preserving its paid account.
 
         Construct this agent in a new workspace with the intended total limits.
@@ -270,10 +508,11 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         self.source_task = context["research_phase"] == "source_learning"
         return self._restore_paid_research(previous, previous_workspace, laboratory,
             confirmation_seed=confirmation_seed, context=context,
-            retained_comparison_reports=retained_comparison_reports)
+            retained_comparison_reports=retained_comparison_reports,
+            retained_state=retained_state)
 
     def restore_practice_research(self, previous, previous_workspace, laboratory, *, confirmation_seed,
-                                  retained_comparison_reports=()):
+                                  retained_comparison_reports=(), retained_state=None):
         """Continue a zero-LLM practice directly from its actual saved result/state.
 
         The caller supplies the original knowledge and new total limits. No online
@@ -281,10 +520,12 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         """
         return self._restore_paid_research(previous, previous_workspace, laboratory,
             confirmation_seed=confirmation_seed,
-            retained_comparison_reports=retained_comparison_reports)
+            retained_comparison_reports=retained_comparison_reports,
+            retained_state=retained_state)
 
     def _restore_paid_research(self, previous, previous_workspace, laboratory, *,
-                               confirmation_seed, context=None, retained_comparison_reports=()):
+                               confirmation_seed, context=None, retained_comparison_reports=(),
+                               retained_state=None):
         source = Path(previous_workspace).resolve()
         if source == self.workspace:
             raise ValueError("restore into a separate workspace to retain the original run")
@@ -292,8 +533,13 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             raise ValueError("restore with a fresh apparatus; do not repurchase the prefix")
         if getattr(laboratory, "_settings", {}).get("calibration_change") is not None:
             raise ValueError("this continuation restores a fixed apparatus")
-        state = json.loads((source / "research_state.json").read_text())
-        questions = deepcopy(previous["online_questions"])
+        state = (read_json_checkpoint(source / "research_state.json")
+                 if retained_state is None else retained_state)
+        retain = deepcopy
+        if retained_state is not None:
+            previous = retained_checkpoint_result(previous, state)
+            retain = lambda value: value
+        questions = retain(previous["online_questions"])
         for question in questions:
             reference = question.get("native_condition_research")
             if (isinstance(reference, dict)
@@ -350,7 +596,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                     # Replace that copy with the preserved immutable reference.
                     (self.workspace / path.relative_to(source)).unlink(missing_ok=True)
                 elif (_model_context_ignored(path, source)
-                      or (root == source and name == "research_trace.json")):
+                      or (root == source and name in {
+                          "research_trace.json", "training.json.writing"})):
                     excluded.add(name)
             return excluded
 
@@ -381,6 +628,9 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         # unchanged filesystem blocks instead of rebuilding the history.
         # The local state remains independently writable.
         _copy_model_file(source / "research_state.json", self.workspace / "research_state.json")
+        for name in ('research_state.json', 'active.json', 'training.json'):
+            retain_checkpoint_sources(self.workspace / name,
+                source / 'research_state.json', source / 'training.json')
 
         def referenced_paths(value):
             if isinstance(value, dict):
@@ -427,6 +677,9 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                     if context_root != source:
                         contexts.setdefault(context_root, set()).add(inner)
         for context_root in sorted(contexts, key=lambda path: len(path.parts)):
+            # External historical roots keep their saved absolute references.
+            if not context_root.is_relative_to(source):
+                continue
             if context_root.is_relative_to(source / "_submitted_models"):
                 continue
             bindings_file = context_root / 'model_bindings.json'
@@ -436,7 +689,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             _copy_execution_context(context_root,
                 self.workspace / context_root.relative_to(source), models)
         for name, report in comparison_reports.items():
-            (self.workspace / name).write_text(json.dumps(report, indent=2), encoding='utf-8')
+            write_text_incrementally(self.workspace / name, json.dumps(report, indent=2))
         # The last request precedes the last executed action. Refresh its files
         # from disk and add successful final writes, not another arm's archive.
         names = set(context["files"] if context is not None else self.files)
@@ -454,24 +707,24 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                       for name in names if "_evaluated_model" not in Path(name).parts
                       and not _model_context_ignored(self.workspace / name, self.workspace)
                       and (self.workspace / name).is_file()}
-        self.events = deepcopy(previous["events"])
+        self.events = retain_event_history(previous["events"])
         self.observations = deepcopy(previous["paid_observations"])
         self.rows = [row for record in self.observations for row in laboratory.observation_rows(record)]
         self.costs = deepcopy(previous["costs"])
         self.model = previous["model"]
         self.questions = questions
-        self.revisions = deepcopy(previous["revision_proposals"])
-        self.experiment_comparisons = deepcopy(previous["experiment_comparisons"])
-        self.observable_models = deepcopy(previous.get("observable_models", {}))
-        self.conditional_models = deepcopy(previous.get("conditional_models", {}))
-        self.model_dependencies = deepcopy(previous.get("model_dependencies", []))
-        self.research_input_bindings = deepcopy(previous.get("research_input_bindings", {}))
-        self.research_candidates = deepcopy(previous.get("research_candidates", {}))
-        self.relation_research = deepcopy(previous.get("relation_research", {}))
+        self.revisions = retain(previous["revision_proposals"])
+        self.experiment_comparisons = retain(previous["experiment_comparisons"])
+        self.observable_models = retain(previous.get("observable_models", {}))
+        self.conditional_models = retain(previous.get("conditional_models", {}))
+        self.model_dependencies = retain(previous.get("model_dependencies", []))
+        self.research_input_bindings = retain(previous.get("research_input_bindings", {}))
+        self.research_candidates = retain(previous.get("research_candidates", {}))
+        self.relation_research = retain(previous.get("relation_research", {}))
         install_theory_index(self, self.knowledge.get('theory_index'))
-        self.theory_index = deepcopy(previous.get('theory_index', state.get('theory_index', {})))
-        self.research_mission = deepcopy(previous.get('research_mission', state.get('research_mission', {})))
-        self.research_agenda = deepcopy(previous.get('research_agenda', state.get('research_agenda', {})))
+        self.theory_index = retain(previous.get('theory_index', state.get('theory_index', {})))
+        self.research_mission = retain(previous.get('research_mission', state.get('research_mission', {})))
+        self.research_agenda = retain(previous.get('research_agenda', state.get('research_agenda', {})))
         library = source / LIBRARY_PATH
         if library.is_file():
             self._save(LIBRARY_PATH, library.read_text())
@@ -480,20 +733,21 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         self._inquiry_stack = deepcopy(previous.get('inquiry_stack', []))
         for frame in self._inquiry_stack:
             frame['question'] = next(q for q in self.questions if q['id'] == frame['question_id'])
-        self.method_results = deepcopy(previous["method_results"])
-        self.program_contexts = deepcopy(previous.get("program_contexts", {}))
-        self.operator_results = deepcopy(state["operator_results"])
-        self.candidate_paths = deepcopy(state["exported_candidate_paths"])
+        self.method_results = retain(previous["method_results"])
+        self.program_contexts = retain(previous.get("program_contexts", {}))
+        self.operator_results = retain(state["operator_results"])
+        self.candidate_paths = retain(state["exported_candidate_paths"])
         self.manifest = deepcopy(previous["outgoing_knowledge"].get("manifest", {}))
         self._active_question_id = (context["online_research"]["active_question"]
-            if context is not None else state["online_research"]["active_question"])
+            if context is not None and retained_state is None
+            else state["online_research"]["active_question"])
         question_ids = {question["id"] for question in self.questions}
         for event in self.events:
             args, feedback = event.get("arguments", {}), event.get("feedback", {})
             declaration = args.get("research_question") or args.get("question") or feedback.get("question")
             identifier = feedback.get("research_question_id") or (
                 declaration.get("id") if isinstance(declaration, dict) else None)
-            if identifier in question_ids:
+            if identifier in question_ids and retained_state is None:
                 self._active_question_id = identifier
         retained = previous["evaluated_model"]
         self.evaluated_model = None if retained is None else {
@@ -543,6 +797,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 laboratory._past_costs = account
         if self.provider is not None:
             self.provider.calls = self.costs["model_calls"]
+        restore_comparison_history(self)
         self._restore_scientific_returns()
         self._write_evidence()
         self._prepare_program_state()
@@ -1269,6 +1524,12 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             self._prepare_program_state()
         elif action == 'run' and arguments.get('operator') == 'research_route':
             result = {'operator': 'research_route', **route_research(self, arguments, laboratory, question)}
+            revision = result.get('research_track_question_ref', result.get('parent_revision_question_ref'))
+            if revision is not None:
+                from .finite_native_author import export_revision_candidates
+                from .research_episodes import _question_versions
+                owner = _question_versions(self)[revision['question_id'], revision.get('meaning_version', 1)][0]
+                result['parent_revision_exports'] = export_revision_candidates(self, owner)
             self._prepare_program_state()
         elif action == 'run' and arguments.get('operator') == 'research_step':
             if question is None:
@@ -1358,6 +1619,35 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             question["reviewed_child_answers"] = reviewed_returns
             result["research_question_id"] = question["id"]
             result['question_meaning_version'] = question.get('meaning_version', 1)
+            if action == 'run' and arguments.get('operator') == 'research_choice':
+                from .research_episodes import _question_versions
+                evaluated_paths = {item.get('path') for item in result.get('evaluations', [])}
+                owners = [owner for owner, _ in _question_versions(self).values()
+                          if any(item.get('model') in evaluated_paths
+                                 for item in owner.get('revision_candidate_exports', []))]
+                combined = None
+                for owner in owners or [question]:
+                    recorded = record_revision_comparison_failures(
+                        self, owner, result, source_ref={'file': 'research_state.json',
+                            'json_path': ['operator_results', len(self.operator_results) - 1]},
+                        comparison_question=question)
+                    if combined is None:
+                        combined = deepcopy(recorded)
+                        combined['owner_results'] = []
+                    else:
+                        for key, value in recorded.items():
+                            if type(value) is int:
+                                combined[key] += value
+                            elif isinstance(value, list):
+                                combined[key].extend(deepcopy(value))
+                    combined['owner_results'].append({
+                        'question_ref': {'question_id': owner['id'],
+                            'meaning_version': owner.get('meaning_version', 1)},
+                        'new_failure_record_count': recorded.get('new_failure_record_count', 0),
+                        'unknown_count': len(recorded.get('unknown', []))})
+                if combined.get('unknown'):
+                    combined['status'] = 'UNKNOWN'
+                result['revision_comparison_failures'] = combined
         self._record_parent_research(parent_research, action, arguments, result)
         if pending_parent is not None and result.get('observations'):
             parent = next(q for q in self.questions if q['id'] == pending_parent)
@@ -1484,15 +1774,16 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                     for key in ("error", "status", "executed_path", "mse", "returncode") if key in feedback}},
                 "evidence_file": "research_state.json"}
 
-    def _shared_files(self):
+    def _shared_files(self, *, excluded=()):
         """Read authored work without serializing immutable fitting snapshots."""
         files = {}
         for directory, subdirs, names in os.walk(self.workspace / "shared"):
             subdirs[:] = [name for name in subdirs if name != "_evaluated_model"]
             for name in names:
                 path = Path(directory) / name
-                if path.suffix in {".py", ".json", ".md", ".txt"}:
-                    files[str(path.relative_to(self.workspace))] = path.read_text(encoding="utf-8")
+                relative = str(path.relative_to(self.workspace))
+                if relative not in excluded and path.suffix in {".py", ".json", ".md", ".txt"}:
+                    files[relative] = path.read_text(encoding="utf-8")
         return files
 
     def _request(self, laboratory):
@@ -1880,17 +2171,19 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
 
     def _program_state(self):
         state = super()._program_state()
-        state["experiment_comparisons"] = deepcopy(self.experiment_comparisons)
+        state["experiment_comparisons"] = self.experiment_comparisons
         state["online_research"] = self._online_research()
-        state["observable_models"] = deepcopy(self.observable_models)
-        state["conditional_models"] = deepcopy(self.conditional_models)
-        state["model_dependencies"] = deepcopy(self.model_dependencies)
-        state["research_candidates"] = deepcopy(self.research_candidates)
-        state["research_input_bindings"] = deepcopy(self.research_input_bindings)
-        state['relation_research'] = deepcopy(self.relation_research)
-        state['theory_index'] = deepcopy(self.theory_index)
-        state['research_mission'] = deepcopy(self.research_mission)
-        state['research_agenda'] = deepcopy(self.research_agenda)
+        state["observable_models"] = self.observable_models
+        state["conditional_models"] = self.conditional_models
+        state["model_dependencies"] = self.model_dependencies
+        state["research_candidates"] = self.research_candidates
+        state["research_input_bindings"] = self.research_input_bindings
+        state['relation_research'] = self.relation_research
+        # The existing state writer consumes this value synchronously, as it
+        # already does for questions, costs and operator_results in base layers.
+        state['theory_index'] = self.theory_index
+        state['research_mission'] = self.research_mission
+        state['research_agenda'] = self.research_agenda
         if self.theory_consolidation:
             state['theory_consolidation'] = {'file': LIBRARY_PATH}
         return state
@@ -1951,24 +2244,40 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             "research_options": [native] if native is not None else [],
             "methods": methods}, indent=2))
 
+    def _base_result_files(self):
+        # This class replaces the base outgoing knowledge and changed-file view
+        # below. Construct its actual portable/workspace export once, there.
+        return {}
+
     def result(self, status):
+        return self._result_with_snapshot(status, deepcopy)
+
+    def checkpoint_result(self, status):
+        """Build an immediately written checkpoint, borrowing live research data.
+
+        Unlike result(), this transient value must be serialized before the
+        agent continues. Retained results still receive an independent snapshot.
+        """
+        return self._result_with_snapshot(status, lambda value: value)
+
+    def _result_with_snapshot(self, status, snapshot):
         if self.theory_index or getattr(self, '_theory_index_source_ref', None):
             save_theory_index(self)
-        result = super().result(status)
-        result["experiment_comparisons"] = deepcopy(self.experiment_comparisons)
-        result["observable_models"] = deepcopy(self.observable_models)
-        result["conditional_models"] = deepcopy(self.conditional_models)
-        result["model_dependencies"] = deepcopy(self.model_dependencies)
-        result["research_candidates"] = deepcopy(self.research_candidates)
-        result["research_input_bindings"] = deepcopy(self.research_input_bindings)
-        result['relation_research'] = deepcopy(self.relation_research)
-        result['theory_index'] = deepcopy(self.theory_index)
-        result['research_mission'] = deepcopy(self.research_mission)
-        result['research_agenda'] = deepcopy(self.research_agenda)
+        result = super()._result_with_snapshot(status, snapshot)
+        result["experiment_comparisons"] = snapshot(self.experiment_comparisons)
+        result["observable_models"] = snapshot(self.observable_models)
+        result["conditional_models"] = snapshot(self.conditional_models)
+        result["model_dependencies"] = snapshot(self.model_dependencies)
+        result["research_candidates"] = snapshot(self.research_candidates)
+        result["research_input_bindings"] = snapshot(self.research_input_bindings)
+        result['relation_research'] = snapshot(self.relation_research)
+        result['theory_index'] = snapshot(self.theory_index)
+        result['research_mission'] = snapshot(self.research_mission)
+        result['research_agenda'] = snapshot(self.research_agenda)
         if self.theory_consolidation:
             result['theory_consolidation'] = {'file': LIBRARY_PATH}
-        result['llm_inquiries'] = deepcopy(self.llm_inquiries)
-        result['inquiry_stack'] = deepcopy(self._inquiry_stack)
+        result['llm_inquiries'] = snapshot(self.llm_inquiries)
+        result['inquiry_stack'] = snapshot(self._inquiry_stack)
         # A failed or unfinished source may already have authored a useful
         # manifest. The old result only retains self.manifest after submission.
         manifest = deepcopy(self.manifest or self.knowledge.get("manifest", {}))
@@ -2009,6 +2318,36 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         if manifest.get("research_programs"):
             manifest["research_programs"] = self._registered_research_programs(manifest)
 
+        files = self._outgoing_files_for_result(status, manifest, manifest_paths, model_paths)
+        lessons = [*snapshot(self.knowledge.get("lessons", []))]
+        if self.lesson:
+            lessons.append(self.lesson)
+        result["outgoing_knowledge"] = {
+            "files": files,
+            "manifest": deepcopy(manifest),
+            "question_traces": [*snapshot(self.knowledge.get("question_traces", [])),
+                                *snapshot(self.questions)],
+            "lessons": lessons,
+        }
+        if self.theory_index or getattr(self, '_theory_index_source_ref', None):
+            result['outgoing_knowledge']['files'].pop(INDEX_PATH, None)
+            result['outgoing_knowledge']['theory_index'] = {
+                'file': str(self.workspace / INDEX_PATH), 'json_path': []}
+        if self.theory_consolidation:
+            result['outgoing_knowledge']['files'].pop(LIBRARY_PATH, None)
+            result['outgoing_knowledge']['theory_consolidation'] = {
+                'file': str(self.workspace / LIBRARY_PATH), 'json_path': []}
+        for key in ("research_roles", "source_catalog", "archive_instructions"):
+            if key in self.knowledge:
+                result["outgoing_knowledge"][key] = snapshot(self.knowledge[key])
+        result["inherited_files_changed"] = sorted(
+            name for name in self.inherited_files
+            if name in files and files[name] != self.knowledge["files"][name])
+        result["knowledge_protocol"] = "common_executable_archive"
+        return result
+
+    def _outgoing_files_for_result(self, status, manifest, manifest_paths, model_paths):
+        """Materialize ordinary portable exports when the consumer needs files."""
         if status == "researching":
             # Same-workspace checkpoints retain snapshots on disk. Publishing
             # below still transfers their fitting views to independent tasks.
@@ -2026,39 +2365,21 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                         authored_paths(item)
 
             authored_paths(manifest)
-            files = self._shared_files()
+            referenced_files = ({INDEX_PATH} if self.theory_index
+                or getattr(self, '_theory_index_source_ref', None) else set())
+            if self.theory_consolidation:
+                referenced_files.add(LIBRARY_PATH)
+            # These files are published by reference below; their complete
+            # text would otherwise be read and discarded on every checkpoint.
+            files = self._shared_files(excluded=referenced_files)
             files.update({name: (self.workspace / name).read_text(encoding="utf-8")
-                for name in names if "_evaluated_model" not in Path(name).parts
+                for name in names if name not in referenced_files
+                and "_evaluated_model" not in Path(name).parts
                 and (self.workspace / name).is_file()
                 and (self.workspace / name).name not in _HOST_RECORD_FILES})
         else:
             files = self._result_files(manifest, manifest_paths, model_paths)
-        lessons = deepcopy(self.knowledge.get("lessons", []))
-        if self.lesson:
-            lessons.append(self.lesson)
-        result["outgoing_knowledge"] = {
-            "files": files,
-            "manifest": deepcopy(manifest),
-            "question_traces": [*deepcopy(self.knowledge.get("question_traces", [])),
-                                *deepcopy(self.questions)],
-            "lessons": lessons,
-        }
-        if self.theory_index or getattr(self, '_theory_index_source_ref', None):
-            result['outgoing_knowledge']['files'].pop(INDEX_PATH, None)
-            result['outgoing_knowledge']['theory_index'] = {
-                'file': str(self.workspace / INDEX_PATH), 'json_path': []}
-        if self.theory_consolidation:
-            result['outgoing_knowledge']['files'].pop(LIBRARY_PATH, None)
-            result['outgoing_knowledge']['theory_consolidation'] = {
-                'file': str(self.workspace / LIBRARY_PATH), 'json_path': []}
-        for key in ("research_roles", "source_catalog", "archive_instructions"):
-            if key in self.knowledge:
-                result["outgoing_knowledge"][key] = deepcopy(self.knowledge[key])
-        result["inherited_files_changed"] = sorted(
-            name for name in self.inherited_files
-            if name in files and files[name] != self.knowledge["files"][name])
-        result["knowledge_protocol"] = "common_executable_archive"
-        return result
+        return files
 
     def _result_files(self, manifest, manifest_paths, model_paths):
         """Export executable source research for later independent consumers."""
@@ -2152,8 +2473,13 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 bindings = json.loads(bindings_file.read_text(encoding='utf-8')).get(model, {})
                 selected_paths.update(str((context / child).relative_to(self.workspace))
                                       for child in bindings.values())
+        referenced_files = ({INDEX_PATH} if self.theory_index
+            or getattr(self, '_theory_index_source_ref', None) else set())
+        if self.theory_consolidation:
+            referenced_files.add(LIBRARY_PATH)
         return {name: (self.workspace / name).read_text(encoding="utf-8")
-                for name in sorted(names) if (self.workspace / name).is_file()
+                for name in sorted(names) if name not in referenced_files
+                and (self.workspace / name).is_file()
                 and not _model_context_ignored(self.workspace / name,
                     python_model_context(self.workspace, name)[0])}
 

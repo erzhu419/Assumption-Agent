@@ -9,6 +9,7 @@ import re
 from time import monotonic
 
 from .language import Program
+from .checkpoint_storage import write_text_incrementally
 from .world_reference_recalibration import refresh_response_evidence
 from .world_response_consequences import QUERY_ALLOWANCE, reuse_paid_family_exclusions
 from .world_response_constraints import query_response_family
@@ -226,7 +227,7 @@ def execute_reference_hypothesis(agent, laboratory, arguments):
     reused = _reuse_paid_family_exclusions(agent, laboratory, checked_state, source)
     paid_check = _paid_family_check(agent, laboratory, checked_state, hypothesis)
     if paid_check is not None or reused:
-        state_path.write_text(json.dumps(checked_state, indent=2))
+        write_text_incrementally(state_path, json.dumps(checked_state, indent=2))
     excluded = paid_check is not None and paid_check["status"] == "UNSAT_VERIFIED"
     execution = ({"status": "method_stopped"} if excluded else
                  agent._run_procedure(laboratory, path, max_steps=256,

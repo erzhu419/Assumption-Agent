@@ -27,6 +27,10 @@ New multi-source plans reserve the final cohort consolidation inside C's origina
 combined compute cap via source_cohort_allocation; local hooks retain their source
 basis with zero consolidation compute. Plans without that contract keep their
 registered allocation on recovery.
+run_target_intervention reuses a completed target ABC study's common initial
+input and runs only fresh C jobs for a frozen removal manifest. The full ABC
+plan, old library, current runtime, budgets and confirmation contract stay
+matched; prior target results are referenced only in the final paired readout.
 """
 
 import argparse
@@ -35,10 +39,13 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 import json
 from math import isfinite
+import os
 from pathlib import Path
 from random import Random
 from shutil import copy2
 import sys
+from time import monotonic
+from traceback import format_exc
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,13 +57,20 @@ from hegel_machine.cognition.anonymous_research_archive import resolve_workspace
 from hegel_machine.cognition.code_agent import (
     CodexCodeProvider, evaluate_python_model, archived_paid_trace_references,
 )
+from hegel_machine.cognition.checkpoint_storage import clone_or_copy
+from hegel_machine.cognition.experiment_runtime import (
+    physical_worker_cpus as _native_worker_cpus,
+    physical_cpu_groups as _native_worker_cpu_groups,
+    run_process_trials as _native_process_trials,
+)
 from hegel_machine.cognition.common_archive_inquiry import CommonArchiveInquiryAgent
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.proposers import _events
 from hegel_machine.cognition.question_routing import register_theories
 from hegel_machine.cognition.question_selection import validate_exploration_policy
 from hegel_machine.cognition.research_episodes import (
-    extract_episodes, load_episode_sources, _contains_reference, _path, _question_versions,
+    extract_episodes, load_episode_sources, retained_revision_sources,
+    _contains_reference, _path, _question_versions,
 )
 from hegel_machine.cognition.theory_consolidation import (
     LIBRARY_PATH, install_theory_library, save_theory_index,
@@ -68,6 +82,7 @@ from scripts.run_online_inquiry_llm import verify_codex_subscription, write_json
 
 ORGANIZATION_ARMS = ('archive', 'fixed_pr2', 'pr3')
 ORGANIZATION_ORIGIN = 'registered_research_organization'
+
 
 
 class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
@@ -143,7 +158,10 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
         except (ValueError, TypeError, KeyError, OSError) as error:
             feedback = {'operator': arguments['operator'], 'status': 'automatic_research_failed',
                         'error': f'{type(error).__name__}: {error}',
+                        'traceback': format_exc(limit=-8),
                         'new_compute_cost': self.costs['compute_cost'] - before}
+            if isinstance(error, OSError):
+                feedback['errno'] = error.errno
         actual = self.costs['compute_cost'] - before
         state = self._organization_state
         if feedback.get('cache_hit') and not actual and kind in state:
@@ -164,8 +182,10 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
         scopes = self._organization_state['source_theory_scopes']
         references = self._organization_registration.get('consolidation', {}).get('episode_sources', [])
         retained = load_episode_sources(references, self.workspace) if references else []
-        episodes = {identifier: episode for episode in extract_episodes(
-            self, retained_episodes=retained)['episodes'] for identifier in episode['theory_ids']}
+        intake = extract_episodes(self, retained_episodes=retained)
+        episodes = {identifier: episode for episode in intake['episodes']
+                    for identifier in episode['theory_ids']}
+        revision_sources = retained_revision_sources(self, intake['episodes'])
 
         def contract(theory):
             reference = theory.get('source_ref') or theory.get('episode_ref', {})
@@ -241,6 +261,19 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
                     seed.setdefault('registered_episode_source_ref', deepcopy(episode['source_ref']))
         selected = []
         for identifier, theory in self.theory_index.items():
+            episode = episodes.get(identifier)
+            revision = revision_sources.get(identifier)
+            if (revision is not None and episode is not None
+                    and episode['question_ref'] == revision['question_ref']
+                    and episode['source_id'] == revision['source_id']
+                    and any((reference['question_id'], reference['meaning_version']) ==
+                            (revision['episode_ref']['question_id'],
+                             revision['episode_ref']['meaning_version'])
+                            for reference in question_scopes)):
+                # Actual local adoption can supply a typed after; its inherited
+                # library provenance does not create another physical source.
+                selected.append(identifier)
+                continue
             if theory.get('consolidation_ref') and identifier not in scopes:
                 continue
             if identifier in scopes and contract(scopes[identifier]) is None:
@@ -308,7 +341,8 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
         if (active is None or active.get('queue') == 'theory'
                 or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
             active = next(question for question in self.questions if question['id'] == 'task')
-        self._bind_revision_target(active)
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
         arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
             'library_path': state['automatic_library_path'],
             'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
@@ -331,6 +365,7 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
             arguments['allocation'] = {
                 **arguments.get('allocation', {}),
                 'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
                 'comparison_rows': reserve['paid_rows']}
         try:
             opened = self._automatic_work(arguments, laboratory, 'routing') or opened
@@ -344,7 +379,12 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
                 active['ordinary_completion_reserve'] = reserve
                 self._prepare_program_state()
 
-        exported = export_revision_candidates(self, active)
+        routing = state.get('routing')
+        track = (self.events[routing['event_index']]['feedback'].get('research_track_question_ref')
+                 if routing is not None else None)
+        export_owner = (_question_versions(self)[track['question_id'], track['meaning_version']][0]
+                        if track is not None else active)
+        exported = export_revision_candidates(self, export_owner)
         if exported['changed']:
             self._prepare_program_state()
         return opened or exported['new_exports'] > 0
@@ -570,8 +610,19 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
         request['research_organization'] = deepcopy(self._organization_state)
         return request
 
+    def _outgoing_files_for_result(self, status, manifest, manifest_paths, model_paths):
+        # Registered studies publish the existing workspace result protocol.
+        # Reading every predictor here only builds a mapping discarded by
+        # compact_workspace_result; the complete independent files stay on disk.
+        return {}
+
     def result(self, status):
         result = super().result(status)
+        result['research_organization'] = deepcopy(self._organization_state)
+        return compact_workspace_result(self, result)
+
+    def checkpoint_result(self, status):
+        result = super().checkpoint_result(status)
         result['research_organization'] = deepcopy(self._organization_state)
         return compact_workspace_result(self, result)
 
@@ -740,7 +791,8 @@ def protocol(*, kinds=("memoryless", "delay", "hysteresis"), cases=1,
         plan['provider'] = {'backend': 'finite_native_procedure', 'model_calls': 0}
         plan['runtime_snapshot'] = sorted({str(path.relative_to(ROOT))
             for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
-            {'scripts/run_anonymous_revision_inquiry.py'})
+            {'scripts/run_anonymous_revision_inquiry.py', 'scripts/run_online_inquiry_llm.py',
+             'scripts/run_online_inquiry_study.py'})
         plan['runtime_entry'] = str(ROOT / 'scripts/run_anonymous_revision_inquiry.py')
         plan['author_source_ref'] = {'file': 'initial_archive.json',
                                      'json_path': ['files', author['path']]}
@@ -814,8 +866,13 @@ def _aggregate_registered_sources(plan, output, trials, organization, knowledge,
     previous = None
     if previous_study and (Path(previous_study) / 'source_aggregation.json').is_file():
         previous = json.loads((Path(previous_study) / 'source_aggregation.json').read_text())
+        snapshot = Path(previous_study) / 'source_at_run'
+        runtime_unchanged = (not snapshot.is_dir() or all(
+            (snapshot / name).is_file() and (ROOT / name).is_file()
+            and (snapshot / name).read_bytes() == (ROOT / name).read_bytes()
+            for name in plan.get('runtime_snapshot', [])))
         if (previous['source_refs'] == references and previous['source_costs'] == source_costs
-                and previous['source_versions'] == source_versions):
+                and previous['source_versions'] == source_versions and runtime_unchanged):
             retained = {**previous, 'new_compute_cost': 0, 'reused': True}
             write_json(Path(output) / 'source_aggregation.json', retained)
             return retained
@@ -885,6 +942,90 @@ def _aggregate_registered_sources(plan, output, trials, organization, knowledge,
 def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_prefix=None,
               laboratory_factory=None, workers=1, agent_factory=None,
               previous_study=None, resume_task=''):
+    return _run_study(plan, output, provider_factory=provider_factory, knowledge=knowledge,
+        prepare_prefix=prepare_prefix, laboratory_factory=laboratory_factory, workers=workers,
+        agent_factory=agent_factory, previous_study=previous_study, resume_task=resume_task)
+
+
+def run_target_intervention(plan, output, *, keep_study, prepare_prefix=None,
+                            laboratory_factory=None, workers=1, agent_factory=None):
+    """Run only the removed-library C jobs, paired with completed frozen ABC.
+
+    The complete ABC plan and its checks stay intact. The prior run supplies
+    common initial knowledge, never the target training state or terminal rows.
+    All fresh training, confirmation and evaluation use the ordinary study loop.
+    """
+    from hegel_machine.cognition.theory_consolidation import _read_library
+
+    keep = Path(keep_study).resolve()
+    original = json.loads((keep / 'protocol.json').read_text())
+    summary = json.loads((keep / 'summary.json').read_text())
+    if (set(plan['arms']) != set(ORGANIZATION_ARMS)
+            or plan.get('research_organization', {}).get('phase') != 'target'
+            or original.get('research_organization', {}).get('phase') != 'target'
+            or summary['status'] != 'completed' or not plan.get('author')):
+        raise ValueError('target intervention requires a completed finite ABC target study')
+    for field in ('cases', 'arms', 'model', 'provider', 'limits', 'prefix_rows',
+                  'evaluation', 'author', 'archive', 'prepared_public_questions', 'source_cost_ref',
+                  'paid_score_index_refs_by_case'):
+        if plan.get(field) != original.get(field):
+            raise ValueError(f'target intervention must preserve registered {field}')
+    organization = deepcopy(plan['research_organization'])
+    retained_organization = deepcopy(original['research_organization'])
+    removed_library = organization.pop('pr3_library_path')
+    retained_organization.pop('pr3_library_path')
+    if organization != retained_organization:
+        raise ValueError('only the automatic C library may change in a target intervention')
+    expected = {(case['id'], arm) for case in plan['cases'] for arm in ORGANIZATION_ARMS}
+    trial_keys = [(trial['case'], trial['arm']) for trial in summary['trials']]
+    if len(trial_keys) != len(expected) or set(trial_keys) != expected:
+        raise ValueError('the keep study must retain every registered ABC outcome, including failures')
+    runtime = sorted({str(path.relative_to(ROOT))
+        for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
+        {'scripts/run_anonymous_revision_inquiry.py'} | set(plan.get('runtime_snapshot', [])))
+    if original.get('runtime_snapshot') != runtime or any(
+            (ROOT / name).read_bytes() != (keep / 'source_at_run' / name).read_bytes()
+            for name in runtime):
+        raise ValueError('paired target intervention requires the same current frozen runtime')
+    intervention = deepcopy(plan.get('target_intervention') or {})
+    if intervention.get('kind') not in {'individual_object', 'new_redundancy_class'}:
+        raise ValueError('declare the frozen individual-object or new-class intervention')
+    reference = intervention['manifest_ref']
+    manifest = json.loads(Path(reference['file']).read_text())
+    for key in _path(reference):
+        manifest = manifest[key]
+    if manifest.get('status') != 'frozen_ready':
+        raise ValueError('target intervention needs a ready frozen removal manifest')
+    removed = set(manifest['removed_candidate_ids'])
+    retained_library = _read_library({'file': str(keep / 'pr3_theory_library.json'), 'json_path': []}, ROOT)
+    selected_library = _read_library({'file': removed_library, 'json_path': []}
+        if isinstance(removed_library, str) else removed_library, ROOT)
+    old = organization['initial_library_path']
+    old_library = _read_library({'file': old, 'json_path': []} if isinstance(old, str) else old, ROOT)
+    prior = retained_library.get('candidates', {})
+    actual = selected_library.get('candidates', {})
+    old_ids = set(old_library.get('candidates', {}))
+    if (not removed or not removed <= set(prior) or removed.intersection(old_ids)
+            or not old_ids <= set(manifest['preserved_old_candidate_ids'])
+            or list(actual) != [key for key in prior if key not in removed]
+            or actual != {key: value for key, value in prior.items() if key not in removed}):
+        raise ValueError('intervention must remove only the declared new candidates and preserve the complete old library')
+    knowledge = json.loads((keep / 'initial_archive.json').read_text())
+    intervention.update(keep_study=str(keep), executed_arms=['pr3'],
+        keep_protocol_ref={'file': str(keep / 'protocol.json'), 'json_path': []},
+        keep_summary_ref={'file': str(keep / 'summary.json'), 'json_path': []},
+        keep_outcome_refs=[{'file': str(keep / 'summary.json'), 'json_path': ['trials', index]}
+                           for index in range(len(summary['trials']))],
+        common_initial_archive_ref={'file': str(keep / 'initial_archive.json'), 'json_path': []},
+        keep_costs_recharged=False)
+    return _run_study(plan, output, knowledge=knowledge, prepare_prefix=prepare_prefix,
+        laboratory_factory=laboratory_factory, workers=workers, agent_factory=agent_factory,
+        target_intervention=intervention)
+
+
+def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_prefix=None,
+               laboratory_factory=None, workers=1, agent_factory=None,
+               previous_study=None, resume_task='', target_intervention=None):
     output = Path(output).resolve()
     author = plan.get('author')
     _validate_finite_author(author, plan.get('research_organization'))
@@ -905,7 +1046,8 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
             raise ValueError('cohort recovery must preserve registered source_cohort_allocation')
         if author != previous_plan.get('author'):
             raise ValueError('cohort recovery must preserve registered author')
-    organization, prepared_knowledge = _prepare_organization(plan, output, knowledge, previous_study)
+    organization, prepared_knowledge = _prepare_organization(plan, output, knowledge,
+        Path(target_intervention['keep_study']) if target_intervention else previous_study)
     if author:
         if author['path'] not in (prepared_knowledge or {}).get('files', {}):
             raise ValueError('finite author path must exist in the common executable archive')
@@ -914,7 +1056,8 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
         plan = deepcopy(plan)
         plan['runtime_snapshot'] = sorted({str(path.relative_to(ROOT))
             for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
-            {'scripts/run_anonymous_revision_inquiry.py'})
+            {'scripts/run_anonymous_revision_inquiry.py', 'scripts/run_online_inquiry_llm.py',
+             'scripts/run_online_inquiry_study.py'} | set(plan.get('runtime_snapshot', [])))
         plan['runtime_entry'] = str(ROOT / 'scripts/run_anonymous_revision_inquiry.py')
         plan['author_source_ref'] = {'file': 'initial_archive.json',
                                      'json_path': ['files', author['path']]}
@@ -925,12 +1068,18 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
     agent_factory = agent_factory or (RegisteredOrganizationAgent if organization else CommonArchiveInquiryAgent)
     write_json(output / "protocol.json", plan)
     # Literal common input is saved once; no arm learns the other's live results.
-    write_json(output / "initial_archive.json", prepared_knowledge or {})
+    if target_intervention:
+        clone_or_copy(Path(target_intervention['common_initial_archive_ref']['file']),
+                      output / 'initial_archive.json')
+    else:
+        write_json(output / "initial_archive.json", prepared_knowledge or {})
     source_workspace = (prepared_knowledge or {}).get('workspace')
     if source_workspace is None and plan.get('archive'):
         source_workspace = Path(plan['archive']).resolve().parent
     if previous_study and (previous_study / 'reference_archive').is_dir():
         source_workspace = previous_study / 'reference_archive'
+    if target_intervention and (Path(target_intervention['keep_study']) / 'reference_archive').is_dir():
+        source_workspace = Path(target_intervention['keep_study']) / 'reference_archive'
     paid_traces = archived_paid_trace_references((prepared_knowledge or {}).get('files', {}),
         output / 'reference_archive', source_workspace=source_workspace)
     limits = InquiryLLMConfig(**plan["limits"])
@@ -940,7 +1089,8 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
     for case_index, case in enumerate(plan["cases"]):
         arms = plan["arms"]
         ordered = case.get("arms", arms[case_index % len(arms):] + arms[:case_index % len(arms)])
-        jobs.extend((case, arm) for arm in ordered)
+        jobs.extend((case, arm) for arm in ordered
+                    if not target_intervention or arm == 'pr3')
 
     def train(job):
         case, arm = job
@@ -1023,6 +1173,8 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
 
     if workers == 1:
         trials = [train(job) for job in jobs]
+    elif author:
+        trials = _native_process_trials(train, jobs, workers)
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             # map retains registration order; all training finishes before any
@@ -1036,17 +1188,30 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
     records = []
     for trial in trials:
         case, result = trial["case"], trial["result"]
-        evaluation = {"status": "no_submitted_model", "mse": None}
+        host_workspace = output / case['id'] / trial['arm']
+        host_workspace.mkdir(parents=True, exist_ok=True)
+        evaluation = {"status": "no_submitted_model", "mse": None,
+                      "evaluation_rows": 0, "python_execution_seconds": 0.}
         if result["model"]:
             rows = laboratory_factory(case).evaluation_rows(
                 length=plan["evaluation"]["rows"], seed=case["evaluation_seed"])
-            evaluation = evaluate_python_model(result["workspace"], result["model"], rows,
-                                               timeout_seconds=limits.execution_seconds)
-            evaluation.pop("predictions", None)
+            evaluation = evaluate_terminal_model(result["workspace"], result["model"], rows,
+                                                 timeout_seconds=limits.execution_seconds)
+            predictions = evaluation.pop("predictions", None)
+            if predictions is not None:
+                training_ref = {'file': str(Path(result['workspace']) / 'training.json'), 'json_path': []}
+                prediction_path = host_workspace / 'terminal_predictions.json'
+                write_json(prediction_path, {'model': result['model'], 'training_ref': training_ref,
+                    'model_ref': {**training_ref, 'json_path': ['model']},
+                    'submitted_model_ref': {'file': str(Path(result['workspace']) / result['model'])},
+                    'evaluation_contract': {'case': case['id'], 'kind': case['kind'],
+                        'evaluation_seed': case['evaluation_seed'], 'rows': plan['evaluation']['rows'],
+                        'trajectory_length': plan['evaluation'].get('trajectory_length')},
+                    'evaluation_contract_ref': {'file': str(output / 'protocol.json'), 'json_path': ['evaluation']},
+                    'predictions': predictions})
+                evaluation['prediction_ref'] = {'file': str(prediction_path), 'json_path': []}
         evaluation["passed"] = (evaluation.get("returncode") == 0 and
             evaluation.get("mse", float("inf")) <= plan["evaluation"]["mse_threshold"])
-        host_workspace = output / case['id'] / trial['arm']
-        host_workspace.mkdir(parents=True, exist_ok=True)
         write_json(host_workspace / "evaluation.json", evaluation)
         usage = [event.get("usage", {}) for event in result["events"]
                  if event.get("usage", {}).get("backend") == "codex_cli"]
@@ -1074,12 +1239,43 @@ def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_pr
                    event.get("usage", {}).get("backend") == "codex_cli" for event in live_events)
                    else "scripted_interface_check",
                "source_count": len(plan["cases"]), "scope": plan["scope"]}
+    if target_intervention:
+        summary['target_intervention'] = deepcopy(target_intervention)
     if aggregation is not None:
         summary['source_aggregation'] = aggregation
     if plan.get('source_cohort_allocation') is not None:
         summary['source_cohort_allocation'] = deepcopy(plan['source_cohort_allocation'])
     write_json(output / "summary.json", summary)
+    if organization and organization['phase'] == 'target':
+        from hegel_machine.cognition.method_effect_query import registered_successor_effect
+
+        try:
+            effect = (registered_successor_effect(target_intervention['keep_study'], output,
+                left_arm='pr3', right_arm='pr3', source_cost_ref=plan.get('source_cost_ref'),
+                intervention_ref=target_intervention['manifest_ref']) if target_intervention else
+                registered_successor_effect(output, source_cost_ref=plan.get('source_cost_ref')))
+        except (OSError, KeyError, ValueError) as error:
+            effect = {'status': 'UNKNOWN', 'reason': f'{type(error).__name__}: {error}',
+                'training_and_evaluation_retained': True}
+        write_json(output / 'research_effects.json', effect)
+        summary['research_effects_ref'] = {'file': str(output / 'research_effects.json'), 'json_path': []}
+        write_json(output / 'summary.json', summary)
     return summary
+
+
+def evaluate_terminal_model(workspace, model, rows, *, timeout_seconds):
+    """Execute an already submitted model once on evaluator-only rows.
+
+    The shared Python executor projects away targets before prediction. Its
+    existing optional source-fit behavior is unchanged; callers requiring a
+    literal frozen predictor must verify that execution context before calling.
+    """
+    started = monotonic()
+    evaluation = evaluate_python_model(workspace, model, rows,
+                                       timeout_seconds=timeout_seconds)
+    evaluation.update(python_execution_seconds=monotonic() - started,
+                      evaluation_rows=len(rows))
+    return evaluation
 
 
 def main():
@@ -1097,9 +1293,13 @@ def main():
     parser.add_argument("--seed", type=int, default=61011017)
     parser.add_argument("--model", default="gpt-6-luna")
     parser.add_argument("--timeout-seconds", type=float, default=300.)
+    parser.add_argument("--workers", type=int,
+        help="Native jobs use independent CPU processes (default 8); model authors retain threads (default 1)")
     args = parser.parse_args()
     if args.cases < 1:
         parser.error("--cases must be positive")
+    if args.workers is not None and args.workers < 1:
+        parser.error("--workers must be positive")
     organization = json.loads(args.research_organization.read_text()) if args.research_organization else None
     author = json.loads(args.finite_native_author.read_text()) if args.finite_native_author else None
     try:
@@ -1115,7 +1315,8 @@ def main():
         return CodexCodeProvider(workspace, model=args.model, reasoning_effort="medium",
                                  timeout_seconds=args.timeout_seconds)
     print(json.dumps(run_study(plan, args.output, provider_factory=provider if author is None else None,
-                               knowledge=knowledge), indent=2))
+                               knowledge=knowledge,
+                               workers=args.workers if args.workers is not None else 8 if author else 1), indent=2))
 
 
 if __name__ == "__main__":

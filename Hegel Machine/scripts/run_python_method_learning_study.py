@@ -321,7 +321,7 @@ def run_study(output, *, provider_factory=None, auth_mode=None, resume_author=No
     for index, phase in enumerate(plan.get("prior_author_phases", [])):
         directory = output / "prior_author_phases" / f"phase_{index:03d}"
         write_json(directory / "costs.json", phase)
-        shutil.copy2(phase["result"], directory / "result.json")
+        (directory / "result.json").symlink_to(Path(phase["result"]).resolve())
     shutil.copytree(ROOT / "src/hegel_machine/cognition", output / "source_at_run/src/hegel_machine/cognition",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     for name in (Path(__file__).name, "run_python_procedure_study.py", "run_python_pending_advice_study.py",

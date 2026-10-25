@@ -612,9 +612,15 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
                     'compute_cost', 'completion_reserve')},
                 'automatic_matching_action': {'action': 'run', 'arguments': retry}}
     index = next(i for i, item in enumerate(agent.questions) if item['id'] == question['id'])
-    directory = (Path('_experiment_models') / f'native_conditions_{index:04d}_{len(rounds):04d}'
-                 / '_evaluated_model')
-    (agent.workspace / directory).mkdir(parents=True, exist_ok=True)
+    execution_index = len(rounds)
+    execution = Path('_experiment_models') / f'native_conditions_{index:04d}_{execution_index:04d}'
+    # Bank chronology is local to this question; inherited exports and reopened
+    # banks may already occupy the same file names. Keep those versions intact.
+    while (agent.workspace / execution).exists():
+        execution_index += 1
+        execution = Path('_experiment_models') / f'native_conditions_{index:04d}_{execution_index:04d}'
+    directory = execution / '_evaluated_model'
+    (agent.workspace / directory).mkdir(parents=True)
     models = []
     for candidate_index, candidate in enumerate(result['candidates']):
         model = directory / f'candidate_{candidate_index:04d}.py'

@@ -10,6 +10,8 @@ from statistics import mean
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 from hegel_machine.cognition.models import ResearchConfig
 from hegel_machine.cognition.unified_session import UnifiedResearchSession, task_sequence
@@ -19,8 +21,7 @@ ARMS = ("full", "fixed_library", "no_active", "no_memory")
 
 
 def write(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=False, allow_nan=True)
 
 
 def prepare(output):

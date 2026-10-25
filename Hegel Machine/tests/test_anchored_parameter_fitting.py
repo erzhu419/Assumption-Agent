@@ -31,7 +31,7 @@ def best(programs, report):
     return min(programs, key=report['losses'].__getitem__)
 
 
-def test_offset_fits_the_whole_after_without_changing_the_parent_or_legacy_fit_cost():
+def test_offset_fits_the_whole_after_and_both_fitters_retain_the_stable_candidate():
     pattern = binary('add', PARENT, constant(0.))
     selected = template(pattern, [(1,)])
     rows = observations(lambda x: 5. * x + 7.)
@@ -40,15 +40,17 @@ def test_offset_fits_the_whole_after_without_changing_the_parent_or_legacy_fit_c
     fitted = best(programs, report)
     assert fitted.children[1].value == pytest.approx(7., abs=1e-8)
     assert all(program.op == 'add' and program.children[0] == PARENT for program in programs)
-    assert work.spent == report['actual_compute_cost'] == 4 * len(rows)
+    assert work.spent == report['actual_compute_cost'] == 5 * len(rows)
+    assert report['candidate_methods'] == ['initial', 'ridge_lstsq', 'stable_lstsq']
     assert report['status'] == 'completed' and report['actual_fitted_rows'] == len(rows)
     assert not report['scientific_support'] and not report['global_optimum_established']
     legacy_work, legacy_report = SearchBudget(1000), {}
     legacy = fit_template(selected, {}, rows, legacy_work, report=legacy_report)
     # The old fitter still attempts its normal whole-output calibration. Here
     # its result is cached as the same Program, so that attempt costs one pass.
-    assert legacy == programs and legacy_work.spent == 5 * len(rows)
-    assert set(legacy_report) == {'fitted_rows', 'losses'}
+    assert legacy == programs and legacy_work.spent == 6 * len(rows)
+    assert legacy_report['candidate_methods'] == report['candidate_methods']
+    assert legacy_report['linear_diagnostics'] == report['linear_diagnostics']
 
 
 def test_data_only_guard_and_fixed_parent_constants_leave_startup_parameters_linear():
@@ -66,7 +68,7 @@ def test_data_only_guard_and_fixed_parent_constants_leave_startup_parameters_lin
     assert fitted.children[1].children[0].children[0].value == pytest.approx(3., abs=1e-7)
     assert fitted.children[1].children[1].value == pytest.approx(7., abs=1e-7)
     assert all(fitted.predict(row) == pytest.approx(row.target, abs=1e-7) for row in rows)
-    assert work.spent == report['actual_compute_cost'] == 5 * len(rows)
+    assert work.spent == report['actual_compute_cost'] == 6 * len(rows)
     assert definition.body.children[0] == guard and report['status'] == 'completed'
 
 
@@ -82,7 +84,7 @@ def test_one_lexical_hole_parameter_stays_shared_at_both_definition_occurrences(
     assert fitted.definition == definition
     expanded = fitted.expanded()
     assert expanded.children[1].children[0] == expanded.children[1].children[1] == fitted.children[1]
-    assert work.spent == 4 * len(rows) and report['status'] == 'completed'
+    assert work.spent == 5 * len(rows) and report['status'] == 'completed'
 
 
 def test_nonlinear_trials_preserve_the_parent_and_do_not_claim_a_global_fit():
@@ -94,7 +96,9 @@ def test_nonlinear_trials_preserve_the_parent_and_do_not_claim_a_global_fit():
     rows = observations(lambda x: 5. * x + 49.)
     report, work = {}, SearchBudget(1000)
     programs = fit_parameter_slots(selected, {}, rows, work, report=report)
-    assert report['status'] == 'completed' and report['losses'][best(programs, report)] > 1.
+    assert report['status'] == 'UNKNOWN' and report['losses'][best(programs, report)] > 1.
+    assert report['reason'] == 'nonlinear_parameter_search_is_local'
+    assert report['search_completed'] and not report['budget_exhausted']
     assert not report['global_optimum_established'] and not report['scientific_support']
     assert all(program.definition == definition and program.children[0] == PARENT for program in programs)
     assert work.spent == report['actual_compute_cost'] == 3 * len(rows)

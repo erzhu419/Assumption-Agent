@@ -12,6 +12,8 @@ import sys
 from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(ROOT)]
 OUTPUT = ROOT / "artifacts/response_composition_transfer_20261011"
 HISTORICAL = ROOT / "artifacts/response_structure_transfer_20261009"
@@ -20,8 +22,7 @@ METHOD = "shared/consolidated_method.py"
 
 
 def write(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    write_json_checkpoint(path, data, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def declarations(source):

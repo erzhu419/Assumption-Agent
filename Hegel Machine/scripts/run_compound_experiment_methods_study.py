@@ -12,14 +12,15 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 ARTIFACTS = ROOT / "artifacts/compound_experiment_methods_20260913"
 PROTOCOL = ARTIFACTS / "protocol.json"
 ARMS = ("v070", "compound_methods")
 
 
 def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def load_runtime(path):

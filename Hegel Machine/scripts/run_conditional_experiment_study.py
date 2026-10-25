@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 from run_conditional_discovery_study import evaluate, learn, run_dir, summarize as summarize_predictions
-from run_knowledge_lineage_study import ROOT, read, save
+from run_knowledge_lineage_study import ROOT, read, save, checkpoint_path
 
 
 def summarize(output, protocol):
@@ -18,7 +18,7 @@ def summarize(output, protocol):
     for arm, total in summary["totals"].items():
         acquisitions, paid_rows = Counter(), Counter()
         for root in protocol["roots"]:
-            state = read(run_dir(output, arm, root) / "checkpoint.json.gz")
+            state = read(checkpoint_path(run_dir(output, arm, root) / "checkpoint.json"))
             for result in state["results"]:
                 for action in result["research"]["actions"]:
                     if action["action"] == "acquire":

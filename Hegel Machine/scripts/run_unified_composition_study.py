@@ -14,6 +14,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine.cognition.models import ResearchConfig
@@ -33,10 +35,7 @@ TASKS = (
 
 
 def write(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=False, allow_nan=True)
 
 
 def tasks_for(seed):
@@ -98,7 +97,8 @@ def prepare(output, *, seeds=None, arms=None):
 
 
 def freeze(output, kind):
-    names = ("code_agent.py", "unified_code_control.py", "unified_object_lab.py", "structure_lab.py",
+    names = ("code_agent.py", "checkpoint_storage.py", "code_provider_context.py",
+             "unified_code_control.py", "unified_object_lab.py", "structure_lab.py",
              "unknown_task_lab.py", "proposers.py", "models.py", "measurement_lab.py", "evaluation.py")
     sources = ([ROOT / "src/hegel_machine/cognition" / name for name in names] if kind == "code"
                else [path for path in (ROOT / "src/hegel_machine/cognition").glob("*.py")

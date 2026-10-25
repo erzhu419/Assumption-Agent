@@ -57,7 +57,7 @@ def guarded_sources():
 def relation(sources=None):
     result = consolidate_revision_relations(sources or guarded_sources(), allocation={'compute': 10000})
     assert result['status'] == 'completed'
-    candidate, = result['candidates']
+    candidate, = [item for item in result['candidates'] if item['kind'] == 'program_context_relation']
     return candidate
 
 
@@ -157,7 +157,17 @@ def test_existing_ordered_constant_and_role_parameter_family_is_not_a_new_contex
     right = revision('b', binary('add', constant(-.1), binary('mul', constant(1.7), feature('v'))),
         role_signature={'v': deepcopy(ROLES['u'])})
     result = consolidate_revision_relations([left, right], allocation={'compute': 1000})
-    assert result['status'] == 'completed' and result['candidates'] == []
+    assert result['status'] == 'completed'
+    assert not any(item['kind'] == 'program_context_relation' for item in result['candidates'])
+    # The explicit before/after records can now also retain a joint proposal;
+    # without measured source failure it remains unavailable for application.
+    for candidate in result['candidates']:
+        assert candidate['kind'] == 'program_revision_relation'
+        attempted = propose_revision(candidate, component('unchanged', constant(0.)), [],
+            evidence_checks=[{'source_ref': {'file': 'unmeasured.json', 'json_path': []},
+                'observation': {'features': {'u': 1.}, 'target': 2., 'history': []}}])
+        assert not attempted['proposals']
+        assert attempted['reason'] == 'source_measured_discrepancy_required'
     assert result['excluded'] == [{'episode_ids': ['a', 'b'], 'status': 'existing_family',
                                   'reason': 'existing_ordered_parameter_family'}]
     assert result['actual_compute_cost'] > 0 and not result['budget_exhausted']

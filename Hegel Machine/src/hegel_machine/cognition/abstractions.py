@@ -7,12 +7,16 @@ executed, compared and removed without a separate interpreter or hidden state.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import permutations
+from math import isfinite
 from typing import Any, Iterator, Sequence
+
+import numpy as np
 
 from .language import Program
 from .models import Observation, SearchBudget
+from .parallel_prediction import predict_rows
 from .synthesis import _fit_linear, _loss, _solve
 
 
@@ -36,6 +40,39 @@ def _bind_constants(program: Program, bindings: dict[tuple[int, ...], float],
     return Program(program.op, program.value, program.name, program.lag,
                    tuple(_bind_constants(child, bindings, path + (index,))
                          for index, child in enumerate(program.children)), program.definition)
+
+
+def _comparison_slot_uses(program, path):
+    """Locate a lexical const slot used directly as a comparison operand."""
+    if path and _at(program, path[:-1]).op in {'ge', 'lt'}:
+        return [(False, path[:-1], 1 - path[-1])]
+    node, through_call = program, False
+    for index in path:
+        through_call = through_call or node.op == 'call'
+        node = node.children[index]
+    if not through_call:
+        return []
+    marker = Program('arg', name='selected_fitting_slot')
+
+    def mark(node, remaining):
+        if not remaining:
+            return marker
+        children = list(node.children)
+        children[remaining[0]] = mark(children[remaining[0]], remaining[1:])
+        return Program(node.op, node.value, node.name, node.lag, tuple(children), node.definition)
+
+    uses = []
+
+    def visit(node, origin=()):
+        if node.op in {'ge', 'lt'}:
+            for index, child in enumerate(node.children):
+                if child == marker and node.children[1 - index] != marker:
+                    uses.append((True, origin, 1 - index))
+        for index, child in enumerate(node.children):
+            visit(child, (*origin, index))
+
+    visit(mark(program, path).expanded())
+    return uses
 
 
 def _parameter_degree(program: Program) -> int:
@@ -301,44 +338,194 @@ def eligible_fitting_rows(program: Program, observations: Sequence[Observation])
                     for name, lag in variables)]
 
 
+def quote_parameter_slot_fit(template: AbstractTemplate, observations: Sequence[Observation],
+                             mapping: dict[str, str] | None = None) -> dict[str, Any]:
+    """Bound one cold, complete finite ``fit_parameter_slots`` call, without prediction.
+
+    This quotes the existing fitter's candidate-by-row account, including both
+    old coordinate rounds and every conditional linear profile they can visit.
+    Preparation, candidate assembly/checking and unpaid comparison belong to
+    the caller's complete research visit. A finite fit does not establish a
+    nonlinear optimum or scientific support.
+    """
+    for path in template.parameter_paths:
+        if _at(template.pattern, path).op != 'const':
+            raise ValueError('parameter_paths must select actual const slots')
+    initial = template.instantiate(mapping or {})
+    rows = eligible_fitting_rows(initial, observations)
+    count, selected = len(rows), len(template.parameter_paths)
+    degree = _slot_degree(template.pattern, template.parameter_paths)
+
+    def lexical_nodes(node):
+        return 1 + sum(lexical_nodes(child) for child in node.children)
+
+    quote = {'scope': 'cold_complete_finite_fit_only', 'compute': 0,
+        'maximum_outputs': 0, 'eligible_rows': count, 'selected_slot_count': selected,
+        'selected_slot_degree': degree, 'expanded_program_nodes': initial.expanded().size,
+        'lexical_program_nodes': lexical_nodes(initial), 'coordinate_compute': 0,
+        'conditional_profile_count_bound': 0, 'conditional_compute': 0}
+    if not count:
+        return quote
+    if not selected:
+        return {**quote, 'compute': count, 'maximum_outputs': 1}
+    if degree <= 1:
+        # Initial, zero basis, p unit bases, ridge and stable evaluations.
+        # Repeated Programs may cost less; restoration cannot assume hot values.
+        return {**quote, 'compute': (selected + 4) * count, 'maximum_outputs': 3}
+
+    comparison_uses = {path: _comparison_slot_uses(template.pattern, path)
+                       for path in template.parameter_paths}
+    trial_bound, threshold_trials, operand_compute = 0, 0, 0
+    for path in template.parameter_paths:
+        uses = comparison_uses[path]
+        # The current value is already measured. Only 0, +1, -1 and at most
+        # nine observed midpoints per operand can add new Program evaluations.
+        trials = 3
+        for expanded, origin, operand in uses:
+            other = _at(initial.expanded() if expanded else initial, origin).children[operand]
+            operand_rows = sum(len(row.history) >= other.minimum_history_depth for row in rows)
+            operand_compute += operand_rows
+            trials += min(9, max(0, operand_rows - 1))
+        trial_bound += trials
+        if uses:
+            threshold_trials += trials
+    coordinate = count + 2 * (trial_bound * count + operand_compute)
+    outputs = 1 + 2 * trial_bound
+    ordinary = tuple(path for path in template.parameter_paths if not comparison_uses[path])
+    if threshold_trials and ordinary and _slot_degree(template.pattern, ordinary) <= 1:
+        # Conditions are collected only from the old coordinate evaluations.
+        # An ordinary-slot trial cannot change the threshold tuple; each new
+        # threshold trial contributes at most one tuple, rather than an
+        # unvisited Cartesian product of possible threshold values.
+        profiles = 1 + 2 * threshold_trials
+        profile_compute = profiles * (len(ordinary) + 4) * count
+        quote.update(conditional_profile_count_bound=profiles,
+                     conditional_compute=profile_compute)
+        outputs += 2 * profiles  # Each profile can append ridge and stable.
+    quote.update(compute=coordinate + quote['conditional_compute'],
+                 maximum_outputs=outputs, coordinate_compute=coordinate)
+    return quote
+
+
 def _fit_slots(template, mapping, observations, budget, risk_quantile, *, report,
-               parameter_degree, calibrate):
+               parameter_degree, calibrate, _evaluation_state=None):
+    started = budget.spent
     initial = template.instantiate(mapping)
     rows = eligible_fitting_rows(initial, observations)
-    if not rows:
-        return [], False, rows
     count = len(rows)
     programs: list[Program] = []
-    measured_losses: dict[Program, float] = {}
+    measured_losses, residuals_by_program, predictions_by_program = (
+        _evaluation_state if _evaluation_state is not None else ({}, {}, {}))
+    methods = []
+    linear = {'status': 'UNKNOWN', 'solver': 'numpy.linalg.lstsq', 'rows': count,
+        'selected_slot_count': len(template.parameter_paths), 'rank': None,
+        'singular_values': [], 'condition_number': None, 'rank_deficient': None,
+        'parameter_identifiability': 'UNKNOWN', 'scope': 'linear_training_rows_only',
+        'least_squares_objective': 'sum_squared_residuals',
+        'evaluation_objective': 'mean_squared_error' if risk_quantile == .5 else 'quantile_loss',
+        'reason': 'linear_basis_not_evaluated'}
     if report is not None:
+        report.pop('linear_diagnostics', None)
+        report.pop('conditional_linear_profiles', None)
+        report.pop('conditional_linear_threshold_paths', None)
         report["losses"] = measured_losses
         report["fitted_rows"] = count
+        report['parameter_paths'] = [list(path) for path in template.parameter_paths]
+        report['selected_slot_degree'] = parameter_degree
+        report['candidate_methods'] = methods
+        if template.parameter_paths and parameter_degree <= 1:
+            report['linear_diagnostics'] = linear
+
+    def finish(completed):
+        identity = ('not_applicable' if not template.parameter_paths else
+            linear['parameter_identifiability'] if parameter_degree <= 1 else 'UNKNOWN')
+        reason = ('no_executable_fitting_rows' if not rows else
+            'parameter_fitting_budget_exhausted' if not completed else
+            'nonlinear_parameter_search_is_local' if template.parameter_paths and parameter_degree > 1 else
+            linear.get('reason') if template.parameter_paths and linear['status'] != 'computed' else
+            'rank_deficient_parameter_fit' if linear['rank_deficient'] else None)
+        if report is not None:
+            report.update(status='UNKNOWN' if reason else 'completed', search_completed=completed,
+                budget_exhausted=bool(rows) and not completed,
+                parameter_identifiability=identity, actual_compute_cost=budget.spent - started,
+                actual_fitted_rows=count if programs else 0, eligible_fitting_rows=count,
+                global_optimum_established=False, scientific_support=False)
+            if reason:
+                report['reason'] = reason
+            else:
+                report.pop('reason', None)
+        return programs, completed, rows
+
+    if not rows:
+        return finish(False)
+
+    def append(program, method):
+        programs.append(program)
+        methods.append(method)
+
+    def training_summary(program, parameters, penalty):
+        residuals = residuals_by_program[program]
+        sse = sum(value * value for value in residuals)
+        return {'train_residual_sum_squares': sse, 'train_mse': sse / count,
+            'train_residual_max_abs': max(abs(value) for value in residuals),
+            'penalty': penalty, 'objective': sse + penalty * sum(value * value for value in parameters),
+            'objective_kind': 'sum_squared_residuals_plus_parameter_penalty',
+            'evaluation_loss': measured_losses[program]}
 
     def evaluate(program: Program) -> float | None:
         if program in measured_losses:
             return measured_losses[program]
-        if not budget.spend(count):
-            return None
-        measured_losses[program] = _loss(program, rows, risk_quantile)
+        if program not in predictions_by_program:
+            if not budget.spend(count):
+                return None
+            predictions_by_program[program] = predict_rows(program, rows)
+        # The same _loss objective and summation order, retaining its residuals
+        # for diagnostics without a second, uncharged prediction pass.
+        residuals = [row.target - prediction for row, prediction in
+                     zip(rows, predictions_by_program[program])]
+        residuals_by_program[program] = residuals
+        measured_losses[program] = (sum(value * value for value in residuals) / count
+            if risk_quantile == .5 else sum(max(risk_quantile * value,
+                (risk_quantile - 1) * value) for value in residuals) / count)
         return measured_losses[program]
 
     best_loss = evaluate(initial)
     if best_loss is None:
-        return [], False, rows
-    programs.append(initial)
+        return finish(False)
+    append(initial, 'initial')
     best = initial
     parameters = list(template.parameters)
-    if parameters and parameter_degree <= 1 and budget.remaining >= (len(parameters) + 2) * count:
+    complete = True
+    basis_programs = None
+    basis_required = (len(parameters) + 2) * count
+    if parameters and parameter_degree <= 1 and _evaluation_state is not None:
         base = template.instantiate(mapping, [0.0] * len(parameters))
-        budget.spend(count)
-        base_values = [base.predict(row) for row in rows]
+        basis_programs = [base]
+        for index in range(len(parameters)):
+            unit = [0.0] * len(parameters)
+            unit[index] = 1.0
+            basis_programs.append(template.instantiate(mapping, unit))
+        basis_required = (sum(program not in predictions_by_program
+                              for program in set(basis_programs)) + 1) * count
+    if parameters and parameter_degree <= 1 and budget.remaining >= basis_required:
+        base = template.instantiate(mapping, [0.0] * len(parameters))
+
+        def basis_values(program):
+            if _evaluation_state is not None and program in predictions_by_program:
+                return predictions_by_program[program]
+            budget.spend(count)
+            values = predict_rows(program, rows)
+            if _evaluation_state is not None:
+                predictions_by_program[program] = values
+            return values
+
+        base_values = basis_values(base)
         columns = []
         for index in range(len(parameters)):
             unit = [0.0] * len(parameters)
             unit[index] = 1.0
             basis = template.instantiate(mapping, unit)
-            budget.spend(count)
-            columns.append([basis.predict(row) - value for row, value in zip(rows, base_values)])
+            columns.append([prediction - value for prediction, value in zip(basis_values(basis), base_values)])
         gram = [[sum(a * b for a, b in zip(left, right)) for right in columns] for left in columns]
         for index in range(len(parameters)):
             gram[index][index] += 1e-9
@@ -347,27 +534,70 @@ def _fit_slots(template, mapping, observations, budget, risk_quantile, *, report
         fitted = template.instantiate(mapping, fitted_parameters)
         fitted_loss = evaluate(fitted)
         if fitted_loss is not None:
-            programs.append(fitted)
+            append(fitted, 'ridge_lstsq')
+            linear['ridge'] = training_summary(fitted, fitted_parameters, 1e-9)
             if fitted_loss < best_loss:
                 best, best_loss, parameters = fitted, fitted_loss, fitted_parameters
+        # Both candidates reuse this exact paid basis and fixed containing
+        # Program. Only the additional candidate's evaluation costs another N.
+        if budget.can_spend(count):
+            design = np.asarray(columns, dtype=float).T
+            try:
+                coefficients, _, rank, singular = np.linalg.lstsq(design, targets, rcond=None)
+            except np.linalg.LinAlgError:
+                linear['reason'] = 'stable_linear_solver_failed'
+            else:
+                stable_parameters = coefficients.tolist()
+                stable = template.instantiate(mapping, stable_parameters)
+                stable_loss = evaluate(stable)
+                if stable_loss is not None:
+                    append(stable, 'stable_lstsq')
+                    condition = float(singular[0] / singular[-1]) if len(singular) and singular[-1] > 0 else None
+                    rank_deficient = int(rank) < len(template.parameter_paths)
+                    basis_errors = design @ coefficients - np.asarray(targets)
+                    linear.update(status='computed', rank=int(rank), singular_values=singular.tolist(),
+                        condition_number=condition if condition is not None and isfinite(condition) else None,
+                        rank_deficient=rank_deficient,
+                        parameter_identifiability='UNKNOWN' if rank_deficient else 'full_rank_linear_design',
+                        stable=training_summary(stable, stable_parameters, 0.),
+                        linear_l2_residual_sum_squares=float(basis_errors @ basis_errors))
+                    linear.update({key: linear['stable'][key] for key in
+                        ('train_residual_sum_squares', 'train_mse', 'train_residual_max_abs')})
+                    linear.pop('reason', None)
+                    if stable_loss < best_loss:
+                        best, best_loss, parameters = stable, stable_loss, stable_parameters
+        else:
+            linear['reason'] = 'stable_linear_candidate_budget_exhausted'
+            complete = False
+    elif parameters and parameter_degree <= 1:
+        # An unaffordable linear basis is not a nonlinear fitting problem.
+        # Keep the paid initial candidate and the actual denied atomic request
+        # so the caller can fund the same least-squares method on continuation.
+        budget.can_spend(basis_required)
+        linear['reason'] = 'linear_basis_budget_exhausted'
+        complete = False
     elif parameters:
         # Comparisons and conditional expressions need actual discrete trials.
         # Candidate thresholds come from current observed values of the operand.
+        comparison_uses = {path: _comparison_slot_uses(template.pattern, path)
+                           for path in template.parameter_paths}
         for _ in range(2):
             improved = False
             for index, path in enumerate(template.parameter_paths):
                 values = [parameters[index], 0.0, 1.0, -1.0]
-                if path:
-                    parent = _at(template.pattern, path[:-1])
-                    if parent.op in {"ge", "lt"}:
-                        other = _at(template.instantiate(mapping, parameters), path[:-1]).children[1 - path[-1]]
+                uses = comparison_uses[path]
+                if uses:
+                    current = template.instantiate(mapping, parameters)
+                    operands = dict.fromkeys(_at(current.expanded() if expanded else current, origin).children[operand]
+                        for expanded, origin, operand in uses)
+                    for other in operands:
                         # The complete program can execute a startup branch
                         # while this threshold operand still requires history.
                         operand_rows = [row for row in rows
                                         if len(row.history) >= other.minimum_history_depth]
                         if not budget.spend(len(operand_rows)):
-                            return programs, False, rows
-                        ordered = sorted({other.predict(row) for row in operand_rows})
+                            return finish(False)
+                        ordered = sorted(set(predict_rows(other, operand_rows)))
                         midpoints = [(left + right) / 2 for left, right in zip(ordered, ordered[1:])]
                         if len(midpoints) > 9:
                             midpoints = [midpoints[round(i * (len(midpoints) - 1) / 8)] for i in range(9)]
@@ -378,30 +608,62 @@ def _fit_slots(template, mapping, observations, budget, risk_quantile, *, report
                     trial = template.instantiate(mapping, trial_parameters)
                     trial_loss = evaluate(trial)
                     if trial_loss is None:
-                        return programs, False, rows
+                        return finish(False)
                     if trial_loss < best_loss:
                         best, best_loss, parameters = trial, trial_loss, trial_parameters
-                        programs.append(best)
+                        append(best, 'coordinate_trial')
                         improved = True
             if not improved:
                 break
 
+        # A threshold makes the joint problem nonlinear, while the other
+        # declared slots can remain affine with that threshold fixed. Preserve
+        # the complete old finite route first, then reuse its paid predictions
+        # and the ordinary linear fitter for conditions it actually visited.
+        threshold_paths = tuple(path for path, uses in comparison_uses.items() if uses)
+        ordinary_paths = tuple(path for path in template.parameter_paths if not comparison_uses[path])
+        if (not calibrate and threshold_paths and ordinary_paths
+                and _slot_degree(template.pattern, ordinary_paths) <= 1):
+            conditions = {}
+            for program in tuple(measured_losses):
+                condition = tuple(_at(program, path).value for path in threshold_paths)
+                conditions.setdefault(condition, program)
+            profiles = []
+            if report is not None:
+                report['conditional_linear_profiles'] = profiles
+                report['conditional_linear_threshold_paths'] = [list(path) for path in threshold_paths]
+            for condition, pattern in conditions.items():
+                local_report = {}
+                selected = replace(template, pattern=pattern, parameter_paths=ordinary_paths)
+                fitted, completed, _ = _fit_slots(selected, {}, rows, budget, risk_quantile,
+                    report=local_report, parameter_degree=1, calibrate=False,
+                    _evaluation_state=(measured_losses, residuals_by_program, predictions_by_program))
+                profiles.append({'threshold_values': list(condition),
+                    **{key: value for key, value in local_report.items() if key != 'losses'}})
+                for program, method in zip(fitted, local_report['candidate_methods']):
+                    if method != 'initial' and program not in programs:
+                        append(program, 'conditional_' + method)
+                        if measured_losses[program] < best_loss:
+                            best, best_loss = program, measured_losses[program]
+                if not completed:
+                    return finish(False)
+
     if not calibrate:
-        return programs, True, rows
+        return finish(complete)
     # A reusable nonlinear subexpression becomes an observed coordinate in an
     # ordinary new model. Its coefficients are refitted instead of copying old
     # predictions. Also permits a changed offset around a learned full theory.
     if budget.spend(count):
         calibrated = _fit_linear((best,), rows)
         if evaluate(calibrated) is not None and calibrated not in programs:
-            programs.append(calibrated)
+            append(calibrated, 'output_calibration')
     if template.kind == "subexpression" and budget.spend(count):
         current = [Program("feature", name=name)
                    for name in sorted(set.intersection(*(set(row.features) for row in rows)))]
         combined = _fit_linear([*current, best], rows)
         if evaluate(combined) is not None and combined not in programs:
-            programs.append(combined)
-    return programs, True, rows
+            append(combined, 'current_feature_calibration')
+    return finish(complete)
 
 
 def fit_parameter_slots(template: AbstractTemplate, mapping: dict[str, str],
@@ -411,30 +673,22 @@ def fit_parameter_slots(template: AbstractTemplate, mapping: dict[str, str],
 
     Lexical Definition arguments keep repeated holes shared. Constants outside
     ``parameter_paths`` and all operators/history offsets stay fixed. Linear
-    selected parameters use the existing basis solve; nonlinear dependence uses
-    the existing finite coordinate trials, with no global optimum claim. No
+    selected parameters retain the ridge solve and add stable least squares on
+    the same paid basis. Nonlinear dependence uses the existing finite trials;
+    affine remaining slots are then fitted under the conditions actually tried.
+    Rank deficiency and local trials retain UNKNOWN identifiability. No
     output calibration or extra current-feature model is appended.
     """
     for path in template.parameter_paths:
         if _at(template.pattern, path).op != 'const':
             raise ValueError('parameter_paths must select actual const slots')
-    started = budget.spent
     local_report = report if report is not None else {}
     local_report['losses'] = {}
     local_report.pop('reason', None)
-    programs, completed, rows = _fit_slots(template, mapping, observations, budget, q,
+    programs, _, _ = _fit_slots(template, mapping, observations, budget, q,
         report=local_report, parameter_degree=_slot_degree(template.pattern, template.parameter_paths),
         calibrate=False)
-    local_report.update(status='completed' if completed else 'UNKNOWN',
-        search_completed=completed, budget_exhausted=not completed and bool(rows),
-        actual_fitted_rows=len(rows) if programs else 0, eligible_fitting_rows=len(rows),
-        actual_compute_cost=budget.spent - started,
-        parameter_scope='declared_const_slots_only', global_optimum_established=False,
-        scientific_support=False)
-    if not rows:
-        local_report['reason'] = 'no_executable_fitting_rows'
-    elif not completed:
-        local_report['reason'] = 'parameter_fitting_budget_exhausted'
+    local_report['parameter_scope'] = 'declared_const_slots_only'
     return programs
 
 

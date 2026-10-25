@@ -29,6 +29,7 @@ from scripts.run_temporal_paired_retention import (
 CALIBRATIONS = {"first": (98106007, 1), "second": (99406007, 2)}
 SOURCE_FILES = (
     "scripts/run_temporal_calibration_transfer.py",
+    "src/hegel_machine/cognition/checkpoint_storage.py",
     "src/hegel_machine/cognition/stateful_instrument_lab.py",
     "src/hegel_machine/cognition/ambiguous_instrument_lab.py",
     "src/hegel_machine/cognition/temporal_inquiry.py",

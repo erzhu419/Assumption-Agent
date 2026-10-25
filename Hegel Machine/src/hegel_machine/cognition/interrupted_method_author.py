@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from .proposers import _events
+from .checkpoint_storage import write_text_incrementally
 from .temporal_method_learning import METHOD_PATH
 
 
@@ -129,6 +130,8 @@ def recover_interrupted_method_author(previous_workspace, workspace):
         feedback = {'written': METHOD_PATH, 'edit_practice': feedback}
     retained['events'].append({'step': call - 1, 'action': action, 'arguments': arguments,
                               'feedback': feedback, 'usage': usage})
-    (trial / 'result.json').write_text(json.dumps(result, indent=2))
-    (workspace / 'runtime_interrupted.json').write_text(json.dumps(retained, indent=2))
+    write_text_incrementally(trial / 'result.json', json.dumps(result, indent=2))
+    destination = workspace / 'runtime_interrupted.json'
+    write_text_incrementally(destination, json.dumps(retained, indent=2),
+        base=previous_workspace / 'active.json' if not destination.exists() else None)
     return retained

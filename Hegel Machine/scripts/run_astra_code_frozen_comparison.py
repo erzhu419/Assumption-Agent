@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 
 from hegel_machine.cognition.anonymous_method_learning import AUTHOR_INTERFACE
-from hegel_machine.cognition.code_agent import CodexCodeProvider
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
+from hegel_machine.cognition.code_agent import (
+    CodexCodeProvider, _copy_model_file, archived_paid_trace_references)
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.python_method_learning import PythonArchiveMethodLearner
 from hegel_machine.cognition.temporal_method_learning import METHOD_PATH, register_published_method
@@ -128,16 +130,26 @@ def prepare_author(plan, output, provider_factory):
     sources = read_json(source / 'source_outcomes.json')
     earlier = read_json(source / 'author/training.json')
     knowledge = register_published_method(original, earlier, max_steps=plan['method_steps'])
-    write_json(output / 'initial_archive.json', knowledge)
+    write_json(output / 'initial_archive.json', knowledge, base=source / 'initial_archive.json')
     write_json(output / 'source_outcomes.json', sources)
     reference = output / 'reference_archive'
+    previous_reference = source / 'reference_archive'
+    paid_traces = archived_paid_trace_references(original['files'], reference,
+        source_workspace=previous_reference if previous_reference.is_dir() else None)
     for name, contents in original['files'].items():
         path = reference / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents)
+        if name in paid_traces:
+            if path.resolve() != paid_traces[name]:
+                path.symlink_to(paid_traces[name])
+        elif ((previous_reference / name).is_file()
+                and (previous_reference / name).read_text(encoding='utf-8') == contents):
+            _copy_model_file(previous_reference / name, path)
+        else:
+            write_text_incrementally(path, contents)
     workspace = output / 'author'
     author = CodeProgramLearner(provider_factory(workspace), workspace,
-        knowledge=knowledge, cases=plan['practice_cases'], lab_factory=laboratory,
+        knowledge=knowledge, paid_trace_references=paid_traces, cases=plan['practice_cases'], lab_factory=laboratory,
         config=InquiryLLMConfig(**plan['author_limits']),
         practice_limits=InquiryLLMConfig(**plan['limits']),
         prepare_trial=trial_preparer(knowledge, sources, reference,
@@ -149,7 +161,7 @@ def prepare_author(plan, output, provider_factory):
                    'max_model_calls': 0, 'token_budget': 0}}
         for name, case in plan['practice_cases'].items()}
     author.files['practice_interfaces.json'] = json.dumps(public, indent=2)
-    (workspace / 'practice_interfaces.json').write_text(author.files['practice_interfaces.json'])
+    write_text_incrementally(workspace / 'practice_interfaces.json', author.files['practice_interfaces.json'])
     author.common_interface += '\n'.join(dict.fromkeys(
         laboratory(case).task_interface for case in plan['practice_cases'].values()))
     attach_online_research_experience(author, plan['online_research_experience'])

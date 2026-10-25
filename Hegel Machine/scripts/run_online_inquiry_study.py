@@ -20,6 +20,8 @@ from time import process_time
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / 'src'))
 ARMS = ('recursive', 'flat', 'frozen_method')
 MECHANISMS = ('linear', 'quadratic', 'absolute', 'threshold')
@@ -43,7 +45,7 @@ BINARY_METRICS = (
 
 
 def write_json(path, payload):
-    Path(path).write_text(json.dumps(payload, indent=2, allow_nan=False) + '\n')
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=True, allow_nan=False)
 
 
 def task_spec(seed, position, *, changed_structure=False, changed_surface=False):

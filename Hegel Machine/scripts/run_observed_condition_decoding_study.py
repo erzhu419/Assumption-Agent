@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime
+from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime, checkpoint_path
 
 
 def laboratory(task):
@@ -137,7 +137,7 @@ def run_dir(output, arm, root):
 def learn(output, protocol, arm, root):
     module = load_runtime(protocol, arm)
     directory = run_dir(output, arm, root)
-    path = directory / "checkpoint.json.gz"
+    path = checkpoint_path(directory / "checkpoint.json")
     if path.exists() and read(path)["study"]["learning_complete"]:
         return
     tasks = protocol["roots"][root]["tasks"]
@@ -146,7 +146,7 @@ def learn(output, protocol, arm, root):
             "costs": dict.fromkeys(COSTS, 0), "knowledge": {},
             "study": {"steps": 0, "cpu_seconds": 0., "elapsed_seconds": 0., "learning_complete": False}}
         for position, task in enumerate(tasks):
-            task_path = directory / f"task{position:02d}.json.gz"
+            task_path = checkpoint_path(directory / f"task{position:02d}.json")
             if task_path.exists():
                 learned = read(task_path)
             else:
@@ -194,8 +194,8 @@ def learn(output, protocol, arm, root):
         state["study"]["elapsed_seconds"] += time.monotonic() - wall
         state["study"]["learning_complete"] = (len(state["results"]) == len(tasks)
             and not state["pending_revisits"])
-        save(directory / f"visit{state['study']['steps']:02d}.json.gz", state)
         save(path, state)
+        save(checkpoint_path(directory / f"visit{state['study']['steps']:02d}.json"), state, base=path)
         print({"arm": arm, "root": root, "steps": state["study"]["steps"],
             "complete": state["study"]["learning_complete"], "costs": state["costs"]}, flush=True)
         session = module.UnifiedResearchSession(state=state, lab_factory=laboratory)
@@ -230,7 +230,7 @@ def evaluate(output, protocol, arm, root):
     path = run_dir(output, arm, root) / "evaluation.json"
     if path.exists():
         return
-    state = read(path.parent / "checkpoint.json.gz")
+    state = read(checkpoint_path(path.parent / "checkpoint.json"))
     scored, settings = [], protocol["terminal"]
     for position, task in enumerate(state["tasks"]):
         report = state["results"][position]["research"]
@@ -259,7 +259,7 @@ def summarize(output, protocol):
             "terminal_costs": dict.fromkeys(COSTS, 0), "learning_cpu_seconds": 0., "terminal_cpu_seconds": 0.}
         for root in protocol["roots"]:
             directory = run_dir(output, arm, root)
-            state = read(directory / "checkpoint.json.gz")
+            state = read(checkpoint_path(directory / "checkpoint.json"))
             for key in COSTS:
                 total["learning_costs"][key] += state["costs"][key]
             total["learning_cpu_seconds"] += state["study"]["cpu_seconds"]

@@ -7,6 +7,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
+from .checkpoint_storage import write_text_incrementally
 from .experiments import compare, run_research, run_sequence
 from .memory import KnowledgeLibrary
 from .models import ResearchConfig
@@ -169,7 +170,7 @@ def dispatch(args):
         for stage in args.tasks:
             researcher.config = replace(config, seed=args.seed + stage * 10007)
             report = researcher.run(GrowthLab(seed=args.seed, stage=stage))
-            args.checkpoint.write_text(json.dumps(researcher.to_dict(), indent=2) + "\n", encoding="utf-8")
+            write_text_incrementally(args.checkpoint, json.dumps(researcher.to_dict(), indent=2) + "\n")
             print(json.dumps({"stage": stage, **{key: report[key] for key in
                 ("status", "expression", "costs", "selected_channels", "uncertainty")}}))
         return 0
@@ -215,7 +216,7 @@ def dispatch(args):
         args.checkpoint.parent.mkdir(parents=True, exist_ok=True)
 
         def save_session(state):
-            args.checkpoint.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            write_text_incrementally(args.checkpoint, json.dumps(state, ensure_ascii=False, indent=2) + "\n")
 
         report = session.run(max_steps=args.steps, on_checkpoint=save_session)
         save_session(report)
@@ -237,13 +238,13 @@ def dispatch(args):
         report = run_sequence(config, library=library)
         if args.memory:
             args.memory.parent.mkdir(parents=True, exist_ok=True)
-            args.memory.write_text(json.dumps(report["knowledge"], indent=2) + "\n", encoding="utf-8")
+            write_text_incrementally(args.memory, json.dumps(report["knowledge"], indent=2) + "\n")
         summary = {key: value for key, value in report.items() if key not in {"episodes", "knowledge"}}
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_text_incrementally(args.output, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         summary_path = args.output.with_name(args.output.stem + "_summary.json")
-        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_text_incrementally(summary_path, json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
         summary["output"] = str(args.output.resolve())
         summary["summary_output"] = str(summary_path.resolve())
     print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -272,7 +273,7 @@ def _dispatch_lab(args):
     args.checkpoint.parent.mkdir(parents=True, exist_ok=True)
 
     def save(state):
-        args.checkpoint.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_text_incrementally(args.checkpoint, json.dumps(state, ensure_ascii=False, indent=2) + "\n")
 
     report = session.run(max_steps=args.steps, research_steps=args.research_steps, on_checkpoint=save)
     save(report)
@@ -280,9 +281,9 @@ def _dispatch_lab(args):
     summary["checkpoint"] = str(args.checkpoint.resolve())
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_text_incrementally(args.output, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         summary_path = args.output.with_name(args.output.stem + "_summary.json")
-        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_text_incrementally(summary_path, json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
         summary["output"] = str(args.output.resolve())
         summary["summary_output"] = str(summary_path.resolve())
     print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -297,7 +298,7 @@ def main(argv=None):
 
 def _save_json(path, report):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_text_incrementally(path, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
 
 def _dispatch_extended(args):

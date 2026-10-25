@@ -183,3 +183,86 @@ def test_exploration_policy_requires_the_explicit_finite_contract(policy):
     assert validate_exploration_policy(None) is None
     with pytest.raises(ValueError, match='exploration_policy'):
         select_question_plan(question(), [], [], exploration_policy=policy)
+
+
+def test_common_comparable_pairs_match_legacy_intersection_with_missing_and_irrelevant_cells():
+    from hegel_machine.cognition.question_selection import _partial_prediction_scores
+
+    plans = [{'id': 'cold', 'tolerance': .5, 'observation_cost': 1},
+             {'id': 'conditional', 'tolerance': .5, 'observation_cost': 2,
+              'branches': [{'tolerance': .1}, {'tolerance': .1}]}]
+    evaluated = {}
+    for identifier, answer, predictions in [
+            ('A', 0., {'cold': (0.,), 'conditional': (0., 0, 0.)}),
+            ('alias_A', 0., {'cold': (0.,), 'conditional': (0., 0, 0.)}),
+            ('B', .1, {'cold': (.2,), 'conditional': (0., 1, 6.)}),
+            ('C', 3., {'conditional': (0., 0, 3.)}),
+            ('D', 4., {'cold': (1.,)}),
+            ('E', 1., {'cold': (2.,), 'conditional': (2., 0, 0.)})]:
+        evaluated[identifier] = {'task_known': True, 'task': {'value': answer},
+            'predictions': predictions, 'prediction_key': identifier,
+            'prediction_status': {plan['id']: {'status': 'predicted'} if plan['id'] in predictions
+                else {'status': 'scoped_unknown', 'reason': 'premise_unknown' if identifier == 'D'
+                      else 'insufficient_history'} for plan in plans}}
+    evaluated['task_unknown'] = {'task_known': False,
+        'task': {'status': 'scoped_unknown', 'reason': 'insufficient_history'}}
+    result = {'groups': [], 'pairwise_edges': [], 'scores': []}
+    universe, blocked, task_blocked = _partial_prediction_scores(result, evaluated, plans, .25)
+    coverage = result['prediction_coverage']
+    comparable = {row['id']: row['comparable_pairs'] for row in coverage['plans']}
+    # The original post-pass is a small independent oracle, including its order.
+    legacy = [pair for pair in universe if all(pair in comparable[plan['id']] for plan in plans)]
+    assert coverage['common_comparable_pairs'] == legacy == [
+        ['group_000', 'group_004'], ['group_001', 'group_004']]
+    assert coverage['common_comparable_pair_count'] == 2
+    assert len(result['pairwise_edges']) == 10 and len(universe) == 9
+    assert result['pairwise_edges'][0]['different_task_answer'] is False
+    assert result['groups'][0]['theory_ids'] == ['A', 'alias_A']
+    assert coverage['task_unknown_theory_ids'] == ['task_unknown']
+    assert blocked == ['conditional'] and task_blocked is False
+    assert result['unknown_reason'] == 'incomplete_candidate_predictions'
+    assert [(score['separated_pairs'], score['comparable_pairs'], score['unknown_pairs'],
+             score['effective_pairs'], score['common_comparable_pairs'], score['G'], score['G_upper'])
+            for score in result['scores']] == [(2, 5, 4, 9, 2, 2 / 9, 6 / 9),
+                                              (4, 5, 4, 9, 2, 4 / 9, 8 / 9)]
+
+
+def test_large_partial_group_pool_keeps_all_edges_without_quadratic_pair_membership(monkeypatch):
+    import hegel_machine.cognition.question_selection as selection
+
+    count = 256  # A reachable distinct-forecast subset of the retained 1932-model roster.
+    pair_count = count * (count - 1) // 2
+    comparison_limit = pair_count * 2
+    comparisons = 0
+
+    class CountedID(str):
+        def __eq__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            assert comparisons <= comparison_limit, 'repeated pair-ID membership is quadratic'
+            return str.__eq__(self, other)
+
+    original_combinations = selection.combinations
+
+    def tracked_pairs(groups, size):
+        for group in groups:
+            group['id'] = CountedID(group['id'])
+        return original_combinations(groups, size)
+
+    monkeypatch.setattr(selection, 'combinations', tracked_pairs)
+    plans = [{'id': name, 'tolerance': 0.} for name in ('first', 'second')]
+    evaluated = {str(i): {'task_known': True, 'task': {'value': float(i)},
+        'predictions': {plan['id']: (float(i),) for plan in plans},
+        'prediction_status': {plan['id']: {'status': 'predicted'} for plan in plans}}
+        for i in range(count)}
+    result = {'groups': [], 'pairwise_edges': [], 'scores': []}
+    universe, blocked, task_blocked = selection._partial_prediction_scores(result, evaluated, plans, 0.)
+    assert comparisons <= comparison_limit
+    assert len(result['groups']) == count
+    assert len(result['pairwise_edges']) == len(universe) == pair_count
+    assert result['prediction_coverage']['common_comparable_pairs'] == universe
+    assert universe[0] == ['group_000', 'group_001']
+    assert universe[-1] == ['group_254', 'group_255']
+    assert not blocked and not task_blocked
+    assert all(score['effective_pairs'] == score['comparable_pairs'] == pair_count
+               and score['G'] == score['G_upper'] == 1. for score in result['scores'])

@@ -14,6 +14,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 
 from hegel_machine.cognition.controller import CognitiveAgent
 from hegel_machine.cognition.environments import make_suite
@@ -238,7 +239,7 @@ def main(argv=None):
 
     def save(report):
         report["source"]["checkpoint"] = str(args.checkpoint.resolve())
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_text_incrementally(args.output, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
     report = run_study(checkpoint, tasks=args.tasks, seed=args.seed, observation_budget=args.observation_budget,
                        compute_budget=args.compute_budget, rounds=args.rounds,

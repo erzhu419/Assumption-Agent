@@ -12,6 +12,7 @@ from math import isfinite
 import sys
 from time import monotonic
 
+from .checkpoint_storage import write_text_incrementally
 from .online_inquiry_llm import InquiryLLMAgent, InquiryLLMConfig, _PLAN_RUNNER
 from .proposers import _run
 from .temporal_paired_method import execute_procedure
@@ -337,8 +338,8 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
     def _write_evidence(self):
         # Override the inherited numerical-row writer, including during init.
         # This environment has action records, not an empty fitting dataset.
-        (self.workspace / "laboratory_observations.json").write_text(
-            json.dumps(self.observations, ensure_ascii=False), encoding="utf-8")
+        write_text_incrementally(self.workspace / "laboratory_observations.json",
+            json.dumps(self.observations, ensure_ascii=False))
 
     @staticmethod
     def _action_observation(record):
@@ -446,7 +447,7 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
                            ("llm_inquiries.json", self.llm_inquiries),
                            ("current_observation.json", self._current_observation()),
                            ("action_observations.json", [self._action_observation(r) for r in self.observations])):
-            (self.workspace / name).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            write_text_incrementally(self.workspace / name, json.dumps(data, ensure_ascii=False))
         self._prepare_program_state()
 
     def _latest_program_result(self, path):
@@ -567,7 +568,7 @@ class DiscoveryWorldAgent(InquiryLLMAgent):
                    "research_advice": deepcopy(self.research_advice),
                    "answer_semantics": "Agent-authored support on cited evidence; new evidence requires review."}
         self.files["method_decision.json"] = json.dumps(summary, ensure_ascii=False)
-        (self.workspace / "method_decision.json").write_text(self.files["method_decision.json"], encoding="utf-8")
+        write_text_incrementally(self.workspace / "method_decision.json", self.files["method_decision.json"])
 
     def _request(self):
         from .world_prerequisite_research import public_reference_history

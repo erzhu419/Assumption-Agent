@@ -1,8 +1,11 @@
 """Actual Common source references keep native identities and executed failures."""
 from copy import deepcopy
 import json
+from pathlib import Path
 
+from hegel_machine.cognition import anonymous_method_learning
 from hegel_machine.cognition.anonymous_method_learning import compact_workspace_result
+from hegel_machine.cognition.checkpoint_storage import read_json_checkpoint, write_json_checkpoint
 from hegel_machine.cognition.language import Program
 from hegel_machine.cognition.question_routing import register_theories, resolved_theories
 from hegel_machine.cognition.research_episodes import (
@@ -49,6 +52,56 @@ def scientific_entries(intake):
                 'program', 'role_signature', 'output_unit', 'context_ref', 'context_family_ref')},
              'source_ref': pool[identifier]['program_source_ref']}
             for episode in intake['episodes'] for identifier in episode['theory_ids']]
+
+
+def test_borrowed_compact_checkpoint_preserves_live_banks_and_restores_references(tmp_path, monkeypatch):
+    agent, _, _ = source(tmp_path / 'source')
+    before = json.loads(json.dumps(agent.questions))
+    bank = agent.questions[1]['native_condition_research']
+    costs = deepcopy(agent.costs)
+    borrowed = agent.checkpoint_result('researching')
+    assert borrowed['online_questions'] is agent.questions
+    state_path = agent.workspace / 'research_state.json'
+    reader = anonymous_method_learning.read_json_checkpoint
+    reads = []
+
+    def read_questions_only(path, *, keys=None):
+        assert path == state_path and keys == {'questions'}, 'expanded unrelated paid state for compaction'
+        reads.append(path)
+        return reader(path, keys=keys)
+
+    read_text = Path.read_text
+
+    def no_full_state_text(path, *args, **kwargs):
+        assert path != state_path, 'allocated complete state text only to read questions'
+        return read_text(path, *args, **kwargs)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(anonymous_method_learning, 'read_json_checkpoint', read_questions_only)
+        patched.setattr(Path, 'read_text', no_full_state_text)
+        compact = compact_workspace_result(agent, borrowed)
+
+    assert reads == [state_path]
+    assert agent.questions[1]['native_condition_research'] is bank
+    assert json.loads(json.dumps(agent.questions)) == before
+    assert compact['online_questions'] is not agent.questions
+    assert compact['online_questions'][1] is not agent.questions[1]
+    assert compact['outgoing_knowledge']['question_traces'][1] is not agent.questions[1]
+    assert compact['online_questions'][0] is agent.questions[0]
+    assert compact['events'] is agent.events and compact['theory_index'] is agent.theory_index
+    for question in (compact['online_questions'][1], compact['outgoing_knowledge']['question_traces'][1]):
+        assert question['native_condition_research'] == {
+            'full_content_file': 'research_state.json',
+            'json_path': ['questions', 1, 'native_condition_research'], 'round_count': len(bank)}
+    write_json_checkpoint(agent.workspace / 'training.json', compact)
+    previous = read_json_checkpoint(agent.workspace / 'training.json')
+    resumed, laboratory = prepared(tmp_path / 'restored'), PaidConditionalLab()
+    monkeypatch.setattr(laboratory, 'execute', lambda *_args, **_kwargs:
+        (_ for _ in ()).throw(AssertionError('recovery repurchased paid evidence')))
+    resumed.restore_practice_research(previous, agent.workspace, laboratory, confirmation_seed=1709)
+    assert json.loads(json.dumps(resumed.questions)) == before
+    assert resumed.costs == costs == agent.costs
+    assert json.loads(json.dumps(agent.questions)) == before
 
 
 def test_distinct_common_sources_with_same_native_id_reconstruct_without_overwriting(tmp_path):

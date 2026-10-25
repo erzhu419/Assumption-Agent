@@ -341,7 +341,8 @@ def _allocated(owner):
     return type(allocation) in (int, float) and allocation > 0
 
 
-def build_agenda(questions, research_candidates, theories, *, mission=None, budget=None, matching=None):
+def build_agenda(questions, research_candidates, theories, *, mission=None, budget=None, matching=None,
+                 parent_research=None):
     """Retain both queues; select only declared, funded work in a fixed order."""
     original = _records(questions)
     combined = {question['id']: dict(question) for question in original}
@@ -363,6 +364,23 @@ def build_agenda(questions, research_candidates, theories, *, mission=None, budg
     ordered = [q for q in combined.values() if pending_dependency(q)]
     ordered.extend(q for q in combined.values() if not pending_dependency(q))
     for question in ordered:
+        retained = (parent_research or {}).get(question['id'])
+        if retained is not None:
+            for work in retained:
+                entry = {**deepcopy(work), 'queue': 'task', 'kind': question.get('kind'),
+                         'work_kind': 'parent_revision', 'status': 'ready'}
+                if work['state'] in {'completed_no_gain', 'refuted'}:
+                    entry.update(status='completed', reason=work['state'])
+                elif work['state'] not in {'unstarted', 'budget_incomplete'}:
+                    entry.update(status='deferred', reason=work['state'])
+                elif min(budget.get('compute', 0), work.get('available_compute', budget.get('compute', 0))) \
+                        < work['minimum_compute_for_progress']:
+                    entry.update(status='deferred', reason='minimum_progress_compute_unfunded')
+                if entry['status'] == 'deferred':
+                    deferred.append({key: deepcopy(entry[key]) for key in
+                                     ('question_id', 'meaning_version', 'queue', 'reason')})
+                queues['task_agenda'].append(entry)
+            continue
         owner = _owner(question, mission)
         queue = question.get('queue', 'theory' if question.get('mission', {}).get('purpose') in _THEORY_PURPOSES else 'task')
         expression = (question.get('query_semantics') or {}).get('query_expression')
@@ -423,5 +441,7 @@ def build_agenda(questions, research_candidates, theories, *, mission=None, budg
         selected = next((entry for entry in queues[f'{queue}_agenda'] if entry['status'] == 'ready'), None)
         if selected:
             result.update(status='selected', selected_question_id=selected['question_id'], selected_queue=queue)
+            if selected.get('question_ref'):
+                result['selected_question_ref'] = deepcopy(selected['question_ref'])
             break
     return result

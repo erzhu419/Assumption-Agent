@@ -14,29 +14,43 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_text_incrementally
 COSTS = ("observation_cost", "measurement_cost", "compute_cost")
 
 
+def checkpoint_path(path):
+    """Prefer the current plain snapshot, retaining actual old gzip recovery."""
+    path = Path(path)
+    plain = path.with_suffix("") if path.suffix == ".gz" else path
+    historical = plain.with_name(plain.name + ".gz")
+    return plain if plain.exists() or not historical.exists() else historical
+
+
 def read(path):
+    path = checkpoint_path(path)
     if path.suffix == ".gz":
         with gzip.open(path, "rt") as stream:
             return json.load(stream)
     return json.loads(path.read_text())
 
 
-def save(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
+def save(path, value, *, base=None):
+    # Existing gzip snapshots stay untouched. New checkpoints use the ordinary
+    # JSON reader and can share unchanged blocks with the actual prior state.
+    path = Path(path)
     if path.suffix == ".gz":
-        with gzip.open(temporary, "wt") as stream:
-            json.dump(value, stream, separators=(",", ":"))
-    else:
-        temporary.write_text(json.dumps(value, indent=2) + "\n")
-    temporary.replace(path)
+        path = path.with_suffix("")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if base is not None:
+        base = checkpoint_path(base)
+        if base.suffix == ".gz":
+            base = None
+    write_text_incrementally(path, json.dumps(value, indent=2) + "\n", base=base)
 
 
 def checkpoint(output, arm, root, position):
-    return output / "runs" / arm / root / f"stage{position:02d}" / "checkpoint.json.gz"
+    return checkpoint_path(output / "runs" / arm / root / f"stage{position:02d}" / "checkpoint.json")
 
 
 def source(protocol, root):
@@ -93,7 +107,8 @@ def learn(output, protocol, arm, root):
                 protocol["roots"][root]["source_report"] if mode != "empty" else None),
             "input_counts": {key: len(value) for key, value in (incoming or {}).items()
                 if isinstance(value, list)}}
-        save(path, state)
+        save(path, state, base=checkpoint(output, arm, root, position - 1)
+            if mode == "cumulative" and position else None)
         print(json.dumps({**state["study"], "status": state["results"][0]["research"]["status"],
             "costs": state["costs"]}), flush=True)
 

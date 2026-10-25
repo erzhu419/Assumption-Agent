@@ -9,9 +9,11 @@ import shutil
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_text_incrementally
 sys.path.insert(0, str(ROOT / "src"))
 
-from hegel_machine.cognition.code_agent import CodexCodeProvider, retain_evaluated_python_model
+from hegel_machine.cognition.code_agent import _copy_model_file, CodexCodeProvider, retain_evaluated_python_model
 from hegel_machine.cognition.code_session import CodeComparisonSession
 
 PRIMARY = ROOT / "artifacts/code_session_v026_20260909.json"
@@ -56,7 +58,7 @@ def main():
         for index in (2, 5):
             result = state["code"]["results"][index]
             destination = WORKSPACE / f"task_{index:03d}"
-            shutil.copytree(result["workspace"], destination)
+            shutil.copytree(result["workspace"], destination, copy_function=_copy_model_file)
             result["workspace"] = str(destination)
         result = state["code"]["results"][2]
         last = result["events"][-1]
@@ -74,7 +76,7 @@ def main():
         report["extension"] = {"kind": "completion_extension", "original": str(PRIMARY),
             "original_costs": before, "retained_evaluated_candidate": 2,
             "extra_costs": {key: report["code"]["costs"][key]-value for key, value in before.items()}}
-        OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+        write_text_incrementally(OUTPUT, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         print(json.dumps({"visited": len(report["code"]["results"]),
             "models": sum(bool(row["model"]) for row in report["code"]["results"]),
             "costs": report["code"]["costs"]}), flush=True)
@@ -90,8 +92,10 @@ def main():
     session.evaluate()
     checkpoint()
     primary_report = ROOT / "artifacts/code_session_v026_primary_comparison_20260909.json"
-    with primary_report.open("x") as stream:
-        json.dump(original.to_dict(), stream, ensure_ascii=False, indent=2)
+    if primary_report.exists():
+        raise FileExistsError(primary_report)
+    write_text_incrementally(primary_report, json.dumps(original.to_dict(), ensure_ascii=False, indent=2),
+        base=PRIMARY)
     report = session.to_dict()
     summary = {"primary": {"status": original.to_dict()["status"], "code_costs": before,
                     "usable_models": sum(bool(row["model"]) for row in primary["code"]["results"]),

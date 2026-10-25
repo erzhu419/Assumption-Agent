@@ -14,6 +14,8 @@ from statistics import mean
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine import __version__
@@ -28,9 +30,7 @@ ARMS = ("shared", "cold")
 
 
 def write_json(path, value):
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
-    temporary.replace(path)
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=False, allow_nan=True)
 
 
 def protocol(project_root):

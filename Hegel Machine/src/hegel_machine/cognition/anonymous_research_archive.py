@@ -104,6 +104,23 @@ def prepare_frozen_source_archive(source_study, base_archive):
     files = knowledge.setdefault('files', {})
     original_files = dict(files)
     catalog = knowledge.setdefault('source_catalog', [])
+    old_catalog_ids = {entry['id'] for entry in catalog if entry.get('id')}
+
+    def occupied(prefix):
+        label = ':'.join(prefix.parts)
+        return (any(Path(name).is_relative_to(prefix) or prefix.is_relative_to(Path(name))
+                    for name in original_files)
+                or any(identifier == label or identifier.startswith(label + ':')
+                       for identifier in old_catalog_ids))
+
+    source_prefix = Path('source_research')
+    if occupied(source_prefix):
+        preferred = source_prefix / source_study.parent.name / source_study.name
+        source_prefix = preferred
+        suffix = 1
+        while occupied(source_prefix):
+            source_prefix = preferred.with_name(f'{preferred.name}_{suffix}')
+            suffix += 1
     roles = knowledge.setdefault('research_roles', {})
     predictors = roles.setdefault('predictors', [])
     if roles.get('predictor') and roles['predictor'] not in predictors:
@@ -121,6 +138,10 @@ def prepare_frozen_source_archive(source_study, base_archive):
                     if model not in predictors:
                         predictors.append(model)
     plan = json.loads((source_study / 'protocol.json').read_text(encoding='utf-8'))
+    summary_path = source_study / 'summary.json'
+    saved_trials = ({(trial['case'], trial['arm']): trial for trial in
+        json.loads(summary_path.read_text(encoding='utf-8')).get('trials', [])}
+        if summary_path.is_file() else {})
     source_refs = []
     facts = {'observations.json', 'model_observations.json', 'laboratory_observations.json', 'paid_trace.json'}
 
@@ -156,8 +177,12 @@ def prepare_frozen_source_archive(source_study, base_archive):
 
     for case in plan['cases']:
         for arm in case.get('arms', plan['arms']):
-            workspace = source_study / case['id'] / arm
-            training_ref = {'file': str(workspace / 'training.json'), 'json_path': []}
+            trial = saved_trials.get((case['id'], arm), {})
+            selected = trial.get('result_ref') or trial.get('training_ref')
+            workspace = (Path(selected['file']).resolve().parent if selected
+                         else source_study / case['id'] / arm)
+            training_ref = (deepcopy(selected) if selected else
+                {'file': str(workspace / 'training.json'), 'json_path': []})
             state_ref = {'file': str(workspace / 'research_state.json'), 'json_path': []}
             training = json.loads(Path(training_ref['file']).read_text(encoding='utf-8'))
             state = json.loads(Path(state_ref['file']).read_text(encoding='utf-8'))
@@ -173,7 +198,7 @@ def prepare_frozen_source_archive(source_study, base_archive):
             evaluated = training.get('evaluated_model')
             if evaluated:
                 models.extend([evaluated['model'], evaluated['source_model']])
-            prefix = Path('source_research') / case['id'] / arm
+            prefix = source_prefix / case['id'] / arm
             transferred, mappings = [], []
             collected = set()
 
@@ -217,7 +242,7 @@ def prepare_frozen_source_archive(source_study, base_archive):
                 if mapped not in predictors:
                     predictors.append(mapped)
             final = next((m for m in mappings if m['source_model'] == training.get('model')), None)
-            catalog.append({'id': f'source_research:{case["id"]}:{arm}',
+            catalog.append({'id': f'{":".join(source_prefix.parts)}:{case["id"]}:{arm}',
                 'directory': final['directory'] if final else str(prefix),
                 'model': final['model'] if final else None,
                 'predictors': transferred, 'status': training['status'],

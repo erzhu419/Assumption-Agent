@@ -19,7 +19,8 @@ _ANSWER_FIELDS = ('answer', 'executable_answer', 'answer_history', 'structural_a
                   'representation_assessments', 'compilation', 'pending_author_work',
                   'pending_query', 'pending_query_source', 'parent_use_history',
                   'routing_execution', 'routing_history', 'completed_agenda_basis',
-                  'resolution_experiments', 'conditional_continuation')
+                  'resolution_experiments', 'conditional_continuation', 'frozen_recall_execution',
+                  'revision_candidate_exports', 'revision_export_errors')
 _ANSWER_TYPES = {'number', 'vector', 'interval', 'distribution', 'boolean_claim', 'binding',
                  'program', 'relation', 'scoped_unknown'}
 
@@ -78,7 +79,9 @@ def adopt_question_semantics(existing, incoming):
     if _meaning(existing) != _meaning(merged):
         snapshot = {key: deepcopy(existing[key]) for key in
                     ('id', 'question', 'parent_id', 'depends_on', 'status', *_MEANING_FIELDS,
-                     'query_semantics', 'use_sites', *_ANSWER_FIELDS) if key in existing}
+                     'query_semantics', 'use_sites', 'theory_target', 'native_research_ref',
+                     'mission', 'queue', 'frozen_library_path', 'exploration_policy',
+                     'research_comparison', 'allowed_mappings', *_ANSWER_FIELDS) if key in existing}
         snapshot['meaning_version'] = version
         history.append(snapshot)
         for key in _ANSWER_FIELDS:

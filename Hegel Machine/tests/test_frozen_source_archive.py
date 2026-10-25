@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+from pathlib import Path
 
 from hegel_machine.cognition.anonymous_research_archive import prepare_frozen_source_archive
 from hegel_machine.cognition.code_agent import evaluate_python_model
@@ -180,3 +181,63 @@ def predict(row): return 2. * models['child'](row)
     result = evaluate_python_model(target, restored, [Observation({'u': 2.}, 6., ())])
     assert result['returncode'] == 0 and result['predictions'] == [6.]
     assert not (target / restored).is_symlink()
+
+
+def test_continued_source_uses_latest_result_and_original_retained_workspace(tmp_path):
+    from shutil import copytree
+
+    original, base = source_study(tmp_path)
+    continued = tmp_path / 'continued'
+    plan = json.loads((original / 'protocol.json').read_text())
+    write(continued / 'protocol.json', plan)
+    write(continued / 'source_aggregation.json', json.loads((original / 'source_aggregation.json').read_text()))
+    latest = continued / 'case_0/pr3'
+    copytree(original / 'case_0/pr3', latest)
+    write((latest / NATIVE).parent / 'parameter.json', {'gain': 11.})
+    result = json.loads((latest / 'training.json').read_text())
+    result.update(workspace=str(latest), status='latest_failed_source')
+    write(latest / 'training.json', result)
+    trials = [{'case': case['id'], 'arm': arm,
+        'training_ref': {'file': str(original / case['id'] / arm / 'training.json'), 'json_path': []},
+        **({'result_ref': {'file': str(latest / 'training.json'), 'json_path': []}}
+           if (case['id'], arm) == ('case_0', 'pr3') else {})}
+        for case in plan['cases'] for arm in plan['arms']]
+    write(continued / 'summary.json', {'trials': trials})
+    assert not (continued / 'case_0/archive').exists()
+    shared = prepare_frozen_source_archive(continued, base)
+    selected = {entry['id']: entry for entry in shared['source_catalog'] if entry['id'].startswith('source_research:')}
+    assert selected['source_research:case_0:pr3']['source_ref'] == trials[2]['result_ref']
+    assert selected['source_research:case_0:pr3']['status'] == 'latest_failed_source'
+    assert selected['source_research:case_0:archive']['source_ref'] == trials[0]['training_ref']
+    prefix = 'source_research/case_0/pr3/'
+    assert json.loads(shared['files'][prefix + str(Path(NATIVE).parent / 'parameter.json')]) == {'gain': 11.}
+
+
+def test_source_cohort_preserves_existing_source_research_bodies(tmp_path):
+    root, base = source_study(tmp_path)
+    old_model = f'source_research/case_0/pr3/{NATIVE}'
+    old_body = 'def predict(row): return -731.\n'
+    base['files'][old_model] = old_body
+    # A previously frozen cohort can also already occupy the preferred root.
+    prior_cohort_model = str(Path('source_research') / root.parent.name / root.name / 'retained.py')
+    base['files'][prior_cohort_model] = 'def predict(row): return -732.\n'
+    base['research_roles']['predictors'].extend([old_model, prior_cohort_model])
+    old_entry = {'id': 'source_research:case_0:pr3', 'model': old_model,
+        'predictors': [old_model], 'status': 'prior_failed_source'}
+    base['source_catalog'].append(old_entry)
+    base['files']['source_catalog.json'] = json.dumps(base['source_catalog'])
+    original = deepcopy(base)
+    shared = prepare_frozen_source_archive(root, base)
+    assert base == original
+    assert shared['files'][old_model] == old_body
+    assert shared['files'][prior_cohort_model] == original['files'][prior_cohort_model]
+    assert all(entry in shared['source_catalog'] for entry in original['source_catalog'])
+    ids = [entry['id'] for entry in shared['source_catalog']]
+    assert len(ids) == len(set(ids))
+    current = next(entry for entry in shared['source_catalog']
+                   if entry.get('source_ref', {}).get('file') == str(root / 'case_0/pr3/training.json'))
+    assert current['id'] != old_entry['id']
+    exported = next(item['model'] for item in current['model_sources'] if item['source_model'] == NATIVE)
+    assert exported != old_model
+    assert shared['files'][exported] == MODEL
+    assert {old_model, prior_cohort_model, exported}.issubset(shared['research_roles']['predictors'])

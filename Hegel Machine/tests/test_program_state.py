@@ -24,7 +24,7 @@ PROGRAM = "def select_actions(spec, observations, memory): return []\n"
     InquiryLLMAgent, TemporalOperatorAgent, ProcedureConsumerAgent,
     CommonArchiveInquiryAgent, FrozenMethodAgent, AnonymousPreparedMethodAgent,
 ])
-def test_program_state_is_encoded_and_written_once_with_all_layer_fields(
+def test_program_state_is_written_once_with_all_layer_fields(
         tmp_path, monkeypatch, agent_class):
     manifest = {"research_programs": [
         {"id": "probe", "path": "shared/probe.py", "max_steps": 3}],
@@ -99,31 +99,25 @@ def test_program_state_is_encoded_and_written_once_with_all_layer_fields(
     expected = json.loads(json.dumps(expected))  # Observation histories become JSON arrays.
     state_path = agent.workspace / "research_state.json"
     state_path.write_text("unfinished old state", encoding="utf-8")
-    original_read, original_dumps = Path.read_text, json.dumps
-    original_write = online_inquiry_llm.write_text_incrementally
-    encoded, written = [], []
+    original_read = Path.read_text
+    original_write = online_inquiry_llm.write_json_checkpoint
+    written = []
 
     def read(path, *args, **kwargs):
         assert path != state_path, "state layers must not reload an intermediate state"
         return original_read(path, *args, **kwargs)
 
-    def write(path, content, *args, **kwargs):
+    def write(path, value, *args, **kwargs):
         if path == state_path:
-            written.append(content)
-        return original_write(path, content, *args, **kwargs)
-
-    def dumps(value, *args, **kwargs):
-        if isinstance(value, dict) and {"questions", "limits", "costs"} <= value.keys():
-            encoded.append(value)
-        return original_dumps(value, *args, **kwargs)
+            written.append(json.loads(json.dumps(value)))
+        return original_write(path, value, *args, **kwargs)
 
     with monkeypatch.context() as patched:
         patched.setattr(Path, "read_text", read)
-        patched.setattr(online_inquiry_llm, "write_text_incrementally", write)
-        patched.setattr(json, "dumps", dumps)
+        patched.setattr(online_inquiry_llm, "write_json_checkpoint", write)
         agent._prepare_program_state()
 
-    assert len(encoded) == len(written) == 1
+    assert written == [expected]
     assert json.loads(state_path.read_text(encoding="utf-8")) == expected
     if isinstance(agent, CommonArchiveInquiryAgent):
         methods = json.loads((agent.workspace / "method_decision.json").read_text())["methods"]

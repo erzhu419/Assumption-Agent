@@ -14,6 +14,8 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_text_incrementally
 CONFIG = ROOT / "config/risk_chain_code_ablation_20260920.json"
 ARMS = ("hegel_full", "hegel_no_memory", "code_full", "code_no_memory")
 sys.path.insert(0, str(ROOT / "src"))
@@ -53,7 +55,7 @@ def _run_hegel(output, p, arm, *, evaluate=False):
     session.run()
     if evaluate:
         session.evaluate(**p["evaluation"])
-    path.write_text(json.dumps(session.to_dict(), indent=2) + "\n")
+    write_text_incrementally(path, json.dumps(session.to_dict(), indent=2) + "\n")
 
 
 def _run_code(output, p, arm, *, evaluate=False):
@@ -76,7 +78,7 @@ def _run_code(output, p, arm, *, evaluate=False):
         state=saved, provider_factory=provider, use_memory=arm == "code_full")
 
     def checkpoint(state):
-        state_path.write_text(json.dumps(state, indent=2) + "\n")
+        write_text_incrementally(state_path, json.dumps(state, indent=2) + "\n")
 
     try:
         while len(session.state["results"]) < len(session.state["tasks"]):
@@ -122,7 +124,7 @@ def run(output, *, run_code=False):
             session = UnifiedCodeSession(output / arm, state=state)
         if len(session.state["results"]) == len(session.state["tasks"]):
             session.evaluate(**p["evaluation"])
-            path.write_text(json.dumps(session.to_dict(), indent=2) + "\n")
+            write_text_incrementally(path, json.dumps(session.to_dict(), indent=2) + "\n")
 
 
 def summary(output):

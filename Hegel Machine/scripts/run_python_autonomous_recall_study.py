@@ -13,6 +13,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 
+from hegel_machine.cognition.code_agent import _copy_model_file
 from scripts import run_python_method_reopening_study as prior
 from scripts.python_method_edit_practice import EditPracticeMethodLearner
 
@@ -96,7 +97,8 @@ def remove_supported_history(history, output):
     trials = []
     for index, trial in enumerate(kept):
         directory = f'trials/trial_{index:03d}'
-        shutil.copytree(Path(history['workspace']) / trial['directory'], output / directory)
+        shutil.copytree(Path(history['workspace']) / trial['directory'], output / directory,
+            copy_function=_copy_model_file)
         trials.append({**deepcopy(trial), 'directory': directory})
     ablated.update(workspace=str(output), practice_trials=trials)
     prior.write_json(output / 'result.json', ablated)

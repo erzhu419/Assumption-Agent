@@ -13,11 +13,138 @@ from math import isfinite
 from .abstractions import AbstractTemplate, fit_parameter_slots
 from .language import Program
 from .models import Observation
+from .parameter_roles import describe_bound_parameter_roles, role_compatible
 from .synthesis import OPERATIONS, iter_synthesis_structures
 
 
 class _BudgetExhausted(Exception):
     pass
+
+
+def target_conflicts(features, targets, indices, names, tolerance, budget, *, coordinate_scales=None):
+    """Find a necessary single-valued-target failure in one declared view.
+
+    Only exact input identity is grouped. Source-record indices reference the
+    caller's existing source table; no labels are added and no Program executes.
+    Targets may be canonical coefficients. ``coordinate_scales`` then converts
+    each saved raw coefficient to that coordinate; tolerance stays in the raw
+    coefficient's original units. A missing conflict is not sufficiency.
+    """
+    started = budget.spent
+    names, indices = list(names), list(indices)
+    result = {'status': 'UNKNOWN', 'input_names': names, 'checked_indices': [],
+        'witnesses': [], 'budget_exhausted': False,
+        'reason': 'no_identical_input_conflict_found_not_sufficiency',
+        'scope': 'single_valued_after_parameter_on_declared_source_view',
+        'tolerance_coordinate': 'saved_raw_parameter',
+        'source_record_index_table': 'source_records', 'actual_compute_cost': 0}
+    groups = {}
+    for index in indices:
+        if not budget.spend(1):
+            result.update(budget_exhausted=True, reason='target_conflict_diagnosis_budget_exhausted')
+            break
+        values = tuple(features[index][name] for name in names)
+        groups.setdefault(values, []).append(index)
+        result['checked_indices'].append(index)
+    for values, records in groups.items():
+        expected = [targets[index] for index in records]
+        scales = [1. if coordinate_scales is None else coordinate_scales[index] for index in records]
+        if any(type(scale) not in (int, float) or not isfinite(scale) or scale == 0 for scale in scales):
+            result['reason'] = 'explicit_finite_nonzero_parameter_coordinate_scale_required'
+            continue
+        span = max(expected) - min(expected)
+        lower = max(value - tolerance * abs(scale) for value, scale in zip(expected, scales))
+        upper = min(value + tolerance * abs(scale) for value, scale in zip(expected, scales))
+        if lower > upper:
+            bound = max(abs(left - right) / (abs(left_scale) + abs(right_scale))
+                for left, left_scale in zip(expected, scales)
+                for right, right_scale in zip(expected, scales))
+            result['witnesses'].append({'source_record_indices': records,
+                'input_values': list(values), 'target_values': expected,
+                'coordinate_scales': scales, 'target_span': span,
+                'common_canonical_interval': {'lower': lower, 'upper': upper},
+                'necessary_max_abs_error_lower_bound': bound,
+                'error_bound_coordinate': 'saved_raw_parameter'})
+    if result['witnesses']:
+        result.update(status='conflict', reason='identical_inputs_have_incompatible_parameter_targets')
+    result['actual_compute_cost'] = budget.spent - started
+    return result
+
+
+def diagnose_parameter_targets(candidate, records, budget):
+    """Resolve saved constant coordinates without predicting or fitting.
+
+    A shared hole position is not a shared coefficient role. Actual Programs
+    take precedence over fixture declarations. Missing fitter state requests
+    source work, while finite empirical maps remain possible on known roles.
+    """
+    started = budget.spent
+    result = {'status': 'UNKNOWN', 'constants': {}, 'raw_constants': {},
+        'input_holes': [], 'output_holes': [], 'parameter_roles': {},
+        'excluded': [], 'next_actions': [], 'budget_exhausted': False,
+        'actual_compute_cost': 0}
+    descriptions = [describe_bound_parameter_roles(candidate, record, budget)['roles']
+                    for record in records]
+    for hole in candidate['holes']:
+        name, values = hole['name'], []
+        for record in records:
+            if not budget.spend(1):
+                result['budget_exhausted'] = True
+                break
+            value = record.get('bindings', {}).get(name)
+            value = Program.from_dict(value) if isinstance(value, dict) else value
+            if (not isinstance(value, Program) or value.op != 'const'
+                    or type(value.value) not in (int, float) or not isfinite(value.value)):
+                break
+            values.append(float(value.value))
+        if len(values) != len(records) or not records:
+            continue
+        result['raw_constants'][name] = values
+        roles = [description.get(name, {}) for description in descriptions]
+        bad = [index for index, role in enumerate(roles) if not role_compatible(roles[0], role)
+               or role.get('coefficient_unit') != roles[0].get('coefficient_unit')]
+        if hole.get('output_unit') is None:
+            reason = 'explicit_parameter_unit_required'
+        elif bad:
+            reason = 'common_computational_parameter_role_required'
+        else:
+            reason = None
+        if reason:
+            result['excluded'].append({'hole': name, 'reason': reason,
+                'source_record_indices': bad, 'source_reasons': [
+                    {'source_record_index': index, 'reason': roles[index].get('reason',
+                        'incompatible_computational_parameter_role')} for index in bad]})
+            result['next_actions'].append({'reason': reason, 'output_hole': name,
+                'required_inputs': ['actual_Program_parameter_role_and_unique_binding'],
+                'source_record_indices': bad})
+            continue
+        result['constants'][name] = [role['canonical_parameter'] for role in roles]
+        result['parameter_roles'][name] = {key: deepcopy(roles[0][key]) for key in (
+            'status', 'role_key', 'coordinate_scale', 'coefficient_unit')}
+        result['parameter_roles'][name]['source_coordinate_scales'] = [
+            role['coordinate_scale'] for role in roles]
+        result['input_holes' if name in candidate['parent_holes'] else 'output_holes'].append(hole)
+    for index, description in enumerate(descriptions):
+        if any(role.get('reason') == 'parameter_role_budget_exhausted' for role in description.values()):
+            result['budget_exhausted'] = True
+    fitter = [index for index, record in enumerate(records) if record.get('fit_state_refs')]
+    direct = [index for index, record in enumerate(records)
+              if record.get('generating_process') == 'direct_program_edit']
+    missing = [index for index in range(len(records)) if index not in fitter and index not in direct]
+    generating_process = ('historical_fitter_output' if len(fitter) == len(records) and records
+        else 'direct_program_edit' if len(direct) == len(records) and records else 'UNKNOWN')
+    result['target_contract'] = {'purpose': 'exact_edit_map', 'target': 'saved_after_parameter',
+        'generating_process': generating_process, 'target_identifiability': 'UNKNOWN',
+        'input_sufficiency': 'UNKNOWN', 'scope': 'retained_revision_parameters_only',
+        'fitter_source_record_indices': fitter, 'unknown_source_record_indices': missing}
+    if missing:
+        result['next_actions'].append({'reason': 'saved_parameter_generating_process_not_established',
+            'required_inputs': ['saved_fitter_state_or_explicit_direct_edit_provenance'],
+            'source_record_indices': missing})
+    result['status'] = ('known_roles' if result['input_holes'] and result['output_holes']
+                        and not result['budget_exhausted'] else 'UNKNOWN')
+    result['actual_compute_cost'] = budget.spent - started
+    return result
 
 
 def learn_parameter_relations(candidate, source_bindings_records, budget, *, search_contract):
@@ -136,7 +263,7 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
 
     started = budget.spent
     receipt = {'status': 'UNKNOWN', 'accepted': [], 'attempts': [], 'excluded': [],
-        'source_records': [],
+        'source_records': [], 'next_actions': [], 'target_conflicts': {},
         'actual_compute_cost': 0, 'budget_exhausted': False,
         'scope': 'retained_revision_parameter_metadata_only', 'support_updated': False,
         'scientific_support': False, 'independent_confirmation': False}
@@ -188,35 +315,22 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
         receipt['split'] = {'rule': 'last_actual_revision_per_physical_source',
             'training': [refs(index) for index in training],
             'held': [refs(index) for index in held], 'physical_source_count': len(by_source)}
-        if len(training) < 3:
-            receipt['reason'] = 'insufficient_parameter_training_points'
-            return receipt
         holes = candidate['holes']
-        constants = {}
-        for hole in holes:
-            name = hole['name']
-            if hole.get('output_unit') is None:
-                receipt['reason'] = 'explicit_parameter_unit_required'
-                return receipt
-            values = []
-            for record in records:
-                spend()
-                value = record.get('bindings', {}).get(name)
-                value = Program.from_dict(value) if isinstance(value, dict) else value
-                if (not isinstance(value, Program) or value.op != 'const'
-                        or type(value.value) not in (int, float) or not isfinite(value.value)):
-                    break
-                values.append(float(value.value))
-            if len(values) == len(records):
-                constants[name] = values
-        inputs = [hole for hole in holes if hole['name'] in candidate['parent_holes']
-                  and hole['name'] in constants]
-        outputs = [hole for hole in holes if hole['name'] not in candidate['parent_holes']
-                   and hole['name'] in constants]
+        diagnosis = diagnose_parameter_targets(candidate, records, budget)
+        receipt['parameter_target_diagnosis'] = {key: deepcopy(value) for key, value in diagnosis.items()
+            if key not in ('constants', 'raw_constants', 'input_holes', 'output_holes', 'next_actions')}
+        receipt['next_actions'].extend(diagnosis['next_actions'])
+        receipt['excluded'].extend(diagnosis['excluded'])
+        receipt['target_contract'] = diagnosis['target_contract']
+        if diagnosis['budget_exhausted']:
+            raise _BudgetExhausted
+        constants, inputs, outputs = (diagnosis['constants'], diagnosis['input_holes'], diagnosis['output_holes'])
         if not inputs or not outputs:
-            receipt['reason'] = 'common_parent_and_open_after_constant_holes_required'
+            receipt['reason'] = 'common_computational_parent_and_after_parameter_roles_required'
             return receipt
-        roles = {hole['name']: {'role': 'before_program_parameter', 'unit': hole['output_unit'],
+        parameter_roles = diagnosis['parameter_roles']
+        roles = {hole['name']: {'role': 'before_program_parameter',
+                               'unit': parameter_roles[hole['name']]['coefficient_unit'],
                                'time': 'before_revision'} for hole in inputs}
         features = [{hole['name']: constants[hole['name']][index] for hole in inputs}
                     for index in range(len(records))]
@@ -258,6 +372,28 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
                 features[index][name] = value
         receipt['input_scope'] = ('before_parameters_and_measured_evidence' if evidence_inputs
                                   else 'before_parameters_only')
+        available_outputs = []
+        for hole in outputs:
+            conflict = target_conflicts(features, constants[hole['name']], training,
+                sorted(roles), tolerance, budget,
+                coordinate_scales=parameter_roles[hole['name']]['source_coordinate_scales'])
+            receipt['target_conflicts'][hole['name']] = conflict
+            if conflict['budget_exhausted']:
+                raise _BudgetExhausted
+            if conflict['status'] == 'conflict':
+                receipt['next_actions'].append({'reason': 'exact_edit_map_input_view_conflicts',
+                    'output_hole': hole['name'], 'input_names': sorted(roles),
+                    'required_inputs': ['distinct_computational_role_or_declared_additional_source_state'],
+                    'conflict_ref': ['target_conflicts', hole['name']]})
+            else:
+                available_outputs.append(hole)
+        outputs = available_outputs
+        if not outputs:
+            receipt['reason'] = 'all_exact_parameter_target_views_conflict'
+            return receipt
+        if len(training) < 3:
+            receipt['reason'] = 'insufficient_parameter_training_points'
+            return receipt
         if joint:
             receipt['input_scope'] = 'sparse_parent_evidence_pairs'
             receipt['frontier'] = {'per_output_limit': maximum, 'outputs': {}}
@@ -265,7 +401,7 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
             if not evidence_inputs:
                 receipt['reason'] = 'shared_typed_measured_evidence_inputs_required'
                 return receipt
-        queue = deque()
+        queue, conflicting_views = deque(), set()
         for hole in outputs:
             rows = [Observation(features[index], constants[hole['name']][index]) for index in training]
             cursor = {}
@@ -302,6 +438,22 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
             names = sorted(program.required_features())
             attempt['input_holes'] = [name for name in names if name not in evidence_inputs]
             attempt['evidence_inputs'] = [name for name in names if name in evidence_inputs]
+            conflict = target_conflicts(features, constants[hole['name']], training,
+                names, tolerance, budget,
+                coordinate_scales=parameter_roles[hole['name']]['source_coordinate_scales'])
+            attempt['target_conflict'] = conflict
+            if conflict['budget_exhausted']:
+                raise _BudgetExhausted
+            if conflict['status'] == 'conflict':
+                attempt.update(status='refuted', reason='exact_edit_map_input_view_conflicts')
+                view = (hole['name'], tuple(names))
+                if view not in conflicting_views:
+                    conflicting_views.add(view)
+                    receipt['next_actions'].append({'reason': 'exact_edit_map_input_view_conflicts',
+                        'output_hole': hole['name'], 'input_names': names,
+                        'required_inputs': ['distinct_computational_role_or_declared_additional_source_state'],
+                        'conflict_ref': ['attempts', len(receipt['attempts']) - 1, 'target_conflict']})
+                continue
             distinct = []
             for index in training:
                 values = tuple(features[index][name] for name in names)
@@ -315,7 +467,7 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
                 attempt['reason'] = 'insufficient_parameter_variation_or_points_for_free_parameters'
                 continue
             try:
-                _check_generated_units(program, hole['output_unit'], roles, {}, budget)
+                _check_generated_units(program, parameter_roles[hole['name']]['coefficient_unit'], roles, {}, budget)
             except _MissingContract as error:
                 attempt.update(reason=str(error))
                 continue
@@ -324,45 +476,82 @@ def _learn_parameter_relations(candidate, source_bindings_records, budget, *, se
             report = {}
             fitted = fit_parameter_slots(template, {}, rows, budget, quantile, report=report)
             attempt['fitting'] = {key: value for key, value in report.items() if key != 'losses'}
-            for hypothesis in fitted:
-                checks = {'program': hypothesis.to_dict(), 'training': [], 'held': [], 'status': 'UNKNOWN'}
+            solver_checks = []
+            for fit_index, hypothesis in enumerate(fitted):
+                method = report['candidate_methods'][fit_index]
+                checks = {'program': hypothesis.to_dict(), 'fitting_method': method,
+                          'training': [], 'held': [], 'status': 'UNKNOWN'}
                 attempt['checks'].append(checks)
                 for label, indices in (('training', training), ('held', held)):
                     for index in indices:
                         spend()
-                        observed = constants[hole['name']][index]
-                        predicted = hypothesis.predict(Observation(features[index], observed))
+                        canonical_observed = constants[hole['name']][index]
+                        canonical_predicted = hypothesis.predict(Observation(features[index], canonical_observed))
+                        scale = parameter_roles[hole['name']]['source_coordinate_scales'][index]
+                        observed = diagnosis['raw_constants'][hole['name']][index]
+                        predicted = canonical_predicted / scale
                         residual = predicted - observed
                         checks[label].append({**refs(index), 'expected_parameter': observed,
                             'predicted_parameter': predicted, 'residual': residual,
+                            'coordinate_scale': scale,
+                            'canonical_expected_parameter': canonical_observed,
+                            'canonical_predicted_parameter': canonical_predicted,
+                            'canonical_residual': canonical_predicted - canonical_observed,
+                            'tolerance_coordinate': 'saved_raw_parameter',
                             'status': 'passed' if isfinite(predicted) and abs(residual) <= tolerance else 'failed'})
                 passed = all(check['status'] == 'passed'
                              for label in ('training', 'held') for check in checks[label])
                 checks['status'] = 'passed' if passed else 'failed'
+                solver_checks.append({'method': method, **{
+                    label: {'passed': all(check['status'] == 'passed' for check in checks[label]),
+                            'max_abs_residual': max(abs(check['residual']) for check in checks[label])}
+                    for label in ('training', 'held')}})
                 if not passed:
                     continue
                 existing = next((index for index, item in enumerate(receipt['accepted'])
                     if item['output_hole'] == hole['name'] and item['program'] == hypothesis.to_dict()), None)
                 if existing is not None:
                     checks.clear()
-                    checks.update(status='passed', accepted_index=existing)
+                    checks.update(status='passed', accepted_index=existing, fitting_method=method)
                     continue
                 receipt['accepted'].append({'output_hole': hole['name'], 'program': hypothesis.to_dict(),
+                    'purpose': 'exact_edit_map', 'parameter_coordinate': 'canonical_basis',
+                    'input_roles': {name: deepcopy(parameter_roles[name]) for name in names
+                                    if name not in evidence_inputs},
+                    'output_role': deepcopy(parameter_roles[hole['name']]),
+                    'target_contract': deepcopy(diagnosis['target_contract']),
                     'input_holes': [name for name in names if name not in evidence_inputs],
                     'evidence_inputs': [name for name in names if name in evidence_inputs],
                     'input_contracts': {name: deepcopy(roles[name]) for name in names},
                     'output_unit': hole['output_unit'], 'source_refs': [refs(index) for index in range(len(records))],
                     'training_checks': deepcopy(checks['training']), 'held_checks': deepcopy(checks['held']),
+                    'fitting_method': method,
+                    'parameter_identifiability': report['parameter_identifiability'],
                     'status': 'empirical_candidate', 'scope': 'retained_revision_parameters_only',
                     'support_updated': False, 'scientific_support': False, 'independent_confirmation': False})
                 # Accepted evidence lives once in the executable map. Attempts
                 # retain its index; failed/truncated evidence remains inline.
                 checks.clear()
-                checks.update(status='passed', accepted_index=len(receipt['accepted']) - 1)
+                checks.update(status='passed', accepted_index=len(receipt['accepted']) - 1,
+                              fitting_method=method)
+            stable = next((item for item in solver_checks if item['method'] == 'stable_lstsq'), None)
+            ridge = next((item for item in solver_checks if item['method'] == 'ridge_lstsq'), None)
+            outcome = 'UNKNOWN'
+            if stable is not None:
+                outcome = ('stable_training_mismatch' if not stable['training']['passed'] else
+                    'held_out_failure' if not stable['held']['passed'] else
+                    'numerical_rejection_corrected' if ridge is not None and not all(
+                        ridge[label]['passed'] for label in ('training', 'held')) else 'stable_passed')
+            attempt['numerical_diagnosis'] = {
+                'observed_outcome': outcome, 'solver_checks': solver_checks,
+                'parameter_identifiability': report['parameter_identifiability'],
+                'scope': 'returned_Programs_on_same_saved_training_and_held_rows',
+                'structure_impossibility_established': False}
             attempt['status'] = ('accepted' if any(check['status'] == 'passed' for check in attempt['checks'])
-                                 else 'UNKNOWN' if not report['search_completed'] else 'failed')
+                                 else 'UNKNOWN' if report['status'] == 'UNKNOWN' else 'failed')
         receipt['status'] = ('UNKNOWN' if receipt.get('frontier_truncated') or any(
-            item['status'] == 'UNKNOWN' for item in receipt['attempts'])
+            item['status'] == 'UNKNOWN' or item.get('numerical_diagnosis', {}).get(
+                'parameter_identifiability') == 'UNKNOWN' for item in receipt['attempts'])
                              else 'completed')
         if receipt.get('frontier_truncated'):
             receipt['reason'] = 'joint_parameter_frontier_limit_reached'

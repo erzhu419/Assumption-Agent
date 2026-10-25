@@ -9,6 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 
 from hegel_machine.cognition.code_agent import CodeAgent, CodeAgentConfig, CodexCodeProvider, evaluate_python_model
 from hegel_machine.cognition.measurement_lab import make_lab
@@ -51,7 +52,7 @@ def main():
                 evaluation.pop("predictions", None)
                 result["evaluation"] = {**evaluation, "rows": len(rows), "compute_cost": len(rows)}
             report["results"].append(result)
-            args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            write_text_incrementally(args.output, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
             print(json.dumps({"task_index": task_index, "status": result["status"], "costs": result["costs"],
                               "evaluation": result.get("evaluation")}), flush=True)
             if result["status"] == "provider_failed":

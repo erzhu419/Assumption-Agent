@@ -65,6 +65,7 @@ def _source_label(source, label):
 
 def _save_sources(output):
     paths = ["scripts/run_temporal_conditional_method.py", "scripts/run_temporal_method_learning.py",
+             "src/hegel_machine/cognition/checkpoint_storage.py",
              "scripts/run_temporal_method_practice.py",
              "scripts/run_temporal_operator_llm.py",
              "src/hegel_machine/cognition/temporal_conditional_method.py",

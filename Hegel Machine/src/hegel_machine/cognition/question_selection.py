@@ -116,7 +116,7 @@ def _partial_prediction_scores(result, evaluated, plans, answer_atol):
         result['groups'].append(group)
     groups = [group for group in result['groups'] if group['known']]
     comparable, unknown, separated = ({plan['id']: [] for plan in plans} for _ in range(3))
-    universe = []
+    universe, common = [], []
     for left, right in combinations(groups, 2):
         pair = [left['id'], right['id']]
         distance = numeric_answer_distance(left['task_answer'], right['task_answer'])
@@ -139,11 +139,12 @@ def _partial_prediction_scores(result, evaluated, plans, answer_atol):
                 distinguishing.append(name)
                 if relevant:
                     separated[name].append(pair)
+        if relevant and not unknown_plans:
+            common.append(pair)
         result['pairwise_edges'].append({'left': left['id'], 'right': right['id'],
             'different_task_answer': relevant, 'experiments': distinguishing,
             'comparable_experiments': known_plans, 'unknown_experiments': unknown_plans})
     task_unknown = [identifier for identifier, entry in evaluated.items() if not entry.get('task_known')]
-    common = [pair for pair in universe if all(pair in comparable[plan['id']] for plan in plans)]
     blocked = [plan['id'] for plan in plans if any(
         _hard_prediction_failure(entry.get('prediction_status', {}).get(plan['id'], {}))
         for entry in evaluated.values())]

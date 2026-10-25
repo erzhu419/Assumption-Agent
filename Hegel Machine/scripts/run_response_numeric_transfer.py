@@ -13,6 +13,8 @@ import sys
 from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(ROOT)]
 SOURCE = ROOT / "artifacts/response_retained_program_support_20261011"
 OUTPUT = ROOT / "artifacts/response_numeric_transfer_20261011"
@@ -24,8 +26,7 @@ SOURCES = tuple([f"cubic_original_{i}" for i in range(1, 5)]
 
 
 def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def source_knowledge(name):

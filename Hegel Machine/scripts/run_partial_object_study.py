@@ -11,6 +11,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 BASELINE = ROOT / "artifacts/partial_objects_20260913/v065_runtime"
 SEEDS = (4060319137, 4060419151, 4060519167)
 ARMS = ("v065", "partial_objects")
@@ -20,8 +22,7 @@ PHASES = {"all": (0, 8), "partial": (0, 2), "completion": (2, 3),
 
 
 def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def tasks_for(seed):

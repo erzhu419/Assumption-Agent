@@ -5,7 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 import shutil
 
-from .code_agent import CodeAgent, CodeAgentConfig, CodexCodeProvider, evaluate_python_model
+from .code_agent import CodeAgent, CodeAgentConfig, CodexCodeProvider, _copy_model_file, evaluate_python_model
 from .models import Probe
 from .unified_session import laboratory_for
 
@@ -76,7 +76,8 @@ class UnifiedCodeSession:
             if self.use_memory and index and not active:
                 previous_shared = Path(self.state["results"][-1]["research_workspace"]) / "shared"
                 if previous_shared.is_dir():
-                    shutil.copytree(previous_shared, task_workspace / "shared", dirs_exist_ok=True)
+                    shutil.copytree(previous_shared, task_workspace / "shared", dirs_exist_ok=True,
+                                    copy_function=_copy_model_file)
             agent = CodeAgent(self.provider_factory(task_workspace), task_workspace, self.config,
                 state=active["agent_state"] if active else None, session_knowledge=inherited)
 

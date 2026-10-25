@@ -150,10 +150,17 @@ def _run(command: list[str], prompt: str, timeout: float, cwd: str) -> tuple[int
     try:
         stdout, stderr = process.communicate(prompt, timeout=timeout)
         return process.returncode, stdout, stderr, False
-    except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
+    except BaseException as error:
+        # A host scoring deadline can interrupt communicate before its own
+        # timeout. Reap this same existing process group before propagating it.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         stdout, stderr = process.communicate()
-        return process.returncode, stdout, stderr, True
+        if isinstance(error, subprocess.TimeoutExpired):
+            return process.returncode, stdout, stderr, True
+        raise
 
 
 def _events(stdout: str) -> tuple[list[dict], list[str]]:

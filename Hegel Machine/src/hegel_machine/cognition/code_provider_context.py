@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 from .executable_evidence import PAID_RELATION_FIELD_MEANINGS
+from .checkpoint_storage import write_text_incrementally
 
 
 _PROVIDER_CONTEXT_CHARACTERS = 1_000_000
@@ -430,6 +431,11 @@ def _compact_practice_feedback(value, field_path, full_content_file="research_co
         elif key in ("action", "arguments", "proposal", "program_action", "next_action"):
             compact[key] = item
         elif key == "paid_residuals" and isinstance(item, dict):
+            if 'examples_ref' in item and 'examples' not in item:
+                # An already paid residual is retained by address, not absent.
+                # Keep that small address instead of fabricating zero examples.
+                compact[key] = dict(item)
+                continue
             examples = item.get('examples', [])
             compact[key] = {name: detail for name, detail in item.items() if name != 'examples'}
             compact[key]['example_count'] = len(examples)
@@ -886,9 +892,9 @@ def prepare_code_context(workspace, request, *, schema, instructions):
             if (name in inherited and value == inherited[name]
                     and len(json.dumps(value)) > len(json.dumps(reference))):
                 stored["files"][name] = reference
-    (workspace / "research_context.json").write_text(json.dumps(stored), encoding="utf-8")
-    (workspace / "code_action_schema.json").write_text(json.dumps(schema), encoding="utf-8")
-    (workspace / "code_agent_instructions.txt").write_text(instructions, encoding="utf-8")
+    write_text_incrementally(workspace / "research_context.json", json.dumps(stored))
+    write_text_incrementally(workspace / "code_action_schema.json", json.dumps(schema))
+    write_text_incrementally(workspace / "code_agent_instructions.txt", instructions)
     context = deepcopy(request)
     trajectory_records = any(isinstance(record.get("rows"), list)
                              for record in context.get("laboratory_observations", []))

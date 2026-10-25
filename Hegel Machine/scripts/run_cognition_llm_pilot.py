@@ -17,6 +17,7 @@ from time import perf_counter
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 
 from hegel_machine.cognition.controller import CognitiveAgent
 from hegel_machine.cognition.environments import make_suite
@@ -122,11 +123,11 @@ def main():
                               actual_proposer_calls=proposer.calls if proposer else 0)
             record["wall_time_seconds"] = perf_counter() - started
             payload["runs"].append(record)
-            artifact.write_text(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
+            write_text_incrementally(artifact, json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
             summary = summarize(payload)
             summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
             print(json.dumps({"event": "complete", **summary["runs"][-1]}, ensure_ascii=False), flush=True)
-    artifact.write_text(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
+    write_text_incrementally(artifact, json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
     summary_path.write_text(json.dumps(summarize(payload), indent=2, ensure_ascii=False, allow_nan=False) + "\n")
     print(json.dumps({"artifact": str(artifact), "summary": str(summary_path)}), flush=True)
 

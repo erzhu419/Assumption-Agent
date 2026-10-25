@@ -9,6 +9,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 PROTOCOL = ROOT / "artifacts/joint_experiment_methods_20260913/comparison_v1/protocol.json"
 BASELINE = ROOT / "artifacts/transfer_condition_research_20260913/object_regression_v1"
 OUTPUT = ROOT / "artifacts/shared_transfer_fitting_20260913/object_regression_v1"
@@ -16,8 +18,7 @@ COSTS = ("observation_cost", "measurement_cost", "compute_cost")
 
 
 def write(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n")
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def summarize(protocol):

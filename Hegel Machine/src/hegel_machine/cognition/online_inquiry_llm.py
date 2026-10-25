@@ -17,12 +17,14 @@ from time import monotonic
 from .code_agent import (
     _copy_model_file, evaluate_python_model, python_model_context, retain_evaluated_python_model,
 )
-from .checkpoint_storage import write_text_incrementally
+from .checkpoint_storage import write_text_incrementally, write_json_checkpoint
+from .experiment_runtime import checkpoint_execution
 from .models import Observation
 from .proposers import _run
 from .inquiry_revision import REVISION_INTERFACE, prepare_revision, complete_revision
 from .executable_evidence import compare_paid_relations
 from .question_semantics import adopt_question_semantics
+from .paid_score_history import compact_agent_comparisons
 
 
 ARMS = ("code_react", "textual_memory", "hegel")
@@ -77,7 +79,9 @@ def _paid_prediction_scope(workspace, model, rows, predictions):
     if not training.exists():
         return scope
     fitted = json.loads(training.read_text())
-    scope['fitting_view'].update(file=str(training.relative_to(workspace)), rows=len(fitted))
+    training_reference = (training.relative_to(workspace)
+                          if training.is_relative_to(workspace) else training)
+    scope['fitting_view'].update(file=str(training_reference), rows=len(fitted))
     prefix = [{'features': row.features, 'target': row.target, 'history': list(row.history)}
               for row in rows[:len(fitted)]]
     if fitted != prefix:
@@ -151,6 +155,8 @@ evaluate {model:'model.py'} fits/scores ONLY already purchased response rows.
 paid_residuals returns up to three largest squared errors from that same scoring,
 with the evaluated model, exact paid row indices, controls/history and labels.
 These diagnose evaluation on paid rows, not a fresh confirmation or a scientific explanation.
+Retained comparisons may use score_result_ref and paid_residuals.examples_ref
+to address the complete saved score and residual examples at their file/json_path.
 When earlier readouts contain executed response checks, paid_relation_diagnostic
 also compares this candidate's already computed predictions with those measured
 contrasts. It preserves their revision, declared scope and actual term rows;
@@ -260,7 +266,7 @@ class InquiryLLMAgent:
             if paid_trace_references and name in paid_trace_references:
                 _copy_model_file(paid_trace_references[name], path)
             else:
-                path.write_text(source, encoding="utf-8")
+                write_text_incrementally(path, source)
         self.inherited_files = set(self.files)
         self.events, self.observations, self.rows = [], [], []
         self.model, self.lesson, self.manifest = None, "", {}
@@ -276,8 +282,10 @@ class InquiryLLMAgent:
 
     def _write_evidence(self):
         records = [asdict(row) for row in self.rows]
-        for filename in ("observations.json", "model_observations.json"):
-            write_text_incrementally(self.workspace / filename, json.dumps(records))
+        text = json.dumps(records)
+        write_text_incrementally(self.workspace / "observations.json", text)
+        write_text_incrementally(self.workspace / "model_observations.json", text,
+                                 base=self.workspace / "observations.json")
         write_text_incrementally(self.workspace / "laboratory_observations.json",
                                  json.dumps(self.observations))
 
@@ -299,13 +307,15 @@ class InquiryLLMAgent:
 
     def _program_state(self):
         """Let specialized research interfaces contribute to the same state."""
+        compact_agent_comparisons(self)
         return {'questions': self.questions, 'revisions': self.revisions,
                 'limits': asdict(self.config), 'costs': self.costs,
                 'evaluated_model': self._evaluated_summary()}
 
     def _prepare_program_state(self):
-        state = self._program_state()
-        write_text_incrementally(self.workspace / 'research_state.json', json.dumps(state))
+        with checkpoint_execution():
+            state = self._program_state()
+            write_json_checkpoint(self.workspace / 'research_state.json', state, indent=None)
 
     def _program_memory(self, path, arguments):
         """Give programs their actual invocation alongside inherited knowledge."""
@@ -542,8 +552,15 @@ class InquiryLLMAgent:
             if retained["current_mse"] is not None and result["mse"] >= retained["current_mse"]:
                 record_decision('incumbent_retained', incumbent)
                 return
-        self.evaluated_model = retain_evaluated_python_model(
-            self.workspace, model, [], result["mse"])
+        execution = result.get('execution_context')
+        if execution is not None:
+            self.evaluated_model = retain_evaluated_python_model(
+                execution['workspace'], execution['model'], [], result['mse'],
+                destination=self.workspace / '_evaluated_model')
+            self.evaluated_model['source_model'] = model
+        else:
+            self.evaluated_model = retain_evaluated_python_model(
+                self.workspace, model, [], result["mse"])
         self.evaluated_model.update(current_mse=result["mse"], evaluated_rows=len(self.rows))
         _remember_paid_scope(self.evaluated_model, result)
         record_decision('candidate_retained', incumbent)
@@ -790,29 +807,38 @@ class InquiryLLMAgent:
         return {str(path.relative_to(self.workspace)): path.read_text(encoding="utf-8")
                 for path in shared.rglob("*") if path.is_file() and path.suffix in {".py", ".json", ".md", ".txt"}}
 
-    def result(self, status):
+    def _base_result_files(self):
         files = self._shared_files()
         for entry in [*self.manifest.get("hypotheses", []), *self.manifest.get("research_programs", [])]:
             if isinstance(entry, dict) and entry.get("path") and (self.workspace / entry["path"]).is_file():
                 files[entry["path"]] = (self.workspace / entry["path"]).read_text(encoding="utf-8")
+        return files
+
+    def result(self, status):
+        return self._result_with_snapshot(status, deepcopy)
+
+    def _result_with_snapshot(self, status, snapshot):
+        """Build either an owned result or a synchronously borrowed checkpoint."""
+        compact_agent_comparisons(self)
+        files = self._base_result_files()
         if self.arm == "code_react":
             outgoing = {}
         elif self.arm == "textual_memory":
             outgoing = {"lessons": [*self.knowledge.get("lessons", []), self.lesson]}
         else:
-            outgoing = {"files": files, "manifest": deepcopy(self.manifest),
-                        "question_traces": deepcopy(self.questions),
+            outgoing = {"files": files, "manifest": snapshot(self.manifest),
+                        "question_traces": snapshot(self.questions),
                         "lessons": [*self.knowledge.get("lessons", []), self.lesson]}
         return {"agent_arm": self.arm, "status": status, "workspace": str(self.workspace),
-                "model": self.model, "costs": deepcopy(self.costs), "events": deepcopy(self.events),
+                "model": self.model, "costs": snapshot(self.costs), "events": snapshot(self.events),
                 "evaluated_model": self._evaluated_summary(),
                 "inherited_files": sorted(self.inherited_files), "outgoing_knowledge": outgoing,
                 "inherited_files_changed": sorted(name for name in self.inherited_files
                     if name in files and files[name] != self.knowledge["files"][name]),
-                "fresh_confirmation": deepcopy(self.confirmations[-1]) if self.confirmations else None,
-                "paid_observations": deepcopy(self.observations),
-                "online_questions": deepcopy(self.questions),
-                "revision_proposals": deepcopy(self.revisions),
+                "fresh_confirmation": snapshot(self.confirmations[-1]) if self.confirmations else None,
+                "paid_observations": snapshot(self.observations),
+                "online_questions": snapshot(self.questions),
+                "revision_proposals": snapshot(self.revisions),
                 "limits": asdict(self.config), "token_limit_kind": "reported_usage_between_calls",
                 "compute_limit_kind": "host_candidate_row_scoring; agent Python bounded by execution_seconds"}
 

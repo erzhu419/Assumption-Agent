@@ -328,7 +328,9 @@ def run_choice(source, output, *, provider_factory, auth_mode=None, cases=None,
                     'origin': 'host_scheduled_development',
                     'usage': {'backend': 'host_scheduled_development', 'total_tokens': 0}})
             agent.common_interface += RESEARCH_TASK
-            write_json(agent.workspace / 'active.json', agent.result('researching'))
+            checkpoint = agent.workspace / 'active.json'
+            write_json(checkpoint, agent.result('researching'),
+                       base=resume_path if not checkpoint.exists() else None)
             return {'prior_research_cost': deepcopy(previous['costs']),
                     'resume_origin': str(resume_path)}
     for name in plan['runtime_snapshot']:

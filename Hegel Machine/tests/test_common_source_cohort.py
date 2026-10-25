@@ -182,6 +182,38 @@ def test_same_source_resume_reuses_and_changed_source_retains_old_aggregate_debi
     assert third['source_versions'] != first['source_versions']
 
 
+def test_changed_registered_consumer_invalidates_same_source_aggregate_cache(tmp_path, monkeypatch):
+    configured, organization, trials = cohort(tmp_path / 'inputs', count=2)
+    name = Path('src/hegel_machine/cognition/revision_relations.py')
+    runtime = tmp_path / 'runtime'
+    current = runtime / name
+    current.parent.mkdir(parents=True)
+    current.write_text('def checked_transfer():\n    return "original"\n')
+    monkeypatch.setattr(study, 'ROOT', runtime)
+    configured['runtime_snapshot'] = [str(name)]
+    first_root = tmp_path / 'first'
+    frozen = first_root / 'source_at_run' / name
+    frozen.parent.mkdir(parents=True)
+    frozen.write_bytes(current.read_bytes())
+    first = aggregate(first_root, configured, organization, trials)
+    same = aggregate(tmp_path / 'same_runtime', configured, organization, trials,
+                     previous=first_root)
+    assert same['reused'] and same['new_compute_cost'] == 0
+
+    current.write_text('def checked_transfer():\n    return "family_contract_forwarded"\n')
+    changed_root = tmp_path / 'changed_runtime'
+    changed = aggregate(changed_root, configured, organization, trials, previous=first_root)
+    assert changed['reused'] is False
+    assert changed['source_refs'] == first['source_refs']
+    assert changed['source_costs'] == first['source_costs']
+    assert changed['source_versions'] == first['source_versions']
+    assert (changed_root / 'source_aggregation/training.json').is_file()
+    assert changed['source_compute_before'] == first['source_costs']['compute_cost'] + first['new_compute_cost']
+    assert changed['cumulative_aggregation_compute'] == first['new_compute_cost'] + changed['new_compute_cost']
+    assert changed['source_compute_after'] <= changed['source_compute_limit']
+    assert frozen.read_text() != current.read_text()
+
+
 def test_run_study_aggregates_all_c_sources_before_any_terminal_rows(tmp_path, runtime_root, monkeypatch):
     order, agents = [], {}
     driver = "def select_actions(spec, observations, memory): return {'model':'new.py'}\n"

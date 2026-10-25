@@ -111,6 +111,7 @@ def run_study(output, *, provider_factory, auth_mode=None, seed_method=None, see
     plan["auth_mode"] = auth_mode
     write_json(output / "protocol.json", plan)
     for name in ("scripts/run_temporal_paired_method.py",
+                 "src/hegel_machine/cognition/checkpoint_storage.py",
                  "src/hegel_machine/cognition/temporal_paired_practice.py",
                  "src/hegel_machine/cognition/temporal_paired_method.py",
                  "src/hegel_machine/cognition/temporal_operator_agent.py",

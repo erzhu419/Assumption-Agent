@@ -9,13 +9,14 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 BASELINE = ROOT / "artifacts/joint_experiment_methods_20260913/comparison_v1"
 OUTPUT = ROOT / "artifacts/compound_experiment_methods_20260913/object_regression_v1"
 
 
 def write(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n")
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def main():

@@ -14,7 +14,7 @@ from hegel_machine.cognition.revision_parameter_relations import (
 from hegel_machine.cognition.synthesis import OPERATIONS
 
 
-CONTRACT = {'operations': ['refit'], 'max_structures': 2, 'risk_quantile': .5, 'tolerance': 1e-8}
+CONTRACT = {'operations': ['refit'], 'max_structures': 2, 'risk_quantile': .5, 'tolerance': 1e-10}
 
 
 def sources(tmp_path, *, values=((1., 2., 3.), (4., 5., 6.)), bad_held=False):
@@ -36,7 +36,12 @@ def sources(tmp_path, *, values=((1., 2., 3.), (4., 5., 6.)), bad_held=False):
                 'episode_id': f'source_{source_index}:revision_{index}',
                 'source_ref': after, 'before_ref': before, 'after_ref': after,
                 'failure_refs': [{'file': str(path), 'json_path': ['source_failure']}],
-                'bindings': {'old_coefficient': old, 'new_coefficient': new}})
+                'bindings': {'old_coefficient': old, 'new_coefficient': new},
+                'parameter_role_contracts': {name: {
+                    'role_key': {'fixture_coordinate': role}, 'coordinate_scale': 1.,
+                    'coefficient_unit': 'dimensionless', 'status': 'known'}
+                    for name, role in (('old_coefficient', 'before_response_coefficient'),
+                                       ('new_coefficient', 'after_response_coefficient'))}})
         path.write_text(json.dumps({'source_failure': True, 'revisions': revisions}))
     return candidate, records
 
@@ -118,6 +123,9 @@ def test_unit_mismatch_stays_unknown_instead_of_learning_numeric_cross_unit_affi
     candidate, records = sources(tmp_path)
     candidate['holes'][0]['output_unit'] = 's'
     candidate['holes'][1]['output_unit'] = 'V'
+    for record in records:
+        record['parameter_role_contracts']['old_coefficient']['coefficient_unit'] = 's'
+        record['parameter_role_contracts']['new_coefficient']['coefficient_unit'] = 'V'
     result = learn(candidate, records)
     assert result['accepted'] == [] and result['status'] == 'UNKNOWN'
     assert result['attempts'][-1]['reason'] == 'incompatible_generated_unit'
@@ -212,6 +220,9 @@ def wide_evidence_sources(tmp_path):
     for record in records:
         for name in extra:
             record['bindings'][name] = Program('const', value=float(rng.randrange(-4, 5)))
+            record['parameter_role_contracts'][name] = {
+                'role_key': {'fixture_coordinate': f'independent_nuisance_{name}'},
+                'coordinate_scale': 1., 'coefficient_unit': 'dimensionless', 'status': 'known'}
         features = {name: float(rng.randrange(-4, 5)) for name in evidence}
         record['evidence_context'] = {'features': features,
             'role_signature': {name: {'role': 'measured_control', 'unit': 'dimensionless',

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from .code_agent import python_model_context_matches
+from .checkpoint_storage import write_text_incrementally
 from .online_inquiry_llm import InquiryLLMConfig
 from .temporal_method_learning import METHOD_PATH
 from .temporal_paired_method import FrozenMethodAgent, ProcedureConsumerAgent
@@ -160,8 +161,9 @@ class PythonArchiveMethodLearner(PairedMethodLearner):
                         evidence['execution_summary'] = latest_summary
             # The inline view and the advertised file must describe the same
             # actual execution. Retain the historical trial ledger unchanged.
-            self.files['method_candidates.json'] = json.dumps(entries, indent=2)
-            (self.workspace / 'method_candidates.json').write_text(self.files['method_candidates.json'])
+            content = json.dumps(entries, indent=2)
+            write_text_incrementally(self.workspace / 'method_candidates.json', content)
+            self.files['method_candidates.json'] = content
         candidates = []
         for entry in entries:
             # Historical program selection must retain paid outcomes from earlier
@@ -255,8 +257,9 @@ class PythonArchiveMethodLearner(PairedMethodLearner):
         comparison = self._failed_case_paid_comparison()
         if comparison is not None:
             summary['failed_case_paid_comparison'] = comparison
-        self.files['method_decision.json'] = json.dumps(summary, indent=2)
-        (self.workspace / 'method_decision.json').write_text(self.files['method_decision.json'])
+        content = json.dumps(summary, indent=2)
+        write_text_incrementally(self.workspace / 'method_decision.json', content)
+        self.files['method_decision.json'] = content
 
     def _paid_practice_view(self, trial):
         directory = trial['directory']

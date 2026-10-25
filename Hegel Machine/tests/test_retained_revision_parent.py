@@ -10,10 +10,29 @@ from test_revision_candidate_exports import prepared_revision_scene
 def completed_revision_comparison(tmp_path, monkeypatch):
     agent, lab, question = prepared_revision_scene(tmp_path, monkeypatch)
     agent._before_model_turn(lab)
+    expected = [*agent.knowledge['finite_native_author']['predictor_paths'], *agent.candidate_paths]
+    for round_ in question['native_condition_research']:
+        expected.extend(item['model'] for item in round_['candidates'])
+        expected.extend(item['model'] for item in round_['exported_models'])
+    expected = list(dict.fromkeys(expected))
+    before_compute = agent.costs['compute_cost']
     compared = execute_procedure(agent, lab, POLICY, max_steps=1, allow_confirmation=False,
         record_events=True, before_step=agent._before_model_turn, after_step=agent._after_model_turn)
     assert compared['steps'][0]['proposal']['arguments']['operator'] == 'research_choice'
-    assert compared['steps'][0]['feedback']['compute_cost'] == 48
+    feedback = compared['steps'][0]['feedback']
+    assert compared['steps'][0]['proposal']['arguments']['models'] == expected
+    assert [item['path'] for item in feedback['evaluations']] == expected
+    # The current 300-unit construction yields five revision exports. Together
+    # with the old archive and two native drafts, all eight are scored on four
+    # paid rows; this comparison has no cached scores or extra incumbent pass.
+    assert len(expected) == feedback['new_scored_count'] == 8
+    assert feedback['paid_rows'] == 4 and feedback['reused_score_count'] == 0
+    assert feedback['retained_comparison_score_counts'] == {'reused': 0, 'newly_scored': 0}
+    execution_costs = [item['paid_score_reuse']['execution_costs']['compute_cost']
+                       for item in feedback['evaluations']]
+    assert execution_costs == [4] * 8
+    assert feedback['compute_cost'] == sum(execution_costs) == 32
+    assert agent.costs['compute_cost'] - before_compute == 32
     retained = agent.evaluated_model
     exported, = [item for item in question['revision_candidate_exports']
                  if item['model'] == retained['source_model']]

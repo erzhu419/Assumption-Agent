@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .agenda import RESOURCES, ResearchAgenda
+from .checkpoint_storage import write_text_incrementally
 from .environments import make_suite
 from .evaluation import loss
 from .language import Program
@@ -60,7 +61,7 @@ def run_dependency_demo(directory, *, seed=71):
                     "answer_concepts": checkpoint["questions"]["shared_mechanism"]["answer_concepts"]}
     shared = ResearchAgenda(directory=directory / "shared", state=json.loads(json.dumps(checkpoint)))
     completed = shared.run()
-    (directory / "shared_checkpoint.json").write_text(json.dumps(completed, indent=2) + "\n", encoding="utf-8")
+    write_text_incrementally(directory / "shared_checkpoint.json", json.dumps(completed, indent=2) + "\n")
     separate_agendas = []
     for identifier in ("parameter_transfer", "renamed_transfer"):
         individual = dependency_agenda(directory / identifier, seed=seed, successors=(identifier,))

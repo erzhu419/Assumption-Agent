@@ -14,7 +14,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime
+from scripts.run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime, checkpoint_path
 
 
 def laboratory(task):
@@ -223,7 +223,7 @@ def learn_independent(output, protocol, arm, root):
     """Reset the entire knowledge library and unused budget after each task."""
     module = load_runtime(protocol, arm)
     directory = run_dir(output, arm, root)
-    path = directory / "checkpoint.json.gz"
+    path = checkpoint_path(directory / "checkpoint.json")
     if path.exists() and read(path)["study"]["learning_complete"]:
         return
     tasks = protocol["roots"][root]["tasks"]
@@ -231,7 +231,7 @@ def learn_independent(output, protocol, arm, root):
         "costs": dict.fromkeys(COSTS, 0), "knowledge": {},
         "study": {"steps": 0, "cpu_seconds": 0., "learning_complete": False}}
     for position, task in enumerate(tasks):
-        task_path = directory / f"task{position:02d}.json.gz"
+        task_path = checkpoint_path(directory / f"task{position:02d}.json")
         if task_path.exists():
             learned = read(task_path)
         else:
@@ -263,7 +263,7 @@ def learn(output, protocol, arm, root):
     if protocol["arms"][arm]["knowledge"] == "independent":
         return learn_independent(output, protocol, arm, root)
     module = load_runtime(protocol, arm)
-    path = run_dir(output, arm, root) / "checkpoint.json.gz"
+    path = checkpoint_path(run_dir(output, arm, root) / "checkpoint.json")
     if path.exists():
         state = read(path)
         if state["study"]["learning_complete"]:
@@ -286,8 +286,8 @@ def learn(output, protocol, arm, root):
         state["study"]["cpu_seconds"] += time.process_time() - started
         state["study"]["learning_complete"] = (len(state["results"]) == len(state["tasks"])
             and not state["pending_revisits"])
-        save(path.parent / f"visit{state['study']['steps']:02d}.json.gz", state)
         save(path, state)
+        save(checkpoint_path(path.parent / f"visit{state['study']['steps']:02d}.json"), state, base=path)
         print({"arm": arm, "root": root, "steps": state["study"]["steps"],
             "complete": state["study"]["learning_complete"], "costs": state["costs"]}, flush=True)
         session = module.UnifiedResearchSession(state=state, lab_factory=laboratory)
@@ -296,7 +296,7 @@ def learn(output, protocol, arm, root):
 def evaluate(output, protocol, arm, root):
     for name in protocol["arms"]:
         for key in protocol["roots"]:
-            if not read(run_dir(output, name, key) / "checkpoint.json.gz")["study"]["learning_complete"]:
+            if not read(checkpoint_path(run_dir(output, name, key) / "checkpoint.json"))["study"]["learning_complete"]:
                 raise ValueError("all arms must finish learning before terminal scoring")
     load_runtime(protocol, arm)
     from hegel_machine.cognition.evaluation import loss
@@ -304,7 +304,7 @@ def evaluate(output, protocol, arm, root):
     path = run_dir(output, arm, root) / "evaluation.json"
     if path.exists():
         return
-    state = read(path.parent / "checkpoint.json.gz")
+    state = read(checkpoint_path(path.parent / "checkpoint.json"))
     scored, settings = [], protocol["terminal"]
     for position, task in enumerate(state["tasks"]):
         report = state["results"][position]["research"]
@@ -342,7 +342,7 @@ def summarize(output, protocol):
             "learning_cpu_seconds": 0., "terminal_cpu_seconds": 0.}
         for root in protocol["roots"]:
             directory = run_dir(output, arm, root)
-            state = read(directory / "checkpoint.json.gz")
+            state = read(checkpoint_path(directory / "checkpoint.json"))
             for key in COSTS:
                 total["learning_costs"][key] += state["costs"][key]
             total["learning_cpu_seconds"] += state["study"]["cpu_seconds"]

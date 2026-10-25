@@ -108,6 +108,7 @@ adds no scientific support: fresh predictive confirmation still determines adopt
         self.method_results = []
         self.program_contexts = {}
         self._current_proposal = None
+        self._prepared_program_result = None
         self._active_program_path = None
         self._procedure_confirmation_allowed = True
         self._method_no_progress = None
@@ -147,8 +148,8 @@ adds no scientific support: fresh predictive confirmation still determines adopt
 
     def _program_state(self):
         state = super()._program_state()
-        state["method_results"] = deepcopy(self.method_results)
-        state["program_contexts"] = deepcopy(self.program_contexts)
+        state["method_results"] = self.method_results
+        state["program_contexts"] = self.program_contexts
         return state
 
     def _program_evidence(self):
@@ -268,8 +269,20 @@ adds no scientific support: fresh predictive confirmation still determines adopt
             return super()._query(arguments, laboratory)
         self._active_program_path, self._current_proposal = path, None
         evidence_before = self._program_evidence()
+        prepared, self._prepared_program_result = self._prepared_program_result, None
         try:
-            feedback = super()._query(arguments, laboratory)
+            if prepared is None:
+                feedback = super()._query(arguments, laboratory)
+            else:
+                # The registered saved-source loop already executed this author
+                # to enforce its no-acquisition boundary. Consume that real
+                # proposal once through the same action dispatcher and ledger.
+                if prepared['path'] != path:
+                    raise ValueError('prepared author result belongs to another procedure')
+                feedback = self._handle_program_proposal(deepcopy(prepared['proposal']), laboratory)
+                if feedback is None:
+                    raise ValueError('prepared source result must declare one ordinary action or stop')
+                feedback = {**feedback, 'program_execution': deepcopy(prepared['program_execution'])}
         except (ValueError, TypeError, KeyError, OSError, StopIteration) as error:
             feedback = {"error": f"{type(error).__name__}: {error}", "executed_path": path}
         self.method_results.append({"step": len(self.method_results), "path": path,
@@ -285,12 +298,12 @@ adds no scientific support: fresh predictive confirmation still determines adopt
             result["fresh_confirmation"].pop("observations", None)
         return result
 
-    def result(self, status):
-        result = super().result(status)
-        result["method_results"] = deepcopy(self.method_results)
-        result["program_contexts"] = deepcopy(self.program_contexts)
+    def _result_with_snapshot(self, status, snapshot):
+        result = super()._result_with_snapshot(status, snapshot)
+        result["method_results"] = snapshot(self.method_results)
+        result["program_contexts"] = snapshot(self.program_contexts)
         if status == "method_no_progress" and self._method_no_progress:
-            result["no_progress"] = deepcopy(self._method_no_progress)
+            result["no_progress"] = snapshot(self._method_no_progress)
         return result
 
     def _procedure_budget_status(self):
@@ -345,7 +358,7 @@ def _acquisition_only(proposed):
 
 def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmation=True,
                       record_events=False, on_checkpoint=None, query_arguments=None,
-                      before_step=None, after_step=None):
+                      before_step=None, after_step=None, _prepared_program_result=None):
     """Run the existing procedure protocol on this agent's evidence and account.
 
     Frozen replay records its own zero-LLM events and permits the authored method
@@ -363,6 +376,8 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
     previous = agent._procedure_confirmation_allowed
     previous_review = agent._acquisition_review
     previous_config = agent.config
+    previous_prepared = agent._prepared_program_result
+    agent._prepared_program_result = _prepared_program_result
     if record_events:
         # A frozen program has no live author to receive the per-run handoff.
         # Keep its existing task allowance; authored explicit timeouts still apply.
@@ -528,6 +543,7 @@ def execute_procedure(agent, laboratory, path, max_steps=8, *, allow_confirmatio
         agent._procedure_confirmation_allowed = previous
         agent._acquisition_review = previous_review
         agent.config = previous_config
+        agent._prepared_program_result = previous_prepared
     return {"status": status, "path": path, "steps": steps, "model": agent.model,
             **({"no_progress": deepcopy(agent._method_no_progress)} if status == "method_no_progress" else {}),
             **({"review": deepcopy(steps[-1]["feedback"]["review"])} if status == "method_review_required" else {}),
@@ -551,8 +567,8 @@ class FrozenMethodAgent(ProcedureConsumerAgent):
                                     record_events=True, on_checkpoint=on_checkpoint)
         return self.result(outcome["status"])
 
-    def result(self, status):
-        result = super().result(status)
+    def _result_with_snapshot(self, status, snapshot):
+        result = super()._result_with_snapshot(status, snapshot)
         result.update(method_path=METHOD_PATH, method_source=self.frozen_method_source,
-                      method_results=deepcopy(self.method_results))
+                      method_results=snapshot(self.method_results))
         return result

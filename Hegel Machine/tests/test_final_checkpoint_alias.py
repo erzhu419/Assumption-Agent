@@ -7,10 +7,13 @@ import pytest
 from scripts.run_online_inquiry_llm import final_checkpoint_alias, write_json
 
 
-def test_final_checkpoint_reuses_final_result_and_keeps_future_writes_separate(tmp_path):
+@pytest.mark.parametrize('large', [False, True])
+def test_final_checkpoint_reuses_final_result_and_keeps_future_writes_separate(tmp_path, large):
     final = tmp_path / 'training.json'
     checkpoint = tmp_path / 'active.json'
     result = {'status': 'completed', 'paid_records': [{'observation': 3.}]}
+    if large:
+        result['paid_records'][0]['retained_history'] = 'original failure evidence ' * 10000
     write_json(checkpoint, {**result, 'status': 'researching'})
     write_json(final, result)
     final_bytes = final.read_bytes()

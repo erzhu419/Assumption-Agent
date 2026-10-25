@@ -28,6 +28,7 @@ def export_revision_candidates(agent, question):
     """
     from time import monotonic
     from .language import Program
+    from .research_episodes import _question_versions, _path
     from .temporal_operator_agent import export_temporal_program
     from .theory_consolidation import _anchor_file_references, library_entry_reference
 
@@ -48,8 +49,11 @@ def export_revision_candidates(agent, question):
     saved = question.setdefault('revision_candidate_exports', [])
     failures = question.get('revision_export_errors', [])
     prefix = f'frozen_recall:{question["id"]}@{question.get("meaning_version", 1)}:'
+    owner, owner_ref = _question_versions(agent)[question['id'], question.get('meaning_version', 1)]
+    if owner is not question:
+        raise ValueError('revision_export_requires_original_question_meaning')
     directory = (Path('_experiment_models') /
-        f'revision_{agent.questions.index(question):04d}_{question.get("meaning_version", 1):04d}' /
+        f'revision_{_path(owner_ref)[1]:04d}_{question.get("meaning_version", 1):04d}' /
         '_evaluated_model')
     documents = {}
     for identifier in identifiers:
@@ -136,7 +140,7 @@ def _attempted(proposal, results, paid_rows):
 
 
 def _completed_choice(results, models, paid_rows, question, state):
-    """Reuse this procedure's completed comparison, not its last operator kind.
+    """Reuse a matching completed comparison, including an earlier author version.
 
     The ordinary execution feedback retains the actual question and meaning
     after Common has removed the declaration from the operator's arguments.
@@ -168,6 +172,52 @@ def _completed_choice(results, models, paid_rows, question, state):
                 and [item.get('path') for item in evaluations] == expected
                 and not any(item.get('truncated') for item in evaluations)):
             return feedback
+    return None
+
+
+def _same_bank_after_unavailable_refit(state, results, question, latest, paid_rows,
+                                      observed_records, max_compute):
+    """Consume the native researcher's published full-paid continuation action."""
+    owner_index = next((index for index, item in enumerate(state.get('questions', []))
+                        if item['id'] == question['id']), None)
+    if owner_index is None or latest is None:
+        return None
+    owner = state['questions'][owner_index]
+    meaning = owner.get('meaning_version', 1)
+    if not any((entry.get('proposal') or {}).get('arguments', {}).get('operator') == 'refit'
+            and entry.get('feedback', {}).get('status') == 'refit_unavailable'
+            and entry['feedback'].get('research_question_id') == question['id']
+            and entry['feedback'].get('question_meaning_version', 1) == meaning
+            and entry.get('evidence_after', {}).get('rows') == paid_rows for entry in results):
+        return None
+    path = Path('method_decision.json')
+    if not path.is_file():
+        return None
+    for option in json.loads(path.read_text()).get('research_options', []):
+        if option.get('id') != 'native_condition_research':
+            continue
+        for entry in reversed(option.get('current_executions', [])):
+            source = entry.get('source', {})
+            if (entry.get('question_id') != question['id']
+                    or entry.get('round_index') != latest.get('round_index')
+                    or entry.get('fit_scope') != 'all_paid_rows'
+                    or entry.get('paid_rows') != paid_rows
+                    or entry.get('current_paid_rows') != paid_rows
+                    or entry.get('observed_record_count') != observed_records
+                    or source.get('file') != 'research_state.json'
+                    or source.get('json_path') != ['questions', owner_index,
+                        'native_condition_research', latest.get('round_index')]):
+                continue
+            proposal = deepcopy(entry.get('resume_action'))
+            if not proposal:
+                return None
+            arguments = proposal.get('arguments', {})
+            if (proposal.get('action') != 'run'
+                    or arguments.get('operator') != 'native_condition_research'
+                    or arguments.get('research_question', {}).get('id') != question['id']):
+                return None
+            arguments['max_compute'] = max_compute
+            return proposal if not _attempted(proposal, results, paid_rows) else None
     return None
 
 
@@ -279,7 +329,14 @@ def select_actions(public_spec, observations, memory):
     if missing:
         return _author_work('retained_predictor_source_missing', missing,
                             catalog_ref=deepcopy(contract['predictor_catalog_ref']))
-    results = memory.get('program_results', [])
+    meaning = next((item.get('meaning_version', 1) for item in state.get('questions', [])
+                    if item['id'] == question['id']), question.get('meaning_version', 1))
+    # A source edit resets program_results, while its actual scientific
+    # executions retain their original source, question, meaning and paid scope.
+    results = [entry for entry in state.get('method_results', [])
+        if entry.get('feedback', {}).get('research_question_id') == question['id']
+        and entry['feedback'].get('question_meaning_version', 1) == meaning]
+    results += memory.get('program_results', [])
     # The existing choice scores every named old/native model and adds all
     # validated refit/response exports itself. Its retention/confirmation gate
     # decides among them before another purchase or refinement can intervene.
@@ -290,6 +347,11 @@ def select_actions(public_spec, observations, memory):
         return _action({'action': 'run', 'arguments': {'operator': 'research_choice', 'models': models}}, question)
     if current_choice and choice.get('next_action') and not _attempted(choice['next_action'], results, paid_rows):
         return _action(choice['next_action'], question)
+    if current_choice:
+        resumed = _same_bank_after_unavailable_refit(state, results, question, latest,
+            paid_rows, len(observations), contract['max_compute'])
+        if resumed is not None:
+            return _action(resumed, question)
     if parent.get('pending_query'):
         return _action({'action': 'query', 'arguments': {'pending_question': parent_id}}, question)
     # Retain the old method's actual boundary/matched-evidence continuation.

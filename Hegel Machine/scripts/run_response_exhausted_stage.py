@@ -13,6 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(ROOT)]
+from hegel_machine.cognition.code_agent import _copy_model_file
 from scripts import run_response_revision_successors as previous
 
 SOURCE = previous.OUTPUT
@@ -38,7 +39,8 @@ def prepare(output):
         "model_calls": 0}
     write(output / "protocol.json", protocol)
     for arm in ARMS:
-        shutil.copytree(SOURCE / "successors" / arm / "sources", output / "after" / arm / "sources")
+        shutil.copytree(SOURCE / "successors" / arm / "sources", output / "after" / arm / "sources",
+            copy_function=_copy_model_file)
         shutil.copyfile(SOURCE / "successors" / arm / "protocol.json", output / "after" / arm / "protocol.json")
     (output / Path(__file__).name).write_text(Path(__file__).read_text())
     summarize(output)

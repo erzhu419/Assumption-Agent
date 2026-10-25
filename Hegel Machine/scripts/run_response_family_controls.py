@@ -15,6 +15,8 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 from scripts.run_response_family_pilot import ResponseLab, ESTIMATORS, consequence_snapshot
@@ -35,8 +37,7 @@ LIMITS = {"environment_steps": 11, "score_checkpoints_environment_steps": [],
 
 
 def write_json(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def member_snapshot(state, proposal):

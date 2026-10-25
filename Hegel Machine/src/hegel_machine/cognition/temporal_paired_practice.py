@@ -445,7 +445,7 @@ class PairedMethodLearner(InquiryLLMAgent):
         last_action_summary = _compact_trajectory_payload(last_action)
         if last_action is not None:
             action_file = "resume_last_action.json"
-            (self.workspace / action_file).write_text(json.dumps(last_action, indent=2))
+            write_text_incrementally(self.workspace / action_file, json.dumps(last_action, indent=2))
             last_action_summary["full_action_file"] = action_file
             if last_action["action"] == "run" and "operator" not in last_action.get("arguments", {}):
                 feedback = last_action_summary.get("feedback", {})
@@ -467,7 +467,7 @@ class PairedMethodLearner(InquiryLLMAgent):
                                      "for reading. Edit or restore methods only into the current shared source; "
                                      "new practices use new numbered directories."}
         self.files["resume_context.json"] = json.dumps(context, indent=2)
-        (self.workspace / "resume_context.json").write_text(self.files["resume_context.json"])
+        write_text_incrementally(self.workspace / "resume_context.json", self.files["resume_context.json"])
         return context
 
     def _refresh_method_candidates(self):
@@ -495,7 +495,7 @@ class PairedMethodLearner(InquiryLLMAgent):
             candidate["trials"].append(evidence)
         content = json.dumps(list(grouped.values()), indent=2)
         self.files["method_candidates.json"] = content
-        (self.workspace / "method_candidates.json").write_text(content)
+        write_text_incrementally(self.workspace / "method_candidates.json", content)
 
     def _latest_source_practices(self, source):
         """A later practice on the same case updates that source's support."""
@@ -518,7 +518,7 @@ class PairedMethodLearner(InquiryLLMAgent):
             context = json.loads(self.files["resume_context.json"])
             context["current_source_coverage"] = coverage
             self.files["resume_context.json"] = json.dumps(context, indent=2)
-            (self.workspace / "resume_context.json").write_text(self.files["resume_context.json"])
+            write_text_incrementally(self.workspace / "resume_context.json", self.files["resume_context.json"])
         self._refresh_method_candidates()
         return coverage
 

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime
+from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime, checkpoint_path
 from run_nonlinear_mechanism_revision import laboratory as nonlinear_laboratory
 from run_condition_response_action_study import laboratory as conditional_laboratory
 
@@ -28,7 +28,7 @@ def directory(output, arm, root):
 
 
 def checkpoint(output, arm, root):
-    return directory(output, arm, root) / "checkpoint.json.gz"
+    return checkpoint_path(directory(output, arm, root) / "checkpoint.json")
 
 
 def runtime(protocol, arm):
@@ -52,8 +52,8 @@ def session_for(module, protocol, root, state=None):
 
 
 def persist(output, arm, root, state):
-    save(directory(output, arm, root) / f"visit{state['study']['steps']:02d}.json.gz", state)
     save(checkpoint(output, arm, root), state)
+    save(checkpoint_path(directory(output, arm, root) / f"visit{state['study']['steps']:02d}.json"), state, base=checkpoint(output, arm, root))
 
 
 def one_step(session, output, arm, root):
@@ -70,7 +70,7 @@ def one_step(session, output, arm, root):
     state["study"]["cpu_seconds"] += time.process_time() - cpu
     state["study"]["elapsed_seconds"] += time.monotonic() - wall
     if first and len(state["results"]) == len(state["tasks"]):
-        save(directory(output, arm, root) / "first_visits.json.gz", state)
+        save(checkpoint_path(directory(output, arm, root) / "first_visits.json"), state, base=checkpoint(output, arm, root))
     state["study"]["learning_complete"] = (len(state["results"]) == len(state["tasks"])
         and not state["pending_revisits"])
     persist(output, arm, root, state)
@@ -102,8 +102,8 @@ def learn(output, protocol, arm, root):
 
 def first_consumption(output, root, task_count):
     for position in range(1, task_count):
-        before = read(directory(output, "candidate", root) / f"visit{position:02d}.json.gz")
-        after = read(directory(output, "candidate", root) / f"visit{position + 1:02d}.json.gz")
+        before = read(checkpoint_path(directory(output, "candidate", root) / f"visit{position:02d}.json"))
+        after = read(checkpoint_path(directory(output, "candidate", root) / f"visit{position + 1:02d}.json"))
         report = after["results"][position]["research"]
         present = {item["concept_id"] for item in before["knowledge"].get("concepts", [])}
         sources = sorted(present & set(report.get("used_sources", []) + report.get("method_source_ids", [])))

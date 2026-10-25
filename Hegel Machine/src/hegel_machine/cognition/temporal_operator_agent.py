@@ -8,6 +8,7 @@ import json
 import inspect
 import sys
 from copy import deepcopy
+from contextlib import nullcontext
 from dataclasses import asdict
 from math import nextafter
 from pathlib import Path
@@ -15,12 +16,16 @@ from time import monotonic
 
 from .code_agent import (
     _MODEL_RUNNER, _bound_model_contexts, _copy_model_context, evaluate_python_model,
+    _closed_temporal_export, literal_python_model_context_matches,
     python_model_context, python_model_context_matches,
 )
+from .checkpoint_storage import write_text_incrementally, write_json_checkpoint
+from .experiment_runtime import PythonExecutionDeadline, python_execution_deadline
 from .history_revision import revise_history
 from .knowledge_evolution import bind_answers
 from .language import Program
 from .online_inquiry_llm import InquiryLLMAgent
+from .paid_score_history import retain_comparison_history
 from .program_experiment_methods import ProgramExperimentMethods
 from .temporal_instrument_research import (
     assess_temporal_instrument, fit_temporal_instrument,
@@ -28,6 +33,61 @@ from .temporal_instrument_research import (
 )
 from .temporal_research import fit_temporal_response, mse
 from .temporal_response_experiments import plan_response_experiment, assess_response_experiment
+
+
+def _index_literal_assessment(index, reference, assessment):
+    context = assessment['execution_context']
+    key = (context['workspace'], context['model'])
+    if key not in index['sources']:
+        source = (Path(key[0]) / key[1]).read_text(encoding='utf-8')
+        prefix = '# Frozen paid-data predictor; controls and recorded history only.\n_PROGRAM = '
+        index['sources'][key] = (source if source.startswith(prefix)
+                                 and source.endswith('\n' + _PROGRAM_RUNNER) else None)
+    source = index['sources'][key]
+    if source is not None:
+        index['assessments'].setdefault(source, []).append((reference, assessment))
+
+
+def _literal_score_index(comparison):
+    """Index small selected sources once; full contexts are checked only on hits."""
+    index = {'sources': {}, 'assessments': {}}
+    scopes = {name for name, scope in comparison['scopes'].items()
+              if scope == comparison['basis']}
+    for retained in comparison['assessments'].values():
+        for reference, assessment in retained:
+            if assessment['scope_ref']['file'] in scopes:
+                _index_literal_assessment(index, reference, assessment)
+    return index
+
+
+def _matching_literal_score(workspace, model, comparison):
+    directory, inner = python_model_context(workspace, model)
+    if not _closed_temporal_export(directory, inner):
+        return None
+    if 'literal_score_index' not in comparison:
+        comparison['literal_score_index'] = _literal_score_index(comparison)
+    source = (directory / inner).read_text(encoding='utf-8')
+    for reference, assessment in reversed(
+            comparison['literal_score_index']['assessments'].get(source, [])):
+        context = assessment['execution_context']
+        if literal_python_model_context_matches(workspace, model,
+                                                context['workspace'], context['model']):
+            return reference, assessment
+    return None
+
+
+def _reused_python_score(model, reference, assessment):
+    result = deepcopy(assessment['result'])
+    if 'paid_residuals' in result:
+        result['paid_residuals']['model'] = model
+    reuse = {'status': 'reused', 'assessment_ref': {**reference, 'json_path': ['result']},
+        'execution_basis_ref': reference, 'scope_ref': assessment['scope_ref'],
+        'original_costs': deepcopy(assessment['execution_costs']),
+        'additional_scoring_compute': 0, 'additional_scoring_python_seconds': 0.}
+    if model != assessment['model']:
+        reuse.update(matched_model=assessment['model'],
+                     match_basis='identical_closed_literal_execution')
+    return {**result, 'paid_score_reuse': reuse}
 
 
 OPERATOR_INTERFACE = """
@@ -429,7 +489,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
     def _save(self, path, source):
         destination = self.workspace / path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(source, encoding="utf-8")
+        write_text_incrementally(destination, source)
         self.files[path] = source
         session = getattr(self, "legacy_session", None)
         if path == INSTRUMENT_METHODS_PATH and session is not None:
@@ -567,11 +627,11 @@ class TemporalOperatorAgent(InquiryLLMAgent):
 
         def fitting_view(rows, records):
             text = json.dumps(rows, allow_nan=False)
-            for filename in ("model_observations.json", "observations.json"):
-                (context / filename).write_text(text, encoding="utf-8")
-            (context / "laboratory_observations.json").write_text(
-                json.dumps([self.observations[index] for index in records], allow_nan=False),
-                encoding="utf-8")
+            write_text_incrementally(context / "model_observations.json", text)
+            write_text_incrementally(context / "observations.json", text,
+                                     base=context / "model_observations.json")
+            write_text_incrementally(context / "laboratory_observations.json",
+                json.dumps([self.observations[index] for index in records], allow_nan=False))
 
         fitting_view(train_rows, split["training_records"])
         try:
@@ -727,6 +787,13 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         return ProgramExperimentMethods(json.loads(path.read_text(encoding="utf-8"))
                                         if path.exists() else [])
 
+    def _operator_python_remaining(self):
+        clock = getattr(self, '_operator_python_clock', None)
+        if clock is not None:
+            spent, started = clock
+            self.costs['python_execution_seconds'] = spent + monotonic() - started
+        return self.config.execution_seconds - self.costs['python_execution_seconds']
+
     def _python_research_choice(self, arguments, spec):
         from .python_research_routing import validated_candidates
         if "records" in arguments:
@@ -735,18 +802,48 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         if models is None:
             current = self._evaluated_summary()
             models = [current["model"]] if current else []
-        models = list(models) + validated_candidates(self)
-        # Keep complete executions by reference. A path, row count, or printed
-        # fit error alone does not establish the execution inputs of an old score.
+        models = list(dict.fromkeys([*models, *validated_candidates(self)]))
+        # Keep complete executions by reference. Candidate scoring is bounded;
+        # the existing caller commits its completed retention after that timer.
         previous = getattr(self, "_paid_python_comparison", None)
-        self._paid_python_comparison = self._paid_python_score_scope(spec)
+        evaluations, exhausted = [], False
         try:
-            evaluations = [{"path": path, **super(TemporalOperatorAgent, self)._execute(
-                                "evaluate", {"model": path}, None)} for path in dict.fromkeys(models)]
+            try:
+                with python_execution_deadline(self._operator_python_remaining()):
+                    self._paid_python_comparison = self._paid_python_score_scope(spec)
+            except PythonExecutionDeadline:
+                exhausted = True
+            for path in models if not exhausted else []:
+                if self._operator_python_remaining() <= 0:
+                    exhausted = True
+                    break
+                try:
+                    evaluation = super(TemporalOperatorAgent, self)._execute(
+                        "evaluate", {"model": path}, None)
+                except PythonExecutionDeadline:
+                    exhausted = True
+                    break
+                evaluations.append({"path": path, **evaluation})
+                if evaluation.get('timeout'):
+                    exhausted = True
+                    break
         finally:
             self._paid_python_comparison = previous
-        result = self._python_research_decision(self._evaluated_summary(), spec, evaluations=evaluations)
+        exhausted = exhausted or self._operator_python_remaining() <= 0
+        if exhausted:
+            # Keep already paid scores and the actual retained winner. A partial
+            # pool comparison cannot choose the next scientific research action.
+            result = {'status': 'comparison_incomplete_python_budget',
+                'truncated': True, 'reason': 'python_execution_budget_exhausted',
+                'evaluations': evaluations, 'evaluated_model': self._evaluated_summary(),
+                'paid_rows': len(self.rows), 'recommendation': None,
+                'decision': {'options': [], 'reason': 'incomplete_candidate_comparison'},
+                'evidence_scope': 'Completed paid candidate scores only; full-pool comparison unfinished.'}
+        else:
+            result = self._python_research_decision(
+                self._evaluated_summary(), spec, evaluations=evaluations)
         result.update(
+            models_requested=len(models), models_completed=len(evaluations),
             reused_score_count=sum(item["paid_score_reuse"]["status"] == "reused"
                                    for item in evaluations),
             new_scored_count=sum(item["paid_score_reuse"]["status"] == "newly_scored"
@@ -769,6 +866,23 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         question = next((item for item in self.questions if item["id"] == active), None)
         if question is None and self.questions:
             question = self.questions[-1]
+        if question is not None and question.get('paid_score_question_ref') is not None:
+            # A separate parent-revision duty still compares predictions on
+            # its original paid task. Keep research attribution on the duty;
+            # only the declared numerical score uses that unchanged task.
+            reference = question['paid_score_question_ref']
+            source = next((item for item in self.questions
+                           if item['id'] == reference['question_id']), None)
+            if (question.get('kind') != 'program_revision'
+                    or reference != question.get('native_research_ref')
+                    or source is None
+                    or source.get('meaning_version', 1) != reference['meaning_version']
+                    or source.get('context_ref') != question.get('context_ref')
+                    or any((source.get('theory_target') or {}).get(key)
+                           != (question.get('theory_target') or {}).get(key)
+                           for key in ('role_signature', 'output_unit', 'context_ref'))):
+                raise ValueError('parent revision paid-score task no longer matches its source')
+            question = source
         basis = {
             "rows": [asdict(row) if hasattr(row, "features") else deepcopy(row) for row in self.rows],
             "public_spec": deepcopy(spec),
@@ -794,10 +908,10 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 scope_ref = reference
         if scope_ref is None:
             path = directory / f"scope_{len(index['scopes']):04d}.json"
-            path.write_text(json.dumps(basis), encoding="utf-8")
+            write_text_incrementally(path, json.dumps(basis))
             scope_ref = {"file": str(path), "json_path": []}
             index["scopes"].append(scope_ref)
-            index_file.write_text(json.dumps(index), encoding="utf-8")
+            write_json_checkpoint(index_file, index, indent=None)
         scopes[scope_ref["file"]] = basis
         assessments, contexts = {}, {}
         for reference in index["assessments"]:
@@ -810,58 +924,84 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 "assessments": assessments, "contexts": contexts}
 
     def _score(self, model):
-        comparison = getattr(self, "_paid_python_comparison", None)
-        if comparison is None:
-            return super()._score(model)
-        index = comparison["index"]
-        reason = "no_retained_complete_execution_basis"
-        for reference, assessment in reversed(comparison["assessments"].get(model, [])):
-            scope = comparison["scopes"][assessment["scope_ref"]["file"]]
-            if scope != comparison["basis"]:
-                reason = "paid_rows_or_question_contract_changed"
-                continue
-            context = assessment["execution_context"]
-            if not python_model_context_matches(self.workspace, model, context["workspace"], context["model"]):
-                reason = "python_execution_context_changed"
-                continue
-            # Adoption is performed by the ordinary evaluate caller against its
-            # current incumbent, never by replaying an earlier retention decision.
-            return {**deepcopy(assessment["result"]), "paid_score_reuse": {
-                "status": "reused", "assessment_ref": {**reference, "json_path": ["result"]},
-                "execution_basis_ref": reference, "scope_ref": assessment["scope_ref"],
-                "original_costs": deepcopy(assessment["execution_costs"]),
-                "additional_scoring_compute": 0, "additional_scoring_python_seconds": 0.}}
+        bounded = getattr(self, '_bounded_python_comparison', False)
+        remaining = self._operator_python_remaining() if bounded else None
+        with python_execution_deadline(remaining) if bounded else nullcontext():
+            comparison = getattr(self, "_paid_python_comparison", None)
+            if comparison is None:
+                return super()._score(model)
+            index = comparison["index"]
+            source, inner = python_model_context(self.workspace, model)
+            external = not source.is_relative_to(self.workspace)
+            reason = "no_retained_complete_execution_basis"
+            for reference, assessment in reversed(comparison["assessments"].get(model, [])):
+                scope = comparison["scopes"][assessment["scope_ref"]["file"]]
+                if scope != comparison["basis"]:
+                    reason = "paid_rows_or_question_contract_changed"
+                    continue
+                context = assessment["execution_context"]
+                if not python_model_context_matches(self.workspace, model, context["workspace"], context["model"]):
+                    reason = "python_execution_context_changed"
+                    continue
+                # Adoption is performed by the ordinary evaluate caller against its
+                # current incumbent, never by replaying an earlier retention decision.
+                reused = _reused_python_score(model, reference, assessment)
+                if external:
+                    reused['execution_context'] = deepcopy(assessment['execution_context'])
+                return reused
 
-        if not self.rows or self._remaining_compute() < len(self.rows):
-            return super()._score(model)  # Preserve the original budget error without a new context copy.
+            literal = _matching_literal_score(self.workspace, model, comparison)
+            if literal is not None:
+                reused = _reused_python_score(model, *literal)
+                if external:
+                    reused['execution_context'] = deepcopy(literal[1]['execution_context'])
+                return reused
 
-        # Existing model-context copying shares filesystem blocks, including
-        # immutable paid-trace references. Reuse one matching context for other
-        # programs with the same actual execution root and declared dependencies.
-        source, inner = python_model_context(self.workspace, model)
-        context = None
-        for retained in reversed(comparison["contexts"].get(str(source), [])):
-            if python_model_context_matches(
-                    self.workspace, model, retained["workspace"], inner):
-                context = {"workspace": retained["workspace"], "model": inner}
-                break
-        if context is None:
-            destination = comparison["directory"] / f"context_{len(index['contexts']):04d}"
-            inner = _copy_model_context(self.workspace, model, destination)
-            context = {"workspace": str(destination), "model": inner}
-            retained = {"source_workspace": str(source), **context}
-            index["contexts"].append(retained)
-            comparison["contexts"].setdefault(str(source), []).append(retained)
-        before_compute = self.costs["compute_cost"]
-        before_seconds = self.costs["python_execution_seconds"]
-        result = super()._score(model)
-        costs = {"compute_cost": self.costs["compute_cost"] - before_compute,
-                 "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds}
-        complete = (result.get("returncode") == 0 and not result.get("truncated")
-                    and not result.get("paid_relation_diagnostic", {}).get("truncated")
-                    and isinstance(result.get("mse"), (int, float)))
-        stable = complete and python_model_context_matches(
-            self.workspace, model, context["workspace"], context["model"])
+            if not self.rows or self._remaining_compute() < len(self.rows):
+                return super()._score(model)  # Preserve the original budget error without a new context copy.
+
+            # Existing model-context copying shares filesystem blocks, including
+            # immutable paid-trace references. Reuse one matching context for other
+            # programs with the same actual execution root and declared dependencies.
+            context = None
+            for retained in reversed(comparison["contexts"].get(str(source), [])):
+                if python_model_context_matches(
+                        self.workspace, model, retained["workspace"], inner):
+                    context = {"workspace": retained["workspace"], "model": inner}
+                    break
+            if context is None:
+                destination = comparison["directory"] / f"context_{len(index['contexts']):04d}"
+                inner = _copy_model_context(self.workspace, model, destination)
+                context = {"workspace": str(destination), "model": inner}
+                retained = {"source_workspace": str(source), **context}
+                index["contexts"].append(retained)
+                comparison["contexts"].setdefault(str(source), []).append(retained)
+            if bounded:
+                self._operator_python_remaining()
+            before_compute = self.costs["compute_cost"]
+            before_seconds = self.costs["python_execution_seconds"]
+            if external:
+                original_workspace = self.workspace
+                self.workspace = Path(context['workspace'])
+                try:
+                    result = super()._score(context['model'])
+                finally:
+                    self.workspace = original_workspace
+                result['execution_context'] = deepcopy(context)
+                if 'paid_residuals' in result:
+                    result['paid_residuals']['model'] = model
+                fitting = result.get('fitting_view', {})
+                if fitting.get('file') and not Path(fitting['file']).is_absolute():
+                    fitting['file'] = str(Path(context['workspace']) / fitting['file'])
+            else:
+                result = super()._score(model)
+            costs = {"compute_cost": self.costs["compute_cost"] - before_compute,
+                     "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds}
+            complete = (result.get("returncode") == 0 and not result.get("truncated")
+                        and not result.get("paid_relation_diagnostic", {}).get("truncated")
+                        and isinstance(result.get("mse"), (int, float)))
+            stable = complete and python_model_context_matches(
+                self.workspace, model, context["workspace"], context["model"])
         reuse = {"status": "newly_scored", "reuse_miss_reason": reason,
                  "reusable": bool(stable), "execution_costs": costs,
                  "scope_ref": comparison["scope_ref"]}
@@ -870,16 +1010,18 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             assessment = {"model": model, "source_workspace": str(source),
                 "scope_ref": comparison["scope_ref"], "execution_context": context,
                 "execution_costs": costs, "result": deepcopy(result)}
-            path.write_text(json.dumps(assessment), encoding="utf-8")
+            write_text_incrementally(path, json.dumps(assessment))
             reference = {"file": str(path), "json_path": []}
             index["assessments"].append(reference)
             comparison["assessments"].setdefault(model, []).append((reference, assessment))
+            if 'literal_score_index' in comparison:
+                _index_literal_assessment(comparison['literal_score_index'], reference, assessment)
             reuse.update(assessment_ref={**reference, "json_path": ["result"]},
                          execution_basis_ref=reference)
         else:
             reuse["unavailable_reason"] = ("execution_context_changed_during_scoring"
                 if complete else "incomplete_or_failed_execution")
-        comparison["index_file"].write_text(json.dumps(index), encoding="utf-8")
+        write_json_checkpoint(comparison["index_file"], index, indent=None)
         return {**result, "paid_score_reuse": reuse}
 
     def _python_research_decision(self, retained, spec, *, evaluations=(), repair=None):
@@ -1213,7 +1355,10 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                                           "arguments": deepcopy(arguments), **result})
             raise
         self.operator_results.append({"index": len(self.operator_results),
-                                      "arguments": deepcopy(arguments), **deepcopy(result)})
+                                      "arguments": deepcopy(arguments),
+                                      **retain_comparison_history(result)})
+        if result.get('reason') == 'python_execution_budget_exhausted':
+            return result
         return self._attach_research_advice(action, arguments, result, laboratory)
 
     def _execute_operator(self, arguments, laboratory):
@@ -1223,6 +1368,10 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         before, started = self.costs["compute_cost"], monotonic()
         before_seconds = self.costs["python_execution_seconds"]
         operator = arguments["operator"]
+        previous_clock = getattr(self, '_operator_python_clock', None)
+        previous_bounded = getattr(self, '_bounded_python_comparison', False)
+        self._operator_python_clock = (before_seconds, started)
+        self._bounded_python_comparison = operator == 'research_choice' and 'hypotheses' not in arguments
         try:
             spec = laboratory.public_spec()
             if operator == "legacy_capabilities":
@@ -1283,7 +1432,14 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             elapsed = monotonic() - started
             # Nested evaluate calls already record their Python runtime.
             self.costs["python_execution_seconds"] = before_seconds + elapsed
+            self._operator_python_clock = previous_clock
+            self._bounded_python_comparison = previous_bounded
         if elapsed > remaining:
-            raise ValueError("shared research operator exceeded remaining Python execution time")
+            if operator == 'research_choice' and 'hypotheses' not in arguments:
+                result.update(status='comparison_incomplete_python_budget', truncated=True,
+                              reason='python_execution_budget_exhausted', recommendation=None)
+                result.pop('next_action', None)
+            else:
+                raise ValueError("shared research operator exceeded remaining Python execution time")
         return {"operator": operator, **result, "compute_cost": self.costs["compute_cost"] - before,
                 "python_execution_seconds": elapsed}

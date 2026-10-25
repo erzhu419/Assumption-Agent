@@ -11,6 +11,7 @@ from .models import ResearchConfig, SearchBudget
 from .numeric_method_revisits import reprice_numeric_method_offer, refresh_numeric_method_quote
 from .response_research_questions import refresh_response_question_quotes, response_question_offer
 from .research_portfolio import choose_research_visit
+from .research_resources import allocate_complete_research
 from .knowledge_returns import matching_returns, return_priority
 
 
@@ -686,8 +687,8 @@ class UnifiedResearchSession:
         method = offer.get("basis") == "new_partial_method_distinguishing_experiment"
         instrument_condition = offer.get("basis") == "unresolved_instrument_condition"
         allocation = (dict(offer["minimum_resources"]) if method else
-            {key: min(value, max(offer["minimum_resources"][key], value // (1 + len(pending))))
-             for key, value in remaining.items()})
+            allocate_complete_research(offer["minimum_resources"],
+                [item["minimum_resources"] for item in pending], remaining))
         if method and candidate.get("method_experiment") is not None:
             # Refitting can expose a rare reading boundary absent from the
             # initial quote. Let its measured information value choose how much

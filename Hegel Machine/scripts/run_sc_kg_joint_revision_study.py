@@ -11,6 +11,8 @@ from statistics import mean
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine.cognition.language import Program
@@ -33,8 +35,7 @@ def read(path):
 
 
 def write(path, body):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\n")
+    write_json_checkpoint(path, body, indent=2, ensure_ascii=False, allow_nan=True)
 
 
 def make_protocol(source_change, output):

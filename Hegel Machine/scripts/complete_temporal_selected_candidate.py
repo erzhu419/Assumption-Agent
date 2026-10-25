@@ -35,6 +35,7 @@ def complete_selected_candidate(comparison, output):
     agent = ProcedureConsumerAgent(None, output, arm="hegel", knowledge=memory, source_task=False,
         config=InquiryLLMConfig(**plan["transfer_limits"]), confirmation_seed=confirmation_seed)
     for name in ("scripts/complete_temporal_selected_candidate.py",
+                 "src/hegel_machine/cognition/checkpoint_storage.py",
                  "src/hegel_machine/cognition/temporal_paired_method.py"):
         saved = output / "source_at_run" / name
         saved.parent.mkdir(parents=True, exist_ok=True)

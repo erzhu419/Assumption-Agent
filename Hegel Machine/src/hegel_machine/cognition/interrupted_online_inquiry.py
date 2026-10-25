@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from .code_agent import _model_context_ignored
+from .checkpoint_storage import write_chunks_incrementally
 from .evidence_readout_proposal import prepare_evidence_readout
 from .proposers import _events
 
@@ -129,8 +130,9 @@ def recover_completed_online_query(previous_workspace, *, model, result_path, pr
     if 'research_notes' in payload:
         files['research_notes.md'] = payload['research_notes']
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open('w', encoding='utf-8') as output:
-        json.dump(retained, output, ensure_ascii=False)
+    write_chunks_incrementally(destination,
+        json.JSONEncoder(ensure_ascii=False).iterencode(retained),
+        base=checkpoint if not destination.exists() else None)
     return retained
 
 
@@ -268,6 +270,7 @@ def recover_interrupted_online_run(previous_workspace, *, model, interruption, r
         if name not in files or path.stat().st_mtime > checkpoint_mtime:
             files[name] = path.read_text(encoding='utf-8')
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open('w', encoding='utf-8') as output:
-        json.dump(retained, output, ensure_ascii=False)
+    write_chunks_incrementally(destination,
+        json.JSONEncoder(ensure_ascii=False).iterencode(retained),
+        base=checkpoint if not destination.exists() else None)
     return retained

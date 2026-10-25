@@ -207,6 +207,30 @@ def test_actual_automatic_input_failure_keeps_each_registered_source_and_its_cos
         assert agents[group].observations == [] and not agents[group].confirmations
 
 
+def test_automatic_os_failure_retains_errno_deepest_trace_and_actual_cost(tmp_path, monkeypatch):
+    import errno
+
+    agents, _, _, _, _ = study(tmp_path)
+    agent = agents['fixed_pr2']
+    before = agent.costs['compute_cost']
+    previous_automatic = agent._organization_state['automatic_compute_cost']
+
+    def failing_save(*args, **kwargs):
+        agent.costs['compute_cost'] += 7
+        raise OSError(errno.ENOMEM, 'Cannot allocate memory')
+
+    monkeypatch.setattr(agent, '_execute', failing_save)
+    assert agent._automatic_work({'operator': 'research_route'}, NoAcquisitionLab(), 'routing')
+    feedback = agent.events[-1]['feedback']
+    assert feedback['status'] == 'automatic_research_failed'
+    assert feedback['error'] == 'OSError: [Errno 12] Cannot allocate memory'
+    assert feedback['errno'] == errno.ENOMEM
+    assert 'failing_save' in feedback['traceback']
+    assert feedback['traceback'].endswith('OSError: [Errno 12] Cannot allocate memory\n')
+    assert feedback['new_compute_cost'] == agent.costs['compute_cost'] - before == 7
+    assert agent._organization_state['automatic_compute_cost'] == previous_automatic + 7
+
+
 def test_source_consolidation_retains_its_owner_while_an_author_child_is_active(tmp_path):
     from dataclasses import replace
 

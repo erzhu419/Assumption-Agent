@@ -200,9 +200,10 @@ def run_study(output, *, provider_factory, auth_mode=None, historical_run=None):
                 "candidates, tools and limits. No historical concepts or fitted instruments transfer.",
             transfer="Extract the two full method books from the existing measured v0.76 run. "
                 "Retain its counterexamples and conditions. Target feedback never reaches another target.")
-        shutil.copy2(historical_run, output / "historical_run.json")
+        (output / "historical_run.json").symlink_to(Path(historical_run).resolve())
     write_json(output / "protocol.json", plan)
     for name in ("scripts/run_temporal_legacy_method_llm.py",
+                 "src/hegel_machine/cognition/checkpoint_storage.py",
                  "src/hegel_machine/cognition/temporal_operator_agent.py",
                  "src/hegel_machine/cognition/temporal_response_experiments.py",
                  "src/hegel_machine/cognition/temporal_method_lab.py",

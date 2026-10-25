@@ -7,6 +7,7 @@ from math import isfinite, isclose
 from pathlib import PurePosixPath
 from time import monotonic
 
+from .checkpoint_storage import write_text_incrementally
 from .world_reference_recalibration import _prepared_reference_recovery, _scan, refresh_response_evidence
 from .world_response_hypotheses import propose_response_research
 
@@ -323,7 +324,7 @@ def execute_reference_response(agent, laboratory, arguments):
         agent._record_answer(question, {'status': 'inconclusive',
             'evidence': result['evidence'], 'answer': deepcopy(result)})
         trial['band_revision'] = result
-        state_path.write_text(json.dumps(state, indent=2))
+        write_text_incrementally(state_path, json.dumps(state, indent=2))
         # The child answer reopens its physical parent. Reanalyse the same paid
         # observation so the controller consumes the revised prediction before
         # choosing another world action, including when no repair was found.
@@ -398,7 +399,7 @@ def execute_reference_response(agent, laboratory, arguments):
         **({'frozen_transfer': result['frozen_transfer']}
            if 'frozen_transfer' in result else {}),
         'hypotheses': result['hypotheses'], 'evidence': result['evidence']})
-    state_path.write_text(json.dumps(state, indent=2))
+    write_text_incrementally(state_path, json.dumps(state, indent=2))
     return {'operator': 'reference_response', **result}
 
 
@@ -548,7 +549,7 @@ def _execute_bound_response(agent, arguments, state, state_path, physical_test=N
     saved = state.setdefault('bound_response_research', saved)
     saved.pop(question['id'], None)
     saved[question['id']] = {'binding_path': binding_path, 'result': deepcopy(result)}
-    state_path.write_text(json.dumps(state, indent=2))
+    write_text_incrementally(state_path, json.dumps(state, indent=2))
     return_response_to_author(agent, result, physical_test=physical_test)
     agent._save_state()
     return {'operator': 'reference_response', **result}
@@ -676,7 +677,7 @@ def _execute_selected_response(agent, laboratory, arguments, state, state_path, 
         qid = declared['id'] if declared else f'reference_authored_{number}_{first}'
     if declared:
         parent_id = declared.get('parent_id', parent_id)
-    state_path.write_text(json.dumps(state, indent=2))
+    write_text_incrementally(state_path, json.dumps(state, indent=2))
     recoveries_before = len(state.get('setting_recoveries', []))
     execution = agent._run_procedure(laboratory, arguments['path'],
         max_steps=arguments.get('max_steps', 128), query_arguments={'response_experiment': {
@@ -694,7 +695,7 @@ def _execute_selected_response(agent, laboratory, arguments, state, state_path, 
     refresh_response_evidence(state, agent.observations, laboratory.public_observation(), estimators)
     if origin and state.get('test', {}).get('question') == qid:
         state['test']['response_comparison'] = deepcopy(origin)
-    state_path.write_text(json.dumps(state, indent=2))
+    write_text_incrementally(state_path, json.dumps(state, indent=2))
     question = next((q for q in agent.questions if q['id'] == qid), {})
     answer = question.get('answer')
     measured = [{**row, 'evidence': [i for i in row['evidence'] if i >= first]}

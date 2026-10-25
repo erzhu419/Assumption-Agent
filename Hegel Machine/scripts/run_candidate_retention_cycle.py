@@ -13,6 +13,8 @@ from time import monotonic
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine.cognition.code_agent import evaluate_python_model
@@ -28,9 +30,7 @@ COST_KEYS = ("observation_cost", "measurement_cost", "compute_cost",
 
 
 def write_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=False)
 
 
 def protocol():

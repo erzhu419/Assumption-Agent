@@ -10,6 +10,8 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
@@ -20,7 +22,7 @@ SELECTION = ROOT / "config/discoveryworld_hard_selection_20261007.json"
 
 
 def write_json(path, value):
-    Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=False)
 
 
 def make_plan(task_ids, arms, runtime, workers):

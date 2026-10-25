@@ -11,6 +11,8 @@ from statistics import mean
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine.cognition.evaluation import point_loss, predict
@@ -35,10 +37,7 @@ SOURCES = ("unknown_task_lab.py", "unified_research.py", "unified_session.py",
 
 
 def write(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=False, allow_nan=True)
 
 
 def tasks_for(seed):

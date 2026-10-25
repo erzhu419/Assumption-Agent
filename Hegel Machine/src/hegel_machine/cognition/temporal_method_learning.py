@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 
+from .checkpoint_storage import write_text_incrementally
 from .code_provider_context import _compact_trajectory_payload
 from .online_inquiry_llm import InquiryLLMAgent, _PLAN_RUNNER
 from .temporal_operator_agent import OPERATOR_INTERFACE
@@ -101,7 +102,7 @@ class MethodConsolidationAgent(InquiryLLMAgent):
         provenance = {"task_position": experience["task_position"], "paid_records": len(self.observations),
                       "paid_rows": len(self.rows), "events": trace}
         source = json.dumps(provenance)
-        (self.workspace / "experience.json").write_text(source, encoding="utf-8")
+        write_text_incrementally(self.workspace / "experience.json", source)
         self.files["experience.json"] = source
 
     def run(self, *, on_checkpoint=None):
@@ -124,7 +125,7 @@ class MethodConsolidationAgent(InquiryLLMAgent):
         if any(item.get("id") == entry["id"] for item in self.knowledge.get("manifest", {}).get("research_programs", [])):
             raise ValueError("the consolidated method needs a new research-program id")
         state = {"operator_results": [], "limits": asdict(self.config), "costs": self.costs}
-        (self.workspace / "research_state.json").write_text(json.dumps(state), encoding="utf-8")
+        write_text_incrementally(self.workspace / "research_state.json", json.dumps(state))
         code, stdout, stderr, timed_out = self._python(
             [sys.executable, "-c", _PLAN_RUNNER, str(self.workspace / path)],
             json.dumps({"spec": self.laboratory.public_spec(), "observations": [],

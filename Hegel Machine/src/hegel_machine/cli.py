@@ -80,10 +80,11 @@ from .vertical_slice import run_controlled_vertical_slice
 
 
 def _write_json(path: Path, payload: object) -> None:
+    from .cognition.checkpoint_storage import write_text_incrementally
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    write_text_incrementally(path,
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
     )
 
 

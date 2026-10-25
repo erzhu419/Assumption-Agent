@@ -3,6 +3,7 @@
 from dataclasses import asdict, dataclass
 from copy import deepcopy
 from contextlib import nullcontext
+import ast
 import errno
 import fcntl
 import importlib.util
@@ -683,6 +684,11 @@ def python_model_context(workspace, model):
         boundary = snapshots[-1] + 1
         workspace = workspace / Path(*model.parts[:boundary])
         model = Path(*model.parts[boundary:])
+    elif model.is_absolute():
+        if model.is_relative_to(workspace):
+            model = model.relative_to(workspace)
+        else:
+            workspace, model = model.parent, Path(model.name)
     return workspace.resolve(), str(model)
 
 
@@ -919,8 +925,9 @@ def retain_evaluated_python_model(workspace, model, channels, training_mse, *,
     if training_observations is not None:
         training_text = json.dumps([asdict(row) if hasattr(row, "features") else row
                                     for row in training_observations])
-        for filename in ("model_observations.json", "observations.json"):
-            write_text_incrementally(retained / filename, training_text)
+        write_text_incrementally(retained / "model_observations.json", training_text)
+        write_text_incrementally(retained / "observations.json", training_text,
+                                 base=retained / "model_observations.json")
     return {"workspace": str(retained), "model": model, "source_model": source_model,
             "selected_channels": list(channels),
             "training_mse": training_mse, "model_source": (retained / model).read_text(),
@@ -944,16 +951,49 @@ def archive_confirmed_python_model(agent, destination):
             "training_rows": len(json.loads(training.read_text()))}
 
 
-def _python_model_context_files(directory):
+def _closed_temporal_export(directory, model):
+    """Recognize the existing literal export, whose runner reads only its row."""
+    from .temporal_operator_agent import _PROGRAM_RUNNER
+
+    source = (Path(directory) / model).read_text(encoding='utf-8')
+    prefix = '# Frozen paid-data predictor; controls and recorded history only.\n_PROGRAM = '
+    suffix = '\n' + _PROGRAM_RUNNER
+    if not source.startswith(prefix) or not source.endswith(suffix):
+        return False
+    try:
+        literal = ast.literal_eval(source[len(prefix):-len(suffix)])
+        if not isinstance(literal, tuple) or source != prefix + repr(literal) + suffix:
+            return False
+        for name in ('model_bindings.json', 'model_research_inputs.json'):
+            path = Path(directory) / name
+            if path.is_file() and json.loads(path.read_text()).get(model):
+                return False
+    except (ValueError, SyntaxError, TypeError):
+        return False
+    return True
+
+
+def _python_model_context_files(directory, model=None):
     directory = Path(directory)
+    selected = Path(model) if model is not None else None
+    if (selected is not None and (selected.is_absolute() or not (directory / selected).is_file()
+            or not _closed_temporal_export(directory, model))):
+        selected = None
+    selected_directory = directory / selected.parent if selected is not None else None
     files = {}
     for root, directories, names in os.walk(directory):
+        parent = Path(root)
         directories[:] = [name for name in directories
-            if not (Path(root) == directory and name in {
+            if not (parent == directory and name in {
                 "_evaluated_model", "_target_work", "_experiment_models", "_submitted_models"})
-            and not _model_snapshot_ignored(Path(root) / name, directory)]
+            and not _model_snapshot_ignored(parent / name, directory)]
         for name in names:
-            path = Path(root) / name
+            # Existing literal exports cannot import sibling programs. Apply
+            # that same dependency rule before stat/path work for every sibling.
+            # JSON, fitting views and parameters retain the existing contract.
+            if parent == selected_directory and name != selected.name and name.endswith('.py'):
+                continue
+            path = parent / name
             if path.is_file() and not _model_snapshot_ignored(path, directory):
                 files[path.relative_to(directory)] = path
     return files
@@ -993,11 +1033,18 @@ def python_model_context_matches(workspace, model, snapshot_workspace, inner_mod
     if model != inner_model:
         return False
 
-    submitted = _python_model_context_files(current)
-    original = _python_model_context_files(snapshot_workspace)
-    if (submitted.keys() != original.keys()
-            or any(submitted[path].read_bytes() != original[path].read_bytes() for path in original)):
+    submitted = _python_model_context_files(current, model)
+    original = _python_model_context_files(snapshot_workspace, inner_model)
+    if submitted.keys() != original.keys():
         return False
+    for name, prior in original.items():
+        current_file = submitted[name]
+        if (_archived_paid_trace(current_file) and current_file.resolve() == prior.resolve()):
+            # Constructor/snapshot storage already shares this immutable source;
+            # comparing it with itself cannot find an execution-context change.
+            continue
+        if current_file.read_bytes() != prior.read_bytes():
+            return False
     # Explicitly selected contexts are executable dependencies, even though
     # unrelated generated contexts were omitted from the enclosing snapshot.
     for child_context, inner in _bound_model_contexts(current, model):
@@ -1005,6 +1052,27 @@ def python_model_context_matches(workspace, model, snapshot_workspace, inner_mod
             retained_context = Path(snapshot_workspace) / child_context.relative_to(current)
             if not python_model_context_matches(child_context, inner, retained_context, inner):
                 return False
+    return True
+
+
+def literal_python_model_context_matches(workspace, model, snapshot_workspace, inner_model):
+    """Compare existing row-only literal exports across selected filenames."""
+    current, model = python_model_context(workspace, model)
+    if (not _closed_temporal_export(current, model)
+            or not _closed_temporal_export(snapshot_workspace, inner_model)):
+        return False
+    submitted = _python_model_context_files(current, model)
+    original = _python_model_context_files(snapshot_workspace, inner_model)
+    selected = submitted.pop(Path(model))
+    retained = original.pop(Path(inner_model))
+    if selected.read_bytes() != retained.read_bytes() or submitted.keys() != original.keys():
+        return False
+    for name, prior in original.items():
+        current_file = submitted[name]
+        if (_archived_paid_trace(current_file) and current_file.resolve() == prior.resolve()):
+            continue
+        if current_file.read_bytes() != prior.read_bytes():
+            return False
     return True
 
 
@@ -1037,15 +1105,17 @@ class CodeAgent:
             for name, source in self.files.items():
                 path = self.workspace / name
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(source, encoding="utf-8")
-            (self.workspace / "observations.json").write_text(json.dumps([asdict(row) for row in self.observations]))
+                write_text_incrementally(path, source)
+            write_text_incrementally(self.workspace / "observations.json",
+                                     json.dumps([asdict(row) for row in self.observations]))
             if self.transition_batches:
-                (self.workspace / "transitions.json").write_text(json.dumps(self.transition_batches), encoding="utf-8")
+                write_text_incrementally(self.workspace / "transitions.json",
+                                         json.dumps(self.transition_batches))
         else:
             for name, source in self.session_knowledge.get("files", {}).items():
                 path = self.workspace / name
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(source, encoding="utf-8")
+                write_text_incrementally(path, source)
                 self.files[name] = source
 
     def to_dict(self):
@@ -1087,12 +1157,14 @@ class CodeAgent:
             if transitions:
                 self.transition_batches.append({"channels": list(channels),
                     "observation_start": len(self.observations), "transitions": deepcopy(transitions)})
-                (self.workspace / "transitions.json").write_text(json.dumps(self.transition_batches), encoding="utf-8")
+                write_text_incrementally(self.workspace / "transitions.json",
+                                         json.dumps(self.transition_batches))
             self.observations.extend(rows)
             self.selected_channels = list(channels)
             self.costs["observation_cost"] += len(rows)
             self.costs["measurement_cost"] += units
-            (self.workspace / "observations.json").write_text(json.dumps([asdict(row) for row in self.observations]), encoding="utf-8")
+            write_text_incrementally(self.workspace / "observations.json",
+                                     json.dumps([asdict(row) for row in self.observations]))
             self._write_model_observations(laboratory, channels)
             feedback = {"observations_file": "observations.json", "model_observations_file": "model_observations.json",
                         "observation_cost": len(rows), "measurement_cost": units}
@@ -1155,8 +1227,9 @@ class CodeAgent:
 
     def _write_model_observations(self, laboratory, channels):
         observations = self._model_observations(laboratory, channels)
-        (self.workspace / "model_observations.json").write_text(
-            json.dumps([asdict(row) for row in observations]), encoding="utf-8")
+        write_text_incrementally(self.workspace / "model_observations.json",
+            json.dumps([asdict(row) for row in observations]),
+            base=self.workspace / "observations.json")
         return observations
 
     def _model_observations(self, laboratory, channels):

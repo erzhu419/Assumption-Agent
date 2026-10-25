@@ -12,6 +12,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 
 from hegel_machine.cognition.code_agent import CodeAgentConfig
@@ -20,9 +22,7 @@ from hegel_machine.cognition.models import ResearchConfig
 
 
 def save(path, value):
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2))
-    temporary.replace(path)
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=False, allow_nan=True)
 
 
 def prepare(directory):

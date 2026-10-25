@@ -116,11 +116,14 @@ def test_budget_cutoff_is_unknown_after_one_mapping_then_resumes_with_stable_ids
     assert partial['status'] == 'UNKNOWN' and partial['new_compute_cost'] == 8
     first, = partial['generated_theory_ids']
     assert [item['mapping'] for item in partial['work']] == [{'role_0': 'u'}]
-    library = (agent.workspace / LIBRARY_PATH).read_text()
     repeated = recall_frozen_theories(agent, current, {'allocation': {'compute': 8}})
-    assert repeated['cache_hit'] and repeated['new_compute_cost'] == 0
-    assert agent.costs['compute_cost'] == before + 8
-    assert (agent.workspace / LIBRARY_PATH).read_text() == library
+    # An incomplete owner remains available in the persistent coverage round.
+    # The unchanged short call pays its metadata/pattern work again; it is not
+    # a completed-search cache hit and does not invent the second mapping.
+    assert not repeated['cache_hit'] and repeated['new_compute_cost'] == 8
+    assert repeated['generated_theory_ids'] == [first] and not repeated['search_completed']
+    assert repeated['object_cursor'] == partial['object_cursor']
+    assert agent.costs['compute_cost'] == before + 16
     resumed = recall_frozen_theories(agent, current, {'allocation': {'compute': 15}})
     assert resumed['status'] == 'completed'
     assert resumed['generated_theory_ids'] == [first, first + ':binding:1']
@@ -156,7 +159,8 @@ def test_a_failed_mapping_is_retained_while_another_mapping_remains_available(tm
     assert_no_new_science(agent, lab)
 
 
-def test_the_new_mapping_method_reopens_the_actual_form_of_an_old_unique_mapping_cache(tmp_path):
+def test_the_new_mapping_method_reopens_the_actual_form_of_an_old_unique_mapping_cache(tmp_path, monkeypatch):
+    from hegel_machine.cognition import theory_consolidation
     agent, lab = frozen_scene(tmp_path)
     current = agent._open_question(two_role_question(agent))
     candidates = agent.theory_consolidation['candidates']
@@ -167,9 +171,17 @@ def test_the_new_mapping_method_reopens_the_actual_form_of_an_old_unique_mapping
         'generated_theory_ids': [], 'new_compute_cost': 3,
         'author_work': [{'reason': 'unique_typed_role_mapping_required'}]}}
 
+    retained = deepcopy(current['frozen_recall_execution'])
+
+    def unsupported_equivalence(*args, **kw):
+        raise AssertionError('An unknown old library path cannot prove cross-library equivalence')
+
+    monkeypatch.setattr(theory_consolidation, '_same_library_candidate', unsupported_equivalence)
     result = recall_frozen_theories(agent, current, {})
 
     assert not result['cache_hit'] and len(result['generated_theory_ids']) == 2
+    assert retained['basis'].get('library_path') is None
+    assert retained['result']['author_work'] == [{'reason': 'unique_typed_role_mapping_required'}]
     assert current['frozen_recall_execution']['basis']['method_ref'].endswith('AbstractTemplate.mappings')
     assert len(json.loads((agent.workspace / LIBRARY_PATH).read_text())['transfers']) == 2
     assert_no_new_science(agent, lab)

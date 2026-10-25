@@ -14,6 +14,8 @@ import sys
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
@@ -48,9 +50,7 @@ No knowledge manifest is required for this continuation.
 
 
 def write_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=False)
 
 
 def protocol():

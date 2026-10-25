@@ -11,12 +11,11 @@ from time import sleep
 
 from .measurement_lab import CHANNELS, MeasurementBatch, make_lab
 from .models import Probe
+from .checkpoint_storage import write_text_incrementally
 
 
 def _write_result(path, result):
-    temporary = path.with_suffix(".writing")
-    temporary.write_text(json.dumps(result), encoding="utf-8")
-    temporary.replace(path)
+    write_text_incrementally(path, json.dumps(result))
 
 
 class DelayedFeedback:

@@ -47,6 +47,7 @@ def replay(candidate_run, output):
     write_json(output / "protocol.json", plan)
     (output / "candidate.py").write_text(source)
     for name in ("scripts/replay_temporal_paired_candidate.py", "scripts/run_temporal_paired_method.py",
+                 "src/hegel_machine/cognition/checkpoint_storage.py",
                  "src/hegel_machine/cognition/temporal_paired_method.py",
                  "src/hegel_machine/cognition/temporal_operator_agent.py",
                  "src/hegel_machine/cognition/online_inquiry_llm.py"):

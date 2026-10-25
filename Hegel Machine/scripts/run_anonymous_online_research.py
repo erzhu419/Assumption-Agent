@@ -39,6 +39,7 @@ SNAPSHOT_FILES = [
     *['src/hegel_machine/cognition/' + name + '.py' for name in (
         'anonymous_history_lab', 'anonymous_research_archive', 'common_archive_inquiry',
         'online_inquiry_llm', 'inquiry_revision', 'temporal_paired_method', 'code_agent',
+        'checkpoint_storage', 'code_provider_context',
         'probing', 'models', 'language', 'evaluation')],
 ]
 

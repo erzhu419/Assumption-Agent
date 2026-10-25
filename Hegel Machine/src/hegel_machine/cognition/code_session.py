@@ -4,9 +4,10 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 import json
 from pathlib import Path
+import shutil
 from time import monotonic
 
-from .code_agent import CodeAgent, CodeAgentConfig, CodexCodeProvider, evaluate_python_model
+from .code_agent import CodeAgent, CodeAgentConfig, CodexCodeProvider, _copy_model_file, evaluate_python_model
 from .evaluation import loss
 from .language import Program
 from .measurement_lab import make_lab
@@ -148,6 +149,11 @@ class CodeResearchSession:
             inherited = deepcopy(self.state["knowledge"])
             inherited.update(task_position=index, tasks_remaining=len(self.state["tasks"])-index,
                              total_resources=self.state["totals"], spent_resources=costs)
+            if index and not active:
+                previous_shared = Path(self.state["results"][-1]["workspace"]) / "shared"
+                if previous_shared.is_dir():
+                    shutil.copytree(previous_shared, task_workspace / "shared", dirs_exist_ok=True,
+                                    copy_function=_copy_model_file)
             agent = CodeAgent(self.provider_factory(task_workspace), task_workspace, config,
                               state=active["agent_state"] if active else None, session_knowledge=inherited)
 

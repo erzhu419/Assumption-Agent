@@ -17,7 +17,9 @@ from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
 from hegel_machine.cognition.anonymous_method_learning import (
     AnonymousPreparedMethodAgent, AnonymousResearchMethodLearner, EMPTY_METHOD)
 from hegel_machine.cognition.anonymous_research_archive import load_research_archive
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 from hegel_machine.cognition.code_agent import (
+    _copy_model_file,
     CodexCodeProvider, archived_paid_trace_references, evaluate_python_model,
 )
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
@@ -268,13 +270,23 @@ def run_learning(plan, output, *, provider_factory):
     write_json(output / 'initial_archive.json', knowledge)
     write_json(output / 'source_outcomes.json', sources)
     reference_archive = output / 'reference_archive'
+    previous_reference = Path(plan['source_root']) / 'reference_archive'
+    paid_traces = archived_paid_trace_references(knowledge['files'], reference_archive,
+        source_workspace=previous_reference if previous_reference.is_dir() else None)
     for name, content in knowledge['files'].items():
         path = reference_archive / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        if name in paid_traces:
+            if path.resolve() != paid_traces[name]:
+                path.symlink_to(paid_traces[name])
+        elif ((previous_reference / name).is_file()
+                and (previous_reference / name).read_text(encoding='utf-8') == content):
+            _copy_model_file(previous_reference / name, path)
+        else:
+            write_text_incrementally(path, content)
     workspace = output / 'author'
     author = AnonymousResearchMethodLearner(provider_factory(workspace), workspace,
-        knowledge=knowledge, cases=plan['practice_cases'], lab_factory=laboratory,
+        knowledge=knowledge, paid_trace_references=paid_traces, cases=plan['practice_cases'], lab_factory=laboratory,
         config=InquiryLLMConfig(**plan['author_limits']),
         practice_limits=InquiryLLMConfig(**plan['limits']),
         prepare_trial=trial_preparer(knowledge, sources, reference_archive))

@@ -6,6 +6,7 @@ a parent query; buying it requires the ordinary query action.
 
 from copy import deepcopy
 from dataclasses import replace
+from math import isfinite
 import json
 import sys
 
@@ -342,6 +343,165 @@ def _apply_uses(agent, question, uses, laboratory):
     return results
 
 
+
+
+def _parent_use_completed(results):
+    return any(result['status'] in {'parent_refitted', 'parent_component_evaluated'} or (
+        result['status'] in {'parent_query_prepared', 'parent_plan_stopped'} and result.get('changed'))
+        for result in results)
+
+def parent_revision_obligation(agent, question, answer_execution):
+    """Keep a measured answer and route its unfinished, failed parent separately."""
+    target = question.get('theory_target') or {}
+    retained = agent.evaluated_model or {}
+    mse = retained.get('current_mse')
+    parent_id = question.get('parent_id')
+    parent_theory = agent.theory_index.get(target.get('parent_theory_id'), {})
+    if (answer_execution.get('parent_revision_completed') is not False
+            or target.get('revision_fitting') is None or not parent_theory
+            or not parent_id or not question.get('use_sites') or not target.get('evidence_checks')
+            or type(mse) not in (int, float) or not isfinite(mse)
+            or mse <= agent.config.confirmation_mse_threshold
+            or not retained.get('evaluated_rows') or not retained.get('source_model')):
+        return None
+    source = {'question_id': question['id'], 'meaning_version': question.get('meaning_version', 1)}
+    subject = {'kind': 'theory', 'id': parent_theory['id'], 'version': parent_theory.get('version', 1)}
+    paid = {'kind': 'paid_evidence', 'records': len(agent.observations), 'rows': len(agent.rows)}
+    obligation = agent._open_question({
+        'id': f'parent_revision:{parent_id}:{question["id"]}',
+        'question': 'Revise the retained parent against its remaining paid counterexamples for the declared parent use.',
+        'parent_id': parent_id, 'depends_on': [], 'kind': 'program_revision',
+        'answer_type': 'program', 'context_ref': deepcopy(question.get('context_ref')),
+        'answer_resolution_ref': {'relation': 'le', 'atol': agent.config.confirmation_mse_threshold,
+            'scope': 'paid_candidate_comparison_not_independent_confirmation'},
+        'subject_refs': [subject, paid, {'kind': 'native_research', **source}], 'query_semantics': {'mode': 'solution_relation'},
+        'use_sites': deepcopy(question.get('use_sites', [])),
+        'origin': {'kind': 'unfinished_parent_revision', 'source_question_ref': source},
+        'native_research_ref': source, 'theory_target': deepcopy(target)})
+    for key in ('frozen_library_path', 'mission', 'exploration_policy', 'research_comparison'):
+        if key in question:
+            obligation[key] = deepcopy(question[key])
+    reference = {'question_id': obligation['id'], 'meaning_version': obligation.get('meaning_version', 1)}
+    question['parent_revision_question_ref'] = reference
+    parent = next((owner for owner in agent.questions if owner['id'] == parent_id), None)
+    if parent is not None:
+        parent['parent_revision_question_ref'] = deepcopy(reference)
+        parent['status'] = 'reopened'
+    return obligation
+
+
+def parent_revision_work(agent, question):
+    """Expose unfinished meanings of the same parent use, without rebinding them.
+
+    A failed before predictor is a reason to revise it. Only a completed search
+    or an unavailable premise closes that research opportunity.
+    """
+    from .research_episodes import _question_versions
+
+    origin = question.get('origin') or {}
+    if (question.get('kind') != 'program_revision' or not isinstance(origin, dict)
+            or origin.get('kind') != 'unfinished_parent_revision'):
+        return []
+    current_target = question.get('theory_target') or {}
+    result = []
+    for (identifier, meaning), (work, reference) in _question_versions(agent).items():
+        if identifier != question['id']:
+            continue
+        target = work.get('theory_target') or {}
+        if (work.get('parent_id') != question.get('parent_id')
+                or work.get('context_ref') != question.get('context_ref')
+                or work.get('use_sites') != question.get('use_sites')
+                or work.get('native_research_ref') != question.get('native_research_ref')
+                or any(target.get(key) != current_target.get(key) for key in
+                       ('role_signature', 'output_unit', 'context_ref', 'context_family_ref'))):
+            continue
+        recall = work.get('frozen_recall_execution') or {}
+        basis = recall.get('basis') or {}
+        routing = (work.get('routing_execution') or {}).get('basis') or {}
+        # Earlier snapshots retained these exact execution bases rather than
+        # the operative fields. Restore their own contracts, never today's parent.
+        for field, value in (
+                ('frozen_library_path', basis.get('library_path')),
+                ('mission', routing.get('mission')),
+                ('exploration_policy', routing.get('exploration_policy')),
+                ('allowed_mappings', routing.get('allowed_mappings'))):
+            if field not in work and value is not None:
+                work[field] = deepcopy(value)
+        comparison = routing.get('research_comparison') or {}
+        if 'research_comparison' not in work and comparison.get('contract'):
+            work['research_comparison'] = deepcopy(comparison['contract'])
+        prefix = f'frozen_recall:{identifier}@{meaning}:'
+        retained_executions = agent.theory_consolidation.get('executions', {})
+        groups = recall.get('result', {}).get('execution_work_groups')
+        executions = ([retained_executions[group['execution_key']] for group in groups
+                       if group.get('execution_key') in retained_executions] if groups is not None else
+                      [execution for key, execution in retained_executions.items()
+                       if key.startswith(f'relation_transfer:{prefix}')])
+        pending = [execution for execution in executions
+                   if execution.get('search_completed', True) is False]
+        state = 'unstarted' if not recall else 'completed_no_gain'
+        if pending or recall.get('result', {}).get('search_completed') is False:
+            state = 'budget_incomplete'
+        elif executions and all(execution.get('result', {}).get('status') == 'refuted'
+                                for execution in executions):
+            state = 'refuted'
+        elif recall.get('result', {}).get('status') == 'author_work_request':
+            state = 'author_work_required'
+        if meaning != question.get('meaning_version', 1) and not recall:
+            continue
+        valid, _ = _versioned_support(agent, work)
+        if not valid:
+            state = 'premise_unknown'
+        cutoff = target.get('paid_evidence_scope') or next((ref for ref in work.get('subject_refs', [])
+                                                           if ref.get('kind') == 'paid_evidence'), {})
+        if (cutoff.get('records', 0) > len(agent.observations)
+                or cutoff.get('rows', 0) > len(agent.rows)):
+            state = 'evidence_unavailable'
+        requirements = [execution.get('result', {}).get('minimum_compute_for_progress', 1)
+                        for execution in pending]
+        requirements.extend(item.get('required_compute', 1)
+                            for item in recall.get('result', {}).get('unfunded_objects', []))
+        minimum = min(requirements, default=1)
+        result.append({'question_id': identifier, 'meaning_version': meaning,
+            'question_ref': {'question_id': identifier, 'meaning_version': meaning},
+            'state': state, 'minimum_compute_for_progress': minimum,
+            'source_ref': deepcopy(reference), 'parent_theory_id': target.get('parent_theory_id'),
+            'paid_scope': deepcopy(cutoff),
+            'requires_current_evidence_comparison': cutoff.get('rows') != len(agent.rows)})
+    return result
+
+
+def select_parent_revision_work(agent, question, allowance):
+    """Offer one funded meaning in the existing agenda's persistent event order."""
+    from .question_agenda import build_agenda
+    from .research_episodes import _question_versions
+
+    work = parent_revision_work(agent, question)
+    if not work:
+        return question, None
+    versions = _question_versions(agent)
+    for item in work:
+        snapshot = versions[item['question_id'], item['meaning_version']][0]
+        mission = effective_question_mission(snapshot, agent.research_mission)
+        item['available_compute'] = (min(allowance, mission_compute_remaining(agent, mission))
+            if mission.get('purpose') in {'theory_learning', 'method_learning'} else allowance)
+    order = [item['meaning_version'] for item in work]
+    next_meaning = question.get('parent_research_cursor', {}).get(
+        'next_meaning_version', question.get('meaning_version', 1))
+    first = order.index(next_meaning) if next_meaning in order else order.index(question.get('meaning_version', 1))
+    ordered = [*work[first:], *work[:first]]
+    agenda = build_agenda([question], {}, [], mission=effective_question_mission(question, agent.research_mission),
+        budget={'compute': allowance, 'author_calls': 0},
+        parent_research={question['id']: ordered})
+    question['parent_research_agenda'] = deepcopy(agenda)
+    selected = next((entry for entry in agenda['task_agenda'] if entry['status'] == 'ready'), None)
+    if selected is None:
+        return None, agenda
+    meaning = selected['meaning_version']
+    question['parent_research_cursor'] = {'next_meaning_version': order[(order.index(meaning) + 1) % len(order)]}
+    question['parent_research_last_selection'] = deepcopy(selected['question_ref'])
+    return _question_versions(agent)[question['id'], meaning][0], agenda
+
 def step_question(agent, question, laboratory, *, mission=None):
     """The same computable route is available with or without an LLM provider."""
     mission = effective_question_mission(question, mission if mission is not None else agent.research_mission)
@@ -465,7 +625,9 @@ def step_question(agent, question, laboratory, *, mission=None):
                  'model_sources': {use['model']: (agent.workspace / use['model']).read_text()
                     for use in uses if use.get('model')}}
     if question.get('applied_question_use') == use_basis and _component_use_current(agent, question, uses):
-        return {'status': 'reused_answer', 'answer': deepcopy(current), 'new_parent_work': False}
+        return {'status': 'reused_answer', 'answer': deepcopy(current), 'new_parent_work': False,
+                'parent_revision_completed': _parent_use_completed(
+                    question.get('parent_use_history', [{}])[-1].get('results', []))}
     before_compute = agent.costs['compute_cost']
     original_config = agent.config
     if mission.get('purpose') in {'theory_learning', 'method_learning'}:
@@ -487,6 +649,4 @@ def step_question(agent, question, laboratory, *, mission=None):
                 result['status'] == 'author_work_request' for result in results) else 'answer_applied'),
             **({key: incomplete[key] for key in ('reason', 'detail')} if incomplete else {}),
             'answer': deepcopy(current), 'uses': results,
-            'parent_revision_completed': any(result['status'] in {'parent_refitted', 'parent_component_evaluated'} or (
-                result['status'] in {'parent_query_prepared', 'parent_plan_stopped'}
-                and result['changed']) for result in results)}
+            'parent_revision_completed': _parent_use_completed(results)}

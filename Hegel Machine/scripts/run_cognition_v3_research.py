@@ -21,6 +21,8 @@ import sys
 from time import perf_counter
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "artifacts"))
 
@@ -139,7 +141,7 @@ def partition_summary(payload):
 
 
 def write_json(path, value):
-    path.write_text(json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=False, allow_nan=False)
 
 
 def main():

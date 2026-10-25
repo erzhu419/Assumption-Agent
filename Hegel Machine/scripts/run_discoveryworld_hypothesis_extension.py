@@ -9,6 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 
 from hegel_machine.cognition.code_agent import CodexCodeProvider
 from hegel_machine.cognition.discoveryworld_agent import DiscoveryWorldAgent
@@ -73,7 +74,7 @@ def run(source_result, output, calls=None, resume=None):
                 if not 0 <= prediction <= 10000:
                     state.setdefault('out_of_range', []).append({
                         'prediction': prediction, 'allowed_range': [0, 10000], 'fit_question': qid})
-        state_path.write_text(json.dumps(state, indent=2))
+        write_text_incrementally(state_path, json.dumps(state, indent=2))
         prefix_steps = lab.environment_steps
         costs_before = deepcopy(agent.costs)
         prior_child_answers = agent.child_answers_returned

@@ -2,6 +2,7 @@
 
 import json
 
+from .checkpoint_storage import write_text_incrementally
 from .temporal_method_learning import METHOD_PATH
 from .temporal_paired_practice import PairedMethodLearner
 
@@ -142,7 +143,7 @@ class SelectiveMethodLearner(PairedMethodLearner):
             context = json.loads(self.files["resume_context.json"])
             context["current_source_coverage"] = coverage
             self.files["resume_context.json"] = json.dumps(context, indent=2)
-            (self.workspace / "resume_context.json").write_text(self.files["resume_context.json"])
+            write_text_incrementally(self.workspace / "resume_context.json", self.files["resume_context.json"])
         return coverage
 
     def _practice(self, case):

@@ -43,7 +43,8 @@ class LocalLab(ConfirmationLab):
 @pytest.fixture
 def runtime_root(tmp_path, monkeypatch):
     root = tmp_path / 'current_runtime'
-    for name in ('src/hegel_machine/current_module.py', 'scripts/run_anonymous_revision_inquiry.py'):
+    for name in ('src/hegel_machine/current_module.py', 'scripts/run_anonymous_revision_inquiry.py',
+                 'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py'):
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('# current runtime fixture\n')
@@ -121,6 +122,8 @@ def test_finite_formal_dispatch_uses_common_archive_hooks_and_original_confirmat
                 assert event['arguments']['exploration_policy'] == registered['research_organization']['exploration_policy']
     frozen = json.loads((output / 'protocol.json').read_text())
     assert frozen['runtime_snapshot'] == ['scripts/run_anonymous_revision_inquiry.py',
+                                           'scripts/run_online_inquiry_llm.py',
+                                           'scripts/run_online_inquiry_study.py',
                                            'src/hegel_machine/current_module.py']
     for name in frozen['runtime_snapshot']:
         assert (output / 'source_at_run' / name).read_text() == (runtime_root / name).read_text()
@@ -238,7 +241,8 @@ def test_registered_question_scope_admits_actual_native_bank_without_a_fake_seed
     assert agent.costs['model_calls'] == agent.costs['observation_cost'] == 0
 
 
-def test_finite_cli_bypasses_subscription_validation(tmp_path, runtime_root, monkeypatch, capsys):
+@pytest.mark.parametrize('workers', [None, 3])
+def test_finite_cli_bypasses_subscription_validation(tmp_path, runtime_root, monkeypatch, capsys, workers):
     organization = tmp_path / 'organization.json'
     author = tmp_path / 'author.json'
     organization.write_text(json.dumps(registration()))
@@ -253,9 +257,10 @@ def test_finite_cli_bypasses_subscription_validation(tmp_path, runtime_root, mon
     monkeypatch.setattr(study, 'verify_codex_subscription', lambda: pytest.fail('No subscription is used'))
     monkeypatch.setattr('sys.argv', ['runner', '--arms', *study.ORGANIZATION_ARMS,
         '--research-organization', str(organization), '--finite-native-author', str(author),
-        '--output', str(tmp_path / 'cli')])
+        '--output', str(tmp_path / 'cli'), *([] if workers is None else ['--workers', str(workers)])])
     study.main()
     assert captured['provider_factory'] is None
+    assert captured['workers'] == (8 if workers is None else workers)
     assert captured['plan']['provider'] == {'backend': 'finite_native_procedure', 'model_calls': 0}
     assert captured['plan']['author'] == plan()['author']
     assert 'not_executed_test' in capsys.readouterr().out

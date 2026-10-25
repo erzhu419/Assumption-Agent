@@ -15,10 +15,13 @@ from time import monotonic
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
 from hegel_machine.cognition.code_agent import (
+    _copy_model_file,
     CodexCodeProvider, archive_confirmed_python_model, evaluate_python_model,
     python_model_context_matches,
 )
@@ -52,9 +55,7 @@ that model and its existing dependencies without an extra declaration.
 
 
 def write_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    write_json_checkpoint(path, value, indent=2, ensure_ascii=True, allow_nan=False)
 
 
 def protocol():
@@ -126,7 +127,7 @@ def prepare_episode(case, position, workspace, knowledge, plan, provider=None, *
     imported = monotonic()
     for candidate in knowledge:
         destination = workspace / BANK_PATH / candidate["candidate_id"] / "_evaluated_model"
-        shutil.copytree(candidate["snapshot_workspace"], destination)
+        shutil.copytree(candidate["snapshot_workspace"], destination, copy_function=_copy_model_file)
         for path in destination.rglob("*"):
             if path.is_file() and path.suffix in {".py", ".json", ".md", ".txt"}:
                 agent.files[str(path.relative_to(workspace))] = path.read_text(encoding="utf-8")

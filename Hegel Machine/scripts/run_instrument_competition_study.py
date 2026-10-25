@@ -13,14 +13,15 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src/hegel_machine/cognition"))
+from checkpoint_storage import write_json_checkpoint
 OUTPUT = ROOT / 'artifacts/instrument_competition_study_20260919'
 ARMS = ('baseline_v090', 'learned')
 COSTS = ('observation_cost', 'measurement_cost', 'compute_cost', 'queries')
 
 
 def save(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + '\n')
+    write_json_checkpoint(path, payload, indent=2, ensure_ascii=True, allow_nan=True)
 
 
 def prepare(output):

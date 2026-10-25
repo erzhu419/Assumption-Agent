@@ -158,8 +158,10 @@ def test_real_transfer_and_pr2_route_consume_context_fits_without_adopting_the_p
     assert_no_new_science(agent, lab)
 
 
-def test_local_nonlinear_fit_stays_pending_with_global_budget_left_and_resumes_to_completion():
+def test_local_nonlinear_fit_stays_pending_with_global_budget_left_and_resumes_to_completion(monkeypatch):
     from hegel_machine.cognition.abstractions import _constant_paths
+    from hegel_machine.cognition import revision_relations
+    from hegel_machine.cognition.models import SearchBudget
 
     # Four product terms have eight declared free coefficients. Their zero
     # start is flat for one-coordinate moves, so the finite nonlinear pass must
@@ -176,11 +178,29 @@ def test_local_nonlinear_fit_stays_pending_with_global_budget_left_and_resumes_t
     checks = examples(parent)
     fitting = {**FITTING, 'operations': ['refit'], 'max_structures': 1}
     original = deepcopy((candidate, declaration, components, checks))
-    first = propose_revision(candidate, declaration, components, allocation={'compute': 200},
+    # Explicitly bound the first *local* pass; added typed-occurrence accounting
+    # should not turn this regression into a narrow global-budget coincidence.
+    # The original fitter still executes, and every unit it spends is charged.
+    fit = revision_relations._fit_revision_binding
+    local_passes = []
+
+    def first_local_share(candidate, prepared, fixed, rows, quantile, budget, **kwargs):
+        if local_passes:
+            return fit(candidate, prepared, fixed, rows, quantile, budget, **kwargs)
+        assert any(item['id'] == 'unfitted_nonlinear' for name, item in prepared.items() if name not in fixed)
+        local = SearchBudget(min(52, budget.remaining))
+        output = fit(candidate, prepared, fixed, rows, quantile, local, **kwargs)
+        assert budget.spend(local.spent)
+        local_passes.append({'spent': local.spent, 'limit': local.limit})
+        return output
+
+    monkeypatch.setattr(revision_relations, '_fit_revision_binding', first_local_share)
+    first = propose_revision(candidate, declaration, components, allocation={'compute': 500},
                              evidence_checks=checks, fitting=fitting)
     assert first['status'] == 'UNKNOWN' and first['reason'] == 'bounded_parameter_fitting_incomplete'
     assert not first['search_completed'] and not first['budget_exhausted']
-    assert 0 < first['actual_compute_cost'] < 200 and first['attempted_bindings'] == 2
+    assert 0 < first['actual_compute_cost'] < 500 and first['attempted_bindings'] == 2
+    assert 0 < local_passes[0]['spent'] <= local_passes[0]['limit'] == 52
     pending, = first['cursor']['pending_fits']
     assert first['incomplete_fit_positions'] == [pending['position']]
     assert any(item['fitting']['status'] == 'UNKNOWN' for item in first['proposals'])
@@ -196,7 +216,10 @@ def test_local_nonlinear_fit_stays_pending_with_global_budget_left_and_resumes_t
     assert resumed['incomplete_fit_positions'] == []
     assert all(item['search_position']['layer'] == pending['position']['layer']
                and item['search_position']['offset'] == pending['position']['offset']
-               and item['fitting']['status'] == 'completed' for item in resumed['proposals'])
+               and item['fitting']['search_completed']
+               and item['fitting']['status'] == 'UNKNOWN'
+               and item['fitting']['parameter_identifiability'] == 'UNKNOWN'
+               for item in resumed['proposals'])
     # Completing the finite trials is not a successful nonlinear fit: this
     # binding's retained training error remains visible, without new support.
     assert resumed['proposals'] and all(item['fitting']['training_loss'] == 49.
@@ -239,7 +262,9 @@ def test_pending_fit_resumes_before_the_unfinished_new_binding_frontier():
     assert resumed['proposals']
     retried = resumed['proposals'][0]
     assert {key: retried['search_position'][key] for key in ('layer', 'offset')} == pending['position']
-    assert retried['fitting']['status'] == 'completed'
+    assert retried['fitting']['search_completed']
+    assert retried['fitting']['status'] == 'UNKNOWN'
+    assert retried['fitting']['parameter_identifiability'] == 'UNKNOWN'
     assert pending not in resumed['cursor']['pending_fits']
     assert 0 < resumed['actual_compute_cost'] <= 400
     assert Program.from_dict(retried['program']).children[0] == parent

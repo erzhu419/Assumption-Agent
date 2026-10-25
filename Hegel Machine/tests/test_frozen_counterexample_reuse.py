@@ -1,6 +1,6 @@
 """Actual scoped counterexamples follow a numerical Program across aliases."""
 
-from copy import deepcopy
+from copy import copy, deepcopy
 import json
 from types import SimpleNamespace
 
@@ -44,6 +44,55 @@ def scene():
 
 def pool(agent):
     return {item['id']: item for item in resolved_theories(agent)}
+
+
+@pytest.mark.parametrize('kind', ['renamed_failure', 'changed_parameters', 'changed_context'])
+def test_incoming_numeric_refutation_does_not_expand_unrelated_forecast_columns(tmp_path, monkeypatch, kind):
+    from hegel_machine.cognition import retained_forecasts
+
+    agent = scene()
+    agent.workspace = tmp_path
+    (tmp_path / 'forecasts.json').write_text(json.dumps({'forecasts': [{
+        'model': 'retained.py', 'prediction_inputs': [{'features': {'x': 1.}, 'history': []}],
+        'predictions': [1.3]}]}))
+    forecasts = []
+    for identifier, filename in [('ready_forecast', 'forecasts.json'), ('missing_forecast', 'missing.json')]:
+        item = declaration(identifier)
+        item.pop('program')
+        item['forecast_ref'] = {'file': filename, 'json_path': ['forecasts', 0], 'model': 'retained.py'}
+        forecasts.append(item)
+    register_theories(agent, forecasts)
+    pending = declaration('incoming_alias')
+    if kind == 'changed_parameters':
+        pending['program'] = Program('add', children=(Program('const', value=.7),
+            Program('feature', name='x'))).to_dict()
+    elif kind == 'changed_context':
+        pending['context_ref'] = {'episode': 'another_domain'}
+
+    # The original full routing path supplies an independent scoped-evidence
+    # comparison, including ready and unavailable opaque forecast columns.
+    full = copy(agent)
+    full.theory_index = deepcopy(agent.theory_index)
+    register_theories(full, [pending])
+    baseline = {item['id']: item for item in resolved_theories(full)}
+    expected = baseline[pending['id']].get('scope_refutation')
+    assert bool(expected) is (kind == 'renamed_failure')
+    assert baseline['ready_forecast']['source_status'] == 'retained_forecast_ready'
+    assert baseline['missing_forecast']['source_status'] == 'unavailable_retained_forecast'
+    calls, resolve = [], retained_forecasts.resolve_forecast_references
+
+    def counted(*args, **kwargs):
+        calls.append(True)
+        return resolve(*args, **kwargs)
+
+    monkeypatch.setattr(retained_forecasts, 'resolve_forecast_references', counted)
+    before = deepcopy(agent.theory_index)
+    assert scoped_numeric_refutation(agent, pending) == expected
+    assert calls == []  # No unrelated column file read or whole-pool deepcopy.
+    assert agent.theory_index == before
+    register_theories(agent, [pending])
+    assert {item['id']: item for item in resolved_theories(agent)} == baseline
+    assert calls == [True]  # Ordinary prediction/selection still resolves every column.
 
 
 def test_two_ordinary_aliases_cannot_revive_the_same_refuted_numerical_program():

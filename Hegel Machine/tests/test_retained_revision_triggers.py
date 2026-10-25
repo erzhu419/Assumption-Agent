@@ -89,11 +89,11 @@ def test_common_retention_refs_produce_explicit_mse_witnesses_and_cache_without_
     arguments = {'counterexamples': {identifier: [explicit]}}
     before_costs = deepcopy(target.costs)
     result = build(target, lab, [item[3] for item in sources], **arguments)
-    assert result['status'] == 'completed' and len(calls) == 6
+    assert result['status'] == 'completed' and len(calls) == 10
     candidate, = target.theory_consolidation['candidates'].values()
     checks = candidate['trigger_checks']
     derived = [check for check in checks if 'criterion' in check]
-    assert len(derived) == 2 and any(check['tolerance'] == .25 for check in checks)
+    assert len(derived) == 4 and any(check['tolerance'] == .25 for check in checks)
     for check in derived:
         criterion = check['criterion']
         assert criterion['kind'] == 'paid_mse_single_residual_witness'
@@ -110,11 +110,15 @@ def test_common_retention_refs_produce_explicit_mse_witnesses_and_cache_without_
         assert retained[2]['value']['squared_error'] > 2e-10
         assert retained[3]['value']['target'] == check['before']['target']
     assert '"observation"' not in json.dumps(candidate)
+    for source in candidate['source_outcomes']:
+        effect = source['source_comparison']['paid_mse_effect']
+        assert effect['status'] == 'measured' and effect['direction'] == 'improved'
+        assert effect['before_criterion_status'] == effect['after_criterion_status'] == 'failed'
     assert not candidate['active_library'] and not candidate['scientific_support_added']
     assert target.costs['compute_cost'] - before_costs['compute_cost'] == result['new_compute_cost'] >= len(calls)
     spent, library = deepcopy(target.costs), (target.workspace / 'shared/theory_library.json').read_text()
     repeated = build(target, lab, [item[3] for item in sources], **arguments)
-    assert repeated['cache_hit'] and repeated['new_compute_cost'] == 0 and len(calls) == 6
+    assert repeated['cache_hit'] and repeated['new_compute_cost'] == 0 and len(calls) == 10
     assert target.costs == spent and (target.workspace / 'shared/theory_library.json').read_text() == library
     assert lab.paid == 0 and target.costs['model_calls'] == 0 and not target.observations
     assert all(source_lab.paid == 2 and source_agent.costs['model_calls'] == 0
@@ -177,7 +181,7 @@ def test_live_local_revision_uses_current_events_limits_and_paid_rows_without_pr
     episode = next(item for item in intake['episodes'] if identifier in item['theory_ids'])
     pool = {item['id']: item for item in resolved_theories(agent)}
     entry, = _revision_entries(agent, [{**episode, 'theory_id': identifier}], pool, retained=[])
-    witness, = entry['counterexamples']
+    witness, later = entry['counterexamples']
     assert witness['criterion']['kind'] == 'paid_mse_single_residual_witness'
     assert witness['criterion']['threshold'] == agent.config.confirmation_mse_threshold == 1e-10
     assert witness['criterion']['evaluated_rows'] == 2
@@ -188,5 +192,110 @@ def test_live_local_revision_uses_current_events_limits_and_paid_rows_without_pr
     assert witness['source_ref'] == {
         'file': 'laboratory_observations.json', 'json_path': [0, 'rows', 0]}
     assert witness['observation'] == observations[0]['rows'][0]
+    assert later['source_ref']['json_path'] == [0, 'rows', 1]
+    assert later['observation'] == observations[0]['rows'][1]
     assert witness['tolerance'] ** 2 == pytest.approx(2e-10)
     assert agent.costs == costs and agent.observations == observations and lab.paid == 2
+
+
+def saved_trigger_comparison(monkeypatch, *, before_mse=3.5, after_mse=2.25):
+    """Saved scores include a locally worse row despite aggregate improvement."""
+    from hegel_machine.cognition import theory_consolidation
+
+    rows = [{'features': {'u': float(index)}, 'target': 0., 'history': []} for index in range(4)]
+    old = [{'row_index': index, **deepcopy(row), 'squared_error': error}
+           for index, (row, error) in enumerate(zip(rows, (4., 9., .5, .5)))]
+    new = [{'row_index': index, **deepcopy(row), 'squared_error': error}
+           for index, (row, error) in enumerate(zip(rows, (9., 0., 0., 0.)))]
+    before = {'returncode': 0, 'loss_kind': 'mse', 'mse': before_mse,
+              'paid_residuals': {'evaluated_rows': 4, 'examples': old}}
+    after = {'returncode': 0, 'loss_kind': 'mse', 'mse': after_mse,
+             'paid_residuals': {'evaluated_rows': 4, 'examples': new}}
+    record = {'row_indices': list(range(4)), 'rows': deepcopy(rows)}
+    comparison = {'before_evaluation_ref': {'file': 'saved.json', 'json_path': ['before']},
+                  'after_evaluation_ref': {'file': 'saved.json', 'json_path': ['after']},
+                  'criterion_ref': {'file': 'saved.json', 'json_path': ['threshold']},
+                  'paid_observation_refs': [{'file': 'paid.json', 'json_path': [0]}],
+                  'scope': {'same_paid_rows': True, 'evaluated_rows': 4,
+                            'independent_confirmation': False}}
+    values = [before, after, .25, record]
+    monkeypatch.setattr(theory_consolidation, 'resolve_program_sources', lambda *a: values)
+    monkeypatch.setattr(Program, 'predict', lambda *a, **k: pytest.fail('use saved scores only'))
+    return {'source_comparison': comparison,
+            'action_ref': {'file': 'saved.json', 'json_path': ['retention_decision']}}, before, after
+
+
+def test_saved_trigger_intake_retains_every_bound_witness_and_original_first_selection(monkeypatch):
+    from hegel_machine.cognition.models import SearchBudget
+    from hegel_machine.cognition.revision_evidence import evidence_context
+    from hegel_machine.cognition.theory_consolidation import _retained_trigger_examples
+
+    entry, before, after = saved_trigger_comparison(monkeypatch)
+    _retained_trigger_examples(None, [entry], [])
+    first, second = entry['counterexamples']
+    assert [row['source_ref']['json_path'] for row in (first, second)] == [[0, 'rows', 0], [0, 'rows', 1]]
+    assert [row['criterion']['before_residual_ref']['json_path'] for row in (first, second)] == [
+        ['before', 'paid_residuals', 'examples', 0], ['before', 'paid_residuals', 'examples', 1]]
+    assert first['criterion']['sufficiency'] == 'one_row_proves_paid_mse_failure_only'
+    checks = [{'status': 'computed', 'failed': True, 'prediction': -2.},
+              {'status': 'computed', 'failed': True, 'prediction': -3.}]
+    selected = evidence_context(constant(0.), entry['counterexamples'], ROLES, 'V', checks, SearchBudget(100))
+    assert selected['selection'] == 'first_measured_parent_failure'
+    assert selected['source_refs'] == [first['source_ref']]
+    effect = entry['source_comparison']['paid_mse_effect']
+    assert effect['direction'] == 'improved' and effect['after_criterion_status'] == 'failed'
+    assert effect['mse_change'] == -1.25
+    assert after['paid_residuals']['examples'][0]['squared_error'] > before['paid_residuals']['examples'][0]['squared_error']
+    assert 'trigger_obligations' not in entry
+
+
+@pytest.mark.parametrize('before_mse,after_mse,direction,before_status,after_status', [
+    (3.5, 2.25, 'improved', 'failed', 'failed'),
+    (3.5, .25, 'improved', 'failed', 'passed'),
+    (3.5, 3.5, 'unchanged', 'failed', 'failed'),
+    (3.5, 4., 'worsened', 'failed', 'failed'),
+])
+def test_saved_batch_effect_uses_original_mse_contract_separately_from_single_rows(
+        monkeypatch, before_mse, after_mse, direction, before_status, after_status):
+    from hegel_machine.cognition.theory_consolidation import _retained_trigger_examples
+
+    entry, _, _ = saved_trigger_comparison(monkeypatch, before_mse=before_mse, after_mse=after_mse)
+    _retained_trigger_examples(None, [entry], [])
+    comparison = entry['source_comparison']
+    effect = comparison['paid_mse_effect']
+    assert effect['status'] == 'measured' and effect['direction'] == direction
+    assert effect['before_mse'] == before_mse and effect['after_mse'] == after_mse
+    assert effect['before_criterion_status'] == before_status and effect['after_criterion_status'] == after_status
+    assert effect['threshold'] == .25 and effect['evaluated_rows'] == 4
+    for key in ('before_evaluation_ref', 'after_evaluation_ref', 'criterion_ref'):
+        assert effect[key] == comparison[key]
+    assert effect['scope'] == 'same_paid_rows_not_independent_confirmation'
+
+
+@pytest.mark.parametrize('missing', ['before_mse', 'after_mse', 'same_scope'])
+def test_missing_saved_batch_values_remain_unknown_without_inventing_improvement(monkeypatch, missing):
+    from hegel_machine.cognition.theory_consolidation import _retained_trigger_examples
+
+    entry, before, after = saved_trigger_comparison(monkeypatch)
+    if missing == 'same_scope':
+        entry['source_comparison']['scope']['same_paid_rows'] = False
+    else:
+        (before if missing == 'before_mse' else after).pop('mse')
+    _retained_trigger_examples(None, [entry], [])
+    assert entry['source_comparison']['paid_mse_effect']['status'] == 'UNKNOWN'
+    assert 'direction' not in entry['source_comparison']['paid_mse_effect']
+    if missing == 'same_scope':
+        assert not entry.get('counterexamples')
+    else:
+        assert len(entry['counterexamples']) == 2
+
+
+@pytest.mark.parametrize('field', ['features', 'history', 'target'])
+def test_saved_counterexample_with_mismatched_paid_row_is_not_bound(monkeypatch, field):
+    from hegel_machine.cognition.theory_consolidation import _retained_trigger_examples
+
+    entry, before, _ = saved_trigger_comparison(monkeypatch)
+    residual = before['paid_residuals']['examples'][1]
+    residual[field] = {'u': 99.} if field == 'features' else [{'u': 99.}] if field == 'history' else 99.
+    _retained_trigger_examples(None, [entry], [])
+    assert [item['source_ref']['json_path'] for item in entry['counterexamples']] == [[0, 'rows', 0]]

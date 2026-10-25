@@ -192,7 +192,7 @@ def run_study(output, *, provider_factory=None, auth_mode=None):
     snapshot.mkdir()
     shutil.copy2(__file__, snapshot / Path(__file__).name)
     for name in ("python_method_learning.py", "python_selective_method_learning.py",
-                 "python_scoped_method_learning.py", "temporal_paired_practice.py"):
+                 "python_scoped_method_learning.py", "temporal_paired_practice.py", "checkpoint_storage.py"):
         shutil.copy2(ROOT / "src/hegel_machine/cognition" / name, snapshot / name)
 
     def author(replica):

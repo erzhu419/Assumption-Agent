@@ -6,6 +6,7 @@ import json
 from time import monotonic
 
 from .language import Program
+from .checkpoint_storage import write_text_incrementally
 from .mechanism_revision import _signed_terms
 from .models import Observation, SearchBudget
 from .nonlinear_parameters import _coefficient
@@ -147,6 +148,6 @@ def execute_reference_expansion(agent, laboratory, arguments):
         agent.files[path] = source
         state["expanded_features"] = sorted(set(state.get("expanded_features", [])) | set(pending))
         state.setdefault("basis_expansions", []).append(deepcopy(result))
-        state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        write_text_incrementally(state_path, json.dumps(state, indent=2))
     agent.costs["research_compute_units"] += compute_cost + check_cost
     return result

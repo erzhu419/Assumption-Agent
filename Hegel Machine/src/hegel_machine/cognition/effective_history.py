@@ -339,7 +339,10 @@ def compact_unit(store, item, work_root, *, progress=None):
                         'uid': initial.st_uid, 'gid': initial.st_gid, 'linkname': '',
                         'uname': '', 'gname': '', 'pax_headers': {}}
             with source.open('rb') as payload:
-                metadata, sequence = save_file(store, payload, metadata, work_root, gzip_input=True)
+                if item['kind'] == 'file':
+                    metadata.update(mtime_ns=initial.st_mtime_ns, atime_ns=initial.st_atime_ns)
+                metadata, sequence = save_file(store, payload, metadata, work_root,
+                                               gzip_input=item['kind'] != 'file')
             store.connection.execute('INSERT INTO entries VALUES(?,?,?,?)',
                                       (unit, 0, json.dumps(metadata), sequence))
             count = 1
@@ -450,7 +453,10 @@ def restore_unit(store, unit, destination, member=None):
             raise ValueError('Unsupported historical tar member: ' + metadata['type'])
         if not path.is_symlink():
             os.chmod(path, metadata['mode'])
-            os.utime(path, (metadata['mtime'], metadata['mtime']))
+            if 'mtime_ns' in metadata:
+                os.utime(path, ns=(metadata['atime_ns'], metadata['mtime_ns']))
+            else:
+                os.utime(path, (metadata['mtime'], metadata['mtime']))
         restored += 1
     for path, metadata in reversed(directories):
         os.chmod(path, metadata['mode'])

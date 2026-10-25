@@ -87,6 +87,7 @@ def run_experiment(output, *, provider_factory, auth_mode=None):
     plan["supplied_trace_origin"] = str(source)
     write_json(output / "protocol.json", plan)
     for name in ("scripts/run_temporal_selective_revision.py",
+                 "src/hegel_machine/cognition/checkpoint_storage.py",
                  "src/hegel_machine/cognition/temporal_selective_practice.py"):
         path = output / "source_at_run" / name
         path.parent.mkdir(parents=True, exist_ok=True)

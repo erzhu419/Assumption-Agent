@@ -4,7 +4,7 @@ from copy import deepcopy
 from hegel_machine.cognition.finite_native_author import export_finite_native_author, export_revision_candidates
 from hegel_machine.cognition import finite_native_author
 from hegel_machine.cognition.temporal_paired_method import execute_procedure
-from hegel_machine.cognition.theory_consolidation import _read_library
+from hegel_machine.cognition.theory_consolidation import _read_library, _anchor_file_references
 from scripts.run_anonymous_revision_inquiry import RegisteredOrganizationAgent
 from test_finite_native_author import ChoiceLab, POLICY
 from test_inquiry_revision import action
@@ -45,10 +45,15 @@ def test_registered_revision_exports_all_real_statuses_into_the_full_ordinary_co
     agent._before_model_turn(lab)
     exports = owner.get('revision_candidate_exports', [])
     assert exports, owner.get('frozen_recall_execution', {}).get('result')
-    assert {'refuted', 'candidate_registered'} <= {item['status'] for item in exports}
+    assert {'UNKNOWN', 'candidate_registered'} <= {item['status'] for item in exports}
     original_theories = {item['theory_ref']['id']: deepcopy(agent.theory_index[item['theory_ref']['id']])
                          for item in exports}
     original_transfers = deepcopy(agent.theory_consolidation['transfers'])
+    for item in exports:
+        actual_transfer = next(record for record in original_transfers
+                               if record['theory_ref'] == item['theory_ref'])
+        assert item['status'] == actual_transfer['status']
+        assert item['support_status'] == original_theories[item['theory_ref']['id']]['support']['status']
     assert all('program' not in item and 'observation' not in item for item in exports)
     for item in exports:
         text = (agent.workspace / item['model']).read_text()
@@ -75,8 +80,20 @@ def test_registered_revision_exports_all_real_statuses_into_the_full_ordinary_co
     assert [item['path'] for item in choice['evaluations']] == expected
     assert choice['paid_rows'] == 4 and choice['compute_cost'] == 4 * len(expected)
     assert {'archive/failed.py', *(item['model'] for item in exports)} <= set(expected)
-    assert agent.theory_consolidation['transfers'] == original_transfers
-    assert all(agent.theory_index[identifier] == original for identifier, original in original_theories.items())
+    assert agent.theory_consolidation['transfers'][:len(original_transfers)] == original_transfers
+    evaluations = {item['path']: item for item in choice['evaluations']}
+    for item in exports:
+        identifier = item['theory_ref']['id']
+        original, current = original_theories[identifier], agent.theory_index[identifier]
+        assert _anchor_file_references({key: value for key, value in current.items()
+            if key not in {'support', 'compatible'}}, agent.workspace) == _anchor_file_references({
+            key: value for key, value in original.items() if key not in {'support', 'compatible'}}, agent.workspace)
+        if evaluations[item['model']]['mse'] > agent.config.confirmation_mse_threshold:
+            assert current['support']['status'] == 'refuted' and not current['compatible'], [
+                item['reason'] for item in outcome['steps'][0]['feedback'][
+                    'revision_comparison_failures']['unknown']]
+        else:
+            assert current == original
     assert agent.costs['compute_cost'] <= agent.config.compute_budget
     assert agent.costs['observation_cost'] == before['observation_cost'] == 4
     assert agent.costs['model_calls'] == 0 and not agent.confirmations and agent.model is None
@@ -119,7 +136,11 @@ def test_restored_relative_index_bindings_match_the_anchored_actual_transfer(tmp
     exported = export_revision_candidates(restored, current)
     assert exported['new_exports'] == len(restored.theory_consolidation['transfers'])
     assert not exported['errors']
-    assert {item['status'] for item in exported['exports']} == {'candidate_registered', 'refuted'}
+    assert {item['status'] for item in exported['exports']} == {'candidate_registered', 'UNKNOWN'}
+    for item in exported['exports']:
+        original = next(record for record in restored.theory_consolidation['transfers']
+                        if record['theory_ref'] == item['theory_ref'])
+        assert item['status'] == original['status']
     assert restored.costs['compute_cost'] == before['compute_cost']
     assert restored.costs['observation_cost'] == before['observation_cost'] == 4
     after = deepcopy(restored.costs)

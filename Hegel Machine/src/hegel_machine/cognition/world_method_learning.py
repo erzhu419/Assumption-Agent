@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 from time import monotonic
 
-from .code_provider_context import _compact_practice_feedback
+from .code_agent import _copy_model_file
+from .checkpoint_storage import write_text_incrementally
 from .discoveryworld_agent import DiscoveryWorldAgent
 from .discoveryworld_lab import DiscoveryWorldLab
 from .online_inquiry_llm import InquiryLLMConfig
@@ -27,7 +28,7 @@ def compact_author_events(events):
             result["full_trace_file"] = str(Path(value["directory"]) / "result.json")
         return result
 
-    return [preview(_compact_practice_feedback(event), index == len(events) - 1)
+    return [preview(event, index == len(events) - 1)
             for index, event in enumerate(events)]
 
 
@@ -148,7 +149,7 @@ class WorldMethodLearner(PythonArchiveMethodLearner):
             missing = self._current_source_coverage()["missing_cases"]
             if missing:
                 outcome = self._practice(next(case for case in self.cases if case in missing))
-                feedback = {**feedback, "edit_practice": _compact_practice_feedback(outcome),
+                feedback = {**feedback, "edit_practice": deepcopy(outcome),
                             "current_source_coverage": self._current_source_coverage()}
         return feedback
 
@@ -165,6 +166,14 @@ class WorldMethodLearner(PythonArchiveMethodLearner):
         directory = f"trials/trial_{len(self.practice_trials):03d}"
         workspace = self.workspace / directory
         workspace.mkdir(parents=True)
+        # Seed declared inherited files before the ordinary write actions run.
+        # Read-only source traces remain references; current method/model files
+        # are independent writable snapshots with shared unchanged blocks.
+        for path, text in {**self.knowledge.get("files", {}), METHOD_PATH: source}.items():
+            original, destination = self.workspace / path, workspace / path
+            if original.is_file() and original.read_text(encoding='utf-8') == text:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                _copy_model_file(original, destination)
         limits = {**self.world_limits, "max_model_calls": max(0, remaining_calls),
                   "python_seconds_per_task": remaining_seconds}
         factory = self.provider_factory if provider_factory is None else provider_factory
@@ -226,9 +235,10 @@ class WorldMethodLearner(PythonArchiveMethodLearner):
                 wall_time_seconds=monotonic() - started)
         revised_path = Path(directory) / "shared/revised_method.py"
         if changed:
-            (self.workspace / revised_path).write_text(result["executed_source"])
+            write_text_incrementally(self.workspace / revised_path, result["executed_source"],
+                                     base=workspace / METHOD_PATH)
             # Candidate source_path and restore_method must identify the same draft.
-            (workspace / METHOD_PATH).write_text(source)
+            write_text_incrementally(workspace / METHOD_PATH, source)
         # The old recorder owns the four ordinary practice costs; merge only the
         # remaining child-model/account fields here, exactly once.
         feedback = self._record_practice(case, directory, source, agent, result, False)
@@ -246,15 +256,15 @@ class WorldMethodLearner(PythonArchiveMethodLearner):
             # A successful interactive repair is a candidate. Reuse the same
             # practice with no model before retaining it as the author's draft.
             candidate = result["executed_source"]
+            write_text_incrementally(self.workspace / METHOD_PATH, candidate)
             self.files[METHOD_PATH] = candidate
-            (self.workspace / METHOD_PATH).write_text(candidate)
             confirmation = self._practice(case, provider_factory=lambda _: None)
             retained = (confirmation.get("fresh_confirmation") or {}).get("passed") is True
             if not retained:
+                write_text_incrementally(self.workspace / METHOD_PATH, source)
                 self.files[METHOD_PATH] = source
-                (self.workspace / METHOD_PATH).write_text(source)
             feedback["repaired_candidate_confirmation"] = {
-                "retained": retained, "practice": _compact_practice_feedback(confirmation)}
+                "retained": retained, "practice": deepcopy(confirmation)}
             feedback["current_source_coverage"] = self._current_source_coverage()
         return feedback
 

@@ -1,6 +1,7 @@
 """Finite control-flow checks use fixture rows, never a scientific simulator."""
 
 from copy import deepcopy
+import json
 
 import pytest
 
@@ -258,3 +259,127 @@ def test_structured_missing_input_obligation_survives_the_actual_procedure(tmp_p
     assert result['status'] == 'method_stopped' and request['status'] == 'author_work_request'
     assert request['request']['reason'] == 'public_typed_research_contract_required'
     assert lab.paid == agent.costs['model_calls'] == 0
+
+
+def test_author_source_update_reuses_completed_choice_then_refit_and_published_same_bank(tmp_path, monkeypatch):
+    contract = declaration()
+    contract['predictor_paths'] = ['archive/_evaluated_model/old.py']
+    previous_source = export_finite_native_author() + '\n# previous frozen author version\n'
+    agent = CommonArchiveInquiryAgent(None, tmp_path, arm='code_react', source_task=False,
+        knowledge={'files': {POLICY: previous_source,
+            contract['predictor_paths'][0]: 'def predict(row): return 0.\n'},
+            'finite_native_author': contract},
+        config=InquiryLLMConfig(observation_budget=20, compute_budget=10000, confirmation_rows=2,
+                               execution_seconds=30., max_model_calls=0))
+    lab = ChoiceLab()
+    agent._execute('query', {'actions': [action(2.), action(3.)]}, lab)
+    programs = [Program('const', value=0.).to_dict(), Program('const', value=1.).to_dict()]
+    basis = [Program('feature', name='u').to_dict()]
+    agent._execute('run', {'operator': 'native_condition_research',
+        'research_question': contract['question'], 'programs': programs, 'basis': basis,
+        'max_compute': contract['max_compute'], 'max_candidates': contract['max_candidates']}, lab)
+    owner = next(item for item in agent.questions if item['id'] == 'source_native')
+    original = deepcopy(owner['native_condition_research'][0])
+    first = agent._execute('run', {'operator': 'procedure', 'path': POLICY,
+        'max_steps': 1, 'confirm': False}, lab)
+    choice = first['steps'][0]['feedback']
+    assert choice['operator'] == 'research_choice'
+    assert choice['next_action']['arguments']['operator'] == 'refit'
+    assert choice['paid_rows'] == 2 and len(choice['evaluations']) == 3
+    first_result = deepcopy(agent.method_results[-1])
+    assert agent.program_contexts[POLICY]['source'] == previous_source
+    agent._save(POLICY, export_finite_native_author())
+    agent.knowledge['finite_native_author']['max_compute'] = 600
+
+    def no_new_purchase(*args, **kwargs):
+        pytest.fail('the same-paid continuation must not acquire another fixture record')
+
+    monkeypatch.setattr(lab, 'execute', no_new_purchase)
+    before = deepcopy(agent.costs)
+    result = agent._execute('run', {'operator': 'procedure', 'path': POLICY,
+        'max_steps': 3, 'confirm': False}, lab)
+    steps = result['steps']
+    assert [entry['proposal']['arguments']['operator'] for entry in steps] == [
+        'refit', 'native_condition_research', 'research_choice'], result
+    assert steps[0]['feedback']['status'] == 'refit_unavailable'
+    resumed = steps[1]['proposal']['arguments']
+    assert resumed['max_compute'] == 600
+    assert resumed['max_candidates'] == contract['max_candidates']
+    assert resumed['programs'] == programs and resumed['basis'] == basis
+    assert owner['native_condition_research'][0] == original
+    assert len(owner['native_condition_research']) == 2
+    expected = contract['predictor_paths'] + [candidate['model']
+        for round_ in owner['native_condition_research'] for candidate in round_['candidates']]
+    assert steps[-1]['proposal']['arguments']['models'] == expected
+    assert [item['path'] for item in steps[-1]['feedback']['evaluations']] == expected
+    assert steps[-1]['feedback']['reused_score_count'] == 3
+    assert steps[-1]['feedback']['new_scored_count'] == 2
+    assert agent.method_results[0] == first_result
+    assert agent.program_contexts[POLICY]['source'] == export_finite_native_author()
+    assert agent.program_contexts[POLICY]['start'] == 1
+    assert 0 < agent.costs['compute_cost'] - before['compute_cost']
+    assert lab.paid == agent.costs['observation_cost'] == before['observation_cost'] == 2
+    assert agent.costs['model_calls'] == 0 and not agent.confirmations
+
+    # The same published action at the same paid scope is attempted once even
+    # after its result was reused; it must not become another native search.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'research_state.json').write_text(json.dumps(agent._program_state()))
+    next_proposal = select_actions(lab.public_spec(), agent.observations,
+        {'finite_native_author': agent.knowledge['finite_native_author']})
+    assert next_proposal.get('arguments', {}).get('operator') != 'native_condition_research'
+
+
+@pytest.mark.parametrize('changed', ['finish', 'other_question', 'other_meaning', 'selected_records', 'attempted'])
+def test_same_bank_requires_actual_current_full_scope_refit_failure_and_keeps_finish_first(
+        tmp_path, monkeypatch, changed):
+    monkeypatch.chdir(tmp_path)
+    question = declaration()['question']
+    memory = local_memory(questions=[{'id': 'task', 'pending_query': {'actions': []}},
+        {**deepcopy(question), 'meaning_version': 1}])
+    memory['finite_native_author']['max_compute'] = 100000
+    model = 'native.py'
+    (tmp_path / model).write_text('def predict(row): return 0.\n')
+    latest = {'round_index': 0, 'status': 'candidates_require_evaluation',
+        'candidates': [{'model': model}], 'observed_record_count': 1}
+    state = memory['research_state']
+    state['operator_results'] = [{'operator': 'native_condition_research',
+        'research_question_id': question['id'], 'question_meaning_version': 1,
+        'native_condition_research': latest}]
+    choice = {'operator': 'research_choice', 'research_question_id': question['id'],
+        'question_meaning_version': 1, 'paid_rows': 1, 'evaluations': [{'path': model}]}
+    state['method_results'] = [
+        {'proposal': {'action': 'run', 'arguments': {'operator': 'research_choice', 'models': [model]}},
+         'feedback': choice, 'evidence_after': {'rows': 1}},
+        {'proposal': {'action': 'run', 'arguments': {'operator': 'refit', 'model': model}},
+         'feedback': {'status': 'refit_unavailable', 'research_question_id': question['id'],
+                      'question_meaning_version': 1}, 'evidence_after': {'rows': 1}}]
+    entry = {'question_id': question['id'], 'round_index': 0, 'paid_rows': 1,
+        'current_paid_rows': 1, 'observed_record_count': 1, 'fit_scope': 'all_paid_rows',
+        'source': {'file': 'research_state.json',
+                   'json_path': ['questions', 1, 'native_condition_research', 0]},
+        'resume_action': {'action': 'run', 'arguments': {'operator': 'native_condition_research',
+            'research_question': {'id': question['id']}, 'max_compute': 300, 'max_candidates': 16}}}
+    if changed == 'finish':
+        choice['next_action'] = {'action': 'finish', 'arguments': {'model': model}}
+    elif changed == 'other_question':
+        entry['question_id'] = 'different_question'
+    elif changed == 'other_meaning':
+        state['method_results'][-1]['feedback']['question_meaning_version'] = 2
+    elif changed == 'selected_records':
+        entry['fit_scope'] = 'selected_records'
+    (tmp_path / 'method_decision.json').write_text(json.dumps({'research_options': [
+        {'id': 'native_condition_research', 'current_executions': [entry]}]}))
+    proposed = select_actions({'controls': ['u']}, observations(), memory)
+    if changed == 'attempted':
+        assert proposed['arguments'] == {**entry['resume_action']['arguments'], 'max_compute': 100000}
+        state['method_results'].append({'proposal': deepcopy(proposed),
+            'feedback': {'operator': 'native_condition_research',
+                'research_question_id': question['id'], 'question_meaning_version': 1},
+            'evidence_after': {'rows': 1}})
+        proposed = select_actions({'controls': ['u']}, observations(), memory)
+    if changed == 'finish':
+        assert proposed['action'] == 'finish'
+    else:
+        assert proposed['action'] == 'query'
+        assert proposed['arguments'] == {'pending_question': 'task'}

@@ -597,7 +597,7 @@ def test_partial_relation_transfer_persists_and_resumes_its_round_robin_cursor(t
     assert_no_new_science(agent, lab)
 
 
-def test_retained_t02_t03_keep_the_old_context_without_an_observed_parent_link(monkeypatch):
+def test_retained_t02_t03_keep_old_context_and_unshared_structural_proposal(monkeypatch):
     from hegel_machine.cognition.revision_relations import consolidate_revision_relations
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / 'scripts'))
     from replay_cross_skeleton_relations import POINTER, load_source, source_declarations, source_ref
@@ -616,9 +616,18 @@ def test_retained_t02_t03_keep_the_old_context_without_an_observed_parent_link(m
     result = consolidate_revision_relations(revisions, allocation={'compute': 3000})
     assert result['status'] == 'completed' and not result['budget_exhausted']
     assert 0 < result['actual_compute_cost'] <= 3000
-    assert [item['kind'] for item in result['candidates']] == ['program_context_relation']
-    assert any(item['reason'] == 'no_shared_parent_subprogram_in_revision' for item in result['excluded'])
-    assert all(item['exact'] for item in result['candidates'][0]['source_reconstruction'])
+    context, revision = result['candidates']
+    assert context['kind'] == 'program_context_relation'
+    assert all(item['exact'] for item in context['source_reconstruction'])
+    # An unchanged parent subtree is not a prerequisite for a structural
+    # proposer. Its actual source endpoints remain exact, without scientific
+    # confirmation or an exact parameter-map claim.
+    assert revision['kind'] == 'program_revision_relation'
+    assert revision['purpose'] == revision['source_change_kind'] == 'structural_revision'
+    assert revision['structural_change'] is True
+    assert all(item['before_exact'] and item['after_exact'] for item in revision['source_reconstruction'])
+    assert not revision['support_updated'] and not revision['independent_confirmation']
+    assert revision['transfer_status'] == 'not_established'
 
 
 def test_joint_revision_consumes_unregistered_fits_only_from_the_native_parent_bank(tmp_path):

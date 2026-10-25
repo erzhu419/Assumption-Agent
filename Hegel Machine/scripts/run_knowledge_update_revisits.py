@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime
+from run_knowledge_lineage_study import ROOT, COSTS, read, save, load_runtime, checkpoint_path
 
 
 def directory(output, arm, root):
@@ -19,17 +19,17 @@ def directory(output, arm, root):
 
 
 def current(output, arm, root):
-    return directory(output, arm, root) / "checkpoint.json.gz"
+    return checkpoint_path(directory(output, arm, root) / "checkpoint.json")
 
 
 def persist(output, arm, root, state):
     path = directory(output, arm, root)
-    save(path / f"visit{state['study']['steps']:02d}.json.gz", state)
     save(current(output, arm, root), state)
+    save(checkpoint_path(path / f"visit{state['study']['steps']:02d}.json"), state, base=current(output, arm, root))
 
 
 def initial_snapshot(output, root, position, arm="knowledge_revisit"):
-    return read(directory(output, arm, root) / f"visit{position + 1:02d}.json.gz")
+    return read(checkpoint_path(directory(output, arm, root) / f"visit{position + 1:02d}.json"))
 
 
 def learn(output, protocol, arm, root):
@@ -70,7 +70,7 @@ def learn(output, protocol, arm, root):
         if first_visit:
             state["study"]["initial_cpu_seconds"] += elapsed
             if len(state["results"]) == len(state["tasks"]):
-                save(path.parent / "first_visits.json.gz", state)
+                save(checkpoint_path(path.parent / "first_visits.json"), state, base=path)
         state["study"]["learning_complete"] = (
             len(state["results"]) == len(state["tasks"]) and not state["pending_revisits"])
         persist(output, arm, root, state)
@@ -90,12 +90,12 @@ def ablate(output, protocol, root):
         raise ValueError("finish the actual new-arm schedule before its matched deletion")
     path = current(output, arm, root)
     state = read(path) if path.exists() else read(
-        directory(output, "knowledge_revisit", root) / "first_visits.json.gz")
+        checkpoint_path(directory(output, "knowledge_revisit", root) / "first_visits.json"))
     if not path.exists():
         state["pending_revisits"], state["revisits"] = [], []
         state["knowledge"] = {}
         state["study"].update(arm=arm, learning_complete=False, matched=[], local_knowledge={},
-            reused_initial_from=str(directory(output, "knowledge_revisit", root) / "first_visits.json.gz"))
+            reused_initial_from=str(checkpoint_path(directory(output, "knowledge_revisit", root) / "first_visits.json")))
     if state["study"]["learning_complete"]:
         return
     for index in range(len(state["study"]["matched"]), len(paired["revisits"])):

@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 
 from hegel_machine.cognition.anonymous_method_learning import AnonymousResearchMethodLearner
+from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 from hegel_machine.cognition.code_agent import (
+    _copy_model_file,
     CodexCodeProvider, archived_paid_trace_references, evaluate_python_model,
 )
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
@@ -151,7 +153,7 @@ def run_paid_source_repair(plan, output, *, provider_factory):
             'a successful explanation. Edit the author method and inspect actual practices; '
             'later trial results retain the accumulated paid observations.'}
     source_text = json.dumps(source_index, indent=2)
-    (author.workspace / 'scene_source.json').write_text(source_text)
+    write_text_incrementally(author.workspace / 'scene_source.json', source_text)
     author.files['scene_source.json'] = source_text
     previous_trial_count = len(author.practice_trials)
     if restored is None:
@@ -714,7 +716,7 @@ def attach_transfer_repair_experience(author, plan):
                 'and the separate resource costs; no program is selected by this summary.'}
     text = json.dumps(evidence, ensure_ascii=False, separators=(',', ':'))
     author.files['repair_evidence.json'] = text
-    (author.workspace / 'repair_evidence.json').write_text(text)
+    write_text_incrementally(author.workspace / 'repair_evidence.json', text)
     comparison = evidence.get('completed_revision_comparison')
     comparison_context = ''
     if comparison is not None:
@@ -749,7 +751,7 @@ def attach_task(author, plan):
         for name, case in plan['practice_cases'].items()}
     text = json.dumps(public, indent=2)
     author.files['practice_interfaces.json'] = text
-    (author.workspace / 'practice_interfaces.json').write_text(text)
+    write_text_incrementally(author.workspace / 'practice_interfaces.json', text)
     author.common_interface = author.common_interface.replace(
         'The initial method is only an unresolved placeholder.',
         'The initial source is the retained draft; earlier supported drafts remain available.').replace(
@@ -843,7 +845,7 @@ def attach_task(author, plan):
     if plan.get('operator_practice'):
         evidence = Path(plan['operator_practice']).read_text()
         author.files['native_operator_practice.json'] = evidence
-        (author.workspace / 'native_operator_practice.json').write_text(evidence)
+        write_text_incrementally(author.workspace / 'native_operator_practice.json', evidence)
         author.common_interface = ('native_operator_practice.json records a host-executed, '
             'zero-LLM practice of the available operator on paid development evidence. '
             'It is tool execution evidence, not your authored method or an autonomous '
@@ -870,12 +872,12 @@ def restore_accepted_method(author, study):
             'Later failed drafts and their paid practices remain available; this does '
             'not publish the restored source or add confirmation support.'}
     author.files['restored_method.json'] = json.dumps(restored, indent=2)
-    (author.workspace / 'restored_method.json').write_text(author.files['restored_method.json'])
+    write_text_incrementally(author.workspace / 'restored_method.json', author.files['restored_method.json'])
     context = json.loads(author.files['resume_context.json'])
     context['current_source_coverage'] = author._current_source_coverage()
     context['restored_method'] = restored
     author.files['resume_context.json'] = json.dumps(context, indent=2)
-    (author.workspace / 'resume_context.json').write_text(author.files['resume_context.json'])
+    write_text_incrementally(author.workspace / 'resume_context.json', author.files['resume_context.json'])
     author._refresh_method_candidates()
     author.common_interface = ('restored_method.json identifies the user-accepted starting '
         'source. It replaces the latest exhausted draft only in the current working file; '
@@ -908,13 +910,23 @@ def run_compilation(plan, output, *, provider_factory):
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / name, path)
     knowledge = register_published_method(original, previous, max_steps=plan['method_steps'])
-    write_json(output / 'initial_archive.json', knowledge)
+    write_json(output / 'initial_archive.json', knowledge, base=source / 'initial_archive.json')
     write_json(output / 'source_outcomes.json', sources)
     reference = output / 'reference_archive'
+    previous_reference = source / 'reference_archive'
+    paid_traces = archived_paid_trace_references(original['files'], reference,
+        source_workspace=previous_reference if previous_reference.is_dir() else None)
     for name, content in original['files'].items():
         path = reference / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        if name in paid_traces:
+            if path.resolve() != paid_traces[name]:
+                path.symlink_to(paid_traces[name])
+        elif ((previous_reference / name).is_file()
+                and (previous_reference / name).read_text(encoding='utf-8') == content):
+            _copy_model_file(previous_reference / name, path)
+        else:
+            write_text_incrementally(path, content)
     practice_agent = ExperimentalDesignMethodAgent
     if plan.get('source_comparison'):
         def practice_agent(*args, **kwargs):
@@ -923,7 +935,7 @@ def run_compilation(plan, output, *, provider_factory):
     learner_type = (SourceComparisonMethodLearner if plan.get('source_comparison')
                     else AnonymousResearchMethodLearner)
     author = learner_type(provider_factory(output / 'author'), output / 'author',
-        knowledge=knowledge, cases=plan['practice_cases'], lab_factory=laboratory,
+        knowledge=knowledge, paid_trace_references=paid_traces, cases=plan['practice_cases'], lab_factory=laboratory,
         config=InquiryLLMConfig(**plan['author_limits']),
         practice_limits=InquiryLLMConfig(**plan['limits']),
         prepare_trial=trial_preparer(knowledge, sources, reference,

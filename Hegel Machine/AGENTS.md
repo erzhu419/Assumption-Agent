@@ -12,6 +12,31 @@ Reuse historical findings already established in the current task; inspect again
 
 # Experiment storage
 
+Experiment storage and execution performance are shared infrastructure. Research
+entry scripts must call the optimized `checkpoint_storage`, `experiment_runtime`
+and `parallel_prediction` interfaces for checkpoint persistence, inherited data,
+worker allocation and execution timing. Keep scientific proposal, selection and
+budget decisions in the research code. Do not reimplement file copying, snapshot
+serialization, cache validation or process-pool management in each new experiment.
+Subsequent scientific iterations use these interfaces without changing their
+implementation. Repair an observed infrastructure defect centrally, preserving
+its recovery and execution contracts and their focused regressions.
+
+For synchronous Common-agent checkpoint writes, pass `checkpoint_result(status)`
+immediately to the shared writer. It borrows the live index only for that write;
+ordinary `result(status)` retains its independent snapshot contract.
+
+Persistent comparison histories use `paid_score_history`; keep full live feedback
+and retain occurrence decisions, failures and costs while addressing immutable
+paid payloads. Restore historical score/residual fields through `research_episodes`.
+Use the central published-text helpers for index/library files; ordinary authored
+files still require their actual change checks.
+
+Python comparison callers must preserve and stop on a truncated comparison, including
+its paid scores and costs, rather than counting it as a completed research unit.
+
+For candidate IDs and versions, use `theory_library_candidate_versions` from the existing theory module. It reuses the installed frozen view without expanding its retained library; full candidate reads still use the existing loader. Repeated complete refutation scopes use the library's existing local field references, and complete checkpoint arrays share equal retained ranges through `checkpoint_storage`.
+
 Save effective scientific information once: unique paid observations, actions, costs, failures, candidate changes and required recovery state. Reference existing read-only source traces instead of embedding or copying them into every result, trial and candidate snapshot. Use the existing `method_practice_workspace` result format and retained `reference_archive`; immutable `archive/source_*/paid_trace.json` must remain shared even when the filesystem does not support reflinks. Practice bank fields reference `research_state.json` only when their full values match; restoration expands those fields while preserving the result's latest question metadata. Keep writable model code, parameters and fitting inputs independent. Portable source exports must retain the contexts declared in `research_roles` and `source_catalog`, including nested predictors and failed source directories; prune undeclared comparisons rather than advertised research. Preserve distinct versions; filesystem placement or a successful VHDX compaction does not establish that the writers avoid duplicate data.
 
 Start new experiments from current mainline entry scripts by absolute path and freeze that code afresh. Old `runtime` and `source_at_run` directories remain historical evidence rather than launch defaults.
@@ -22,6 +47,12 @@ Restore earlier submitted snapshots by reference, with new submissions written u
 
 For a completed comparison with saved fold parameters, declare its source-relative report through `--retain-comparison-report` on the paid-source runner. Restoration keeps the report and residuals locally and points its `parameter_path` fields to the retained original files; it does not copy those completed fits into every practice. Read historical parameters through those references, and create an independent local file when refitting. Incomplete comparison parameters and ordinary active model dependencies remain writable copies. Keep the referenced historical directories; this mechanism does not delete or compact earlier copies.
 
-Use the existing `/mnt/hegel-snapshot-cow` XFS workspace for new active continuation phases so `_copy_model_file` can share unchanged blocks while retaining independent writable files. The ordinary JSON checkpoint writer preserves unchanged blocks before atomic replacement; `resume_origin` supplies the prior result only at commit, never as an already-completed new trial. Existing ext4 runs stay at their original paths. Check physical allocation as well as logical file sizes: `du` counts shared reflink blocks repeatedly. Changed fits and shifted JSON blocks still require space; this is not a claim of globally minimal logical deltas.
+Use the existing `/mnt/hegel-snapshot-cow` XFS workspace for new active continuation phases so `_copy_model_file` can share unchanged blocks while retaining independent writable files. Its backend is now the native WSL block disk `D:\Hegel-Active-Experiments-20261013\hegel-snapshot-native.vhdx`; keep the old raw image offline and retain the existing storage/runtime interfaces. Preserve the control scripts in `D:\Hegel-Active-Experiments-20261013\native-migration-20261025` and login task `HegelNativeVHDXMount`; after a manual WSL restart, run `schtasks.exe /Run /TN HegelNativeVHDXMount`. Mount inspection and operations use the distro PID1 mount namespace through `nsenter -t 1 -m`; confirm PID1 has no remaining mount before detaching the native disk. The ordinary JSON checkpoint writer preserves unchanged blocks before atomic replacement; `resume_origin` supplies the prior result only at commit, never as an already-completed new trial. Existing ext4 runs stay at their original paths. Check physical allocation as well as logical file sizes: `du` counts shared reflink blocks repeatedly. Changed fits and shifted JSON blocks still require space; this is not a claim of globally minimal logical deltas.
 
 Cold historical snapshots use `scripts/compact_effective_history.py`: identical content blocks and complete snapshots share references, while changed content remains independently recoverable. Keep the entire shared store. Use `scripts/adopt_effective_history.py` to update recovery references and remove an old container only after every original member has been replayed from the committed store; changing the compression format alone does not meet this storage rule.
+
+All host experiment checkpoint, observation, context and result writers must use the existing `checkpoint_storage` primitives. Equal saves leave the existing file unchanged; new versions and equal training views declare their actual prior or canonical `base` before writing. Do not recompress complete inherited state into new gzip snapshots: new lineage snapshots use the existing plain JSON checkpoint path and retain historical gzip reads and completion checks. Preserve deliberate old-runtime import isolation. Small authored standalone programs, unique API responses, source code and notes retain their own ordinary-file contract.
+
+For completed retained snapshots, the existing `adopt_effective_history.py --retained-snapshots-root` entry compares declared same-scene views and uses kernel block deduplication without changing unique data. Replace an active checkpoint with the existing final-result alias only when the complete saved bytes agree and the final state is terminal; verify recovery before removing the redundant payload. Exclude live runs from reclamation, and enable tested host writer changes after the frozen run has closed. Record physical block changes separately from logical size, shared blocks, and unrelated concurrent disk activity.
+
+For nonidentical host checkpoint pairs in explicitly selected closed historical roots, pass `--retained-store` pointing to the existing shared historical store. Commit and replay both exact raw originals and persist their restore references before canonicalizing field order; verify each replacement's complete JSON values before replacing either file. Preserve interrupted statuses, original costs, failures, counterexamples and stored original metadata. Keep the shared store and reclamation manifest for exact original-version restoration; unmatched historical files remain in place.
