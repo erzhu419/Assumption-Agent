@@ -104,6 +104,55 @@ def test_no_qualified_source_keeps_whole_strategy_with_identical_B_library(tmp_p
     assert result['closed_source_accounting_ref'] == spec['frozen_source']['accounting_ref']
 
 
+def test_no_new_object_identical_library_is_frozen_without_expanding_old_history(tmp_path, monkeypatch):
+    from hegel_machine.cognition import theory_consolidation
+
+    spec, _ = frozen_spec(tmp_path)
+    spec['frozen_source']['library_ref'] = deepcopy(spec['materials']['initial_library_ref'])
+    spec['frozen_source']['new_candidate_ids'] = []
+    prohibit_science(monkeypatch)
+    monkeypatch.setattr(theory_consolidation, '_read_library',
+        lambda *a, **k: pytest.fail('identical no-object library was expanded'))
+    result = preparation.prepare_frozen_successor(spec, tmp_path / 'successor')
+    assert result['proposal_qualification'] == []
+    assert result['whole_strategy']['no_new_object_C_falls_back_to_B']
+    assert preparation._read(result['automatic_C_library_ref']['file']) == {
+        'source_ref': spec['materials']['initial_library_ref']}
+
+
+def test_existing_prepared_archive_keeps_absolute_contexts_in_original_runner(tmp_path, monkeypatch):
+    from hegel_machine.cognition import anonymous_research_archive as archives
+
+    spec, _ = frozen_spec(tmp_path)
+    spec['frozen_source']['library_ref'] = deepcopy(spec['materials']['initial_library_ref'])
+    spec['frozen_source']['new_candidate_ids'] = []
+    models = [str(tmp_path / 'old_context/_evaluated_model/model.py'),
+              str(tmp_path / 'failed_source/_evaluated_model/model.py')]
+    archive = {'files': {'source_catalog.json': '[]'},
+        'research_roles': {'predictors': models},
+        'frozen_source_refs': [spec['frozen_source']['source_summary_ref']]}
+    spec['frozen_source']['common_archive_ref'] = save(tmp_path / 'common_archive.json', archive)
+    spec['target']['limits']['compute_budget'] = 1500000
+    output = tmp_path / 'successor'
+    result = preparation.prepare_frozen_successor(spec, output)
+    assert result['common_archive_preparation']['archive_ref'] == spec['frozen_source']['common_archive_ref']
+    assert not result['successor_execution_authorized']
+    result['successor_execution_authorized'] = True  # Stub only.
+    preparation._write(output / 'registration.json', result)
+    monkeypatch.setattr(archives, 'prepare_frozen_source_archive',
+        lambda *a, **k: pytest.fail('prepared archive redundantly re-exported old sources'))
+
+    def original_loop(plan, destination, **kwargs):
+        knowledge = kwargs['knowledge']
+        assert knowledge['research_roles']['predictors'] == models
+        assert knowledge['finite_native_author']['predictor_paths'] == models
+        assert knowledge['frozen_source_refs'] == archive['frozen_source_refs']
+        return {'status': 'stub_only_not_a_successor_execution'}
+
+    monkeypatch.setattr(study, 'run_study', original_loop)
+    assert preparation.run_prepared_successor(output)['status'] == 'stub_only_not_a_successor_execution'
+
+
 @pytest.mark.parametrize('purpose', ['structural_revision', 'parameter_proposal', 'exact_edit_map'])
 def test_proposal_use_does_not_require_exact_after_parameter_prediction(tmp_path, purpose):
     spec, candidate = frozen_spec(tmp_path)

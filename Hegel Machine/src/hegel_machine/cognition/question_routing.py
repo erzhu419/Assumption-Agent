@@ -81,6 +81,19 @@ answered by each model), claim_refs [{id,version}] and legal_constructor_ref
 {kind:'resolution_experiments'}. They search the question's retained public
 panel through the same selector. A unique plan returns executable actions and
 query_refs; ties and missing witnesses remain unresolved. No plan is purchased.
+For a computed representation child, native_representation_plan declares
+{parent_theory_ids:[...],validation_records:[...],compute_limit:...,max_candidates:8}.
+An optional retained_research_program_refs list addresses whole native candidate
+records whose Program and procedure output must equal an actual declared parent.
+The existing saved procedure is refitted on training only and offered to the
+same composition search; duplicate procedure references do not repeat a refit.
+It reuses the finite native researcher on separate paid trajectories, retains
+every declared parent, and exports its measured alternatives for the ordinary
+full-pool research_choice. It neither adopts a task model nor resolves the child
+before its actual representation and predictions have been evaluated.
+native_representation_ref addresses the one complete result; the route and
+question histories retain costs, decisions and exact candidate field references.
+Use load_native_representation_result to restore the selected candidate's graph.
 """
 
 
@@ -398,6 +411,9 @@ def _basis(agent, question, mission, *, compute_limit=None):
         'compute_limit': agent.config.compute_budget if compute_limit is None else compute_limit}
     if question.get('research_comparison') is not None:
         basis['research_comparison'] = research_comparison_basis(agent, question)
+    if question.get('native_representation_plan') is not None:
+        basis['native_representation_plan'] = deepcopy(question['native_representation_plan'])
+        basis['native_public_spec'] = deepcopy(question.get('native_representation_public_spec'))
     return basis
 
 
@@ -616,6 +632,82 @@ def continue_conditional_plan(agent, parent, executed, purchased):
             'parent_id': parent['id'], 'purchased_second_step': False}
 
 
+def _native_representation_route(agent, question, laboratory, pool, mission, compute_limit):
+    """Execute the declared native representation work without another author."""
+    from .models import TaskSpec
+    from .representation_inquiry import execute_native_representation_inquiry
+    from .temporal_operator_agent import export_temporal_program
+
+    plan = question['native_representation_plan']
+    identifiers = plan.get('parent_theory_ids', [])
+    if (not isinstance(identifiers, list) or not identifiers
+            or len(set(identifiers)) != len(identifiers)):
+        raise ValueError('native representation parent_theory_ids must be distinct registered IDs')
+    parents = {theory['id']: Program.from_dict(theory['program']) for theory in pool
+               if theory['id'] in identifiers and theory.get('program')}
+    missing = [identifier for identifier in identifiers if identifier not in parents]
+    if missing:
+        return {'status': 'scoped_unknown', 'reason': 'native_representation_parent_unavailable',
+            'question_id': question['id'], 'missing_theory_ids': missing,
+            'new_compute_cost': 0, 'cache_hit': False}
+    public = laboratory.public_spec()
+    question['native_representation_public_spec'] = deepcopy(public)
+    allowance = mission_compute_remaining(agent, mission)
+    basis = _basis(agent, question, mission, compute_limit=compute_limit)
+    previous = question.get('routing_execution')
+    if previous and previous['basis'] == basis:
+        incomplete = previous['result'].get('status') == 'scoped_unknown'
+        if not incomplete or allowance <= previous['allowance']:
+            return {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0}
+    controls = public.get('controls', [])
+    if not controls or not all(isinstance(name, str) for name in controls):
+        raise ValueError('native representation research needs named public controls')
+    spec = TaskSpec(question['id'], question.get('question', 'Explain the measured response'),
+        tuple(controls), (), (), feature_bounds={name: tuple(bounds) for name, bounds
+            in public.get('feature_bounds', {}).items()},
+        max_probe_length=public.get('max_probe_length', 12))
+    start = agent.costs['compute_cost']
+    try:
+        native = execute_native_representation_inquiry(agent, question, spec=spec,
+            parent_programs={identifier: parents[identifier] for identifier in identifiers},
+            validation_records=plan['validation_records'],
+            compute_limit=min(plan['compute_limit'], allowance),
+            max_candidates=plan.get('max_candidates', 8),
+            retained_research_program_refs=plan.get('retained_research_program_refs'))
+    finally:
+        debit_mission_compute(agent, mission, start)
+    round_index = len(question['native_representation_research']) - 1
+    receipt = question['native_representation_research'][round_index]
+    native_ref = receipt['source_ref']
+    question_index = agent.questions.index(question)
+    exports = []
+    for index, candidate in enumerate(native['candidates']):
+        program = Program.from_dict(candidate['program'])
+        path = (f'native_representations/question_{question_index:04d}/'
+                f'round_{round_index:04d}/candidate_{index:04d}.py')
+        agent._save(path, export_temporal_program(program, feature_names=tuple(controls)))
+        if path not in agent.candidate_paths:
+            agent.candidate_paths.append(path)
+        exports.append({'model': path, 'candidate_id': candidate['id'],
+            'source_ref': {**deepcopy(native_ref), 'json_path': [
+                *native_ref.get('json_path', []), 'candidates', index]}})
+    selected = native.get('selected')
+    selected_model = next((entry['model'] for entry in exports
+        if selected and entry['candidate_id'] == selected['id']), None)
+    result = {'status': ('native_representation_candidates_ready' if native.get('comparison_completed')
+        else 'scoped_unknown'), 'question_id': question['id'], 'cache_hit': False,
+        'native_representation': deepcopy(receipt), 'native_representation_ref': deepcopy(native_ref),
+        'exported_models': exports,
+        'selected_model': selected_model, 'retained_parent_theory_ids': list(identifiers),
+        'parent_revision_completed': False, 'representation_child_resolved': False,
+        'next_action': {'action': 'run', 'arguments': {'operator': 'research_choice'}}
+            if exports else None,
+        'new_compute_cost': agent.costs['compute_cost'] - start}
+    question['routing_execution'] = {'basis': basis, 'allowance': allowance,
+        'version': (previous or {}).get('version', 0) + 1, 'result': deepcopy(result)}
+    return result
+
+
 def route_research(agent, arguments, laboratory, question=None):
     # A completion reserve narrows execution, not the task's nominal contract.
     # Pending execution checks this basis again after the caller restores its cap.
@@ -630,6 +722,7 @@ def route_research(agent, arguments, laboratory, question=None):
                                ('allowed_mappings', 'allowed_mappings'),
                                ('candidate_theory_ids', 'candidate_theory_ids'),
                                ('research_comparison', 'research_comparison'),
+                               ('native_representation_plan', 'native_representation_plan'),
                                ('library_path', 'frozen_library_path')]:
             if source in arguments:
                 question[target] = deepcopy(arguments[source])
@@ -702,6 +795,9 @@ def route_research(agent, arguments, laboratory, question=None):
     if 'exploration_policy' in arguments:
         question['exploration_policy'] = deepcopy(arguments['exploration_policy'])
     mission = effective_question_mission(question, mission)
+    if (question.get('kind') in {'representation', 'program_revision'}
+            and question.get('native_representation_plan')):
+        return _native_representation_route(agent, question, laboratory, pool, mission, compute_limit)
     distinguishing = question.get('query_semantics', {}).get('query_expression', {}).get(
         'op') == 'FindDistinguishingExperiment'
     comparison_question = question

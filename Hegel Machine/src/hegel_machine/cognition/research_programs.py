@@ -11,11 +11,13 @@ from itertools import combinations, combinations_with_replacement
 from copy import deepcopy
 import json
 from math import isfinite
+from statistics import mean
 
 from .continuous_state import _linear_fit, _sum_terms
-from .evaluation import initial_prediction, loss
+from .evaluation import initial_prediction, point_loss
 from .language import MissingHistory, Program
 from .models import Candidate
+from .parallel_prediction import predict_rows
 from .research_graph import ResearchGraph
 from .scale_bindings import bind_measurement_arguments
 from .structure_lab import ObjectSchema
@@ -55,7 +57,7 @@ class _Fitter:
         if not self.budget.spend(self.count):
             return None
         try:
-            values = [term.predict(row) for row in self.rows]
+            values = predict_rows(term, self.rows)
         except (MissingHistory, KeyError):
             values = None
         if values is not None and not all(isfinite(value) for value in values):
@@ -86,7 +88,11 @@ class _Fitter:
         coefficients = _linear_fit(columns, self.targets)
         program = _sum_terms(terms, coefficients[1:], coefficients[0])
         self.budget.spend(self.count)
-        measured = loss(program, self.rows, self.fallback, self.quantile)
+        predictions = predict_rows(program, self.rows)
+        if not all(isfinite(value) for value in predictions):
+            raise ValueError("candidate produced a non-finite prediction")
+        measured = mean(point_loss(value, row.target, self.quantile)
+                        for value, row in zip(predictions, self.rows))
         self.budget.completed_fits += 1
         used = tuple(term for term, coefficient in zip(terms, coefficients[1:])
                      if abs(coefficient) >= 1e-8)
@@ -222,7 +228,8 @@ def propose_coordinate_programs(spec, training, budget, *, max_candidates=8):
                         if term not in best["terms"] and fitter.columns.get(term) is not None]
             if not budget.spend(len(rows) * (len(eligible) + 1)):
                 break
-            residual = [row.target - best["program"].predict(row) for row in rows]
+            residual = [row.target - value
+                        for row, value in zip(rows, predict_rows(best["program"], rows))]
             residual_center = sum(residual) / len(rows)
             ranked = []
             for term, column in eligible:
@@ -561,7 +568,8 @@ def propose_research_programs(spec, training, budget, calls, *, max_candidates=1
                     continue
                 if not budget.spend(len(rows)):
                     break
-                residual = [row.target - parent["program"].predict(row) for row in rows]
+                residual = [row.target - value
+                            for row, value in zip(rows, predict_rows(parent["program"], rows))]
                 # All correlations use cached, paid columns. These are proposals;
                 # only an actual joint fit can supply an accepted training answer.
                 residual_center = sum(residual) / len(rows)

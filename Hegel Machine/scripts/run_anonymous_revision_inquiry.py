@@ -459,6 +459,14 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
         selected = retained.get('source_model')
         matches = [item for item in question.get('revision_candidate_exports', [])
                    if item.get('model') == selected]
+        if not matches:
+            from hegel_machine.cognition.finite_native_author import bind_actual_representation_parent
+            representation = bind_actual_representation_parent(self, question)
+            if representation['status'] == 'bound':
+                return representation['theory_id']
+            if representation['status'] == 'author_work_request':
+                target['parent_binding_obligation'] = representation
+                return None
         if len(matches) != 1 or not retained.get('model'):
             return None
         exported = matches[0]
@@ -545,6 +553,12 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
                         and _path(reference) in addresses):
                     matches.append(identifier)
             if len(matches) != 1:
+                obligation = target.get('parent_binding_obligation') or {}
+                if (obligation.get('source_model') == selected
+                        and obligation.get('reason', '').startswith('actual_representation_parent_')):
+                    target.pop('parent_theory_id', None)
+                    target.pop('parent_selection_ref', None)
+                    return
                 from hegel_machine.cognition.retained_native_parent import bind_retained_native_parent
 
                 historical = bind_retained_native_parent(self, question)

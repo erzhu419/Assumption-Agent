@@ -6,6 +6,9 @@ theory_target roles/unit/context), the complete explicit ``predictor_paths`` and
 ``predictor_catalog_ref`` (including failed sources), and max_compute,
 max_candidates, boundary_resolution. The catalog is retained, never filtered by
 success. This policy supplies control flow, not a scientific predictor or rule.
+An explicitly funded native_representation_plan declares parent_theory_ids,
+validation_records, compute_limit and max_candidates. The same completed-choice
+collision evidence may trigger this ordinary tool in every registered group.
 """
 
 from copy import deepcopy
@@ -229,6 +232,183 @@ def _comparison_models(old, exports, native):
     return list(dict.fromkeys(models))
 
 
+def _json_reference_value(reference):
+    # Author files run without repository imports; these declared local JSON
+    # records are the existing canonical score/program protocol.
+    with Path(reference['file']).open() as stream:
+        value = json.load(stream)
+    for part in reference.get('json_path', []):
+        value = value[part]
+    return value
+
+
+def _retained_representation_parent(state, results, model, target):
+    """Resolve a real export address; an opaque draft stays an author question."""
+    indexed = state.get('theory_index', {})
+    proposals = []
+    owners = []
+    for qi, owner in enumerate(state.get('questions', [])):
+        owners.append((owner, ['questions', qi]))
+        owners.extend((old, ['questions', qi, 'meaning_history', hi])
+                      for hi, old in enumerate(owner.get('meaning_history', [])))
+    for owner, owner_path in owners:
+        for ri, round_ in enumerate(owner.get('native_condition_research', [])):
+            for ci, candidate in enumerate(round_.get('candidates', [])):
+                if candidate.get('model') == model and candidate.get('program'):
+                    proposals.append((candidate['program'], {'file': 'research_state.json',
+                        'json_path': [*owner_path, 'native_condition_research', ri, 'candidates', ci, 'program']}))
+        for export in owner.get('revision_candidate_exports', []):
+            theory = indexed.get(export.get('theory_ref', {}).get('id'), {})
+            if export.get('model') == model and theory.get('program'):
+                proposals.append((theory['program'], export['program_source_ref']))
+    feedbacks = [entry.get('feedback', {}) for entry in results]
+    feedbacks.extend(owner.get('routing_execution', {}).get('result', {}) for owner, _ in owners)
+    referenced_programs = {}
+    for feedback in feedbacks:
+        for export in feedback.get('exported_models', []):
+            if export.get('model') != model:
+                continue
+            for candidate in feedback.get('native_representation', {}).get('candidates', []):
+                if candidate.get('id') == export.get('candidate_id'):
+                    reference = deepcopy(export['source_ref'])
+                    reference['json_path'].append('program')
+                    program = candidate.get('program')
+                    if program is None:
+                        key = reference['file'], tuple(reference['json_path'])
+                        if key not in referenced_programs:
+                            referenced_programs[key] = _json_reference_value(reference)
+                        program = referenced_programs[key]
+                    proposals.append((program, reference))
+    if not proposals or any(program != proposals[0][0] for program, _ in proposals):
+        return None
+    program, reference = proposals[0]
+    # The target's roles/units are already explicitly declared by the common
+    # public contract. This carries a Program address, never inherited support.
+    identifier = f'retained_representation_parent:{model}'
+    return {'id': identifier, 'program': deepcopy(program),
+        'program_source_ref': deepcopy(reference),
+        'role_signature': deepcopy(target['role_signature']), 'output_unit': target['output_unit'],
+        'context_ref': deepcopy(target['context_ref']),
+        'source_snapshot': {'model': model, 'source_ref': deepcopy(reference)},
+        'support': {'status': 'candidate', 'evidence': [], 'independent_confirmation': False}}
+
+
+def bind_actual_representation_parent(agent, question):
+    """Bind the actual retained native-representation export, in every group."""
+    from .language import Program
+    from .question_routing import register_theories
+    from .temporal_operator_agent import export_temporal_program
+
+    model = (agent.evaluated_model or {}).get('source_model')
+    results = list(getattr(agent, 'method_results', []))
+    for owner in agent.questions:
+        for version in [owner, *owner.get('meaning_history', [])]:
+            results.append({'feedback': version.get('routing_execution', {}).get('result', {})})
+    results = [entry for entry in results if entry.get('feedback', {}).get('native_representation')
+        and any(export.get('model') == model
+                for export in entry['feedback'].get('exported_models', []))]
+    if not results:
+        return {'status': 'not_representation_export', 'source_model': model}
+    target = question.get('theory_target') or {}
+    roles = target.get('role_signature')
+    def missing(reason):
+        return {'status': 'author_work_request', 'reason': reason, 'source_model': model,
+            'required': ['actual retained export and explicitly declared roles/units/context'],
+            'new_compute_cost': 0, 'support_updated': False}
+    if not isinstance(roles, dict) or target.get('output_unit') is None or target.get('context_ref') is None:
+        return missing('actual_representation_parent_contract_required')
+    parent = _retained_representation_parent({'questions': [], 'theory_index': agent.theory_index},
+                                            results, model, target)
+    if parent is None:
+        return missing('actual_representation_parent_program_required')
+    program = Program.from_dict(parent['program'])
+    if any(not isinstance(roles.get(name), dict)
+           or any(roles[name].get(key) is None for key in ('role', 'unit', 'time'))
+           for name in program.required_features()):
+        return missing('actual_representation_parent_contract_required')
+    expected = export_temporal_program(program, feature_names=tuple(roles)).encode('utf-8')
+    if ((agent.workspace / model).read_bytes() != expected
+            or (agent.workspace / agent._evaluated_summary()['model']).read_bytes() != expected):
+        return missing('actual_representation_parent_export_changed')
+    previous = agent.theory_index.get(parent['id'])
+    if previous and all(previous.get(key) == parent[key] for key in
+            ('program', 'program_source_ref', 'role_signature', 'output_unit', 'context_ref')):
+        parent = {key: deepcopy(value) for key, value in previous.items() if key not in {'version', 'history'}}
+    register_theories(agent, [parent])
+    return {'status': 'bound', 'theory_id': parent['id'],
+        'version': agent.theory_index[parent['id']]['version'],
+        'source_ref': deepcopy(parent['program_source_ref']), 'source_model': model,
+        'new_compute_cost': 0, 'support_updated': False}
+
+
+def _representation_action(contract, question, choice, state, memory, paid_rows):
+    """The same finite evidence-triggered repair is available to A, B and C."""
+    retained = choice.get('evaluated_model') or {}
+    model = retained.get('source_model')
+    evaluation = next((item for item in choice.get('evaluations', [])
+                       if item.get('path') == model), {})
+    diagnostic = evaluation.get('representation_diagnostic') or {}
+    if not diagnostic:
+        review = evaluation.get('representation_review', {}).get('review_ref')
+        if review:
+            diagnostic = _json_reference_value(review).get('diagnostic', {})
+        elif evaluation.get('score_result_ref'):
+            diagnostic = _json_reference_value(evaluation['score_result_ref']).get(
+                'representation_diagnostic', {})
+    threshold = state.get('limits', {}).get('confirmation_mse_threshold', 1e-10)
+    if (evaluation.get('returncode') != 0 or diagnostic.get('empirical_mse_floor', 0) <= threshold
+            or not diagnostic.get('conflicting_groups')):
+        return None
+    plan = contract.get('native_representation_plan')
+    if (not isinstance(plan, dict) or not isinstance(plan.get('parent_theory_ids'), list)
+            or not plan['parent_theory_ids'] or not isinstance(plan.get('validation_records'), list)
+            or not plan['validation_records'] or type(plan.get('compute_limit')) is not int
+            or plan['compute_limit'] <= 0 or type(plan.get('max_candidates')) is not int
+            or plan['max_candidates'] < 2):
+        return _author_work('native_representation_plan_required',
+            ['native_representation_plan.parent_theory_ids', 'validation_records',
+             'compute_limit', 'max_candidates'], source_model=model,
+            representation_diagnostic=deepcopy(diagnostic))
+    all_results = list(state.get('method_results', [])) + list(memory.get('program_results', []))
+    expected_plan = deepcopy(plan)
+    expected_plan['parent_theory_ids'] = list(dict.fromkeys([
+        *plan['parent_theory_ids'], f'retained_representation_parent:{model}']))
+    # Stop unchanged work before rereading an already consumed canonical draft.
+    if any((entry.get('proposal') or {}).get('arguments', {}).get('operator') == 'research_route'
+            and (entry.get('proposal') or {}).get('arguments', {}).get('research_question', {}).get('id')
+                == f'representation:{model}'
+            and (entry.get('proposal') or {}).get('arguments', {}).get('native_representation_plan') == expected_plan
+            and entry.get('evidence_after', {}).get('rows') == paid_rows for entry in all_results):
+        return _author_work('representation_research_return_requires_supported_revision_or_new_evidence',
+            ['actual changed draft, new counterexample, or revised explicit research contract'],
+            source_model=model, question_ref={'question_id': f'representation:{model}'})
+    parent = _retained_representation_parent(state, all_results, model, question['theory_target'])
+    if parent is None:
+        return _author_work('actual_retained_representation_program_required',
+            ['registered actual retained Program with export address'], source_model=model,
+            representation_diagnostic=deepcopy(diagnostic))
+    child = {'id': f'representation:{model}',
+        'question': 'Which public input distinctions were lost by the actual retained predictor?',
+        'kind': 'representation', 'origin': 'computed_representation_conflict',
+        'parent_id': question['id'], 'depends_on': [], 'answer_type': 'program',
+        'subject_refs': [{'type': 'candidate', 'path': model}],
+        'context_ref': deepcopy(question.get('context_ref')),
+        'answer_resolution_ref': {'evaluator': 'representation_diagnostic_and_paid_comparison',
+                                  'parent_model': model},
+        'query_semantics': {'mode': 'solution_relation'},
+        'representation_diagnostic': deepcopy(diagnostic),
+        'use_sites': [{'kind': 'supply_component', 'model': model, 'slot': 'representation'}]}
+    native_plan = deepcopy(plan)
+    native_plan['parent_theory_ids'] = list(dict.fromkeys([*plan['parent_theory_ids'], parent['id']]))
+    proposal = {'action': 'run', 'arguments': {'operator': 'research_route',
+        'research_question': child, 'theories': [parent], 'native_representation_plan': native_plan}}
+    if _attempted(proposal, all_results, paid_rows):
+        return _author_work('representation_research_return_requires_supported_revision_or_new_evidence',
+            ['actual changed draft, new counterexample, or revised explicit research contract'],
+            source_model=model, question_ref={'question_id': child['id']})
+    return proposal
+
+
 def ordinary_completion_reserve(agent, question):
     """Leave the finite task's complete comparison and original finish funded."""
     from .python_research_routing import validated_candidates
@@ -345,6 +525,10 @@ def select_actions(public_spec, observations, memory):
     current_choice = choice is not None
     if models and not current_choice:
         return _action({'action': 'run', 'arguments': {'operator': 'research_choice', 'models': models}}, question)
+    if current_choice:
+        representation = _representation_action(contract, question, choice, state, memory, paid_rows)
+        if representation is not None:
+            return representation
     if current_choice and choice.get('next_action') and not _attempted(choice['next_action'], results, paid_rows):
         return _action(choice['next_action'], question)
     if current_choice:

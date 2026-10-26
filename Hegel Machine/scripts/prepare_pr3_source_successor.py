@@ -410,15 +410,20 @@ def prepare_frozen_successor(spec, output):
     if not manifest or not accounting['accounting_and_preservation_checks_pass']:
         raise ValueError('closed source freeze and accounting are required')
     initial_ref = spec['materials']['initial_library_ref']
-    baseline = _read_library(initial_ref, ROOT)
     library_ref = frozen['library_ref']
-    library = _read_library(library_ref, ROOT)
+    ids = frozen['new_candidate_ids']
+    # A no-object successor uses the identical fixed library in B and C.
+    # Identity is already explicit in this contract; expanding its complete
+    # execution history twice adds no qualification or preservation evidence.
+    same_fixed_library = not ids and library_ref == initial_ref
+    if not same_fixed_library:
+        baseline = _read_library(initial_ref, ROOT)
+        library = _read_library(library_ref, ROOT)
     declared = {question['theory_target']['context_ref']['source_id']
                 for question in source_plan['prepared_public_questions'].values()}
-    ids = frozen['new_candidate_ids']
-    if set(ids).intersection(baseline.get('candidates', {})):
+    if not same_fixed_library and set(ids).intersection(baseline.get('candidates', {})):
         raise ValueError('new proposal IDs must retain a distinct current-source identity')
-    if any(library.get('candidates', {}).get(identifier) != candidate
+    if not same_fixed_library and any(library.get('candidates', {}).get(identifier) != candidate
            for identifier, candidate in baseline.get('candidates', {}).items()):
         raise ValueError('the frozen source library must retain the complete common old library')
     qualification = []
@@ -427,8 +432,8 @@ def prepare_frozen_successor(spec, output):
         row['candidate_ref'] = _frozen_entry_ref(library_ref, library, 'candidates', identifier)
         qualification.append(row)
     qualified = sorted(row['id'] for row in qualification if row['status'] == 'qualified_local_proposal')
-    unavailable = [identifier for identifier in library.get('candidates', {})
-                   if identifier not in baseline.get('candidates', {}) and identifier not in qualified]
+    unavailable = ([] if same_fixed_library else [identifier for identifier in library.get('candidates', {})
+                   if identifier not in baseline.get('candidates', {}) and identifier not in qualified])
     selected = qualified[0] if qualified else None
     keep_path = output / 'frozen_target_libraries' / 'keep.json'
     keep = ({'source_ref': deepcopy(library_ref), 'removed_candidates': unavailable}
@@ -515,6 +520,14 @@ def prepare_frozen_successor(spec, output):
     # running predictors. Actual common archive size is checked before launch.
     estimate = spec['design'].get('common_pool_model_count_upper_estimate', 999)
     budget = _successor_completion_budget([f'count_only/{i}' for i in range(estimate)], spec)
+    common_archive = ({'entry': 'hegel_machine.cognition.anonymous_research_archive.resolve_workspace_archive',
+        'archive_ref': deepcopy(frozen['common_archive_ref']),
+        'scope': 'The prepared common archive retains every explicit predictor at its original execution context; all A/B/C receive the same facts, failures and paid references.',
+        'status': 'prepared_common_archive_referenced'} if frozen.get('common_archive_ref') else
+        {'entry': 'hegel_machine.cognition.anonymous_research_archive.prepare_frozen_source_archive',
+        'source_study': frozen['source_study'], 'base_archive_ref': deepcopy(frozen['common_base_archive_ref']),
+        'scope': 'All registered source contexts, concrete versions, parameters, failures and paid references are common to A/B/C.',
+        'status': 'not_materialized_preparation_only'})
     registration = {'status': 'prepared_not_executed', 'stage': 'frozen_successor',
         'namespace': spec['namespace'], 'spec_ref': spec_ref, 'spec': spec,
         'author_ref': {'file': str(author_path)},
@@ -531,10 +544,7 @@ def prepare_frozen_successor(spec, output):
         'new_class_intervention': new_class,
         'old_closure_reconstruction_diagnostic_ref': deepcopy(frozen['reconstruction_diagnostic_ref']),
         'reconstruction_blocks_successor': False,
-        'common_archive_preparation': {'entry': 'hegel_machine.cognition.anonymous_research_archive.prepare_frozen_source_archive',
-            'source_study': frozen['source_study'], 'base_archive_ref': deepcopy(frozen['common_base_archive_ref']),
-            'scope': 'All registered source contexts, concrete versions, parameters, failures and paid references are common to A/B/C.',
-            'status': 'not_materialized_preparation_only'},
+        'common_archive_preparation': common_archive,
         'budget_readiness': {'status': 'pending_actual_common_pool_count_and_frozen_equal_cap',
             'count_only_estimate': estimate, 'estimate': budget,
             'actual_common_model_count': None,
@@ -636,7 +646,8 @@ def run_prepared_successor(output, *, workers=8):
     CLI preparation never calls this function. Actual successor execution has
     its own authorization boundary, independent of source/object qualification.
     """
-    from hegel_machine.cognition.anonymous_research_archive import prepare_frozen_source_archive
+    from hegel_machine.cognition.anonymous_research_archive import (
+        prepare_frozen_source_archive, resolve_workspace_archive)
 
     output = Path(output).resolve()
     registration = _read(output / 'registration.json')
@@ -644,7 +655,9 @@ def run_prepared_successor(output, *, workers=8):
         raise ValueError('successor execution is not authorized by this prepared registration')
     spec = registration['spec']
     common = registration['common_archive_preparation']
-    knowledge = prepare_frozen_source_archive(common['source_study'], common['base_archive_ref']['file'])
+    knowledge = (resolve_workspace_archive(_value(common['archive_ref']))
+        if common.get('archive_ref') else
+        prepare_frozen_source_archive(common['source_study'], common['base_archive_ref']['file']))
     predictors = list(dict.fromkeys(knowledge['research_roles']['predictors']))
     knowledge['files'][spec['author']['path']] = Path(registration['author_ref']['file']).read_text(encoding='utf-8')
     knowledge['finite_native_author'] = {**spec['native_search'], 'predictor_paths': predictors,
@@ -2177,8 +2190,34 @@ def main():
     parser.add_argument('--spec', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--resume-from', type=Path)
-    parser.add_argument('--stage', choices=('source', 'successor', 'saved-scene-run', 'registered-source-run', 'frozen-parent-evaluation'), default='source')
+    parser.add_argument('--stage', choices=('source', 'successor', 'saved-scene-run', 'registered-source-run', 'frozen-parent-evaluation', 'representation-research', 'recursive-preparation', 'recursive-revision'), default='source')
     arguments = parser.parse_args()
+    if arguments.stage in {'recursive-preparation', 'recursive-revision'}:
+        from hegel_machine.cognition.registered_source_control import (
+            prepare_registered_parent_recursion, run_registered_parent_recursion)
+        if arguments.resume_from is not None:
+            parser.error('recursive registration declares its exact retained source in --spec')
+        if arguments.stage == 'recursive-preparation':
+            result = prepare_registered_parent_recursion(
+                _read(arguments.spec), arguments.output)['acceptance']
+            print(json.dumps({'status': result['status'],
+                'acceptance': str(arguments.output / 'restoration_acceptance.json')}))
+        else:
+            from hegel_machine.cognition.experiment_runtime import run_process_trials
+            result = run_process_trials(lambda unused: run_registered_parent_recursion(
+                _read(arguments.spec), arguments.output), [None], 8)[0]
+            print(json.dumps({'status': result['status'],
+                'summary': str(arguments.output / 'summary.json')}))
+        return
+    if arguments.stage == 'representation-research':
+        from hegel_machine.cognition.experiment_runtime import run_process_trials
+        from hegel_machine.cognition.registered_source_control import run_registered_representation_research
+        if arguments.resume_from is not None:
+            parser.error('representation development uses its registered fresh output')
+        result = run_process_trials(lambda unused: run_registered_representation_research(
+            _read(arguments.spec), arguments.output), [None], 8)[0]
+        print(json.dumps({'status': result['status'], 'summary': str(arguments.output/'summary.json')}))
+        return
     if arguments.stage == 'frozen-parent-evaluation':
         from hegel_machine.cognition.registered_source_control import run_frozen_parent_evaluation
         if arguments.resume_from is not None:

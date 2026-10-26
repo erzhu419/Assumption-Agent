@@ -14,6 +14,36 @@ from .models import Observation, Probe
 from .scale_bindings import bind_measurement_arguments, control_history_depth
 
 
+def _public_control_levels(bounds, control_levels):
+    """Resolve an explicitly supplied finite public command contract."""
+    if control_levels is None:
+        return None
+    levels = {}
+    for name, (low, high) in bounds.items():
+        declared = control_levels.get(name)
+        if (not isinstance(declared, (list, tuple)) or not declared
+                or any(type(value) not in (int, float) or not isfinite(value)
+                       or not low <= value <= high for value in declared)):
+            raise ValueError(f"public control_levels required within bounds for {name}")
+        levels[name] = tuple(sorted(set(declared)))
+    return levels
+
+
+def _legal_point(point, control_levels):
+    if control_levels is None:
+        return dict(point)
+    return {name: min(control_levels[name], key=lambda level: (abs(level - value), level))
+            for name, value in point.items()}
+
+
+def _legal_sequence(sequence, control_levels, spend=None):
+    if control_levels is None:
+        return sequence
+    if spend is not None and not spend(sum(len(point) for point in sequence)):
+        return None
+    return tuple(_legal_point(point, control_levels) for point in sequence)
+
+
 def _steady(program):
     """Evaluate a predicate at a maintained command, including lagged fields."""
     if program.op == "lag":
@@ -219,13 +249,14 @@ def solve_joint_boundary(expression, target, point, bounds, spend, *,
 
 
 def propose_program_disagreement_probes(command_spec, programs, budget, *, binding=None,
-                                       serial=0, length=4):
+                                       serial=0, length=4, control_levels=None):
     """Generate program-derived experiments within the planner's 6000 units.
 
     The existing coordinate operation runs first. If it cannot distinguish the
     programs, jointly move predicate controls within public bounds. Both paths
     forecast complete maintained and pulsed trajectories before proposing any
-    purchase of observations.
+    purchase of observations. Explicit public control_levels restrict returned
+    commands to that finite set; separation is recomputed on the actual commands.
     """
     start = budget.spent
     allowance = min(6000, budget.remaining)
@@ -235,6 +266,7 @@ def propose_program_disagreement_probes(command_spec, programs, budget, *, bindi
 
     programs = list(programs)
     bounds = command_spec.feature_bounds
+    levels = _public_control_levels(bounds, control_levels)
     if len(programs) < 2 or not bounds or not allowance:
         return []
     controls = set(bounds)
@@ -249,7 +281,8 @@ def propose_program_disagreement_probes(command_spec, programs, budget, *, bindi
     if any(control_history_depth(program) for program in bindings.values()):
         from .temporal_control_probes import propose_temporal_control_probes
         proposals = propose_temporal_control_probes(command_spec, executable, spend,
-            serial=serial, length=length, programs=programs, binding=bindings)
+            serial=serial, length=length, programs=programs, binding=bindings,
+            control_levels=levels)
         for proposal in proposals:
             proposal["compute_cost"] = budget.spent - start
         return proposals
@@ -282,6 +315,9 @@ def propose_program_disagreement_probes(command_spec, programs, budget, *, bindi
                                             max_length=command_spec.max_probe_length)
             if sequence is None:
                 continue
+            sequence = _legal_sequence(sequence, levels, spend)
+            if sequence is None:
+                return False
             key = tuple(tuple(sorted(point.items())) for point in sequence)
             if key in sequences:
                 continue
@@ -298,7 +334,10 @@ def propose_program_disagreement_probes(command_spec, programs, budget, *, bindi
                     "boundary": {**({"expression": group["expression"].to_dict(),
                         "measured_expression": group["measured_expression"].to_dict(),
                         "thresholds": group["thresholds"], "target": target} if group else {}),
-                        "context": dict(context), **metadata}, "compute_cost": budget.spent - start})
+                        "context": dict(context), **metadata,
+                        **({"public_control_levels": {name: list(values) for name, values in levels.items()},
+                            "executed_solution": _legal_point(solved, levels)} if levels is not None else {})},
+                    "compute_cost": budget.spent - start})
         return True
 
     def simple_search():

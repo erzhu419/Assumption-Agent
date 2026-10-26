@@ -528,6 +528,7 @@ dependencies = []
 research_bindings = []
 research_prediction_count = 0
 research_compute_budget = json.loads(sys.argv[4])
+closed_temporal_representation = sys.argv[5] if len(sys.argv) > 5 else ''
 
 class ResearchComputeBudgetExhausted(Exception):
     pass
@@ -575,6 +576,8 @@ def load_model(directory, path, training=None):
     directory, path = model_context(directory, path)
     with working_directory(directory):
         model = runpy.run_path(str(directory / path))
+        if closed_temporal_representation and directory / path == Path(sys.argv[1]):
+            exec(closed_temporal_representation, model)
         inputs_file = directory / 'model_research_inputs.json'
         inputs = json.loads(inputs_file.read_text()).get(path, {}) if inputs_file.exists() else {}
         if inputs:
@@ -722,6 +725,13 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
                 require_fit=require_fit, training_observations=training_observations,
                 research_compute_budget=research_compute_budget)
     workspace, model = python_model_context(workspace, model)
+    # Retain the original closed export bytes and paid score identity. Its
+    # explicit decomposition runs only in this prediction context, and the
+    # downstream predictor consumes exactly the captured temporal coordinates.
+    temporal_representation = ''
+    if _closed_temporal_export(workspace, model):
+        from .temporal_operator_agent import _PROGRAM_REPRESENTATION_RUNNER
+        temporal_representation = _PROGRAM_REPRESENTATION_RUNNER
     payload = [{"features": row.features, "history": row.history} if hasattr(row, "features")
                else {"features": row["features"], "history": row.get("history", [])} for row in observations]
     # A retained candidate carries its selected paid training view to terminal
@@ -735,13 +745,18 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
             training = Path(fitting_directory) / "model_observations.json"
             training.write_text(json.dumps([asdict(row) if hasattr(row, "features") else row
                                             for row in training_observations]), encoding="utf-8")
+        execution_input = json.dumps(payload)
+        external_started = monotonic()
         code, stdout, stderr, timed_out = _run([sys.executable, "-c", _MODEL_RUNNER, str(workspace / model), str(training),
-                                             "1" if require_fit else "0", json.dumps(research_compute_budget)],
-                                             json.dumps(payload), timeout_seconds, str(workspace))
+                                             "1" if require_fit else "0", json.dumps(research_compute_budget),
+                                             temporal_representation],
+                                             execution_input, timeout_seconds, str(workspace))
+        external_seconds = monotonic() - external_started
         execution = json.loads(stdout) if code == 0 else None
         training_rows = (json.loads(training.read_text())
                          if execution and execution.get("training_representations") is not None else [])
     result = {"returncode": code, "stderr": stderr, "timeout": timed_out,
+              "external_python_wall_seconds": external_seconds,
               "risk_quantile": risk_quantile, "loss_kind": "mse" if risk_quantile == .5 else "pinball"}
     if code == 0:
         predictions = execution["predictions"]
@@ -770,6 +785,38 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
                       for value, target in zip(predictions, targets)) / max(1, len(targets)))
         result["loss"] = sum(point_loss(value, target, risk_quantile)
                              for value, target in zip(predictions, targets)) / max(1, len(targets))
+    return result
+
+
+def closed_temporal_prediction_contract(contract):
+    """The pre-exposure score contract, only for unchanged closed literals.
+
+    Remove only representation exposure and wall-time observation. Other executor source,
+    Python version, fitting and numerical policy still participate in equality.
+    Ordinary authored Python never uses this equivalence.
+    """
+    result = dict(contract)
+    result['runner_source'] = result['runner_source'].replace(
+        "closed_temporal_representation = sys.argv[5] if len(sys.argv) > 5 else ''\n", '').replace(
+        "        if closed_temporal_representation and directory / path == Path(sys.argv[1]):\n"
+        "            exec(closed_temporal_representation, model)\n", '')
+    result['evaluator_source'] = result['evaluator_source'].replace(
+        '        execution_input = json.dumps(payload)\n', '').replace(
+        '                                             execution_input, timeout_seconds, str(workspace))',
+        '                                             json.dumps(payload), timeout_seconds, str(workspace))').replace(
+        '        external_started = monotonic()\n', '').replace(
+        '        external_seconds = monotonic() - external_started\n', '').replace(
+        '              "external_python_wall_seconds": external_seconds,\n', '').replace(
+        "    # Retain the original closed export bytes and paid score identity. Its\n"
+        "    # explicit decomposition runs only in this prediction context, and the\n"
+        "    # downstream predictor consumes exactly the captured temporal coordinates.\n"
+        "    temporal_representation = ''\n"
+        "    if _closed_temporal_export(workspace, model):\n"
+        "        from .temporal_operator_agent import _PROGRAM_REPRESENTATION_RUNNER\n"
+        "        temporal_representation = _PROGRAM_REPRESENTATION_RUNNER\n", '').replace(
+        '"1" if require_fit else "0", json.dumps(research_compute_budget),\n'
+        '                                             temporal_representation],',
+        '"1" if require_fit else "0", json.dumps(research_compute_budget)],')
     return result
 
 

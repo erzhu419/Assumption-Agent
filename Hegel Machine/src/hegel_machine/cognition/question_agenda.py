@@ -399,7 +399,13 @@ def build_agenda(questions, research_candidates, theories, *, mission=None, budg
             if funding is not None:
                 available = min(available, funding)
             cached_request = available <= pending.get('bounded_allowance', 0)
-        work = ('author_work_request' if cached_request else 'consolidation' if consolidation
+        native_plan = question.get('native_representation_plan')
+        native_representation = (question.get('kind') in {'representation', 'program_revision'}
+            and isinstance(native_plan, dict) and bool(native_plan.get('parent_theory_ids'))
+            and isinstance(native_plan.get('validation_records'), list)
+            and type(native_plan.get('compute_limit')) is int)
+        work = ('native_representation' if native_representation else
+                'author_work_request' if cached_request else 'consolidation' if consolidation
                 else 'checked_answer' if checked else 'query'
                 if isinstance(expression, dict) and expression.get('op') in _QUERY_OPS
                 else 'author_work_request')
@@ -413,13 +419,15 @@ def build_agenda(questions, research_candidates, theories, *, mission=None, budg
             reason = 'no_theory_mission'
         elif queue == 'theory' and not _allocated(owner):
             reason = 'theory_allocation_missing'
-        elif (queue == 'theory' and work in {'query', 'consolidation'}
+        elif (queue == 'theory' and work in {'query', 'consolidation', 'native_representation'}
               and _remaining_theory_compute(owner) == 0):
             reason = 'theory_compute_budget'
         elif not question.get('use_sites') and queue == 'task':
             reason = 'no_declared_use'
-        elif work in {'query', 'consolidation'} and budget.get('compute', 0) <= 0:
+        elif work in {'query', 'consolidation', 'native_representation'} and budget.get('compute', 0) <= 0:
             reason = 'compute_budget'
+        elif native_representation and native_plan['compute_limit'] <= 0:
+            reason = 'native_representation_compute_budget'
         elif work == 'author_work_request' and budget.get('author_calls', 0) <= 0:
             reason = 'author_work_unfunded'
         if reason:

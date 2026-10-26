@@ -273,7 +273,10 @@ def test_author_source_update_reuses_completed_choice_then_refit_and_published_s
                                execution_seconds=30., max_model_calls=0))
     lab = ChoiceLab()
     agent._execute('query', {'actions': [action(2.), action(3.)]}, lab)
-    programs = [Program('const', value=0.).to_dict(), Program('const', value=1.).to_dict()]
+    # Isolate same-bank refitting from representation-conflict research: these
+    # predictors retain distinct u values but have deliberately wrong gains.
+    programs = [Program('mul', children=(Program('const', value=gain),
+        Program('feature', name='u'))).to_dict() for gain in (1.25, 1.5)]
     basis = [Program('feature', name='u').to_dict()]
     agent._execute('run', {'operator': 'native_condition_research',
         'research_question': contract['question'], 'programs': programs, 'basis': basis,
@@ -294,7 +297,12 @@ def test_author_source_update_reuses_completed_choice_then_refit_and_published_s
     def no_new_purchase(*args, **kwargs):
         pytest.fail('the same-paid continuation must not acquire another fixture record')
 
+    def no_new_python_score(*args, **kwargs):
+        pytest.fail('unchanged paid execution and literal aliases must not predict again')
+
     monkeypatch.setattr(lab, 'execute', no_new_purchase)
+    monkeypatch.setattr('hegel_machine.cognition.online_inquiry_llm.evaluate_python_model',
+                        no_new_python_score)
     before = deepcopy(agent.costs)
     result = agent._execute('run', {'operator': 'procedure', 'path': POLICY,
         'max_steps': 3, 'confirm': False}, lab)
@@ -312,9 +320,33 @@ def test_author_source_update_reuses_completed_choice_then_refit_and_published_s
         for round_ in owner['native_condition_research'] for candidate in round_['candidates']]
     assert steps[-1]['proposal']['arguments']['models'] == expected
     assert [item['path'] for item in steps[-1]['feedback']['evaluations']] == expected
-    assert steps[-1]['feedback']['reused_score_count'] == 3
-    assert steps[-1]['feedback']['new_scored_count'] == 2
-    assert agent.method_results[0] == first_result
+    compared = steps[-1]['feedback']
+    assert compared['reused_score_count'] == 5
+    assert compared['new_scored_count'] == 0
+    for retained, repeated in zip(choice['evaluations'], compared['evaluations'][:3]):
+        before_reuse, reuse = retained['paid_score_reuse'], repeated['paid_score_reuse']
+        assert reuse['assessment_ref'] == before_reuse['assessment_ref']
+        assert reuse['scope_ref'] == before_reuse['scope_ref']
+    from hegel_machine.cognition.code_agent import literal_python_model_context_matches, python_model_context
+    for retained, alias in zip(choice['evaluations'][1:], compared['evaluations'][3:]):
+        reuse = alias['paid_score_reuse']
+        assert reuse['matched_model'] == retained['path']
+        assert reuse['match_basis'] == 'identical_closed_literal_execution'
+        assert reuse['assessment_ref'] == retained['paid_score_reuse']['assessment_ref']
+        original_context, original_model = python_model_context(agent.workspace, retained['path'])
+        assert literal_python_model_context_matches(agent.workspace, alias['path'],
+                                                   original_context, original_model)
+    from pathlib import Path
+    expected_rows = [{'features': row.features, 'target': row.target,
+                      'history': list(row.history)} for row in agent.rows]
+    for evaluation in compared['evaluations']:
+        reuse = evaluation['paid_score_reuse']
+        assert reuse['additional_scoring_compute'] == reuse['additional_scoring_python_seconds'] == 0
+        assert json.loads(Path(reuse['scope_ref']['file']).read_text())['rows'] == expected_rows
+    from hegel_machine.cognition.paid_score_history import retain_comparison_history
+    retained_first = deepcopy(first_result)
+    retained_first['feedback'] = retain_comparison_history(first_result['feedback'])
+    assert agent.method_results[0] == retained_first
     assert agent.program_contexts[POLICY]['source'] == export_finite_native_author()
     assert agent.program_contexts[POLICY]['start'] == 1
     assert 0 < agent.costs['compute_cost'] - before['compute_cost']

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from time import monotonic, process_time
 
-from .checkpoint_storage import write_json_checkpoint, clone_or_copy
+from .checkpoint_storage import write_json_checkpoint, clone_or_copy, retain_checkpoint_sources
 from .experiment_runtime import checkpoint_execution
 from .development_revision_restore import restore_development_revision_work
 from .registered_source_scene import (load_registered_source_material,
@@ -629,6 +629,455 @@ def _frozen_parent_row_groups(rows, paid_rows):
         regions['seen_public_inputs' if public_input(row) in paid_inputs
                 else 'unseen_public_inputs'].append(index)
     return trajectories, regions
+
+
+def prepare_registered_parent_recursion(registration, output):
+    """Cold restore the actual failed new-parent revision without paid work.
+
+    The failed caller saved a complete result but omitted research_state.json.
+    Reconstruct its known fields in a new workspace through Common's own state
+    writer, then use the ordinary practice restoration. Missing internal fits
+    and a search cursor are not reconstructed.
+    """
+    from .anonymous_history_lab import AnonymousHistoryLab
+    from .code_agent import _copy_execution_context
+    from .common_archive_inquiry import CommonArchiveInquiryAgent
+    from .models import Observation
+    from .online_inquiry_llm import InquiryLLMConfig
+    from .research_episodes import load_source_values
+    from .language import Program
+    from .temporal_operator_agent import export_temporal_program
+
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    read = lambda reference: load_source_values([reference], output)[0]['value']
+    previous = read(registration['source_result_ref'])
+    initial = read(registration['source_initial_evaluation_ref'])
+    source = Path(registration['source_workspace']).resolve()
+    native_question = next(q for q in previous['online_questions']
+                           if q['id'] == registration['question_id'])
+    model = previous['evaluated_model']['source_model']
+    paid_score = previous['research_candidates'][model]['current_evaluation']
+    if (initial.get('returncode') != 0 or paid_score.get('returncode') != 0
+            or initial['mse'] != paid_score['mse']
+            or previous['evaluated_model']['mse'] != initial['mse']):
+        raise ValueError('the actual retained initial parent assessment is inconsistent')
+    if (native_question.get('kind') != 'program_revision'
+            or native_question.get('origin', {}).get('row_indices')
+                != registration['counterexample_rows']):
+        raise ValueError('the saved revision must bind its actual measured counterexamples')
+    measured = read(native_question['origin']['source_ref'])
+    if (measured.get('finite_status') != 'observed_false'
+            or measured.get('evidence') != registration['counterexample_rows']):
+        raise ValueError('the retained revision must use its actual returned counterevidence')
+    plan = native_question['native_representation_plan']
+    if plan['parent_theory_ids'] != [registration['parent_theory_id']]:
+        raise ValueError('the saved revision does not bind the registered actual parent')
+    source_costs = deepcopy(previous['costs'])
+    retained_parent = previous['theory_index'][registration['parent_theory_id']]['program']
+    parent_program = Program.from_dict(retained_parent)
+    if (source / model).read_text() != export_temporal_program(parent_program):
+        raise ValueError('the actual parent source does not execute its registered Program')
+    for reference in registration['retained_research_program_refs']:
+        candidate = read(reference)
+        if candidate['program'] != retained_parent or not candidate.get('research_program'):
+            raise ValueError('the retained procedure must belong to the actual saved parent')
+    carried = deepcopy(registration.get('starting_costs', source_costs))
+    if any(carried[key] < value for key, value in source_costs.items()):
+        raise ValueError('the carried account cannot remove an already reported cost')
+    limits = registration['limits']
+    config = InquiryLLMConfig(compute_budget=limits['compute'],
+        execution_seconds=limits['python_seconds'], observation_budget=0,
+        max_model_calls=0, confirmation_mse_threshold=1e-10)
+    knowledge = deepcopy(previous['outgoing_knowledge'])
+    bridge_workspace = output / 'retained_scene'
+    _copy_execution_context(source, bridge_workspace, [model])
+    # Preserve the independently writable retained predictor and fitting view.
+    _copy_execution_context(source / '_evaluated_model',
+        bridge_workspace / '_evaluated_model',
+        [str(Path(previous['evaluated_model']['model']).relative_to('_evaluated_model'))])
+    bridge = CommonArchiveInquiryAgent(None, bridge_workspace, arm='hegel',
+        source_task=False, knowledge=knowledge, config=config)
+    fields = {'questions': 'online_questions', 'observations': 'paid_observations',
+        'revisions': 'revision_proposals', 'events': 'events', 'model': 'model',
+        'inherited_files': 'inherited_files', 'method_results': 'method_results',
+        'program_contexts': 'program_contexts', 'experiment_comparisons': 'experiment_comparisons',
+        'observable_models': 'observable_models', 'conditional_models': 'conditional_models',
+        'model_dependencies': 'model_dependencies', 'research_candidates': 'research_candidates',
+        'research_input_bindings': 'research_input_bindings', 'relation_research': 'relation_research',
+        'theory_index': 'theory_index', 'research_mission': 'research_mission',
+        'research_agenda': 'research_agenda', 'llm_inquiries': 'llm_inquiries',
+        '_inquiry_stack': 'inquiry_stack'}
+    for attribute, field in fields.items():
+        setattr(bridge, attribute, deepcopy(previous[field]))
+    bridge.inherited_files = set(bridge.inherited_files)
+    bridge.costs = carried
+    bridge.rows = [Observation(dict(row['features']), row['target'], tuple(row['history']))
+                   for record in bridge.observations for row in record['rows']]
+    if (len(bridge.rows) != registration['frozen_split']['training_rows']
+            + registration['frozen_split']['validation_rows']):
+        raise ValueError('the saved material differs from the registered frozen split')
+    bridge.evaluated_model = {
+        'model': str(Path(previous['evaluated_model']['model']).relative_to('_evaluated_model')),
+        'source_model': model, 'current_mse': initial['mse'], 'evaluated_rows': len(bridge.rows),
+        **{key: deepcopy(previous['evaluated_model'][key]) for key in
+           ('evaluation_scope', 'fitting_view', 'later_readings', 'selection')
+           if key in previous['evaluated_model']}}
+    bridge._active_question_id = native_question['id']
+    # The failed route returned no exports or operator result. Its full failure
+    # remains at the existing canonical reference on the question.
+    studies = native_question.get('native_representation_research', [])
+    if any(item.get('candidate_count', len(item.get('candidates', []))) for item in studies):
+        raise ValueError('this omitted-state restoration requires the actual no-export failure')
+    bridge.candidate_paths, bridge.operator_results = [], []
+    bridge._write_evidence()
+    bridge._prepare_program_state()
+    retained = bridge.checkpoint_result('restored_failed_parent_scene')
+    retain_checkpoint_sources(output / 'retained_scene_result.json',
+                              registration['source_result_ref']['file'])
+    _write(output / 'retained_scene_result.json', retained)
+    state = bridge._program_state()
+    laboratory = AnonymousHistoryLab(**registration['environment'])
+    agent = CommonArchiveInquiryAgent(None, output / 'workspace', arm='hegel',
+        source_task=False, knowledge=knowledge, config=config)
+    restored = agent.restore_practice_research(retained, bridge_workspace, laboratory,
+        confirmation_seed=registration.get('confirmation_seed', 9173), retained_state=state)
+    training, held, split = agent._split({'validation_records':
+        registration['frozen_split']['validation_records']})
+    if (len(training) != registration['frozen_split']['training_rows']
+            or len(held) != registration['frozen_split']['validation_rows']):
+        raise ValueError('cold restoration changed the frozen fitting split')
+    models = read(registration['retained_roster_ref'])
+    if len(models) != registration['complete_old_pool_count']:
+        raise ValueError('the complete retained model roster changed')
+    if any(not Path(path).is_absolute() or not Path(path).is_file() for path in models):
+        raise ValueError('retain each strong-pool model at its actual execution context')
+    # Retain prior scopes exactly. In particular, a609-row assessment is not a
+    #613-row assessment; the ordinary scorer still checks the original basis.
+    index = read(registration['retained_score_index_ref'])
+    _write(agent.workspace / '_paid_python_scores/_evaluated_model/assessments.json', index)
+    question = next(q for q in agent.questions if q['id'] == registration['question_id'])
+    questions_preserved = agent.questions == previous['online_questions']
+    question['native_representation_plan'] = {
+        **deepcopy(question['native_representation_plan']),
+        'validation_records': registration['frozen_split']['validation_records'],
+        'compute_limit': limits['native_unit_compute'],
+        'max_candidates': limits['max_candidates'],
+        'retained_research_program_refs': deepcopy(registration['retained_research_program_refs'])}
+    acceptance = {'status': 'actual_new_parent_cold_restore_accepted_without_scientific_execution',
+        'source_result_ref': deepcopy(registration['source_result_ref']),
+        'source_reported_costs': source_costs, 'carried_costs': deepcopy(agent.costs),
+        'python_cost_basis': registration.get('python_cost_basis'),
+        'restoration': restored, 'rows': len(agent.rows), 'records': len(agent.observations),
+        'frozen_split': split, 'parent_source_model': model,
+        'parent_mse': agent._evaluated_summary()['mse'],
+        'actual_parent_nodes': parent_program.size,
+        'measured_answer_ref': deepcopy(native_question['origin']['source_ref']),
+        'measured_status': measured['finite_status'],
+        'initial_parent_score_reused_without_evaluation': True,
+        'retained_research_program_refs': deepcopy(registration['retained_research_program_refs']),
+        'condition_negative_ref': deepcopy(registration['condition_negative_ref']),
+        'complete_old_pool_count': len(models), 'retained_assessment_refs': len(index['assessments']),
+        'retained_score_index_ref': deepcopy(registration['retained_score_index_ref']),
+        'source_parent_bytes_equal': (source / model).read_bytes()
+            == (agent.workspace / model).read_bytes(),
+        'source_questions_preserved': questions_preserved,
+        'source_failure_retained': bool(studies),
+        'lost_intermediate_fits_recovered': False, 'old_195_or65_cursor_reused': False,
+        'new_fits': 0, 'new_predictions': 0, 'new_observations': 0, 'provider_calls': 0}
+    if not acceptance['source_parent_bytes_equal'] or not acceptance['source_questions_preserved']:
+        raise ValueError('cold restoration changed the original parent or question record')
+    _write(output / 'restoration_acceptance.json', acceptance)
+    agent._prepare_program_state()
+    retain_checkpoint_sources(output / 'prepared_state.json',
+                              output / 'retained_scene_result.json')
+    _write(output / 'prepared_state.json', agent.checkpoint_result('prepared_not_executed'))
+    return {'agent': agent, 'laboratory': laboratory, 'models': models, 'question': question,
+        'acceptance': acceptance, 'starting_costs': deepcopy(agent.costs), 'output': output}
+
+
+def _comparison_external_python_timing(comparison):
+    """Count actual fresh executor calls, retaining unknown historical meters."""
+    measured, unknown, seen = 0., 0, set()
+    pending = list(comparison.get('evaluations', []))
+    while pending:
+        evaluation = pending.pop()
+        if isinstance(evaluation.get('retained_comparison'), dict):
+            pending.append(evaluation['retained_comparison'])
+        reuse = evaluation.get('paid_score_reuse', {})
+        if reuse.get('status') == 'reused':
+            continue
+        reference = reuse.get('execution_basis_ref') or reuse.get('assessment_ref')
+        if reference:
+            key = reference['file']
+            if key in seen:
+                continue
+            seen.add(key)
+        value = evaluation.get('external_python_wall_seconds')
+        if value is None:
+            unknown += 1
+        else:
+            measured += value
+    incomplete = bool(comparison.get('truncated'))
+    return {'external_python_wall_seconds': measured if not unknown and not incomplete else None,
+            'measured_external_python_wall_seconds': measured,
+            'unmeasured_execution_count': unknown,
+            'comparison_incomplete': incomplete}
+
+
+def run_registered_parent_recursion(registration, output, *, accepted_scene=None):
+    """Execute an admitted actual-parent revision through Common's old actions."""
+    if registration.get('execution_admitted') is not True:
+        raise ValueError('the complete recursive budget is not admitted for execution')
+    from .paid_score_history import retain_comparison_history
+    from .language import Program
+    from .representation_inquiry import load_native_representation_result
+
+    started = monotonic()
+    scene = accepted_scene or prepare_registered_parent_recursion(registration, output)
+    agent, laboratory, question = scene['agent'], scene['laboratory'], scene['question']
+    timing = {'preparation_wall_seconds': monotonic() - started,
+              'accepted_scene_reused': accepted_scene is not None,
+              'native_route': {}, 'strong_pool_comparison': {}, 'frozen_predictions': {}}
+    initial_parent = agent._evaluated_summary()
+    result = {'status': 'started', 'source_result_ref': registration['source_result_ref'],
+        'source_cost_refs': registration['prior_cost_refs'],
+        'starting_costs': scene['starting_costs'], 'initial_parent': initial_parent,
+        'original_world_threshold': 1e-10, 'new_observations': 0, 'provider_calls': 0,
+        'timing': timing}
+    try:
+        native_started, native_python = monotonic(), agent.costs['python_execution_seconds']
+        try:
+            routing = agent._execute('run', {'operator': 'research_route',
+                'research_question': {'id': question['id']}}, laboratory)
+        finally:
+            timing['native_route'].update(wall_seconds=monotonic() - native_started,
+                python_charge_seconds=agent.costs['python_execution_seconds'] - native_python)
+        _write(scene['output'] / 'routing.json', routing)
+        native = load_native_representation_result(routing['native_representation_ref'], agent.workspace)
+        timing['native_route']['research_body_host_seconds'] = native.get(
+            'native_host_seconds_before_persistence')
+        before_program = Program.from_dict(agent.theory_index[registration['parent_theory_id']]['program'])
+        descendants = {item['model']: Program.from_dict(candidate['program']) for item, candidate
+                       in zip(routing.get('exported_models', []), native.get('candidates', []))}
+        models = list(dict.fromkeys([*scene['models'], *agent.candidate_paths]))
+        compare_started, compare_python = monotonic(), agent.costs['python_execution_seconds']
+        try:
+            comparison = agent._execute('run', {'operator': 'research_choice',
+                'research_question': {'id': question['id']}, 'models': models}, laboratory)
+        finally:
+            timing['strong_pool_comparison'].update(wall_seconds=monotonic() - compare_started,
+                python_charge_seconds=agent.costs['python_execution_seconds'] - compare_python)
+        timing['strong_pool_comparison'].update(_comparison_external_python_timing(comparison))
+        external = timing['strong_pool_comparison']['external_python_wall_seconds']
+        timing['strong_pool_comparison']['charged_non_executor_seconds'] = (
+            None if external is None else timing['strong_pool_comparison']['python_charge_seconds'] - external)
+        _write(scene['output'] / 'complete_comparison.json', retain_comparison_history(comparison))
+        complete = (not comparison.get('truncated')
+                    and comparison.get('models_requested') == comparison.get('models_completed'))
+        final = agent._evaluated_summary()
+        descendant = descendants.get(final['source_model']) if final else None
+        result.update(status='completed' if complete else 'comparison_incomplete',
+            native_result_ref=routing.get('native_representation_ref'),
+            exported_models=routing.get('exported_models', []), final_parent=final,
+            comparison_requested=comparison.get('models_requested'),
+            comparison_completed=comparison.get('models_completed'),
+            reused_score_count=comparison.get('reused_score_count'),
+            new_scored_count=comparison.get('new_scored_count'),
+            parent_changed=bool(final and final['source_model'] != initial_parent['source_model']),
+            actual_recursive_revision_completed=bool(complete and descendant is not None
+                and descendant != before_program
+                and native['parent_theory_ids'] == [registration['parent_theory_id']]
+                and native['origin']['row_indices'] == registration['counterexample_rows']),
+            experiment_selection='UNTESTED_no_purchase_in_this_stage',
+            independent_future_prediction='UNTESTED_exposed_development_material')
+        if complete and final:
+            from scripts.run_anonymous_revision_inquiry import evaluate_terminal_model
+            from .code_agent import _closed_temporal_export, python_model_context
+
+            forecasts = {}
+            for name, model in [('before', initial_parent['source_model']), ('after', final['model'])]:
+                context, inner = python_model_context(agent.workspace, model)
+                if not _closed_temporal_export(context, inner):
+                    forecasts[name] = {'status': 'not_executed_winner_is_not_a_closed_frozen_export'}
+                    continue
+                if (agent._remaining_compute() < len(agent.rows)
+                        or agent.costs['python_execution_seconds'] >= agent.config.execution_seconds):
+                    forecasts[name] = {'status': 'not_executed_remaining_budget_insufficient'}
+                    continue
+                agent._charge(len(agent.rows))
+                assessment = evaluate_terminal_model(agent.workspace, model, agent.rows,
+                    timeout_seconds=agent.config.execution_seconds
+                        - agent.costs['python_execution_seconds'])
+                agent.costs['python_execution_seconds'] += assessment['python_execution_seconds']
+                forecasts[name] = assessment
+                timing['frozen_predictions'][name] = {
+                    'python_charge_seconds': assessment['python_execution_seconds'],
+                    'external_python_wall_seconds': assessment.get('external_python_wall_seconds')}
+            _write(scene['output'] / 'frozen_development_predictions.json', forecasts)
+            result['frozen_development_prediction_ref'] = {
+                'file': str(scene['output'] / 'frozen_development_predictions.json'), 'json_path': []}
+    except Exception as error:
+        result.update(status='failed_retained_no_retry',
+            error=f'{type(error).__name__}: {error}', actual_recursive_revision_completed=False)
+    finally:
+        result.update(costs=deepcopy(agent.costs),
+            new_costs={key: agent.costs[key] - scene['starting_costs'][key] for key in agent.costs},
+            python_cost_basis=registration.get('python_cost_basis'))
+        save_started = monotonic()
+        agent._prepare_program_state()
+        retain_checkpoint_sources(scene['output'] / 'final_state.json',
+                                  scene['output'] / 'prepared_state.json')
+        _write(scene['output'] / 'final_state.json', agent.checkpoint_result(result['status']))
+        timing['checkpoint_wall_seconds'] = monotonic() - save_started
+        result['wall_seconds'] = monotonic() - started
+        _write(scene['output'] / 'summary.json', result)
+    return result
+
+
+def run_registered_representation_research(registration, output):
+    """Run a bounded native representation question on declared exposed rows.
+
+    The complete retained Python pool participates in the ordinary outer
+    comparison. Only the named failed parents supply composition inputs to the
+    local representation researcher; those two roles are recorded separately.
+    """
+    import ast
+    from dataclasses import asdict
+    from .anonymous_history_lab import AnonymousHistoryLab
+    from .common_archive_inquiry import CommonArchiveInquiryAgent
+    from .language import Program
+    from .models import Observation
+    from .online_inquiry_llm import InquiryLLMConfig
+    from .paid_score_history import retain_comparison_history
+    from .question_routing import register_theories
+
+    if registration.get('execution_admitted') is not True:
+        raise ValueError('register the development material and complete budget first')
+    if not registration['material']['exposed_terminal_as_development']:
+        raise ValueError('the old terminal rows are exposed development material')
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    _write(output / 'registration.json', registration)
+    started = monotonic()
+    read = lambda name: json.loads(Path(registration['material'][name]).read_text())
+    records = read('paid_records')
+    terminal = read('exposed_rows')
+    terminal_start = len(records)
+    terminal_row_start = sum(len(record['rows']) for record in records)
+    for offset, row in enumerate(terminal):
+        if not row.get('history'):
+            records.append({'action': {'kind': 'trajectory', 'sequence': []}, 'rows': [], 'row_indices': [],
+                            'origin': 'exposed_evaluator_development_not_purchase'})
+        records[-1]['rows'].append(row)
+        records[-1]['row_indices'].append(terminal_row_start + offset)
+        records[-1]['action']['sequence'].append(dict(row['features']))
+    validation = [terminal_start + index for index in
+                  registration['material']['validation_trajectory_indices']]
+    limits = registration['limits']
+    laboratory = AnonymousHistoryLab(registration['environment']['kind'],
+                                     registration['environment']['seed'])
+    agent = CommonArchiveInquiryAgent(None, output / 'workspace', arm='hegel', source_task=False,
+        config=InquiryLLMConfig(compute_budget=limits['compute'],
+            execution_seconds=limits['python_seconds'], max_model_calls=0,
+            observation_budget=limits['new_observation_rows']))
+    agent.observations = records
+    agent.rows = [Observation(dict(row['features']), float(row['target']),
+        tuple(dict(point) for point in row.get('history', [])))
+        for record in records for row in record['rows']]
+    agent._save('observations.json', json.dumps([asdict(row) for row in agent.rows]))
+    agent._save('laboratory_observations.json', json.dumps(records))
+    parents, models = [], []
+    def decode(node):
+        op, value, name, lag, children = node
+        return Program(op, value=value, name=name, lag=lag,
+                       children=tuple(decode(child) for child in children))
+
+    for name, source in registration['parents'].items():
+        path = Path(source)
+        local = agent.workspace / f'{name}.py'
+        clone_or_copy(path, local)
+        literal = ast.literal_eval(next(node.value for node in ast.parse(local.read_text()).body
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '_PROGRAM'
+                                                    for t in node.targets)))
+        parents.append({'id': name, 'program': decode(literal).to_dict()})
+        models.append(local.name)
+    register_theories(agent, parents)
+    initial = {}
+    for name in models:
+        initial[name] = agent._execute('evaluate', {'model': name}, laboratory)
+    _write(output / 'initial_evaluations.json', initial)
+    complete_pool = []
+    for roster in registration['retained_rosters']:
+        for model in json.loads(Path(roster['file']).read_text()):
+            resolved = str((Path(roster['workspace']) / model).resolve())
+            if resolved not in complete_pool:
+                complete_pool.append(resolved)
+    _write(output / 'complete_retained_roster.json', complete_pool)
+    rounds = []
+    for number in range(limits['research_units']):
+        conflicts = [question for question in agent.questions
+            if question.get('kind') == 'representation' and question.get('status') == 'open'
+            and question.get('origin') == 'computed_representation_conflict'
+            and not question.get('native_representation_completed')]
+        if not conflicts:
+            break
+        question = next((q for q in conflicts if q['id'] == agent._active_question_id), None)
+        if question is None:
+            if number:
+                break
+            question = conflicts[0]
+        result = agent._execute('run', {'operator': 'research_route',
+            'research_question': {'id': question['id']},
+            'native_representation_plan': {'parent_theory_ids': [item['id'] for item in parents],
+                'validation_records': validation, 'compute_limit': limits['per_unit_compute'],
+                'max_candidates': limits['max_candidates']}}, laboratory)
+        selected = result.get('selected_model')
+        evaluated = agent._execute('evaluate', {'model': selected}, laboratory) if selected else None
+        if evaluated is not None:
+            diagnostic = evaluated.get('representation_diagnostic', {})
+            question.update(returned_model=selected, representation_return={
+                'model': selected, 'diagnostic': deepcopy(diagnostic),
+                'mse': evaluated.get('mse'), 'scope': 'exposed_development_rows'})
+            if (evaluated.get('returncode') == 0 and diagnostic.get('empirical_mse_floor') == 0):
+                question.update(status='resolved_on_paid_rows', native_representation_completed=True)
+                parent = next(q for q in agent.questions if q['id'] == question['parent_id'])
+                parent['status'] = 'reopened'
+            else:
+                # Keep the actual new draft and its counterexample as the next
+                # research object, rather than revisiting an unchanged parent.
+                question['native_representation_completed'] = True
+                native = result.get('native_representation', {}).get('selected')
+                if native and 'program' not in native:
+                    from .representation_inquiry import load_native_representation_result
+                    native = load_native_representation_result(
+                        result['native_representation_ref'], agent.workspace)['selected']
+                if native:
+                    declaration = {'id': f'representation_parent:{number}', 'program': native['program']}
+                    register_theories(agent, [declaration])
+                    parents.append(declaration)
+        rounds.append({'research': result, 'actual_evaluation': evaluated})
+        _write(output / f'unit_{number + 1}.json', rounds[-1])
+    comparison = agent._execute('run', {'operator': 'research_choice',
+        'models': list(dict.fromkeys([*complete_pool, *models, *agent.candidate_paths]))}, laboratory)
+    comparison = retain_comparison_history(comparison)
+    _write(output / 'complete_comparison.json', comparison)
+    summary = {'status': 'completed' if not comparison.get('truncated') else 'comparison_incomplete',
+        'scope': 'native_representation_development_not_independent_confirmation',
+        'material': deepcopy(registration['material']),
+        'complete_retained_paths': len(complete_pool), 'old_parents_retained': models,
+        'research_unit_count': len(rounds), 'units': [str(output / f'unit_{n + 1}.json')
+            for n in range(len(rounds))], 'final_parent': agent._evaluated_summary(),
+        'comparison_requested': comparison.get('models_requested'),
+        'comparison_completed': comparison.get('models_completed'),
+        'costs': deepcopy(agent.costs), 'questions_ref': {
+            'file': str(output / 'final_state.json'), 'json_path': ['online_questions']},
+        'new_observations': 0, 'provider_calls': 0, 'wall_seconds': monotonic() - started,
+        'source_costs_ref': deepcopy(registration['source_costs_ref']),
+        'independent_transfer': 'UNTESTED', 'original_world_threshold': 1e-10}
+    _write(output / 'summary.json', summary)
+    _write(output / 'final_state.json', agent.checkpoint_result('development_completed'))
+    return summary
 
 
 def _frozen_parent_metrics(predictions, rows, indices):

@@ -17,7 +17,7 @@ from time import monotonic
 from .code_agent import (
     _MODEL_RUNNER, _bound_model_contexts, _copy_model_context, evaluate_python_model,
     _closed_temporal_export, literal_python_model_context_matches,
-    python_model_context, python_model_context_matches,
+    python_model_context, python_model_context_matches, closed_temporal_prediction_contract,
 )
 from .checkpoint_storage import write_text_incrementally, write_json_checkpoint
 from .experiment_runtime import PythonExecutionDeadline, python_execution_deadline
@@ -27,6 +27,7 @@ from .language import Program
 from .online_inquiry_llm import InquiryLLMAgent
 from .paid_score_history import retain_comparison_history
 from .program_experiment_methods import ProgramExperimentMethods
+from .representation_diagnostics import representation_ambiguity
 from .temporal_instrument_research import (
     assess_temporal_instrument, fit_temporal_instrument,
     observe_temporal_instrument_method, select_temporal_instrument_probe,
@@ -52,12 +53,23 @@ def _literal_score_index(comparison):
     """Index small selected sources once; full contexts are checked only on hits."""
     index = {'sources': {}, 'assessments': {}}
     scopes = {name for name, scope in comparison['scopes'].items()
-              if scope == comparison['basis']}
+              if _same_closed_prediction_scope(scope, comparison['basis'])}
     for retained in comparison['assessments'].values():
         for reference, assessment in retained:
             if assessment['scope_ref']['file'] in scopes:
                 _index_literal_assessment(index, reference, assessment)
     return index
+
+
+def _same_closed_prediction_scope(previous, current):
+    if previous == current:
+        return True
+    before, after = dict(previous), dict(current)
+    before_contract = before.pop('evaluation_contract')
+    after_contract = after.pop('evaluation_contract')
+    return (before == after
+            and closed_temporal_prediction_contract(before_contract)
+                == closed_temporal_prediction_contract(after_contract))
 
 
 def _matching_literal_score(workspace, model, comparison):
@@ -78,6 +90,7 @@ def _matching_literal_score(workspace, model, comparison):
 
 def _reused_python_score(model, reference, assessment):
     result = deepcopy(assessment['result'])
+    result['external_python_wall_seconds'] = 0.
     if 'paid_residuals' in result:
         result['paid_residuals']['model'] = model
     reuse = {'status': 'reused', 'assessment_ref': {**reference, 'json_path': ['result']},
@@ -360,6 +373,76 @@ def predict(row):
     history = row["history"] if isinstance(row, dict) else row.history
     return float(_eval(_PROGRAM, features, history))
 '''
+
+
+_PROGRAM_REPRESENTATION_RUNNER = '''
+# The existing literal predictor is decomposed at its actual temporal inputs.
+# All downstream arithmetic still runs through the original scalar evaluator.
+_representation_terms = []
+_representation_indices = {}
+
+def _representation_program(node):
+    op, value, name, lag, children = node
+    if op in {"feature", "lag", "available", "accumulate", "event_delta", "window_sum"}:
+        if node not in _representation_indices:
+            _representation_indices[node] = len(_representation_terms)
+            _representation_terms.append(node)
+        return ("feature", None, str(_representation_indices[node]), 0, ())
+    return (op, value, name, lag, tuple(_representation_program(child) for child in children))
+
+_represented_program = _representation_program(_PROGRAM)
+
+def represent(row):
+    features = row["features"] if isinstance(row, dict) else row.features
+    history = row["history"] if isinstance(row, dict) else row.history
+    coordinates = [[0, 0.0] for _ in _representation_terms]
+
+    def capture(node):
+        op, value, name, lag, children = node
+        if op in {"feature", "lag", "available", "accumulate", "event_delta", "window_sum"}:
+            index = _representation_indices[node]
+            if not coordinates[index][0]:
+                coordinates[index] = [1, float(_eval(node, features, history))]
+        elif op == "if":
+            capture(children[0])
+            condition = _eval(_representation_program(children[0]),
+                              _RepresentedCoordinates(coordinates), [])
+            capture(children[1 if condition else 2])
+        else:
+            for child in children:
+                capture(child)
+
+    capture(_PROGRAM)
+    return coordinates
+
+class _RepresentedCoordinates:
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
+
+    def __getitem__(self, name):
+        present, value = self.coordinates[int(name)]
+        if not present:
+            raise ValueError("insufficient control history")
+        return value
+
+def predict_features(coordinates):
+    return float(_eval(_represented_program, _RepresentedCoordinates(coordinates), []))
+'''
+
+
+def closed_temporal_representation_diagnostic(workspace, model, observations):
+    """Review retained controls without refitting or repeating paid predictions."""
+    directory, model = python_model_context(workspace, model)
+    if not _closed_temporal_export(directory, model):
+        return None
+    namespace = {}
+    exec((directory / model).read_text(encoding='utf-8'), namespace)
+    exec(_PROGRAM_REPRESENTATION_RUNNER, namespace)
+    representations = [namespace['represent'](row) for row in observations]
+    return {'diagnostic': representation_ambiguity(representations, observations),
+        'coordinate_evaluations': sum(sum(value[0] for value in row) for row in representations),
+        'prediction_evaluations': 0, 'fitting_calls': 0,
+        'basis': 'unchanged_closed_temporal_program_actual_coordinate_inputs'}
 
 
 def export_temporal_program(program, *, feature_names=("u",)):
@@ -936,7 +1019,9 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             reason = "no_retained_complete_execution_basis"
             for reference, assessment in reversed(comparison["assessments"].get(model, [])):
                 scope = comparison["scopes"][assessment["scope_ref"]["file"]]
-                if scope != comparison["basis"]:
+                if scope != comparison["basis"] and not (
+                        _closed_temporal_export(source, inner)
+                        and _same_closed_prediction_scope(scope, comparison['basis'])):
                     reason = "paid_rows_or_question_contract_changed"
                     continue
                 context = assessment["execution_context"]
@@ -946,6 +1031,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 # Adoption is performed by the ordinary evaluate caller against its
                 # current incumbent, never by replaying an earlier retention decision.
                 reused = _reused_python_score(model, reference, assessment)
+                reused = self._review_reused_temporal_representation(model, reference, reused, comparison)
                 if external:
                     reused['execution_context'] = deepcopy(assessment['execution_context'])
                 return reused
@@ -953,6 +1039,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             literal = _matching_literal_score(self.workspace, model, comparison)
             if literal is not None:
                 reused = _reused_python_score(model, *literal)
+                reused = self._review_reused_temporal_representation(model, literal[0], reused, comparison)
                 if external:
                     reused['execution_context'] = deepcopy(literal[1]['execution_context'])
                 return reused
@@ -1023,6 +1110,48 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 if complete else "incomplete_or_failed_execution")
         write_json_checkpoint(comparison["index_file"], index, indent=None)
         return {**result, "paid_score_reuse": reuse}
+
+    def _review_reused_temporal_representation(self, model, reference, result, comparison):
+        if result.get('representation_diagnostic', {}).get('status') != 'not_exposed':
+            return result
+        directory, inner = python_model_context(self.workspace, model)
+        if not _closed_temporal_export(directory, inner):
+            return result
+        retained = comparison['index'].setdefault('representation_diagnostics', {})
+        key = reference['file']
+        if key in retained:
+            result['representation_diagnostic'] = deepcopy(retained[key]['diagnostic'])
+            result['representation_review'] = {'status': 'reused', 'review_ref': {
+                'file': str(comparison['index_file']), 'json_path': ['representation_diagnostics', key]},
+                'additional_compute_cost': 0, 'additional_python_execution_seconds': 0.}
+            return result
+        charge = len(self.rows)
+        if self._remaining_compute() < charge or self._operator_python_remaining() <= 0:
+            result['representation_review'] = {'status': 'unresolved_budget',
+                'required_compute_cost': charge, 'paid_predictions_repeated': False}
+            return result
+        started = monotonic()
+        self.costs['compute_cost'] += charge
+        try:
+            review = closed_temporal_representation_diagnostic(directory, inner, self.rows)
+        finally:
+            elapsed = monotonic() - started
+            if getattr(self, '_operator_python_clock', None) is not None:
+                self._operator_python_remaining()
+            else:
+                self.costs['python_execution_seconds'] += elapsed
+        stored = {**review, 'assessment_ref': deepcopy(reference),
+            'costs': {'compute_cost': charge, 'python_execution_seconds': elapsed},
+            'compute_unit': 'one_control_only_representation_review_per_paid_row'}
+        retained[key] = stored
+        write_json_checkpoint(comparison['index_file'], comparison['index'], indent=None)
+        result['representation_diagnostic'] = deepcopy(review['diagnostic'])
+        result['representation_review'] = {'status': 'computed_from_retained_controls',
+            'review_ref': {'file': str(comparison['index_file']),
+                'json_path': ['representation_diagnostics', key]},
+            'costs': stored['costs'], 'coordinate_evaluations': review['coordinate_evaluations'],
+            'prediction_evaluations': 0, 'fitting_calls': 0}
+        return result
 
     def _python_research_decision(self, retained, spec, *, evaluations=(), repair=None):
         from .action_policy import ActionOption, ResearchActionPolicy

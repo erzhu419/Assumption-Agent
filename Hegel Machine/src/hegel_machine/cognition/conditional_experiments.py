@@ -2,7 +2,7 @@
 
 from .language import Program
 from .models import Observation, Probe
-from .program_disagreement_probes import _forecast
+from .program_disagreement_probes import _forecast, _legal_point, _legal_sequence, _public_control_levels
 from .research_programs import _Fitter, _rank
 
 
@@ -43,7 +43,7 @@ def _separation(programs, reference, intervention, budget):
 
 
 def propose_conditional_experiments(spec, paid_rows, programs, budget, *, serial=0,
-                                    observation_budget=96):
+                                    observation_budget=96, control_levels=None):
     """Cover every public control in two retained, nonzero backgrounds.
 
     One reference is shared by the interventions in each background. The first
@@ -52,6 +52,7 @@ def propose_conditional_experiments(spec, paid_rows, programs, budget, *, serial
     performed by the caller, which pays the entire quoted pack before fitting.
     """
     bounds = spec.feature_bounds
+    legal_levels = _public_control_levels(bounds, control_levels)
     controls = tuple(name for name in spec.feature_names if name in bounds)
     length = min(12, spec.max_probe_length)
     pack_cost = (len(controls) + 1) * length
@@ -67,6 +68,8 @@ def propose_conditional_experiments(spec, paid_rows, programs, budget, *, serial
         for fraction in [( .31 + .05 * (index % 3)) if context == 0
                          else (.72 - .04 * (index % 3))]}
         for context in range(min(2, observation_budget // pack_cost))]
+    if legal_levels is not None:
+        backgrounds = [_legal_point(background, legal_levels) for background in backgrounds]
     packs = []
     for context, background in enumerate(backgrounds):
         before = budget.spent
@@ -79,6 +82,11 @@ def propose_conditional_experiments(spec, paid_rows, programs, budget, *, serial
                 if not budget.spend(length):
                     break
                 sequence, levels, prefix = _sequence(background, control, bounds[control], length, mode)
+                sequence = _legal_sequence(sequence, legal_levels, budget.spend)
+                if sequence is None:
+                    break
+                if legal_levels is not None:
+                    levels = list(dict.fromkeys(point[control] for point in sequence[prefix:]))
                 score = _separation(programs, reference_sequence, sequence, budget)
                 trials.append((score, mode, sequence, levels, prefix))
             if not trials:
@@ -229,15 +237,25 @@ def assess_conditional_experiment(spec, plan, reference_rows, measured_rows, bud
     return result
 
 
-def propose_conditional_boundary_probe(spec, evidence, *, serial=0, length=24):
+def propose_conditional_boundary_probe(spec, evidence, *, serial=0, length=24, control_levels=None):
     """Purchase a local gate scan inside the currently measured interval."""
     control, background = evidence["control"], evidence["background"]
     left, right = evidence["threshold_interval"]
     low, high = spec.feature_bounds[control]
+    legal_levels = _public_control_levels(spec.feature_bounds, control_levels)
     left, right = max(left, low), min(right, high)
     length = min(length, spec.max_probe_length)
     if length < 3 or right <= left:
         return None
+    if legal_levels is not None:
+        scan = [value for value in legal_levels[control] if left <= value <= right]
+        if not scan:
+            return None
+        background = _legal_point(background, legal_levels)
+        points = [dict(background) for _ in range(min(length, len(scan) + 1))]
+        for index, point in enumerate(points[1:]):
+            point[control] = scan[index * max(0, len(scan) - 1) // max(1, len(points) - 2)]
+        return Probe(f"conditional_boundary:{serial}:{control}", tuple(points))
     points = [dict(background) for _ in range(length)]
     for index in range(1, length):
         points[index][control] = left + (right - left) * (index - 1) / (length - 2)

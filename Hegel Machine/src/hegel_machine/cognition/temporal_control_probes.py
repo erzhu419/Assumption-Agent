@@ -69,14 +69,15 @@ class _BudgetEnded(Exception):
 
 
 def propose_temporal_control_probes(command_spec, executable, spend, *, serial=0, length=4,
-                                   programs=None, binding=None):
+                                   programs=None, binding=None, control_levels=None):
     """Reuse the existing numerical solvers on time-indexed real controls.
 
     Only the solve sees flattened prefix coordinates. Every returned proposal
     forecasts the original programs on a reset trajectory with recorded history.
     ``spend`` belongs to the caller's existing 6000-unit proposal allowance.
     """
-    from .program_disagreement_probes import _forecast, predicate_boundary_groups, solve_joint_boundary
+    from .program_disagreement_probes import (_forecast, _legal_sequence, _public_control_levels,
+        predicate_boundary_groups, solve_joint_boundary)
     from .program_condition_sets import compound_predicate_regions, solve_compound_region
 
     depth = max(control_history_depth(program) for program in executable)
@@ -89,6 +90,7 @@ def propose_temporal_control_probes(command_spec, executable, spend, *, serial=0
     if depth + 1 > command_spec.max_probe_length:
         return []
     prefix = _Prefix(command_spec.feature_bounds, depth, spend)
+    levels = _public_control_levels(command_spec.feature_bounds, control_levels)
     try:
         symbolic = [prefix.program(program) for program in executable]
     except (MissingHistory, KeyError, _BudgetEnded):
@@ -112,6 +114,9 @@ def propose_temporal_control_probes(command_spec, executable, spend, *, serial=0
                 *(dict(commands[-1]) for _ in range(depth + 1)),
                 *(dict(commands[0]) for _ in range(depth + 1)))))
         for mode, sequence in sequences:
+            sequence = _legal_sequence(sequence, levels, spend)
+            if sequence is None:
+                return False
             key = tuple(tuple(sorted(point.items())) for point in sequence)
             if key in seen:
                 continue
@@ -130,6 +135,8 @@ def propose_temporal_control_probes(command_spec, executable, spend, *, serial=0
                 "boundary": {"solver_strategy": "temporal_prefix", "history_depth": depth,
                     "prefix_coordinates": [{"control": name, "step": step, "value": solution[alias]}
                                            for (name, step), alias in prefix.coordinates.items()],
+                    **({"public_control_levels": {name: list(values) for name, values in levels.items()},
+                        "executed_prefix": list(sequence[:len(commands)])} if levels is not None else {}),
                     "solve": details, **({"temporal_recipe": recipe} if recipe is not None else {})}})
         return len(proposals) < 8
 
