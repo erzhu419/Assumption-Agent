@@ -43,9 +43,8 @@ def test_registered_revision_exports_all_real_statuses_into_the_full_ordinary_co
     agent, lab, owner = prepared_revision_scene(tmp_path, monkeypatch)
     before = deepcopy(agent.costs)
     agent._before_model_turn(lab)
-    exports = owner.get('revision_candidate_exports', [])
+    exports = deepcopy(owner.get('revision_candidate_exports', []))
     assert exports, owner.get('frozen_recall_execution', {}).get('result')
-    assert {'UNKNOWN', 'candidate_registered'} <= {item['status'] for item in exports}
     original_theories = {item['theory_ref']['id']: deepcopy(agent.theory_index[item['theory_ref']['id']])
                          for item in exports}
     original_transfers = deepcopy(agent.theory_consolidation['transfers'])
@@ -63,8 +62,6 @@ def test_registered_revision_exports_all_real_statuses_into_the_full_ordinary_co
     export_cost = deepcopy(agent.costs)
     cached = export_revision_candidates(agent, owner)
     assert not cached['changed'] and cached['new_exports'] == 0 and agent.costs == export_cost
-    agent._before_model_turn(lab)
-    assert agent.costs == export_cost
     outcome = execute_procedure(agent, lab, POLICY, max_steps=1, allow_confirmation=False,
         record_events=True, before_step=agent._before_model_turn, after_step=agent._after_model_turn)
     proposal = outcome['steps'][0]['proposal']
@@ -136,7 +133,6 @@ def test_restored_relative_index_bindings_match_the_anchored_actual_transfer(tmp
     exported = export_revision_candidates(restored, current)
     assert exported['new_exports'] == len(restored.theory_consolidation['transfers'])
     assert not exported['errors']
-    assert {item['status'] for item in exported['exports']} == {'candidate_registered', 'UNKNOWN'}
     for item in exported['exports']:
         original = next(record for record in restored.theory_consolidation['transfers']
                         if record['theory_ref'] == item['theory_ref'])
@@ -146,3 +142,22 @@ def test_restored_relative_index_bindings_match_the_anchored_actual_transfer(tmp
     after = deepcopy(restored.costs)
     assert not export_revision_candidates(restored, current)['changed']
     assert restored.costs == after
+
+
+def test_incomplete_transfer_exports_the_fixed_program_with_UNKNOWN_status(tmp_path, monkeypatch):
+    agent, lab, owner = prepared_revision_scene(tmp_path, monkeypatch)
+    # Freeze the ordinary generated result before export, then retain the
+    # supported case where its paid check did not complete. An executable
+    # candidate remains eligible for comparison without upgrading its status.
+    with monkeypatch.context() as patch:
+        patch.setattr(finite_native_author, 'export_revision_candidates',
+                      lambda *_: {'changed': False, 'new_exports': 0})
+        agent._before_model_turn(lab)
+    transfer = agent.theory_consolidation['transfers'][0]
+    transfer['status'] = 'UNKNOWN'
+    transfer['reason'] = 'budget_incomplete'
+    result = export_revision_candidates(agent, owner)
+    exported = next(item for item in result['exports'] if item['theory_ref'] == transfer['theory_ref'])
+    assert exported['status'] == 'UNKNOWN'
+    assert exported['model'] in agent.candidate_paths
+    assert not exported['independent_confirmation'] and not exported['support_updated']

@@ -11,7 +11,7 @@ from math import isfinite
 from pathlib import Path
 from types import SimpleNamespace
 
-from .checkpoint_storage import write_text_incrementally
+from .checkpoint_storage import read_json_checkpoint, write_text_incrementally
 from .research_episodes import load_source_values
 
 
@@ -176,7 +176,7 @@ def registered_successor_effect(left_study, right_study=None, *, left_arm='fixed
     def read(path):
         path = Path(path).resolve()
         if path not in cache:
-            cache[path] = json.loads(path.read_text(encoding='utf-8'))
+            cache[path] = read_json_checkpoint(path)
         return cache[path]
 
     def reference(path, *keys):
@@ -278,10 +278,15 @@ def registered_successor_effect(left_study, right_study=None, *, left_arm='fixed
         saved = row.get('result_ref') or row.get('training_ref')
         path = Path(saved['file']) if saved else (
             Path(row['archive']).parent / 'training.json' if row.get('archive') else root / case / arm / 'training.json')
-        training = read(path)
+        # Complete comparison banks and outgoing archives are not readout
+        # inputs. Keep only this arm's actual Episode/forecast dependencies.
+        training = read_json_checkpoint(path, keys={
+            'model', 'evaluated_model', 'fresh_confirmation', 'events',
+            'paid_observations', 'limits'})
         workspace = path.resolve().parent
         state_path = workspace / 'research_state.json'
-        state = read(state_path)
+        state = read_json_checkpoint(state_path, keys={
+            'questions', 'revisions', 'relation_research', 'theory_index', 'evaluated_model'})
         return training, state, workspace
 
     def mechanism(training, state, workspace):
@@ -549,9 +554,9 @@ def registered_successor_effect(left_study, right_study=None, *, left_arm='fixed
                 outcome.update(status=row.get('status'), terminal_mse=terminal.get('mse') if _number(terminal.get('mse')) else None,
                     terminal_passed=terminal.get('passed'), confirmation_passed=row.get('fresh_confirmation_passed'),
                     terminal_status=terminal.get('status'), costs={key: row.get('costs', {}).get(key) for key in cost_keys},
-                    external_terminal_cost={'rows': terminal.get('evaluation_rows',
+                    external_terminal_cost={'rows': terminal.get('cumulative_evaluation_rows', terminal.get('evaluation_rows',
                         plans[0].get('evaluation', {}).get('rows') if 'returncode' in terminal
-                        else 0 if terminal.get('status') == 'no_submitted_model' else None),
+                        else 0 if terminal.get('status') == 'no_submitted_model' else None)),
                         'python_execution_seconds': terminal.get('python_execution_seconds'),
                         'scope': 'outside_agent_training_costs'})
                 try:
@@ -564,6 +569,11 @@ def registered_successor_effect(left_study, right_study=None, *, left_arm='fixed
                 except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
                     outcome['mechanism_status'] = 'UNKNOWN_saved_state_unavailable'
                     outcome['mechanism_detail'] = str(error)
+                finally:
+                    # Generic source references may open another full document.
+                    # None of those payloads should survive into the next arm.
+                    cache.clear()
+                    training = state = None
             arms.append(outcome)
             details.append(detail)
             terminal_columns.append(terminal_column)
@@ -635,6 +645,11 @@ def registered_successor_effect(left_study, right_study=None, *, left_arm='fixed
                     first['parent_forecasts'], second['parent_forecasts']),
                 'objects': [item['objects'] for item in details]}
         result['cases'].append(pair)
+        # The paired result owns references and observed differences, not the
+        # temporary Program pools or complete saved forecast columns.
+        details.clear()
+        terminal_columns.clear()
+        detail = first = second = closed = None
     result.update(status='recorded_comparison', registered_case_count=len(result['cases']),
         paired_terminal_case_count=sum(row['right_minus_left']['terminal_mse'] is not None for row in result['cases']),
         full_source_plus_target_net_cost=('shared_source_cancels_use_recorded_target_and_external_terminal_differences'

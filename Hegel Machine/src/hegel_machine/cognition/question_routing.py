@@ -13,7 +13,7 @@ from .research_episodes import _child_ref, load_source_values
 from .research_assessments import research_comparison_basis, resolve_research_comparison
 from .question_agenda import (adopt_research_mission, build_agenda, debit_mission_compute,
     effective_question_mission, generate_questions, mission_compute_remaining, mission_contract,
-    has_executable_query, merge_question_proposal, question_work_basis)
+    has_executable_query, has_method_use_plan, merge_question_proposal, question_work_basis)
 from .question_continuation import (step_question, _versioned_support, executed_plan_records,
                                     parent_revision_obligation, select_parent_revision_work)
 from .question_selection import select_question_plan
@@ -94,6 +94,13 @@ before its actual representation and predictions have been evaluated.
 native_representation_ref addresses the one complete result; the route and
 question histories retain costs, decisions and exact candidate field references.
 Use load_native_representation_result to restore the selected candidate's graph.
+An acquired method-use question declares method_use_plan={candidate_id,binding}
+and its actual parent_id. Under an existing funded method-learning mission,
+the route freezes the paid method feedback through theory_consolidation, then
+uses the ordinary method decision consumer. Its next_action resumes that parent
+through research_route: unchanged unhelpful work is deferred, while unknown or
+changed evidence retains bounded exploration. This does not purchase evidence,
+fit a predictor, or turn a development return into independent support.
 """
 
 
@@ -382,6 +389,10 @@ def _basis(agent, question, mission, *, compute_limit=None):
     mission = effective_question_mission(question, mission)
     library_path = question.get('frozen_library_path', LIBRARY_PATH)
     use_paths = [use.get('path', use.get('model')) for use in question.get('use_sites', [])]
+    representation_basis = question.get('representation_research_basis') or {}
+    representation_refs = [*representation_basis.get('failure_refs', [])]
+    if representation_basis.get('semantic_question_ref'):
+        representation_refs.append(representation_basis['semantic_question_ref'])
     basis = {'meaning_version': question.get('meaning_version', 1),
         'query': deepcopy(question.get('query_semantics')), 'context': deepcopy(question.get('context_ref')),
         'answer_type': question.get('answer_type'), 'resolution': deepcopy(question.get('answer_resolution_ref')),
@@ -406,7 +417,8 @@ def _basis(agent, question, mission, *, compute_limit=None):
                          'answer_version': (q.get('semantic_answer') or q.get('executable_answer') or {}).get('version'),
                          'status': q.get('status'), 'evidence_status': q.get('evidence_status')}
                          for q in agent.questions if q['id'] in question.get('depends_on', [])
-                         or any(q['id'] == ref['question_id'] for path in question.get('support_paths', []) for ref in path)],
+                         or any(q['id'] == ref['question_id'] for path in question.get('support_paths', []) for ref in path)
+                         or any(q['id'] == ref.get('id', ref.get('question_id')) for ref in representation_refs)],
         'paid_cutoff': [len(agent.observations), len(agent.rows)], 'mission': mission_contract(mission),
         'compute_limit': agent.config.compute_budget if compute_limit is None else compute_limit}
     if question.get('research_comparison') is not None:
@@ -414,6 +426,11 @@ def _basis(agent, question, mission, *, compute_limit=None):
     if question.get('native_representation_plan') is not None:
         basis['native_representation_plan'] = deepcopy(question['native_representation_plan'])
         basis['native_public_spec'] = deepcopy(question.get('native_representation_public_spec'))
+        basis['representation_diagnostic'] = deepcopy(question.get('representation_diagnostic'))
+        basis['representation_research_basis'] = deepcopy(question.get('representation_research_basis'))
+    if has_method_use_plan(question):
+        basis['method_use_plan'] = deepcopy(question['method_use_plan'])
+        basis['method_use_agenda_basis'] = deepcopy(question.get('agenda_basis'))
     return basis
 
 
@@ -580,14 +597,14 @@ def _retained_revision_inputs(agent, question):
                 result['program_source_ref'] = deepcopy(source['program_ref'])
         return result
 
-    # Opaque entries retain their original outer identity; transfer rosters
-    # below still require actual structural Programs.
+    # Both rosters preserve opaque forecasts; structural consumers select their
+    # Program inputs locally, while the retained parent remains structural.
     components = [resolve(item, structural=False) for item in basis.get('components', [])]
     parent = resolve(basis.get('parent'))
     executions = {}
     for identifier, original in retained:
         executions[identifier] = {
-            '_retained_components': [resolve(item) for item in original.get('components', [])],
+            '_retained_components': [resolve(item, structural=False) for item in original.get('components', [])],
             '_retained_parent': resolve(original.get('parent')),
             'component_theory_ids': deepcopy(original.get('component_theory_ids'))}
     return {'_retained_components': components, '_retained_parent': parent,
@@ -708,6 +725,143 @@ def _native_representation_route(agent, question, laboratory, pool, mission, com
     return result
 
 
+def _method_use_route(agent, arguments, laboratory, question, mission, compute_limit):
+    from .method_feedback import procedure_use_decision, research_method_conditions
+    from .theory_consolidation import consolidate_research
+
+    plan = question['method_use_plan']
+    if arguments.get('method_step_revision'):
+        plan['step_revision'] = deepcopy(arguments['method_step_revision'])
+    basis = _basis(agent, question, mission, compute_limit=compute_limit)
+    previous = question.get('routing_execution')
+    allowance = min(mission_compute_remaining(agent, mission),
+        arguments.get('allocation', {}).get('compute', mission_compute_remaining(agent, mission)))
+    if (previous and previous['basis'] == basis
+            and (previous['result']['status'] != 'scoped_unknown' or allowance <= previous['allowance'])):
+        return {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0}
+    start = agent.costs['compute_cost']
+    if plan.get('step_revision'):
+        from .method_feedback import research_method_steps
+        request = plan['step_revision']
+        step = research_method_steps(agent, plan['candidate_id'], request['feedback_ref'], allowance,
+            max_candidates=request.get('max_candidates', 8),
+            previous_ref=question.get('method_step_attempt_ref'), quote_ref=request.get('quote_ref'))
+        debit_mission_compute(agent, mission, start)
+        if step.get('study_ref'):
+            question['method_step_attempt_ref'] = deepcopy(step['study_ref'])
+        unfinished = step.get('status') not in {
+            'development_step_revision_selected', 'complete_no_supported_step_revision'}
+        result = {'status': 'scoped_unknown' if unfinished else
+            'method_steps_revised' if step.get('frozen_candidate') else 'method_steps_researched',
+            'question_id': question['id'], 'method_step_research': step,
+            'parent_revision_completed': False, 'support_updated': False,
+            'independent_confirmation': False, 'cache_hit': False,
+            'new_compute_cost': agent.costs['compute_cost'] - start, 'next_action': None}
+        if step.get('frozen_candidate'):
+            parent_ref = question.get('parent_question_ref') or {'question_id': question.get('parent_id')}
+            parent = next((item for item in agent.questions
+                if item['id'] == parent_ref.get('question_id')), None)
+            if parent is not None:
+                result['next_action'] = {'action': 'run', 'arguments': {
+                    **deepcopy(parent.get('theory_target', {})), 'operator': 'theory_transfer',
+                    'candidate_id': plan['candidate_id'],
+                    'theory_id': f"method-step:{question['id']}:{step['frozen_candidate']['version']}",
+                    'mapping': deepcopy(plan['binding'].get('mapping', {})),
+                    'library_path': 'shared/theory_library.json',
+                    'research_question': {'id': parent['id']},
+                    'allocation': {'compute': max(0, allowance - result['new_compute_cost'])}}}
+        if unfinished:
+            if step.get('required_compute') is not None:
+                result['required_compute'] = step['required_compute']
+            question.pop('completed_agenda_basis', None)
+        else:
+            question['completed_agenda_basis'] = question_work_basis(question)
+        question['method_use_result'] = deepcopy(result)
+        question['routing_execution'] = {
+            'basis': _basis(agent, question, mission, compute_limit=compute_limit),
+            'allowance': allowance, 'version': (previous or {}).get('version', 0) + 1,
+            'result': deepcopy(result)}
+        return result
+    learned = consolidate_research(agent, {
+        'object_type': 'method_use_condition', 'candidate_ids': [plan['candidate_id']],
+        'mission': mission, 'allocation': {'compute': allowance}}, laboratory, question)
+    required = len(agent.theory_consolidation.get('method_feedback', {}).get(
+        plan['candidate_id'], {}).get('outcome_refs', []))
+    if any(item.get('candidate_id') == plan['candidate_id'] and item.get('cache_hit')
+           for item in learned.get('frozen_candidates', [])):
+        required = 0
+    budget_incomplete = required > allowance or learned.get('status') == 'research_deferred'
+    candidate = agent.theory_consolidation.get('candidates', {}).get(plan['candidate_id'])
+    decision = (procedure_use_decision(agent, candidate, plan['binding'])
+        if candidate and candidate.get('kind') == 'research_program' else None)
+    conflict = None
+    if not budget_incomplete and candidate and candidate.get('method_use_conditions'):
+        remaining = min(max(0, allowance - (agent.costs['compute_cost'] - start)),
+                        mission_compute_remaining(agent, mission))
+        before_diagnostics = agent.costs['compute_cost']
+        conflict = research_method_conditions(agent, plan['candidate_id'], remaining,
+            public_experiments=question.get('resolution_experiments', ()))
+        debit_mission_compute(agent, mission, before_diagnostics)
+        budget_incomplete = conflict.get('budget_incomplete', False)
+        candidate = agent.theory_consolidation['candidates'][plan['candidate_id']]
+        decision = procedure_use_decision(agent, candidate, plan['binding'])
+    parent_ref = question.get('parent_question_ref') or {'question_id': question.get('parent_id')}
+    parent = next((item for item in agent.questions if item['id'] == parent_ref.get('question_id')
+        and parent_ref.get('meaning_version', item.get('meaning_version', 1))
+            == item.get('meaning_version', 1)), None)
+    remaining = min(max(0, allowance - (agent.costs['compute_cost'] - start)),
+                    mission_compute_remaining(agent, mission))
+    next_action = ({'action': 'run', 'arguments': {'operator': 'research_route',
+        'research_question': {'id': parent['id']}, 'allocation': {'compute': remaining}}}
+        if parent is not None and parent is not question else None)
+    trial = (not budget_incomplete and parent is not None and remaining > 0
+        and conflict and conflict.get('next_diagnostic') and decision
+        and decision.get('admission') == 'bounded_exploration')
+    if trial:
+        # Competing method explanations need an actual bounded use, not a
+        # method name passed off as a world predictor. Existing transfer and
+        # comparison machinery retains the original strong pool and paid fits.
+        next_action = {'action': 'run', 'arguments': {
+            **deepcopy(parent.get('theory_target', {})), 'operator': 'theory_transfer',
+            'candidate_id': plan['candidate_id'],
+            'theory_id': f"method-trial:{question['id']}:{candidate['version']}",
+            'mapping': deepcopy(plan['binding'].get('mapping', {})),
+            'library_path': 'shared/theory_library.json',
+            'research_question': {'id': parent['id']},
+            'allocation': {'compute': remaining}}}
+        conflict['next_diagnostic']['proposal'] = deepcopy(next_action)
+    result = {'status': ('scoped_unknown' if budget_incomplete else
+                        'method_use_decided' if decision and decision['admission'] in {'admit', 'defer'}
+                         else 'method_use_unresolved'),
+        'question_id': question['id'], 'condition_learning': learned,
+        'method_conflict_research': conflict,
+        'method_use_decision': decision, 'next_action': next_action,
+        'selected_research_action': ('bounded_method_trial' if trial else
+            'ordinary_research' if decision and decision['admission'] == 'defer'
+            else 'bounded_exploration'),
+        'parent_revision_completed': False, 'support_updated': False,
+        'independent_confirmation': False, 'cache_hit': False,
+        'new_compute_cost': agent.costs['compute_cost'] - start}
+    if budget_incomplete:
+        result.update(reason='method_condition_allocation_incomplete',
+                      required_compute=((agent.costs['compute_cost'] - start)
+                        + conflict['required_compute'] if conflict else required),
+                      next_action=None)
+    question['method_use_result'] = deepcopy(result)
+    # The finite feedback analysis is complete even when its scientific answer
+    # remains unknown. Reconsider changed evidence rather than starving the
+    # ordinary agenda by repeating the same unresolved analysis.
+    if budget_incomplete:
+        question.pop('completed_agenda_basis', None)
+    else:
+        question['completed_agenda_basis'] = question_work_basis(question)
+    question['routing_execution'] = {
+        'basis': _basis(agent, question, mission, compute_limit=compute_limit),
+        'allowance': allowance, 'version': (previous or {}).get('version', 0) + 1,
+        'result': deepcopy(result)}
+    return result
+
+
 def route_research(agent, arguments, laboratory, question=None):
     # A completion reserve narrows execution, not the task's nominal contract.
     # Pending execution checks this basis again after the caller restores its cap.
@@ -795,6 +949,8 @@ def route_research(agent, arguments, laboratory, question=None):
     if 'exploration_policy' in arguments:
         question['exploration_policy'] = deepcopy(arguments['exploration_policy'])
     mission = effective_question_mission(question, mission)
+    if has_method_use_plan(question):
+        return _method_use_route(agent, arguments, laboratory, question, mission, compute_limit)
     if (question.get('kind') in {'representation', 'program_revision'}
             and question.get('native_representation_plan')):
         return _native_representation_route(agent, question, laboratory, pool, mission, compute_limit)

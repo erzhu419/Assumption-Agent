@@ -8,6 +8,7 @@ from time import monotonic
 
 from .code_agent import _copy_model_context, python_model_context
 from .conditional_research import _BIND_RUNNER
+from .conditional_coordinates import conditional_search_allowance
 from .language import Program
 from .models import SearchBudget
 from .native_condition_research import (
@@ -37,7 +38,12 @@ search_incomplete and research_decision.computation_incomplete mean requested
 work was not funded, not that an untested model family failed. search_stages
 reports actual completed fits, costs and blocked work. A same-question
 compute_continuation, when available, offers a larger allocation for your choice;
-it never runs automatically. Retained-model scores do not count as new joint fits.
+its research_unit prices preparation, a bounded joint attempt, exports, comparison
+and finish. The existing full retained pool and bounded new exports stay funded.
+An unaffordable complete unit has no action; an exhausted original execution
+window remains exhausted. The restart retains old Programs and recipes and
+charges repeated local assessment. Quoted joint work is an estimate; returned
+search stages record what actually completed.
 It preserves reset history and compares candidate compositions with real evidence.
 Selected matched pairs for the same control and constant background are assessed
 together, keeping each trajectory's reset history. Different backgrounds remain
@@ -72,6 +78,9 @@ Read the most recent entry for your question, including results produced by quer
 method_results also records the surrounding method invocation. Each candidates
 or exported_models item contains model, evaluate_action, fit_mse and source.
 There is no top-level model_path. proposed_experiments items contain query_action.
+Registered finite authors receive a research_continuation for joint searches
+after acquisition; their next action selection prices it on the new paid rows.
+The existing boundary_update continues inline at its original bounded allowance.
 Candidate programs and selection decisions remain inline; complete research
 recipes are retained once in the question's native_condition_research rounds.
 Their full_content_file/json_path references identify the saved recipe.
@@ -341,6 +350,23 @@ def _native_continuation(agent, question, result):
             'operator': 'native_condition_research', 'research_question': {'id': question['id']},
             **{key: deepcopy(arguments[key]) for key in
                ('basis', 'programs', 'max_candidates', 'max_compute') if key in arguments}}}
+        if (result['status'] == 'search_incomplete' or
+                agent.knowledge.get('finite_native_author') and paid_rows < len(agent.rows)):
+            retained = {Program.from_dict(item['program']) for old in
+                question.get('native_condition_research', []) for item in old['candidates']}
+            reserve = _native_completion_reserve(agent, question,
+                len(retained) + len(arguments.get('programs', []))
+                + int(arguments.get('max_candidates', 8)))
+            # On new evidence use the current all-paid bank, rather than replay
+            # the old matched-pair indices from the earlier query continuation.
+            retry = (view['resume_action']['arguments']
+                     if paid_rows < len(agent.rows) else arguments)
+            unit = _native_compute_continuation(agent, question, result, retry, reserve)
+            view['compute_continuation'] = unit
+            view['complete_research_unit'] = deepcopy(unit['research_unit'])
+            view.pop('resume_action')
+            if 'action' in unit:
+                view['resume_action'] = deepcopy(unit['action'])
     return view
 
 
@@ -408,12 +434,12 @@ def native_condition_method(agent):
                 'question_id': previous_question['id'], 'round_index': result['round_index'],
                 'status': result['status'], 'paid_rows': len(result['fit_evidence']),
                 'models': deepcopy(result['exported_models']),
-                **_native_continuation(agent, previous_question, result),
                 **({'completion_reserve': deepcopy(result['completion_reserve'])}
                    if 'completion_reserve' in result else {}),
                 **{key: deepcopy(result[key]) for key in
                    ('research_decision', 'remaining_boundary', 'search_stages',
                     'compute_continuation', 'search_allowance_estimate') if key in result},
+                **_native_continuation(agent, previous_question, result),
                 'source': {'file': 'research_state.json', 'json_path': [
                     'questions', agent.questions.index(previous_question),
                     'native_condition_research', result['round_index']]}})
@@ -519,6 +545,84 @@ def _register_native_theories(agent, question, question_index, round_index):
     return result
 
 
+def _native_completion_reserve(agent, question, max_exported_models):
+    """Use the existing full-pool delivery quote for this finite task."""
+    from .finite_native_author import ordinary_completion_reserve
+
+    rows = len(agent.rows)
+    deliveries = len(agent._inquiry_stack)
+    stale = bool(agent.evaluated_model is not None
+                 and agent.evaluated_model['evaluated_rows'] != rows)
+    reserve = {'compute_cost': rows * (2 + deliveries + int(stale))
+               + agent.config.confirmation_rows,
+        'paid_rows': rows, 'candidate_evaluations': 1, 'local_deliveries': deliveries,
+        'retained_comparisons': int(stale), 'parent_submissions': 1,
+        'confirmation_rows': agent.config.confirmation_rows,
+        'scope': 'one_candidate_delivery_and_original_finish'}
+    complete = ordinary_completion_reserve(agent, question)
+    if complete is not None:
+        reserve.update(compute_cost=complete['compute_cost'] + rows * max_exported_models,
+            candidate_evaluations=complete['models'] + max_exported_models,
+            retained_pool_models=complete['models'],
+            max_exported_models=max_exported_models,
+            comparison_compute_cost=rows * (complete['models'] + max_exported_models + int(stale)),
+            finish_compute_cost=rows * (deliveries + 1) + agent.config.confirmation_rows,
+            export_compute_cost=0,
+            scope='full_retained_pool_and_bounded_exports_then_original_finish',
+            export_cost_scope='Native source export has no separate compute charge; '
+                'host execution time remains charged by the existing caller.')
+    return reserve
+
+
+def _native_compute_continuation(agent, question, result, arguments, reserve):
+    """Publish a whole payable restart, never a smaller unfinished fragment."""
+    rows = len(agent.rows)
+    old_rows = len(result['fit_evidence'])
+    measured_preparation = sum(item['compute_cost'] for item in result['search_stages']
+                               if not item['stage'].startswith('joint_'))
+    extended = rows != old_rows
+    preparation = ((measured_preparation * rows + old_rows - 1) // old_rows
+                   if old_rows else 0) + 2 * rows
+    estimate = (conditional_search_allowance(len(agent.rows[0].features), rows,
+                    max(len(row.history) for row in agent.rows)) if extended
+                else result['search_allowance_estimate']['conditional_joint_attempt'])
+    blocked = max((item['blocked_work']['additional_compute']
+                   for item in result['search_stages'] if 'blocked_work' in item), default=0)
+    minimum = max((0 if extended else result['completion_reserve']['search_allowance'] + blocked),
+                  preparation + estimate)
+    remaining = max(0, agent.config.compute_budget - agent.costs['compute_cost'])
+    available = max(0, remaining - reserve['compute_cost'])
+    seconds = max(0., agent.config.execution_seconds
+                  - agent.costs.get('python_execution_seconds', 0.))
+    payable = available >= minimum and seconds > 0.
+    unit = {'status': ('available' if payable else 'execution_time_exhausted'
+                      if seconds <= 0. else 'shared_compute_insufficient'),
+        'available_compute_after_completion_reserve': available,
+        'estimated_search_allowance': minimum,
+        'remaining_execution_seconds': seconds,
+        'research_unit': {'search_preparation_compute': preparation,
+            'bounded_joint_attempt_estimate': estimate,
+            'search_compute': minimum, 'completion_reserve': deepcopy(reserve),
+            'minimum_compute': minimum + reserve['compute_cost'],
+            'quoted_paid_rows': rows, 'previous_paid_rows': old_rows,
+            'work_reason': 'new_paid_evidence' if extended else 'search_incomplete',
+            'preparation_basis': 'previous_actual_preparation_rescaled_to_current_rows',
+            'resumption': 'bounded_restart_with_retained_programs_not_an_internal_fit_cursor',
+            'previous_paid_compute': result['compute_cost'],
+            'estimate_is_completion_guarantee': False},
+        'scope': 'Bounded same-bank restart with retained Programs and recipes. Local assessment '
+            'and old-program scoring repeat and remain charged; the quoted joint attempt is '
+            'an estimate, not a guarantee. The complete pool comparison and finish stay reserved; '
+            'no new total compute or execution window is created.'}
+    if payable:
+        retry = {key: deepcopy(arguments[key]) for key in (
+            'operator', 'record_indices', 'matched_pairs', 'basis', 'programs',
+            'max_candidates') if key in arguments}
+        retry.update(question={'id': question['id']}, max_compute=minimum)
+        unit['action'] = {'action': 'run', 'arguments': retry}
+    return unit
+
+
 def execute_native_condition_research(agent, arguments, laboratory, question):
     """Run the existing finite scientific inner loop on this question's paid data."""
     if question is None:
@@ -530,10 +634,19 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
     # and fresh confirmation. Comparing a stale retained model costs one more
     # paid-data pass. The ordinary evaluators charge these units when executed.
     rows = len(agent.rows)
-    local_deliveries = len(agent._inquiry_stack)
-    stale_retained = bool(agent.evaluated_model is not None
-                         and agent.evaluated_model['evaluated_rows'] != rows)
-    reserved = rows * (2 + local_deliveries + int(stale_retained)) + agent.config.confirmation_rows
+    retained = []
+    if 'boundary_update' not in arguments:
+        for previous in rounds:
+            for candidate in previous['candidates']:
+                old = next((item for item in retained
+                            if item['program'] == candidate['program']), None)
+                if old is None:
+                    retained.append(deepcopy(candidate))
+                else:
+                    old.update(deepcopy(candidate))
+    reserve = _native_completion_reserve(agent, question,
+        len(retained) + len(arguments.get('programs', [])) + int(arguments.get('max_candidates', 8)))
+    reserved = reserve['compute_cost']
     search_allowance = max(0, remaining - reserved)
     budget = SearchBudget(min(search_allowance,
                               max(0, int(arguments.get('max_compute', search_allowance)))))
@@ -549,57 +662,24 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
             proposal = previous['proposed_experiments'][selected['proposal_index']]
             result = update_native_boundary(laboratory.public_spec(), agent.observations,
                 budget, previous=previous, proposal=proposal,
+                paid_record_indices=selected.get('paid_record_indices', ()),
                 max_candidates=arguments.get('max_candidates', 8),
                 observation_budget=observation_budget)
         else:
-            retained = []
-            for previous in rounds:
-                for candidate in previous['candidates']:
-                    old = next((item for item in retained
-                                if item['program'] == candidate['program']), None)
-                    if old is None:
-                        retained.append(deepcopy(candidate))
-                    else:
-                        # A later score must not erase the research recipe
-                        # needed to continue this same executable candidate.
-                        old.update(deepcopy(candidate))
             result = research_native_conditions(laboratory.public_spec(), agent.observations,
                 budget, programs=arguments.get('programs', []), retained_candidates=retained,
                 observation_budget=observation_budget, **options)
     finally:
         agent.costs['compute_cost'] += budget.spent
         agent.costs['python_execution_seconds'] += monotonic() - started
-    result['completion_reserve'] = {
-        'compute_cost': reserved, 'paid_rows': rows,
-        'candidate_evaluations': 1, 'local_deliveries': local_deliveries,
-        'retained_comparisons': int(stale_retained), 'parent_submissions': 1,
-        'confirmation_rows': agent.config.confirmation_rows,
+    result['completion_reserve'] = {**reserve,
         'search_allowance': budget.limit,
         'remaining_compute': remaining - budget.spent,
         'completion_funded': remaining - budget.spent >= reserved,
     }
     if result['status'] == 'search_incomplete':
-        available = max(0, remaining - budget.spent - reserved)
-        estimate = result['search_allowance_estimate']['conditional_joint_attempt']
-        preparation = sum(item['compute_cost'] for item in result['search_stages']
-                          if not item['stage'].startswith('joint_')) + 2 * rows
-        required = max(item['blocked_work']['additional_compute']
-                       for item in result['search_stages'] if 'blocked_work' in item)
-        allocation = min(available, max(budget.limit + required, preparation + estimate))
-        result['compute_continuation'] = {
-            'available_compute_after_completion_reserve': available,
-            'estimated_search_allowance': preparation + estimate,
-            'status': 'available' if allocation > budget.limit else 'shared_compute_insufficient',
-            'scope': 'Optional rerun on the same candidate bank and selected paid evidence; '
-                     'repeats local assessment and old-program scoring. No automatic purchase '
-                     'or scientific conclusion. The allocation is an estimate, not a guarantee.',
-        }
-        if allocation > budget.limit:
-            retry = {key: deepcopy(arguments[key]) for key in (
-                'operator', 'record_indices', 'matched_pairs', 'basis', 'programs',
-                'max_candidates') if key in arguments}
-            retry.update(question={'id': question['id']}, max_compute=allocation)
-            result['compute_continuation']['action'] = {'action': 'run', 'arguments': retry}
+        result['compute_continuation'] = _native_compute_continuation(
+            agent, question, result, arguments, reserve)
         result['research_decision']['compute_continuation'] = deepcopy(result['compute_continuation'])
     if result['status'] == 'research_not_executed':
         retry = {key: deepcopy(value) for key, value in arguments.items()
@@ -653,7 +733,14 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
         if 'record_indices' in arguments:
             resumed['record_indices'] = list(dict.fromkeys([
                 *arguments['record_indices'], *range(first, first + len(query['actions']))]))
-        query['after_observation'] = [resumed]
+        if agent.knowledge.get('finite_native_author') and 'boundary_update' not in resumed:
+            # The finite author prices the current complete joint unit after
+            # acquisition. Do not silently run its old short search ceiling
+            # before that same action-selection step can choose the allocation.
+            proposed['research_continuation'] = resumed
+            query.pop('after_observation', None)
+        else:
+            query['after_observation'] = [resumed]
     if result.get('research_decision', {}).get('kind') == 'remaining_parameter_ambiguity':
         boundary = next(item for item in result['proposed_experiments']
                         if item.get('purpose') == 'conditional_boundary')

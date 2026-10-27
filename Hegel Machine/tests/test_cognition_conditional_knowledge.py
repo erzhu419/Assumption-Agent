@@ -105,3 +105,61 @@ def test_condition_samples_and_action_experience_roundtrip_and_copy_independentl
     independent = restored.without(set())
     independent.action_experience["numeric"]["repeat"]["gain"] = 9
     assert restored.action_experience["numeric"]["repeat"]["gain"] == pytest.approx(0.2)
+
+
+def test_condition_learning_retains_guarded_history_after_reset_and_uses_no_future_target():
+    from hegel_machine.cognition.condition_learning import learn_condition
+
+    support = [Observation({'u': 0., '__target__': 100.}, 7., ({'u': value},))
+               for value in (-2., -1.)]
+    counterexamples = [Observation({'u': 0., '__target__': -100.}, -7., ({'u': value},))
+                       for value in (1., 2.)]
+    counterexamples.append(Observation({'u': 0., '__target__': -100.}, -7.))
+    learned = learn_condition(support, counterexamples, SearchBudget(100))
+    assert learned['status'] == 'separated'
+    assert learned['scope_purpose'] == 'application'
+    assert learned['measured_coverage']['scope_purpose'] == 'measured_coverage'
+    condition = Program.from_dict(learned['condition'])
+    assert condition.minimum_history_depth == 0
+    assert '__target__' not in condition.required_features()
+    assert all(condition.predict(row) for row in support)
+    assert not any(condition.predict(row) for row in counterexamples)
+    assert condition.predict(Observation({'u': 0.}, -999., ({'u': -1.5},)))
+    assert not condition.predict(Observation({'u': 0.}, 999., ({'u': 1.5},)))
+    assert not condition.predict(Observation({'u': 0.}, 999.))
+
+
+def test_inseparable_application_scope_stays_unknown_and_coverage_creates_no_predicate():
+    from hegel_machine.cognition.condition_learning import learn_condition
+
+    support = [Observation({'u': 0.}, 0.), Observation({'u': 1.}, 1.)]
+    counterexamples = [Observation({'u': 0.}, 7.)]
+    unresolved = learn_condition(support, counterexamples, SearchBudget(100))
+    assert unresolved['status'] == 'not_separable'
+    assert unresolved['scope_status'] == 'unknown'
+    coverage = learn_condition(support, counterexamples, SearchBudget(0),
+                              scope_purpose='measured_coverage')
+    assert coverage['status'] == 'measured_only' and coverage['condition'] is None
+    assert coverage['scope_status'] == 'unknown'
+    assert coverage['measured_coverage']['row_count'] == 3
+    assert coverage['measured_coverage']['feature_ranges'] == {'u': [0., 1.]}
+
+
+def test_relative_utility_mean_gain_differs_from_pointwise_without_world_support():
+    from hegel_machine.cognition.condition_learning import learn_relative_utility_condition
+
+    rows = [Observation({'u': 0.}, 0.) for _ in range(3)]
+    baseline, proposed = [3., 3., 1.], [1., 1., 2.]
+    pointwise = learn_relative_utility_condition(rows, baseline, proposed, SearchBudget(100))
+    assert pointwise['status'] == 'not_separable' and pointwise['selector'] is None
+    assert pointwise['strict_improvement_rows'] == 2
+    mean = learn_relative_utility_condition(rows, baseline, proposed, SearchBudget(100),
+                                            objective='mean_loss')
+    assert mean['status'] == 'mean_improvement'
+    assert Program.from_dict(mean['selector']).predict(Observation({'u': 0.}, 999.)) == 1.
+    assert mean['nonimprovement_rows'] == 1 and mean['worst_loss_increase'] == 3.
+    assert mean['scope_purpose'] == 'relative_utility'
+    assert mean['application_scope_status'] == 'not_assessed'
+    assert mean['world_mse_threshold'] == 1e-10
+    assert mean['candidate_mse'] > mean['world_mse_threshold']
+    assert mean['measured_coverage']['independent_confirmation'] is False

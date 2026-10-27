@@ -148,7 +148,9 @@ def test_source_author_exhausting_python_budget_does_not_execute_or_count_attemp
             'evidence_before': {'records': 0, 'rows': 0},
             'evidence_after': {'records': 0, 'rows': 0}})
     retained = deepcopy(agent.method_results)
-    clock = iter([0., 0., 0., 0., 0., 0., 31., 31., 31., 31.])
+    # Phase diagnostics use the shared runtime clock. This module reads only
+    # the author's start/end for its unchanged billed execution allowance.
+    clock = iter([0., 31.])
     monkeypatch.setattr(runner, 'monotonic', lambda: next(clock))
     monkeypatch.setattr(agent, '_execute', lambda *_args, **_kwargs:
                         pytest.fail('author exhausted the allowance before any action'))

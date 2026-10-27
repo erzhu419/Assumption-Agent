@@ -1,6 +1,7 @@
 """Native representation research consumes only its declared training split."""
 
 from dataclasses import replace
+from pathlib import Path
 import json
 from random import Random
 
@@ -15,6 +16,9 @@ from hegel_machine.cognition.representation_inquiry import (
 )
 from hegel_machine.cognition.temporal_operator_agent import TemporalOperatorAgent
 from hegel_machine.cognition.unified_research import UnifiedResearchAgent
+from hegel_machine.cognition.representation_diagnostics import (
+    representation_ambiguity, representation_evidence_state,
+)
 
 
 def agent_with_records(tmp_path, *, trajectories=5):
@@ -38,6 +42,53 @@ def agent_with_records(tmp_path, *, trajectories=5):
     return agent
 
 
+def measured_failure_basis(agent, distinction):
+    refs = []
+    for index in (3, 4):
+        identifier = f'failed_forecast:{index}'
+        agent.questions.append({'id': identifier, 'kind': 'evidence', 'meaning_version': 1,
+            'query_semantics': {'query_expression': {'op': 'AllOnFiniteSet'}},
+            'semantic_answer': {'version': 1, 'finite_status': 'observed_false',
+                'value': False, 'evidence': agent.observations[index]['row_indices']}})
+        refs.append({'kind': 'question', 'id': identifier, 'version': 1, 'answer_version': 1})
+    return {'failure_refs': refs, 'distinction_program': distinction.to_dict()}
+
+
+def competing_representation_basis(agent, tmp_path, operation='window_sum'):
+    from hegel_machine.cognition.models import Observation
+    drive = Program('feature', name='u')
+    alternative = (Program('accumulate', value=.5, children=(drive, Program('const', value=0.)))
+                   if operation == 'accumulate' else Program(operation, lag=3, children=(drive,)))
+    rows = [Observation(row['features'], row['target'], tuple(row['history']))
+            for row in agent.observations[4]['rows']]
+    selected = {'program': alternative.to_dict(), 'best_retained_id': 'old',
+        'validation_predictions': [alternative.predict(row) for row in rows],
+        'best_retained_validation_predictions': [row.features['u'] for row in rows]}
+    path = tmp_path / 'paid_alternative.json'
+    path.write_text(json.dumps({'selected': selected}))
+    return {'alternative_ref': {'file': str(path), 'json_path': ['selected']}}
+
+
+def learned_representation_basis(tmp_path, *, parameter_only=False):
+    from hegel_machine.cognition.research_programs import consolidate_research_programs
+    from test_question_routing import ROLES, CONTEXT
+    entries = []
+    for index in range(2):
+        directory = tmp_path / f'learned_source_{index}'
+        directory.mkdir()
+        term = (None if parameter_only else Program('window_sum', lag=3,
+            children=(Program('feature', name='u'),)))
+        _, reference = retained_procedure(directory, intercept=float(index), term=term)
+        saved = json.loads(Path(reference['file']).read_text())['candidates'][0]
+        entries.append({**saved, 'source_ref': reference, 'source_id': f'source:{index}',
+            'episode_id': f'episode:{index}', 'context_ref': CONTEXT,
+            'role_signature': ROLES, 'output_unit': 'V'})
+    method, = consolidate_research_programs(entries, allocation={'compute': 1000})['candidates']
+    path = tmp_path / 'learned_method.json'
+    path.write_text(json.dumps({'candidate': method}))
+    return {'learned_method_ref': {'file': str(path), 'json_path': ['candidate']}}
+
+
 def run(agent, question, **kwargs):
     return execute_native_representation_inquiry(agent, question,
         spec=TaskSpec('development', 'public response', ('u',), (), ()),
@@ -51,6 +102,7 @@ def test_native_search_selects_executable_temporal_draft_and_changes_actual_pred
     question = {'id': 'representation:old', 'kind': 'representation'}
     result = run(agent, question)
     assert result['status'] == 'native_representation_draft_selected'
+    assert result['origin'] == 'not_exposed'
     assert result['selected']['validation_mse'] < 1e-10
     assert result['selected']['best_retained_validation_mse'] > 1e-2
     assert result['selected']['changed_prediction_rows'] > 0
@@ -71,7 +123,77 @@ def test_native_search_selects_executable_temporal_draft_and_changes_actual_pred
                for candidate in receipt['candidates'])
     assert 'program' not in receipt['selected'] and 'research_program' not in receipt['selected']
     assert question['native_representation_split']['training_records'] == [0, 1, 2, 3]
+    selection = result['selected']['selection']
+    assert selection['status'] == 'working_draft' and not selection['independent_confirmation']
+    assert selection['fitting_records'] == [0, 1, 2, 3]
+    assert selection['selection_records'] == [4]
+    assert selection['comparison_scope'] == 'declared_parents_and_current_native_candidates'
+    assert selection['uncompared_archive_validation'] == 'not_established'
     assert 'status' not in question  # Installation and child resolution belong to the caller.
+
+
+def test_predeclared_utility_scope_changes_executable_candidate_without_fitting_on_validation(tmp_path, monkeypatch):
+    from hegel_machine.cognition.evaluation import loss
+    from hegel_machine.cognition.models import Observation
+
+    agent = agent_with_records(tmp_path)
+    for index, record in enumerate(agent.observations):
+        record['rows'] = [{'features': {'u': value + index * .01}, 'history': [],
+            'target': max(0., value + index * .01)} for value in (-1., .5, 1., 1.5)]
+        record['action']['sequence'] = [row['features'] for row in record['rows']]
+    agent.rows = [row for record in agent.observations for row in record['rows']]
+
+    def compose(self, spec, rows, budget, parents, actions):
+        program = Program('feature', name='u')
+        return [{'candidate': Candidate('candidate_u', program, 'control'),
+                 'training_loss': loss(program, rows, 0., .5)}]
+
+    monkeypatch.setattr(UnifiedResearchAgent, '_program_claims', compose)
+    question = {'id': 'scope', 'kind': 'program_revision', 'native_representation_plan': {
+        'scope_plan': {'purpose': 'relative_utility', 'objective': 'pointwise_improvement',
+                       'max_compute': 5000, 'max_history': 4}}}
+    result = run(agent, question, parent_programs={'old': Program('const', value=0.)})
+    scope = result['relative_utility_research']
+    assert scope['fitting_records'] == [0, 1, 2, 3] and scope['selection_records'] == [4]
+    assert scope['scope_purpose'] == 'relative_utility'
+    assert scope['application_scope_status'] == 'not_assessed'
+    assert 0 < scope['compute_cost'] <= scope['compute_limit'] == 5000
+    assert result['selected']['id'] == scope['candidate_id']
+    assert result['selected']['validation_mse'] < 1e-10
+    scoped = Program.from_dict(result['selected']['program'])
+    assert scoped.op == 'if'
+    assert scoped.predict(Observation({'u': -.5}, 500., ())) == 0.
+    assert result['selected']['selection']['inherited_parameter_provenance'] == 'original_component_fitting_views_not_established'
+    assert result['compute_cost'] == agent.costs['compute_cost'] <= 100000
+
+    # Held-out targets may change adoption, never which training-only scope
+    # candidate is constructed or what its selector reads.
+    for row in agent.observations[4]['rows']:
+        row['target'] = -10.
+    changed = run(agent, question, parent_programs={'old': Program('const', value=0.)})
+    assert changed['relative_utility_research']['selector'] == scope['selector']
+    assert changed['selected']['retained']
+    scoped_candidate = next(item for item in changed['candidates'] if item.get('relative_utility_scope'))
+    assert scoped_candidate['program'] == scoped.to_dict()
+
+    # An explicitly declared mean-loss selector is constant here. Its branch
+    # already has a paid score; no semantically identical if-program is added.
+    question['native_representation_plan']['scope_plan']['objective'] = 'mean_loss'
+    mean_scope = run(agent, question, parent_programs={'old': Program('const', value=0.)})
+    utility = mean_scope['relative_utility_research']
+    assert utility['selector']['op'] == 'const' and utility['reused_candidate_ref']
+    assert len(mean_scope['candidates']) == 1 and 'candidate_id' not in utility
+
+
+def test_unfunded_scope_retains_comparison_and_does_not_increase_budget(tmp_path):
+    agent = agent_with_records(tmp_path)
+    result = run(agent, {'id': 'scope', 'kind': 'program_revision', 'native_representation_plan': {
+        'scope_plan': {'purpose': 'relative_utility', 'objective': 'mean_loss', 'max_compute': 1}}})
+    assert result['comparison_completed']
+    scope = result['relative_utility_research']
+    assert scope['status'] == 'insufficient_budget' and 'candidate_id' not in scope
+    assert scope['compute_cost'] == 0 and scope['compute_limit'] == 1
+    assert result['compute_cost'] <= 100000
 
 
 def test_split_is_persisted_before_proposal_and_validation_targets_do_not_enter_search(tmp_path, monkeypatch):
@@ -179,7 +301,7 @@ def test_program_revision_uses_actual_parent_only_and_keeps_counterexample_origi
     original = UnifiedResearchAgent._program_claims
 
     def coordinates(*args):
-        raise AssertionError('program revision searched coordinates without a collision')
+        raise AssertionError('a narrow revision acquired an undeclared search direction')
 
     def compose(self, spec, rows, budget, parents, actions):
         assert parents == [actual]
@@ -197,6 +319,65 @@ def test_program_revision_uses_actual_parent_only_and_keeps_counterexample_origi
     assert result['parent_theory_ids'] == ['actual_new_parent']
     assert [entry['direction'] for entry in result['search_directions']] == ['retained_composition']
     assert result['comparison_completed'] and result['candidates']
+
+
+@pytest.mark.parametrize(('diagnostic', 'state'), [
+    ({'status': 'not_exposed'}, 'not_exposed'),
+    ({'status': 'conflicting_targets', 'conflicting_groups': 1}, 'proven_insufficient_on_evidence'),
+    ({'status': 'no_exact_conflicts'}, 'not_refuted_on_current_evidence'),
+    ({'status': 'no_exact_conflicts', 'evidence_state': 'supported_for_declared_tests',
+      'declared_tests': [{'source_ref': {'event_index': 1}, 'passed': True}]},
+     'supported_for_declared_tests'),
+    ({'status': 'no_exact_conflicts', 'evidence_state': 'supported_for_declared_tests'},
+     'not_refuted_on_current_evidence'),
+    ({'status': 'no_exact_conflicts', 'evidence_state': 'supported_for_declared_tests',
+      'declared_tests': [{'source_ref': {'event_index': 1}, 'passed': False}]},
+     'not_refuted_on_current_evidence'),
+])
+def test_representation_support_requires_more_than_absent_collisions(diagnostic, state):
+    assert representation_evidence_state(diagnostic) == state
+
+
+def test_unique_inputs_with_public_missing_distinction_open_finite_alternative(tmp_path):
+    agent = agent_with_records(tmp_path)
+    diagnostic = representation_ambiguity([row['features']['u'] for row in agent.rows], agent.rows)
+    assert diagnostic['conflicting_groups'] == 0
+    question = {'id': 'revision:missing_distinction', 'kind': 'program_revision',
+        'representation_diagnostic': diagnostic,
+        'use_sites': [{'kind': 'supply_component', 'model': 'parent.py', 'slot': 'representation'}],
+        'representation_research_basis': measured_failure_basis(
+            agent, Program('lag', name='u', lag=1))}
+    result = run(agent, question)
+    assert result['representation_evidence_state'] == 'not_refuted_on_current_evidence'
+    assert result['alternative_representation_basis'] == (
+        'prospective_failures_with_public_unrepresented_distinction')
+    assert [entry['direction'] for entry in result['search_directions']] == [
+        'coordinates', 'retained_composition']
+    assert result['selected']['validation_mse'] < 1e-10
+    assert result['selected']['changed_prediction_rows'] > 0
+    assert result['provider_calls'] == result['new_observations'] == 0
+
+
+def test_parameter_only_revision_does_not_force_history_search(tmp_path, monkeypatch):
+    agent = agent_with_records(tmp_path)
+    for row in agent.rows:
+        row['target'] = 3 * row['features']['u'] + .2
+
+    def unexpected(*args):
+        raise AssertionError('parameter-only failure forced a representation expansion')
+
+    monkeypatch.setattr(UnifiedResearchAgent, '_coordinate_claims', unexpected)
+    question = {'id': 'revision:coefficients', 'kind': 'program_revision',
+        'representation_diagnostic': representation_ambiguity(
+            [row['features']['u'] for row in agent.rows], agent.rows),
+        'representation_research_basis': measured_failure_basis(
+            agent, Program('feature', name='u'))}
+    result = run(agent, question)
+    assert result['alternative_representation_basis'] is None
+    assert [entry['direction'] for entry in result['search_directions']] == ['retained_composition']
+    # The behavior under test is the optional representation decision; the
+    # existing finite composition prefix need not solve every coefficient fit.
+    assert result['comparison_completed']
 
 
 def test_native_interruption_restores_paid_fit_without_refitting_and_marks_unfinished_column(tmp_path, monkeypatch):
@@ -257,11 +438,11 @@ def test_native_interruption_restores_paid_fit_without_refitting_and_marks_unfin
     assert agent.costs['compute_cost'] == receipt['compute_cost']
 
 
-def retained_procedure(tmp_path, *, intercept=2., slope=3.):
+def retained_procedure(tmp_path, *, intercept=2., slope=3., term=None):
     """A saved actual-parent graph, with no fitting in the test fixture."""
     from hegel_machine.cognition.continuous_state import _sum_terms
     from hegel_machine.cognition.research_programs import _entry
-    term = Program('feature', name='u')
+    term = term or Program('feature', name='u')
     parent = _sum_terms([term], [slope], intercept)
     fit = {'fit_terms': [term], 'terms': [term], 'program': parent,
            'coefficients': [intercept, slope], 'loss': .5}
@@ -409,3 +590,88 @@ def test_no_executable_replay_keeps_negative_result_without_fitting_validation(t
     assert replay['status'] == 'no_executable_refit' and replay['compute_cost'] == 7
     assert result['status'] == 'native_representation_parent_retained'
     assert result['compute_cost'] == 60 + 7 + 24
+
+
+@pytest.mark.parametrize('operation', ['window_sum', 'accumulate'])
+def test_same_variable_competing_program_opens_coordinates_without_failure_count(tmp_path, operation):
+    agent = agent_with_records(tmp_path)
+    question = {'id': 'revision:competing', 'kind': 'program_revision',
+        'representation_research_basis': competing_representation_basis(agent, tmp_path, operation)}
+    result = run(agent, question)
+    assert result['alternative_representation_basis'] == 'retained_alternative_has_different_task_predictions'
+    assert [item['direction'] for item in result['search_directions']] == ['coordinates', 'retained_composition']
+    assert result['candidates'] and result['selected']['changed_prediction_rows'] > 0
+    assert result['provider_calls'] == result['new_observations'] == 0
+
+
+def test_bound_unresolved_semantics_opens_coordinates_without_failures(tmp_path):
+    agent = agent_with_records(tmp_path)
+    uses = [{'kind': 'supply_component', 'model': 'parent.py', 'slot': 'representation'}]
+    agent.questions.append({'id': 'history_semantics', 'meaning_version': 2,
+        'kind': 'representation', 'status': 'open', 'use_sites': uses,
+        'answer_resolution_ref': {'evaluator': 'representation_diagnostic_and_paid_comparison',
+            'parent_model': 'parent.py'}})
+    question = {'id': 'revision:semantics', 'kind': 'program_revision', 'use_sites': uses,
+        'representation_research_basis': {'semantic_question_ref': {
+            'kind': 'question', 'id': 'history_semantics', 'version': 2}}}
+    result = run(agent, question)
+    assert result['alternative_representation_basis'] == 'unresolved_bound_representation_semantics'
+    assert result['candidates'] and result['comparison_completed']
+
+
+def test_actual_learned_method_reference_is_an_independent_research_warrant(tmp_path):
+    from test_question_routing import ROLES
+    agent = agent_with_records(tmp_path)
+    question = {'id': 'revision:learned', 'kind': 'program_revision',
+        'theory_target': {'role_signature': ROLES, 'output_unit': 'V'},
+        'representation_research_basis': learned_representation_basis(tmp_path)}
+    result = run(agent, question)
+    assert result['alternative_representation_basis'] == 'retained_learned_method_proposes_representation_research'
+    assert result['candidates'] and result['comparison_completed']
+
+
+def test_two_claims_on_the_same_failed_rows_do_not_make_continuing_failures(tmp_path, monkeypatch):
+    agent = agent_with_records(tmp_path)
+    basis = measured_failure_basis(agent, Program('window_sum', lag=3,
+        children=(Program('feature', name='u'),)))
+    agent.questions[-1]['semantic_answer']['evidence'] = agent.questions[-2]['semantic_answer']['evidence']
+    def unexpected(*args):
+        raise AssertionError('one witnessed failure was counted as continuing failures')
+    monkeypatch.setattr(UnifiedResearchAgent, '_coordinate_claims', unexpected)
+    result = run(agent, {'id': 'revision:one_failure', 'kind': 'program_revision',
+        'representation_research_basis': basis})
+    assert result['alternative_representation_basis'] is None
+
+
+def test_missing_optional_reference_does_not_block_another_actual_or_warrant(tmp_path):
+    agent = agent_with_records(tmp_path)
+    basis = measured_failure_basis(agent, Program('window_sum', lag=3,
+        children=(Program('feature', name='u'),)))
+    basis['alternative_ref'] = {'file': str(tmp_path / 'missing.json'), 'json_path': []}
+    result = run(agent, {'id': 'revision:or', 'kind': 'program_revision',
+        'representation_research_basis': basis})
+    assert result['alternative_representation_basis'] == 'prospective_failures_with_public_unrepresented_distinction'
+
+
+
+def test_saved_parameter_refit_method_does_not_claim_a_representation_warrant(tmp_path, monkeypatch):
+    from test_question_routing import ROLES
+    agent = agent_with_records(tmp_path)
+    def unexpected(*args):
+        raise AssertionError('same-coordinate coefficient refit forced independent history search')
+    monkeypatch.setattr(UnifiedResearchAgent, '_coordinate_claims', unexpected)
+    result = run(agent, {'id': 'revision:parameter_method', 'kind': 'program_revision',
+        'theory_target': {'role_signature': ROLES, 'output_unit': 'V'},
+        'representation_research_basis': learned_representation_basis(tmp_path, parameter_only=True)})
+    assert result['alternative_representation_basis'] is None
+    assert result['comparison_completed']
+
+
+
+def test_unlabelled_representation_research_uses_actual_conflict_origin_only_with_witnesses(tmp_path):
+    agent = agent_with_records(tmp_path)
+    diagnostic = representation_ambiguity([0.] * len(agent.rows), agent.rows)
+    assert diagnostic['conflicting_groups'] > 0
+    result = run(agent, {'id': 'representation:witness', 'kind': 'representation',
+        'representation_diagnostic': diagnostic})
+    assert result['origin'] == 'computed_representation_conflict'

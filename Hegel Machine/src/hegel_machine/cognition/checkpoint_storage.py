@@ -552,6 +552,17 @@ def _write_json_ranges(path, value, sources, *, encoder):
             for chunk in _bounded_json_chunks(item, encoder):
                 emit(chunk.encode('utf-8'))
 
+        def comparison_owner(item, field=None):
+            if isinstance(item, list):
+                return field in {'operator_results', 'method_results', 'events',
+                                 'after_observation_results'}
+            if not isinstance(item, dict):
+                return False
+            feedback = item.get('feedback')
+            return (isinstance(item.get('evaluations'), list)
+                    or isinstance(feedback, dict)
+                    and isinstance(feedback.get('evaluations'), list))
+
         def write_value(item, candidates, *, field=None):
             # One real comparison is copied into both operator and method
             # feedback. Retain its already written range, not another value
@@ -563,17 +574,22 @@ def _write_json_ranges(path, value, sources, *, encoder):
                         copy_range(output.fileno(), first, end)
                         return
             first = position
-            for source, node in candidates:
-                if (node[2] - node[1] >= _JSON_SHARED_MINIMUM
-                        and source.value_equal(node, item, encoder.allow_nan)):
-                    copy_value(source, node)
-                    break
+            if comparison_owner(item, field):
+                # New or completely equal history shells still have to visit
+                # their evaluations; otherwise cross-owner sharing is skipped.
+                write_container(item, candidates)
             else:
-                large = any(node[2] - node[1] >= _JSON_SHARED_MINIMUM for _, node in candidates)
-                if isinstance(item, (dict, list)) and large:
-                    write_container(item, candidates)
+                for source, node in candidates:
+                    if (node[2] - node[1] >= _JSON_SHARED_MINIMUM
+                            and source.value_equal(node, item, encoder.allow_nan)):
+                        copy_value(source, node)
+                        break
                 else:
-                    literal(item)
+                    large = any(node[2] - node[1] >= _JSON_SHARED_MINIMUM for _, node in candidates)
+                    if isinstance(item, (dict, list)) and large:
+                        write_container(item, candidates)
+                    else:
+                        literal(item)
             if comparison and output is not None and position - first >= _JSON_SHARED_MINIMUM:
                 emitted_evaluations.setdefault(len(item), []).append((item, first, position))
 
@@ -592,7 +608,7 @@ def _write_json_ranges(path, value, sources, *, encoder):
                 if mapping:
                     literal(str(key))
                     emit(encoder.key_separator.encode())
-                else:
+                elif not comparison_owner(child):
                     # A full-pool comparison consists of many small scores.
                     # Reuse a contiguous equal run as one range instead of
                     # rewriting it because each score is below the threshold.
@@ -602,6 +618,7 @@ def _write_json_ranges(path, value, sources, *, encoder):
                         if end <= index:
                             end = index
                             while (end < len(item) and end in fields and
+                                   not comparison_owner(item[end]) and
                                    source.value_equal(fields[end], item[end], encoder.allow_nan)):
                                 end += 1
                             equal_run_ends[source_index] = end

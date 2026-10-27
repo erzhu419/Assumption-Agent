@@ -3,6 +3,9 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
+import pytest
+
+from hegel_machine.cognition import anonymous_research_archive as archives
 from hegel_machine.cognition.anonymous_research_archive import (
     load_research_archive, resolve_workspace_archive,
 )
@@ -11,6 +14,7 @@ from hegel_machine.cognition.code_agent import (
 )
 from hegel_machine.cognition.models import Observation
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+from hegel_machine.cognition.theory_consolidation import INDEX_PATH, LIBRARY_PATH
 from scripts.run_anonymous_revision_inquiry import RegisteredOrganizationAgent
 from scripts.run_online_inquiry_llm import write_json
 from test_native_condition_inquiry import PaidConditionalLab, buy_fixture, execute
@@ -41,6 +45,58 @@ def save_source(root, agent, result):
     write_json(root / 'protocol.json', {'cases': [{'id': 'case'}], 'arms': ['archive']})
     write_json(agent.workspace / 'training.json', result)
     write_json(agent.workspace / 'archive.json', result['outgoing_knowledge'])
+
+
+@pytest.mark.parametrize(('declaration', 'saved_name'), [
+    ('reference', 'training.json'), ('missing', 'research_state.json'), ('empty', 'training.json')])
+def test_workspace_archive_keeps_bank_references_without_loading_bank_payloads(
+        tmp_path, monkeypatch, declaration, saved_name):
+    workspace = tmp_path / 'source'
+    workspace.mkdir()
+    model = 'def predict(row): return 0.\n'
+    (workspace / 'model.py').write_text(model)
+    references = {field: {'file': str(workspace / name), 'json_path': []}
+                  for field, name in (('theory_index', INDEX_PATH),
+                                      ('theory_consolidation', LIBRARY_PATH))}
+    for reference in references.values():
+        write_json(Path(reference['file']), {'retained': 'x' * 65536})
+    write_json(workspace / saved_name, {'inherited_files': ['model.py'], 'events': [],
+        'model': 'model.py', 'evaluated_model': None, 'theory_index': {'large_bank': 'x' * 65536}})
+    declarations = (references if declaration == 'reference' else
+                    {field: {} for field in references} if declaration == 'empty' else {})
+    archive = {'workspace': str(workspace), 'lessons': ['Retain failed source evidence.'],
+        'question_traces': [{'id': 'failed', 'status': 'refuted'}],
+        **declarations}
+    original = deepcopy(archive)
+    read, selected_read = Path.read_text, archives.read_json_checkpoint
+    selected = []
+
+    def no_bank_text(path, *args, **kwargs):
+        assert path.name != saved_name
+        if declaration != 'empty':
+            assert path.name not in {Path(INDEX_PATH).name, Path(LIBRARY_PATH).name}
+        return read(path, *args, **kwargs)
+
+    def projected(path, *, keys=None):
+        assert keys == {'inherited_files', 'events', 'model', 'evaluated_model'}
+        selected.append(Path(path))
+        return selected_read(path, keys=keys)
+
+    monkeypatch.setattr(Path, 'read_text', no_bank_text)
+    monkeypatch.setattr(archives, 'read_json_checkpoint', projected)
+    resolved = resolve_workspace_archive(archive)
+    assert selected == [workspace / saved_name]
+    assert archive == original
+    expected = declarations if declaration == 'empty' else references
+    assert all(resolved[field] == reference for field, reference in expected.items())
+    assert resolved['files']['model.py'] == model
+    if declaration == 'empty':
+        for name in (INDEX_PATH, LIBRARY_PATH):
+            assert json.loads(resolved['files'][name]) == {'retained': 'x' * 65536}
+    else:
+        assert INDEX_PATH not in resolved['files'] and LIBRARY_PATH not in resolved['files']
+    assert resolved['lessons'] == archive['lessons']
+    assert resolved['question_traces'] == archive['question_traces']
 
 
 def test_registered_results_reference_inherited_trace_and_keep_writable_models_independent(tmp_path):

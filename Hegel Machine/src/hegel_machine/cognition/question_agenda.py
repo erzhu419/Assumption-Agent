@@ -31,6 +31,13 @@ def has_executable_query(question):
     return isinstance(expression, dict) and expression.get('op') in _QUERY_OPS
 
 
+def has_method_use_plan(question):
+    plan = question.get('method_use_plan')
+    return (question.get('kind') == 'method_use' and isinstance(plan, dict)
+            and isinstance(plan.get('candidate_id'), str) and bool(plan['candidate_id'])
+            and isinstance(plan.get('binding'), dict))
+
+
 def merge_question_proposal(existing, proposal):
     """A generated missing-contract placeholder cannot erase an authored query."""
     if not (proposal.get('author_work_request') and not has_executable_query(proposal)
@@ -178,6 +185,69 @@ def generate_questions(questions, research_candidates, theories, *, mission=None
     by_id = {question['id']: question for question in questions}
     proposals = []
 
+    # Measured false claims remain useful research inputs even when none of the
+    # compared drafts survived. They do not identify which shared premise failed.
+    refutations = []
+    for question in questions:
+        answer = question.get('semantic_answer') or {}
+        query = (question.get('query_semantics') or {}).get('query_expression') or {}
+        if (question.get('kind') != 'evidence' or answer.get('finite_status') != 'observed_false'
+                or answer.get('value') is not False or not answer.get('evidence')
+                or query.get('op') != 'AllOnFiniteSet'):
+            continue
+        group = next((items for items in refutations if all(
+            items[0].get(key) == question.get(key) for key in ('parent_id', 'context_ref'))
+            and items[0]['semantic_answer'].get('evidence') == answer['evidence']), None)
+        if group is None:
+            refutations.append([question])
+        else:
+            group.append(question)
+    for group in refutations:
+        premises = [item.get('premise_refs', []) for item in group]
+        common = [ref for ref in premises[0] if all(ref in refs for refs in premises[1:])]
+        distinct = [{**_reference('question', item), 'premise_refs': [
+            ref for ref in refs if ref not in common]} for item, refs in zip(group, premises)]
+        source = group[0]
+        references = [{**_reference('question', item),
+            'answer_version': item['semantic_answer'].get('version')}
+            for item in group]
+        parent = by_id.get(source.get('parent_id'), {})
+        # Continue an explicitly bound revision, rather than copying the
+        # already answered boolean check as the new research method.
+        owner = next((item for item in (parent, *group)
+            if item.get('native_representation_plan')), None)
+        declared = owner or source
+        execution_source = {key: deepcopy(declared[key]) for key in
+            ('parent_id', 'context_ref', 'depends_on') if key in declared}
+        execution_source['answer_type'] = 'program'
+        if owner is not None:
+            execution_source['answer_resolution_ref'] = {
+                'evaluator': 'native_representation_and_paid_candidate_comparison',
+                'source_question_ref': _reference('question', owner)}
+        existing_revision = owner is parent and parent.get('kind') == 'program_revision'
+        if not existing_revision and source.get('parent_id') is not None:
+            execution_source['parent_id'] = source['parent_id']
+        identifier = (parent['id'] if existing_revision else
+                      f'agenda:counterexamples:{source["id"]}')
+        proposal = _proposal(identifier,
+            'Which retained premise or executable revision explains these measured prediction failures?',
+            'program_revision', 'measured_counterexamples', references,
+            source=execution_source, uses=_uses(declared, candidates),
+            mission=_owner(declared, mission), basis={'refuted_answers': references,
+                'evidence_rows': deepcopy(source['semantic_answer']['evidence']),
+                'common_premise_refs': deepcopy(common), 'distinct_premise_refs': distinct,
+                'exhaustive_candidate_pool': False},
+            required_output='Bind the refuted forecasts to their actual candidate versions and parent use, '
+                'then supply an executable premise check or revision and its comparison budget. '
+                'The measured failures do not refute every component or select a true winner.')
+        if owner is not None:
+            for key in ('native_representation_plan', 'representation_model', 'theory_target',
+                        'representation_diagnostic', 'representation_research_basis', 'subject_refs'):
+                if key in owner:
+                    proposal[key] = deepcopy(owner[key])
+            proposal.pop('author_work_request', None)
+        proposals.append(proposal)
+
     # Failed predictions supply suspicious declared premises, not a diagnosis.
     for question in questions:
         failure = question.get('failed_confirmation') or {}
@@ -230,6 +300,22 @@ def generate_questions(questions, research_candidates, theories, *, mission=None
                     'witness_rows': [[row.get('row_index') for row in group.get('rows', [])]
                                      for group in diagnostic['witnesses']]},
                 required_output='Author a candidate representation or premise check against the referenced witnesses; no hidden window is supplied.'))
+
+        basis = candidate.get('representation_research_basis')
+        if basis:
+            source = next((q for q in questions if q.get('id') == f'representation:{model}'), {})
+            proposal = _proposal(source.get('id', f'agenda:representation:{model}'),
+                'Does the proposed observable distinction improve this failed parent prediction?',
+                'program_revision', 'representation_alternative', [_reference('candidate', candidate, model)],
+                source=source, uses=source.get('use_sites') or [{'kind': 'supply_component', 'model': model}],
+                mission=_owner(source, mission), basis={'paid_rows': candidate.get('paid_rows'),
+                    'representation_research_basis': deepcopy(basis)},
+                required_output='Check the referenced failures and public distinction; provide a bounded '
+                    'native plan or an executable candidate with its parent use.')
+            proposal['representation_research_basis'] = deepcopy(basis)
+            if source.get('native_representation_plan'):
+                proposal['native_representation_plan'] = deepcopy(source['native_representation_plan'])
+            proposals.append(proposal)
 
     for question in questions:
         answer = question.get('executable_answer') or {}
@@ -404,7 +490,8 @@ def build_agenda(questions, research_candidates, theories, *, mission=None, budg
             and isinstance(native_plan, dict) and bool(native_plan.get('parent_theory_ids'))
             and isinstance(native_plan.get('validation_records'), list)
             and type(native_plan.get('compute_limit')) is int)
-        work = ('native_representation' if native_representation else
+        work = ('method_conditions' if has_method_use_plan(question) else
+                'native_representation' if native_representation else
                 'author_work_request' if cached_request else 'consolidation' if consolidation
                 else 'checked_answer' if checked else 'query'
                 if isinstance(expression, dict) and expression.get('op') in _QUERY_OPS
@@ -419,12 +506,12 @@ def build_agenda(questions, research_candidates, theories, *, mission=None, budg
             reason = 'no_theory_mission'
         elif queue == 'theory' and not _allocated(owner):
             reason = 'theory_allocation_missing'
-        elif (queue == 'theory' and work in {'query', 'consolidation', 'native_representation'}
+        elif (queue == 'theory' and work in {'query', 'consolidation', 'native_representation', 'method_conditions'}
               and _remaining_theory_compute(owner) == 0):
             reason = 'theory_compute_budget'
         elif not question.get('use_sites') and queue == 'task':
             reason = 'no_declared_use'
-        elif work in {'query', 'consolidation', 'native_representation'} and budget.get('compute', 0) <= 0:
+        elif work in {'query', 'consolidation', 'native_representation', 'method_conditions'} and budget.get('compute', 0) <= 0:
             reason = 'compute_budget'
         elif native_representation and native_plan['compute_limit'] <= 0:
             reason = 'native_representation_compute_budget'

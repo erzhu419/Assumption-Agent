@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 from dataclasses import replace
+from datetime import datetime
+from multiprocessing import get_context
 import os
 import signal
 import sys
@@ -14,6 +16,100 @@ from hegel_machine.cognition.experiment_runtime import (
 )
 from hegel_machine.cognition.proposers import _run
 from test_python_paid_score_reuse import MODELS, choose, no_execution, scene
+from test_cognition_temporal_operator_agent import make_agent
+
+
+def test_operator_timing_binds_real_process_pause_without_refunding_its_python_charge(
+        tmp_path, monkeypatch):
+    agent, lab = make_agent(tmp_path)
+    context = get_context('fork')
+    receiver, sender = context.Pipe(duplex=False)
+
+    def paused_history(arguments):
+        sender.send({'entered': monotonic()})
+        os.kill(os.getpid(), signal.SIGSTOP)
+        return {'status': 'fixture_only', 'external_python_wall_seconds': 0.}
+
+    monkeypatch.setattr(agent, '_history', paused_history)
+    monkeypatch.setattr(agent, '_attach_research_advice',
+        lambda action, arguments, result, laboratory: result)
+
+    def execute():
+        result = agent._execute('run', {'operator': 'history'}, lab)
+        sender.send({'result': result, 'record': agent.operator_results[-1], 'costs': agent.costs})
+
+    worker = context.Process(target=execute)
+    worker.start()
+    try:
+        assert receiver.poll(5.)
+        entered = receiver.recv()['entered']
+        stopped_pid, status = os.waitpid(worker.pid, os.WUNTRACED)
+        assert stopped_pid == worker.pid and os.WIFSTOPPED(status)
+        pause_started = monotonic()
+        sleep(.15)
+        pause_ended = monotonic()
+        os.kill(worker.pid, signal.SIGCONT)
+        assert receiver.poll(5.)
+        completed = receiver.recv()
+        worker.join(5.)
+        assert worker.exitcode == 0
+    finally:
+        if worker.is_alive():
+            os.kill(worker.pid, signal.SIGCONT)
+            worker.terminate()
+            worker.join(5.)
+        receiver.close()
+        sender.close()
+    result, record = completed['result'], completed['record']
+    timing = result['operator_execution_timing']
+    assert timing == record['operator_execution_timing']
+    assert timing['operator'] == 'history' and timing['process_id'] == worker.pid
+    assert (timing['monotonic_start_seconds'] <= entered <= pause_started
+            <= pause_ended <= timing['monotonic_end_seconds'])
+    # WSL's realtime clock stepped backwards during this control once. Retain
+    # its raw UTC anchors; the monotonic interval establishes elapsed ordering.
+    assert all(datetime.fromisoformat(timing[key]).utcoffset().total_seconds() == 0.
+               for key in ('utc_start', 'utc_end'))
+    assert timing['wall_seconds'] >= pause_ended-pause_started
+    assert timing['wall_seconds']-timing['host_cpu_seconds'] >= .1
+    assert timing['wall_clock_scope'] == 'monotonic_elapsed_including_wait_and_process_suspension'
+    assert result['external_python_wall_seconds'] == 0.
+    assert result['python_execution_seconds'] >= pause_ended-pause_started
+    assert completed['costs']['python_execution_seconds'] == result['python_execution_seconds']
+    assert completed['costs']['compute_cost'] == 0 and not result.get('truncated')
+
+
+@pytest.mark.parametrize('failure', ['budget', 'operator_error'])
+def test_operator_timing_keeps_existing_budget_refusal_and_failure_accounts(
+        tmp_path, monkeypatch, failure):
+    agent, lab = make_agent(tmp_path)
+    if failure == 'budget':
+        agent.config = replace(agent.config, execution_seconds=0.)
+        expected = 'Python execution time budget exhausted'
+    else:
+        def fail(arguments):
+            raise OSError('retained operator failure')
+        monkeypatch.setattr(agent, '_history', fail)
+        expected = 'retained operator failure'
+    before = deepcopy(agent.costs)
+    limits = agent.config
+    with pytest.raises((ValueError, OSError), match=expected):
+        agent._execute('run', {'operator': 'history'}, lab)
+    record = agent.operator_results[-1]
+    timing = record['operator_execution_timing']
+    assert record['error'] == expected and timing['operator'] == 'history'
+    assert timing['process_id'] == os.getpid()
+    assert timing['monotonic_end_seconds'] >= timing['monotonic_start_seconds']
+    assert timing['interval_scope'] == 'shared_operator_dispatch_and_budget_admission'
+    assert timing['host_cpu_scope'] == 'current_process_only_excludes_child_processes'
+    assert record['python_execution_seconds'] == agent.costs['python_execution_seconds']-before[
+        'python_execution_seconds']
+    if failure == 'budget':
+        assert record['python_execution_seconds'] == 0. and agent.costs == before
+    else:
+        assert record['python_execution_seconds'] >= 0.
+    assert record['compute_cost'] == 0 and agent.config is limits
+    assert signal.getitimer(signal.ITIMER_REAL) == (0., 0.)
 
 
 def test_slow_comparison_scope_stops_before_loading_the_whole_paid_pool(tmp_path, monkeypatch):

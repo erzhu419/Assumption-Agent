@@ -7,6 +7,203 @@ from .method_conditions import method_applicability, same_research_condition
 from .method_revision import distinguishing_experiment, revision_condition
 
 
+def common_method_process_return(comparison):
+    """Compare completed research under its original task/evaluation contract.
+
+    Resource savings remain separate from prediction gain. Intervals are the
+    retained account bounds, not estimates replacing unknown paid work.
+    """
+    from math import isfinite
+
+    result = {'status': 'UNKNOWN', 'helpful': None, 'scope': comparison.get('scope'),
+        'source_refs': deepcopy(comparison.get('source_refs', [])), 'resource_changes': {}}
+
+    def unknown(reason):
+        return {**result, 'reason': reason}
+
+    def number(value):
+        return type(value) in (int, float) and isfinite(value) and value >= 0
+
+    if (not result['scope'] or comparison.get('same_task') is not True
+            or comparison.get('same_evaluation_contract') is not True or not result['source_refs']):
+        return unknown('matching_task_evaluation_and_original_references_required')
+    before, after = comparison.get('before', {}), comparison.get('after', {})
+    if (comparison.get('administrative_censoring') or comparison.get('censored')
+            or any(item.get('administrative_censoring') or item.get('censored')
+                or item.get('execution_complete') is not True for item in (before, after))):
+        return unknown('incomplete_or_administratively_censored_research')
+    if any(type(item.get('completed')) is not bool for item in (before, after)):
+        return unknown('actual_task_completion_required')
+    result['completion'] = {'before': before['completed'], 'after': after['completed']}
+    quality = [item.get('quality', {}) for item in (before, after)]
+    if (any(not number(item.get('loss')) or not number(item.get('threshold')) for item in quality)
+            or quality[0]['threshold'] != quality[1]['threshold']):
+        return unknown('same_original_quality_threshold_and_measured_losses_required')
+    passed = [item['loss'] <= item['threshold'] for item in quality]
+    result['quality'] = {'before_loss': quality[0]['loss'], 'after_loss': quality[1]['loss'],
+        'threshold': quality[0]['threshold'], 'before_passed': passed[0], 'after_passed': passed[1],
+        'basis': 'original_task_quality_threshold'}
+    coverage = [item.get('coverage') for item in (before, after)]
+    if any(type(value) is not int or value <= 0 for value in coverage):
+        return unknown('measured_evaluation_coverage_required')
+    result['coverage'] = {'before': coverage[0], 'after': coverage[1],
+        'change': coverage[1] - coverage[0]}
+    if (before['completed'] and not after['completed'] or passed[0] and not passed[1]
+            or coverage[1] < coverage[0]):
+        return {**result, 'status': 'measured', 'helpful': False,
+            'reason': 'completed_research_degrades_completion_quality_or_coverage'}
+    if not after['completed'] or not passed[1]:
+        return unknown('comparable_completed_quality_not_established')
+
+    resources = ['observation_cost', 'compute_cost']
+    if any('measurement_cost' in item.get('costs', {})
+           or 'measurement_cost' in item.get('cost_intervals', {}) for item in (before, after)):
+        resources.append('measurement_cost')
+
+    def interval(item, resource):
+        bounds = item.get('cost_intervals', {}).get(resource)
+        if bounds is not None:
+            return list(bounds) if (isinstance(bounds, (list, tuple)) and len(bounds) == 2
+                and all(number(value) for value in bounds) and bounds[0] <= bounds[1]) else None
+        value = item.get('costs', {}).get(resource)
+        return [value, value] if number(value) else None
+
+    directions = []
+    for resource in resources:
+        first, second = interval(before, resource), interval(after, resource)
+        delta = [second[0] - first[1], second[1] - first[0]] if first and second else None
+        direction = ('lower' if delta[1] < 0 else 'higher' if delta[0] > 0
+            else 'equal' if delta == [0, 0] else 'not_higher' if delta[1] <= 0
+            else 'not_lower' if delta[0] >= 0 else 'UNKNOWN') if delta is not None else 'UNKNOWN'
+        result['resource_changes'][resource] = {'before': first, 'after': second,
+            'delta_interval': delta, 'direction': direction}
+        directions.append(direction)
+    if not before['completed'] or not passed[0]:
+        return {**result, 'status': 'measured', 'helpful': True,
+            'reason': 'completed_research_improves_task_completion_or_original_quality'}
+    if 'UNKNOWN' in directions:
+        return unknown('resource_order_not_established')
+    if all(value in {'lower', 'equal', 'not_higher'} for value in directions) and 'lower' in directions:
+        return {**result, 'status': 'measured', 'helpful': True,
+            'reason': 'same_completed_quality_and_coverage_with_lower_resources'}
+    if all(value in {'higher', 'equal', 'not_lower'} for value in directions):
+        return {**result, 'status': 'measured', 'helpful': False,
+            'reason': 'same_completed_quality_without_resource_gain'}
+    return {**result, 'status': 'measured', 'reason': 'resource_tradeoff_requires_task_preference'}
+
+
+def observe_common_method_return(feedback, state=None):
+    """Adapt one retained Common use, without treating work scores as returns.
+
+    ``feedback_ref`` identifies the original use across later confirmations.
+    Only ``paired_future`` can score prediction gain: two frozen predictors on
+    the same new paid readings, with the original result references. Comparable
+    process returns remain a separate vector; the prediction action account
+    covers known method fitting only and other original bills stay referenced.
+    """
+    from math import isfinite
+    from .action_policy import ResearchActionPolicy
+    from .models import TaskSpec
+
+    state = deepcopy(state or {})
+    state.setdefault('cost_scope', 'known_method_fit_only_other_original_bills_referenced')
+    experience = state.setdefault('action_experience', {})
+    origins = state.setdefault('origins', [])
+    reference, method_ref, profile = (feedback['feedback_ref'], feedback['method_ref'], feedback['profile'])
+    entry = next((item for item in origins if item['feedback_ref'] == reference), None)
+    if entry is None:
+        entry = {'feedback_ref': deepcopy(reference), 'method_ref': deepcopy(method_ref),
+            'fit_compute_cost': None, 'cost_refs': [], 'status': 'UNKNOWN'}
+        origins.append(entry)
+    for cost_ref in feedback.get('cost_refs', []):
+        if cost_ref not in entry['cost_refs']:
+            entry['cost_refs'].append(deepcopy(cost_ref))
+    process = feedback.get('process_comparison')
+    if process is not None:
+        measured_process = common_method_process_return(process)
+        entry.update(process_comparison=deepcopy(process), process_return=measured_process)
+        after = process.get('after', {})
+        costs = {key: change['after'][0]
+            for key, change in measured_process['resource_changes'].items()
+            if change['after'] is not None and change['after'][0] == change['after'][1]}
+        if (measured_process['status'] == 'measured'
+                and measured_process.get('helpful') is not None
+                and all(key in costs for key in ('observation_cost', 'compute_cost'))):
+            methods = ResearchMethods({'methods': [{'method_id': method_ref['id'],
+                'steps': ['replay_research_program']}]})
+            entry['process_continuation_outcome'] = methods.observe_continuation(method_ref['id'], profile, {
+                'gain': 0., 'normalized_gain': 0., 'reference_rows': after['coverage'],
+                'observation_cost': costs['observation_cost'], 'compute_cost': costs['compute_cost'],
+                'execution_complete': True, 'process_return': measured_process}, source_task=deepcopy(reference))
+        else:
+            entry.pop('process_continuation_outcome', None)
+    cost = feedback.get('fit_compute_cost')
+    if cost is not None:
+        if type(cost) not in (int, float) or not isfinite(cost) or cost < 0:
+            raise ValueError('Common method fit cost must be known nonnegative work or None')
+        if entry['fit_compute_cost'] is not None and entry['fit_compute_cost'] != cost:
+            raise ValueError('a retained method use cannot change its original fitting bill')
+        entry['fit_compute_cost'] = cost
+    cost = entry['fit_compute_cost']
+    if cost is None:
+        return state
+
+    objective = profile['objective']
+    quantile = objective['quantile']
+    spec = TaskSpec('common_method_use', 'Public method-use objective',
+        tuple(f'role_{index}' for index in range(profile['data']['feature_dimensions'])), (), (),
+        risk_quantile=quantile, decision_costs=(quantile, 1. - quantile)
+            if objective['loss'] == 'decision' else None)
+    policy = ResearchActionPolicy([], spec, experience)
+    action = 'replay_research_program'
+    policy.set_action_knowledge(action, {'method_ref': method_ref, 'profile': profile})
+    context = entry.setdefault('context', policy.action_context(action))
+    paid = {'observation_cost': 0, 'measurement_cost': 0, 'compute_cost': cost}
+    paired = feedback.get('paired_future') or {}
+    measured = (feedback.get('execution_complete') is True and feedback.get('status') == 'completed'
+        and not feedback.get('administrative_censoring') and not feedback.get('censored')
+        and paired.get('same_rows') is True and paired.get('data_role') == 'new_paid_readings'
+        and type(paired.get('reference_rows')) is int and paired['reference_rows'] > 0
+        and bool(paired.get('source_refs')) and paired.get('execution_complete') is not False
+        and all(type(paired.get(key)) in (int, float) and isfinite(paired[key]) and paired[key] >= 0
+                for key in ('before_loss', 'after_loss')))
+    if not measured:
+        if 'trial_origin' not in entry and not entry.get('unscored'):
+            outcome = policy.record_unscored_attempt(action, status='unresolved', context=context, **paid)
+            entry.update(status='unscored', unscored=True, unscored_trial=outcome['trials'])
+        return state
+    if entry.get('paired_future') == paired:
+        return state
+
+    if 'trial_origin' not in entry:
+        if entry.get('unscored'):
+            record = experience[context][action]
+            record['unscored_attempts'] -= 1
+            record['unresolved_attempts'] -= 1
+            for resource, amount in paid.items():
+                record[f'unscored_{resource}'] -= amount
+            entry['unscored'] = False
+            record['last_unscored_trial'] = max((item['unscored_trial'] for item in origins
+                if item.get('unscored') and item.get('context') == context), default=-1)
+        outcome = policy.update(action, before_loss=paired['before_loss'], after_loss=paired['after_loss'],
+            context=context, **paid)
+        entry['trial_origin'] = {'context': context, 'action': action,
+            'trial': outcome['trials'], 'credited_gain': outcome['last_gain']}
+    status = ('supported' if paired['after_loss'] < paired['before_loss'] else
+              'refuted' if paired['after_loss'] > paired['before_loss'] else 'unresolved')
+    outcome = ResearchActionPolicy.revise_feedback(experience, entry['trial_origin'], status=status,
+        before_loss=paired['before_loss'], after_loss=paired['after_loss'],
+        evidence_rows=paired['reference_rows'])
+    measured_gain = outcome['trial_outcomes'][str(entry['trial_origin']['trial'])]['gain']
+    methods = ResearchMethods({'methods': [{'method_id': method_ref['id'], 'steps': [action]}]})
+    continuation = methods.observe_continuation(method_ref['id'], profile, {
+        'gain': paired['before_loss'] - paired['after_loss'], 'normalized_gain': measured_gain,
+        'reference_rows': paired['reference_rows'], 'observation_cost': 0, 'compute_cost': cost,
+        'execution_complete': True}, source_task=deepcopy(reference))
+    entry.update(status='measured', paired_future=deepcopy(paired), continuation_outcome=continuation)
+    return state
+
+
 class ResearchMethods:
     def __init__(self, state=None):
         state = state or {}
@@ -141,6 +338,8 @@ class ResearchMethods:
                   "raw_gain": feedback["gain"], "reference_rows": feedback["reference_rows"],
                   "observation_cost": feedback["observation_cost"], "compute_cost": feedback["compute_cost"],
                   "source_task": source_task, "kind": "transfer"}
+        if 'process_return' in feedback:
+            record['process_return'] = deepcopy(feedback['process_return'])
         method.setdefault("continuation_outcomes", []).append(record)
         self.revisions.append({"method_id": method_id, "change": "measure_complete_continuation_return",
                                "gain": record["gain"], "source_task": source_task})

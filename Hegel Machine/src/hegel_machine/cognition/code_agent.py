@@ -697,7 +697,7 @@ def python_model_context(workspace, model):
 
 def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30, risk_quantile=.5,
                           require_fit=False, training_observations=None,
-                          research_compute_budget=None):
+                          research_compute_budget=None, prediction_state=None):
     """Run input rows, optionally bounding extra bound-research witness predictions.
 
     Candidate-row scoring is charged by the caller. The separate allowance
@@ -723,7 +723,7 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
             return evaluate_python_model(copied, inner, observations,
                 timeout_seconds=timeout_seconds, risk_quantile=risk_quantile,
                 require_fit=require_fit, training_observations=training_observations,
-                research_compute_budget=research_compute_budget)
+                research_compute_budget=research_compute_budget, prediction_state=prediction_state)
     workspace, model = python_model_context(workspace, model)
     # Retain the original closed export bytes and paid score identity. Its
     # explicit decomposition runs only in this prediction context, and the
@@ -768,6 +768,8 @@ def evaluate_python_model(workspace, model, observations, *, timeout_seconds=30,
                           reason='research_compute_budget_exhausted')
             return result
         representations = execution.get("representations")
+        if temporal_representation and prediction_state is not None:
+            prediction_state.update(predictions=predictions, representations=representations)
         result["representation_diagnostic"] = (representation_ambiguity(representations, observations)
             if representations is not None else {"status": "not_exposed"})
         training_representations = execution.get("training_representations")
@@ -801,6 +803,10 @@ def closed_temporal_prediction_contract(contract):
         "        if closed_temporal_representation and directory / path == Path(sys.argv[1]):\n"
         "            exec(closed_temporal_representation, model)\n", '')
     result['evaluator_source'] = result['evaluator_source'].replace(
+        ', prediction_state=None', '').replace(
+        ', prediction_state=prediction_state', '').replace(
+        '        if temporal_representation and prediction_state is not None:\n'
+        '            prediction_state.update(predictions=predictions, representations=representations)\n', '').replace(
         '        execution_input = json.dumps(payload)\n', '').replace(
         '                                             execution_input, timeout_seconds, str(workspace))',
         '                                             json.dumps(payload), timeout_seconds, str(workspace))').replace(
@@ -874,7 +880,7 @@ def _model_context_ignored(path, context_root):
     # Identically named files in ordinary model data directories remain inputs.
     return ((path.parent == context_root or path.parent.name == "_evaluated_model")
             and (path.name in {"code_agent_instructions.txt", "research_context.json",
-                               "research_state.json", "method_decision.json", "active.json",
+                               "research_state.json", "method_decision.json", "method_feedback", "active.json",
                                "training.json", "interrupted_training.json", "archive.json", "evaluation.json", "result.json",
                                "protocol.json", "summary.json"}
                  or (path.name.startswith("interrupted_training_") and path.suffix == ".json"

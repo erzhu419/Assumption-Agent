@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+from .checkpoint_storage import read_json_checkpoint
 from .code_agent import python_model_context, _bound_model_contexts, _model_context_ignored
 
 
@@ -48,6 +49,7 @@ def resolve_workspace_archive(archive, training=None):
     Only the executable file view is read back through Common's exporter.
     """
     from .common_archive_inquiry import CommonArchiveInquiryAgent
+    from .theory_consolidation import INDEX_PATH, LIBRARY_PATH
 
     archive = deepcopy(archive)
     if 'files' in archive or 'workspace' not in archive:
@@ -57,9 +59,17 @@ def resolve_workspace_archive(archive, training=None):
         saved = workspace / 'training.json'
         if not saved.is_file():
             saved = workspace / 'research_state.json'
-        training = json.loads(saved.read_text(encoding='utf-8')) if saved.is_file() else {}
+        training = (read_json_checkpoint(saved, keys={
+            'inherited_files', 'events', 'model', 'evaluated_model'}) if saved.is_file() else {})
+    # Common publishes these banks by reference. Preserve declared origins and
+    # retain an existing local bank even when an older archive omitted its key.
+    for field, name in (('theory_index', INDEX_PATH), ('theory_consolidation', LIBRARY_PATH)):
+        if field not in archive and (workspace / name).is_file():
+            archive[field] = {'file': str(workspace / name), 'json_path': []}
     view = SimpleNamespace(workspace=workspace,
-        files=dict.fromkeys(training.get('inherited_files', [])), knowledge=archive)
+        files=dict.fromkeys(training.get('inherited_files', [])), knowledge=archive,
+        theory_index=archive.get('theory_index', {}),
+        theory_consolidation=archive.get('theory_consolidation', {}))
     manifest_paths = ['shared/knowledge.json', *[event['arguments']['manifest']
         for event in training.get('events', []) if event.get('arguments', {}).get('manifest')]]
     model_paths = [training['model']] if training.get('model') else []

@@ -183,6 +183,129 @@ def test_execution_failure_does_not_generate_a_scientific_premise_diagnosis():
     assert not generate_questions([failure, premise], {}, [])
 
 
+def test_measured_refutations_generate_bounded_work_without_a_false_winner():
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / 'docs/evidence/representation_research_20261026/measured_question_returns.json'
+    saved = json.loads(path.read_text())
+    measured = [{'id': identifier, 'kind': 'evidence', 'parent_id': 'task',
+        'context_ref': {'scene': 'paid'}, 'meaning_version': item['meaning_version'],
+        'semantic_answer': item['semantic_answer'],
+        'premise_refs': ['shared', identifier],
+        'query_semantics': {'query_expression': {'op': 'AllOnFiniteSet'}}}
+        for identifier, item in saved.items()]
+    original = deepcopy(measured)
+    generated = generate_questions(measured, {}, [])
+    proposal, = generated
+    assert proposal['kind'] == 'program_revision' and proposal['parent_id'] == 'task'
+    assert proposal['agenda_basis']['common_premise_refs'] == ['shared']
+    assert proposal['agenda_basis']['evidence_rows'] == [609, 610, 611, 612]
+    assert not proposal['agenda_basis']['exhaustive_candidate_pool']
+    assert len(proposal['agenda_basis']['distinct_premise_refs']) == 2
+    assert 'author_work_request' in proposal and 'program' not in proposal
+    agenda = build_agenda(measured, {}, [], budget={'compute': 100, 'author_calls': 0})
+    deferred = next(item for item in agenda['deferred'] if item['question_id'] == proposal['id'])
+    assert deferred['reason'] == 'no_declared_use'
+    assert measured == original
+
+
+def test_predicted_false_or_unmeasured_failure_is_not_measured_counterevidence():
+    source = {'id': 'forecast', 'kind': 'evidence', 'semantic_answer': {
+        'finite_status': 'predicted_false', 'value': False, 'evidence': [1]},
+        'query_semantics': {'query_expression': {'op': 'AllOnFiniteSet'}}}
+    assert not generate_questions([source], {}, [])
+    source['semantic_answer']['finite_status'] = 'observed_false'
+    source['semantic_answer']['evidence'] = []
+    assert not generate_questions([source], {}, [])
+
+
+def test_measured_failures_reuse_the_bound_revision_plan_and_reach_native_research(tmp_path):
+    from test_native_representation_routing import scene, plan
+
+    agent, lab = scene(tmp_path)
+    owner = {'id': 'revision:actual_parent', 'kind': 'program_revision',
+        'parent_id': 'task', 'answer_type': 'program', 'context_ref': {'scene': 'paid'},
+        'use_sites': [{'kind': 'supply_component', 'model': 'parent.py',
+                       'slot': 'executable_parent_revision'}],
+        'native_representation_plan': plan(parent_theory_ids=['actual']),
+        'representation_model': 'parent.py',
+        'completed_agenda_basis': {'previous_failure': 1}}
+    measured = [{'id': f'forecast:{name}', 'kind': 'evidence', 'parent_id': owner['id'],
+        'context_ref': owner['context_ref'], 'meaning_version': 1,
+        'semantic_answer': {'finite_status': 'observed_false', 'value': False,
+                            'evidence': [48, 49], 'version': 2},
+        'premise_refs': ['shared', name],
+        'query_semantics': {'query_expression': {'op': 'AllOnFiniteSet'}}}
+        for name in ('one', 'two')]
+    original = deepcopy([owner, *measured])
+    proposal, = generate_questions([owner, *measured], {}, [])
+    assert proposal['id'] == owner['id'] and proposal['parent_id'] == 'task'
+    assert proposal['answer_type'] == 'program'
+    assert proposal['native_representation_plan'] == owner['native_representation_plan']
+    assert proposal['representation_model'] == owner['representation_model']
+    assert proposal['use_sites'] == owner['use_sites']
+    assert proposal['query_semantics'] == {'mode': 'solution_relation'}
+    assert 'author_work_request' not in proposal
+    agenda = build_agenda([owner, *measured], {}, [], budget={'compute': 50000, 'author_calls': 0})
+    work = next(item for item in agenda['task_agenda'] if item['question_id'] == owner['id'])
+    assert work['status'] == 'ready' and work['work_kind'] == 'native_representation'
+
+    result = agent._execute('run', {'operator': 'research_route', 'research_question': proposal,
+        'theories': [{'id': 'actual', 'program': {'op': 'feature', 'name': 'u'}}]}, lab)
+    assert result['status'] == 'native_representation_candidates_ready'
+    assert result['question_id'] == owner['id']
+    assert result['new_compute_cost'] > 0 and result['native_representation']['comparison_completed']
+    assert result['next_action']['arguments']['operator'] == 'research_choice'
+    assert agent.costs['model_calls'] == agent.costs['observation_cost'] == 0
+    assert [owner, *measured] == original
+
+
+def test_failed_check_keeps_declared_parent_use_but_does_not_rerun_its_answer_query():
+    source = {'id': 'forecast', 'kind': 'evidence', 'parent_id': 'task',
+        'use_sites': [{'kind': 'supply_component', 'model': 'parent.py', 'slot': 'revision'}],
+        'semantic_answer': {'finite_status': 'observed_false', 'value': False,
+                            'evidence': [1]},
+        'query_semantics': {'query_expression': {'op': 'AllOnFiniteSet'}}}
+    proposal, = generate_questions([source], {}, [])
+    assert proposal['use_sites'] == source['use_sites'] and proposal['answer_type'] == 'program'
+    assert proposal['query_semantics'] == {'mode': 'solution_relation'}
+    assert 'author_work_request' in proposal and 'native_representation_plan' not in proposal
+    agenda = build_agenda([source], {}, [], budget={'compute': 50000, 'author_calls': 0})
+    deferred = next(item for item in agenda['deferred'] if item['question_id'] == proposal['id'])
+    assert deferred['reason'] == 'author_work_unfunded'
+
+
+def test_measured_failure_does_not_replace_the_answered_parent_readout_with_a_revision():
+    parent = question('answered_readout')
+    parent['semantic_answer'] = {'status': 'answered', 'value': 0., 'version': 1}
+    parent['native_representation_plan'] = {'parent_theory_ids': ['retained'],
+        'validation_records': [1], 'compute_limit': 100, 'max_candidates': 4}
+    source = {'id': 'forecast', 'kind': 'evidence', 'parent_id': parent['id'],
+        'semantic_answer': {'finite_status': 'observed_false', 'value': False,
+                            'evidence': [1]},
+        'query_semantics': {'query_expression': {'op': 'AllOnFiniteSet'}}}
+    original = deepcopy(parent)
+    proposal, = generate_questions([parent, source], {}, [])
+    assert proposal['id'] != parent['id'] and proposal['parent_id'] == parent['id']
+    assert proposal['native_representation_plan'] == parent['native_representation_plan']
+    assert proposal['answer_type'] == 'program' and parent == original
+
+
+def test_observable_representation_proposal_preserves_its_actual_evidence_and_plan():
+    source = question('representation:parent.py')
+    source['native_representation_plan'] = {'parent_theory_ids': ['actual'],
+        'validation_records': [1], 'compute_limit': 10}
+    basis = {'failure_refs': [{'id': 'failure_1'}, {'id': 'failure_2'}],
+        'distinction_program': {'op': 'lag', 'name': 'u', 'lag': 1}}
+    candidate = {'paid_rows': 10, 'representation_research_basis': basis}
+    proposals = generate_questions([source], {'parent.py': candidate}, [])
+    proposal, = proposals
+    assert proposal['representation_research_basis'] == basis
+    assert proposal['native_representation_plan'] == source['native_representation_plan']
+    assert proposal['origin']['kind'] == 'representation_alternative'
+
+
 def test_shared_structure_dispatch_without_typed_sources_returns_author_work_not_an_answer():
     from types import SimpleNamespace
     from hegel_machine.cognition.question_object_queries import evaluate_shared_structure

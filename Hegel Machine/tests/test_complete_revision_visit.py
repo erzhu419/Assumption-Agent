@@ -1,6 +1,7 @@
 """An already-started revision gets one priced, fully checked finite fit."""
 
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -146,3 +147,70 @@ def test_last_pending_completion_keeps_whole_search_open_until_old_frontier_exha
     assert result['frontier_exhausted'] is frontier_exhausted
     assert result['search_completed'] is frontier_exhausted
     assert (result['cursor']['layer'], result['cursor']['offset']) == (cursor['layer'], cursor['offset'])
+
+
+@pytest.mark.parametrize('retained_grammar', [False, True])
+def test_retained_mixed_roster_only_supplies_native_programs_to_fitting(monkeypatch, retained_grammar):
+    from hegel_machine.cognition.theory_consolidation import (
+        _relation_request_basis, _relation_transfer_components,
+    )
+
+    candidate = {**edit_candidate(), 'version': 1}
+    parent_program = binary('mul', constant(5.), feature())
+    parent = component('parent', parent_program)
+    typed = [component('old_coordinate', feature(), version=3),
+             component('old_constant', constant(1.), version=7)]
+    opaque = {'id': 'python_forecast:native_public_response@1:0', 'version': 8,
+        'forecast_ref': {'file': 'forecasts_0008.json', 'json_path': ['forecasts', 0],
+                         'model': 'retained_old_python.py'},
+        'role_signature': deepcopy(parent['role_signature']),
+        'output_unit': parent['output_unit'], 'context_ref': deepcopy(parent['context_ref'])}
+    roster = [typed[0], opaque, typed[1]]
+    original = deepcopy(roster)
+    arguments = {'_retained_components': roster, '_retained_parent': parent,
+        'component_theory_ids': [item['id'] for item in roster]}
+    # Retained execution keeps the original mixed roster, rather than borrowing
+    # newer live declarations or deleting its Python comparison entries.
+    agent = SimpleNamespace(questions=[], theory_index={
+        typed[0]['id']: component(typed[0]['id'], constant(99.), version=4)})
+    context = _relation_transfer_components(agent, arguments, candidate)
+    basis = _relation_request_basis(context['parent'], context['components'], arguments,
+                                    candidate, 'retained_library.json')
+    assert context['components'] == roster
+    assert [(item['id'], item['version']) for item in basis['components']] == [
+        (item['id'], item['version']) for item in roster]
+
+    monkeypatch.setattr(revisions, '_fit_revision_binding',
+                        lambda *a, **kw: pytest.fail('preparation must not fit'))
+    kwargs = {'evidence_checks': examples(parent_program),
+              'fitting': {**FITTING, 'operations': ['refit'], 'max_structures': 1}}
+    cursor = {'layer': 0, 'offset': 0, 'pending_fits': []}
+    baseline = revisions.prepare_revision_visit(candidate, parent, typed,
+        {'compute': 5000}, cursor=cursor, **kwargs)
+    if retained_grammar:
+        state = baseline['prepared_visit']['_generator'].gi_frame.f_locals['next_cursor']['fitting']
+        kwargs['grammar_preparation'] = {'source_ref': {
+            'file': 'retained_grammar.json', 'json_path': ['fitting']},
+            'state': {key: deepcopy(state[key]) for key in ('structures', 'grammar_cursor')}}
+        baseline['prepared_visit']['_generator'].close()
+        baseline = revisions.prepare_revision_visit(candidate, parent, typed,
+            {'compute': 5000}, cursor=cursor, **kwargs)
+    actual = revisions.prepare_revision_visit(candidate, context['parent'], context['components'],
+        {'compute': 5000}, cursor=cursor, **kwargs)
+    try:
+        assert actual['prepared_visit'] is not None
+        assert actual['quote'] == baseline['quote']
+        assert actual['actual_compute_cost'] == baseline['actual_compute_cost']
+        assert actual['search_position'] == baseline['search_position']
+        assert actual['_quote_context']['pools'] == baseline['_quote_context']['pools']
+        assert [item['id'] for item in actual['_quote_context']['pools'][0]][:2] == [
+            item['id'] for item in typed]
+        assert actual['cursor'] == baseline['cursor'] == cursor
+        assert roster == original and 'program' not in opaque
+        assert agent.theory_index[typed[0]['id']]['version'] == 4
+        assert basis == _relation_request_basis(context['parent'], context['components'], arguments,
+                                                candidate, 'retained_library.json')
+    finally:
+        baseline['prepared_visit']['_generator'].close()
+        if actual['prepared_visit'] is not None:
+            actual['prepared_visit']['_generator'].close()

@@ -104,6 +104,46 @@ def test_no_qualified_source_keeps_whole_strategy_with_identical_B_library(tmp_p
     assert result['closed_source_accounting_ref'] == spec['frozen_source']['accounting_ref']
 
 
+def test_saved_research_method_requires_declared_split_and_changes_C_payload_only(tmp_path, monkeypatch):
+    from test_research_program_consolidation import compile_sources
+
+    spec, _ = frozen_spec(tmp_path)
+    learner, compiled = compile_sources(tmp_path / 'method_sources')
+    method = deepcopy(learner.theory_consolidation['candidates'][compiled['frozen_candidates'][0]['candidate_id']])
+    method['id'] = 'new'
+    original = preparation._value(spec['frozen_source']['source_plan_ref'])
+    sources = [q['theory_target']['context_ref']['source_id']
+               for q in original['prepared_public_questions'].values()][:2]
+    method['source_ids'] = sources
+    for outcome, reconstruction, source_id in zip(method['source_outcomes'], method['source_reconstruction'], sources):
+        outcome['source_id'] = reconstruction['source_id'] = source_id
+    baseline = preparation._value(spec['materials']['initial_library_ref'])
+    save(Path(spec['frozen_source']['library_ref']['file']), {
+        'candidates': {**baseline['candidates'], 'new': method}})
+    prohibit_science(monkeypatch)
+    with pytest.raises(ValueError, match='declared target validation_records'):
+        preparation.prepare_frozen_successor(spec, tmp_path / 'missing_split')
+    spec['target']['research_program_fitting'] = {'validation_records': [2]}
+    result = preparation.prepare_frozen_successor(spec, tmp_path / 'successor')
+    assert result['qualified_local_proposal_count'] == 1
+    assert result['proposal_qualification'][0]['purpose'] == 'method'
+    assert not result['whole_strategy']['no_new_object_C_falls_back_to_B']
+    keep = _read_library(result['automatic_C_library_ref'], tmp_path)
+    assert keep['candidates']['old'] == baseline['candidates']['old']
+    assert keep['candidates']['new'] == method
+    plan = preparation._value(result['whole_strategy']['plan_ref'])
+    assert all(question['theory_target']['research_program_fitting'] == {'validation_records': [2]}
+               for question in plan['prepared_public_questions'].values())
+    assert plan['limits']['compute_budget'] == spec['target']['limits']['compute_budget']
+    assert not result['successor_execution_authorized'] and result['new_fits'] == 0
+    quote = result['budget_readiness']['method_complete_unit_quote']
+    assert quote['execution_group_count'] == 2
+    assert quote['maximum_method_outputs'] == 2
+    assert quote['method_stages'][0]['retained_refit_compute'] == 6 * quote['maximum_training_rows']
+    assert not quote['expanded_method_search_completion_guaranteed']
+    assert not quote['method_priority_changed'] and quote['new_predictions'] == 0
+
+
 def test_no_new_object_identical_library_is_frozen_without_expanding_old_history(tmp_path, monkeypatch):
     from hegel_machine.cognition import theory_consolidation
 

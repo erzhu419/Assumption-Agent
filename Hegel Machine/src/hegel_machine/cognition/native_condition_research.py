@@ -307,7 +307,7 @@ def _research_decision(result):
 
 
 def update_native_boundary(public_spec, observations, budget, *, previous, proposal,
-                           max_candidates=8, observation_budget=0):
+                           max_candidates=8, observation_budget=0, paid_record_indices=()):
     """Consume a purchased boundary using the retained two-endpoint experiment.
 
     This is the inexpensive interval-update stage of unified research: keep the
@@ -319,8 +319,11 @@ def update_native_boundary(public_spec, observations, budget, *, previous, propo
     spec, before = _spec(public_spec), budget.spent
     start = previous.get('observed_record_count',
                          max(previous['fit_record_indices'], default=-1) + 1)
+    paid = list(dict.fromkeys(paid_record_indices))
+    if any(type(index) is not int or not 0 <= index < len(observations) for index in paid):
+        raise ValueError('paid boundary records must select existing laboratory records')
     selected = list(dict.fromkeys([*previous['fit_record_indices'],
-                                   *range(start, len(observations))]))
+                                   *paid, *range(start, len(observations))]))
     rows = [row for position in selected for row in _rows(observations[position])]
     result = {key: deepcopy(previous[key]) for key in ('finite_prior', 'scope',
                                                        'evidence', 'available_pairs')}
@@ -369,7 +372,7 @@ def update_native_boundary(public_spec, observations, budget, *, previous, propo
     if not score(original):
         return finish()
     action, = proposal['query_action']['arguments']['actions']
-    acquired = next((position for position in range(start, len(observations))
+    acquired = next((position for position in [*paid, *range(start, len(observations))]
                      if observations[position]['action']['sequence'] == action['sequence']), None)
     if acquired is None:
         raise ValueError('boundary update requires its actual purchased trajectory')

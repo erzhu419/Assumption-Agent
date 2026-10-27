@@ -90,10 +90,15 @@ def _occurrence_contracts(pattern, program, holes, budget):
     return contracts, origins
 
 
-def _prepare(record, program, budget, *, side=None):
+def _declared_contract_header(record):
     signatures = record.get('role_signature')
     if not isinstance(signatures, dict) or record.get('output_unit') is None or 'context_ref' not in record:
         raise _MissingContract('explicit_roles_output_unit_and_context_required')
+    return signatures
+
+
+def _prepare(record, program, budget, *, side=None):
+    signatures = _declared_contract_header(record)
     variables = {name for name, _ in program.observed_variables()}
     for name in variables:
         if not isinstance(signatures.get(name), dict) or any(
@@ -1127,7 +1132,7 @@ def _check_generated_units(program, expected, roles, known, budget):
 
 
 def _revision_fitting_pools(candidate, parent, components, holes, rows, fitting, budget, state,
-                            *, parameter_components=None, parent_components=None):
+                            *, parameter_components=None, parent_components=None, excluded=None):
     """Use the original grammar's unfitted structures, never response labels for holes."""
     from .synthesis import OPERATIONS, iter_synthesis_structures
 
@@ -1142,12 +1147,32 @@ def _revision_fitting_pools(candidate, parent, components, holes, rows, fitting,
         raise _MissingContract('finite_revision_fitting_contract_required')
     if not holes:
         return []
+    # A Program can remain an untyped prediction/structural seed. In particular,
+    # the retained frozen_keep/remove seeds do not declare units or roles.
+    # Only explicitly declared components may supply hole values or known units.
+    program_components = [item for item in components if item.get('program')]
+    typed_components = []
+    for item in program_components:
+        try:
+            _declared_contract_header(item)
+        except _MissingContract as error:
+            record = {'component_id': item.get('id'), 'version': item.get('version', 1),
+                'reason': str(error), 'status': 'UNKNOWN', 'scope': 'typed_revision_pool_only'}
+            if item.get('source_ref'):
+                record['source_ref'] = deepcopy(item['source_ref'])
+            saved = state.setdefault('excluded_components', [])
+            if record not in saved:
+                saved.append(record)
+            if excluded is not None:
+                excluded.append(deepcopy(record))
+            continue
+        typed_components.append(item)
     structures = state.setdefault('structures', [])
     grammar_cursor = state.setdefault('grammar_cursor', {})
     if len(structures) < maximum and grammar_cursor.get('status') != 'completed':
         stream = iter_synthesis_structures(rows, operations=operations, budget=budget,
             max_history=history, cursor=grammar_cursor,
-            seed_programs=tuple(_program(item['program']).expanded() for item in components))
+            seed_programs=tuple(_program(item['program']).expanded() for item in program_components))
         for item in stream:
             structures.append({**{key: deepcopy(item[key]) for key in
                 ('operation', 'rationale', 'proposal_index', 'source_ref')},
@@ -1158,10 +1183,10 @@ def _revision_fitting_pools(candidate, parent, components, holes, rows, fitting,
         if grammar_cursor.get('budget_exhausted'):
             raise _Incomplete
     pools = []
-    known_units = {_program(item['program']).expanded(): item['output_unit'] for item in components}
+    known_units = {_program(item['program']).expanded(): item['output_unit'] for item in typed_components}
     known_units[_program(parent['program']).expanded()] = parent['output_unit']
     for hole in holes:
-        pool = [item for item in components if item.get('context_ref') == parent['context_ref']
+        pool = [item for item in typed_components if item.get('context_ref') == parent['context_ref']
                 and item.get('output_unit') == hole['output_unit']]
         for index, item in enumerate(structures):
             program = _program(item['program']).expanded()
@@ -1785,7 +1810,7 @@ def _propose_revision_steps(candidate, parent, components, allocation=None, *, e
                        if key != 'grammar_preparation_ref'}}
             pools = _revision_fitting_pools(candidate, parent, components, open_holes, rows, fitting,
                 budget, fitting_state, parameter_components=parameter_components,
-                parent_components=parent_components)
+                parent_components=parent_components, excluded=excluded)
             if grammar_preparation is not None:
                 next_cursor['fitting'] = {
                     'grammar_preparation_ref': deepcopy(grammar_preparation['source_ref']),

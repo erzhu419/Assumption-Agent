@@ -41,7 +41,7 @@ def export_revision_candidates(agent, question):
     execution = question.get('frozen_recall_execution') or {}
     target = question.get('theory_target') or {}
     if (execution.get('basis', {}).get('target') != target
-            or target.get('revision_fitting') is None):
+            or target.get('revision_fitting') is None and target.get('research_program_fitting') is None):
         return result
     identifiers = list(dict.fromkeys(identifier
         for work in execution.get('result', {}).get('work', [])
@@ -62,7 +62,9 @@ def export_revision_candidates(agent, question):
     for identifier in identifiers:
         theory = agent.theory_index.get(identifier, {})
         binding = theory.get('consolidation_ref', {})
-        if not identifier.startswith(prefix) or not binding.get('parent') or not theory.get('program'):
+        method = binding.get('kind') == 'research_program'
+        if (not identifier.startswith(prefix) or not theory.get('program')
+                or not binding.get('parent') and not method):
             continue
         theory_ref = {'id': identifier, 'version': theory.get('version', 1)}
         if any(item['theory_ref'] == theory_ref for item in saved):
@@ -78,6 +80,8 @@ def export_revision_candidates(agent, question):
         try:
             if transfer is None:
                 raise ValueError('exact_revision_result_reference_required')
+            if method and (not binding.get('source_ref') or not binding.get('fit_split')):
+                raise ValueError('exact_replayed_method_fit_reference_required')
             if (theory.get('context_ref') != target.get('context_ref')
                     or theory.get('output_unit') != target.get('output_unit')
                     or any(target.get('role_signature', {}).get(name) != contract
@@ -135,11 +139,172 @@ def _action(proposal, question):
     return result
 
 
-def _attempted(proposal, results, paid_rows):
+def paid_experiment_record_indices(actions, observations, public_spec, question, contract,
+                                   *, prediction_rows=None):
+    """Bind reset-trajectory answers to their actual paid records, without buying.
+
+    This is the finite author's fixed public episode, not a cache for arbitrary
+    laboratories. A new parent can use the same fact; a declared distribution,
+    instrument or measurement question still asks for its own measurement.
+    """
+    missing = [None] * len(actions)
+    original = contract.get('question') or {}
+    if (not original or not public_spec.get('reset') or not question
+            or question.get('context_ref') != original.get('context_ref')
+            or question.get('answer_type') == 'distribution'
+            or question.get('kind') in {'instrument', 'measurement'}):
+        return missing
+    names = [item['name'] if isinstance(item, dict) else item
+             for item in public_spec.get('controls', [])]
+
+    def inputs(action):
+        if (action.get('kind') != 'trajectory' or action.get('channels', []) != []
+                or set(action) - {'kind', 'channels', 'sequence'}):
+            return None
+        sequence = action.get('sequence')
+        if not isinstance(sequence, list) or not sequence or any(
+                not isinstance(point, dict) or set(point) != set(names) for point in sequence):
+            return None
+        if prediction_rows is not None:
+            try:
+                rows = prediction_rows(action)
+            except (ValueError, KeyError, TypeError):
+                return None
+            return [{'features': row.features, 'history': list(row.history)} for row in rows]
+        return [{'features': point, 'history': sequence[:index]}
+                for index, point in enumerate(sequence)]
+
+    selected = []
+    for action in actions:
+        expected = inputs(action)
+        matches = []
+        if expected and expected[0]['history'] == []:
+            for index, record in enumerate(observations):
+                rows = record.get('rows', [])
+                if (record.get('action', {}).get('kind') == 'trajectory'
+                        and record['action'].get('channels', []) == []
+                        and record.get('experiment_context_ref', original.get('context_ref'))
+                            == question.get('context_ref')
+                        and rows and all('target' in row for row in rows)
+                        and [{'features': row['features'], 'history': list(row.get('history', []))}
+                             for row in rows] == expected):
+                    matches.append(index)
+        # Conflicting answers need research; do not turn one into a cached fact.
+        selected.append(matches[0] if matches and all(
+            observations[index]['rows'] == observations[matches[0]]['rows'] for index in matches) else None)
+    return selected
+
+
+def _boundary_callbacks_completed(proposal, feedback, record_indices):
+    """An acquired point does not complete a later native boundary analysis."""
+    arguments = proposal.get('arguments', {})
+    owner = proposal.get('research_question') or arguments.get('question') or {}
+    for callback in arguments.get('after_observation', []):
+        selected = callback.get('boundary_update')
+        if selected is None:
+            continue
+        question = callback.get('research_question') or callback.get('question') or owner
+        meaning = question.get('meaning_version', owner.get('meaning_version', 1))
+        completed = False
+        for outcome in feedback.get('after_observation_results', []):
+            actual = outcome.get('arguments', {})
+            actual_question = actual.get('research_question') or actual.get('question') or {}
+            update = actual.get('boundary_update', {})
+            result = outcome.get('native_condition_research', {}).get('boundary_update', {})
+            if (outcome.get('operator') == callback.get('operator') == 'native_condition_research'
+                    and not outcome.get('error')
+                    and outcome.get('research_question_id', actual_question.get('id')) == question.get('id')
+                    and outcome.get('question_meaning_version', actual_question.get('meaning_version', 1))
+                        == meaning
+                    and all(update.get(key) == selected.get(key)
+                            for key in ('round_index', 'proposal_index'))
+                    and ('paid_record_indices' not in update
+                         or update['paid_record_indices'] == record_indices)
+                    and result.get('observation_index') in record_indices
+                    and result.get('status') in {'boundary_refined', 'structure_mismatch'}):
+                completed = True
+                break
+        if not completed:
+            return False
+    return True
+
+
+def _attempted(proposal, results, paid_rows, *, paid_record_indices=None):
     def content(value):
         return {key: item for key, item in value.items() if key != 'research_question'}
+    def purpose(value):
+        arguments = value.get('arguments', {})
+        question = value.get('research_question') or arguments.get('question') or {}
+        return {key: question[key] for key in ('kind', 'answer_type', 'context_ref',
+            'answer_resolution_ref', 'query_semantics') if key in question}
+    query_purpose = purpose(proposal)
+    if (proposal.get('action') == 'query' and proposal.get('arguments', {}).get('actions')
+            and not proposal['arguments'].get('revision')
+            and query_purpose.get('answer_type') != 'distribution'
+            and query_purpose.get('kind') not in {'instrument', 'measurement'}):
+        return any((item.get('proposal') or {}).get('action') == 'query'
+            and (item.get('proposal') or {}).get('arguments', {}).get('actions')
+                == proposal['arguments']['actions']
+            and purpose(item.get('proposal') or {}) == query_purpose
+            and not item.get('feedback', {}).get('error')
+            and item.get('feedback', {}).get('record_indices')
+            and (paid_record_indices is None
+                 or item['feedback']['record_indices'] == paid_record_indices)
+            and _boundary_callbacks_completed(proposal, item['feedback'],
+                item['feedback']['record_indices']) for item in results)
     return any(content(item.get('proposal') or {}) == content(proposal)
         and item.get('evidence_after', {}).get('rows') == paid_rows for item in results)
+
+
+def _method_use_action(state, memory, question, paid_rows):
+    """Consume funded method questions and their ordinary parent continuation."""
+    results = list(state.get('method_results', [])) + list(memory.get('program_results', []))
+    questions = {item['id']: item for item in state.get('questions', [])}
+    for child in reversed(list(questions.values())):
+        if child.get('kind') != 'method_use' or child.get('parent_id') != question['id']:
+            continue
+        basis = child.get('agenda_basis') or {'meaning_version': child.get('meaning_version', 1),
+            'answer_version': child.get('semantic_answer', child.get('executable_answer', {})).get('version')}
+        if child.get('completed_agenda_basis') != basis:
+            continue
+        execution = child.get('routing_execution') or {}
+        result = execution.get('result') or {}
+        proposal = result.get('next_action')
+        if not proposal or result.get('status') not in {'method_use_decided', 'method_use_unresolved'}:
+            continue
+        completed = next((index for index in reversed(range(len(results)))
+            if results[index].get('feedback', {}).get('question_id') == child['id']
+            and results[index]['feedback'].get('condition_learning') == result.get('condition_learning')), None)
+        subsequent = results[completed + 1:] if completed is not None else results
+        if not _attempted(proposal, subsequent, paid_rows):
+            return _action(proposal, question)
+    agenda = state.get('research_agenda') or {}
+    selected = agenda.get('selected_question_id')
+    entry = next((item for queue in ('task_agenda', 'theory_agenda')
+        for item in agenda.get(queue, []) if item.get('question_id') == selected
+        and item.get('status') == 'ready' and item.get('work_kind') == 'method_conditions'), None)
+    child = questions.get(selected, {})
+    if entry is None or child.get('parent_id') != question['id']:
+        return None
+    basis = child.get('agenda_basis') or {'meaning_version': child.get('meaning_version', 1),
+        'answer_version': child.get('semantic_answer', child.get('executable_answer', {})).get('version')}
+    if child.get('completed_agenda_basis') == basis:
+        return None
+    mission = child.get('mission') or state.get('research_mission') or {}
+    if mission.get('purpose') not in {'method_learning', 'theory_learning'}:
+        return None
+    funding = mission.get('allocation', mission.get('theory_learning_allocation', 0))
+    funding = funding.get('compute', 0) if isinstance(funding, dict) else funding
+    available = min(max(0, funding - mission.get('resource_usage', {}).get('compute', 0)),
+        max(0, state.get('limits', {}).get('compute_budget', 0)
+            - state.get('costs', {}).get('compute_cost', 0)))
+    if available <= 0:
+        return None
+    proposal = {'action': 'run', 'arguments': {'operator': 'research_route',
+        'research_question': {key: deepcopy(child[key]) for key in
+            ('id', 'meaning_version', 'kind', 'agenda_basis', 'method_use_plan') if key in child},
+        'allocation': {'compute': available}}}
+    return _action(proposal, question) if not _attempted(proposal, results, paid_rows) else None
 
 
 def _completed_choice(results, models, paid_rows, question, state):
@@ -178,20 +343,21 @@ def _completed_choice(results, models, paid_rows, question, state):
     return None
 
 
-def _same_bank_after_unavailable_refit(state, results, question, latest, paid_rows,
-                                      observed_records, max_compute):
-    """Consume the native researcher's published full-paid continuation action."""
+def _native_work_action(state, results, question, latest, paid_rows, observed_records):
+    """Consume a priced pending visit without turning it into another short run."""
     owner_index = next((index for index, item in enumerate(state.get('questions', []))
                         if item['id'] == question['id']), None)
     if owner_index is None or latest is None:
         return None
     owner = state['questions'][owner_index]
     meaning = owner.get('meaning_version', 1)
-    if not any((entry.get('proposal') or {}).get('arguments', {}).get('operator') == 'refit'
+    refit_unavailable = any((entry.get('proposal') or {}).get('arguments', {}).get('operator') == 'refit'
             and entry.get('feedback', {}).get('status') == 'refit_unavailable'
             and entry['feedback'].get('research_question_id') == question['id']
             and entry['feedback'].get('question_meaning_version', 1) == meaning
-            and entry.get('evidence_after', {}).get('rows') == paid_rows for entry in results):
+            and entry.get('evidence_after', {}).get('rows') == paid_rows for entry in results)
+    new_evidence = latest.get('observed_record_count', observed_records) < observed_records
+    if not (refit_unavailable or new_evidence or latest.get('status') == 'search_incomplete'):
         return None
     path = Path('method_decision.json')
     if not path.is_file():
@@ -201,26 +367,40 @@ def _same_bank_after_unavailable_refit(state, results, question, latest, paid_ro
             continue
         for entry in reversed(option.get('current_executions', [])):
             source = entry.get('source', {})
+            continuation = entry.get('compute_continuation', {})
             if (entry.get('question_id') != question['id']
                     or entry.get('round_index') != latest.get('round_index')
                     or entry.get('fit_scope') != 'all_paid_rows'
-                    or entry.get('paid_rows') != paid_rows
                     or entry.get('current_paid_rows') != paid_rows
-                    or entry.get('observed_record_count') != observed_records
+                    or (continuation.get('research_unit', {}).get('quoted_paid_rows') != paid_rows if continuation
+                        else entry.get('paid_rows') != paid_rows
+                             or entry.get('observed_record_count') != observed_records)
                     or source.get('file') != 'research_state.json'
                     or source.get('json_path') != ['questions', owner_index,
                         'native_condition_research', latest.get('round_index')]):
                 continue
+            if continuation and continuation.get('status') != 'available':
+                return _author_work('complete_native_research_unit_unfunded',
+                    ['funded complete research unit within the original compute and execution limits'],
+                    question_ref={'question_id': question['id'], 'meaning_version': meaning},
+                    compute_continuation=deepcopy(continuation))
             proposal = deepcopy(entry.get('resume_action'))
             if not proposal:
                 return None
             arguments = proposal.get('arguments', {})
             if (proposal.get('action') != 'run'
                     or arguments.get('operator') != 'native_condition_research'
-                    or arguments.get('research_question', {}).get('id') != question['id']):
+                    or (arguments.get('research_question') or arguments.get('question') or {}).get('id')
+                        != question['id']):
                 return None
-            arguments['max_compute'] = max_compute
-            return proposal if not _attempted(proposal, results, paid_rows) else None
+            if not _attempted(proposal, results, paid_rows):
+                return proposal
+            if continuation:
+                return _author_work('complete_native_research_unit_already_attempted',
+                    ['new evidence, a changed executable research proposal, or a resolved incomplete return'],
+                    question_ref={'question_id': question['id'], 'meaning_version': meaning},
+                    compute_continuation=deepcopy(continuation))
+            return None
     return None
 
 
@@ -240,6 +420,134 @@ def _json_reference_value(reference):
     for part in reference.get('json_path', []):
         value = value[part]
     return value
+
+
+def representation_research_warrant(question, parents, public_features, *, questions=(), resolve=None):
+    """Recognize a bounded research reason, never evidence of world validity.
+
+    This pure reference consumer is also present in the standalone author. Its
+    inputs are existing paid results, question meanings and executable methods;
+    it supplies no representation formula or preferred history length.
+    """
+    basis = question.get('representation_research_basis') or {}
+    if not basis:
+        return None
+    resolve = resolve or _json_reference_value
+    atoms = {'feature', 'lag', 'available', 'accumulate', 'event_delta', 'window_sum'}
+
+    def inputs(program, names):
+        if not isinstance(program, dict) or not program.get('op'):
+            return None
+        found = []
+        def visit(node):
+            if node.get('op') in {'feature', 'lag'} and node.get('name') not in names:
+                raise ValueError('program_requires_nonpublic_input')
+            for child in node.get('children', []):
+                visit(child)
+            for definition in node.get('definitions', {}).values():
+                visit(definition['body'])
+            if node.get('op') in atoms:
+                found.append(node)
+        try:
+            visit(program)
+        except (ValueError, KeyError, TypeError):
+            return None
+        return found
+
+    def source(reference):
+        try:
+            return resolve(reference)
+        except (OSError, ValueError, KeyError, TypeError, IndexError):
+            return None
+
+    def question_source(reference):
+        return next((item for item in questions
+            if item['id'] == reference.get('id', reference.get('question_id'))
+            and item.get('meaning_version', 1) == reference.get('version',
+                reference.get('meaning_version', 1))), None)
+
+    alternative = basis.get('alternative_ref')
+    if alternative:
+        compared = source(alternative) or {}
+        program = compared.get('program')
+        if program is None and compared.get('program_ref'):
+            program = source(compared['program_ref'])
+        before, after = (compared.get('best_retained_validation_predictions'),
+                         compared.get('validation_predictions'))
+        if (inputs(program, public_features) is not None
+                and compared.get('best_retained_id') in parents and isinstance(before, list)
+                and isinstance(after, list) and before and len(before) == len(after)
+                and before != after):
+            return 'retained_alternative_has_different_task_predictions'
+
+    semantic = basis.get('semantic_question_ref')
+    if semantic:
+        unresolved = question_source(semantic)
+        if (unresolved and unresolved.get('kind') in {'representation', 'instrument', 'measurement', 'binding'}
+                and (unresolved.get('semantic_answer') or {}).get('status') != 'answered'
+                and unresolved.get('status', 'open') not in {'completed', 'closed'}
+                and unresolved.get('answer_resolution_ref')
+                and any(use in question.get('use_sites', []) for use in unresolved.get('use_sites', []))):
+            return 'unresolved_bound_representation_semantics'
+
+    method_ref = basis.get('learned_method_ref')
+    if method_ref:
+        method = source(method_ref) or {}
+        roles = method.get('role_signature') or {}
+        target = question.get('theory_target') or {}
+        target_roles = target.get('role_signature') or {}
+        remaining, mapping = dict(target_roles), {}
+        for name, role in roles.items():
+            bound = next((key for key, value in remaining.items() if value == role), None)
+            if bound is None:
+                break
+            mapping[name] = bound
+            del remaining[bound]
+        else:
+            sources = [source(reference) or {} for reference in method.get('research_program_source_refs', [])]
+            procedures = [item.get('research_program') or {} for item in sources]
+            contract = method.get('research_program_contract') or {}
+            def bind(node):
+                return {**node, **({'name': mapping.get(node['name'], node['name'])}
+                    if node.get('op') in {'feature', 'lag'} else {}),
+                    'children': [bind(child) for child in node.get('children', [])]}
+            terms = [inputs(bind(term), public_features) for term in contract.get('terms', [])]
+            retained = [inputs(program, public_features) for program in parents.values()]
+            changed_terms = (terms and all(value is not None for value in (*terms, *retained))
+                and any(atom not in [old for group in retained for old in group]
+                        for group in terms for atom in group))
+            # Refit-only methods need genuinely different selected coordinates.
+            # The existing conditional-coordinate method itself declares a finite
+            # representation search; it is not a claimed missing world variable.
+            proposes_representation = (changed_terms or contract.get('operation') ==
+                'discover_conditional_coordinates' and all(inputs(bind(term), public_features) is not None
+                    for term in [contract.get('gate_coordinate', {}), *contract.get('branch_basis', [])]))
+            if (roles and not remaining and inputs(method.get('template', {}).get('pattern'), roles) is not None
+                    and method.get('kind') == 'research_program' and method.get('producer')
+                    and proposes_representation and procedures
+                    and method.get('output_unit') == target.get('output_unit')
+                    and all(procedure.get('graph', {}).get('nodes', {}).get(
+                        procedure.get('output_node'), {}).get('answer') for procedure in procedures)):
+                return 'retained_learned_method_proposes_representation_research'
+
+    # A repeated check of two claims on the same rows is one witnessed failure,
+    # not two prospective failures. Read the existing measured-question answers.
+    witnesses = []
+    for reference in basis.get('failure_refs', []):
+        failed = question_source(reference)
+        answer = (failed or {}).get('semantic_answer') or {}
+        evidence = answer.get('evidence')
+        if (answer.get('finite_status') == 'observed_false' and answer.get('value') is False
+                and evidence and evidence not in witnesses
+                and answer.get('version') == reference.get('answer_version', answer.get('version'))):
+            witnesses.append(evidence)
+    proposed = inputs(basis.get('distinction_program'), public_features)
+    retained = [inputs(program, public_features) for program in parents.values()]
+    if (len(witnesses) >= 2 and proposed is not None and all(value is not None for value in retained)
+            and any(atom not in [old for group in retained for old in group] for atom in proposed)):
+        return 'prospective_failures_with_public_unrepresented_distinction'
+    # Missing evidence is unresolved author work, never scientific refutation.
+    return None
 
 
 def _retained_representation_parent(state, results, model, target):
@@ -356,8 +664,13 @@ def _representation_action(contract, question, choice, state, memory, paid_rows)
             diagnostic = _json_reference_value(evaluation['score_result_ref']).get(
                 'representation_diagnostic', {})
     threshold = state.get('limits', {}).get('confirmation_mse_threshold', 1e-10)
-    if (evaluation.get('returncode') != 0 or diagnostic.get('empirical_mse_floor', 0) <= threshold
-            or not diagnostic.get('conflicting_groups')):
+    current = next((item for item in state.get('questions', []) if item['id'] == question['id']), {})
+    question = {**question, **{key: current[key] for key in ('use_sites',) if key in current}}
+    basis = (current.get('representation_research_basis') or question.get('representation_research_basis')
+        or state.get('research_candidates', {}).get(model, {}).get('representation_research_basis'))
+    collision = (diagnostic.get('empirical_mse_floor', 0) > threshold
+                 and bool(diagnostic.get('conflicting_groups')))
+    if evaluation.get('returncode') != 0 or not collision and not basis:
         return None
     plan = contract.get('native_representation_plan')
     if (not isinstance(plan, dict) or not isinstance(plan.get('parent_theory_ids'), list)
@@ -377,6 +690,8 @@ def _representation_action(contract, question, choice, state, memory, paid_rows)
     if any((entry.get('proposal') or {}).get('arguments', {}).get('operator') == 'research_route'
             and (entry.get('proposal') or {}).get('arguments', {}).get('research_question', {}).get('id')
                 == f'representation:{model}'
+            and ((entry.get('proposal') or {}).get('arguments', {}).get('research_question', {}).get(
+                'representation_research_basis') or None) == (basis or None)
             and (entry.get('proposal') or {}).get('arguments', {}).get('native_representation_plan') == expected_plan
             and entry.get('evidence_after', {}).get('rows') == paid_rows for entry in all_results):
         return _author_work('representation_research_return_requires_supported_revision_or_new_evidence',
@@ -387,9 +702,20 @@ def _representation_action(contract, question, choice, state, memory, paid_rows)
         return _author_work('actual_retained_representation_program_required',
             ['registered actual retained Program with export address'], source_model=model,
             representation_diagnostic=deepcopy(diagnostic))
+    if not collision:
+        reason = representation_research_warrant({**question,
+            'representation_research_basis': basis}, {parent['id']: parent['program'],
+                **{identifier: item['program'] for identifier, item in state.get('theory_index', {}).items()
+                   if item.get('program') and identifier in plan['parent_theory_ids']}},
+            list(question['theory_target']['role_signature']), questions=state.get('questions', []))
+        if reason is None:
+            return _author_work('representation_research_warrant_unresolved',
+                ['actual competing predictions, bound unresolved semantics, or executable learned-method reference'],
+                source_model=model, representation_research_basis=deepcopy(basis))
     child = {'id': f'representation:{model}',
-        'question': 'Which public input distinctions were lost by the actual retained predictor?',
-        'kind': 'representation', 'origin': 'computed_representation_conflict',
+        'question': ('Which public input distinctions were lost by the actual retained predictor?' if collision
+            else 'Which executable public representation best serves the declared parent use?'),
+        'kind': 'representation', 'origin': ('computed_representation_conflict' if collision else reason),
         'parent_id': question['id'], 'depends_on': [], 'answer_type': 'program',
         'subject_refs': [{'type': 'candidate', 'path': model}],
         'context_ref': deepcopy(question.get('context_ref')),
@@ -397,7 +723,10 @@ def _representation_action(contract, question, choice, state, memory, paid_rows)
                                   'parent_model': model},
         'query_semantics': {'mode': 'solution_relation'},
         'representation_diagnostic': deepcopy(diagnostic),
-        'use_sites': [{'kind': 'supply_component', 'model': model, 'slot': 'representation'}]}
+        **({'representation_research_basis': deepcopy(basis)} if basis else {}),
+        **({'theory_target': deepcopy(question['theory_target'])} if basis else {}),
+        'use_sites': (deepcopy(question['use_sites']) if basis and question.get('use_sites') else
+                      [{'kind': 'supply_component', 'model': model, 'slot': 'representation'}])}
     native_plan = deepcopy(plan)
     native_plan['parent_theory_ids'] = list(dict.fromkeys([*plan['parent_theory_ids'], parent['id']]))
     proposal = {'action': 'run', 'arguments': {'operator': 'research_route',
@@ -486,9 +815,16 @@ def select_actions(public_spec, observations, memory):
         and item.get('native_condition_research')]
     native = [item['native_condition_research'] for item in native_results]
     latest = native[-1] if native else None
+    meaning = next((item.get('meaning_version', 1) for item in state.get('questions', [])
+                    if item['id'] == question['id']), question.get('meaning_version', 1))
+    results = [entry for entry in state.get('method_results', [])
+        if entry.get('feedback', {}).get('research_question_id') == question['id']
+        and entry['feedback'].get('question_meaning_version', 1) == meaning]
+    results += memory.get('program_results', [])
     # PR2's frozen query need not carry the native method's after_observation.
     # Consume its new paid records with the original retained-bank search before
     # comparing old exports or using experiments proposed on the old prefix.
+    evidence_extended = False
     if latest and latest.get('observed_record_count', len(observations)) < len(observations):
         first = latest['observed_record_count']
         added = list(range(first, len(observations)))
@@ -497,26 +833,14 @@ def select_actions(public_spec, observations, memory):
         if any(index not in covered_records or
                any(row not in covered_rows for row in observations[index]['row_indices'])
                for index in added):
-            previous = native_results[-1].get('arguments', {})
-            arguments = {key: deepcopy(previous[key]) for key in ('basis', 'matched_pairs') if key in previous}
-            if covered_records != list(range(first)):
-                arguments['record_indices'] = list(dict.fromkeys([*covered_records, *added]))
-            arguments.update(operator='native_condition_research', research_question=deepcopy(question),
-                max_compute=contract['max_compute'], max_candidates=contract['max_candidates'])
-            return {'action': 'run', 'arguments': arguments}
+            evidence_extended = True
     models = _comparison_models(old, state.get('exported_candidate_paths', []), native)
     missing = [path for path in models if not Path(path).is_file()]
     if missing:
         return _author_work('retained_predictor_source_missing', missing,
                             catalog_ref=deepcopy(contract['predictor_catalog_ref']))
-    meaning = next((item.get('meaning_version', 1) for item in state.get('questions', [])
-                    if item['id'] == question['id']), question.get('meaning_version', 1))
     # A source edit resets program_results, while its actual scientific
     # executions retain their original source, question, meaning and paid scope.
-    results = [entry for entry in state.get('method_results', [])
-        if entry.get('feedback', {}).get('research_question_id') == question['id']
-        and entry['feedback'].get('question_meaning_version', 1) == meaning]
-    results += memory.get('program_results', [])
     # The existing choice scores every named old/native model and adds all
     # validated refit/response exports itself. Its retention/confirmation gate
     # decides among them before another purchase or refinement can intervene.
@@ -525,6 +849,9 @@ def select_actions(public_spec, observations, memory):
     current_choice = choice is not None
     if models and not current_choice:
         return _action({'action': 'run', 'arguments': {'operator': 'research_choice', 'models': models}}, question)
+    method_use = _method_use_action(state, memory, question, paid_rows)
+    if method_use is not None:
+        return method_use
     if current_choice:
         representation = _representation_action(contract, question, choice, state, memory, paid_rows)
         if representation is not None:
@@ -532,12 +859,39 @@ def select_actions(public_spec, observations, memory):
     if current_choice and choice.get('next_action') and not _attempted(choice['next_action'], results, paid_rows):
         return _action(choice['next_action'], question)
     if current_choice:
-        resumed = _same_bank_after_unavailable_refit(state, results, question, latest,
-            paid_rows, len(observations), contract['max_compute'])
+        resumed = _native_work_action(state, results, question, latest, paid_rows, len(observations))
         if resumed is not None:
-            return _action(resumed, question)
+            return resumed if 'stop' in resumed else _action(resumed, question)
+    if evidence_extended:
+        resumed = _native_work_action(state, results, question, latest, paid_rows, len(observations))
+        if resumed is not None:
+            return resumed if 'stop' in resumed else _action(resumed, question)
+        return _author_work('complete_native_research_unit_quote_required',
+            ['current paid-scope complete research quote retaining the original evidence selection'],
+            question_ref={'question_id': question['id'], 'meaning_version': meaning},
+            native_round=latest.get('round_index'), paid_rows=paid_rows)
     if parent.get('pending_query'):
         return _action({'action': 'query', 'arguments': {'pending_question': parent_id}}, question)
+    paid_answers = []
+    def unanswered(proposal):
+        arguments = proposal.get('arguments', {})
+        if proposal.get('action') == 'query' and arguments.get('actions') and not arguments.get('revision'):
+            records = paid_experiment_record_indices(arguments['actions'], observations,
+                public_spec, question, contract)
+            if all(index is not None for index in records):
+                answer = {'query_action': deepcopy(proposal), 'record_indices': records,
+                    'observation_refs': [{'file': 'laboratory_observations.json', 'json_path': [index]}
+                                         for index in records]}
+                if answer not in paid_answers:
+                    paid_answers.append(answer)
+                # The same physical answer can support a new boundary step.
+                # Query reuse will bind these original indices and execute its
+                # existing continuation without purchasing another trajectory.
+                if any('boundary_update' in step for step in arguments.get('after_observation', [])):
+                    return not _attempted(_action(proposal, question), results, paid_rows,
+                                          paid_record_indices=records)
+                return False
+        return not _attempted(proposal, results, paid_rows)
     # Retain the old method's actual boundary/matched-evidence continuation.
     if latest:
         interval = latest.get('remaining_boundary', {}).get('threshold_interval', [])
@@ -546,7 +900,7 @@ def select_actions(public_spec, observations, memory):
             proposal = experiment.get('query_action')
             if (proposal and (refine and experiment.get('purpose') == 'conditional_boundary'
                               or latest.get('status') == 'needs_matched_evidence')
-                    and not _attempted(proposal, results, paid_rows)):
+                    and unanswered(proposal)):
                 return _action(proposal, question)
     if latest is None:
         return {'action': 'run', 'arguments': {'operator': 'native_condition_research',
@@ -554,8 +908,13 @@ def select_actions(public_spec, observations, memory):
             'max_candidates': contract['max_candidates']}}
     for experiment in latest.get('proposed_experiments', []):
         proposal = experiment.get('query_action')
-        if proposal and not _attempted(proposal, results, paid_rows):
+        if proposal and unanswered(proposal):
             return _action(proposal, question)
+    if paid_answers:
+        return _author_work('paid_experiments_already_answered',
+            ['resume unfinished computation or propose an experiment with different public inputs'],
+            question_ref={'question_id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+            paid_answers=paid_answers)
     return _author_work('executable_revision_or_scope_required',
         ['revised executable candidate, fitting scope, or finite research policy'],
         question_ref={'question_id': question['id'], 'meaning_version': question.get('meaning_version', 1)},

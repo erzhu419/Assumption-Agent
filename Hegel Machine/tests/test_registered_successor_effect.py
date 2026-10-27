@@ -61,6 +61,99 @@ def prohibit_execution(monkeypatch):
     monkeypatch.setattr(Program, 'predict', lambda *a, **k: pytest.fail('readout predicted'))
 
 
+def test_successor_effect_reads_only_needed_fields_and_releases_each_arm(tmp_path, monkeypatch):
+    from shutil import copytree
+    import weakref
+    from hegel_machine.cognition import method_effect_query as effects
+    from hegel_machine.cognition.checkpoint_storage import _json_values_equal
+
+    root = fixture(tmp_path)
+    protocol = json.loads((root / 'protocol.json').read_text())
+    summary = json.loads((root / 'summary.json').read_text())
+    for index in (1, 2):
+        case = f'case_{index}'
+        copytree(root / 'case_0', root / case)
+        protocol['cases'].append({**protocol['cases'][0], 'id': case})
+        summary['trials'].extend({**deepcopy(row), 'case': case}
+                                 for row in summary['trials'][:2])
+    for case in protocol['cases']:
+        for arm in ('fixed_pr2', 'pr3'):
+            for filename in ('training.json', 'research_state.json'):
+                path = root / case['id'] / arm / filename
+                document = json.loads(path.read_text())
+                document['method_results'] = [{'feedback': 'unused complete comparison bank' * 2000}]
+                document['operator_results'] = [{'evaluations': ['unused paid score'] * 2000}]
+                save(path, document)
+    # Both a real failed/no-submission outcome and a missing saved state keep
+    # their costs and UNKNOWN behavior, including on the release/error path.
+    failed = root / 'case_1/pr3/training.json'
+    document = json.loads(failed.read_text())
+    document.update(model=None, fresh_confirmation=None)
+    save(failed, document)
+    summary['trials'][3].update(status='budget_exhausted', terminal={
+        'status': 'no_submitted_model', 'mse': None, 'passed': False})
+    (root / 'case_2/pr3/research_state.json').unlink()
+    save(root / 'protocol.json', protocol)
+    save(root / 'summary.json', summary)
+    prohibit_execution(monkeypatch)
+    reader = effects.read_json_checkpoint
+    # Compare the full input interpretation, including ignored large banks,
+    # against the bounded field reader without changing effect computation.
+    monkeypatch.setattr(effects, 'read_json_checkpoint', lambda path, keys=None: reader(path))
+    expected = registered_successor_effect(root)
+    requested, live_payloads = [], []
+
+    class OwnedPayload(dict):
+        pass
+
+    def selected(path, *, keys=None):
+        path = Path(path)
+        if path.name not in {'training.json', 'research_state.json'}:
+            return reader(path, keys=keys)
+        assert keys is not None, 'completed training/state must use the existing field reader'
+        if path.name == 'training.json':
+            assert not any(saved() is not None for saved in live_payloads), \
+                'a previous arm payload survived into the next arm'
+            assert keys == {'model', 'evaluated_model', 'fresh_confirmation', 'events',
+                            'paid_observations', 'limits'}
+        else:
+            assert keys == {'questions', 'revisions', 'relation_research',
+                            'theory_index', 'evaluated_model'}
+        requested.append((path, set(keys)))
+        payload = OwnedPayload(reader(path, keys=keys))
+        live_payloads.append(weakref.ref(payload))
+        return payload
+
+    monkeypatch.setattr(effects, 'read_json_checkpoint', selected)
+    actual = registered_successor_effect(root)
+    assert _json_values_equal(actual, expected)
+    assert len(requested) == 12  # Three cases, two arms, training then state.
+    assert not any(saved() is not None for saved in live_payloads)
+    assert actual['cases'][1]['right']['status'] == 'budget_exhausted'
+    assert actual['cases'][2]['right']['mechanism_status'] == 'UNKNOWN_saved_state_unavailable'
+
+
+def test_successor_effect_resolves_extra_same_state_forecast_fields(tmp_path, monkeypatch):
+    from hegel_machine.cognition import method_effect_query as effects
+    from hegel_machine.cognition.checkpoint_storage import _json_values_equal
+
+    root = fixture(tmp_path, right_predictions=[2.])
+    for arm in ('fixed_pr2', 'pr3'):
+        workspace = root / 'case_0' / arm
+        state = json.loads((workspace / 'research_state.json').read_text())
+        state['retained_forecast_document'] = json.loads((workspace / 'forecast.json').read_text())
+        state['questions'][0]['python_forecast_execution']['source_ref'] = {
+            'file': 'research_state.json', 'json_path': ['retained_forecast_document']}
+        save(workspace / 'research_state.json', state)
+    prohibit_execution(monkeypatch)
+    reader = effects.read_json_checkpoint
+    expected = registered_successor_effect(root)
+    monkeypatch.setattr(effects, 'read_json_checkpoint', lambda path, keys=None: reader(path))
+    full = registered_successor_effect(root)
+    assert _json_values_equal(expected, full)
+    assert expected['cases'][0]['mechanism']['stored_forecast_comparison']['changed'] is True
+
+
 def paid_prediction_fixture(tmp_path):
     """Both trained branches have the same97 rows; later48 are source-only."""
     from hegel_machine.cognition.temporal_operator_agent import export_temporal_program
@@ -562,7 +655,9 @@ def test_same_scene_registered_removals_cancel_only_their_common_source(
 
 
 @pytest.mark.parametrize('different', [False, True])
-def test_submitted_parent_terminal_vectors_keep_version_scope_and_external_costs(tmp_path, different, monkeypatch):
+@pytest.mark.parametrize('cumulative_rows', ['missing', 2, 6, None])
+def test_submitted_parent_terminal_vectors_keep_version_scope_and_external_costs(
+        tmp_path, different, monkeypatch, cumulative_rows):
     root = fixture(tmp_path)
     plan_path = root / 'protocol.json'
     plan = json.loads(plan_path.read_text())
@@ -581,6 +676,9 @@ def test_submitted_parent_terminal_vectors_keep_version_scope_and_external_costs
         save(path, payload)
         row['terminal'].update(prediction_ref={'file': str(path), 'json_path': []},
                               evaluation_rows=2, python_execution_seconds=.25 + i)
+        if i and cumulative_rows != 'missing':
+            row['terminal'].update(cumulative_evaluation_rows=cumulative_rows,
+                                  new_execution_costs={'rows': 0, 'python_execution_seconds': 0.})
     save(summary_path, summary)
     prohibit_execution(monkeypatch)
     row = registered_successor_effect(root)['cases'][0]
@@ -588,7 +686,10 @@ def test_submitted_parent_terminal_vectors_keep_version_scope_and_external_costs
     assert result['status'] == 'recorded' and result['changed'] is different
     assert result['rows'] == 2
     assert row['right']['external_terminal_cost'] == {
-        'rows': 2, 'python_execution_seconds': 1.25, 'scope': 'outside_agent_training_costs'}
+        'rows': 2 if cumulative_rows == 'missing' else cumulative_rows,
+        'python_execution_seconds': 1.25, 'scope': 'outside_agent_training_costs'}
+    assert row['right_minus_left']['external_terminal_costs']['rows'] == (
+        None if cumulative_rows is None else 0 if cumulative_rows == 'missing' else cumulative_rows - 2)
     assert row['right']['costs']['python_execution_seconds'] == 2.
     assert row['right_minus_left']['external_terminal_costs']['python_execution_seconds'] == 1.
     path = root / 'case_0/pr3/terminal_predictions.json'

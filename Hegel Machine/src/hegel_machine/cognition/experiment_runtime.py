@@ -7,6 +7,7 @@ returns compact retained-file references between coordinating processes.
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager, ExitStack
+from datetime import datetime, timezone
 import gc
 import json
 from multiprocessing import get_context
@@ -170,6 +171,7 @@ class ExecutionTiming:
     def __init__(self, phases):
         self.phases = dict.fromkeys(phases, 0.)
         self._wall_start, self._cpu_start = monotonic(), process_time()
+        self._utc_start = datetime.now(timezone.utc).isoformat()
 
     @contextmanager
     def phase(self, name):
@@ -180,8 +182,17 @@ class ExecutionTiming:
             self.phases[name] += monotonic() - started
 
     def result(self):
-        return {'wall_seconds': monotonic() - self._wall_start,
+        ended = monotonic()
+        return {'wall_seconds': ended - self._wall_start,
             'host_cpu_seconds': process_time() - self._cpu_start,
+            'monotonic_start_seconds': self._wall_start,
+            'monotonic_end_seconds': ended,
+            'utc_start': self._utc_start,
+            'utc_end': datetime.now(timezone.utc).isoformat(),
+            'utc_clock_scope': 'raw_realtime_anchors_not_the_elapsed_clock',
+            'process_id': os.getpid(),
+            'wall_clock_scope': 'monotonic_elapsed_including_wait_and_process_suspension',
+            'host_cpu_scope': 'current_process_only_excludes_child_processes',
             'phase_seconds': dict(self.phases),
             'after_and_checkpoint_are_nested_in_procedure': True,
             'scope': 'host_wall_diagnostics_not_added_to_scientific_fee_counters'}

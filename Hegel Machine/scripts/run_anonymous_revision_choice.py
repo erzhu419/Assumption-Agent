@@ -298,7 +298,9 @@ def run_choice(source, output, *, provider_factory, auth_mode=None, cases=None,
     if resume_result is not None:
         if cases is None or len(plan['arms']) != 1:
             raise ValueError('restore one explicitly registered source and arm')
-        resume_path = Path(resume_result).resolve()
+        # The checkpoint may live in cold storage while its execution context
+        # and writable models remain beside the caller's checkpoint link.
+        resume_path = Path(resume_result).absolute()
         previous = json.loads(resume_path.read_text())
         if previous['status'] == 'completed':
             raise ValueError('continue a genuinely unresolved paid source')

@@ -10,7 +10,7 @@ from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
 from hegel_machine.cognition.question_agenda import build_agenda
 from hegel_machine.cognition.research_episodes import load_source_values
 from hegel_machine.cognition.temporal_operator_agent import export_temporal_program
-from test_native_representation_inquiry import agent_with_records, retained_procedure
+from test_native_representation_inquiry import agent_with_records, retained_procedure, measured_failure_basis
 
 
 class PublicOnlyLab:
@@ -163,7 +163,7 @@ def test_common_program_revision_routes_actual_new_parent_without_representation
     assert agenda['selected_question_id'] == question['id']
 
     def no_coordinates(*args):
-        raise AssertionError('floor-zero revision must not search coordinates')
+        raise AssertionError('a narrow retained revision changed its declared directions')
 
     monkeypatch.setattr(UnifiedResearchAgent, '_coordinate_claims', no_coordinates)
     result = agent._execute('run', {'operator': 'research_route', 'research_question': question,
@@ -175,6 +175,25 @@ def test_common_program_revision_routes_actual_new_parent_without_representation
     assert result['native_representation']['research_kind'] == 'program_revision'
     assert result['exported_models'] and not result['parent_revision_completed']
     assert agent.model is None and agent.costs['observation_cost'] == 0
+
+
+def test_new_representation_evidence_invalidates_previous_narrow_route(tmp_path):
+    agent, lab = scene(tmp_path)
+    question = {**declaration(), 'id': 'revision:evidence', 'kind': 'program_revision'}
+    arguments = {'operator': 'research_route', 'research_question': question,
+        'native_representation_plan': plan(parent_theory_ids=['old']),
+        'theories': [{'id': 'old', 'program': Program('feature', name='u').to_dict()}]}
+    first = agent._execute('run', arguments, lab)
+    assert first['native_representation']['alternative_representation_basis'] is None
+    stored = next(q for q in agent.questions if q['id'] == question['id'])
+    stored['representation_research_basis'] = measured_failure_basis(
+        agent, Program('lag', name='u', lag=1))
+    second = agent._execute('run', {'operator': 'research_route', 'research_question': stored}, lab)
+    assert not second.get('cache_hit')
+    assert second['new_compute_cost'] > 0
+    assert second['native_representation']['alternative_representation_basis'] == (
+        'prospective_failures_with_public_unrepresented_distinction')
+    assert second['native_representation']['selected']['validation_mse'] < 1e-10
 
 
 def test_common_routes_actual_parent_graph_and_reuses_it_without_a_second_replay(tmp_path, monkeypatch):
@@ -204,3 +223,27 @@ def test_common_routes_actual_parent_graph_and_reuses_it_without_a_second_replay
     reused = agent._execute('run', arguments, lab)
     assert reused['cache_hit'] and reused['new_compute_cost'] == 0
     assert agent.costs == before and calls == [1]
+
+
+
+def test_resolved_representation_semantics_invalidates_cached_optional_route(tmp_path):
+    agent, lab = scene(tmp_path)
+    question = {**declaration(), 'id': 'revision:semantics', 'kind': 'program_revision',
+        'representation_research_basis': {'semantic_question_ref': {
+            'kind': 'question', 'id': 'history_semantics', 'version': 1}}}
+    semantics = {'id': 'history_semantics', 'kind': 'representation', 'status': 'open',
+        'use_sites': deepcopy(question['use_sites']),
+        'answer_resolution_ref': {'evaluator': 'representation_diagnostic_and_paid_comparison',
+            'parent_model': 'old.py'}}
+    agent.questions.append(semantics)
+    first = agent._execute('run', {'operator': 'research_route', 'research_question': question,
+        'native_representation_plan': plan(parent_theory_ids=['old']),
+        'theories': [{'id': 'old', 'program': Program('feature', name='u').to_dict()}]}, lab)
+    assert first['native_representation']['alternative_representation_basis'] == (
+        'unresolved_bound_representation_semantics')
+    semantics.update(status='completed', semantic_answer={'version': 1, 'status': 'answered'})
+    stored = next(item for item in agent.questions if item['id'] == question['id'])
+    second = agent._execute('run', {'operator': 'research_route', 'research_question': stored}, lab)
+    assert not second.get('cache_hit')
+    assert second['native_representation']['alternative_representation_basis'] is None
+    assert [item['direction'] for item in second['native_representation']['search_directions']] == ['retained_composition']

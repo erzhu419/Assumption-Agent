@@ -314,6 +314,25 @@ def record_representation_return(agent, frame, result):
         break
 
 
+def _representation_search_basis(question, parent_programs, public_features, *, questions=(), resolve=None):
+    """Use actual view evidence to open an optional finite alternative path.
+
+    A retained-program revision keeps its existing narrow contract unless the
+    question supplies concrete representation evidence. Prediction error alone
+    does not establish a missing dependency or prescribe a deeper history.
+    """
+    from .finite_native_author import representation_research_warrant
+    from .representation_diagnostics import representation_evidence_state
+
+    diagnostic = question.get('representation_diagnostic') or {}
+    state = representation_evidence_state(diagnostic)
+    if state == 'proven_insufficient_on_evidence':
+        return state, 'observed_representation_conflict'
+    return state, representation_research_warrant(question,
+        {identifier: program.expanded().to_dict() for identifier, program in parent_programs.items()},
+        public_features, questions=questions, resolve=resolve)
+
+
 def execute_native_representation_inquiry(agent, question, *, spec, parent_programs,
         validation_records, compute_limit, max_candidates=8,
         retained_research_program_refs=None):
@@ -326,6 +345,8 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
     """
     from .evaluation import initial_prediction, loss, predict
     from .models import Candidate, Observation, ResearchConfig, SearchBudget
+    from .language import Program
+    from .research_episodes import load_source_values
     from .unified_research import UnifiedResearchAgent
     from time import monotonic
 
@@ -340,6 +361,17 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
     if spec.risk_quantile != .5:
         raise ValueError('representation collision research currently uses the MSE contract')
     revision = question.get('kind') == 'program_revision'
+    scope_plan = (question.get('native_representation_plan') or {}).get('scope_plan')
+    scope_limit = 0
+    if scope_plan is not None:
+        if (scope_plan.get('purpose') != 'relative_utility'
+                or scope_plan.get('objective') not in {'pointwise_improvement', 'mean_loss'}
+                or type(scope_plan.get('max_compute')) is not int or scope_plan['max_compute'] < 0):
+            raise ValueError('scope research needs its declared relative-utility objective and compute cap')
+        scope_limit = scope_plan['max_compute']
+    representation_state, alternative_basis = _representation_search_basis(
+        question, parent_programs, spec.feature_names, questions=agent.questions,
+        resolve=lambda reference: load_source_values([reference], agent.workspace)[0]['value'])
     training, validation, split = agent._split({'validation_records': validation_records})
     if not validation:
         raise ValueError('representation research needs distinct validation trajectories')
@@ -355,10 +387,15 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
         compute_budget=max(1, budget.limit), max_candidates=max_candidates,
         minimum_improvement=threshold, active_probes=False))
     fallback = initial_prediction(training, .5)
+    origin = deepcopy(question.get('origin'))
+    if origin is None and not revision:
+        origin = ('computed_representation_conflict' if representation_state ==
+                  'proven_insufficient_on_evidence' else alternative_basis or representation_state)
     result = {'status': 'native_representation_inconclusive_budget',
-        'origin': (deepcopy(question.get('origin')) if revision else
-                   'computed_representation_conflict'), 'question_id': question['id'],
+        'origin': origin, 'question_id': question['id'],
         'research_kind': 'program_revision' if revision else 'representation',
+        'representation_evidence_state': representation_state,
+        'alternative_representation_basis': alternative_basis,
         'parent_theory_ids': list(parent_programs),
         'split': deepcopy(split), 'mse_threshold': threshold,
         'retained_comparison': [], 'candidates': [], 'actions': [],
@@ -370,7 +407,7 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
     # Fund all retained comparisons, every possible proposed holdout comparison,
     # and the actual selected-vs-retained prediction trace before search begins.
     baseline_cost = len(parent_programs) * (len(training) + len(validation))
-    directions = (('retained_composition',) if revision else
+    directions = (('retained_composition',) if revision and alternative_basis is None else
                   ('coordinates', 'retained_composition'))
     try:
         procedures = retained_native_research_programs(
@@ -381,8 +418,8 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
         compared_capacity = max(2 * max_candidates,
             len(directions) * max_candidates + len(procedures))
         reserved = (compared_capacity + 2) * len(validation)
-        if not budget.can_spend(baseline_cost + reserved):
-            result['required_comparison_compute'] = baseline_cost + reserved
+        if not budget.can_spend(baseline_cost + reserved + scope_limit):
+            result['required_comparison_compute'] = baseline_cost + reserved + scope_limit
             return result
         retained = []
         for identifier, program in parent_programs.items():
@@ -391,13 +428,15 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
                 'training_loss': loss(program, training, fallback, .5), 'retained': True})
         retained = researcher._assess(retained, validation, budget, fallback, .5)
         result['retained_comparison'] = [{'id': entry['candidate'].candidate_id,
+            'version': (getattr(agent, 'theory_index', {}).get(entry['candidate'].candidate_id) or {}).get('version'),
             'nodes': entry['candidate'].program.size, 'training_mse': entry['training_loss'],
             'validation_mse': entry['validation_loss']} for entry in retained]
         best_retained = researcher._best(retained)
-        allowance = budget.remaining - reserved
+        allowance = budget.remaining - reserved - scope_limit
         proposals = []
-        # A response counterexample with a sufficient view revises its actual
-        # retained program; it does not invent another representation conflict.
+        # The existing narrow revision remains a valid local experiment. A
+        # concrete missing-distinction warrant opens the ordinary bounded
+        # coordinate path without declaring that alternative sufficient.
         for index, direction in enumerate(directions):
             local = SearchBudget(allowance // len(directions)
                 + (allowance % len(directions) if index == 0 else 0))
@@ -468,15 +507,75 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
             # Incomplete comparisons never select a new draft.
             result['compared_candidates'] = len(checked)
             return result
+        winner = researcher._best([*retained, *checked])
+        if scope_plan is not None:
+            from .condition_learning import learn_relative_utility_condition
+
+            local = SearchBudget(scope_limit)
+            utility = {'status': 'insufficient_budget', 'scope_purpose': 'relative_utility',
+                'application_scope_status': 'not_assessed', 'compute_cost': 0,
+                'fitting_records': deepcopy(split['training_records']),
+                'selection_records': deepcopy(split['validation_records']),
+                'independent_confirmation': False}
+            result['relative_utility_research'] = utility
+            try:
+                if not checked:
+                    utility['status'] = 'no_new_draft'
+                elif not local.spend(2 * len(training)):
+                    utility['last_denied_request'] = deepcopy(local.last_denied_request)
+                else:
+                    # Fix both branches using training losses before using any
+                    # validation result to select a scope-construction input.
+                    train_key = lambda item: (item['training_loss'], item['candidate'].program.size)
+                    draft = min(checked, key=train_key)
+                    retained_scope = min(retained, key=train_key)
+                    utility['draft_candidate_ref'] = {'json_path': ['candidates', checked.index(draft)]}
+                    utility['baseline_candidate_ref'] = {'json_path': ['retained_comparison', retained.index(retained_scope)]}
+                    original = draft['candidate'].program
+                    baseline = retained_scope['candidate'].program
+                    before = [predict(baseline, row, fallback) for row in training]
+                    after = [predict(original, row, fallback) for row in training]
+                    utility.update(learn_relative_utility_condition(training, before, after, local,
+                        objective=scope_plan['objective'], max_history=scope_plan.get('max_history', 4),
+                        world_mse_threshold=threshold))
+                    selector = utility.get('selector')
+                    if selector is not None:
+                        selector = Program.from_dict(selector)
+                        if selector.op == 'const':
+                            utility['reused_candidate_ref'] = deepcopy(utility[
+                                'draft_candidate_ref' if selector.value else 'baseline_candidate_ref'])
+                            scoped = original if selector.value else baseline
+                        else:
+                            scoped = Program('if', children=(selector, original, baseline))
+                        if (scoped not in parent_programs.values()
+                                and not any(item['candidate'].program == scoped for item in checked)):
+                            if local.spend(len(training) + len(validation)):
+                                entry = {'candidate': Candidate('relative_utility_scope', scoped,
+                                    'learned_relative_utility_selector'),
+                                    'training_loss': loss(scoped, training, fallback, .5),
+                                    'validation_loss': loss(scoped, validation, fallback, .5),
+                                    'relative_utility_scope': {
+                                        key: deepcopy(utility[key]) for key in
+                                        ('draft_candidate_ref', 'baseline_candidate_ref')}}
+                                checked.append(entry)
+                                utility['candidate_id'] = f'native_representation:{len(checked) - 1}'
+                            else:
+                                utility['candidate_status'] = 'comparison_unfunded'
+                                utility['last_denied_request'] = deepcopy(local.last_denied_request)
+            finally:
+                budget.spend(local.spent)
+                utility.update(compute_cost=local.spent, compute_limit=local.limit)
+            winner = researcher._best([*retained, *checked])
         result['candidates'] = [{'id': f"native_representation:{index}",
             'program': entry['candidate'].program.to_dict(),
             'nodes': entry['candidate'].program.size,
             'training_mse': entry['training_loss'], 'validation_mse': entry['validation_loss'],
             **({'method_source_refs': deepcopy(entry['method_source_refs'])}
                if entry.get('method_source_refs') else {}),
-            'research_program': deepcopy(entry.get('research_program'))}
+            'research_program': deepcopy(entry.get('research_program')),
+            **({'relative_utility_scope': deepcopy(entry['relative_utility_scope'])}
+               if entry.get('relative_utility_scope') else {})}
             for index, entry in enumerate(checked)]
-        winner = researcher._best([*retained, *checked])
         selected_program = winner['candidate'].program
         budget.spend(2 * len(validation))
         before = [predict(best_retained['candidate'].program, row, fallback) for row in validation]
@@ -492,6 +591,20 @@ def execute_native_representation_inquiry(agent, question, *, spec, parent_progr
             'changed_prediction_rows': sum(left != right for left, right in zip(before, after)),
             'max_prediction_change': max(abs(left - right) for left, right in zip(before, after)),
             'research_program': deepcopy(winner.get('research_program'))}
+        result['selected']['selection'] = {
+            'status': 'working_draft', 'data_role': 'exposed_development_validation',
+            'candidate_ref': {'json_path': (['retained_comparison', retained.index(winner)]
+                if is_retained else ['candidates', checked.index(winner)])},
+            'fitting_records': None if is_retained else deepcopy(split['training_records']),
+            'fitting_provenance': ('retained_parameters_original_fit_not_established'
+                if is_retained else 'new_fits_use_current_training_records'),
+            'inherited_parameter_provenance': 'original_component_fitting_views_not_established',
+            'selection_records': deepcopy(split['validation_records']),
+            'competitor_refs': [{'json_path': ['retained_comparison']}, {'json_path': ['candidates']}],
+            'comparison_scope': 'declared_parents_and_current_native_candidates',
+            'loss': {'kind': 'mse', 'weighting': 'uniform_rows', 'risk_quantile': .5},
+            'independent_confirmation': False,
+            'uncompared_archive_validation': 'not_established'}
         result.update(status='native_representation_draft_selected' if not is_retained
             else 'native_representation_parent_retained', comparison_completed=True,
             remaining_question=('Compare this actual parent revision against the complete '

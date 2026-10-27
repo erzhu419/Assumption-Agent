@@ -20,7 +20,7 @@ from .code_agent import (
     python_model_context, python_model_context_matches, closed_temporal_prediction_contract,
 )
 from .checkpoint_storage import write_text_incrementally, write_json_checkpoint
-from .experiment_runtime import PythonExecutionDeadline, python_execution_deadline
+from .experiment_runtime import ExecutionTiming, PythonExecutionDeadline, python_execution_deadline
 from .history_revision import revise_history
 from .knowledge_evolution import bind_answers
 from .language import Program
@@ -53,7 +53,8 @@ def _literal_score_index(comparison):
     """Index small selected sources once; full contexts are checked only on hits."""
     index = {'sources': {}, 'assessments': {}}
     scopes = {name for name, scope in comparison['scopes'].items()
-              if _same_closed_prediction_scope(scope, comparison['basis'])}
+              if _closed_prediction_prefix_scope(scope, comparison['basis'])}
+    index['prefix_scopes'] = scopes
     for retained in comparison['assessments'].values():
         for reference, assessment in retained:
             if assessment['scope_ref']['file'] in scopes:
@@ -72,6 +73,12 @@ def _same_closed_prediction_scope(previous, current):
                 == closed_temporal_prediction_contract(after_contract))
 
 
+def _closed_prediction_prefix_scope(previous, current):
+    count = len(previous['rows'])
+    return (0 < count <= len(current['rows']) and previous['rows'] == current['rows'][:count]
+            and _same_closed_prediction_scope({**previous, 'rows': current['rows']}, current))
+
+
 def _matching_literal_score(workspace, model, comparison):
     directory, inner = python_model_context(workspace, model)
     if not _closed_temporal_export(directory, inner):
@@ -81,6 +88,9 @@ def _matching_literal_score(workspace, model, comparison):
     source = (directory / inner).read_text(encoding='utf-8')
     for reference, assessment in reversed(
             comparison['literal_score_index']['assessments'].get(source, [])):
+        scope = comparison['scopes'][assessment['scope_ref']['file']]
+        if not _same_closed_prediction_scope(scope, comparison['basis']):
+            continue
         context = assessment['execution_context']
         if literal_python_model_context_matches(workspace, model,
                                                 context['workspace'], context['model']):
@@ -101,6 +111,23 @@ def _reused_python_score(model, reference, assessment):
         reuse.update(matched_model=assessment['model'],
                      match_basis='identical_closed_literal_execution')
     return {**result, 'paid_score_reuse': reuse}
+
+
+def _closed_prediction_values(reference, workspace):
+    """Expand actual paid deltas; saved assessments keep each suffix only once."""
+    from .research_episodes import load_source_values
+
+    states, source_ref = [], reference
+    while reference is not None:
+        value, = load_source_values([reference], workspace)
+        state = value['value']
+        states.append(state)
+        reference = state.get('prefix_ref')
+    predictions = [value for state in reversed(states) for value in state['predictions']]
+    representations = [value for state in reversed(states) for value in state['representations']]
+    if len(predictions) != states[0]['row_count'] or len(representations) != len(predictions):
+        raise ValueError('retained closed prediction state does not cover its paid rows')
+    return {'predictions': predictions, 'representations': representations, 'source_ref': source_ref}
 
 
 OPERATOR_INTERFACE = """
@@ -537,9 +564,21 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             resolved = deepcopy(authored)
             before_compute = self.costs["compute_cost"]
             before_seconds = self.costs["python_execution_seconds"]
+            before_operators = len(self.operator_results)
             try:
                 if not isinstance(resolved, dict) or "operator" not in resolved:
                     raise ValueError("each continuation step needs a shared operator")
+                positions = result.get('record_index_map', {})
+                for key in ('records', 'record_indices'):
+                    if positions and isinstance(resolved.get(key), list):
+                        mapped = [positions.get(str(index), index) for index in resolved[key]]
+                        resolved[key] = list(dict.fromkeys(mapped)) if key == 'record_indices' else mapped
+                for pair in resolved.get('matched_pairs', []):
+                    for key in ('reference_record_index', 'record_index'):
+                        if key in pair:
+                            pair[key] = positions.get(str(pair[key]), pair[key])
+                if result.get('reused_record_indices') and 'boundary_update' in resolved:
+                    resolved['boundary_update']['paid_record_indices'] = list(result['record_indices'])
                 if resolved.get("records") == "acquired":
                     resolved["records"] = list(result["record_indices"])
                 feedback = self._execute("run", resolved, laboratory)
@@ -548,6 +587,10 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                             "error": str(error),
                             "compute_cost": self.costs["compute_cost"] - before_compute,
                             "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds}
+                if len(self.operator_results) > before_operators:
+                    timing = self.operator_results[-1].get('operator_execution_timing')
+                    if timing is not None:
+                        feedback['operator_execution_timing'] = deepcopy(timing)
             outcome = {"arguments": resolved, **feedback}
             outcomes.append(outcome)
             if current_question is not None:
@@ -1006,6 +1049,36 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 "scope_ref": scope_ref, "basis": basis, "scopes": scopes,
                 "assessments": assessments, "contexts": contexts}
 
+    def _closed_prediction_prefix(self, model, comparison):
+        source, inner = python_model_context(self.workspace, model)
+        if not _closed_temporal_export(source, inner):
+            return None
+        if 'literal_score_index' not in comparison:
+            comparison['literal_score_index'] = _literal_score_index(comparison)
+        text = (source / inner).read_text(encoding='utf-8')
+        current = comparison['basis']
+        for reference, assessment in reversed(
+                comparison['literal_score_index']['assessments'].get(text, [])):
+            state = assessment.get('closed_prediction_state')
+            if state is None:
+                continue
+            previous = comparison['scopes'][assessment['scope_ref']['file']]
+            count = state['row_count']
+            if (len(previous['rows']) != count
+                    or assessment['scope_ref']['file'] not in comparison['literal_score_index']['prefix_scopes']):
+                continue
+            context = assessment['execution_context']
+            if literal_python_model_context_matches(
+                    self.workspace, model, context['workspace'], context['model']):
+                return reference, assessment
+        return None
+
+    def _score_compute_requirement(self, model):
+        comparison = getattr(self, '_paid_python_comparison', None)
+        prefix = self._closed_prediction_prefix(model, comparison) if comparison is not None else None
+        return (len(self.rows) - prefix[1]['closed_prediction_state']['row_count']
+                if prefix else super()._score_compute_requirement(model))
+
     def _score(self, model):
         bounded = getattr(self, '_bounded_python_comparison', False)
         remaining = self._operator_python_remaining() if bounded else None
@@ -1044,8 +1117,12 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                     reused['execution_context'] = deepcopy(literal[1]['execution_context'])
                 return reused
 
-            if not self.rows or self._remaining_compute() < len(self.rows):
+            prefix = self._closed_prediction_prefix(model, comparison)
+            paid_prefix = prefix[1]['closed_prediction_state']['row_count'] if prefix else 0
+            if not self.rows or self._remaining_compute() < len(self.rows) - paid_prefix:
                 return super()._score(model)  # Preserve the original budget error without a new context copy.
+            retained_predictions = (_closed_prediction_values(
+                {**prefix[0], 'json_path': ['closed_prediction_state']}, self.workspace) if prefix else None)
 
             # Existing model-context copying shares filesystem blocks, including
             # immutable paid-trace references. Reuse one matching context for other
@@ -1071,7 +1148,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 original_workspace = self.workspace
                 self.workspace = Path(context['workspace'])
                 try:
-                    result = super()._score(context['model'])
+                    result = super()._score(context['model'], retained_prediction_state=retained_predictions)
                 finally:
                     self.workspace = original_workspace
                 result['execution_context'] = deepcopy(context)
@@ -1081,7 +1158,8 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 if fitting.get('file') and not Path(fitting['file']).is_absolute():
                     fitting['file'] = str(Path(context['workspace']) / fitting['file'])
             else:
-                result = super()._score(model)
+                result = super()._score(model, retained_prediction_state=retained_predictions)
+            captured = result.pop('_closed_prediction_state', None)
             costs = {"compute_cost": self.costs["compute_cost"] - before_compute,
                      "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds}
             complete = (result.get("returncode") == 0 and not result.get("truncated")
@@ -1092,11 +1170,20 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         reuse = {"status": "newly_scored", "reuse_miss_reason": reason,
                  "reusable": bool(stable), "execution_costs": costs,
                  "scope_ref": comparison["scope_ref"]}
+        if prefix:
+            reuse.update(reused_prediction_rows=paid_prefix,
+                requested_prediction_rows=len(self.rows) - paid_prefix,
+                newly_predicted_rows=(len(self.rows) - paid_prefix if captured is not None else 0),
+                prefix_assessment_ref=deepcopy(prefix[0]))
         if stable:
             path = comparison["directory"] / f"assessment_{len(index['assessments']):06d}.json"
+            if captured is not None:
+                result['closed_prediction_state_ref'] = {'file': str(path),
+                    'json_path': ['closed_prediction_state']}
             assessment = {"model": model, "source_workspace": str(source),
                 "scope_ref": comparison["scope_ref"], "execution_context": context,
-                "execution_costs": costs, "result": deepcopy(result)}
+                "execution_costs": costs, "result": deepcopy(result),
+                **({'closed_prediction_state': captured} if captured is not None else {})}
             write_text_incrementally(path, json.dumps(assessment))
             reference = {"file": str(path), "json_path": []}
             index["assessments"].append(reference)
@@ -1185,9 +1272,39 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         policy.set_condition("temporal:" + diagnosis)
         options = ([ActionOption("retain_response", self.config.confirmation_rows,
                     len(self.rows) + self.config.confirmation_rows)] if supported else [])
+        repairs = {}
         if repair and repair.get("next_action"):
             options.append(ActionOption(repair["name"], repair["observation_cost"],
                 repair["compute_cost"], measurement_cost=repair["measurement_cost"]))
+            repairs[repair['name']] = repair
+        # A completed comparison can leave a real joint search unfinished.
+        # Price that whole visit beside the existing revision action; a short
+        # old invocation is not a quote for completing the pending work.
+        if not supported and self.knowledge.get('finite_native_author'):
+            from .finite_native_author import _attempted
+            from .structural_inquiry import native_condition_method
+            native = native_condition_method(self)
+            question = next((item for item in self.questions
+                if item['id'] == self._active_question_id), {})
+            executions = [item for item in (native or {}).get('current_executions', [])
+                if item['question_id'] == question.get('id')]
+            offer = executions[-1].get('compute_continuation', {}) if executions else {}
+            proposal = offer.get('action')
+            history = [entry for entry in self.method_results
+                if entry.get('feedback', {}).get('research_question_id') == question.get('id')
+                and entry['feedback'].get('question_meaning_version', 1)
+                    == question.get('meaning_version', 1)]
+            if repair and repair.get('next_action') and _attempted(
+                    repair['next_action'], history, len(self.rows)):
+                options = [option for option in options if option.name != repair['name']]
+            if offer.get('status') == 'available' and proposal:
+                if not _attempted(proposal, history, len(self.rows)):
+                    unit = offer['research_unit']
+                    name = 'native_condition_research'
+                    options.append(ActionOption(name, 0, unit['minimum_compute'],
+                        payload=(proposal, {'compute_limit': unit['minimum_compute']})))
+                    repairs[name] = {'name': name, 'next_action': proposal,
+                        'research_unit': deepcopy(unit)}
         choice = policy.choose(options,
             observation_remaining=max(0, self.config.observation_budget - self.costs["observation_cost"]),
             compute_remaining=self._remaining_compute(), minimum_improvement=1e-10)
@@ -1205,8 +1322,11 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 result["recommendation"] = {"operator": "retain_response", "path": retained["model"]}
                 result["next_action"] = {"action": "finish", "arguments": {"model": retained["model"]}}
             else:
+                repair = repairs[choice.name]
                 result["recommendation"] = {"operator": repair["name"]}
                 result["next_action"] = repair["next_action"]
+                if 'research_unit' in repair:
+                    result['research_unit'] = repair['research_unit']
         return result
 
     def _render_research_advice(self, advice):
@@ -1474,15 +1594,22 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             return self._attach_research_advice(action, arguments, result, laboratory)
         before_compute = self.costs["compute_cost"]
         before_seconds = self.costs["python_execution_seconds"]
+        timing = ExecutionTiming(())
+        timing_scope = {'operator': arguments['operator'],
+            'interval_scope': 'shared_operator_dispatch_and_budget_admission',
+            'excludes': ['feedback_advice', 'operator_result_persistence'],
+            'external_execution_meter': 'existing_external_python_wall_seconds_when_available'}
         try:
             result = self._execute_operator(arguments, laboratory)
         except (ValueError, TypeError, KeyError, OSError) as error:
             result = {"operator": arguments["operator"], "error": str(error),
                       "compute_cost": self.costs["compute_cost"] - before_compute,
-                      "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds}
+                      "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds,
+                      'operator_execution_timing': {**timing_scope, **timing.result()}}
             self.operator_results.append({"index": len(self.operator_results),
                                           "arguments": deepcopy(arguments), **result})
             raise
+        result['operator_execution_timing'] = {**timing_scope, **timing.result()}
         self.operator_results.append({"index": len(self.operator_results),
                                       "arguments": deepcopy(arguments),
                                       **retain_comparison_history(result)})

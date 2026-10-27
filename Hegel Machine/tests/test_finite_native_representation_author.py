@@ -18,11 +18,13 @@ from hegel_machine.cognition.question_continuation import parent_revision_obliga
 from hegel_machine.cognition.temporal_operator_agent import export_temporal_program
 from scripts.run_anonymous_revision_inquiry import RegisteredOrganizationAgent
 from test_finite_native_author import declaration
-from test_native_representation_inquiry import agent_with_records
+from test_native_representation_inquiry import (
+    agent_with_records, measured_failure_basis, competing_representation_basis, learned_representation_basis,
+)
 from test_native_representation_routing import PublicOnlyLab
 
 
-def scene(tmp_path, group):
+def scene(tmp_path, group, *, old=None):
     library = tmp_path / 'library.json'
     library.write_text('{"candidates":{}}')
     contract = declaration()
@@ -38,7 +40,7 @@ def scene(tmp_path, group):
     agent.observations = records.observations
     agent.rows = [Observation(row['features'], row['target'], tuple(row['history']))
                   for row in records.rows]
-    old = Program('const', value=0.)
+    old = old or Program('const', value=0.)
     agent._save('old.py', export_temporal_program(old))
     register_theories(agent, [{'id': 'old', 'program': old.to_dict(),
         **{key: deepcopy(contract['question']['theory_target'][key])
@@ -221,3 +223,68 @@ def test_actual_new_export_binds_new_parent_and_creates_a_separate_revision_mean
     assert 'frozen_recall_execution' not in second
     assert second['meaning_history'][0]['frozen_recall_execution']['cursor'] == {
         'next_candidate_id': 'original_parent_cursor'}
+
+
+@pytest.mark.parametrize('warrant', ['failures', 'alternative', 'semantics', 'learned'])
+def test_formal_author_and_actual_native_consume_each_independent_warrant(tmp_path, monkeypatch, warrant):
+    agent, lab, contract, choice, memory = scene(tmp_path, 'archive', old=Program('feature', name='u'))
+    assert choice['evaluations'][0]['representation_diagnostic']['conflicting_groups'] == 0
+    current = next(item for item in agent.questions if item['id'] == contract['question']['id'])
+    current['use_sites'] = [{'kind': 'supply_component', 'model': 'old.py', 'slot': 'representation'}]
+    if warrant == 'failures':
+        basis = measured_failure_basis(agent, Program('window_sum', lag=3,
+            children=(Program('feature', name='u'),)))
+    elif warrant == 'alternative':
+        basis = competing_representation_basis(agent, tmp_path)
+    elif warrant == 'learned':
+        basis = learned_representation_basis(tmp_path)
+    else:
+        agent.questions.append({'id': 'history_semantics', 'kind': 'representation', 'status': 'open',
+            'use_sites': deepcopy(current['use_sites']),
+            'answer_resolution_ref': {'evaluator': 'representation_diagnostic_and_paid_comparison',
+                                      'parent_model': 'old.py'}})
+        basis = {'semantic_question_ref': {'kind': 'question', 'id': 'history_semantics', 'version': 1}}
+    current['representation_research_basis'] = basis
+    agent._prepare_program_state()
+    memory['research_state'] = agent._program_state()
+    monkeypatch.chdir(agent.workspace)
+    proposal = select_actions(lab.public_spec(), agent.observations, memory)
+    assert proposal.get('action') == 'run', proposal
+    assert proposal['arguments']['operator'] == 'research_route'
+    child = proposal['arguments']['research_question']
+    assert child['representation_research_basis'] == basis
+    assert child['use_sites'] == current['use_sites']
+    result = agent._execute('run', proposal['arguments'], lab)
+    assert result['status'] == 'native_representation_candidates_ready'
+    assert result['native_representation']['alternative_representation_basis']
+    assert result['native_representation']['origin'] == child['origin']
+    assert result['native_representation']['origin'] != 'computed_representation_conflict'
+    assert result['native_representation']['candidates']
+    assert agent.costs['model_calls'] == agent.costs['observation_cost'] == 0
+
+
+def test_missing_reference_requests_author_work_instead_of_counting_a_field_as_evidence(tmp_path):
+    agent, _, contract, choice, memory = scene(tmp_path, 'archive', old=Program('feature', name='u'))
+    current = next(item for item in agent.questions if item['id'] == contract['question']['id'])
+    current['representation_research_basis'] = {'alternative_ref': {
+        'file': str(tmp_path / 'missing.json'), 'json_path': []}}
+    result = _representation_action(contract, contract['question'], choice,
+        agent._program_state(), memory, len(agent.rows))
+    assert result['stop']['request']['reason'] == 'representation_research_warrant_unresolved'
+
+
+
+def test_standalone_author_consumes_saved_competing_program_without_collision(tmp_path):
+    agent, lab, contract, _, _ = scene(tmp_path, 'archive', old=Program('feature', name='u'))
+    current = next(item for item in agent.questions if item['id'] == contract['question']['id'])
+    current['representation_research_basis'] = competing_representation_basis(agent, tmp_path)
+    agent._save('shared/author.py', export_finite_native_author())
+    result = agent._execute('run', {'operator': 'procedure', 'path': 'shared/author.py',
+                                  'max_steps': 2, 'confirm': False}, lab)
+    operators = [entry['proposal']['arguments']['operator'] for entry in result['steps']]
+    assert operators == ['research_choice', 'research_route'], result
+    native = result['steps'][-1]['feedback']['native_representation']
+    assert native['alternative_representation_basis'] == 'retained_alternative_has_different_task_predictions'
+    assert native['origin'] == result['steps'][-1]['proposal']['arguments']['research_question']['origin']
+    assert native['origin'] != 'computed_representation_conflict'
+    assert native['candidates'] and agent.costs['model_calls'] == agent.costs['observation_cost'] == 0

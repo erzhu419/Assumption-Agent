@@ -59,8 +59,15 @@ def install_unfunded_proposal(monkeypatch, queries):
             'quote': None, 'actual_compute_cost': 0, 'cursor': {'layer': 0, 'offset': 0}})
 
 
-def test_outer_preparation_uses_saved_roster_and_preserves_full_pool(tmp_path, monkeypatch):
+@pytest.mark.parametrize('with_opaque', [False, True])
+def test_outer_preparation_uses_saved_roster_and_preserves_full_pool(tmp_path, monkeypatch, with_opaque):
     agent, lab, question, args = retained_scene(tmp_path)
+    if with_opaque:
+        retained = args['_retained_execution_inputs']['old_object']
+        retained['_retained_components'].insert(1, {
+            'id': 'old_python_forecast', 'version': 8,
+            'forecast_ref': {'file': 'retained_forecasts.json', 'json_path': ['forecasts', 0]}})
+        retained['component_theory_ids'] = [item['id'] for item in retained['_retained_components']]
     roster = deepcopy(args['_retained_execution_inputs']['old_object']['_retained_components'])
     index, models = deepcopy(agent.theory_index), list(agent.candidate_paths)
     calls = []
@@ -72,11 +79,11 @@ def test_outer_preparation_uses_saved_roster_and_preserves_full_pool(tmp_path, m
 
     monkeypatch.setattr(consolidation, 'transfer_theory', transfer)
     result = consolidation.recall_frozen_theories(agent, question, args)
-    assert result['new_compute_cost'] == 1 + len(ROLES) + len(roster) == 5
-    assert calls[0]['allocation']['compute'] == 75
+    assert result['new_compute_cost'] == 1 + len(ROLES) + len(roster)
+    assert calls[0]['allocation']['compute'] == 80 - result['new_compute_cost']
     assert calls[0]['_retained_components'] == roster
-    assert calls[0]['component_theory_ids'] == ['component_5', 'component_2', 'component_7']
-    assert [item['version'] for item in roster] == [1, 1, 1]
+    assert calls[0]['component_theory_ids'] == [item['id'] for item in roster]
+    assert [item['version'] for item in roster if item.get('program')] == [1, 1, 1]
     assert agent.theory_index['component_5']['version'] == 2
     assert agent.theory_index == index and agent.candidate_paths == models
     assert_no_new_science(agent, lab)

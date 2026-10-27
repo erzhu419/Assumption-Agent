@@ -160,7 +160,7 @@ def test_actual_common_procedure_consumes_the_prepared_PR2_parent_query(tmp_path
     assert agent.costs['model_calls'] == 0 and not agent.confirmations
 
 
-def test_PR2_purchase_refits_the_same_native_bank_before_rescoring_exports(tmp_path):
+def test_PR2_purchase_compares_the_retained_bank_before_pricing_current_data_research(tmp_path):
     agent = CommonArchiveInquiryAgent(None, tmp_path, arm='code_react', source_task=False,
         knowledge={'files': {POLICY: export_finite_native_author()}},
         config=InquiryLLMConfig(observation_budget=20, compute_budget=3000, confirmation_rows=2,
@@ -197,21 +197,18 @@ def test_PR2_purchase_refits_the_same_native_bank_before_rescoring_exports(tmp_p
     paid_before, compute_before = lab.paid, agent.costs['compute_cost']
     result = agent._execute('run', {'operator': 'procedure', 'path': POLICY,
                                   'max_steps': 2, 'confirm': False}, lab)
-    query, refit = result['steps']
+    query, compared = result['steps']
     assert query['proposal']['arguments'] == {'pending_question': 'task'}
     executed_query = agent.method_results[-2]
     assert executed_query['evidence_before']['rows'] == 1 and executed_query['evidence_after']['rows'] == 2
-    assert refit['proposal']['arguments']['operator'] == 'native_condition_research'
-    assert refit['proposal']['arguments']['max_compute'] == contract['max_compute']
-    assert refit['proposal']['arguments']['max_candidates'] == contract['max_candidates']
-    assert refit['proposal']['arguments']['research_question'] == current
+    assert compared['proposal']['arguments']['operator'] == 'research_choice'
+    assert compared['feedback']['paid_rows'] == 2
+    assert compared['proposal']['arguments']['models'] == [
+        candidate['model'] for candidate in original['candidates']]
     assert owner['native_condition_research'][0] == original
-    updated = owner['native_condition_research'][1]
-    assert updated['fit_record_indices'] == [0, 1] and updated['fit_evidence'] == [0, 1]
-    old_programs = [item['program'] for item in original['candidates']]
-    assert all(program in [item['program'] for item in updated['candidates']] for program in old_programs)
-    assert 0 < updated['compute_cost'] <= contract['max_compute']
-    assert agent.costs['compute_cost'] - compute_before >= updated['compute_cost']
+    assert len(owner['native_condition_research']) == 1
+    assert lab.paid == paid_before + 1
+    assert agent.costs['compute_cost'] >= compute_before
     assert lab.paid == paid_before + 1 and len(lab.actions) == 2
     assert parent['executed_pending_queries'][-1]['query'] == frozen_pending
     assert not agent.confirmations and agent.costs['model_calls'] == 0
@@ -311,7 +308,7 @@ def test_author_source_update_reuses_completed_choice_then_refit_and_published_s
         'refit', 'native_condition_research', 'research_choice'], result
     assert steps[0]['feedback']['status'] == 'refit_unavailable'
     resumed = steps[1]['proposal']['arguments']
-    assert resumed['max_compute'] == 600
+    assert resumed['max_compute'] == contract['max_compute']
     assert resumed['max_candidates'] == contract['max_candidates']
     assert resumed['programs'] == programs and resumed['basis'] == basis
     assert owner['native_condition_research'][0] == original
@@ -404,7 +401,7 @@ def test_same_bank_requires_actual_current_full_scope_refit_failure_and_keeps_fi
         {'id': 'native_condition_research', 'current_executions': [entry]}]}))
     proposed = select_actions({'controls': ['u']}, observations(), memory)
     if changed == 'attempted':
-        assert proposed['arguments'] == {**entry['resume_action']['arguments'], 'max_compute': 100000}
+        assert proposed['arguments'] == entry['resume_action']['arguments']
         state['method_results'].append({'proposal': deepcopy(proposed),
             'feedback': {'operator': 'native_condition_research',
                 'research_question_id': question['id'], 'question_meaning_version': 1},

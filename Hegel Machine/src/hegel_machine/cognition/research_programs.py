@@ -154,6 +154,550 @@ def _entry(fit, steps, count, compute_cost, index=0):
             "research_program": plan}
 
 
+def consolidate_research_programs(entries, *, allocation, candidate_id='research_method'):
+    """Group actual procedures by a shared search contract, retaining each seed.
+
+    This learns an optional method, not a shared world mechanism or a utility
+    trigger. Conditional replay already re-identifies thresholds, durations,
+    placement and coefficients; generic replay re-identifies readout weights.
+    Other specialized replayers need their own actual input contract first.
+    """
+    from .abstractions import AbstractTemplate
+    from .models import SearchBudget
+
+    budget = SearchBudget(allocation['compute'])
+    groups, requests = {}, []
+    for entry in entries:
+        payload = entry['research_program']
+        program = Program.from_dict(entry['program'])
+        if not budget.spend(program.size):
+            break
+        output = payload['graph']['nodes'][payload['output_node']]['answer']
+        if output is None or Program.from_dict(output) != program:
+            requests.append({'type': 'AuthorWorkRequest', 'source_ref': entry['source_ref'],
+                             'reason': 'saved_procedure_output_does_not_match_candidate'})
+            continue
+        signatures = entry['role_signature']
+        terms = [Program.from_dict(payload['graph']['nodes'][key]['answer'])
+                 for key in payload['term_nodes']]
+        names = tuple(sorted(set().union(program.required_features(),
+                                         *(term.required_features() for term in terms))))
+        if any(name not in signatures or any(key not in signatures[name]
+                   for key in ('role', 'unit', 'time')) for name in names):
+            requests.append({'type': 'AuthorWorkRequest', 'source_ref': entry['source_ref'],
+                             'reason': 'procedure_role_unit_time_contract_required'})
+            continue
+        roles = tuple(f'role_{index}' for index in range(len(names)))
+        mapping = dict(zip(names, roles))
+        steps = payload.get('selection_steps', [])
+        conditional = next((step for step in reversed(steps)
+                            if step['operation'] == 'discover_conditional_coordinates'), None)
+        specialized = {'discover_decoded_conditional_coordinates', 'discover_composed_conditions',
+                       'resolve_relation_intervals'}
+        if any(step['operation'] in specialized for step in steps):
+            requests.append({'type': 'AuthorWorkRequest', 'source_ref': entry['source_ref'],
+                             'reason': 'shared_specialized_replay_contract_not_established'})
+            continue
+        canonical = lambda value: Program.from_dict(value).remap_features(mapping).to_dict()
+        if conditional:
+            operation = {'operation': 'discover_conditional_coordinates',
+                'gate_coordinate': canonical(conditional['gate_coordinate']),
+                'branch_basis': [canonical(term) for term in conditional['branch_basis']]}
+            freedoms = ['threshold', 'width', 'placement', 'response_coefficients']
+        else:
+            operation = {'operation': 'refit_selected_terms', 'terms': [canonical(
+                payload['graph']['nodes'][key]['answer']) for key in payload['term_nodes']]}
+            freedoms = ['response_coefficients']
+        signature = {role: deepcopy(signatures[name]) for name, role in mapping.items()}
+        context = entry.get('context_family_ref', entry['context_ref'])
+        key = json.dumps([operation, signature, entry['output_unit'], context], sort_keys=True)
+        groups.setdefault(key, []).append((entry, roles, names, signature, operation, freedoms))
+    candidates = []
+    for records in groups.values():
+        sources = list(dict.fromkeys(item[0]['source_id'] for item in records))
+        if len(sources) < 2:
+            requests.append({'type': 'AuthorWorkRequest',
+                'reason': 'distinct_physical_research_sources_required', 'source_ids': sources,
+                'source_refs': [deepcopy(item[0]['source_ref']) for item in records]})
+            continue
+        if len(candidates) >= allocation.get('max_groups', 16):
+            break
+        first, roles, names, signature, operation, freedoms = records[0]
+        identifier = f'{candidate_id}:{len(candidates)}'
+        template = AbstractTemplate(identifier, first['episode_id'],
+            Program('object_sum', children=tuple(Program('feature', name=role) for role in roles)),
+            roles, names, ())
+        retained = [{key: deepcopy(entry[key]) for key in (
+            'episode_id', 'source_id', 'source_ref', 'action_ref', 'evidence_refs', 'cost_refs',
+            'failure_refs', 'source_cutoff', 'status', 'source_revision_steps', 'independent_results',
+            'cost_scope', 'source_outcome_ref')
+            if key in entry} | {'input_mapping': dict(zip(roles, source_names))}
+            for entry, _, source_names, *_ in records]
+        candidates.append({'id': identifier, 'kind': 'research_program', 'purpose': 'method',
+            'producer': 'finite_native_saved_replay_contract_grouping',
+            'status': 'EXECUTABLE_CANDIDATE', 'frozen': True, 'active_library': False,
+            'construction_only': True, 'global_support': False, 'support_updated': False,
+            'independent_confirmation': False, 'transfer_status': 'not_established',
+            'template': template.to_dict(), 'role_signature': signature,
+            'output_unit': first['output_unit'], 'research_program_contract': operation,
+            'free_parameters': freedoms, 'source_ids': sources, 'independent_source_count': len(sources),
+            'source_outcomes': retained, 'source_contexts': [deepcopy(item[0]['context_ref']) for item in records],
+            'research_program_source_ref': deepcopy(first['source_ref']),
+            'research_program_source_refs': [deepcopy(item['source_ref']) for item in retained],
+            'source_seed_inputs': [{'source_id': entry['source_id'],
+                'source_ref': deepcopy(entry['source_ref']), 'retained_term_refs': [
+                    {**deepcopy(entry['source_ref']), 'json_path': [*entry['source_ref']['json_path'],
+                     'research_program', 'graph', 'nodes', key, 'answer']}
+                    for key in entry['research_program']['term_nodes']]}
+                for entry, *_ in records],
+            'seed_policy': 'equal_bounded_source_order_distinct_replay_inputs',
+            'source_reconstruction_scope': 'individual_saved_graph_identity_only',
+            'source_reconstruction': [{'source_id': item['source_id'],
+                'source_ref': deepcopy(item['source_ref']),
+                'exact': True, 'comparison': 'saved_graph_output_equals_its_actual_candidate_not_shared_method'}
+                for item in retained],
+            'trigger': {'kind': 'current_research_obligation', 'learned_utility_trigger': False},
+            'scope': {'context_ref': deepcopy(first.get('context_family_ref', first['context_ref'])),
+                'application': 'unconfirmed', 'relative_utility': 'unconfirmed',
+                'measured_coverage': [deepcopy(item['source_ref']) for item in retained]},
+            'counterexample_refs': [deepcopy(ref) for item in retained for ref in item.get('failure_refs', [])],
+            'consumer': 'hegel_machine.cognition.research_programs:replay_research_program'})
+    exhausted = budget.last_denied_request is not None
+    return {'status': 'UNKNOWN' if exhausted or requests else 'completed', 'candidates': candidates,
+        'author_work': requests, 'excluded': [], 'actual_compute_cost': budget.spent,
+        'budget_exhausted': exhausted}
+
+
+def research_program_replay_inputs(payload, *, feature_mapping=None):
+    """Describe the actual finite replayer input, including retained seed terms."""
+    def mapped(value):
+        program = Program.from_dict(value)
+        if feature_mapping:
+            program = bind_measurement_arguments(program, feature_mapping)
+        return program.to_dict()
+
+    value = {'retained_terms': [mapped(payload['graph']['nodes'][key]['answer'])
+                               for key in payload['term_nodes']]}
+    saved = next((step for step in reversed(payload.get('selection_steps', []))
+                  if step['operation'] == 'discover_conditional_coordinates'), None)
+    if saved:
+        value.update(operation='discover_conditional_coordinates',
+            gate_coordinate=mapped(saved['gate_coordinate']),
+            branch_basis=[mapped(term) for term in saved['branch_basis']])
+    else:
+        value['operation'] = 'refit_selected_terms'
+    return value
+
+
+def propose_research_step_revisions(payload, training=(), *, feature_names=(),
+                                    feature_mapping=None, source_ref=None,
+                                    max_candidates=8, max_history=None):
+    """Change one input that the saved replayer really consumes.
+
+    Selection steps usually describe historical work, rather than instructions
+    replayed in order. Editing their prose or old losses is not a method edit.
+    These proposals instead alter one retained computation, conditional gate,
+    or branch coordinate. The finite vocabulary and guarded measured history
+    are shared with ordinary coordinate research; no task label selects a lag.
+    """
+    from .condition_learning import _condition_coordinates
+    from .research_drafts import _rebind_step
+
+    rows = list(training)
+    bound = _rebind_step(payload, feature_mapping or {})
+    original = research_program_replay_inputs(bound)
+    unsupported = {"discover_decoded_conditional_coordinates", "discover_composed_conditions",
+                   "resolve_relation_intervals"}
+    if any(step["operation"] in unsupported for step in bound.get("selection_steps", [])):
+        return {"status": "step_contract_not_established", "candidates": [],
+            "reason": "specialized_replay_requires_its_existing_parameter_and_dependency_contract"}
+    terms = [Program.from_dict(value) for value in original["retained_terms"]]
+    names = (set.intersection(*(set(row.features) for row in rows)) - {"__target__"}) if rows else set(feature_names)
+    names &= set(feature_names) if feature_names else names
+    current = [Program("feature", name=name) for name in sorted(names)]
+    upper = max((len(row.history) for row in rows), default=0)
+    upper = min(upper, max_history) if max_history is not None else upper
+    coordinates = _condition_coordinates(rows, upper) if rows else current
+    coordinates = [term for term in coordinates if term.required_features() <= names | {"__target__"}]
+    history = [term for term in coordinates if term.history_depth]
+    products = list(dict.fromkeys(Program("mul", children=pair)
+        for pair in combinations_with_replacement(current[:8], 2)))
+    saved = [Program.from_dict(step["program"]) for step in bound.get("selection_steps", [])
+        if step.get("program") and Program.from_dict(step["program"]).required_features() <= names]
+    # Round-robin input families keep current-coordinate variants from taking
+    # all places before an acquired historical distinction receives a trial.
+    pools = [list(history), [*current, *products], list(dict.fromkeys(saved))]
+    choices = []
+    while any(pools):
+        for pool in pools:
+            if pool:
+                term = pool.pop(0)
+                if term not in choices:
+                    choices.append(term)
+    conditional = next((index for index in reversed(range(len(bound.get("selection_steps", []))))
+        if bound["selection_steps"][index]["operation"] == "discover_conditional_coordinates"), None)
+    edits = []
+    for term in choices:
+        if term not in terms:
+            edits.append({"kind": "add_retained_input", "term": term.to_dict(),
+                "target": ["term_nodes"], "coordinate_source": "paid_public_coordinates_or_saved_computation"})
+        if conditional is not None and not term.history_depth:
+            step = bound["selection_steps"][conditional]
+            if term.to_dict() != step["gate_coordinate"]:
+                edits.append({"kind": "replace_gate", "term": term.to_dict(),
+                    "before": deepcopy(step["gate_coordinate"]),
+                    "target": ["selection_steps", conditional, "gate_coordinate"]})
+            # Raw coordinates are already reintroduced by _coordinates. A
+            # deletion/addition there would not change this execution step.
+            if term not in current and term.to_dict() not in step["branch_basis"]:
+                edits.append({"kind": "add_branch_coordinate", "term": term.to_dict(),
+                    "target": ["selection_steps", conditional, "branch_basis"]})
+    if len(terms) > 1:
+        for key, term in zip(bound["term_nodes"], terms):
+            edits.append({"kind": "remove_retained_input", "before": term.to_dict(),
+                "target": ["term_nodes"], "node": key})
+    candidates, seen = [], [original]
+    # Different actual steps receive opportunities before more alternatives
+    # of the same step, independent of candidate identity or observed return.
+    kinds = list(dict.fromkeys(edit["kind"] for edit in edits))
+    queues = [[edit for edit in edits if edit["kind"] == kind] for kind in kinds]
+    while any(queues) and len(candidates) < max_candidates:
+        for queue in queues:
+            if not queue or len(candidates) >= max_candidates:
+                continue
+            edit, revised = queue.pop(0), deepcopy(bound)
+            if edit["kind"] == "add_retained_input":
+                graph = ResearchGraph.from_dict(revised["graph"])
+                key = f"step_input:{len(graph.nodes)}"
+                node = graph.add_question(key, "Test an alternative measured computation in this replay step",
+                    operations=("reuse",), expression=Program.from_dict(edit["term"]))
+                node.answer, node.status = node.expression, "answered"
+                revised["graph"] = graph.to_dict()
+                revised["term_nodes"].append(key)
+            elif edit["kind"] == "remove_retained_input":
+                revised["term_nodes"].remove(edit["node"])
+            else:
+                step = revised["selection_steps"][conditional]
+                if edit["kind"] == "replace_gate":
+                    step["gate_coordinate"] = deepcopy(edit["term"])
+                else:
+                    step["branch_basis"].append(deepcopy(edit["term"]))
+            inputs = research_program_replay_inputs(revised)
+            if inputs in seen:
+                continue
+            seen.append(inputs)
+            revised["status"] = "requires_step_validation"
+            revised["method_step_revision"] = {"edit": deepcopy(edit), "source_ref": deepcopy(source_ref)}
+            candidates.append({"edit": edit, "research_program": revised, "replay_inputs": inputs,
+                "source_refs": [deepcopy(source_ref)] if source_ref else [],
+                "status": "unmeasured_step_intervention"})
+    return {"status": "proposed" if candidates else "no_distinct_executable_step",
+        "candidates": candidates, "baseline_research_program": bound,
+        "baseline_replay_inputs": original, "observed_history_bound": upper,
+        "scope": "finite_step_interventions_not_world_support"}
+
+
+def evaluate_research_step_revisions(payload, training, validation, budget, *,
+                                     per_method_compute, risk_quantile=.5,
+                                     feature_mapping=None, feature_names=(), source_refs=(),
+                                     source_ref=None, max_candidates=8, max_history=None,
+                                     previous=None, minimum_improvement=1e-10,
+                                     paid_baseline=None, on_progress=None):
+    """Pair the old method and one-step interventions on the same paid split.
+
+    Every method receives the same fit-plus-assessment ceiling. Only completed
+    pairs can support a local step-intervention effect. Saved complete slots
+    are reusable under the caller's immutable paid-view references; incomplete
+    work and its costs remain visible, never becoming a method counterexample.
+    A progress callback can persist each newly charged slot before the next
+    method starts; callback failures stop the pass rather than losing the bill.
+    """
+    from .evaluation import loss
+    from .experiment_runtime import PythonExecutionDeadline
+    from .models import SearchBudget
+    from .research_methods import common_method_process_return
+
+    training, validation = list(training), list(validation)
+    proposal = propose_research_step_revisions(payload, training,
+        feature_names=feature_names, feature_mapping=feature_mapping, source_ref=source_ref,
+        max_candidates=max_candidates, max_history=max_history)
+    programs = [proposal.get("baseline_research_program", payload),
+        *[item["research_program"] for item in proposal["candidates"]]]
+    inputs = [research_program_replay_inputs(item) for item in programs]
+    basis = {"replay_inputs": inputs, "source_refs": deepcopy(list(source_refs)),
+        "training_rows": len(training), "validation_rows": len(validation),
+        "risk_quantile": risk_quantile, "per_method_compute": per_method_compute,
+        "minimum_improvement": minimum_improvement}
+    reusable = (previous and source_refs and previous.get("basis") == basis)
+    paid = deepcopy(previous.get("methods", [])) if reusable else []
+    reused = {item["index"]: item for item in paid if item.get("execution_complete")}
+    baseline_basis = {"replay_inputs": inputs[0], "source_refs": deepcopy(list(source_refs)),
+        "training_rows": len(training), "validation_rows": len(validation), "risk_quantile": risk_quantile}
+    baseline_validation_cost = None
+    if paid_baseline is not None and 0 not in reused:
+        score = paid_baseline.get("validation_loss")
+        scored = type(score) in (int, float) and isfinite(score) and score >= 0
+        known = (bool(source_refs) and paid_baseline.get("basis") == baseline_basis
+            and paid_baseline.get("execution_complete") is True
+            and not paid_baseline.get("execution_error")
+            and (scored or paid_baseline.get("program")))
+        if known:
+            baseline_validation_cost = 0 if scored else len(validation)
+    required = (len(programs) - len(reused)) * per_method_compute
+    if baseline_validation_cost is not None:
+        required += baseline_validation_cost - per_method_compute
+    result = {"status": "unresolved", "basis": basis, "proposal": proposal, "methods": paid,
+        "baseline_basis": baseline_basis,
+        "pairs": [], "selected_revision": None, "required_compute": required,
+        "compute_cost": 0, "previous_compute_cost": previous.get("paid_compute_cost", 0) if reusable else 0,
+        "budget_incomplete": False, "independent_support": False,
+        "time_incomplete": False,
+        "scope": "same_paid_split_development_step_intervention"}
+    if paid_baseline is not None and 0 not in reused and baseline_validation_cost is None:
+        return {**result, "status": "paid_baseline_not_reusable", "required_compute": None,
+            "reason": "exact_original_seed_program_or_same_split_paid_score_required_no_automatic_refit"}
+    if proposal["status"] == "step_contract_not_established":
+        return {**result, "status": proposal["status"], "required_compute": 0}
+    if not validation or per_method_compute <= len(validation):
+        return {**result, "status": "complete_fit_and_validation_contract_required"}
+    if not budget.can_spend(required):
+        return {**result, "status": "insufficient_budget", "budget_incomplete": True,
+            "denied_request": deepcopy(budget.last_denied_request)}
+    start, methods = budget.spent, []
+    result["retained_incomplete_attempts"] = ([*deepcopy(previous.get("retained_incomplete_attempts", [])),
+        *[{key: deepcopy(item.get(key)) for key in ("index", "paid_compute_cost", "execution_error", "denied_request")}
+            for item in paid if not item.get("execution_complete")]] if reusable else [])
+
+    def persist_progress():
+        if on_progress is None:
+            return
+        completed_prefix = list(methods)
+        known = {item["index"] for item in completed_prefix}
+        completed_prefix.extend({**item, "new_compute_cost": 0, "reused": True}
+            for index, item in reused.items() if index not in known)
+        completed_prefix.sort(key=lambda item: item["index"])
+        new_cost = budget.spent - start
+        on_progress(deepcopy({**result, "status": "incomplete_step_comparison",
+            "methods": completed_prefix, "compute_cost": new_cost,
+            "paid_compute_cost": result["previous_compute_cost"] + new_cost,
+            "budget_incomplete": any(item.get("denied_request") for item in completed_prefix),
+            "unexecuted_method_indices": [index for index in range(len(programs))
+                if index not in {item["index"] for item in completed_prefix}]}))
+
+    fallback = initial_prediction(training, risk_quantile) if training else 0.
+    for index, program in enumerate(programs):
+        if index in reused:
+            methods.append({**reused[index], "new_compute_cost": 0, "reused": True})
+            continue
+        if index == 0 and baseline_validation_cost is not None:
+            measured, error = paid_baseline.get("validation_loss"), None
+            if baseline_validation_cost:
+                budget.spend(baseline_validation_cost)
+                try:
+                    measured = loss(Program.from_dict(paid_baseline["program"]), validation, fallback, risk_quantile)
+                except (ValueError, MissingHistory, KeyError) as exc:
+                    error = {"type": type(exc).__name__, "message": str(exc)}
+            original_cost = paid_baseline.get("fit_compute_cost")
+            cost = (original_cost + baseline_validation_cost
+                if type(original_cost) in (int, float) and baseline_validation_cost else
+                paid_baseline.get("paid_compute_cost"))
+            methods.append({"index": 0, "execution_complete": error is None,
+                "new_compute_cost": baseline_validation_cost, "paid_compute_cost": cost,
+                "training_loss": paid_baseline.get("training_loss"), "validation_loss": measured,
+                "program": deepcopy(paid_baseline.get("program")),
+                "research_program": deepcopy(paid_baseline.get("research_program")),
+                "cost_ref": deepcopy(paid_baseline.get("cost_ref")),
+                "original_fit_compute_cost": original_cost,
+                "execution_error": error, "denied_request": None, "reused": True})
+            if error and error["type"] == PythonExecutionDeadline.__name__:
+                result["time_incomplete"] = True
+            if baseline_validation_cost:
+                persist_progress()
+            if error:
+                new_cost = budget.spent - start
+                return {**result, "status": "incomplete_paid_baseline_assessment", "methods": methods,
+                    "time_incomplete": error["type"] == PythonExecutionDeadline.__name__,
+                    "compute_cost": new_cost, "paid_compute_cost": result["previous_compute_cost"] + new_cost}
+            continue
+        local = SearchBudget(per_method_compute, reserve=len(validation))
+        claim, measured, error = None, None, None
+        try:
+            claim = replay_research_program(program, training, local, risk_quantile=risk_quantile)
+            if claim is not None:
+                local.release_reserve()
+                local.spend(len(validation))
+                measured = loss(claim["candidate"].program, validation, fallback, risk_quantile)
+        except (ValueError, MissingHistory, KeyError) as exc:
+            error = {"type": type(exc).__name__, "message": str(exc)}
+            if isinstance(exc, PythonExecutionDeadline):
+                result["time_incomplete"] = True
+        complete = claim is not None and measured is not None and error is None and local.last_denied_request is None
+        budget.spend(local.spent)
+        methods.append({"index": index, "execution_complete": complete,
+            "new_compute_cost": local.spent, "paid_compute_cost": local.spent,
+            "training_loss": claim["training_loss"] if claim else None,
+            "validation_loss": measured, "program": claim["candidate"].program.to_dict() if claim else None,
+            "research_program": claim["research_program"] if claim else None,
+            "execution_error": error,
+            "denied_request": deepcopy(local.last_denied_request), "reused": False})
+        persist_progress()
+        if result["time_incomplete"]:
+            # The shared runtime's deadline is a matrix boundary, not another
+            # unproductive method. Preserve the current charge and stop before
+            # starting any remaining scientific work.
+            known = {item["index"] for item in methods}
+            methods.extend({**item, "new_compute_cost": 0, "reused": True}
+                for position, item in reused.items() if position not in known)
+            methods.sort(key=lambda item: item["index"])
+            break
+    result["methods"] = methods
+    result["unexecuted_method_indices"] = [index for index in range(len(programs))
+        if index not in {item["index"] for item in methods}]
+    baseline = methods[0]
+    for item in methods[1:]:
+        candidate = proposal["candidates"][item["index"] - 1]
+        complete = baseline["execution_complete"] and item["execution_complete"]
+        delta = item["validation_loss"] - baseline["validation_loss"] if complete else None
+        process = None
+        if complete:
+            def side(method):
+                return {"execution_complete": True, "completed": True,
+                    "quality": {"loss": method["validation_loss"], "threshold": minimum_improvement},
+                    "coverage": len(validation), "costs": {"observation_cost": 0,
+                        "compute_cost": method["paid_compute_cost"]}}
+            process = common_method_process_return({"same_task": True,
+                "same_evaluation_contract": True, "source_refs": deepcopy(list(source_refs)),
+                "scope": result["scope"], "before": side(baseline), "after": side(item)})
+        improved = complete and (delta < -minimum_improvement or process["helpful"] is True)
+        result["pairs"].append({"method_index": item["index"], "edit": deepcopy(candidate["edit"]),
+            "execution_complete": complete, "same_training_and_validation": True,
+            "equal_method_compute_ceiling": per_method_compute, "validation_loss_change": delta,
+            "process_return": process,
+            "status": "local_step_improvement" if improved else
+                "complete_step_unhelpful" if complete else "incomplete_not_negative",
+            "scope": result["scope"], "source_refs": deepcopy(list(source_refs))})
+    useful = [item for item in result["pairs"] if item["status"] == "local_step_improvement"]
+    all_complete = len(methods) == len(programs) and all(item["execution_complete"] for item in methods)
+    if useful and all_complete and not result["time_incomplete"]:
+        chosen = min(useful, key=lambda pair: (
+            0. if methods[pair["method_index"]]["validation_loss"] <= minimum_improvement else
+                methods[pair["method_index"]]["validation_loss"],
+            methods[pair["method_index"]]["paid_compute_cost"]))
+        result["selected_revision"] = deepcopy(proposal["candidates"][chosen["method_index"] - 1])
+        selected = methods[chosen["method_index"]]
+        result["selected_revision"].update(replayed_research_program=deepcopy(selected["research_program"]),
+            paired_program=deepcopy(selected["program"]), validation_loss=selected["validation_loss"])
+        result["status"] = "development_step_revision_selected"
+    else:
+        result["status"] = "complete_no_step_improvement" if all_complete else "incomplete_step_comparison"
+    result["compute_cost"] = budget.spent - start
+    result["paid_compute_cost"] = result["previous_compute_cost"] + result["compute_cost"]
+    result["budget_incomplete"] = any(item.get("denied_request") for item in methods)
+    return result
+
+
+def quote_research_step_revisions(payload, training, validation, *, feature_mapping=None,
+                                  feature_names=(), source_ref=None, max_candidates=8,
+                                  max_history=None):
+    """Bound a complete finite replay/assessment pass without fitting a model.
+
+    Conditional replay can visit only a finite measured gate bracket, integer
+    duration and placement cell. Its fitter caches each cell's columns and
+    solve. The bound includes all such cells, initial duration fits, both sparse
+    deletion paths, retained-input refitting and assessment. This deliberately
+    differs from the older bounded-attempt allowance. No clock-time guarantee
+    follows from candidate-row accounting.
+    """
+    from .conditional_coordinates import _coordinates
+    from .models import TaskSpec
+
+    training, validation = list(training), list(validation)
+    proposal = propose_research_step_revisions(payload, training, feature_names=feature_names,
+        feature_mapping=feature_mapping, source_ref=source_ref, max_candidates=max_candidates,
+        max_history=max_history)
+    result = {"status": "UNKNOWN", "proposal": proposal, "methods": [],
+        "per_method_compute_upper": None, "complete_pass_compute_upper": None,
+        "coordinate_readout_compute": 0, "new_fits": 0, "new_world_predictions": 0,
+        "scope": "finite_candidate_row_upper_not_host_seconds"}
+    if proposal["status"] == "step_contract_not_established" or len(training) < 6 or not validation:
+        return {**result, "reason": "supported_complete_fit_and_assessment_contract_required"}
+    programs = [proposal["baseline_research_program"],
+        *[item["research_program"] for item in proposal["candidates"]]]
+    count, readouts = len(training), {}
+    for index, program in enumerate(programs):
+        replay = research_program_replay_inputs(program)
+        retained = tuple(dict.fromkeys(Program.from_dict(value) for value in replay["retained_terms"]))
+        retained_fit = count * (len(retained) + 2)
+        method = {"index": index, "retained_fit_upper": retained_fit,
+            "assessment_upper": len(validation), "replay_inputs": replay}
+        if replay["operation"] == "refit_selected_terms":
+            method["compute_upper"] = retained_fit + len(validation)
+            result["methods"].append(method)
+            continue
+        names = tuple(sorted(set.intersection(*(set(row.features) for row in training)) - {"__target__"}))
+        spec = TaskSpec("paid_coordinate_quote", "Count finite replay coordinates", names, (), ())
+        available, basis = _coordinates(spec, training,
+            [Program.from_dict(term) for term in replay["branch_basis"]])
+        gates = list(dict.fromkeys([Program.from_dict(replay["gate_coordinate"]), *available]))[:8]
+        gates = [gate for gate in gates if not gate.history_depth and gate.required_features() <= set(names)]
+        # _search appends its own intercept coordinate before masking branches.
+        branch_terms = 2 * (len(basis) + 1)
+        if branch_terms + 3 >= count:
+            # The alternate screening path can revisit a failed screen. Its
+            # current code does not provide the same finite-cell cost bound.
+            return {**result, "reason": "screened_conditional_fit_complete_bound_not_established",
+                "unquoted_method_index": index, "branch_terms": branch_terms}
+        thresholds = []
+        for gate in gates:
+            if gate not in readouts:
+                try:
+                    values = predict_rows(gate, training)
+                except (MissingHistory, KeyError, ValueError) as exc:
+                    return {**result, "reason": "paid_gate_coordinate_unavailable",
+                        "unquoted_method_index": index, "error": str(exc)}
+                if not all(isfinite(value) for value in values):
+                    return {**result, "reason": "paid_gate_coordinate_nonfinite", "unquoted_method_index": index}
+                readouts[gate] = values
+                result["coordinate_readout_compute"] += count
+            from collections import Counter
+            occurrences = Counter(readouts[gate])
+            distinct, below, brackets = sorted(occurrences), 0, 0
+            for left, right in zip(distinct, distinct[1:]):
+                below += occurrences[left]
+                brackets += below >= 3 and count - below >= 3
+            thresholds.append({"gate_coordinate": gate.to_dict(), "brackets": brackets})
+        upper = max(1, max((len(row.history) for row in training), default=0))
+        widths, width = [1], 2
+        while width < upper:
+            widths.append(width)
+            width *= 2
+        if upper > 1:
+            widths.append(upper)
+        placements = 2 if upper > 1 else 1
+        cells = sum(item["brackets"] for item in thresholds) * upper * placements
+        fit_price = count * (branch_terms + 2)
+        gate_preparation = 2 * count * len(gates)
+        plain_fits = len(widths) * count * (len(basis) + 3)
+        # At most two winners: re-fit their active terms once, read their
+        # contributions, then delete down to two terms with cached columns.
+        deletion = 2 * count * (3 * branch_terms - 2)
+        # Keep the existing refinement loop's two-fit reserve available even
+        # after its last uncached cell, then let its ordinary no-progress stop.
+        completion_reserve = 2 * fit_price
+        method.update(gate_brackets=thresholds, observed_history_bound=upper,
+            branch_terms=branch_terms, parameter_cells_upper=cells,
+            gate_preparation_upper=gate_preparation, plain_fits_upper=plain_fits,
+            parameter_fits_upper=cells * fit_price, sparse_deletion_upper=deletion,
+            completion_reserve=completion_reserve,
+            compute_upper=retained_fit + gate_preparation + plain_fits + cells * fit_price
+                + deletion + completion_reserve + len(validation))
+        result["methods"].append(method)
+    maximum = max(item["compute_upper"] for item in result["methods"])
+    return {**result, "status": "quoted", "per_method_compute_upper": maximum,
+        "complete_pass_compute_upper": maximum * len(programs),
+        "method_count": len(programs), "equal_method_ceiling_required": True}
+
+
 def coordinate_search_allowance(feature_count, row_count, history_length=0):
     """Quote a bounded attempt using the constructor's two multiplication rounds."""
     first = min(feature_count, 8)

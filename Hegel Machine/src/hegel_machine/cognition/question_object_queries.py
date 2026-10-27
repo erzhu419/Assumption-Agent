@@ -98,7 +98,7 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
                 'reason': reason, **extra}
 
     object_type = query.get('object_type')
-    if object_type not in (None, 'program_revision_relation'):
+    if object_type not in (None, 'program_revision_relation', 'research_program'):
         return author('unsupported_shared_construction_object_type', requested_object_type=object_type)
     references = query.get('typed_program_refs')
     if not isinstance(references, list) or len(references) < 2:
@@ -135,7 +135,8 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
     arguments = {'source_theory_ids': selected, 'allocation': deepcopy(allocation),
         'theme': f'FindSharedStructure:{question["id"]}@{question.get("meaning_version", 1)}',
         'mission': mission if mission is not None else agent.research_mission}
-    for field in ('context_family_ref', 'episode_sources', 'materials', 'counterexamples', 'object_type'):
+    for field in ('context_family_ref', 'episode_sources', 'common_source_refs',
+                  'materials', 'counterexamples', 'object_type'):
         if field in query:
             arguments[field] = deepcopy(query[field])
     result = consolidate_research(agent, arguments, lab, question)
@@ -150,6 +151,17 @@ def evaluate_shared_structure(agent, question, query, lab, mission):
         candidate = agent.theory_consolidation['candidates'][identifier]
         reference = {'file': result['library_path'], 'json_path': ['candidates', identifier],
                      'version': candidate['version']}
+        if candidate['kind'] == 'research_program':
+            abstractions.append({'library_ref': reference, 'kind': 'research_program',
+                'research_program_contract_ref': {**reference,
+                    'json_path': [*reference['json_path'], 'research_program_contract']},
+                'research_program_sources_ref': {**reference,
+                    'json_path': [*reference['json_path'], 'research_program_source_refs']},
+                'source_outcomes_ref': {**reference, 'json_path': [*reference['json_path'], 'source_outcomes']},
+                'source_reconstruction_ref': {**reference,
+                    'json_path': [*reference['json_path'], 'source_reconstruction']},
+                'source_reconstruction_scope': candidate['source_reconstruction_scope']})
+            continue
         executable_field = 'definition' if candidate.get('definition') else 'template'
         inverse_field = 'source_bindings' if candidate.get('source_bindings') else 'instances'
         abstractions.append({'library_ref': reference, 'kind': candidate['kind'],

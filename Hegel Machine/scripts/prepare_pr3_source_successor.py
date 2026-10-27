@@ -207,16 +207,47 @@ def prepare(spec, output):
 
 def _frozen_proposal_qualification(identifier, candidate, declared_sources):
     """Admit a typed local proposal, without claiming world-law support."""
+    from hegel_machine.cognition.abstractions import AbstractTemplate
     from hegel_machine.cognition.language import Definition, Program
 
     reasons = []
     reconstruction = candidate.get('source_reconstruction', [])
+    method = candidate.get('kind') == 'research_program'
+    reconstruction_sources = ({outcome.get('source_id') for outcome in candidate.get('source_outcomes', [])
+        if any(row.get('source_ref') == outcome.get('source_ref') for row in reconstruction)}
+        if method else {row.get('source_id') for row in reconstruction})
     sources = sorted(set(candidate.get('source_ids', [])).intersection(declared_sources,
-        {row.get('source_id') for row in reconstruction}))
+        reconstruction_sources))
     if len(sources) < 2:
         reasons.append('two_registered_physical_sources_required')
     if not reconstruction or not all(row.get('exact') is True for row in reconstruction):
-        reasons.append('exact_source_reconstruction_not_established')
+        reasons.append('individual_saved_graph_identity_not_established' if method else
+                       'exact_source_reconstruction_not_established')
+    if method:
+        roles = candidate.get('role_signature', {})
+        if (not roles or not candidate.get('output_unit') or any(
+                any(key not in contract for key in ('role', 'unit', 'time'))
+                for contract in roles.values())):
+            reasons.append('declared_roles_units_and_time_required')
+        if (candidate.get('purpose') != 'method' or not candidate.get('research_program_contract')
+                or not candidate.get('research_program_source_ref')
+                or not candidate.get('free_parameters') or candidate.get('consumer') !=
+                    'hegel_machine.cognition.research_programs:replay_research_program'):
+            reasons.append('saved_executable_procedure_contract_unavailable')
+        if (not candidate.get('research_program_source_refs') or not candidate.get('source_seed_inputs')
+                or candidate.get('seed_policy') != 'equal_bounded_source_order_distinct_replay_inputs'
+                or candidate.get('source_reconstruction_scope') != 'individual_saved_graph_identity_only'):
+            reasons.append('complete_source_replay_seeds_required')
+        try:
+            AbstractTemplate.from_dict(candidate['template'])
+        except (KeyError, TypeError, ValueError):
+            reasons.append('saved_executable_structure_unavailable')
+        return {'id': identifier, 'version': candidate.get('version', 1),
+            'status': 'qualified_local_proposal' if not reasons else 'UNKNOWN',
+            'purpose': 'method', 'physical_source_ids': sources, 'reasons': reasons,
+            'source_reconstruction_scope': candidate.get('source_reconstruction_scope'),
+            'source_world_success_inherited': False,
+            'old_closure_reconstructibility_is_admission_requirement': False}
     if candidate.get('kind') != 'program_revision_relation':
         reasons.append('executable_revision_proposal_required')
     if candidate.get('purpose') not in {'structural_revision', 'parameter_proposal', 'exact_edit_map'}:
@@ -257,6 +288,66 @@ def _successor_completion_budget(models, spec):
         'scope': 'One complete maximum-row common-pool comparison and finish, one stale incumbent, one parent delivery, common routing and one native allowance. Not a guarantee for all48 author steps.'}
 
 
+def _research_method_complete_unit_quote(library, spec, model_count):
+    """Quote one bounded common unit, including ordinary saved-method refits.
+
+    The existing scheduler still decides whether a method is visited. This
+    funds a comparable retained refit when visited, not exhaustion of its
+    conditional search or every object within the author's step limit.
+    """
+    from hegel_machine.cognition.language import Program
+    from hegel_machine.cognition.theory_consolidation import _recall_work_groups
+
+    methods = [candidate for candidate in library.get('candidates', {}).values()
+               if candidate.get('kind') == 'research_program']
+    if not methods:
+        return None
+    rows = spec['target']['limits']['observation_budget']
+    groups = _recall_work_groups(SimpleNamespace(theory_consolidation={}),
+        library['candidates'], library, {})
+    stages = []
+    for method in methods:
+        seeds = method['source_seed_inputs']
+        fit = rows * sum(len(seed['retained_term_refs']) + 2 for seed in seeds)
+        # One object, one complete mapping and one check per declared role.
+        prepare = 2 + len(method['role_signature']) + Program.from_dict(method['template']['pattern']).size
+        compare = len(seeds) * rows
+        stages.append({'candidate_id': method['id'], 'candidate_version': method['version'],
+            'maximum_seed_outputs': len(seeds), 'retained_refit_compute': fit,
+            'typed_mapping_preparation_compute': prepare,
+            'output_comparison_reserve': compare,
+            'minimum_complete_visit_compute': prepare + fit + compare})
+    configured_routing = spec['organization'].get('routing_allocation', {}).get('compute', 0)
+    routing = max(configured_routing, len(groups) * max(
+        stage['minimum_complete_visit_compute'] for stage in stages))
+    frontier = spec['native_search']['max_candidates'] * 2
+    new_outputs = frontier + sum(stage['maximum_seed_outputs'] for stage in stages)
+    native = spec['native_search'].get('native_representation_plan', {}).get(
+        'compute_limit', spec['native_search']['max_compute'])
+    base = _successor_completion_budget([f'quote/{i}' for i in range(model_count)], spec)
+    finish = base['completion_reserve']['compute_cost'] - model_count * rows
+    comparisons = (2 * model_count + new_outputs) * rows
+    proposed = comparisons + native + routing + finish
+    registered = spec['target']['limits']['compute_budget']
+    return {'status': 'quote_only_no_budget_applied', 'common_model_count': model_count,
+        'fresh_target_execution_groups': groups, 'execution_group_count': len(groups),
+        'method_stages': stages, 'maximum_training_rows': rows,
+        'registered_routing_compute': configured_routing,
+        'minimum_equal_group_routing_for_retained_refit': len(groups) * max(
+            stage['minimum_complete_visit_compute'] for stage in stages),
+        'proposed_shared_routing_compute': routing,
+        'maximum_native_outputs': frontier, 'maximum_method_outputs': new_outputs - frontier,
+        'initial_and_post_unit_full_pool_comparison_compute': comparisons,
+        'native_compute_ceiling': native, 'stale_parent_delivery_finish_confirmation_compute': finish,
+        'required_per_case_compute': proposed, 'registered_per_case_compute': registered,
+        'registered_cap_sufficient': registered >= proposed and configured_routing >= routing,
+        'registered_python_seconds': spec['target']['limits']['execution_seconds'],
+        'external_terminal_rows': 512, 'expanded_method_search_completion_guaranteed': False,
+        'all_objects_visit_within_48_steps_guaranteed': False,
+        'method_priority_changed': False, 'new_fits': 0, 'new_predictions': 0,
+        'scope': 'One bounded native unit, possible method retained refits, two complete maximum-row comparisons and the ordinary finish. Distinct retained seeds remain separate; no successful fit, method visit, expanded-search completion, world success or complete author loop is promised. Terminal scoring is outside the agent account.'}
+
+
 def _direct_candidate(entry):
     """Read provenance used by the existing transfer and index consumers."""
     for field in ('consolidation_ref', 'binding', 'request_basis'):
@@ -285,12 +376,195 @@ def _index_entry_ref(reference, identifier, *parts):
         reference = deepcopy(document['source_ref'])
 
 
+def _method_condition_revision(identifier, old, new):
+    """Qualify an actual usage-condition revision of an existing method."""
+    from hegel_machine.cognition.method_feedback import _condition_outcomes
+
+    fields = {'version', 'previous_version_ref', 'method_use_conditions', 'trigger'}
+    if (old.get('kind') != 'research_program' or new.get('kind') != 'research_program'
+            or old.get('id') != identifier or new.get('id') != identifier
+            or type(new.get('version')) is not int or new['version'] <= old.get('version', 1)
+            or {k: v for k, v in old.items() if k not in fields} !=
+               {k: v for k, v in new.items() if k not in fields}):
+        raise ValueError('existing method revisions must preserve the executable contract and seeds')
+    current, lineage = new, []
+    while current.get('version', 1) > old.get('version', 1):
+        reference = current.get('previous_version_ref')
+        if not reference:
+            raise ValueError('method condition revision requires its exact previous versions')
+        previous = _value(reference)
+        if previous.get('id') != identifier or previous.get('version', 1) >= current['version']:
+            raise ValueError('method condition revision has an invalid previous version')
+        lineage.append(deepcopy(reference))
+        current = previous
+    if current != old:
+        raise ValueError('method condition lineage does not restore the complete baseline method')
+    conditions = new.get('method_use_conditions') or {}
+    usage = old.get('method_use_conditions', {}).get('usage_version',
+        {'id': identifier, 'version': old.get('version', 1)})
+    if (conditions == old.get('method_use_conditions') or conditions.get('usage_version') != usage
+            or not conditions.get('outcomes_ref')):
+        raise ValueError('method condition revision requires changed, addressed use feedback')
+    outcomes = _condition_outcomes(SimpleNamespace(workspace=ROOT), conditions['outcomes_ref'])
+    completed = [row for row in outcomes if row.get('method_ref') == usage
+        and (row.get('source_feedback_ref') or row.get('source_ref') or row.get('feedback_ref'))
+        and row.get('status') == 'completed' and row.get('execution_complete') is not False
+        and (row.get('working_comparison') or {}).get('complete') is True
+        and row['working_comparison'].get('same_rows') is True
+        and row['working_comparison'].get('data_role') == 'exposed_development']
+    if not completed:
+        raise ValueError('method condition revision needs an actual complete use comparison')
+    return {'id': identifier, 'version': new['version'], 'status': 'qualified_local_proposal',
+        'purpose': 'method', 'revision_kind': 'method_use_condition',
+        'baseline_version': old.get('version', 1), 'previous_version_refs': lineage,
+        'feedback_outcomes_ref': deepcopy(conditions['outcomes_ref']),
+        'feedback_count': len(outcomes), 'completed_local_feedback_count': len(completed),
+        'source_world_success_inherited': False, 'independent_transfer_support': False,
+        'old_closure_reconstructibility_is_admission_requirement': False}
+
+
+def _method_body_revision(identifier, old, new):
+    """Admit the saved, paired step intervention, never a renamed method."""
+    identity = {'id': identifier, 'version': old.get('version', 1)}
+    revision = new.get('method_step_revision') or {}
+    changed = {'version', 'previous_version_ref', 'method_use_conditions', 'trigger',
+        'research_program_source_ref', 'research_program_source_refs', 'source_seed_inputs',
+        'source_outcomes', 'research_program_contract', 'method_step_revision'}
+    if (old.get('kind') != 'research_program' or new.get('kind') != 'research_program'
+            or old.get('id') != identifier or new.get('id') != identifier
+            or new.get('version') != old.get('version', 1) + 1
+            or not new.get('previous_version_ref') or _value(new['previous_version_ref']) != old
+            or revision.get('baseline_method_ref') != identity
+            or {k: v for k, v in old.items() if k not in changed} !=
+               {k: v for k, v in new.items() if k not in changed}):
+        raise ValueError('step revision must preserve the exact parent method and source identities')
+    study = _value(revision['study_ref'])
+    proof = _value(revision['actual_step_revision_ref'])
+    selected = new.get('research_program_source_refs', [])
+    prior = old.get('research_program_source_refs', [])
+    if (proof.get('status') != 'completed' or proof.get('data_role') != 'exposed_development'
+            or proof.get('baseline_method_ref') != identity or not proof.get('scope')
+            or proof.get('selected_method_payload_refs') != selected
+            or study.get('status') != 'development_step_revision_selected'
+            or study.get('baseline_method_ref') != identity
+            or study.get('data_role') != 'exposed_development'
+            or len(selected) != len(prior) or not selected
+            or len(study.get('seed_studies', [])) != len(selected)
+            or new.get('research_program_source_ref') != selected[0]):
+        raise ValueError('step revision needs its actual complete paired development proof')
+    expected_trigger = deepcopy(old.get('trigger', {}))
+    expected_trigger['learned_utility_trigger'] = False
+    if new.get('trigger') != expected_trigger or new.get('method_use_conditions'):
+        raise ValueError('a changed method body must not inherit learned conditions for the old procedure')
+    edits, improved, caps = [], False, []
+    paired_refs = proof.get('paired_replay_refs', [])
+    for index, reference in enumerate(selected):
+        payload = _value(reference)
+        expected_ref = {**revision['study_ref'], 'json_path': [
+            *revision['study_ref'].get('json_path', []), 'seed_studies', index]}
+        seed = study['seed_studies'][index]
+        basis = seed.get('basis') or {}
+        methods = seed.get('methods', [])
+        actual = [item for item in methods[1:] if item.get('execution_complete') is True
+            and item.get('research_program') == payload.get('research_program')
+            and item.get('program') == payload.get('program')]
+        if (payload.get('data_role') != 'exposed_development'
+                or payload.get('paired_replay_ref') != expected_ref
+                or payload.get('parent_source_ref') != prior[index]
+                or not payload.get('research_program') or not payload.get('program')
+                or not methods or methods[0].get('execution_complete') is not True
+                or not basis.get('source_refs') or basis.get('training_rows', 0) <= 0
+                or basis.get('validation_rows', 0) <= 0
+                or basis.get('per_method_compute', 0) <= 0 or len(actual) != 1
+                or not any(_value(ref) == seed or _value(ref) == study for ref in paired_refs)):
+            raise ValueError('step payload must identify its actual completed seed replay and paid split')
+        pair = next((item for item in seed.get('pairs', [])
+            if item.get('method_index') == actual[0]['index']), {})
+        if (pair.get('execution_complete') is not True
+                or pair.get('same_training_and_validation') is not True
+                or pair.get('equal_method_compute_ceiling') != basis['per_method_compute']
+                or pair.get('status') not in {'local_step_improvement', 'complete_step_unhelpful'}
+                or type(pair.get('validation_loss_change')) not in (int, float)
+                or pair['validation_loss_change'] > basis.get('minimum_improvement', 0)):
+            raise ValueError('step revision requires equal-budget completed pairs without holdout regression')
+        edits.append(pair['edit'])
+        caps.append(basis['per_method_compute'])
+        improved |= pair['status'] == 'local_step_improvement'
+        outcome = new.get('source_outcomes', [])[index]
+        if (outcome.get('source_ref') != reference
+                or {k: v for k, v in outcome.items() if k not in {'source_ref', 'input_mapping'}} !=
+                   {k: v for k, v in old['source_outcomes'][index].items()
+                    if k not in {'source_ref', 'input_mapping'}}
+                or new['source_seed_inputs'][index]['source_id'] != old['source_ids'][index]):
+            raise ValueError('step source outcomes must preserve actual failures, costs and physical source identities')
+    if not improved or any(edit != edits[0] for edit in edits) or len(set(caps)) != 1:
+        raise ValueError('the same completed step edit must be supported across the retained seeds')
+    if (new.get('research_program_contract') == old.get('research_program_contract')
+            and all(_value(a).get('research_program') == _value(b).get('research_program')
+                    for a, b in zip(selected, prior))):
+        raise ValueError('body intervention needs an actual executable step change')
+    from hegel_machine.cognition.research_drafts import _rebind_step
+    from hegel_machine.cognition.research_programs import research_program_replay_inputs
+
+    mapping = new['source_outcomes'][0]['input_mapping']
+    canonical = {name: role for role, name in mapping.items()}
+    contract = research_program_replay_inputs(_rebind_step(
+        _value(selected[0])['research_program'], canonical))
+    if new.get('research_program_contract') != contract:
+        raise ValueError('method execution contract must be derived from the selected actual replay payload')
+    return {'id': identifier, 'version': new['version'], 'baseline_version': identity['version'],
+        'status': 'qualified_local_proposal', 'revision_kind': 'method_body_revision',
+        'actual_step_revision_ref': deepcopy(revision['actual_step_revision_ref']),
+        'study_ref': deepcopy(revision['study_ref']), 'paired_seed_count': len(selected),
+        'scope': proof['scope'], 'independent_transfer_support': False}
+
+
+def prepare_method_body_intervention(output, candidate_ref):
+    """Prepare optional D from an actual step result; keep ABC's initial scene."""
+    from hegel_machine.cognition.theory_consolidation import _read_library
+
+    output = Path(output).resolve()
+    registration = _read(output / 'registration.json')
+    plan = _read(output / 'target_plan.json')
+    reference = registration['automatic_C_library_ref']
+    library = _read_library(reference, ROOT)
+    candidate = _value(candidate_ref)
+    identifier = candidate['id']
+    qualified = _method_body_revision(identifier, library['candidates'][identifier], candidate)
+    directory = output / 'interventions' / 'method_body_revision'
+    if (directory / 'manifest.json').exists():
+        raise ValueError('preserve the existing method-body preparation')
+    view_ref = {'file': str(directory / 'theory_library.json'), 'json_path': []}
+    manifest_ref = {'file': str(directory / 'manifest.json'), 'json_path': []}
+    _write(view_ref['file'], {'source_ref': deepcopy(reference),
+        'candidates': {identifier: deepcopy(candidate)}})
+    selected = deepcopy(plan)
+    selected['research_organization']['pr3_library_path'] = view_ref['file']
+    selected['target_intervention'] = {'kind': 'method_body_revision', 'manifest_ref': manifest_ref}
+    _write(directory / 'plan.json', selected)
+    _write(manifest_ref['file'], {'status': 'frozen_ready', 'kind': 'method_body_revision',
+        'candidate_id': identifier, 'baseline_version': qualified['baseline_version'],
+        'revised_version': candidate['version'], 'candidate_ref': deepcopy(candidate_ref),
+        'actual_step_revision_ref': qualified['actual_step_revision_ref'],
+        'preserved_old_candidate_ids': list(library['candidates']),
+        'source_cost_ref': deepcopy(plan['source_cost_ref']),
+        'common_initial_scene_only': True, 'target_training_inherited': False})
+    registration['method_body_revision'] = {'status': 'prepared_not_executed',
+        'plan_ref': {'file': str(directory / 'plan.json'), 'json_path': []},
+        'manifest_ref': manifest_ref, 'qualification': qualified}
+    _write(output / 'registration.json', registration)
+    return registration['method_body_revision']
+
+
 def _freeze_removal(plan, library_ref, library, baseline, index_ref, indexed,
-                    identifiers, output, kind, *, class_ref=None):
+                    identifiers, output, kind, *, class_ref=None, restore_candidates=None):
     """Freeze an automatic-organization intervention, keeping concrete facts."""
     old = set(baseline.get('candidates', {}))
-    removed = set(identifiers)
-    if not removed or not removed <= set(library['candidates']) or removed.intersection(old):
+    selected = set(identifiers)
+    restored = restore_candidates or {}
+    removed = selected - set(restored)
+    if (not selected or not selected <= set(library['candidates']) or removed.intersection(old)
+            or not set(restored) <= selected.intersection(old)):
         raise ValueError('remove only registered new candidates; retain every old candidate')
     directory = Path(output) / 'interventions' / kind
     library_path, manifest_path = directory / 'theory_library.json', directory / 'manifest.json'
@@ -314,10 +588,10 @@ def _freeze_removal(plan, library_ref, library, baseline, index_ref, indexed,
         if not surviving:
             removed_index.append(identifier)
         else:
-            restored = surviving.pop()
+            restored_entry = surviving.pop()
             if surviving:
-                restored['history'] = surviving
-            overrides[identifier] = restored
+                restored_entry['history'] = surviving
+            overrides[identifier] = restored_entry
     # Mixed source-construction cache records are retained history. The target
     # caller does not consolidate source Episodes, and these cached results only
     # return IDs; they do not reinstall a removed candidate into the library.
@@ -331,6 +605,8 @@ def _freeze_removal(plan, library_ref, library, baseline, index_ref, indexed,
                     historical.append({'candidate_id': entry['candidate_id'], 'source_ref':
                         _frozen_entry_ref(library_ref, library, 'executions', key, 'result', field, position)})
     view = {'source_ref': deepcopy(library_ref), 'removed_candidates': sorted(removed)}
+    if restored:
+        view['candidates'] = deepcopy(restored)
     if direct_executions:
         view['removed_execution_keys'] = direct_executions
     if transfers:
@@ -353,7 +629,13 @@ def _freeze_removal(plan, library_ref, library, baseline, index_ref, indexed,
         'source_library_ref': deepcopy(library_ref), 'source_index_ref': deepcopy(index_ref),
         'removed_candidate_ids': sorted(removed), 'preserved_old_candidate_ids': sorted(old),
         'candidate_alias_refs': [_frozen_entry_ref(library_ref, library, 'candidates', identifier)
-                                 for identifier in sorted(removed)],
+                                 for identifier in sorted(selected)],
+        'restored_candidate_versions': [{'id': identifier,
+            'removed_version': library['candidates'][identifier]['version'],
+            'restored_version': candidate['version'],
+            'restored_candidate_ref': {'file': str(library_path),
+                'json_path': ['candidates', identifier]}}
+            for identifier, candidate in restored.items()],
         'remaining_candidate_ids': [key for key in library['candidates'] if key not in removed],
         'removed_execution_keys': direct_executions, 'removed_transfer_indices': transfers,
         'removed_index_ids': removed_index, 'restored_independent_index_ids': list(overrides),
@@ -378,7 +660,8 @@ def _freeze_removal(plan, library_ref, library, baseline, index_ref, indexed,
         'plan_ref': {'file': str(directory / 'plan.json'), 'json_path': []},
         'manifest_ref': {'file': str(manifest_path), 'json_path': []},
         'frozen_remove_library_ref': {'file': str(library_path), 'json_path': []},
-        'removed_candidate_ids': sorted(removed)}, view, index_view
+        'removed_candidate_ids': sorted(removed),
+        'restored_candidate_versions': deepcopy(manifest['restored_candidate_versions'])}, view, index_view
 
 
 def prepare_frozen_successor(spec, output):
@@ -421,14 +704,18 @@ def prepare_frozen_successor(spec, output):
         library = _read_library(library_ref, ROOT)
     declared = {question['theory_target']['context_ref']['source_id']
                 for question in source_plan['prepared_public_questions'].values()}
-    if not same_fixed_library and set(ids).intersection(baseline.get('candidates', {})):
-        raise ValueError('new proposal IDs must retain a distinct current-source identity')
+    revisions = {}
+    if not same_fixed_library:
+        revisions = {identifier: _method_condition_revision(identifier,
+            baseline['candidates'][identifier], library['candidates'][identifier])
+            for identifier in set(ids).intersection(baseline.get('candidates', {}))}
     if not same_fixed_library and any(library.get('candidates', {}).get(identifier) != candidate
-           for identifier, candidate in baseline.get('candidates', {}).items()):
+           for identifier, candidate in baseline.get('candidates', {}).items() if identifier not in revisions):
         raise ValueError('the frozen source library must retain the complete common old library')
     qualification = []
     for identifier in ids:
-        row = _frozen_proposal_qualification(identifier, library['candidates'][identifier], declared)
+        row = revisions.get(identifier) or _frozen_proposal_qualification(
+            identifier, library['candidates'][identifier], declared)
         row['candidate_ref'] = _frozen_entry_ref(library_ref, library, 'candidates', identifier)
         qualification.append(row)
     qualified = sorted(row['id'] for row in qualification if row['status'] == 'qualified_local_proposal')
@@ -439,6 +726,12 @@ def prepare_frozen_successor(spec, output):
     keep = ({'source_ref': deepcopy(library_ref), 'removed_candidates': unavailable}
             if qualified else {'source_ref': deepcopy(initial_ref)})
     settings = spec['target']
+    method_fitting = settings.get('research_program_fitting')
+    if any(library['candidates'][identifier]['kind'] == 'research_program' for identifier in qualified):
+        records = (method_fitting or {}).get('validation_records')
+        if (not isinstance(records, list) or not records
+                or any(type(index) is not int or index < 0 for index in records)):
+            raise ValueError('frozen research methods require declared target validation_records')
     limits = InquiryLLMConfig(**settings['limits'])
     if limits.max_model_calls != 0 or limits.token_budget != 0:
         raise ValueError('the finite successor protocol declares zero model calls and tokens')
@@ -458,6 +751,9 @@ def prepare_frozen_successor(spec, output):
     fitting = _value(spec['materials']['revision_fitting_ref'])
     plan['prepared_public_questions'] = {case['id']: _public_question(
         template, fitting, spec['namespace'], 'target', case['id']) for case in plan['cases']}
+    if method_fitting is not None:
+        for question in plan['prepared_public_questions'].values():
+            question['theory_target']['research_program_fitting'] = deepcopy(method_fitting)
     plan['source_cost_ref'] = deepcopy(frozen['accounting_ref'])
     readiness = spec['design'].get('target_seed_readiness', {})
     target_seeds = [case['seed'] for case in plan['cases']]
@@ -488,7 +784,8 @@ def prepare_frozen_successor(spec, output):
             eligible_library['candidates'].pop(identifier)
         eligible_ref = {'file': str(keep_path), 'json_path': []}
         individual, individual_view, individual_index = _freeze_removal(plan, eligible_ref,
-            eligible_library, baseline, index_ref, indexed, [selected], output, 'individual_object')
+            eligible_library, baseline, index_ref, indexed, [selected], output, 'individual_object',
+            restore_candidates=({selected: baseline['candidates'][selected]} if selected in revisions else None))
         individual.update(selected_candidate_id=selected,
             selection_rule='first_lexicographic_qualified_current_source_proposal',
             matched_cases_ref={'file': str(output / 'target_plan.json'), 'json_path': ['cases']},
@@ -498,7 +795,10 @@ def prepare_frozen_successor(spec, output):
         selected_group = next(((position, group) for position, group in enumerate(groups)
             if selected in [*group.get('original_member_ids', []),
                             *group.get('additional_same_contract_member_ids', [])]), None)
-        if selected_group is None:
+        if selected in revisions:
+            new_class = {'status': 'UNKNOWN', 'reason': 'method_condition_revision_is_not_a_new_class',
+                'ordinary_old_language_reconstruction_remains_legal': True}
+        elif selected_group is None:
             new_class = {'status': 'UNKNOWN', 'reason': 'retained_class_membership_required',
                 'ordinary_old_language_reconstruction_remains_legal': True}
         else:
@@ -520,6 +820,8 @@ def prepare_frozen_successor(spec, output):
     # running predictors. Actual common archive size is checked before launch.
     estimate = spec['design'].get('common_pool_model_count_upper_estimate', 999)
     budget = _successor_completion_budget([f'count_only/{i}' for i in range(estimate)], spec)
+    method_quote = (None if same_fixed_library else
+        _research_method_complete_unit_quote(eligible_library if selected else library, spec, estimate))
     common_archive = ({'entry': 'hegel_machine.cognition.anonymous_research_archive.resolve_workspace_archive',
         'archive_ref': deepcopy(frozen['common_archive_ref']),
         'scope': 'The prepared common archive retains every explicit predictor at its original execution context; all A/B/C receive the same facts, failures and paid references.',
@@ -547,10 +849,12 @@ def prepare_frozen_successor(spec, output):
         'common_archive_preparation': common_archive,
         'budget_readiness': {'status': 'pending_actual_common_pool_count_and_frozen_equal_cap',
             'count_only_estimate': estimate, 'estimate': budget,
+            'method_complete_unit_quote': method_quote,
             'actual_common_model_count': None,
             'shared_by': ['archive', 'fixed_pr2', 'pr3', 'individual_remove', 'new_class_remove'],
             'insufficient_actual_budget_action': 'Stop before run_study and re-register equal budgets; preserve all models and costs.'},
         'target_use': {'structural_revision': 'Conditional structure/research proposal followed by ordinary target fitting and original prediction/confirmation checks.',
+            'method': 'Replay the saved research procedure on declared target training records; its reserved validation split is not scored by replay and source scientific support is not transferred.',
             'parameter_proposal': 'Saved parameter-search proposal followed by ordinary whole-after target fitting. Numerical initialization quality remains unevaluated; exact historical after coefficients are not required.',
             'exact_edit_map': 'Sufficient-condition special case under its existing role/input and check contracts.'},
         'estimand': deepcopy(spec['design']['endpoints']),
@@ -663,6 +967,16 @@ def run_prepared_successor(output, *, workers=8):
     knowledge['finite_native_author'] = {**spec['native_search'], 'predictor_paths': predictors,
         'predictor_catalog_ref': {'file': 'source_catalog.json', 'json_path': []}}
     budget = _successor_completion_budget(predictors, spec)
+    method_quote = registration['budget_readiness'].get('method_complete_unit_quote')
+    if method_quote:
+        required = method_quote['required_per_case_compute'] + 2 * (
+            len(predictors) - method_quote['common_model_count']) * method_quote['maximum_training_rows']
+        budget['required_per_case_compute'] = max(budget['required_per_case_compute'], required)
+        budget['registered_cap_sufficient'] = (
+            budget['registered_per_case_compute'] >= budget['required_per_case_compute']
+            and spec['organization'].get('routing_allocation', {}).get('compute', 0)
+                >= method_quote['proposed_shared_routing_compute'])
+        budget['method_complete_unit_quote'] = method_quote
     _write(output / 'launch_budget_preflight.json', {'status': ('sufficient' if budget['registered_cap_sufficient']
         else 'insufficient_no_scientific_execution'), 'actual_common_model_count': len(predictors), **budget})
     if not budget['registered_cap_sufficient']:
@@ -692,7 +1006,8 @@ def _prepared_callbacks(plan):
         score_index = plan.get('paid_score_index_refs_by_case', {}).get(case_id)
         if score_index is not None:
             kwargs['knowledge'].setdefault('files', {})[
-                '_paid_python_scores/_evaluated_model/assessments.json'] = json.dumps(_value(score_index))
+                '_paid_python_scores/_evaluated_model/assessments.json'] = json.dumps(
+                    _target_paid_score_index(score_index, plan['prepared_public_questions'][case_id]))
         index_view = plan.get('target_intervention', {}).get('index_view_ref')
         if index_view and kwargs['arm'] == 'pr3':
             kwargs['knowledge']['theory_index'] = deepcopy(index_view)
@@ -713,6 +1028,36 @@ def _prepared_callbacks(plan):
     return agent_factory, prepare_prefix
 
 
+def _target_paid_score_index(reference, question):
+    """Keep exact question scopes active; retain the complete source by ref.
+
+    The ordinary scorer requires this complete question identity before either
+    exact-score or closed-prefix reuse. New tasks cannot hit another question's
+    scores, so avoid eagerly loading thousands of such assessment payloads.
+    Paid rows, model context and evaluator contracts remain scorer checks.
+    """
+    from hegel_machine.cognition.research_episodes import SEMANTIC_FIELDS
+
+    index = _value(reference)
+    identity = {key: deepcopy(question[key]) for key in ('id', *SEMANTIC_FIELDS) if key in question}
+    # Common adds the first meaning version when it opens this prepared
+    # question. Missing optional semantics are left to the ordinary scorer.
+    identity['meaning_version'] = question.get('meaning_version', 1)
+    scopes = []
+    for item in index.get('scopes', []):
+        previous = _value(item).get('question') or {}
+        if all(previous.get(key) == value for key, value in identity.items()):
+            scopes.append(item)
+    if not scopes:
+        return {'scopes': [], 'assessments': [], 'contexts': [],
+            'historical_score_index_ref': deepcopy(reference)}
+    names = {item['file'] for item in scopes}
+    assessments = [item for item in index.get('assessments', [])
+        if _value(item)['scope_ref']['file'] in names]
+    return {**index, 'scopes': scopes, 'assessments': assessments,
+        'historical_score_index_ref': deepcopy(reference)}
+
+
 def run_prepared_intervention(output, kind, *, workers=8):
     """Run only the registered removal C, pairing it with the original keep C."""
     from scripts import run_anonymous_revision_inquiry as study
@@ -722,14 +1067,16 @@ def run_prepared_intervention(output, kind, *, workers=8):
     if not registration['successor_execution_authorized']:
         raise ValueError('successor execution is not authorized by this prepared registration')
     field = {'individual_object': 'individual_object',
-             'new_redundancy_class': 'new_class_intervention'}[kind]
+             'new_redundancy_class': 'new_class_intervention',
+             'method_body_revision': 'method_body_revision'}[kind]
     selected = registration[field]
     if selected['status'] != 'prepared_not_executed':
         return {'status': selected['status'], 'new_compute_cost': 0,
                 'new_observations': 0, 'reason': selected.get('reason')}
     physical = selected.get('reuse_execution_of', kind)
     physical_field = {'individual_object': 'individual_object',
-                      'new_redundancy_class': 'new_class_intervention'}[physical]
+                      'new_redundancy_class': 'new_class_intervention',
+                      'method_body_revision': 'method_body_revision'}[physical]
     prepared = registration[physical_field]
     destination = output / 'intervention_runs' / physical
     if physical != kind and (destination / 'summary.json').is_file():

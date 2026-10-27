@@ -1,6 +1,7 @@
 """Native CPU execution preserves the existing study and intervention contracts."""
 
 from copy import deepcopy
+from dataclasses import replace
 import json
 from multiprocessing import current_process, get_context
 import os
@@ -229,19 +230,217 @@ def test_native_process_intervention_executes_only_fresh_C_and_keeps_costs(
 
 
 def test_native_process_recovery_references_existing_training_without_recharging(
-        tmp_path, runtime_root, effects):
+        tmp_path, runtime_root, effects, monkeypatch):
     configured, keep = frozen_pair(tmp_path)
     recovered = tmp_path / 'recovered_parallel'
-    result = study.run_study(configured, recovered, previous_study=keep, workers=8,
-        prepare_prefix=lambda *a: pytest.fail('Completed training must not repurchase a prefix'),
-        agent_factory=lambda *a, **k: pytest.fail('Completed training must not reconstruct an agent'),
-        laboratory_factory=lambda _: LocalLab())
+    original_read = Path.read_text
+
+    def forbid_training_read(path, *args, **kwargs):
+        if path.name == 'training.json':
+            raise AssertionError('completed recovery must select fields instead of loading full training')
+        return original_read(path, *args, **kwargs)
+
+    with monkeypatch.context() as guarded:
+        guarded.setattr(Path, 'read_text', forbid_training_read)
+        result = study.run_study(configured, recovered, previous_study=keep, workers=8,
+            prepare_prefix=lambda *a: pytest.fail('Completed training must not repurchase a prefix'),
+            agent_factory=lambda *a, **k: pytest.fail('Completed training must not reconstruct an agent'),
+            laboratory_factory=lambda _: LocalLab())
     for row in result['trials']:
         old_path = keep / row['case'] / row['arm'] / 'training.json'
         assert row['costs'] == json.loads(old_path.read_text())['costs']
         column = json.loads(Path(row['terminal']['prediction_ref']['file']).read_text())
         assert column['training_ref']['file'] == str(old_path)
         assert not (recovered / row['case'] / row['arm'] / 'training.json').exists()
+
+
+def test_native_study_returns_small_metadata_after_saving_full_trials(
+        tmp_path, runtime_root, monkeypatch):
+    if len(study._native_worker_cpus()) < 2:
+        pytest.skip('Two physical cores are needed for the actual process route')
+    configured = plan(steps=3)
+    output = tmp_path / 'compact_study'
+    keys = job_keys(configured)
+    original_read, process_trials = Path.read_text, study._native_process_trials
+    returned, terminal_calls = [], []
+
+    def forbid_training_read(path, *args, **kwargs):
+        if path.name == 'training.json':
+            raise AssertionError('study must not rehydrate whole training after its worker finishes')
+        return original_read(path, *args, **kwargs)
+
+    def observe(train, jobs, workers):
+        trials = process_trials(train, jobs, workers)
+        returned.extend(deepcopy(trials))
+        return trials
+
+    class GuardedLab(LocalLab):
+        def evaluation_rows(self, *args, **kwargs):
+            assert all((output / case / arm / name).is_file()
+                       for case, arm in keys for name in ('training.json', 'archive.json'))
+            terminal_calls.append(os.getpid())
+            return super().evaluation_rows(*args, **kwargs)
+
+    monkeypatch.setattr(study, '_native_process_trials', observe)
+    monkeypatch.setattr(Path, 'read_text', forbid_training_read)
+    summary = study.run_study(configured, output, knowledge=knowledge(),
+        prepare_prefix=paid_prefix, laboratory_factory=lambda _: GuardedLab(), workers=2)
+    assert terminal_calls == [os.getpid()] * len(keys)
+    assert [(trial['case']['id'], trial['arm']) for trial in returned] == keys
+    assert [(row['case'], row['arm']) for row in summary['trials']] == keys
+    for trial, row in zip(returned, summary['trials']):
+        assert 'result' not in trial and 'training_ref' not in trial
+        small = trial['result_summary']
+        assert not {'events', 'revision_proposals', 'outgoing_knowledge', 'theory_index'} & small.keys()
+        training_path = output / row['case'] / row['arm'] / 'training.json'
+        assert trial['result_ref'] == {'file': str(training_path), 'json_path': []}
+        training = json.loads(original_read(training_path))
+        assert row['costs'] == training['costs']
+        assert row['model'] == training['model'] and row['status'] == training['status']
+        assert row['revision_count'] == len(training['revision_proposals'])
+        assert row['fresh_confirmation_passed'] == training['fresh_confirmation']['passed']
+        assert row['research_organization'] == training['research_organization']
+        archive = json.loads(original_read(training_path.with_name('archive.json')))
+        assert archive == training['outgoing_knowledge']
+        assert training['paid_observations'] and training['events']
+        assert row['terminal']['passed']
+
+
+def test_partial_terminal_recovery_reuses_committed_rows_and_original_training_chain(
+        tmp_path, runtime_root, monkeypatch):
+    configured, interrupted = plan(steps=3), tmp_path / 'interrupted_terminal'
+    actual, calls = study.evaluate_terminal_model, []
+
+    class GuardedLab(LocalLab):
+        def evaluation_rows(self, *args, **kwargs):
+            assert all((interrupted / case / arm / 'training.json').is_file()
+                       for case, arm in job_keys(configured))
+            return super().evaluation_rows(*args, **kwargs)
+
+    def interrupt(workspace, *args, **kwargs):
+        if calls:
+            raise RuntimeError('fixture coordinator interruption before next prediction')
+        calls.append(Path(workspace).name)
+        return actual(workspace, *args, **kwargs)
+
+    monkeypatch.setattr(study, 'evaluate_terminal_model', interrupt)
+    with pytest.raises(RuntimeError, match='fixture coordinator interruption'):
+        study.run_study(configured, interrupted, knowledge=knowledge(), prepare_prefix=paid_prefix,
+            laboratory_factory=lambda _: GuardedLab(), workers=2)
+    first_path = interrupted / 'case_000/archive/evaluation.json'
+    first = json.loads(first_path.read_text())
+    assert not (interrupted / 'summary.json').exists()
+    assert (interrupted / 'training_results.json').is_file()
+    assert first['python_execution_seconds'] > 0
+
+    def counted(workspace, *args, **kwargs):
+        calls.append(Path(workspace).name)
+        return actual(workspace, *args, **kwargs)
+
+    monkeypatch.setattr(study, 'evaluate_terminal_model', counted)
+    recovered = tmp_path / 'terminal_recovered'
+    summary = study.run_study(configured, recovered, previous_study=interrupted, workers=2,
+        agent_factory=lambda *a, **k: pytest.fail('All original training must be reused'),
+        prepare_prefix=lambda *a: pytest.fail('No prefix may be repurchased'),
+        laboratory_factory=lambda _: GuardedLab())
+    assert calls == ['archive', 'fixed_pr2', 'pr3']
+    row = summary['trials'][0]
+    assert row['terminal']['prediction_ref'] == first['prediction_ref']
+    assert row['terminal']['python_execution_seconds'] == first['python_execution_seconds']
+    assert row['terminal']['new_execution_costs'] == {'rows': 0, 'python_execution_seconds': 0.}
+    assert not (recovered / 'case_000/archive/terminal_predictions.json').exists()
+    assert all(row['terminal']['passed'] for row in summary['trials'])
+    for row in summary['trials'][1:]:
+        assert row['terminal']['new_execution_costs']['python_execution_seconds'] > 0
+        assert row['terminal']['python_execution_seconds'] is None  # Interrupted old work has no paid receipt.
+
+    monkeypatch.setattr(study, 'evaluate_terminal_model', lambda *a, **k:
+                        pytest.fail('Completed recovery chain must not predict again'))
+    again = study.run_study(configured, tmp_path / 'terminal_recovered_again',
+        previous_study=recovered, workers=2,
+        agent_factory=lambda *a, **k: pytest.fail('A reference-only recovery must retain original training'),
+        prepare_prefix=lambda *a: pytest.fail('No recovery may repurchase a prefix'),
+        laboratory_factory=lambda _: GuardedLab())
+    assert all(row['terminal']['new_execution_costs'] == {'rows': 0, 'python_execution_seconds': 0.}
+               for row in again['trials'])
+    assert again['trials'][0]['terminal']['python_execution_seconds'] == first['python_execution_seconds']
+
+
+@pytest.mark.parametrize('changed', ['materials', 'model', 'runtime'])
+def test_terminal_recovery_reexecutes_changed_actual_basis_and_keeps_paid_costs(
+        tmp_path, runtime_root, effects, monkeypatch, changed):
+    configured, keep = frozen_pair(tmp_path)
+    old_summary = json.loads((keep / 'summary.json').read_text())
+    if changed == 'model':
+        training = json.loads((keep / 'case_000/archive/training.json').read_text())
+        selected = Path(training['workspace']) / training['model']
+        selected.write_text(selected.read_text() + '\n# Changed submitted executable context.\n')
+    elif changed == 'runtime':
+        for old in old_summary['trials']:
+            path = keep / old['case'] / old['arm'] / 'evaluation.json'
+            saved = json.loads(path.read_text())
+            runtime = next(entry for entry in saved['execution_basis']['input_versions']
+                           if entry['file'] == str(Path(study.code_agent.__file__).resolve()))
+            runtime['modified_ns'] -= 1  # A receipt committed under an earlier executor version.
+            study.write_json(path, saved)
+
+    class ChangedLab(LocalLab):
+        def evaluation_rows(self, *args, **kwargs):
+            rows = super().evaluation_rows(*args, **kwargs)
+            return ([replace(row, target=row.target + .5) for row in rows]
+                    if changed == 'materials' else rows)
+
+    actual, calls = study.evaluate_terminal_model, []
+
+    def counted(workspace, *args, **kwargs):
+        calls.append(Path(workspace).name)
+        return actual(workspace, *args, **kwargs)
+
+    monkeypatch.setattr(study, 'evaluate_terminal_model', counted)
+    recovered = study.run_study(configured, tmp_path / 'changed_basis', previous_study=keep,
+        laboratory_factory=lambda _: ChangedLab(),
+        agent_factory=lambda *a, **k: pytest.fail('Changing terminal inputs must not repeat training'),
+        prepare_prefix=lambda *a: pytest.fail('No terminal change repurchases a prefix'))
+    assert calls == (['archive'] if changed == 'model' else ['archive', 'fixed_pr2', 'pr3'])
+    for old, row in zip(old_summary['trials'], recovered['trials']):
+        terminal = row['terminal']
+        assert terminal['python_execution_seconds'] == pytest.approx(
+            old['terminal']['python_execution_seconds'] + terminal['new_execution_costs']['python_execution_seconds'])
+        assert terminal['new_execution_costs']['rows'] == (3 if row['arm'] in calls else 0)
+        assert row['costs'] == old['costs']
+
+
+def test_terminal_recovery_keeps_committed_failure_and_unsubmitted_outcome(
+        tmp_path, runtime_root, monkeypatch):
+    configured = plan(steps=3)
+    driver = SOURCE.replace("    state = json.load(open('research_state.json'))",
+        "    from pathlib import Path\n"
+        "    if Path.cwd().name == 'archive':\n"
+        "        return {'stop': 'Unsubmitted negative fixture.'}\n"
+        "    state = json.load(open('research_state.json'))")
+    actual = study.evaluate_terminal_model
+
+    def failed(workspace, model, rows, **kwargs):
+        if Path(workspace).name == 'fixed_pr2':
+            return {'returncode': 1, 'stderr': 'Preserved timeout fixture.', 'timeout': True,
+                'evaluation_rows': len(rows), 'python_execution_seconds': 2.5}
+        return actual(workspace, model, rows, **kwargs)
+
+    monkeypatch.setattr(study, 'evaluate_terminal_model', failed)
+    previous = tmp_path / 'negative_terminal'
+    first = study.run_study(configured, previous, knowledge=knowledge(driver),
+        prepare_prefix=paid_prefix, laboratory_factory=lambda _: LocalLab())
+    monkeypatch.setattr(study, 'evaluate_terminal_model', lambda *a, **k:
+                        pytest.fail('Neither committed failures nor unsubmitted models may be retried'))
+    recovered = study.run_study(configured, tmp_path / 'negative_recovery', previous_study=previous,
+        laboratory_factory=lambda _: LocalLab())
+    for old, row in zip(first['trials'], recovered['trials']):
+        assert row['terminal'].get('mse') == old['terminal'].get('mse')
+        assert row['terminal']['passed'] == old['terminal']['passed']
+        assert row['terminal']['python_execution_seconds'] == old['terminal']['python_execution_seconds']
+        assert row['terminal']['new_execution_costs'] == {'rows': 0, 'python_execution_seconds': 0.}
+    assert recovered['trials'][0]['terminal']['status'] == 'no_submitted_model'
+    assert recovered['trials'][1]['terminal']['timeout'] is True
 
 
 def test_native_compact_summaries_never_read_full_training_and_keep_order(tmp_path, monkeypatch):

@@ -154,6 +154,407 @@ def load_episode_sources(references, workspace):
              'episode': loaded['value']} for loaded in load_source_values(references, workspace)]
 
 
+def project_method_use_feedback(source_ref, workspace):
+    """Project an addressed historical use into Common's method-return record.
+
+    Current Common returns already retain their pre-call profile and comparison;
+    import those records directly while keeping the original invocation identity.
+    The small source projection addresses its original public paid view,
+    binding, comparison and execution-validity receipt. Later selected models
+    do not supply the pre-use representation or residual. This projection
+    performs no fitting, prediction, purchase or source-library update.
+    """
+    from .method_conditions import method_profile
+    from .method_feedback import method_evidence_basis
+    from .models import Observation, TaskSpec
+
+    def read(reference):
+        return load_source_values([reference], workspace)[0]['value']
+
+    source = read(source_ref)
+    if 'profile_ref' in source:
+        # Current Common already stores the public pre-call profile and paid
+        # comparison. Import that exact return without replaying its method.
+        record = deepcopy(source)
+        record['profile'] = read(record['profile_ref'])
+        record['source_ref'] = deepcopy(source_ref)
+        record.setdefault('origin_ref', deepcopy(source_ref))
+        return record
+    before, application = source['public_before_call'], source['actual_application']
+    public = read(before['public_spec_ref'])
+    paid = read(before['paid_evidence_ref'])
+    binding_ref = source['source_provenance']['method_binding_ref']
+    binding = read(binding_ref)
+    method_ref = {'id': binding['candidate_id'], 'version': binding['candidate_version']}
+    if source['method_ref'] != method_ref:
+        raise ValueError('historical feedback must retain the actual invoked method version')
+    if before['parent_exposure'] != 'unmodeled_not_exposed':
+        raise ValueError('this historical projection requires its actual pre-use parent exposure')
+    controls = tuple(item['name'] if isinstance(item, dict) else item for item in public['controls'])
+    spec = TaskSpec('public_method_use', 'Already acquired public research conditions',
+        controls, (), (), feature_bounds={name: tuple(bounds) for name, bounds in
+            public.get('feature_bounds', {}).items()}, max_probe_length=public['max_probe_length'])
+    observations = [Observation(row['features'], row['target'], tuple(row.get('history', [])))
+                    for row in paid]
+    profile = method_profile(spec, observations,
+        minimum_improvement=before['minimum_improvement'])
+    profile['representation'].pop('program', None)
+    evidence_basis = method_evidence_basis(binding)
+    evidence_basis['paid_evidence_ref'] = deepcopy(before['paid_evidence_ref'])
+
+    comparison = application['comparison']
+    validity_ref = comparison['execution_validity_ref']
+    validity = read(validity_ref)
+    requested, completed = comparison['requested'], comparison['completed']
+    losses = comparison['old_pool_best_mse'], comparison['candidate_mse']
+    complete = (application['replay_search_completed'] is True
+        and requested == completed == validity['comparison_requested'] ==
+            validity['comparison_completed'] == validity['comparison_evaluations'] ==
+            validity['valid_complete_mse_entries']
+        and not validity['invalid_entries'] and validity['timeouts'] == 0
+        and comparison['rows'] == binding['paid_cutoff']['rows'] == len(paid)
+        and all(type(value) in (int, float) and isfinite(value) and value >= 0 for value in losses))
+    theory_ref = read({**binding_ref, 'json_path': [*_path(binding_ref)[:-1], 'theory_ref']})
+    record = {'method_ref': method_ref, 'invoked_method_ref': deepcopy(method_ref),
+        'profile': profile, 'evidence_basis': evidence_basis,
+        'status': 'completed' if complete else 'incomplete',
+        'execution_complete': application['replay_search_completed'],
+        'execution_ref': deepcopy(application['method_work_ref']),
+        'generated_theories': [theory_ref],
+        'actual_model_refs': [{**comparison['score_ref'], 'json_path': ['model']}],
+        'fit_compute_cost': application['method_replay_compute'],
+        'working_comparison': {'complete': complete, 'same_rows':
+            comparison['rows'] == binding['paid_cutoff']['rows'] == len(paid),
+            'before_loss': losses[0], 'after_loss': losses[1],
+            'data_role': 'exposed_development', 'rows': comparison['rows'],
+            'requested_pool_size': requested,
+            'scope': 'complete_requested_pool_on_same_paid_rows'},
+        'comparison_ref': deepcopy(comparison['comparison_ref']),
+        'comparison_execution_validity_ref': deepcopy(validity_ref),
+        'comparison_cost_scope': 'shared_comparison_ledger_not_attributed_to_each_method',
+        'cost_refs': [deepcopy(source['subsequent_outcome']['summary_trial_ref']),
+                      *deepcopy(source.get('source_cost_refs', []))],
+        'source_ref': deepcopy(source_ref),
+        'subsequent_outcome': deepcopy(source['subsequent_outcome']),
+        'world_support_updated': False, 'independent_confirmation': False}
+    if before.get('parent_question_ref'):
+        record['parent_question_ref'] = {'question_id': before['question_id'],
+            'meaning_version': before['question_meaning_version']}
+        record['parent_question_source_ref'] = deepcopy(before['parent_question_ref'])
+    if before.get('theory_target_ref'):
+        record['theory_target'] = read(before['theory_target_ref'])
+    record['invocation_binding'] = deepcopy(binding)
+    confirmation = source['subsequent_outcome'].get('fresh_confirmation')
+    if confirmation:
+        record['confirmation'] = {key: deepcopy(value) for key, value in confirmation.items()
+                                  if key in {'passed', 'returncode', 'timeout', 'mse', 'rows'}}
+        record['confirmation'].update(paired_method_gain=None,
+            scope='submitted_predictor_only_no_before_predictor_column')
+    # Later administrative pauses, exceptions or non-submission censor the
+    # follow-up stage. They do not erase an earlier completed paid comparison.
+    return record
+
+
+def _paid_method_program_version(index_ref, theory_ref, binding, workspace):
+    """Read one saved generated Program/version from the existing thin index."""
+    from contextlib import ExitStack
+    from .checkpoint_storage import _JsonSource
+
+    reference = deepcopy(index_ref)
+    while True:
+        path = Path(reference['file'])
+        path = path if path.is_absolute() else Path(workspace) / path
+        if not path.is_file():
+            return None
+        with ExitStack() as opened:
+            source = _JsonSource(path, opened)
+
+            def node_at(parts):
+                node = None
+                for part in parts:
+                    node = source.members(node, keys={part})[part]
+                return node
+
+            def value(node):
+                return json.loads(source.text[node[1]:node[2]])
+
+            root = node_at(_path(reference))
+            fields = source.members(root, keys={'entries', 'source_ref', theory_ref['id']})
+            prefix = [*_path(reference), 'entries'] if 'entries' in fields else _path(reference)
+            entries = source.members(fields['entries'], keys={theory_ref['id']}) if 'entries' in fields else fields
+            selected = entries.get(theory_ref['id'])
+            if selected is not None:
+                entry_path = [*prefix, theory_ref['id']]
+                versions = [(entry_path, selected)]
+                history = source.members(selected, keys={'history'}).get('history')
+                if history is not None:
+                    versions.extend(([*entry_path, 'history', index], node)
+                        for index, node in source.members(history).items())
+                for parts, node in versions:
+                    saved = source.members(node, keys={'version', 'consolidation_ref', 'program', 'program_ref'})
+                    if value(saved['version']) != theory_ref['version']:
+                        continue
+                    actual = value(saved['consolidation_ref']) if 'consolidation_ref' in saved else {}
+                    if any(actual.get(key) != binding.get(key) for key in
+                            ('candidate_id', 'candidate_version', 'mapping', 'fit_split', 'paid_cutoff')):
+                        return None
+                    program_ref = {'file': str(path), 'json_path': [*parts, 'program']}
+                    if 'program' in saved:
+                        program = value(saved['program'])
+                    elif 'program_ref' in saved:
+                        retained = value(saved['program_ref'])
+                        if retained.get('file') or retained.get('archive'):
+                            return None
+                        program_ref['json_path'] = _path(retained)
+                        program = value(node_at(_path(retained)))
+                    else:
+                        return None
+                    return {'program_ref': program_ref, 'program': program,
+                        'theory_ref': deepcopy(theory_ref), 'fitted_binding': actual}
+                return None
+            inherited = value(fields['source_ref']) if 'source_ref' in fields else None
+        if inherited is None:
+            return None
+        if inherited.get('file') and not Path(inherited['file']).is_absolute():
+            inherited['file'] = str(path.parent / inherited['file'])
+        reference = inherited
+
+
+def project_method_paid_step_evidence(source_ref, workspace):
+    """Read a procedure's paid columns and original split without replaying it.
+
+    Original frozen uses and current Common feedback both address the same
+    score files. Joint replay failure is measurable; individual threshold,
+    window and seed effects are not inferred from its final aggregate loss.
+    """
+    from math import fsum
+    from .temporal_operator_agent import _closed_prediction_values
+
+    def read(reference):
+        return load_source_values([reference], workspace)[0]['value']
+
+    source = read(source_ref)
+    historical = 'actual_application' in source
+    if historical:
+        application = source['actual_application']
+        binding_ref = source['source_provenance']['method_binding_ref']
+        binding = read(binding_ref)
+        score_ref = application['comparison']['score_ref']
+        cost = application['method_replay_compute']
+        complete = application['replay_search_completed']
+        paid_ref = source['public_before_call']['paid_evidence_ref']
+    else:
+        binding = source['invocation_binding']
+        score_ref = source.get('working_comparison', {}).get('after_score_ref')
+        cost, complete = source.get('fit_compute_cost'), source.get('execution_complete')
+        paid_ref = source['evidence_basis']['paid_evidence_ref']
+    method_ref = {'id': binding['candidate_id'], 'version': binding['candidate_version']}
+    invoked = source.get('invoked_method_ref', source['method_ref'])
+    if invoked != method_ref:
+        raise ValueError('step evidence must retain the actual invoked method version')
+    result = {'status': 'UNKNOWN', 'feedback_ref': deepcopy(source_ref),
+        'method_ref': deepcopy(source['method_ref']), 'invoked_method_ref': method_ref,
+        'invocation_binding': deepcopy(binding), 'fit_split': deepcopy(binding['fit_split']),
+        'fit_compute_cost': cost, 'execution_complete': complete,
+        'paid_rows_ref': deepcopy(paid_ref), 'source_method_payload_refs': [],
+        'joint_operation_contract': deepcopy(binding.get('research_program_contract')),
+        'seed_replay_work': None, 'seed_work_status': 'UNKNOWN_original_per_seed_work_unavailable',
+        'split_rows': {}, 'localization_scope': 'joint_replay_only_no_individual_step_ablation',
+        'world_support_updated': False, 'independent_confirmation': False,
+        'new_fits': 0, 'new_predictions': 0, 'new_paid_observations': 0}
+
+    from .checkpoint_storage import read_json_checkpoint
+
+    location = Path(binding['library_path'])
+    location = location if location.is_absolute() else Path(workspace) / location
+    # Frozen libraries are real thin source layers. Locate this one method's
+    # declaration without restoring their inherited execution/transfer pools.
+    layer_ref = {'file': str(location), 'json_path': []}
+    while True:
+        layer = (read_json_checkpoint(layer_ref['file'], keys=('candidates', 'source_ref'))
+            if not _path(layer_ref) else read(layer_ref))
+        if binding['candidate_id'] in layer.get('candidates', {}):
+            library_ref = _child_ref(layer_ref, 'candidates', binding['candidate_id'], 'source_outcomes')
+            outcomes = layer['candidates'][binding['candidate_id']]['source_outcomes']
+            break
+        inherited = deepcopy(layer['source_ref'])
+        if inherited.get('file') and not Path(inherited['file']).is_absolute():
+            inherited['file'] = str(Path(layer_ref['file']).parent / inherited['file'])
+        layer_ref = inherited
+    for index, reference in enumerate(binding.get('source_refs', [])):
+        origin = next((item for item in outcomes if item['source_ref'] == reference), None)
+        result['source_method_payload_refs'].append({'source_ref': deepcopy(reference),
+            'input_mapping': deepcopy(origin['input_mapping']) if origin else None,
+            'source_outcome_ref': _child_ref(library_ref, outcomes.index(origin)) if origin else None,
+            'source_index': index})
+    if 'seed_replay_work' in source:
+        result.update(seed_replay_work=deepcopy(source['seed_replay_work']),
+            seed_work_status='retained_original_invocation')
+    elif historical:
+        # The old execution key is mutable: later paid data can replace it.
+        # Never attach that later bill to the original frozen 72-row call.
+        key = f"research_program_transfer:frozen_recall:{source['public_before_call']['question_id']}@{source['public_before_call']['question_meaning_version']}:{method_ref['id']}"
+        execution_ref = {'file': binding_ref['file'], 'json_path': ['executions', key]}
+        saved = read(_child_ref(execution_ref, 'basis', 'binding'))
+        result['retained_execution_ref'] = execution_ref
+        if all(saved.get(field) == binding.get(field) for field in
+                ('candidate_id', 'candidate_version', 'mapping', 'fit_split', 'paid_cutoff')):
+            work_ref = _child_ref(execution_ref, 'result', 'seed_replay_work')
+            result.update(seed_replay_work=read(work_ref), seed_work_ref=work_ref,
+                seed_work_status='retained_matching_invocation')
+        else:
+            result['seed_work_status'] = 'UNKNOWN_execution_key_now_addresses_different_paid_fit'
+    for payload in result['source_method_payload_refs']:
+        work = next((item for item in result['seed_replay_work'] or []
+            if item.get('source_ref') == payload['source_ref']), {})
+        payload['seed_index'] = work.get('seed_index', work.get('reused_seed_index'))
+    if not score_ref:
+        return {**result, 'reason': 'no_saved_after_score'}
+    score_ref = {**score_ref, 'json_path': []}
+    score = read(score_ref)
+    result['score_ref'] = deepcopy(score_ref)
+    result['score_execution_costs_ref'] = _child_ref(score_ref, 'execution_costs')
+    if 'representation_diagnostic' in score.get('result', {}):
+        result['representation_diagnostic_ref'] = _child_ref(score_ref, 'result', 'representation_diagnostic')
+    if 'paid_residuals' in score.get('result', {}):
+        result['paid_failure_examples_ref'] = _child_ref(score_ref, 'result', 'paid_residuals')
+    if 'closed_prediction_state' not in score:
+        return {**result, 'reason': 'no_retained_prediction_columns'}
+    predictions_ref = _child_ref(score_ref, 'closed_prediction_state')
+    predictions = _closed_prediction_values(predictions_ref, workspace)['predictions']
+    scope = read(score['scope_ref'])
+    paid = read(paid_ref)
+    if scope['rows'] != paid or len(predictions) != len(paid):
+        return {**result, 'reason': 'saved_predictions_do_not_match_original_paid_view'}
+    # All actual Common score receipts live under this original workspace's
+    # _paid_python_scores/_evaluated_model directory. Its record table retains
+    # explicit row indices, including noncontiguous training/holdout records.
+    score_path = Path(score_ref['file'])
+    score_path = score_path if score_path.is_absolute() else Path(workspace) / score_path
+    records_ref = {'file': str(score_path.parent.parent.parent / 'laboratory_observations.json'),
+        'json_path': []}
+    records = read(records_ref)[:binding['paid_cutoff']['records']]
+    if (sum(len(record['row_indices']) for record in records) != len(paid)
+            or any(record['rows'] != [paid[index] for index in record['row_indices']]
+                for record in records)):
+        return {**result, 'reason': 'original_record_indices_do_not_match_paid_columns'}
+    for name, field, count_field in (('training', 'training_records', 'train_rows'),
+                                    ('holdout', 'validation_records', 'holdout_rows')):
+        indices = [row for index in binding['fit_split'][field] for row in records[index]['row_indices']]
+        if len(indices) != binding['fit_split'][count_field] or not indices:
+            return {**result, 'reason': 'original_fit_split_does_not_match_paid_columns'}
+        result['split_rows'][name] = {'rows': len(indices), 'row_indices': indices,
+            'rows_ref': deepcopy(paid_ref), 'predictions_ref': deepcopy(predictions_ref),
+            'records_ref': records_ref, 'record_indices': deepcopy(binding['fit_split'][field]),
+            'loss': fsum((paid[index]['target'] - predictions[index]) ** 2 for index in indices) / len(indices)}
+    if historical:
+        declarations = [read({**binding_ref, 'json_path': [*_path(binding_ref)[:-1], 'theory_ref']})]
+    else:
+        declarations = source.get('generated_theories', [])
+    owner = score_path.parent.parent.parent
+    # Common commits its live index in research_state after each operation;
+    # the portable shared index is published only when a result is requested.
+    # Read either exact retained version without expanding the complete state.
+    index_refs = [{'file': str(owner / 'research_state.json'), 'json_path': ['theory_index']},
+                  {'file': str(owner / 'shared/theory_index.json'), 'json_path': []}]
+    retained = []
+    for declaration in declarations:
+        for index_ref in index_refs:
+            item = _paid_method_program_version(index_ref, declaration, binding, workspace)
+            if item is not None:
+                retained.append(item)
+                break
+    seed_work = result['seed_replay_work'] or []
+    all_fitted = bool(seed_work) and complete and all(item['status'] in
+        {'fitted_candidate', 'same_replay_inputs'} and item.get('search_completed') is not False
+        for item in seed_work)
+    result['paid_seed_baselines'] = []
+    for payload in result['source_method_payload_refs']:
+        work = next((item for item in seed_work if item.get('source_ref') == payload['source_ref']), {})
+        fitted = next((item for item in retained
+            if item['fitted_binding'].get('source_ref') == payload['source_ref']), None)
+        deduplicated = False
+        if fitted is None and len(declarations) == len(retained) == 1 and all_fitted:
+            # The existing consumer retains every nonidentical successful
+            # replay Program. A complete one-output replay proves exact dedup;
+            # multiple surviving outputs do not identify an omitted seed.
+            fitted, deduplicated = retained[0], True
+        if fitted is None:
+            continue
+        result['paid_seed_baselines'].append({
+            'source_ref': deepcopy(payload['source_ref']), 'seed_index': payload['seed_index'],
+            'program_ref': fitted['program_ref'], 'program': fitted['program'],
+            'theory_ref': fitted['theory_ref'], 'execution_complete': complete,
+            'fit_compute_cost': work.get('compute_cost'),
+            'cost_ref': deepcopy(result.get('seed_work_ref', source_ref)),
+            'training_loss': result['split_rows']['training']['loss'] if len(declarations) == 1 else None,
+            'validation_loss': result['split_rows']['holdout']['loss'] if len(declarations) == 1 else None,
+            'paid_rows_ref': deepcopy(paid_ref), 'fit_split': deepcopy(binding['fit_split']),
+            'research_program_ref': _child_ref(payload['source_ref'], 'research_program'),
+            'research_program_scope': 'original_source_plan_not_target_execution_graph',
+            'exact_program_deduplication': deduplicated})
+    result.update(status='completed', predictions_ref=predictions_ref,
+        scope_ref=deepcopy(score['scope_ref']),
+        measured_scope='original_paid_split_reduction_of_retained_prediction_columns')
+    return result
+
+
+def project_method_process_comparison(source_ref, workspace, *, method_ref,
+                                      uncommitted_costs=None, cost_bounds_ref=None):
+    """Read a retained matched process comparison, without executing models.
+
+    Costs in a completed study can still have uncommitted old work. A supplied
+    bound has an actual retained receipt; its absence stays unknown. This
+    describes the two configurations, not a causal effect of one method.
+    """
+    def read(reference):
+        return load_source_values([reference], workspace)[0]['value']
+
+    pair = read(source_ref)
+    case_ref = pair['registered_case_ref']
+    case = read(case_ref)
+    protocol = read({**case_ref, 'json_path': []})
+    evaluation = protocol['evaluation']
+    columns = pair.get('selected_parent_terminal_predictions', {}).get('column_refs', [])
+    documents = [read(reference) for reference in columns]
+    expected = {'case': case['id'], 'kind': case.get('kind'),
+        'evaluation_seed': case['evaluation_seed'], 'rows': evaluation['rows'],
+        'trajectory_length': evaluation.get('trajectory_length')}
+    matched = (len(documents) == 2 and all(document.get('evaluation_contract') == expected
+        for document in documents))
+    sides = {}
+    for index, (side, key) in enumerate((('before', 'left'), ('after', 'right'))):
+        outcome = pair[key]
+        bounds = (uncommitted_costs or {}).get(side, {})
+        costs, intervals = {}, {}
+        for resource in ('observation_cost', 'compute_cost'):
+            recorded = outcome.get('costs', {}).get(resource)
+            unknown = bounds.get(resource)
+            interval = ([recorded + unknown[0], recorded + unknown[1]]
+                if type(recorded) in (int, float) and unknown is not None else None)
+            intervals[resource] = interval
+            costs[resource] = interval[0] if interval is not None and interval[0] == interval[1] else None
+        completed = (outcome.get('terminal_passed') is True
+            and outcome.get('confirmation_passed') is True and outcome.get('model_submitted') is True)
+        bound = (matched and documents[index].get('training_ref') == outcome.get('training_ref'))
+        sides[side] = {'execution_complete': outcome.get('status') == 'completed' and bound,
+            'completed': completed, 'quality': {'loss': outcome.get('terminal_mse'),
+                'threshold': evaluation['mse_threshold']},
+            'coverage': evaluation['rows'] if bound else None,
+            'costs': costs, 'cost_intervals': intervals,
+            'recorded_costs': deepcopy(outcome.get('costs', {}))}
+        for marker in ('administrative_censoring', 'censored', 'execution_error'):
+            if marker in outcome:
+                sides[side][marker] = deepcopy(outcome[marker])
+    return {'method_ref': deepcopy(method_ref), 'same_task': pair.get('case') == case['id'],
+        'same_evaluation_contract': matched, 'before': sides['before'], 'after': sides['after'],
+        'scope': 'matched_target_configuration_return_not_single_method_causality_or_source_net',
+        'source_refs': [deepcopy(source_ref), deepcopy(case_ref), *deepcopy(columns)],
+        'cost_bounds_ref': deepcopy(cost_bounds_ref),
+        'uncommitted_costs': deepcopy(uncommitted_costs),
+        'source_net_utility': 'UNKNOWN', 'world_support_updated': False}
+
+
 def _source_fit_algorithm(workspace):
     """Address the fitter retained by this actual run_study source, if declared."""
     study = Path(workspace).parent.parent
@@ -347,6 +748,18 @@ def load_common_sources(references, workspace):
                     continue
                 snapshot = deepcopy(snapshots[identifier])
                 snapshot['id'] = qualified(identifier)
+                locator = native[identifier].get('source_ref', {})
+                if locator.get('kind') == 'native_candidate':
+                    round_index, candidate_index = locator['round_index'], locator['candidate_index']
+                    rounds = question.get('native_condition_research', [])
+                    if round_index < len(rounds):
+                        candidate = rounds[round_index].get('candidates', [])[candidate_index]
+                        if candidate.get('research_program'):
+                            snapshot['research_program_source_ref'] = anchored(_child_ref(
+                                question_ref, 'native_condition_research', round_index,
+                                'candidates', candidate_index))
+                            snapshot['research_program_action_ref'] = anchored(_child_ref(
+                                question_ref, 'native_condition_research', round_index))
                 if identifier in revision_sources:
                     snapshot['program_source_ref'] = anchored(
                         revision_sources[identifier]['program_source_ref'])
@@ -402,6 +815,27 @@ def load_common_sources(references, workspace):
                 append(field, entry)
     result['status'] = 'UNKNOWN' if result['author_work'] else 'completed'
     return result
+
+
+def research_program_entries(agent, episodes, pool):
+    """Address actual saved producer DAGs without copying them into the library."""
+    selected = [(episode, pool[episode['theory_id']]) for episode in episodes
+                if pool[episode['theory_id']].get('research_program_source_ref')]
+    loaded = load_source_values([theory['research_program_source_ref']
+                                for _, theory in selected], agent.workspace)
+    entries = []
+    for (episode, theory), saved in zip(selected, loaded):
+        entry = {key: deepcopy(episode[key]) for key in (
+            'episode_id', 'source_id', 'context_ref', 'context_family_ref',
+            'role_signature', 'output_unit', 'evidence_refs', 'cost_refs',
+            'failure_refs', 'source_cutoff', 'status', 'source_revision_steps',
+            'independent_results', 'cost_scope', 'source_outcome_ref') if key in episode}
+        entry.update(source_ref=deepcopy(saved['source_ref']),
+            action_ref=deepcopy(theory['research_program_action_ref']),
+            research_program=saved['value']['research_program'],
+            program=saved['value']['program'])
+        entries.append(entry)
+    return entries
 
 
 def resolve_program_sources(agent, references, retained_episodes=None):

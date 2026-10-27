@@ -192,7 +192,10 @@ def prepare_python_forecasts(agent, question, laboratory, models, *, compute_bud
             directory, inner = python_model_context(agent.workspace, model)
             if not (directory / inner).is_file():
                 raise FileNotFoundError(model)
-            key = str(directory.relative_to(agent.workspace))
+            # The ordinary resolver also accepts frozen external archives.
+            # Keep their absolute identity; execution snapshots remain local.
+            key = str(directory.relative_to(agent.workspace)
+                      if directory.is_relative_to(agent.workspace) else directory)
             group = groups.setdefault(key, {'source_directory': str(directory),
                 'source_relative_directory': key, 'models': []})
             group['models'].append(inner)
@@ -224,20 +227,23 @@ def prepare_python_forecasts(agent, question, laboratory, models, *, compute_bud
     file = root / f'forecasts_{version:04d}.json'
     doc = {'basis': deepcopy(basis), 'contexts': [], 'prediction_inputs': public, 'forecasts': [], 'columns': []}
     changed, before = False, agent.costs['compute_cost']
-    previous_payloads = {}
+    # Thousands of columns can address one file. Share the source reader's
+    # existing per-call payload cache across this retained roster.
+    old_references = [old_columns[model]['forecast_ref'] for model in models if model in old_columns]
+    previous_payloads = {(reference['file'], tuple(reference['json_path'])): loaded['value']
+        for reference, loaded in zip(old_references,
+            load_source_values(old_references, agent.workspace))} if old_references else {}
     for model in models:
         group = None
         if model not in errors:
             directory, inner = python_model_context(agent.workspace, model)
-            group = groups[str(directory.relative_to(agent.workspace))]
+            group = groups[str(directory.relative_to(agent.workspace)
+                               if directory.is_relative_to(agent.workspace) else directory)]
         old = old_columns.get(model)
         reused = None
         if old:
             reference = old['forecast_ref']
             key = (reference['file'], tuple(reference['json_path']))
-            if key not in previous_payloads:
-                loaded, = load_source_values([reference], agent.workspace)
-                previous_payloads[key] = loaded['value']
             recorded = previous_payloads[key]
             unfunded = allowance - (agent.costs['compute_cost'] - before) < len(public)
             retryable = recorded.get('reason') in {'forecast_compute_budget_exhausted',

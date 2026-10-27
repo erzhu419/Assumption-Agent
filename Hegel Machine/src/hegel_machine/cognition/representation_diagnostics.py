@@ -3,6 +3,23 @@
 from math import fsum
 
 
+def representation_evidence_state(diagnostic):
+    """Interpret the existing diagnostic without promoting absence of conflict.
+
+    A declared-test support statement is separate evidence: the collision check
+    itself can only refute a view or leave it unrefuted on its finite rows.
+    """
+    if not diagnostic or diagnostic.get('status') == 'not_exposed':
+        return 'not_exposed'
+    if diagnostic.get('conflicting_groups') or diagnostic.get('status') == 'conflicting_targets':
+        return 'proven_insufficient_on_evidence'
+    if (diagnostic.get('evidence_state') == 'supported_for_declared_tests'
+            and diagnostic.get('declared_tests')
+            and all(test.get('passed') is True for test in diagnostic['declared_tests'])):
+        return 'supported_for_declared_tests'
+    return 'not_refuted_on_current_evidence'
+
+
 REPRESENTATION_INTERFACE = """
 An optional explicit representation uses represent(row), predict_features(features),
 and optionally fit_features(features, targets) in the model file. represent receives
@@ -69,6 +86,8 @@ def representation_ambiguity(representations, rows, *, scope="evaluated_rows", m
                           "group_size": len(indices), "mean_target": mean,
                           "squared_error_floor": sse, "rows": examples})
     return {"status": "conflicting_targets" if conflicts else "no_exact_conflicts",
+            "evidence_state": ('proven_insufficient_on_evidence' if conflicts
+                               else 'not_refuted_on_current_evidence'),
             "scope": scope, "rows": len(rows),
             "loss_kind": "mse", "weighting": "uniform_rows",
             "representation_contract": "actual_downstream_inputs",

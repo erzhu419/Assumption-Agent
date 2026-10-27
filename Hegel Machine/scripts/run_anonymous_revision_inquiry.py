@@ -54,10 +54,12 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
 from hegel_machine.cognition.anonymous_method_learning import compact_workspace_result
 from hegel_machine.cognition.anonymous_research_archive import resolve_workspace_archive
+from hegel_machine.cognition import code_agent
 from hegel_machine.cognition.code_agent import (
     CodexCodeProvider, evaluate_python_model, archived_paid_trace_references,
+    python_model_context, _python_model_context_files, _bound_model_contexts,
 )
-from hegel_machine.cognition.checkpoint_storage import clone_or_copy
+from hegel_machine.cognition.checkpoint_storage import clone_or_copy, read_json_checkpoint
 from hegel_machine.cognition.experiment_runtime import (
     physical_worker_cpus as _native_worker_cpus,
     physical_cpu_groups as _native_worker_cpu_groups,
@@ -82,6 +84,13 @@ from scripts.run_online_inquiry_llm import verify_codex_subscription, write_json
 
 ORGANIZATION_ARMS = ('archive', 'fixed_pr2', 'pr3')
 ORGANIZATION_ORIGIN = 'registered_research_organization'
+STUDY_ACCOUNT_FIELDS = ("historical_prefix_cost", "additional_cost", "prefix_origin",
+                        "prior_research_cost", "continuation_cost", "resume_origin",
+                        "recovered_paid_reply", "unknown_cost_reservation",
+                        "registered_continuation_ceiling", "known_uncommitted_costs",
+                        "known_uncommitted_cost_refs")
+STUDY_RESULT_FIELDS = ("workspace", "status", "model", "costs", "research_organization",
+                       "fresh_confirmation", "events", "revision_proposals", "execution_timing", *STUDY_ACCOUNT_FIELDS)
 
 
 
@@ -955,10 +964,11 @@ def _aggregate_registered_sources(plan, output, trials, organization, knowledge,
 
 def run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_prefix=None,
               laboratory_factory=None, workers=1, agent_factory=None,
-              previous_study=None, resume_task=''):
+              previous_study=None, resume_task='', registered_continuation=None):
     return _run_study(plan, output, provider_factory=provider_factory, knowledge=knowledge,
         prepare_prefix=prepare_prefix, laboratory_factory=laboratory_factory, workers=workers,
-        agent_factory=agent_factory, previous_study=previous_study, resume_task=resume_task)
+        agent_factory=agent_factory, previous_study=previous_study, resume_task=resume_task,
+        registered_continuation=registered_continuation)
 
 
 def run_target_intervention(plan, output, *, keep_study, prepare_prefix=None,
@@ -1002,15 +1012,15 @@ def run_target_intervention(plan, output, *, keep_study, prepare_prefix=None,
             for name in runtime):
         raise ValueError('paired target intervention requires the same current frozen runtime')
     intervention = deepcopy(plan.get('target_intervention') or {})
-    if intervention.get('kind') not in {'individual_object', 'new_redundancy_class'}:
-        raise ValueError('declare the frozen individual-object or new-class intervention')
+    if intervention.get('kind') not in {'individual_object', 'new_redundancy_class', 'method_body_revision'}:
+        raise ValueError('declare the frozen object, class or actual method-step intervention')
     reference = intervention['manifest_ref']
     manifest = json.loads(Path(reference['file']).read_text())
     for key in _path(reference):
         manifest = manifest[key]
     if manifest.get('status') != 'frozen_ready':
         raise ValueError('target intervention needs a ready frozen removal manifest')
-    removed = set(manifest['removed_candidate_ids'])
+    removed = set(manifest.get('removed_candidate_ids', []))
     retained_library = _read_library({'file': str(keep / 'pr3_theory_library.json'), 'json_path': []}, ROOT)
     selected_library = _read_library({'file': removed_library, 'json_path': []}
         if isinstance(removed_library, str) else removed_library, ROOT)
@@ -1019,11 +1029,25 @@ def run_target_intervention(plan, output, *, keep_study, prepare_prefix=None,
     prior = retained_library.get('candidates', {})
     actual = selected_library.get('candidates', {})
     old_ids = set(old_library.get('candidates', {}))
-    if (not removed or not removed <= set(prior) or removed.intersection(old_ids)
-            or not old_ids <= set(manifest['preserved_old_candidate_ids'])
-            or list(actual) != [key for key in prior if key not in removed]
-            or actual != {key: value for key, value in prior.items() if key not in removed}):
-        raise ValueError('intervention must remove only the declared new candidates and preserve the complete old library')
+    if intervention['kind'] == 'method_body_revision':
+        from scripts.prepare_pr3_source_successor import _method_body_revision, _value
+
+        identifier = manifest['candidate_id']
+        candidate = _value(manifest['candidate_ref'])
+        qualified = _method_body_revision(identifier, prior[identifier], candidate)
+        expected_candidates = {**prior, identifier: candidate}
+        if (actual != expected_candidates or list(actual) != list(prior)
+                or manifest.get('baseline_version') != prior[identifier]['version']
+                or manifest.get('revised_version') != candidate['version']
+                or manifest.get('actual_step_revision_ref') != qualified['actual_step_revision_ref']
+                or set(manifest.get('preserved_old_candidate_ids', [])) != set(prior)
+                or manifest.get('common_initial_scene_only') is not True
+                or manifest.get('target_training_inherited') is not False
+                or {k: v for k, v in selected_library.items() if k != 'candidates'} !=
+                   {k: v for k, v in retained_library.items() if k != 'candidates'}):
+            raise ValueError('method step intervention must preserve the complete common initial library and paid caches')
+    else:
+        _validate_object_intervention(intervention, manifest, prior, actual, old_library, old_ids, removed)
     knowledge = json.loads((keep / 'initial_archive.json').read_text())
     intervention.update(keep_study=str(keep), executed_arms=['pr3'],
         keep_protocol_ref={'file': str(keep / 'protocol.json'), 'json_path': []},
@@ -1037,9 +1061,152 @@ def run_target_intervention(plan, output, *, keep_study, prepare_prefix=None,
         target_intervention=intervention)
 
 
+def _validate_object_intervention(intervention, manifest, prior, actual, old_library, old_ids, removed):
+    """Keep the existing object-removal and condition-rollback contracts strict."""
+    restored = manifest.get('restored_candidate_versions', [])
+    restored_ids = {item['id'] for item in restored}
+    if (not (removed or restored) or not removed <= set(prior) or removed.intersection(old_ids)
+            or len(restored_ids) != len(restored) or not restored_ids <= old_ids.intersection(prior)
+            or restored_ids.intersection(removed)
+            or not old_ids <= set(manifest['preserved_old_candidate_ids'])
+            or list(actual) != [key for key in prior if key not in removed]):
+        raise ValueError('intervention must remove only the declared new candidates and preserve the complete old library')
+    expected_candidates = {key: value for key, value in prior.items() if key not in removed}
+    if restored:
+        from scripts.prepare_pr3_source_successor import _method_condition_revision
+
+        if intervention['kind'] != 'individual_object' or len(restored) != 1 or removed:
+            raise ValueError('a method condition intervention restores one registered baseline version')
+        for item in restored:
+            identifier = item['id']
+            baseline_method = old_library['candidates'][identifier]
+            _method_condition_revision(identifier, baseline_method, prior[identifier])
+            if (item['removed_version'] != prior[identifier]['version']
+                    or item['restored_version'] != baseline_method['version']):
+                raise ValueError('method condition intervention must restore the exact baseline version')
+            expected_candidates[identifier] = baseline_method
+    if actual != expected_candidates:
+        raise ValueError('intervention must preserve every undeclared candidate and restore the complete old method')
+
+
+def _saved_study_trial(case, arm, result, training_path, initial_event_count):
+    """Return the study readout without reloading its complete saved research."""
+    retained = {key: result[key] for key in
+                ("workspace", "status", "model", "costs", "research_organization", "execution_timing", *STUDY_ACCOUNT_FIELDS)
+                if key in result}
+    usage = [event.get("usage", {}) for event in result["events"]
+             if event.get("usage", {}).get("backend") == "codex_cli"]
+    live_backends = [event.get("usage", {}).get("backend")
+                     for event in result["events"][initial_event_count:]
+                     if event.get("usage", {}).get("backend") not in
+                         {"common_paid_prefix", "restored_paid_prefix", ORGANIZATION_ORIGIN}]
+    retained.update(
+        fresh_confirmation_passed=(result.get("fresh_confirmation") or {}).get("passed", False),
+        revision_count=len(result.get("revision_proposals", [])),
+        cached_input_tokens=sum(item.get("cached_input_tokens") or 0 for item in usage),
+        calls_with_cache_hits=sum(bool(item.get("cached_input_tokens")) for item in usage),
+        live_event_backends=live_backends)
+    return {"case": case, "arm": arm, "result_summary": retained,
+            "result_ref": {"file": str(training_path), "json_path": []}}
+
+
+def _terminal_basis(plan, case, trial, materials_ref):
+    result = trial['result']
+    references = [trial['result_ref'],
+        {'file': str(Path(code_agent.__file__).resolve())},
+        {'file': str(Path(__file__).resolve())}]
+    if result['model']:
+        context, model = python_model_context(result['workspace'], result['model'])
+        for directory, inner in [(context, model), *_bound_model_contexts(context, model)]:
+            references.extend({'file': str(path)} for path in
+                _python_model_context_files(directory, inner).values()
+                if path != directory / 'terminal_predictions.json')
+    return {'case': deepcopy(case), 'evaluation': deepcopy(plan['evaluation']),
+        'execution_seconds': plan['limits']['execution_seconds'], 'model': result['model'],
+        'training_ref': deepcopy(trial['result_ref']), 'materials_ref': materials_ref,
+        'input_versions': _episode_file_versions(SimpleNamespace(workspace=Path('/')), references)}
+
+
+def _terminal_cost(evaluation):
+    return {'rows': evaluation.get('cumulative_evaluation_rows', evaluation.get('evaluation_rows')),
+            'python_execution_seconds': evaluation.get('python_execution_seconds')}
+
+
+
+def _registered_resume_checkpoint(entry, old_workspace, limits, author):
+    """Read one explicitly selected unfinished checkpoint, without fresh budgets.
+
+    Saved partial-score receipts first restore known unpaid-to-ledger work.
+    The reservation bounds remaining unknown work, reduces the original usable
+    ceiling, and is never reported as an actual fee.
+    """
+    from hegel_machine.cognition.common_archive_inquiry import retained_checkpoint_result
+
+    reference = entry['checkpoint_ref']
+    path = Path(reference['file']).resolve()
+    if (reference.get('json_path', []) or path.parent != old_workspace.resolve()
+            or path.name not in {'active.json', 'training.json'}):
+        raise ValueError('registered continuation requires its own saved checkpoint')
+    previous = read_json_checkpoint(path)
+    if previous['costs'] != entry['known_recorded_costs']:
+        raise ValueError('registered continuation checkpoint account changed; re-admit the stopped state')
+    steps = previous['research_organization']['finite_author']['completed_steps']
+    if steps != entry['completed_steps']:
+        raise ValueError('registered continuation must retain its actual finite-author cursor')
+    reservation = entry['unknown_cost_reservation']
+    if (set(reservation) != {'compute_cost', 'python_execution_seconds'}
+            or any(type(value) not in (int, float) or not isfinite(value) or value < 0
+                   for value in reservation.values())
+            or not entry.get('unrecorded_cost_basis_refs')):
+        raise ValueError('registered continuation requires a bounded unknown-work reservation and basis')
+    ceilings = {'compute_cost': limits.compute_budget - reservation['compute_cost'],
+                'python_execution_seconds': limits.execution_seconds - reservation['python_execution_seconds']}
+    if (previous.get('model') or steps >= author['max_steps']
+            or any(previous['costs'][key] >= value for key, value in ceilings.items())):
+        return previous, path, None, None
+    state = read_json_checkpoint(old_workspace / 'research_state.json')
+    if state['costs'] != entry['central_state_recorded_costs']:
+        raise ValueError('registered continuation central account changed; re-admit the stopped state')
+    a, b = previous['costs'], state['costs']
+    newer = all(b[key] >= value for key, value in a.items())
+    older = all(b[key] <= value for key, value in a.items())
+    if not newer and not older:
+        raise ValueError('checkpoint and central accounts are incomparable; retain unresolved work')
+    retained = None
+    if newer:
+        # This existing helper rejects paid acquisitions missing from the saved
+        # result, rather than purchasing them again or fabricating a query event.
+        previous = retained_checkpoint_result(previous, state)
+        saved_steps = state.get('research_organization', {}).get('finite_author', {}).get('completed_steps', steps)
+        if saved_steps < steps:
+            state = {**state, 'research_organization': read_json_checkpoint(path,
+                keys={'research_organization'})['research_organization']}
+            previous['research_organization'] = state['research_organization']
+        retained = state
+    paid = entry.get('known_uncommitted_costs', {})
+    if paid:
+        if (set(paid) != {'compute_cost', 'python_execution_seconds'}
+                or any(type(value) not in (int, float) or not isfinite(value) or value < 0
+                       for value in paid.values())
+                or not entry.get('known_uncommitted_cost_refs') or retained is None):
+            raise ValueError('known stopped paid work requires its receipts and a compatible committed state')
+        previous = {**previous, 'costs': {**previous['costs'], **{
+            key: previous['costs'][key] + value for key, value in paid.items()}}}
+        # Reconcile only the new recovery account. Original state/result and
+        # per-assessment receipts remain immutable; the existing restore helper
+        # sees the same reconciled ledger rather than rolling it back.
+        retained = {**retained, 'costs': previous['costs']}
+    if any(previous['costs'][key] >= value for key, value in ceilings.items()):
+        return previous, path, None, None
+    effective = replace(limits, compute_budget=ceilings['compute_cost'],
+                        execution_seconds=ceilings['python_execution_seconds'])
+    return previous, path, retained, effective
+
+
 def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_prefix=None,
                laboratory_factory=None, workers=1, agent_factory=None,
-               previous_study=None, resume_task='', target_intervention=None):
+               previous_study=None, resume_task='', target_intervention=None,
+               registered_continuation=None):
     output = Path(output).resolve()
     author = plan.get('author')
     _validate_finite_author(author, plan.get('research_organization'))
@@ -1049,6 +1216,7 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
     if (output / "protocol.json").exists():
         raise ValueError("use a fresh output directory to retain earlier developmental failures")
     previous_study = Path(previous_study).resolve() if previous_study else None
+    previous_trials, previous_records = {}, {}
     if previous_study:
         previous_plan = json.loads((previous_study / 'protocol.json').read_text())
         for field in ('cases', 'arms', 'model', 'provider', 'limits', 'prefix_rows', 'evaluation'):
@@ -1060,6 +1228,26 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
             raise ValueError('cohort recovery must preserve registered source_cohort_allocation')
         if author != previous_plan.get('author'):
             raise ValueError('cohort recovery must preserve registered author')
+        saved_trials = previous_study / 'training_results.json'
+        if saved_trials.is_file():
+            previous_trials = {(trial['case']['id'], trial['arm']): trial
+                               for trial in read_json_checkpoint(saved_trials)}
+        if (previous_study / 'summary.json').is_file():
+            previous_records = {(row['case'], row['arm']): row for row in
+                read_json_checkpoint(previous_study / 'summary.json', keys={'trials'})['trials']}
+    continuation_entries = {}
+    if registered_continuation is not None:
+        if not previous_study or not author or target_intervention:
+            raise ValueError('registered continuation requires the original finite cohort')
+        for entry in registered_continuation['tasks']:
+            key = (entry['case'], entry['arm'])
+            if key in continuation_entries:
+                raise ValueError('registered continuation task must be unique')
+            continuation_entries[key] = entry
+        expected = {(case['id'], arm) for case in plan['cases'] for arm in plan['arms']}
+        if not set(continuation_entries) <= expected:
+            raise ValueError('registered continuation cannot add a new scientific task')
+        write_json(output / 'registered_continuation.json', registered_continuation)
     organization, prepared_knowledge = _prepare_organization(plan, output, knowledge,
         Path(target_intervention['keep_study']) if target_intervention else previous_study)
     if author:
@@ -1110,10 +1298,31 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
         case, arm = job
         workspace = output / case["id"] / arm
         old_workspace = previous_study / case['id'] / arm if previous_study else None
-        if old_workspace and (old_workspace / 'training.json').is_file():
-            result = json.loads((old_workspace / 'training.json').read_text())
-            return {'case': case, 'arm': arm, 'result': result, 'initial_event_count': 0}
-        job_limits, job_organization = limits, organization
+        training_path = old_workspace / 'training.json' if old_workspace else None
+        if old_workspace and not training_path.is_file():
+            prior_trial = previous_trials.get((case['id'], arm))
+            prior_record = previous_records.get((case['id'], arm))
+            if prior_trial:
+                training_path = Path(prior_trial['result_ref']['file'])
+            elif prior_record:
+                training_path = Path(prior_record['archive']).parent / 'training.json'
+        entry = continuation_entries.get((case['id'], arm))
+        resumed, resume_path, retained_state, resumed_limits = None, None, None, None
+        if entry is not None:
+            resumed, resume_path, retained_state, resumed_limits = _registered_resume_checkpoint(
+                entry, old_workspace, limits, author)
+            if resumed_limits is None:
+                return _saved_study_trial(case, arm, resumed, resume_path, 0)
+        elif training_path and training_path.is_file():
+            result = read_json_checkpoint(training_path, keys=STUDY_RESULT_FIELDS)
+            return _saved_study_trial(case, arm, result, training_path, 0)
+        elif registered_continuation is not None:
+            # Keep the original roster in the scheduler, including unresolved
+            # and already submitted tasks, so its physical grouping is unchanged.
+            path = old_workspace / 'active.json'
+            result = read_json_checkpoint(path, keys=STUDY_RESULT_FIELDS)
+            return _saved_study_trial(case, arm, result, path, 0)
+        job_limits, job_organization = resumed_limits or limits, organization
         if arm == 'pr3' and plan.get('source_cohort_allocation'):
             cohort = plan['source_cohort_allocation']
             job_limits = replace(limits, compute_budget=cohort['source_stage_compute'][case['id']])
@@ -1130,15 +1339,27 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
         laboratory = laboratory_factory(case)
         prefix_account = {}
         if old_workspace and old_workspace.is_dir():
-            previous = json.loads((old_workspace / 'active.json').read_text())
+            previous = resumed if resumed is not None else read_json_checkpoint(old_workspace / 'active.json')
             agent.restore_research(previous, old_workspace, laboratory,
-                                   confirmation_seed=case['confirmation_seed'])
+                confirmation_seed=case['confirmation_seed'],
+                **({'retained_state': retained_state} if retained_state is not None else {}))
             agent.common_interface += resume_task
             recovery = (None if organization else restore_pending_question_error(agent, laboratory, previous,
                 old_workspace, model=plan['model']))
             prefix_account = {'prior_research_cost': deepcopy(agent.costs),
                               'resume_origin': str(old_workspace / 'active.json'),
                               **({'recovered_paid_reply': recovery} if recovery else {})}
+            if entry is not None:
+                prefix_account.update(resume_origin=str(resume_path),
+                    **({key: deepcopy(entry[key]) for key in
+                        ('known_uncommitted_costs', 'known_uncommitted_cost_refs') if key in entry}),
+                    unknown_cost_reservation=deepcopy(entry['unknown_cost_reservation']),
+                    registered_continuation_ceiling={
+                        'original_compute_budget': limits.compute_budget,
+                        'original_execution_seconds': limits.execution_seconds,
+                        'usable_compute_budget': job_limits.compute_budget,
+                        'usable_execution_seconds': job_limits.execution_seconds,
+                        'original_max_steps': author['max_steps']})
             write_json(workspace / 'active.json', agent.result('researching'))
         elif prepare_prefix is None:
             prefix = laboratory.confirmation_actions(plan["prefix_rows"], Random(case["prefix_seed"]))
@@ -1164,6 +1385,8 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
                 before_step=agent._before_model_turn, after_step=after_step)
                 if remaining else {'status': 'method_step_limit'})
             result = agent.result(outcome['status'])
+            if 'execution_timing' in outcome:
+                result['execution_timing'] = deepcopy(outcome['execution_timing'])
             checkpoint(result)
         else:
             result = agent.run(laboratory, on_checkpoint=checkpoint)
@@ -1182,8 +1405,7 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
         print(json.dumps({"case": case["id"], "arm": arm, "status": result["status"],
                           "costs": result["costs"]}), flush=True)
 
-        return {"case": case, "arm": arm, "result": result,
-                "initial_event_count": initial_event_count}
+        return _saved_study_trial(case, arm, result, workspace / 'training.json', initial_event_count)
 
     if workers == 1:
         trials = [train(job) for job in jobs]
@@ -1195,20 +1417,65 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
             # terminal rows are generated by the separate evaluation loop.
             trials = list(executor.map(train, jobs))
 
+    # The complete result stays in each worker's persisted training. The shared
+    # process runner receives result_ref, so it need not rehydrate every history.
+    for trial in trials:
+        trial['result'] = trial.pop('result_summary')
+    # Persist these small original-training references before terminal work.
+    # A later interrupted recovery need not fabricate another training result.
+    write_json(output / 'training_results.json', trials)
+
     aggregation = None
     if organization and organization['phase'] == 'source' and len(plan['cases']) > 1:
         aggregation = _aggregate_registered_sources(plan, output, trials, organization,
             prepared_knowledge, paid_traces, previous_study)
-    records = []
+    records, terminal_materials = [], []
     for trial in trials:
         case, result = trial["case"], trial["result"]
         host_workspace = output / case['id'] / trial['arm']
         host_workspace.mkdir(parents=True, exist_ok=True)
-        evaluation = {"status": "no_submitted_model", "mse": None,
-                      "evaluation_rows": 0, "python_execution_seconds": 0.}
+        prior, prior_ref = None, None
+        if previous_study:
+            prior_path = previous_study / case['id'] / trial['arm'] / 'evaluation.json'
+            if prior_path.is_file():
+                prior = read_json_checkpoint(prior_path)
+                prior_ref = {'file': str(prior_path), 'json_path': []}
+            elif (case['id'], trial['arm']) in previous_records:
+                prior = previous_records[case['id'], trial['arm']]['terminal']
+                prior_index = list(previous_records).index((case['id'], trial['arm']))
+                prior_ref = {'file': str(previous_study / 'summary.json'),
+                             'json_path': ['trials', prior_index, 'terminal']}
+        rows, materials_ref = None, None
         if result["model"]:
             rows = laboratory_factory(case).evaluation_rows(
                 length=plan["evaluation"]["rows"], seed=case["evaluation_seed"])
+            values = json.loads(json.dumps([asdict(row) if hasattr(row, 'features') else row for row in rows]))
+            retained_materials = (prior or {}).get('execution_basis', {}).get('materials_ref')
+            if retained_materials and read_json_checkpoint(retained_materials['file']) == values:
+                materials_ref = retained_materials
+            else:
+                materials_ref = next((reference for identifier, saved, reference in terminal_materials
+                    if identifier == case['id'] and saved == values), None)
+                if materials_ref is None:
+                    path = output / 'terminal_materials' / f"{case['id']}_{trial['arm']}.json"
+                    write_json(path, values)
+                    materials_ref = {'file': str(path), 'json_path': []}
+            terminal_materials.append((case['id'], values, materials_ref))
+        basis = _terminal_basis(plan, case, trial, materials_ref)
+        reusable = prior and (prior.get('execution_basis') == basis or
+            not result['model'] and prior.get('status') == 'no_submitted_model')
+        missing_basis = prior and not prior.get('execution_basis') and not reusable
+        if reusable:
+            evaluation = deepcopy(prior)
+            evaluation['reused_from'] = prior_ref
+        elif missing_basis:
+            evaluation = {'status': 'terminal_recovery_unknown', 'mse': None, 'passed': False,
+                'evaluation_rows': 0, 'python_execution_seconds': 0., 'prior_terminal_ref': prior_ref,
+                'reason': 'saved_terminal_execution_basis_missing_no_automatic_retry'}
+        else:
+            evaluation = {"status": "no_submitted_model", "mse": None,
+                          "evaluation_rows": 0, "python_execution_seconds": 0.}
+        if result['model'] and not reusable and not missing_basis:
             evaluation = evaluate_terminal_model(result["workspace"], result["model"], rows,
                                                  timeout_seconds=limits.execution_seconds)
             predictions = evaluation.pop("predictions", None)
@@ -1226,31 +1493,37 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
                 evaluation['prediction_ref'] = {'file': str(prediction_path), 'json_path': []}
         evaluation["passed"] = (evaluation.get("returncode") == 0 and
             evaluation.get("mse", float("inf")) <= plan["evaluation"]["mse_threshold"])
+        historical = (_terminal_cost(prior) if prior else
+            {'rows': None, 'python_execution_seconds': None} if previous_study and result['model'] else
+            {'rows': 0, 'python_execution_seconds': 0.})
+        new_cost = {'rows': 0 if reusable or missing_basis else evaluation['evaluation_rows'],
+            'python_execution_seconds': 0. if reusable or missing_basis else evaluation['python_execution_seconds']}
+        evaluation.update(execution_basis=_terminal_basis(plan, case, trial, materials_ref),
+            new_execution_costs=new_cost,
+            python_execution_seconds=(historical['python_execution_seconds'] + new_cost['python_execution_seconds']
+                if historical['python_execution_seconds'] is not None else None),
+            cumulative_evaluation_rows=(historical['rows'] + new_cost['rows']
+                if historical['rows'] is not None else None))
+        if prior_ref:
+            evaluation['prior_terminal_ref'] = prior_ref
         write_json(host_workspace / "evaluation.json", evaluation)
-        usage = [event.get("usage", {}) for event in result["events"]
-                 if event.get("usage", {}).get("backend") == "codex_cli"]
         records.append({"case": case["id"], "kind": case["kind"], "arm": trial["arm"],
             "status": result["status"], "model": result["model"], "costs": result["costs"],
-            "fresh_confirmation_passed": (result.get("fresh_confirmation") or {}).get("passed", False),
+            "fresh_confirmation_passed": result['fresh_confirmation_passed'],
             "terminal": evaluation,
-            "revision_count": len(result.get("revision_proposals", [])),
-            "cached_input_tokens": sum(item.get("cached_input_tokens") or 0 for item in usage),
-            "calls_with_cache_hits": sum(bool(item.get("cached_input_tokens")) for item in usage),
+            "revision_count": result['revision_count'],
+            "cached_input_tokens": result['cached_input_tokens'],
+            "calls_with_cache_hits": result['calls_with_cache_hits'],
             "archive": str(Path(result["workspace"]) / "archive.json")})
         if organization:
             records[-1]['research_organization'] = deepcopy(result['research_organization'])
-        for field in ("historical_prefix_cost", "additional_cost", "prefix_origin",
-                      "prior_research_cost", "continuation_cost", "resume_origin",
-                      "recovered_paid_reply"):
+        for field in (*STUDY_ACCOUNT_FIELDS, "execution_timing"):
             if field in result:
                 records[-1][field] = deepcopy(result[field])
-    live_events = [event for trial in trials
-                   for event in trial["result"]["events"][trial["initial_event_count"]:]
-                   if event.get("usage", {}).get("backend") not in
-                       {"common_paid_prefix", "restored_paid_prefix", ORGANIZATION_ORIGIN}]
+    live_backends = [backend for trial in trials for backend in trial['result']['live_event_backends']]
     summary = {"study": plan["study"], "status": "completed", "trials": records,
-               "evidence_kind": 'finite_native_program_execution' if author else "real_external_model" if live_events and all(
-                   event.get("usage", {}).get("backend") == "codex_cli" for event in live_events)
+               "evidence_kind": 'finite_native_program_execution' if author else "real_external_model" if live_backends and all(
+                   backend == "codex_cli" for backend in live_backends)
                    else "scripted_interface_check",
                "source_count": len(plan["cases"]), "scope": plan["scope"]}
     if target_intervention:
@@ -1290,6 +1563,126 @@ def evaluate_terminal_model(workspace, model, rows, *, timeout_seconds):
     evaluation.update(python_execution_seconds=monotonic() - started,
                       evaluation_rows=len(rows))
     return evaluation
+
+
+def run_method_step_study(registration, output):
+    """Execute an authorized paid-split method question through ordinary Common.
+
+    This is the exposed development stage, before fresh successor laboratories
+    are constructed. It neither queries a world nor fits either paid baseline.
+    Every completed replay Program is exported for the common strong archive,
+    including alternatives that the paired study did not select.
+    """
+    from datetime import datetime, timezone
+    from hegel_machine.cognition.experiment_runtime import python_execution_deadline
+    from hegel_machine.cognition.language import Program
+    from hegel_machine.cognition.models import Observation
+    from hegel_machine.cognition.research_episodes import (
+        load_source_values, project_method_use_feedback, project_method_paid_step_evidence)
+    from hegel_machine.cognition.temporal_operator_agent import export_temporal_program
+    from scripts.prepare_pr3_source_successor import _value
+
+    reference = ({'file': str(Path(registration).resolve()), 'json_path': []}
+        if not isinstance(registration, dict) else None)
+    registered = _value(reference) if reference else deepcopy(registration)
+    if (registered.get('stage') != 'method_step_development'
+            or registered.get('execution_authorized') is not True
+            or not registered.get('approval_ref')
+            or registered.get('external_python_seconds') != 0
+            or registered.get('max_candidates') != 8
+            or registered.get('compute_budget', 0) <= 0
+            or registered.get('native_host_stop_seconds', 0) <= 0):
+        raise ValueError('method step study needs its explicit new-stage authorization and finite limits')
+    output = Path(output).resolve()
+    if output.exists():
+        raise ValueError('preserve the previous development study; do not automatically retry')
+    feedback_ref = registered['feedback_ref']
+    feedback = project_method_use_feedback(feedback_ref, ROOT)
+    evidence = project_method_paid_step_evidence(feedback_ref, ROOT)
+    if evidence['status'] != 'completed':
+        raise ValueError('the original paid split and exact saved seed Programs must be recoverable')
+    baseline = registered['baseline_method_ref']
+    controls = tuple(evidence['invocation_binding']['mapping'].values())
+    config = InquiryLLMConfig(observation_budget=0, compute_budget=registered['compute_budget'],
+        execution_seconds=registered['native_host_stop_seconds'], max_model_calls=0, token_budget=0)
+    agent = CommonArchiveInquiryAgent(None, output / 'development', arm='hegel', source_task=False,
+        config=config, knowledge={'theory_consolidation': deepcopy(registered['baseline_library_ref'])})
+    candidate = agent.theory_consolidation['candidates'][baseline['id']]
+    if ({'id': candidate['id'], 'version': candidate['version']} != baseline
+            or candidate['research_program_source_refs'] != evidence['invocation_binding']['source_refs']):
+        raise ValueError('development must start from the frozen exact baseline method body')
+    paid = load_source_values([evidence['paid_rows_ref']], ROOT)[0]['value']
+    agent.rows = [Observation(row['features'], row['target'], tuple(row.get('history', []))) for row in paid]
+    records_ref = evidence['split_rows']['training']['records_ref']
+    records = load_source_values([records_ref], ROOT)[0]['value']
+    agent.observations = deepcopy(records[:evidence['invocation_binding']['paid_cutoff']['records']])
+    agent._write_evidence()
+    parent_ref = feedback.get('parent_question_ref') or {'question_id': 'paid_method_parent', 'meaning_version': 1}
+    agent._open_question({'id': parent_ref['question_id'], 'meaning_version': parent_ref.get('meaning_version', 1),
+        'question': 'Retain the original public parent of the paid method return',
+        'parent_id': 'task', 'theory_target': deepcopy(feedback.get('theory_target', {}))})
+    binding = deepcopy(evidence['invocation_binding'])
+    binding.update(candidate_id=baseline['id'], candidate_version=baseline['version'])
+    question = agent._open_question({'id': 'paid_method_step_development', 'kind': 'method_use',
+        'question': 'Which completed change to the consumed research steps is supported on this paid split?',
+        'answer_type': 'research_action', 'parent_id': parent_ref['question_id'],
+        'parent_question_ref': deepcopy(parent_ref), 'queue': 'theory',
+        'mission': {'mission_id': 'paid_method_step_development', 'purpose': 'method_learning',
+            'allocation': {'compute': registered['compute_budget']}},
+        'use_sites': [{'kind': 'select_research_action', 'parent_id': parent_ref['question_id']}],
+        'theory_target': deepcopy(feedback.get('theory_target', {})),
+        'method_use_plan': {'candidate_id': baseline['id'], 'binding': binding,
+            'step_revision': {'feedback_ref': deepcopy(feedback_ref), 'max_candidates': 8,
+                'quote_ref': deepcopy(registered.get('paid_quote_ref'))}}})
+    runtime = sorted({str(path.relative_to(ROOT)) for path in (ROOT / 'src/hegel_machine').rglob('*.py')}
+        | {'scripts/run_anonymous_revision_inquiry.py', 'scripts/prepare_pr3_source_successor.py'})
+    for name in runtime:
+        destination = output / 'source_at_run' / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        copy2(ROOT / name, destination)
+    write_json(output / 'registration.json', {**registered, 'registration_ref': reference,
+        'runtime_snapshot': runtime, 'started_utc': datetime.now(timezone.utc).isoformat(),
+        'prior_costs_ref': deepcopy(registered.get('prior_costs_ref')),
+        'fresh_stage_counters': deepcopy(agent.costs), 'paid_rows_restored': len(paid)})
+    started = monotonic()
+    arguments = {'operator': 'research_route', 'research_question': {'id': question['id']},
+        'allocation': {'compute': registered['compute_budget']}}
+    with python_execution_deadline(registered['native_host_stop_seconds']):
+        result = agent._execute('run', arguments, None)
+    wall = monotonic() - started
+    write_json(output / 'route_result.json', result)
+    step = result.get('method_step_research', {})
+    exported, errors = [], []
+    for seed_index, seed in enumerate(step.get('seed_studies', [])):
+        for method in seed.get('methods', []):
+            if not method.get('execution_complete') or not method.get('program'):
+                continue
+            name = f"method_step_exports/seed_{seed_index:03d}_method_{method['index']:03d}.py"
+            try:
+                agent._save(name, export_temporal_program(Program.from_dict(method['program']),
+                    feature_names=controls))
+                exported.append({'model': str(agent.workspace / name), 'seed_index': seed_index,
+                    'method_index': method['index'], 'source_ref': {**step['study_ref'],
+                        'json_path': [*step['study_ref'].get('json_path', []), 'seed_studies', seed_index,
+                            'methods', seed['methods'].index(method)]},
+                    'reused_paid_baseline': method.get('reused', False)})
+            except (ValueError, KeyError) as error:
+                errors.append({'seed_index': seed_index, 'method_index': method['index'], 'error': str(error)})
+    agent._prepare_program_state()
+    summary = {'status': result['status'], 'data_role': 'exposed_development',
+        'route_result_ref': {'file': str(output / 'route_result.json'), 'json_path': []},
+        'study_ref': step.get('study_ref'), 'costs': deepcopy(agent.costs),
+        'native_host_wall_seconds': wall, 'external_python_execution_seconds': 0,
+        'new_world_observations': 0, 'independent_support': False,
+        'prior_costs_ref': deepcopy(registered.get('prior_costs_ref')),
+        'exported_candidates': exported, 'export_errors': errors,
+        'actual_candidate_ref': {'file': str(agent.workspace / 'shared/theory_library.json'),
+            'json_path': ['candidates', baseline['id']]},
+        'frozen_candidate': step.get('frozen_candidate'),
+        'actual_step_revision_ref': step.get('actual_step_revision_ref'),
+        'automatic_successor_execution': False}
+    write_json(output / 'summary.json', summary)
+    return summary
 
 
 def main():

@@ -19,6 +19,9 @@ from .checkpoint_storage import (
 )
 from .question_continuation import QUESTION_INTERFACE, step_question, pending_query_arguments
 from .question_routing import ROUTING_INTERFACE, route_research, continue_conditional_plan
+from .method_feedback import (
+    begin_method_feedback, finish_method_feedback, record_method_execution_error,
+)
 from .theory_consolidation import (
     CONSOLIDATION_INTERFACE, LIBRARY_PATH, consolidate_research, transfer_theory,
     INDEX_PATH, install_theory_library, install_theory_index, save_theory_index,
@@ -1413,6 +1416,10 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             acquired = [index for observation in result.get("observations", [])
                         for index in observation.get("row_indices", [observation["observation_index"]])]
             question["acquired_evidence"] = sorted(set(question.get("acquired_evidence", [])) | set(acquired))
+            reused = result.get('reused_record_indices', [])
+            if reused:
+                question['reused_record_indices'] = list(dict.fromkeys([
+                    *question.get('reused_record_indices', []), *reused]))
             # The inherited operator executor used append-only questions. A
             # continued question still owns its actual continuation feedback.
             for key in ("after_observation_results", "after_observation_error"):
@@ -1422,7 +1429,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             if revision is not None:
                 self.revisions[revision["index"]]["question_id"] = question["id"]
                 result["revision"] = deepcopy(self.revisions[revision["index"]])
-            if acquired:
+            if acquired or reused:
                 prepare_evidence_readout(self, question)
             # The canonical question owns every paid native research round.
             # Re-embedding that cumulative bank in each query feedback makes
@@ -1490,6 +1497,10 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             if action == "query":
                 arguments.setdefault("question", {key: question[key]
                     for key in ("id", "question", "parent_id", "depends_on")})
+        method_feedback = begin_method_feedback(self, laboratory)
+        self._method_use_profile = method_feedback['profile'] if method_feedback else None
+        self._active_method_use = None
+        self._method_execution_writes = []
         written = {}
         if "code" in arguments and (action == "evaluate" or (
                 action == "run" and arguments.get("operator") == "refit")):
@@ -1520,10 +1531,18 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             result = {'operator': 'theory_consolidation', **consolidate_research(self, arguments, laboratory, question)}
             self._prepare_program_state()
         elif action == 'run' and arguments.get('operator') == 'theory_transfer':
-            result = {'operator': 'theory_transfer', **transfer_theory(self, arguments, laboratory)}
+            try:
+                result = {'operator': 'theory_transfer', **transfer_theory(self, arguments, laboratory)}
+            except (ValueError, TypeError, KeyError, OSError) as error:
+                record_method_execution_error(self, method_feedback, error)
+                raise
             self._prepare_program_state()
         elif action == 'run' and arguments.get('operator') == 'research_route':
-            result = {'operator': 'research_route', **route_research(self, arguments, laboratory, question)}
+            try:
+                result = {'operator': 'research_route', **route_research(self, arguments, laboratory, question)}
+            except (ValueError, TypeError, KeyError, OSError) as error:
+                record_method_execution_error(self, method_feedback, error)
+                raise
             revision = result.get('research_track_question_ref', result.get('parent_revision_question_ref'))
             if revision is not None:
                 from .finite_native_author import export_revision_candidates
@@ -1659,6 +1678,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             conditional = continue_conditional_plan(self, parent, executed, result)
             if conditional is not None:
                 result['conditional_continuation'] = conditional
+        finish_method_feedback(self, method_feedback, action, arguments, result)
         return result
 
     def _manifest_error(self, manifest, model):

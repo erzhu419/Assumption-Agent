@@ -396,7 +396,15 @@ class InquiryLLMAgent:
             if continuation_origin is not None:
                 question_record.update(after_observation=deepcopy(continuation),
                                        continuation_origin=continuation_origin)
-        requested = sum(laboratory.action_cost(action) for action in actions)
+        reused = [None] * len(actions)
+        finite = self.knowledge.get('finite_native_author')
+        if finite and revision is None:
+            from .finite_native_author import paid_experiment_record_indices
+            reused = paid_experiment_record_indices(actions, self.observations,
+                laboratory.public_spec(), question_record, finite,
+                prediction_rows=getattr(laboratory, 'prediction_rows', None))
+        requested = sum(laboratory.action_cost(action) for action, old in zip(actions, reused)
+                        if old is None)
         if requested > self.config.observation_budget - self.costs["observation_cost"]:
             return {"error": "observation budget exhausted", "requested": requested,
                     "executed_path": executed, "inherited_program": executed in self.inherited_files,
@@ -414,10 +422,21 @@ class InquiryLLMAgent:
                 self._prepare_program_state()
                 return {'error': revision_record['error'], 'revision': deepcopy(revision_record),
                         'executed_path': executed, 'question': deepcopy(question_record), **program_feedback}
-        acquired, record_indices = [], []
+        acquired, record_indices, reused_indices = [], [], []
+        first_record = len(self.observations)
+        record_index_map = {}
         # Record each successful acquisition immediately, even if a later action
         # in the same requested batch is invalid.
-        for action in actions:
+        for position, (action, old) in enumerate(zip(actions, reused)):
+            if old is not None:
+                record_indices.append(old)
+                reused_indices.append(old)
+                record_index_map[str(first_record + position)] = old
+                if question_record is not None:
+                    question_record['evidence'] = sorted(set(question_record['evidence'])
+                        | set(self.observations[old]['row_indices']))
+                    question_record['status'] = 'observed'
+                continue
             try:
                 record = laboratory.execute(action)
             except (ValueError, KeyError, TypeError) as error:
@@ -426,12 +445,18 @@ class InquiryLLMAgent:
                         "knowledge_sources": sources, "record_indices": record_indices,
                         "after_observation": continuation, "continuation_origin": continuation_origin,
                         "question": deepcopy(question_record), **program_feedback}
+                if reused_indices:
+                    feedback.update(reused_record_indices=reused_indices,
+                                    record_index_map=record_index_map)
                 if revision_record is not None:
                     feedback['revision'] = complete_revision(self, revision_record, acquired, record_indices,
                         laboratory, question_record, error=str(error))
                     feedback['question'] = deepcopy(question_record)
                 return feedback
             record_indices.append(len(self.observations))
+            record_index_map[str(first_record + position)] = record_indices[-1]
+            if finite and question_record is not None and question_record.get('context_ref') is not None:
+                record['experiment_context_ref'] = deepcopy(question_record['context_ref'])
             self.observations.append(record)
             acquired.append(record)
             self.costs["observation_cost"] += laboratory.action_cost(action)
@@ -447,6 +472,10 @@ class InquiryLLMAgent:
                 "record_indices": record_indices, "after_observation": continuation,
                 "continuation_origin": continuation_origin,
                 "knowledge_sources": sources, **program_feedback}
+        if reused_indices:
+            feedback.update(reused_record_indices=reused_indices, record_index_map=record_index_map,
+                reused_observation_refs=[{'file': 'laboratory_observations.json', 'json_path': [index]}
+                                         for index in reused_indices])
         if revision_record is not None:
             feedback['revision'] = complete_revision(self, revision_record, acquired, record_indices,
                 laboratory, question_record)
@@ -458,22 +487,44 @@ class InquiryLLMAgent:
         unchanged = inherited and (self.workspace / path).read_text() == self.knowledge["files"][path]
         return {"inherited_program": inherited, "inherited_source_unchanged": bool(unchanged)}
 
-    def _score(self, model):
+    def _score_compute_requirement(self, model):
+        return len(self.rows)
+
+    def _score(self, model, *, retained_prediction_state=None):
         if not self.rows:
             raise ValueError("buy response observations before model evaluation")
-        if self.costs["compute_cost"] + len(self.rows) > self.config.compute_budget:
+        prefix = retained_prediction_state or {}
+        scored_rows = self.rows[len(prefix.get('predictions', [])):]
+        if self.costs["compute_cost"] + len(scored_rows) > self.config.compute_budget:
             raise ValueError("candidate-row scoring budget exhausted")
         remaining = self.config.execution_seconds - self.costs["python_execution_seconds"]
         if remaining <= 0:
             raise ValueError("Python execution time budget exhausted")
-        self.costs["compute_cost"] += len(self.rows)
+        self.costs["compute_cost"] += len(scored_rows)
         started = monotonic()
-        result = evaluate_python_model(self.workspace, model, self.rows, timeout_seconds=remaining,
-            research_compute_budget=max(0, self.config.compute_budget - self.costs['compute_cost']))
+        captured = {} if getattr(self, '_paid_python_comparison', None) is not None else None
+        result = evaluate_python_model(self.workspace, model, scored_rows, timeout_seconds=remaining,
+            research_compute_budget=max(0, self.config.compute_budget - self.costs['compute_cost']),
+            **({'prediction_state': captured} if captured is not None else {}))
         self.costs['compute_cost'] += result.get('research_prediction_count', 0)
         self.costs["python_execution_seconds"] += monotonic() - started
         predictions = result.pop("predictions", None)
         if predictions is not None:
+            if captured and captured.get('representations') is not None:
+                result['_closed_prediction_state'] = {'row_count': len(self.rows),
+                    'predictions': captured['predictions'], 'representations': captured['representations'],
+                    **({'prefix_ref': prefix['source_ref']} if prefix else {})}
+            if prefix:
+                from .evaluation import point_loss
+                from .representation_diagnostics import representation_ambiguity
+
+                predictions = [*prefix['predictions'], *predictions]
+                representations = [*prefix['representations'], *captured['representations']]
+                result.update(mse=sum((prediction - row.target) ** 2
+                    for prediction, row in zip(predictions, self.rows)) / len(self.rows),
+                    loss=sum(point_loss(prediction, row.target, result['risk_quantile'])
+                    for prediction, row in zip(predictions, self.rows)) / len(self.rows),
+                    representation_diagnostic=representation_ambiguity(representations, self.rows))
             result.update(_paid_prediction_scope(self.workspace, model, self.rows, predictions))
             result['paid_residuals'] = _prediction_residuals(
                 self.rows, predictions, model, evaluation_scope='paid_response_evaluation')
@@ -535,7 +586,8 @@ class InquiryLLMAgent:
                 record_decision('retained_rescored', incumbent)
                 return
             if retained["evaluated_rows"] != len(self.rows):
-                if (self.config.compute_budget - self.costs["compute_cost"] < len(self.rows)
+                if (self.config.compute_budget - self.costs["compute_cost"]
+                        < self._score_compute_requirement(retained_path)
                         or self.config.execution_seconds <= self.costs["python_execution_seconds"]):
                     result["retention_deferred"] = "insufficient budget to compare the saved candidate on current paid rows"
                     record_decision('deferred', incumbent)
