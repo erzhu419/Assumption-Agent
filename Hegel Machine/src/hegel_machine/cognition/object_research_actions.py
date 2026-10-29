@@ -26,6 +26,7 @@ class ObjectResearchActions:
         self.view_rows, self.transitions_for = view_rows, transitions_for
         self.budget, self.actions, self.transfer, self.graph = budget, actions, transfer, graph
         self.remaining, self.length = remaining, min(length, laboratory.spec.max_probe_length)
+        self.confirmation_length = self.length
         self.views = [tuple(view) for view in laboratory.measurement_views]
         self.rates = {channel.name: channel.cost_per_row for channel in laboratory.channels}
         self.learn = agent.config.use_memory and agent.config.learn_research_policy
@@ -63,16 +64,17 @@ class ObjectResearchActions:
     def _acquire(self, channels, purpose, *, probe=None, rows_count=None, reserve_channels=()):
         count = probe.cost if probe is not None else self.length if rows_count is None else rows_count
         remaining = self.remaining()
-        if (remaining["observation_remaining"] < count + self.length or
+        if (remaining["observation_remaining"] < count + self.confirmation_length or
                 remaining["measurement_remaining"] < count * self._rate(channels)
-                + self.length * self._rate(reserve_channels)):
+                + self.confirmation_length * self._rate(reserve_channels)):
             return None
-        return self.acquire(channels, purpose, probe=probe, rows_count=rows_count)
+        return self.acquire(channels, purpose, probe=probe,
+                            rows_count=count if probe is None else rows_count)
 
     def _relation(self, channels, calls):
         training, validation = self._data(channels)
         paid = [*training, *(row for row in validation if row not in training)]
-        available = max(0, self.budget.remaining - 2 * self.length)
+        available = max(0, self.budget.remaining - 2 * self.confirmation_length)
         local = SearchBudget(min(20000, available, max(4 * len(paid), available // 3)))
         fitting = SearchBudget(local.remaining * 3 // 4)
         claims = propose_relation_revisions(self.agent._spec(self.lab, channels), paid, fitting, calls,
@@ -133,7 +135,7 @@ class ObjectResearchActions:
             return None
         cover = self._cover({view, tuple(parent_channels)})
         comparison_rows = sum(len(batch) for batch in self.paired_for(cover)) if parent else 0
-        available = max(0, self.budget.remaining - 2 * self.length - 2 * comparison_rows)
+        available = max(0, self.budget.remaining - 2 * self.confirmation_length - 2 * comparison_rows)
         entry_cost = len(training) * (len(self.agent._spec(self.lab, view).feature_names) + 2) + len(validation)
         local = SearchBudget(min(90000, available, max(entry_cost, available // remaining_views)))
         response_parent = parent if tuple(parent_channels) == view else None
@@ -231,24 +233,24 @@ class ObjectResearchActions:
             context += ":" + self.field_status + (":object_schema" if measured_views else ":no_schema")
             self.policy.set_condition(context)
             options = []
-            confirmation_cost = self.length * self._rate(channels)
+            confirmation_cost = self.confirmation_length * self._rate(channels)
             if relational and len(paid) >= 6:
-                options.append(ActionOption("revise_object_relation", self.length,
-                    4 * len(paid) + 2 * self.length, measurement_cost=confirmation_cost))
+                options.append(ActionOption("revise_object_relation", self.confirmation_length,
+                    4 * len(paid) + 2 * self.confirmation_length, measurement_cost=confirmation_cost))
             if (measured_contract is not None and failed_rows and self.agent._learn_instruments
                     and self.agent._revise_inputs):
-                options.append(ActionOption("remeasure_object_inputs", len(failed_rows) + self.length,
-                    3 * len(failed_rows) + 2 * self.length,
+                options.append(ActionOption("remeasure_object_inputs", len(failed_rows) + self.confirmation_length,
+                    3 * len(failed_rows) + 2 * self.confirmation_length,
                     measurement_cost=len(failed_rows) * self._rate(measured_views[-1])))
             available_views = []
             for view in measured_views:
                 missing = int(not self.paired_for(view))
                 row_count = sum(len(batch) for batch in self.paired_for(view)) or self.length
-                compute = row_count * (len(self.agent._spec(self.lab, view).feature_names) + 2) + 3 * self.length
+                compute = row_count * (len(self.agent._spec(self.lab, view).feature_names) + 2) + self.length + 2 * self.confirmation_length
                 confirm_view = self._cover({view, channels})
-                quote = ActionOption("research_object_structure", (missing + 1) * self.length,
+                quote = ActionOption("research_object_structure", missing * self.length + self.confirmation_length,
                     compute, payload=(view, {}), measurement_cost=missing * self.length * self._rate(view)
-                    + self.length * self._rate(confirm_view))
+                    + self.confirmation_length * self._rate(confirm_view))
                 if all(getattr(quote, name + "_cost") <= self.remaining()[name + "_remaining"]
                        for name in ("observation", "measurement", "compute")):
                     available_views.append(quote)

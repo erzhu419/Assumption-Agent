@@ -20,12 +20,24 @@ from .code_agent import (
     python_model_context, python_model_context_matches, closed_temporal_prediction_contract,
 )
 from .checkpoint_storage import write_text_incrementally, write_json_checkpoint
-from .experiment_runtime import ExecutionTiming, PythonExecutionDeadline, python_execution_deadline
+from .experiment_runtime import (
+    ActivityExecutionDeadline, ExecutionTiming, PythonExecutionDeadline, python_execution_deadline,
+)
 from .history_revision import revise_history
 from .knowledge_evolution import bind_answers
 from .language import Program
 from .online_inquiry_llm import InquiryLLMAgent
 from .paid_score_history import retain_comparison_history
+
+
+def paid_python_evaluation_contract():
+    """The existing score contract, shared with paid-report recovery."""
+    return {"loss_kind": "mse", "risk_quantile": .5,
+        "training_view": "model_observations.json_or_observations.json",
+        "rows": "all_current_paid_rows", "require_fit": False,
+        "python_executable": sys.executable, "python_version": sys.version,
+        "runner_source": _MODEL_RUNNER,
+        "evaluator_source": inspect.getsource(evaluate_python_model)}
 from .program_experiment_methods import ProgramExperimentMethods
 from .representation_diagnostics import representation_ambiguity
 from .temporal_instrument_research import (
@@ -43,7 +55,8 @@ def _index_literal_assessment(index, reference, assessment):
         source = (Path(key[0]) / key[1]).read_text(encoding='utf-8')
         prefix = '# Frozen paid-data predictor; controls and recorded history only.\n_PROGRAM = '
         index['sources'][key] = (source if source.startswith(prefix)
-                                 and source.endswith('\n' + _PROGRAM_RUNNER) else None)
+                                 and source.endswith(('\n' + _PROGRAM_RUNNER,
+                                                      '\n' + _STATE_PROGRAM_RUNNER)) else None)
     source = index['sources'][key]
     if source is not None:
         index['assessments'].setdefault(source, []).append((reference, assessment))
@@ -402,6 +415,22 @@ def predict(row):
 '''
 
 
+_STATE_PROGRAM_RUNNER = _PROGRAM_RUNNER + '''
+# Replay a learned transition from reset using only its own output history.
+_scalar_eval = _eval
+
+def _eval(node, features, history):
+    if node[0] != "state_replay":
+        return _scalar_eval(node, features, history)
+    predicted_history = []
+    for point in (*history, features):
+        controls = {name: value for name, value in point.items() if name != "__target__"}
+        value = _eval(node[4][0], controls, predicted_history)
+        predicted_history.append({**controls, "__target__": value})
+    return value
+'''
+
+
 _PROGRAM_REPRESENTATION_RUNNER = '''
 # The existing literal predictor is decomposed at its actual temporal inputs.
 # All downstream arithmetic still runs through the original scalar evaluator.
@@ -410,7 +439,7 @@ _representation_indices = {}
 
 def _representation_program(node):
     op, value, name, lag, children = node
-    if op in {"feature", "lag", "available", "accumulate", "event_delta", "window_sum"}:
+    if op in {"feature", "lag", "available", "accumulate", "event_delta", "window_sum", "state_replay"}:
         if node not in _representation_indices:
             _representation_indices[node] = len(_representation_terms)
             _representation_terms.append(node)
@@ -426,7 +455,7 @@ def represent(row):
 
     def capture(node):
         op, value, name, lag, children = node
-        if op in {"feature", "lag", "available", "accumulate", "event_delta", "window_sum"}:
+        if op in {"feature", "lag", "available", "accumulate", "event_delta", "window_sum", "state_replay"}:
             index = _representation_indices[node]
             if not coordinates[index][0]:
                 coordinates[index] = [1, float(_eval(node, features, history))]
@@ -482,20 +511,29 @@ def export_temporal_program(program, *, feature_names=("u",)):
     supply its feature names; the original interface remains restricted to u.
     """
     supported = {"const", "feature", "lag", "available", "if", "object_sum",
-                 "accumulate", "event_delta", "window_sum", "abs", "not",
+                 "accumulate", "event_delta", "window_sum", "state_replay", "abs", "not",
                  "add", "sub", "mul", "min", "max", "ge", "lt", "and", "or"}
 
-    def encode(node):
+    has_state_replay = False
+
+    def encode(node, replaying=False):
+        nonlocal has_state_replay
         if node.op not in supported:
             raise ValueError(f"unsupported temporal export operator: {node.op}")
-        if node.op in {"feature", "lag"} and node.name not in feature_names:
+        if node.op == "state_replay":
+            has_state_replay = True
+        predicted_state = replaying and node.op == "lag" and node.name == "__target__"
+        if (node.op in {"feature", "lag"} and not predicted_state
+                and (node.name == "__target__" or node.name not in feature_names)):
             raise ValueError("temporal predictors can read only control "
                              + ", ".join(feature_names))
         return (node.op, node.value, node.name, node.lag,
-                tuple(encode(child) for child in node.children))
+                tuple(encode(child, replaying or node.op == "state_replay") for child in node.children))
 
+    encoded = encode(program.expanded())
+    runner = _STATE_PROGRAM_RUNNER if has_state_replay else _PROGRAM_RUNNER
     return "# Frozen paid-data predictor; controls and recorded history only.\n_PROGRAM = " + repr(
-        encode(program.expanded())) + "\n" + _PROGRAM_RUNNER
+        encoded) + "\n" + runner
 
 
 def _hypotheses(model):
@@ -980,7 +1018,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 for status in ("reused", "newly_scored")})
         return result
 
-    def _paid_python_score_scope(self, spec):
+    def _paid_python_score_scope(self, spec, *, assessment_refs=None):
         from .research_episodes import SEMANTIC_FIELDS
 
         directory = self.workspace / "_paid_python_scores/_evaluated_model"
@@ -1016,12 +1054,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
                 ("id", "meaning_version", *SEMANTIC_FIELDS) if key in question}
                 if question is not None else None),
             "revisions": deepcopy(self.revisions),
-            "evaluation_contract": {"loss_kind": "mse", "risk_quantile": .5,
-                "training_view": "model_observations.json_or_observations.json",
-                "rows": "all_current_paid_rows", "require_fit": False,
-                "python_executable": sys.executable, "python_version": sys.version,
-                "runner_source": _MODEL_RUNNER,
-                "evaluator_source": inspect.getsource(evaluate_python_model)},
+            "evaluation_contract": paid_python_evaluation_contract(),
         }
         # The evaluator transports rows as JSON too; histories restored from a
         # tuple or a JSON list describe the same ordered execution input.
@@ -1041,6 +1074,8 @@ class TemporalOperatorAgent(InquiryLLMAgent):
         scopes[scope_ref["file"]] = basis
         assessments, contexts = {}, {}
         for reference in index["assessments"]:
+            if assessment_refs is not None and reference not in assessment_refs:
+                continue
             assessment = json.loads(Path(reference["file"]).read_text())
             assessments.setdefault(assessment["model"], []).append((reference, assessment))
         for context in index["contexts"]:
@@ -1601,7 +1636,7 @@ class TemporalOperatorAgent(InquiryLLMAgent):
             'external_execution_meter': 'existing_external_python_wall_seconds_when_available'}
         try:
             result = self._execute_operator(arguments, laboratory)
-        except (ValueError, TypeError, KeyError, OSError) as error:
+        except (ValueError, TypeError, KeyError, OSError, ActivityExecutionDeadline) as error:
             result = {"operator": arguments["operator"], "error": str(error),
                       "compute_cost": self.costs["compute_cost"] - before_compute,
                       "python_execution_seconds": self.costs["python_execution_seconds"] - before_seconds,

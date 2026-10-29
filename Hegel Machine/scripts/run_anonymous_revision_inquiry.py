@@ -338,12 +338,101 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
                 state['consolidation_basis'] = basis
         return opened
 
+    def _begin_registered_method_unit(self, path, origin_ref, *, research_compute_reserve=0):
+        """Bound automatic library work around one actual procedure invocation."""
+        previous = self._organization_state.get('registered_method_unit')
+        if (previous is not None and previous['path'] == path
+                and previous['origin_ref'] == origin_ref
+                and previous['status'] == 'interrupted'):
+            previous['status'] = 'running'
+            return previous
+        unit = {'path': path, 'origin_ref': deepcopy(origin_ref), 'status': 'running',
+            'phase': 'public_preparation', 'preparation': {'status': 'pending'},
+            'deferred_public_work': False, 'dependency_updates': [],
+            'research_compute_reserved': research_compute_reserve}
+        self._organization_state['registered_method_unit'] = unit
+        return unit
+
+    def _registered_unit_scope(self, active):
+        target = active.get('theory_target') or {}
+        return {'question_id': active['id'], 'meaning_version': active.get('meaning_version', 1),
+            'rows': len(self.rows), 'records': len(self.observations),
+            'parent_theory_id': target.get('parent_theory_id'),
+            'context_ref': deepcopy(target.get('context_ref', active.get('context_ref'))),
+            'role_signature': deepcopy(target.get('role_signature')),
+            'output_unit': target.get('output_unit')}
+
+    @staticmethod
+    def _registered_unit_contract(scope):
+        return {key: scope.get(key) for key in
+                ('question_id', 'meaning_version', 'context_ref', 'role_signature', 'output_unit',
+                 'parent_theory_id')}
+
+    def _update_registered_unit_comparison(self, unit):
+        """Address a complete current strong-pool comparison, never invent one."""
+        from hegel_machine.cognition.finite_native_author import _comparison_models
+        contract = self.knowledge.get('finite_native_author') or {}
+        native = [entry for question in self.questions
+                  for entry in question.get('native_condition_research', [])]
+        expected = _comparison_models(contract.get('predictor_paths', []), self.candidate_paths, native)
+        unit['preparation']['completion_valid_for_current_scope'] = False
+        if not expected:
+            return
+        records = [(entry.get('feedback') or {}, 'research_state.json', ['method_results', index, 'feedback'])
+                   for index, entry in enumerate(self.method_results)]
+        records.extend((entry.get('feedback') or {}, 'training.json', ['events', index, 'feedback'])
+                       for index, entry in enumerate(self.events))
+        records.extend((entry, 'research_state.json', ['operator_results', index])
+                       for index, entry in enumerate(self.operator_results))
+        for result, file, location in reversed(records):
+            if (result.get('operator') != 'research_choice'
+                    or result.get('error') or result.get('truncated')
+                    or result.get('paid_rows') != len(self.rows)):
+                continue
+            if result.get('research_question_id') is None:
+                from hegel_machine.cognition.paid_score_history import paid_comparison_scope_owner
+                question = next((item for item in self.questions
+                    if item['id'] == unit['current_scope']['question_id']), None)
+                public = getattr(self, '_method_public_spec', None)
+                if question is None or public is None:
+                    continue
+                owner = paid_comparison_scope_owner(result, question=question,
+                    rows=self.rows, public_spec=public, workspace=self.workspace)
+                if owner is None:
+                    continue
+                result = {**result, **owner}
+            if (result.get('research_question_id') != unit['current_scope']['question_id']
+                    or result.get('question_meaning_version', 1) != unit['current_scope']['meaning_version']):
+                continue
+            evaluations = result.get('evaluations', [])
+            paths = [entry.get('path') for entry in evaluations]
+            if (result.get('models_requested') == result.get('models_completed') == len(paths)
+                    and set(expected).issubset(paths)
+                    and not any(entry.get('truncated') for entry in evaluations)):
+                unit['preparation']['complete_comparison_ref'] = {
+                    'file': file, 'json_path': location}
+                unit['preparation']['compared_rows'] = len(self.rows)
+                unit['preparation']['compared_pool_models'] = len(paths)
+                unit['preparation']['completion_valid_for_current_scope'] = True
+                if unit['phase'] == 'awaiting_complete_comparison':
+                    unit['phase'] = 'choice_ready'
+                return
+
+    def _end_registered_method_unit(self, unit, *, interrupted):
+        unit['status'] = 'interrupted' if interrupted else 'research_returned'
+        unit['deferred_public_work'] = True
+
     def _before_model_turn(self, laboratory):
         opened = super()._before_model_turn(laboratory)
         if self.organization_group == 'archive' or self.model is not None:
             return opened
-        opened = self._consolidate_registered_source(laboratory) or opened
         state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is not None and laboratory is not None:
+            self._method_public_spec = laboratory.public_spec()
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
         active = next((question for question in self.questions
                        if question['id'] == self._active_question_id), None)
         origin = (active or {}).get('origin')
@@ -352,6 +441,34 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
             active = next(question for question in self.questions if question['id'] == 'task')
         if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
             self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
         arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
             'library_path': state['automatic_library_path'],
             'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
@@ -366,27 +483,30 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
 
         reserve = ordinary_completion_reserve(self, active)
         original_config = self.config
-        if reserve is not None:
+        if reserve is not None or unit is not None:
             start = self.costs['compute_cost']
-            self.config = replace(original_config, compute_budget=max(
-                start, original_config.compute_budget - reserve['compute_cost']))
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
             available = max(0, self.config.compute_budget - start)
             arguments['allocation'] = {
                 **arguments.get('allocation', {}),
                 'compute': min(arguments.get('allocation', {}).get('compute', available), available),
                 'nominal_compute_budget': original_config.compute_budget,
-                'comparison_rows': reserve['paid_rows']}
+                'comparison_rows': reserve['paid_rows'] if reserve else len(self.rows)}
         try:
             opened = self._automatic_work(arguments, laboratory, 'routing') or opened
         finally:
             if reserve is not None:
                 reserve['new_candidate_comparison_compute'] = (
-                    max(start, original_config.compute_budget - reserve['compute_cost'])
-                    - self.config.compute_budget)
+                    route_ceiling - self.config.compute_budget)
                 reserve['route_compute_cost'] = self.costs['compute_cost'] - start
-                self.config = original_config
                 active['ordinary_completion_reserve'] = reserve
-                self._prepare_program_state()
+            self.config = original_config
 
         routing = state.get('routing')
         track = (self.events[routing['event_index']]['feedback'].get('research_track_question_ref')
@@ -394,8 +514,20 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
         export_owner = (_question_versions(self)[track['question_id'], track['meaning_version']][0]
                         if track is not None else active)
         exported = export_revision_candidates(self, export_owner)
-        if exported['changed']:
-            self._prepare_program_state()
+        if unit is not None:
+            routing = state.get('routing')
+            unit['preparation'] = {'status': 'bounded_public_visit_returned',
+                'routing_ref': ({'file': 'training.json',
+                    'json_path': ['events', routing['event_index']]} if routing else None),
+                'source_scope': deepcopy(scope), 'new_exports': exported['new_exports'],
+                'whole_library_search_completed': False,
+                'public_compute_ceiling': route_ceiling}
+            unit['current_scope'] = deepcopy(self._registered_unit_scope(active))
+            unit['phase'] = 'awaiting_complete_comparison'
+            self._update_registered_unit_comparison(unit)
+        # Both ordinary consumers (_request and a program _query) publish the
+        # current state immediately before reading it. Publishing here as well
+        # traverses the same retained histories without any intervening reader.
         return opened or exported['new_exports'] > 0
 
     def _research_candidate_parent(self, question, target):
@@ -620,6 +752,11 @@ class RegisteredOrganizationAgent(CommonArchiveInquiryAgent):
 
     def _after_model_turn(self, laboratory):
         super()._after_model_turn(laboratory)
+        unit = self._organization_state.get('registered_method_unit')
+        if unit is not None and unit['status'] == 'running':
+            self._update_registered_unit_comparison(unit)
+            unit['deferred_public_work'] = True
+            return
         self._consolidate_registered_source(laboratory)
 
     def _program_state(self):
@@ -815,7 +952,8 @@ def protocol(*, kinds=("memoryless", "delay", "hysteresis"), cases=1,
         plan['runtime_snapshot'] = sorted({str(path.relative_to(ROOT))
             for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
             {'scripts/run_anonymous_revision_inquiry.py', 'scripts/run_online_inquiry_llm.py',
-             'scripts/run_online_inquiry_study.py'})
+             'scripts/run_online_inquiry_study.py', 'scripts/prepare_pr3_source_successor.py',
+             'scripts/run_method_action_pairing.py'})
         plan['runtime_entry'] = str(ROOT / 'scripts/run_anonymous_revision_inquiry.py')
         plan['author_source_ref'] = {'file': 'initial_archive.json',
                                      'json_path': ['files', author['path']]}
@@ -1259,7 +1397,8 @@ def _run_study(plan, output, *, provider_factory=None, knowledge=None, prepare_p
         plan['runtime_snapshot'] = sorted({str(path.relative_to(ROOT))
             for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
             {'scripts/run_anonymous_revision_inquiry.py', 'scripts/run_online_inquiry_llm.py',
-             'scripts/run_online_inquiry_study.py'} | set(plan.get('runtime_snapshot', [])))
+             'scripts/run_online_inquiry_study.py', 'scripts/prepare_pr3_source_successor.py',
+             'scripts/run_method_action_pairing.py'} | set(plan.get('runtime_snapshot', [])))
         plan['runtime_entry'] = str(ROOT / 'scripts/run_anonymous_revision_inquiry.py')
         plan['author_source_ref'] = {'file': 'initial_archive.json',
                                      'json_path': ['files', author['path']]}
@@ -1574,7 +1713,7 @@ def run_method_step_study(registration, output):
     including alternatives that the paired study did not select.
     """
     from datetime import datetime, timezone
-    from hegel_machine.cognition.experiment_runtime import python_execution_deadline
+    from hegel_machine.cognition.experiment_runtime import ActivityExecutionDeadline, python_execution_deadline
     from hegel_machine.cognition.language import Program
     from hegel_machine.cognition.models import Observation
     from hegel_machine.cognition.research_episodes import (
@@ -1635,7 +1774,9 @@ def run_method_step_study(registration, output):
             'step_revision': {'feedback_ref': deepcopy(feedback_ref), 'max_candidates': 8,
                 'quote_ref': deepcopy(registered.get('paid_quote_ref'))}}})
     runtime = sorted({str(path.relative_to(ROOT)) for path in (ROOT / 'src/hegel_machine').rglob('*.py')}
-        | {'scripts/run_anonymous_revision_inquiry.py', 'scripts/prepare_pr3_source_successor.py'})
+        | {'scripts/run_anonymous_revision_inquiry.py', 'scripts/prepare_pr3_source_successor.py',
+           'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py',
+           'scripts/run_method_action_pairing.py'})
     for name in runtime:
         destination = output / 'source_at_run' / name
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1647,8 +1788,11 @@ def run_method_step_study(registration, output):
     started = monotonic()
     arguments = {'operator': 'research_route', 'research_question': {'id': question['id']},
         'allocation': {'compute': registered['compute_budget']}}
-    with python_execution_deadline(registered['native_host_stop_seconds']):
-        result = agent._execute('run', arguments, None)
+    try:
+        with python_execution_deadline(registered['native_host_stop_seconds'], activity=True):
+            result = agent._execute('run', arguments, None)
+    except ActivityExecutionDeadline as error:
+        result = {'status': 'time_exhausted', 'execution_error': f'{type(error).__name__}: {error}'}
     wall = monotonic() - started
     write_json(output / 'route_result.json', result)
     step = result.get('method_step_research', {})

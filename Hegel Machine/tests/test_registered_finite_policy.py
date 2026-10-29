@@ -13,7 +13,7 @@ from test_inquiry_revision import action
 from test_question_routing import future_question, probe, theory
 
 
-def registered_scene(tmp_path):
+def registered_scene(tmp_path, *, retained_program=None):
     library = tmp_path / 'fixed_library.json'
     library.write_text('{"candidates": {}}')
     agent = RegisteredOrganizationAgent(None, tmp_path / 'work', arm='fixed_pr2', source_task=False,
@@ -50,7 +50,7 @@ def registered_scene(tmp_path):
     agent.knowledge['finite_native_author'] = contract
     initial = agent._execute('run', {'operator': 'native_condition_research',
         'research_question': current, 'programs': [Program('const', value=5.).to_dict(),
-            Program('const', value=0.).to_dict()],
+            (Program('const', value=0.) if retained_program is None else retained_program).to_dict()],
         'max_compute': contract['max_compute'], 'max_candidates': contract['max_candidates']}, lab)
     assert 'error' not in initial
     assert initial['native_condition_research']['fit_record_indices'] == [0]
@@ -63,16 +63,22 @@ def run_formal_steps(agent, lab, steps):
 
 
 def test_registered_hooks_refit_new_pending_query_evidence_before_any_second_purchase(tmp_path):
-    agent, lab, current = registered_scene(tmp_path)
+    agent, lab, current = registered_scene(tmp_path, retained_program=Program('mul', children=(
+        Program('feature', name='u'), Program('const', value=0.))))
     owner = next(q for q in agent.questions if q['id'] == current['id'])
     original = deepcopy(owner['native_condition_research'][0])
     compared = run_formal_steps(agent, lab, 1)
     assert compared['steps'][0]['proposal']['arguments']['operator'] == 'research_choice'
     assert not agent.operator_results[-1].get('next_action')
     before = deepcopy(agent.costs)
-    result = run_formal_steps(agent, lab, 2)
-    first, second = result['steps']
+    result = run_formal_steps(agent, lab, 4)
+    first, comparison, refit, second = result['steps']
     assert first['proposal']['arguments'] == {'pending_question': 'task'}
+    assert comparison['proposal']['arguments']['operator'] == 'research_choice'
+    assert comparison['feedback']['paid_rows'] == 2
+    assert comparison['feedback']['models_completed'] == comparison['feedback']['models_requested']
+    assert refit['proposal']['arguments']['operator'] == 'refit'
+    assert refit['feedback']['status'] == 'refit_unavailable'
     assert second['proposal'].get('arguments', {}).get('operator') == 'native_condition_research', {
         'proposals': [step['proposal'] for step in result['steps']],
         'paid_rows': lab.paid, 'native_rounds': len(owner['native_condition_research']),

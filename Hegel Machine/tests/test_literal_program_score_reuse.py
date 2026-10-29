@@ -1,4 +1,4 @@
-"""Closed literal exports retain scores when only unrelated siblings are added.
+"""Closed literal exports retain scores when unconsumed workspace material changes.
 
 The scoring worker is a stub: these checks exercise cache inputs and debits,
 not model prediction, fitting, or scientific evidence.
@@ -56,16 +56,12 @@ def test_nineteen_sibling_exports_reuse_the_existing_97_row_score(tmp_path, monk
     assert repeated['evaluations'][0]['paid_score_reuse']['additional_scoring_compute'] == 0
 
 
-@pytest.mark.parametrize('change', ['selected_source', 'params', 'fit_view', 'bindings', 'research_inputs'])
+@pytest.mark.parametrize('change', ['selected_source', 'bindings', 'research_inputs'])
 def test_literal_export_execution_inputs_still_invalidate_the_score(tmp_path, monkeypatch, change):
     agent, lab, calls = scene(tmp_path, monkeypatch)
     directory = agent.workspace / 'frozen/_evaluated_model'
     if change == 'selected_source':
         (agent.workspace / MODEL).write_text(export_temporal_program(Program('const', value=2.)))
-    elif change == 'params':
-        (directory / 'params.json').write_text('{"unused_fixture_parameter":1}')
-    elif change == 'fit_view':
-        (directory / 'model_observations.json').write_text('[{"features":{"u":1},"target":3}]')
     elif change == 'bindings':
         (directory / 'model_bindings.json').write_text(json.dumps({
             'candidate_0000_v0001.py': {'child': 'another.py'}}))
@@ -76,6 +72,34 @@ def test_literal_export_execution_inputs_still_invalidate_the_score(tmp_path, mo
     assert repeated['new_scored_count'] == 1 and repeated['reused_score_count'] == 0
     assert len(calls) == 2 and agent.costs['compute_cost'] == 194
     assert repeated['evaluations'][0]['paid_score_reuse']['reuse_miss_reason'] == 'python_execution_context_changed'
+
+
+@pytest.mark.parametrize('renamed', [False, True])
+def test_closed_literal_ignores_growing_research_json_and_unused_fit_view(tmp_path, monkeypatch, renamed):
+    agent, lab, calls = scene(tmp_path, monkeypatch)
+    model = 'renamed/_evaluated_model/candidate.py' if renamed else MODEL
+    agent._save(model, (agent.workspace / MODEL).read_text())
+    directory = Path(model).parent
+    for name, contents in (
+        ('params.json', '{"unused_fixture_parameter":1}'),
+        ('model_observations.json', '[{"features":{"u":1},"target":3}]'),
+        ('native_representation_research/record_0000.json', '{"new_research":true}'),
+        ('shared/theory_index.json', '{"new_candidates":[1,2]}'),
+    ):
+        agent._save(str(directory / name), contents)
+    before = scoring_costs(agent)
+    monkeypatch.setattr('hegel_machine.cognition.online_inquiry_llm.evaluate_python_model', no_execution)
+    original_read = Path.read_bytes
+
+    def no_unused_json(path):
+        if path.suffix == '.json':
+            pytest.fail(f'closed predictor compared unconsumed JSON bytes: {path}')
+        return original_read(path)
+
+    monkeypatch.setattr(Path, 'read_bytes', no_unused_json)
+    repeated = choose(agent, lab, [model])
+    assert repeated['reused_score_count'] == 1 and repeated['new_scored_count'] == 0
+    assert calls == [MODEL] and scoring_costs(agent) == before
 
 
 def test_identical_renamed_literals_reuse_scores_and_index_once_per_comparison(tmp_path, monkeypatch):
@@ -119,7 +143,7 @@ def test_identical_renamed_literals_reuse_scores_and_index_once_per_comparison(t
     assert compared['evaluations'][3]['paid_score_reuse']['matched_model'] == models[2]
 
 
-@pytest.mark.parametrize('change', ['source', 'params', 'fit_view', 'meaning', 'target'])
+@pytest.mark.parametrize('change', ['source', 'bindings', 'research_inputs', 'meaning', 'target', 'row_order'])
 def test_renamed_literal_requires_same_source_context_and_scope(tmp_path, monkeypatch, change):
     from dataclasses import replace
 
@@ -130,16 +154,20 @@ def test_renamed_literal_requires_same_source_context_and_scope(tmp_path, monkey
     agent._save('renamed/_evaluated_model/model_observations.json', '[]')
     if change == 'source':
         agent._save(model, export_temporal_program(Program('const', value=2.)))
-    elif change == 'params':
-        agent._save('renamed/_evaluated_model/params.json', '{"unused_fixture_parameter":1}')
-    elif change == 'fit_view':
-        agent._save('renamed/_evaluated_model/model_observations.json', '[{"features":{"u":1},"target":2}]')
+    elif change == 'bindings':
+        agent._save('renamed/_evaluated_model/model_bindings.json',
+                    '{"candidate_v2.py":{"child":"another.py"}}')
+    elif change == 'research_inputs':
+        agent._save('renamed/_evaluated_model/model_research_inputs.json',
+                    '{"candidate_v2.py":{"condition":{"version":2}}}')
     elif change == 'meaning':
         active = next(question for question in agent.questions
                       if question['id'] == agent._active_question_id)
         active['meaning_version'] += 1
-    else:
+    elif change == 'target':
         agent.rows[0] = replace(agent.rows[0], target=2.)
+    else:
+        agent.rows.reverse()
     before = agent.costs['compute_cost']
     compared = choose(agent, lab, [model])
     assert compared['new_scored_count'] == 1 and compared['reused_score_count'] == 0

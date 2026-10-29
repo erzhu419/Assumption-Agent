@@ -204,16 +204,168 @@ def observe_common_method_return(feedback, state=None):
     return state
 
 
+def observe_common_method_segment(segment, actual_return, *, actual_return_ref,
+                                  profile, source_task, state=None):
+    """Feed one measured whole Common segment to the existing sequence learner.
+
+    Artifact reads remain prerequisites, not extra research actions. Individual
+    step returns stay unscored: only the original whole-segment return is known.
+    The caller supplies the already addressed return; this adapter reads no
+    checkpoints and executes no research tool.
+    """
+    from math import isfinite
+
+    actual_return = actual_return or {}
+    book = ResearchMethods(state)
+    result = {'status': 'UNKNOWN', 'actual_return_ref': deepcopy(actual_return_ref),
+        'root_result_ref': deepcopy(segment.get('root_result_ref')),
+        'source_task': deepcopy(source_task), 'method_id': None,
+        'cost_refs': deepcopy(segment.get('cost_refs', [])), 'step_refs': [],
+        'state': book.to_dict()}
+    if (segment.get('missing_dependencies') or actual_return.get('execution_complete') is not True
+            or actual_return.get('administrative_censoring') or actual_return.get('censored')
+            or not actual_return_ref or not profile
+            or any(type(actual_return.get(key)) not in (int, float)
+                or not isfinite(actual_return[key]) for key in ('gain', 'observation_cost', 'compute_cost'))
+            or any(actual_return[key] < 0 for key in ('observation_cost', 'compute_cost'))):
+        return {**result, 'reason': 'complete_addressed_whole_segment_return_required'}
+    nodes = segment.get('nodes', [])
+    def address(reference):
+        return reference.get('file'), tuple(reference.get('json_path', [])), reference.get('version')
+    node_index = {address(node['step_ref']): node for node in nodes}
+    root = segment.get('root_result_ref', {})
+    terminal = next((node for node in nodes if node.get('is_execution') and
+        node['step_ref'].get('file') == root.get('file') and
+        root.get('json_path', [])[:len(node['step_ref'].get('json_path', []))]
+            == node['step_ref'].get('json_path')), None)
+    call = terminal.get('call_ref') if terminal else None
+    if call is None:
+        return {**result, 'reason': 'actual_current_call_execution_required'}
+    executions = [node for node in nodes if node.get('is_execution') and node.get('call_ref') == call]
+    trace, missing = [], []
+    for node in executions:
+        dependencies, inputs, pending, visited = [], [], list(node.get('depends_on_refs', [])), []
+        while pending:
+            reference = pending.pop()
+            if reference in visited:
+                continue
+            visited.append(reference)
+            ancestor = node_index.get(address(reference))
+            if ancestor is None:
+                missing.append(deepcopy(reference))
+            elif ancestor.get('is_execution') and ancestor.get('call_ref') == call:
+                if reference not in dependencies:
+                    dependencies.append(deepcopy(reference))
+            else:
+                if reference not in inputs:
+                    inputs.append(deepcopy(reference))
+                pending.extend(ancestor.get('depends_on_refs', []))
+        trace.append({'step_ref': deepcopy(node['step_ref']), 'action': node['action'],
+            'context': 'common_research_segment', 'call_ref': deepcopy(call),
+            'depends_on_refs': dependencies, 'input_refs': inputs,
+            'gain': None, 'observation_cost': None, 'compute_cost': None,
+            'execution_complete': node.get('execution_status') == 'completed',
+            'cost_refs': deepcopy(node.get('cost_refs', [])), 'return_status': 'unscored_step'})
+    if missing:
+        return {**result, 'reason': 'exact_execution_ancestor_unavailable', 'missing_dependencies': missing}
+    # Preserve the actual execution order within one saved call, including
+    # steps whose individual contribution is unmeasured. A dependency is not
+    # evidence authorizing their deletion from a measured whole sequence.
+    trace.sort(key=lambda step: step['step_ref'].get('json_path', [None, 0])[1])
+    roots = [entry['step_ref'] for entry in trace]
+    origin = next((entry for entry in book.segment_outcomes
+        if entry['actual_return_ref'] == actual_return_ref), None)
+    returned = {**deepcopy(actual_return), 'actual_return_ref': deepcopy(actual_return_ref),
+        'profile': deepcopy(profile), 'cost_refs': deepcopy(result['cost_refs'])}
+    if origin is not None:
+        if origin['root_result_ref'] != segment.get('root_result_ref'):
+            return {**result, 'reason': 'one_return_cannot_join_different_executions'}
+        if origin['return'] != returned:
+            if any(origin['return'][key] != returned[key] for key in ('observation_cost', 'compute_cost')):
+                return {**result, 'reason': 'original_complete_segment_bill_must_remain_unchanged'}
+            identifier = origin.get('method_id')
+            method = next((item for item in book.methods if item['method_id'] == identifier), None)
+            if method is not None:
+                method['observed_gain'] = returned['gain']
+                method['status'] = 'revising' if returned['gain'] <= 1e-8 else 'proposed'
+                method['sequence_outcomes'][0].update(gain=returned['gain'], profile=deepcopy(profile),
+                    cost_refs=deepcopy(returned['cost_refs']))
+            elif returned['gain'] > 1e-8:
+                identifier = book.observe('common_research_segment', trace, condition={}, source_task=source_task,
+                    step_refs=roots, segment_return=returned)
+            origin['method_id'] = identifier
+            origin['return'] = returned
+            book.revisions.append({'method_id': identifier, 'change': 'revise_measured_segment_return',
+                'actual_return_ref': deepcopy(actual_return_ref), 'gain': returned['gain'],
+                'credit_scope': 'whole_segment_only_internal_steps_unscored'})
+            return {**result, 'status': 'updated_measured_segment', 'method_id': identifier,
+                'step_refs': [entry['step_ref'] for entry in trace], 'state': book.to_dict()}
+        return {**result, 'status': 'reused_measured_segment', 'method_id': origin.get('method_id'),
+            'step_refs': [entry['step_ref'] for entry in trace], 'state': book.to_dict()}
+    identifier = book.observe('common_research_segment', trace, condition={}, source_task=source_task,
+        step_refs=roots, segment_return=returned)
+    book.segment_outcomes.append({'actual_return_ref': deepcopy(actual_return_ref),
+        'root_result_ref': deepcopy(segment.get('root_result_ref')), 'source_task': deepcopy(source_task),
+        'method_id': identifier, 'return': returned})
+    return {**result, 'status': 'measured_segment', 'method_id': identifier,
+        'step_refs': [entry['step_ref'] for entry in trace],
+        'unscored_step_refs': [entry['step_ref'] for entry in trace],
+        'observation': deepcopy(book.last_observation), 'state': book.to_dict()}
+
+
 class ResearchMethods:
     def __init__(self, state=None):
         state = state or {}
         self.methods = deepcopy(state.get("methods", []))
         self.revisions = deepcopy(state.get("revisions", []))
+        self.segment_outcomes = deepcopy(state.get('segment_outcomes', []))
         self.last_choice = None
+        self.last_observation = None
+
+    @staticmethod
+    def _method_trace(method, trace):
+        steps = [step for step in trace if step.get('method_id') == method['method_id']]
+        if method.get('step_refs'):
+            call = trace[-1].get('call_ref') if trace else None
+            return [step for step in steps if call is not None and step.get('call_ref') == call]
+        return steps
 
     @staticmethod
     def _completed(method, trace):
-        return [step["action"] for step in trace if step.get("method_id") == method["method_id"]]
+        return [step['action'] for step in ResearchMethods._method_trace(method, trace)]
+
+    def _exact_steps(self, trace, step_refs):
+        """Resolve explicit instances; action names never repair a missing link."""
+        call = trace[-1].get('call_ref') if trace else None
+        selected, missing, external = [], [], []
+        pending = list(step_refs)
+        if call is None:
+            self.last_observation = {'status': 'UNKNOWN', 'reason': 'actual_call_boundary_required',
+                'missing_dependencies': list(step_refs)}
+            return None
+        while pending:
+            reference = pending.pop()
+            matches = [index for index, step in enumerate(trace)
+                if step.get('step_ref', step.get('action_ref')) == reference]
+            if len(matches) != 1:
+                if reference not in missing:
+                    missing.append(deepcopy(reference))
+                continue
+            index, = matches
+            if index in selected:
+                continue
+            selected.append(index)
+            step = trace[index]
+            if step.get('call_ref') != call:
+                external.append(deepcopy(reference))
+            pending.extend(step.get('depends_on_refs', []))
+        self.last_observation = {'status': 'UNKNOWN' if missing else 'reference_closed',
+            'call_ref': deepcopy(call), 'missing_dependencies': missing,
+            'external_dependency_refs': external,
+            'dependency_scope': 'actual_reads_not_causal_contribution'}
+        if missing:
+            return None
+        return [trace[index] for index in sorted(selected) if trace[index].get('call_ref') == call]
 
     @staticmethod
     def _outcome(step, *, source_task, kind):
@@ -290,7 +442,8 @@ class ResearchMethods:
             transferred_sequences = [row for row in applicable_sequences if row["kind"] == "transfer"]
             applicable_sequences = transferred_sequences or applicable_sequences
             if applicable_sequences:
-                spent_gain = sum(step["gain"] for step in trace if step.get("method_id") == method["method_id"])
+                spent_gain = sum(step['gain'] for step in self._method_trace(method, trace)
+                    if type(step.get('gain')) in (int, float))
                 sequence_gain = max(-1., min(1., mean(row["gain"] for row in applicable_sequences) - spent_gain))
                 basis = "remaining_sequence_return"
             elif not sequences:
@@ -373,6 +526,8 @@ class ResearchMethods:
         # ID cannot resell the same failed fit. An unfinished sequence can still
         # take a different next step after a neutral preparation.
         for step in reversed(trace):
+            if step.get('gain') is None:
+                continue  # An unmeasured internal step is not a failed attempt.
             if step["action"] != action or step["gain"] > 1e-8 or not step.get("execution_complete", True):
                 continue
             prior = step.get("profile")
@@ -383,7 +538,7 @@ class ResearchMethods:
                 return None
         return applicability
 
-    def observe(self, context, trace, *, condition, source_task):
+    def observe(self, context, trace, *, condition, source_task, step_refs=None, segment_return=None):
         """Learn measured successful steps and their actual prerequisites.
 
         The shorter sequence is a method hypothesis. Its use in a later task
@@ -391,6 +546,13 @@ class ResearchMethods:
         """
         if not trace:
             return None
+        exact = self._exact_steps(trace, step_refs) if step_refs is not None else None
+        if step_refs is not None and exact is None:
+            return None
+        if segment_return is not None:
+            if step_refs is None:
+                raise ValueError('a whole segment return requires exact execution references')
+            return self._observe_segment_return(context, exact, segment_return, condition, source_task)
         current = trace[-1]
         used = current.get("method_id")
         if used:
@@ -399,7 +561,10 @@ class ResearchMethods:
             if current.get("execution_complete", True):
                 method.setdefault("step_outcomes", []).append(self._outcome(
                     current, source_task=source_task, kind="transfer"))
-            measured_steps = [step for step in trace if step.get("method_id") == used]
+            measured_steps = self._method_trace(method, trace)
+            if step_refs is not None:
+                measured_steps = [step for step in measured_steps
+                    if step.get('call_ref') == current.get('call_ref')]
             completed = [step["action"] for step in measured_steps] == method["steps"]
             step_index = len(measured_steps) - 1
             if step_index < len(method.get("step_costs", [])):
@@ -434,16 +599,18 @@ class ResearchMethods:
             elif current["gain"] > 1e-8 and current.get("execution_complete", True):
                 method["confirmations"] += 1
                 method["status"] = "supported"
-        relevant = [step for step in trace[-6:] if step["context"] == context]
+        relevant = exact if step_refs is not None else [step for step in trace[-6:] if step["context"] == context]
         if not relevant or relevant[-1]["gain"] <= 1e-8 or not relevant[-1].get("execution_complete", True):
             return None
-        original = [step["action"] for step in relevant]
-        selected = {index for index, step in enumerate(relevant)
-                    if step["gain"] > 1e-8 and step.get("execution_complete", True)}
+        original = [step['action'] for step in (trace if step_refs is not None else relevant)
+            if step_refs is None or step.get('call_ref') == current.get('call_ref')]
+        selected = (set(range(len(relevant))) if step_refs is not None else
+            {index for index, step in enumerate(relevant)
+                if step['gain'] > 1e-8 and step.get('execution_complete', True)})
         pending = list(selected)
         while pending:
             index = pending.pop()
-            for action in relevant[index].get("requires_actions", []):
+            for action in (() if step_refs is not None else relevant[index].get("requires_actions", [])):
                 dependency = next((before for before in range(index - 1, -1, -1)
                     if relevant[before]["action"] == action
                     and relevant[before].get("execution_complete", True)), None)
@@ -453,7 +620,7 @@ class ResearchMethods:
         useful_steps = [relevant[index] for index in sorted(selected)]
         # Repeated positive attempts without a dependency are still one step;
         # an explicitly linked preparation is kept in execution order.
-        if not any(step.get("requires_actions") for step in useful_steps):
+        if step_refs is None and not any(step.get("requires_actions") for step in useful_steps):
             unique = {}
             for step in useful_steps:
                 unique.setdefault(step["action"], step)
@@ -462,6 +629,7 @@ class ResearchMethods:
         profiles = [deepcopy(step.get("profile")) for step in useful_steps]
         prior = next((item for item in self.methods if item["context"] == context
                       and item["condition"] == condition and item["steps"] == steps
+                      and bool(item.get('step_refs')) == (step_refs is not None)
                       and all(revision_condition(old) == revision_condition(new)
                               and ((not old and not new) or method_applicability(old, new, action)["status"] == "supported")
                               for old, new, action in zip(item.get("step_profiles", profiles), profiles, steps))), None)
@@ -479,6 +647,11 @@ class ResearchMethods:
                   "mean_compute_cost": sum(step["compute_cost"] for step in useful_steps),
                   "mean_observation_cost": sum(step["observation_cost"] for step in useful_steps)}
         method["step_profiles"] = profiles
+        if step_refs is not None:
+            method.update(step_refs=[deepcopy(step.get('step_ref', step.get('action_ref')))
+                for step in useful_steps], source_call_ref=deepcopy(current['call_ref']),
+                dependency_refs=[deepcopy(step.get('depends_on_refs', [])) for step in useful_steps],
+                external_dependency_refs=deepcopy(self.last_observation['external_dependency_refs']))
         method["sequence_outcomes"] = [{"profile": deepcopy(profiles[0]),
             "gain": method["observed_gain"], "source_task": source_task, "kind": "source"}]
         method["step_outcomes"] = [self._outcome(step, source_task=source_task, kind="source")
@@ -486,9 +659,39 @@ class ResearchMethods:
         method["step_costs"] = [{key: step[key] for key in ("observation_cost", "compute_cost")}
                                 for step in useful_steps]
         self.methods.append(method)
-        self.revisions.append({"method_id": identifier, "change": "remove_unproductive_steps" if steps != original
+        self.revisions.append({"method_id": identifier, "change": 'propose_reference_closed_sequence'
+                               if step_refs is not None else "remove_unproductive_steps" if steps != original
                                else "retain_successful_sequence", "before": original, "after": steps,
                                "source_task": source_task})
+        return identifier
+
+    def _observe_segment_return(self, context, trace, returned, condition, source_task):
+        """Credit the measured sequence; no internal step acquires its gain."""
+        self.last_observation.update(return_scope='whole_segment',
+            actual_return_ref=deepcopy(returned['actual_return_ref']),
+            unscored_step_refs=[deepcopy(step['step_ref']) for step in trace])
+        if returned['gain'] <= 1e-8:
+            self.last_observation.update(status='measured_nonpositive_segment')
+            return None
+        steps = [step['action'] for step in trace]
+        identifier = f'method_{len(self.methods) + 1}'
+        sequence = {'profile': deepcopy(returned['profile']), 'gain': returned['gain'],
+            'observation_cost': returned['observation_cost'], 'compute_cost': returned['compute_cost'],
+            'actual_return_ref': deepcopy(returned['actual_return_ref']),
+            'cost_refs': deepcopy(returned.get('cost_refs', [])), 'source_task': source_task, 'kind': 'source'}
+        self.methods.append({'method_id': identifier, 'context': context, 'condition': deepcopy(condition),
+            'steps': steps, 'original_steps': steps, 'source_task': source_task, 'status': 'proposed',
+            'observed_gain': returned['gain'], 'trials': 0, 'confirmations': 0, 'excluded_conditions': [],
+            'step_refs': [deepcopy(step['step_ref']) for step in trace],
+            'source_call_ref': deepcopy(trace[-1]['call_ref']),
+            'step_profiles': [None for step in trace], 'step_outcomes': [],
+            'unscored_steps': [{key: deepcopy(step[key]) for key in
+                ('step_ref', 'action', 'gain', 'observation_cost', 'compute_cost', 'cost_refs', 'input_refs')}
+                for step in trace], 'sequence_outcomes': [sequence], 'return_scope': 'whole_segment',
+            'mean_observation_cost': returned['observation_cost'], 'mean_compute_cost': returned['compute_cost']})
+        self.revisions.append({'method_id': identifier, 'change': 'propose_reference_closed_sequence',
+            'source_task': source_task, 'actual_return_ref': deepcopy(returned['actual_return_ref']),
+            'credit_scope': 'whole_segment_only_internal_steps_unscored'})
         return identifier
 
     def revise_plan(self, profile, options, trace=()):
@@ -524,7 +727,7 @@ class ResearchMethods:
         eligible = {option.name: option for option in options if option.observation_cost <= observation_remaining
                     and option.compute_cost <= compute_remaining}
         def unfinished(method):
-            completed = [step["action"] for step in trace if step.get("method_id") == method["method_id"]]
+            completed = self._completed(method, trace)
             return bool(completed and completed == method["steps"][:len(completed)]
                         and len(completed) < len(method["steps"]))
 
@@ -545,7 +748,7 @@ class ResearchMethods:
             applicability = self._applicability(method, trace, profile)
             if applicability is None:
                 continue
-            completed = [step["action"] for step in trace if step.get("method_id") == method["method_id"]]
+            completed = self._completed(method, trace)
             if completed != method["steps"][:len(completed)] or len(completed) >= len(method["steps"]):
                 continue
             next_action = method["steps"][len(completed)]
@@ -618,9 +821,8 @@ class ResearchMethods:
                    and costs(method)[0] <= observation_remaining
                    and costs(method)[1] <= compute_remaining]
         choices = [method for method in choices if
-                   [step["action"] for step in trace if step.get("method_id") == method["method_id"]]
-                   == method["steps"][:sum(step.get("method_id") == method["method_id"] for step in trace)]
-                   and sum(step.get("method_id") == method["method_id"] for step in trace) < len(method["steps"])]
+                   self._completed(method, trace) == method['steps'][:len(self._completed(method, trace))]
+                   and len(self._completed(method, trace)) < len(method['steps'])]
         choices = [method for method in choices if self._applicability(method, trace, profile) is not None
                    and (not profile or self._completed(method, trace)
                         or self._applicability(method, trace, profile)["status"] == "supported")
@@ -650,4 +852,7 @@ class ResearchMethods:
         return result
 
     def to_dict(self):
-        return deepcopy({"methods": self.methods, "revisions": self.revisions})
+        result = {"methods": self.methods, "revisions": self.revisions}
+        if self.segment_outcomes:
+            result['segment_outcomes'] = self.segment_outcomes
+        return deepcopy(result)

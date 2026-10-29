@@ -113,7 +113,8 @@ def test_literal_restore_preserves_cursors_parent_and_steps_with_two_future_view
         {'phase': 'target'}, {'files': {}, 'finite_native_author': {'max_compute': 50000}}))
     monkeypatch.setattr(study, 'archived_paid_trace_references', lambda *_a, **_k: [])
     monkeypatch.setattr(study, 'AnonymousHistoryLab', lambda **_kwargs: None)
-    monkeypatch.setattr(preparation, '_retain_scene_score_index', lambda *_a: {'status': 'reused'})
+    monkeypatch.setattr(preparation, '_retain_scene_score_index',
+        lambda *_a, paid_rows: {'status': 'reused', 'available_paid_rows': paid_rows})
     monkeypatch.setattr(method_effect_query, 'retained_research_progress', lambda agent, **_kwargs: {
         'current_parent': deepcopy(agent.evaluated_model), 'full_pool_count': 2377})
     result = preparation.accept_prepared_retained_scene(registered_root / 'retained_scene_registration.json')

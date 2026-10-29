@@ -1006,12 +1006,13 @@ def archive_confirmed_python_model(agent, destination):
 
 def _closed_temporal_export(directory, model):
     """Recognize the existing literal export, whose runner reads only its row."""
-    from .temporal_operator_agent import _PROGRAM_RUNNER
+    from .temporal_operator_agent import _PROGRAM_RUNNER, _STATE_PROGRAM_RUNNER
 
     source = (Path(directory) / model).read_text(encoding='utf-8')
     prefix = '# Frozen paid-data predictor; controls and recorded history only.\n_PROGRAM = '
-    suffix = '\n' + _PROGRAM_RUNNER
-    if not source.startswith(prefix) or not source.endswith(suffix):
+    suffix = next(('\n' + runner for runner in (_PROGRAM_RUNNER, _STATE_PROGRAM_RUNNER)
+                   if source.endswith('\n' + runner)), None)
+    if not source.startswith(prefix) or suffix is None:
         return False
     try:
         literal = ast.literal_eval(source[len(prefix):-len(suffix)])
@@ -1085,6 +1086,8 @@ def python_model_context_matches(workspace, model, snapshot_workspace, inner_mod
     current, model = python_model_context(workspace, model)
     if model != inner_model:
         return False
+    if _closed_temporal_export(current, model):
+        return literal_python_model_context_matches(current, model, snapshot_workspace, inner_model)
 
     submitted = _python_model_context_files(current, model)
     original = _python_model_context_files(snapshot_workspace, inner_model)
@@ -1109,24 +1112,16 @@ def python_model_context_matches(workspace, model, snapshot_workspace, inner_mod
 
 
 def literal_python_model_context_matches(workspace, model, snapshot_workspace, inner_model):
-    """Compare existing row-only literal exports across selected filenames."""
+    """Compare closed row-only exports; paid rows and contracts are checked by callers."""
     current, model = python_model_context(workspace, model)
-    if (not _closed_temporal_export(current, model)
+    if (not (Path(snapshot_workspace) / inner_model).is_file()
+            or not _closed_temporal_export(current, model)
             or not _closed_temporal_export(snapshot_workspace, inner_model)):
         return False
-    submitted = _python_model_context_files(current, model)
-    original = _python_model_context_files(snapshot_workspace, inner_model)
-    selected = submitted.pop(Path(model))
-    retained = original.pop(Path(inner_model))
-    if selected.read_bytes() != retained.read_bytes() or submitted.keys() != original.keys():
-        return False
-    for name, prior in original.items():
-        current_file = submitted[name]
-        if (_archived_paid_trace(current_file) and current_file.resolve() == prior.resolve()):
-            continue
-        if current_file.read_bytes() != prior.read_bytes():
-            return False
-    return True
+    # The exact exported runner has no fit or file reads and no bound models or
+    # research inputs. Growing research records and fitting views cannot alter
+    # this prediction. Ordinary authored Python keeps the full context check.
+    return (current / model).read_bytes() == (Path(snapshot_workspace) / inner_model).read_bytes()
 
 
 class CodeAgent:

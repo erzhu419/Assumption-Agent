@@ -62,6 +62,13 @@ def test_refitting_a_saved_method_preserves_exclusions_and_can_reopen_them_on_ne
     replayed = replay_research_program(record["research_program"], pilot, budget,
                                        feature_mapping=features)
     assert replayed is not None and mse(replayed["candidate"].program, pilot) < 1e-7
+    source_contexts = record["research_program"]["selection_steps"][-1]["evidence_contexts"]
+    replay_contexts = replayed["research_program"]["selection_steps"][-1]["evidence_contexts"]
+    # Rebinding the consuming method must not relabel its old measurements as
+    # evidence for the new response or rewrite them into the next_ instrument.
+    assert source_contexts and replay_contexts == source_contexts
+    assert all(not name.startswith('next_') for context in replay_contexts
+        for name in Program.from_dict(context['parameter_template']).required_features())
     inherited = RelationIntervalResearch(replayed["candidate"].program, [], budget,
                                          research_program=replayed["research_program"])
     same_mechanism = inherited.alternatives(pilot, budget)

@@ -14,7 +14,8 @@ from test_registered_native_author import plan
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = {'scripts/run_anonymous_revision_inquiry.py',
            'scripts/prepare_pr3_source_successor.py',
-           'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py'}
+           'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py',
+           'scripts/run_method_action_pairing.py'}
 
 
 def test_fresh_registered_snapshot_contains_script_import_closure(tmp_path, request):
@@ -23,7 +24,7 @@ def test_fresh_registered_snapshot_contains_script_import_closure(tmp_path, requ
     declared = set(configured['runtime_snapshot']) | {'scripts/prepare_pr3_source_successor.py'}
     assert SCRIPTS <= declared
     # All actual scripts imports, including imports inside the two entrypoints,
-    # must be satisfied by the same four newly frozen script files.
+    # must be satisfied by the same newly frozen script files.
     dependencies = set()
     for name in SCRIPTS:
         for node in ast.walk(ast.parse((ROOT / name).read_text())):
@@ -48,7 +49,8 @@ sys.path[:0] = [str(snapshot / 'src'), str(snapshot)]
 # environment's declared third-party dependency roots, without processing .pth.
 sys.path.extend(json.loads(sys.argv[2]))
 modules = ['scripts.prepare_pr3_source_successor', 'scripts.run_anonymous_revision_inquiry',
-           'scripts.run_online_inquiry_llm', 'scripts.run_online_inquiry_study']
+           'scripts.run_online_inquiry_llm', 'scripts.run_online_inquiry_study',
+           'scripts.run_method_action_pairing']
 origins = {}
 for name in modules:
     module = importlib.import_module(name)

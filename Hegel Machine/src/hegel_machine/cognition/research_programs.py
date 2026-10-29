@@ -289,6 +289,454 @@ def research_program_replay_inputs(payload, *, feature_mapping=None):
     return value
 
 
+def derive_paid_witness_binding_revision(experiences, prior_selection_plan, *, compute_limit=0):
+    """Infer one bounded input-binding revision from actual unbound research.
+
+    A successful local repair and a missed repair must independently show the
+    same reusable relation: the paid old guard/mature mechanism is retained,
+    while its startup rule changes. The missed case must actually recover that
+    mechanism in a later successful whole-state draft. No future predictions,
+    fitted parameters, source labels, or previously authored binding are used.
+    """
+    from .models import SearchBudget
+
+    budget = SearchBudget(max(0, int(compute_limit)))
+    result = {'status': 'insufficient_method_experience', 'candidate': None,
+        'source_evidence': [], 'excluded': [], 'analysis_compute_cost': 0,
+        'support_updated': False, 'independent_confirmation': False}
+    plan = deepcopy(prior_selection_plan or {})
+    ordinary_segment = {'current_option': {'id': 'native_representation:ordinary', 'family': 'N'}}
+    false = plan.get('when_false', {})
+    # This revision is deliberately restricted to the old local fallback. It
+    # cannot overwrite another learned segment or copy an already bound body.
+    if (plan.get('condition') is None or false.get('second_segment') is not None
+            or false.get('first_segment', ordinary_segment) != ordinary_segment
+            or any('parent_binding' in (branch.get(key) or {})
+                   for branch in (plan, plan.get('when_true', {}), false)
+                   for key in ('first_segment', 'second_segment'))):
+        result['status'] = 'original_unbound_local_branch_required'
+        return result
+
+    def finish():
+        result['analysis_compute_cost'] = budget.spent
+        if budget.last_denied_request is not None:
+            result.update(status='analysis_budget_unresolved', candidate=None,
+                          last_denied_request=deepcopy(budget.last_denied_request))
+        return result
+
+    def parts(value):
+        if not budget.spend(1):
+            return None
+        program = Program.from_dict(value)
+        program = program.expanded() if program.op == 'call' else program
+        replay = program.op == 'state_replay'
+        root = program.children[0] if replay else program
+        root = root.expanded() if root.op == 'call' else root
+        if root.op != 'if' or root.children[0].op != 'available':
+            return None
+        return replay, *root.children
+
+    def same_mature(left, right):
+        return bool(budget.spend(1) and left[:3] == right[:3])
+
+    seen = []
+    for experience in experiences:
+        if not budget.spend(1):
+            return finish()
+        source = experience.get('source_task_ref')
+        refs = experience.get('source_refs', [])
+        if not source or source in seen or not refs:
+            result['excluded'].append({'source_task_ref': deepcopy(source),
+                                       'reason': 'distinct_referenced_source_required'})
+            continue
+        seen.append(deepcopy(source))
+        native = experience.get('native_result') or {}
+        pool = (experience.get('profile') or {}).get('research', {}).get('candidate_pool', {})
+        if (native.get('startup_parent_binding') or pool.get('status') != 'observed'
+                or native.get('comparison_completed') is not True
+                or native.get('research_completion') != 'bounded_search_completed'):
+            result['excluded'].append({'source_task_ref': deepcopy(source),
+                                       'reason': 'complete_unbound_research_and_paid_pool_required'})
+            continue
+        witnesses = []
+        for witness in pool.get('witnesses', []):
+            if not budget.spend(1):
+                return finish()
+            transition = witness.get('transition') or {}
+            if (transition.get('status') == 'observed' and transition.get('guard_depth') is not None
+                    and transition.get('startup_first_divergences', 0) > 0
+                    and transition.get('mature_first_divergences') == 0
+                    and witness.get('execution_ref')):
+                witnesses.append(witness)
+        parents = []
+        for parent in experience.get('parent_programs', []):
+            if parent.get('id') not in native.get('parent_theory_ids', []):
+                continue
+            matched = next((w for w in witnesses if parent['id'] in
+                            [name.removesuffix('.py') for name in w.get('models', [])]), None)
+            if matched is None:
+                continue
+            split = parts(parent['program'])
+            if split is not None and split[1].lag == matched['transition']['guard_depth']:
+                parents.append((parent['id'], split))
+        candidates = []
+        for candidate in native.get('candidates', []):
+            if candidate.get('search_direction') not in {'startup_revision', 'discrete_state'}:
+                continue
+            split = parts(candidate['program'])
+            if split is not None:
+                candidates.append((candidate, split))
+        if budget.last_denied_request is not None:
+            return finish()
+        selected = native.get('selected') or {}
+        threshold = native.get('mse_threshold')
+        selected_program = selected.get('program')
+        if selected_program is None:
+            # Native checkpoints retain the selected program in their actual
+            # candidate list rather than duplicating it inside the receipt.
+            # Resolve that existing local reference without loading an archive
+            # or treating the selected id alone as executable evidence.
+            reference = selected.get('program_ref') or {}
+            path = reference.get('json_path', [])
+            if (not reference.get('file') and len(path) == 3
+                    and path[0] == 'candidates' and path[2] == 'program'
+                    and isinstance(path[1], int) and 0 <= path[1] < len(native.get('candidates', []))):
+                if not budget.spend(1):
+                    return finish()
+                referred = native['candidates'][path[1]]
+                if referred.get('id') == selected.get('id'):
+                    selected_program = referred.get('program')
+        if (not isinstance(threshold, (int, float)) or not isfinite(threshold)
+                or selected_program is None):
+            result['excluded'].append({'source_task_ref': deepcopy(source),
+                                       'reason': 'selected_program_and_comparison_threshold_required'})
+            continue
+        chosen = parts(selected_program)
+        if chosen is None:
+            if budget.last_denied_request is not None:
+                return finish()
+            continue
+        selected_candidates = []
+        for candidate, split in candidates:
+            if not budget.spend(1):
+                return finish()
+            scores = [candidate.get(key) for key in
+                      ('training_mse', 'validation_mse', 'development_mse')]
+            if (split == chosen and all(isinstance(score, (int, float)) and isfinite(score)
+                    and score <= threshold for score in scores)):
+                selected_candidates.append((candidate, split))
+        local = [(candidate, split) for candidate, split in candidates
+                 if candidate['search_direction'] == 'startup_revision']
+        local_matches = []
+        for parent_id, old in parents:
+            for candidate, split in local:
+                if same_mature(old, split):
+                    local_matches.append((parent_id, candidate['id']))
+        directions = [entry.get('direction') for entry in native.get('search_directions', [])]
+        record = None
+        for candidate, split in selected_candidates:
+            for parent_id, old in parents:
+                if not same_mature(old, split) or old[3] == split[3]:
+                    continue
+                kind = None
+                if candidate['search_direction'] == 'startup_revision':
+                    kind = 'local_repair_preserved_paid_mature_witness'
+                elif (local and not local_matches and 'startup_revision' in directions
+                      and 'discrete_state' in directions
+                      and directions.index('startup_revision') < directions.index('discrete_state')):
+                    # This is a missed allocation, rather than evidence that
+                    # the local fitter could not express the startup rule.
+                    for _, local_split in local:
+                        if not budget.spend(1):
+                            return finish()
+                        if local_split[1] == split[1] and local_split[3] == split[3]:
+                            kind = 'local_allocation_missed_paid_mature_witness'
+                            break
+                if kind:
+                    record = {'source_task_ref': deepcopy(source), 'kind': kind,
+                        'matched_parent_id': parent_id, 'selected_candidate_id': candidate['id'],
+                        'local_candidate_ids': [entry['id'] for entry, _ in local],
+                        'source_refs': deepcopy(refs)}
+                    break
+            if record is not None:
+                break
+        if budget.last_denied_request is not None:
+            return finish()
+        if record is not None:
+            result['source_evidence'].append(record)
+    kinds = {entry['kind'] for entry in result['source_evidence']}
+    if kinds != {'local_repair_preserved_paid_mature_witness',
+                 'local_allocation_missed_paid_mature_witness'}:
+        return finish()
+    revised = deepcopy(plan)
+    revised.setdefault('when_false', {})['first_segment'] = {
+        **ordinary_segment, 'parent_binding': 'paid_startup_witnesses'}
+    references = []
+    for record in result['source_evidence']:
+        for reference in record['source_refs']:
+            if reference not in references:
+                references.append(deepcopy(reference))
+    result.update(status='proposed_from_research_relations', candidate={
+        'kind': 'python_research_method', 'execution': {'kind': 'python_select_actions'},
+        'research_selection_plan': revised, 'source_refs': references,
+        'status': 'unmeasured_local_research_intervention', 'source_support_inherited': False,
+        'producer': 'finite_paid_guard_mature_startup_relation_induction',
+        'induction_evidence': deepcopy(result['source_evidence']),
+        'unmeasured_branches': []})
+    return finish()
+
+
+def propose_research_action_revisions(ordinary_proposal, options, *, source_refs=(),
+                                     max_candidates=2, selection_states=(),
+                                     method_experiences=(), prior_selection_plan=None,
+                                     compute_limit=0):
+    """Keep P0 and propose at most two different, already quoted research segments.
+
+    These are unmeasured local Python procedures, not new native replay graphs
+    or inferred preferences. The offered actions and their original evidence
+    references come from the ordinary publisher; no fitting is performed here.
+    """
+    from .finite_native_author import research_action_semantics, _bound_research_proposal
+
+    options = options.get('options', []) if isinstance(options, dict) else list(options)
+    baseline = {'id': 'P0', 'kind': 'python_research_method',
+        'research_selection_plan': {'source_refs': deepcopy(list(source_refs))},
+        'status': 'unchanged_ordinary_program'}
+    if (ordinary_proposal.get('action') in {'finish', 'evaluate'}
+            or ordinary_proposal.get('arguments', {}).get('operator') == 'research_choice'):
+        return {'status': 'common_closure_not_a_research_selection', 'baseline': baseline,
+            'candidates': [], 'grouped_trials': [],
+            'scope': 'comparison_and_parent_delivery_are_shared_obligations'}
+    declaration = next((item['question_declaration'] for item in options
+        if item.get('question_declaration')), None)
+    ordinary_proposal = (_bound_research_proposal(ordinary_proposal, declaration)
+        if declaration else ordinary_proposal)
+    original = research_action_semantics(ordinary_proposal,
+        ordinary_proposal.get('program_binding'))
+    seen, candidates, grouped = [original], [], []
+    induction = None
+    if method_experiences:
+        induction = derive_paid_witness_binding_revision(method_experiences,
+            prior_selection_plan, compute_limit=compute_limit)
+        local_option = next((option for option in options
+            if option.get('id') == 'native_representation:ordinary'
+            and option.get('family') == 'N' and option.get('proposal')
+            and option.get('complete_quote', {}).get('status') == 'available'), None)
+        if induction['candidate'] is not None and local_option is not None and max_candidates > 0:
+            candidates.append({**deepcopy(induction['candidate']), 'id': 'P1',
+                'proposal_ref': deepcopy(local_option.get('proposal_ref')),
+                'complete_quote': deepcopy(local_option['complete_quote'])})
+    for option in options:
+        if ((option.get('complete_quote') or {}).get('status') != 'available'
+                or not option.get('proposal') or not option.get('semantic_action')):
+            grouped.append({'proposal_ref': deepcopy(option.get('proposal_ref')),
+                'reason': 'current_fully_quoted_option_required'})
+            continue
+        planning = option['proposal'].get('arguments', {}).get('structure_planning')
+        structural_followup = (option.get('family') == 'N' and planning is not None
+            and option['proposal'].get('action') == 'run'
+            and option['proposal'].get('arguments', {}).get('operator') == 'native_condition_research')
+        if structural_followup and (not option.get('followup_complete_quote')
+                or option['complete_quote'].get('planning_compute') != planning['proposal_compute']):
+            grouped.append({'proposal_ref': deepcopy(option.get('proposal_ref')),
+                'reason': 'complete_structure_followup_capacity_required'})
+            continue
+        semantic = option['semantic_action']
+        if semantic in seen:
+            grouped.append({'proposal_ref': deepcopy(option.get('proposal_ref')),
+                'reason': 'same_current_executable_action',
+                'scope': 'declared_selection_states_only_not_global_program_equivalence'})
+            continue
+        if len(candidates) >= min(2, max(0, max_candidates)):
+            break
+        seen.append(deepcopy(semantic))
+        plan = {'first_segment': deepcopy(semantic), 'source_refs': deepcopy(list(source_refs))}
+        if structural_followup:
+            # The pulse/step winner is not known before this paid planning
+            # return. Bind the second slot to that actual design, never to a
+            # guessed physical experiment or the ordinary author's next Q.
+            plan['second_segment'] = {'followup_of_first_segment': True,
+                                      'purpose': 'conditional_history_structure'}
+        candidates.append({'id': f'P{len(candidates) + 1}', 'kind': 'python_research_method',
+            'execution': {'kind': 'python_select_actions'},
+            'research_selection_plan': plan,
+            'proposal_ref': deepcopy(option.get('proposal_ref')),
+            'complete_quote': deepcopy(option['complete_quote']),
+            'status': 'unmeasured_local_research_intervention',
+            'source_refs': deepcopy([*source_refs, *([option['proposal_ref']]
+                if option.get('proposal_ref') else [])]),
+            'source_support_inherited': False,
+            'static_witnesses': [{'state_index': index,
+                'different_action': semantic != research_action_semantics(
+                    state['ordinary_proposal'], state['ordinary_proposal'].get('program_binding'))}
+                for index, state in enumerate(selection_states)
+                if 'ordinary_proposal' in state
+                and any(item.get('semantic_action') == semantic for item in state.get('options', []))],
+            'unmeasured_branches': []})
+        if structural_followup:
+            candidates[-1].update(
+                quote_scope='bounded_two_segment_capacity_followup_requires_actual_complete_quote',
+                followup_complete_quote=deepcopy(option['followup_complete_quote']),
+                followup_quote={'status': 'requires_actual_first_return',
+                    'purpose': 'conditional_history_structure',
+                    'source': 'current_legal_Q_from_the_actual_structure_planning_result',
+                    'capacity_is_actual_spend_or_selected_query': False})
+    return {'status': 'proposed' if candidates else 'no_distinct_legal_alternative',
+        'baseline': baseline, 'candidates': candidates, 'grouped_trials': grouped,
+        'scope': 'finite_public_proposal_interventions_no_scientific_execution',
+        **({'experience_revision': induction,
+            'analysis_compute_cost': induction['analysis_compute_cost']} if induction is not None else {})}
+
+
+def current_option_selection_plan(option, *, source_refs=(), ordinary_method_path='ordinary.py'):
+    """Freeze a reusable choice of an existing native representation operation.
+
+    Its current parent, paid data and allocation remain invocation inputs from
+    the ordinary option publisher. The actual source proposal stays referenced;
+    this does not infer a useful condition or invent a scientific operation.
+    """
+    proposal = option.get('proposal') or {}
+    if (option.get('family') != 'N'
+            or not option.get('id', '').startswith('native_representation:')
+            or option.get('complete_quote', {}).get('status') != 'available'
+            or not option.get('semantic_action')
+            or proposal.get('action') != 'run'
+            or proposal.get('arguments', {}).get('operator') != 'research_route'
+            or not proposal['arguments'].get('native_representation_plan')):
+        raise ValueError('an existing currently quoted native representation option is required')
+    return {'ordinary_method_path': ordinary_method_path,
+        'first_segment': {'current_option': {'id': option['id'], 'family': option['family']}},
+        'source_refs': deepcopy([*source_refs, *([option['proposal_ref']]
+            if option.get('proposal_ref') else [])])}
+
+
+def rebuild_research_selection_guard(plan, choice):
+    """Apply whole-method evidence without silently replacing a branch.
+
+    A pair against an unconditional method can support choosing that complete
+    body under a new guard. A pair against a conditional method instead
+    measures its entire existing decision program, including both branches and
+    its coverage fallback. It does not identify either branch in isolation.
+    The finite compiler does not express a new guard around that whole body,
+    so retain it until a content-preserving alternative has its own evidence.
+    """
+    retained = deepcopy(plan)
+    if not choice.get('general_guard_supported'):
+        return {'status': 'guard_not_supported', 'plan': retained, 'changed': False,
+                'existing_selection_evidence_retained': True}
+    if plan.get('condition') is not None:
+        return {'status': 'conditioned_method_retained', 'plan': retained, 'changed': False,
+            'reason': 'whole_method_pairs_do_not_identify_branch_replacement',
+            'required_evidence': 'matched_return_for_a_content_preserving_revised_policy',
+            'existing_selection_evidence_retained': True}
+    revised = {'ordinary_method_path': plan['ordinary_method_path'],
+        'condition': deepcopy(choice['condition']),
+        'condition_feature_paths': deepcopy(choice['coordinate_paths']),
+        'when_true': {key: deepcopy(plan[key]) for key in
+            ('first_segment', 'second_segment', 'source_refs') if key in plan},
+        'when_false': {}}
+    return {'status': 'validated_guard_for_complete_unconditional_method',
+        'plan': revised, 'changed': True, 'existing_selection_evidence_retained': False}
+
+
+def export_research_selection_program(plan=None):
+    """Compile the short policy to Common's existing ordinary Python consumer.
+
+    The inherited ordinary method remains at its manifest path. It supplies
+    both its ordinary policy and the finite current-option consumer; the native
+    DAG replayer is never involved. The installation freezes the selection plan
+    and ordinary source through the existing method manifest.
+    """
+    from .temporal_operator_agent import export_temporal_program
+
+    plan = deepcopy(plan or {})
+    if plan.get('condition') is not None:
+        branches = [plan.get('when_true') or {}, plan.get('when_false') or {}]
+        if any(branch.get('condition') is not None for branch in branches):
+            raise ValueError('a short research program permits only one condition branch')
+        condition = Program.from_dict(plan['condition'])
+        if condition.history_depth:
+            raise ValueError('method selection conditions use the current public profile')
+        names = sorted(condition.required_features())
+        condition_source = export_temporal_program(condition, feature_names=tuple(names))
+    else:
+        branches, names, condition_source = [plan], [], None
+    for branch in branches:
+        if any(key not in {'first_segment', 'second_segment', 'source_refs',
+                'ordinary_method_path', 'condition_feature_paths'} for key in branch
+               if key not in {'condition', 'when_true', 'when_false'}):
+            raise ValueError('unsupported short research program field')
+        if branch.get('second_segment') is not None and branch.get('first_segment') is None:
+            raise ValueError('a second research segment requires a first segment')
+        for segment in (branch.get('first_segment'), branch.get('second_segment')):
+            if segment is not None and 'current_option' in segment:
+                choice = segment['current_option']
+                if (set(segment) - {'current_option', 'parent_binding'} or set(choice) != {'id', 'family'}
+                        or choice['family'] != 'N'
+                        or not isinstance(choice['id'], str)
+                        or not choice['id'].startswith('native_representation:')):
+                    raise ValueError('a current option selects an existing native representation operation')
+                if ('parent_binding' in segment and
+                        (segment['parent_binding'] != 'paid_startup_witnesses'
+                         or choice['id'] != 'native_representation:ordinary')):
+                    raise ValueError('startup witnesses bind the ordinary local representation option')
+        second = branch.get('second_segment') or {}
+        if 'followup_of_first_segment' in second:
+            first = branch['first_segment']
+            arguments = first.get('arguments', {})
+            if (second != {'followup_of_first_segment': True,
+                           'purpose': 'conditional_history_structure'}
+                    or first.get('action') != 'run'
+                    or arguments.get('operator') != 'native_condition_research'
+                    or not isinstance(arguments.get('structure_planning'), dict)):
+                raise ValueError('a structural followup requires its native structure-planning first segment')
+    return '''# Frozen finite research selection; ordinary Common actions only.
+from pathlib import Path
+import math
+_FROZEN_PLAN = ''' + repr(plan) + '''
+_CONDITION_SOURCE = ''' + repr(condition_source) + '''
+_CONDITION_FEATURES = ''' + repr(names) + '''
+
+def _condition(memory):
+    if (memory.get('method_condition_support') or {}).get('can_apply') is not True:
+        return None
+    features = memory.get('method_condition_features') or {}
+    if any(name not in features or features[name] is None
+           or not isinstance(features[name], (int, float))
+           or not math.isfinite(features[name]) for name in _CONDITION_FEATURES):
+        return None
+    namespace = {}
+    exec(_CONDITION_SOURCE, namespace)
+    return bool(namespace['predict']({'features': features, 'history': []}))
+
+def select_actions(public_spec, observations, memory):
+    path = memory.get('ordinary_method_path')
+    if not path:
+        return {'stop': {'status': 'author_work_request', 'request': {
+            'type': 'AuthorWorkRequest', 'reason': 'ordinary_method_path_required',
+            'required': ['frozen ordinary method manifest binding']}}}
+    namespace = {'__file__': path}
+    exec(compile(Path(path).read_text(encoding='utf-8'), path, 'exec'), namespace)
+    if 'select_research_segment' not in namespace:
+        return {'stop': {'status': 'author_work_request', 'request': {
+            'type': 'AuthorWorkRequest', 'reason': 'ordinary_method_selection_adapter_required',
+            'required': ['current ordinary source with the registered finite selection consumer'],
+            'ordinary_method_path': path}}}
+    plan = memory.get('research_selection_plan', _FROZEN_PLAN)
+    branches = (plan, plan.get('when_true', {}), plan.get('when_false', {}))
+    if (any((branch.get(step) or {}).get('parent_binding') == 'paid_startup_witnesses'
+            for branch in branches for step in ('first_segment', 'second_segment'))
+            and '_bind_paid_startup_witnesses' not in namespace):
+        return {'stop': {'status': 'author_work_request', 'request': {
+            'type': 'AuthorWorkRequest', 'reason': 'ordinary_parent_binding_adapter_required',
+            'required': ['registered ordinary executor consuming paid_startup_witnesses'],
+            'ordinary_method_path': path}}}
+    return namespace['select_research_segment'](public_spec, observations, memory,
+        plan=plan, ordinary_select_actions=namespace['select_actions'],
+        condition=_condition if _CONDITION_SOURCE is not None else None)
+'''
+
+
 def propose_research_step_revisions(payload, training=(), *, feature_names=(),
                                     feature_mapping=None, source_ref=None,
                                     max_candidates=8, max_history=None):
@@ -318,12 +766,14 @@ def propose_research_step_revisions(payload, training=(), *, feature_names=(),
     upper = max((len(row.history) for row in rows), default=0)
     upper = min(upper, max_history) if max_history is not None else upper
     coordinates = _condition_coordinates(rows, upper) if rows else current
-    coordinates = [term for term in coordinates if term.required_features() <= names | {"__target__"}]
+    coordinates = [term for term in coordinates
+        if all(name in names for name, _ in term.observed_variables())]
     history = [term for term in coordinates if term.history_depth]
     products = list(dict.fromkeys(Program("mul", children=pair)
         for pair in combinations_with_replacement(current[:8], 2)))
     saved = [Program.from_dict(step["program"]) for step in bound.get("selection_steps", [])
-        if step.get("program") and Program.from_dict(step["program"]).required_features() <= names]
+        if step.get("program") and all(name in names for name, _ in
+            Program.from_dict(step["program"]).observed_variables())]
     # Round-robin input families keep current-coordinate variants from taking
     # all places before an acquired historical distinction receives a trial.
     pools = [list(history), [*current, *products], list(dict.fromkeys(saved))]
@@ -341,7 +791,7 @@ def propose_research_step_revisions(payload, training=(), *, feature_names=(),
         if term not in terms:
             edits.append({"kind": "add_retained_input", "term": term.to_dict(),
                 "target": ["term_nodes"], "coordinate_source": "paid_public_coordinates_or_saved_computation"})
-        if conditional is not None and not term.history_depth:
+        if conditional is not None:
             step = bound["selection_steps"][conditional]
             if term.to_dict() != step["gate_coordinate"]:
                 edits.append({"kind": "replace_gate", "term": term.to_dict(),
@@ -361,6 +811,11 @@ def propose_research_step_revisions(payload, training=(), *, feature_names=(),
     # of the same step, independent of candidate identity or observed return.
     kinds = list(dict.fromkeys(edit["kind"] for edit in edits))
     queues = [[edit for edit in edits if edit["kind"] == kind] for kind in kinds]
+    for kind, queue in zip(kinds, queues):
+        if kind in {"replace_gate", "add_branch_coordinate"}:
+            # Keep existing current-coordinate interventions in their saved
+            # order; newly supported history edits extend that replay contract.
+            queue.sort(key=lambda edit: bool(Program.from_dict(edit["term"]).history_depth))
     while any(queues) and len(candidates) < max_candidates:
         for queue in queues:
             if not queue or len(candidates) >= max_candidates:
@@ -639,7 +1094,8 @@ def quote_research_step_revisions(payload, training, validation, *, feature_mapp
         available, basis = _coordinates(spec, training,
             [Program.from_dict(term) for term in replay["branch_basis"]])
         gates = list(dict.fromkeys([Program.from_dict(replay["gate_coordinate"]), *available]))[:8]
-        gates = [gate for gate in gates if not gate.history_depth and gate.required_features() <= set(names)]
+        gates = [gate for gate in gates
+                 if all(name in names for name, _ in gate.observed_variables())]
         # _search appends its own intercept coordinate before masking branches.
         branch_terms = 2 * (len(basis) + 1)
         if branch_terms + 3 >= count:
@@ -1020,7 +1476,134 @@ def _object_observation_lifts(spec, fitter, raw, tolerance):
     return proposals
 
 
-def propose_research_programs(spec, training, budget, calls, *, max_candidates=16):
+def _residual_coordinate_programs(fitter, atoms, coordinates, max_candidates, progress):
+    """Revise the retained answer before spending on whole-target singletons.
+
+    A coordinate nominates a joint fit through its correlation with the actual
+    parent's residual. Reading a column is cheaper than fitting it alone, and
+    the fit reserve prevents a larger coordinate vocabulary from consuming the
+    complete allocation before any nominated repair is executed.
+    """
+    budget, count = fitter.budget, fitter.count
+    start, fits_before = budget.spent, budget.completed_fits
+    original_reserve = budget.reserve
+    receipt = progress if progress is not None else {}
+    receipt.update(stage="parent_residual", completed_joint_fits=0,
+        residual_screened_terms=0, screening_cutoffs=[], status="incomplete")
+    found = {}
+    try:
+        # Parent measurement, residual, one ranked column and a complete fit.
+        # Refusing
+        # here incurs no partial search merely to rediscover a funding shortage.
+        if not budget.can_spend(7 * count):
+            receipt["status"] = "insufficient_joint_fit_budget"
+            return []
+        parent_program = atoms[0]
+        values = fitter.column(parent_program)
+        if values is None:
+            receipt["status"] = "parent_prediction_unavailable"
+            return []
+        budget.spend(count)
+        measured = mean(point_loss(value, row.target, fitter.quantile)
+                        for value, row in zip(values, fitter.rows))
+        parent = {"terms": (parent_program,), "fit_terms": (parent_program,),
+            "program": parent_program, "loss": measured, "coefficients": [0., 1.]}
+        tolerance = max(1e-10, abs(measured) * 1e-7)
+        first = {"operation": "retain_parent_for_residual",
+            "question": "Measure the retained parent's remaining error on the paid evidence",
+            "program": parent_program, "loss": measured}
+        paths = {parent_program: [first]}
+        receipt["parent_training_loss"] = measured
+        pool = list(dict.fromkeys([*coordinates, *atoms]))
+        temporal = max(len(row.history) for row in fitter.rows) >= 2
+        for depth in range(2):
+            families = [("coordinates", pool), ("interactions", [
+                Program("mul", children=(left, right)) for left, right in combinations(pool, 2)])]
+            if temporal:
+                seeds = pool if depth == 0 else [parent["program"]]
+                families.append(("temporal", [term for seed in seeds for term in _temporal(seed)]))
+            for family, candidates in families:
+                if parent["loss"] <= tolerance:
+                    break
+                receipt["stage"] = f"{family}_residual_screen"
+                if not budget.can_spend(5 * count):
+                    receipt["status"] = "incomplete_joint_search"
+                    break
+                if not budget.spend(count):
+                    break
+                residual = [row.target - value for row, value in
+                    zip(fitter.rows, predict_rows(parent["program"], fitter.rows))]
+                center = mean(residual)
+                candidates = list(dict.fromkeys(term for term in candidates
+                    if term not in parent["fit_terms"]))
+                ranked = []
+                # Release only our own tail before executing fits, preserving
+                # any independent confirmation reserve held by the caller.
+                fit_slots = min(4, len(candidates),
+                    max(1, (budget.remaining - 2 * count) // (2 * count)))
+                budget.reserve = original_reserve + fit_slots * 2 * count
+                try:
+                    for term in candidates:
+                        required = count * (1 + int(term not in fitter.columns))
+                        if not budget.can_spend(required):
+                            receipt["screening_cutoffs"].append({"round": depth,
+                                "family": family, **deepcopy(budget.last_denied_request)})
+                            break
+                        column = fitter.column(term)
+                        if column is None:
+                            continue
+                        budget.spend(count)
+                        receipt["residual_screened_terms"] += 1
+                        column_center = mean(column)
+                        norm = sum((value - column_center) ** 2 for value in column)
+                        if norm <= 1e-12:
+                            continue
+                        covariance = sum((value - column_center) * (error - center)
+                            for value, error in zip(column, residual))
+                        ranked.append((covariance * covariance / norm, term))
+                finally:
+                    budget.reserve = original_reserve
+                receipt["stage"] = f"{family}_joint_fit"
+                current = parent
+                for _, term in sorted(ranked, key=lambda item: item[0], reverse=True)[:fit_slots]:
+                    fits = budget.completed_fits
+                    fit = fitter.fit((*current["fit_terms"], term))
+                    receipt["completed_joint_fits"] += budget.completed_fits - fits
+                    if fit is None or fit["loss"] + tolerance >= current["loss"]:
+                        continue
+                    step = {"operation": "explain_residual_and_recombine",
+                        "question": "Jointly refit a measured coordinate with the retained explanation",
+                        "program": fit["program"], "loss": fit["loss"],
+                        "parent_loss": current["loss"], "residual_rows": count,
+                        "coordinate_family": family}
+                    path = [*paths[current["program"]], step]
+                    paths[fit["program"]] = path
+                    found[fit["program"]] = fit, path
+                    if _rank(fit) < _rank(parent):
+                        parent = fit
+                if parent["loss"] <= tolerance:
+                    receipt["status"] = "training_residual_explained"
+                    break
+            if parent["loss"] <= tolerance or budget.remaining < 5 * count:
+                break
+        if receipt["status"] == "incomplete":
+            receipt["status"] = ("incomplete_joint_search" if receipt["screening_cutoffs"]
+                or budget.remaining < 5 * count else "bounded_joint_search_complete")
+        ranked = sorted(found.values(), key=lambda item: _rank(item[0]))[:max_candidates]
+        return [_entry(fit, path, count, budget.spent - start, index)
+                for index, (fit, path) in enumerate(ranked)]
+    except Exception:
+        receipt["status"] = "interrupted_joint_search"
+        raise
+    finally:
+        budget.reserve = original_reserve
+        receipt.update(compute_cost=budget.spent - start,
+            completed_fits=budget.completed_fits - fits_before,
+            proposals=len(found), last_denied_request=deepcopy(budget.last_denied_request))
+
+
+def propose_research_programs(spec, training, budget, calls, *, max_candidates=16,
+                              coordinates=(), progress=None):
     """Search a bounded residual-driven composition grammar over callable atoms.
 
     Each column, fit, residual measurement and executable comparison costs one
@@ -1035,6 +1618,16 @@ def propose_research_programs(spec, training, budget, calls, *, max_candidates=1
     names = set.intersection(*(set(row.features) for row in rows))
     atoms = list(dict.fromkeys(call for call in calls
                  if call.required_features().issubset(names)))[:max_candidates]
+    coordinate_request = bool(coordinates)
+    coordinates = list(dict.fromkeys(term for term in coordinates
+        if all(name in names for name, _ in term.observed_variables())))
+    if coordinate_request:
+        atoms = [term for term in atoms
+            if all(name in names for name, _ in term.observed_variables())]
+        if not atoms or not coordinates:
+            return []
+        return _residual_coordinate_programs(_Fitter(rows, budget, spec.risk_quantile),
+            atoms, coordinates, max_candidates, progress)
     if not atoms:
         return []
     start = budget.spent
@@ -1055,6 +1648,9 @@ def propose_research_programs(spec, training, budget, calls, *, max_candidates=1
     found = {}
     beam = raw[:3]
     pool = list(dict.fromkeys(term for fit in raw[:8] for term in fit["terms"]))
+    # A child representation result is a new input to this same residual
+    # grammar, not another whole predictor competing for the atom prefix cap.
+    pool = list(dict.fromkeys([*coordinates, *pool]))
     temporal = max(len(row.history) for row in rows) >= 2
 
     def retain(fit, path):
@@ -1083,11 +1679,15 @@ def propose_research_programs(spec, training, budget, calls, *, max_candidates=1
         # Residual fits nominate additional coordinates. The complete joint fit
         # below then decides whether the new coordinate survives recombination.
         candidates = list(pool)
+        interactions = [Program("mul", children=(left, right))
+                        for left, right in combinations(pool if coordinates else pool[:5], 2)]
+        if coordinates:
+            candidates.extend(interactions)
         if temporal:
             seeds = pool if depth == 0 else [fit["program"] for fit in beam[:2]]
             candidates.extend(term for seed in seeds for term in _temporal(seed))
-        candidates.extend(Program("mul", children=(left, right))
-                          for left, right in combinations(pool[:5], 2))
+        if not coordinates:
+            candidates.extend(interactions)
         candidates = list(dict.fromkeys(candidates))
         singles = []
         for term in candidates:
@@ -1153,16 +1753,51 @@ def propose_research_programs(spec, training, budget, calls, *, max_candidates=1
 
 
 def replay_research_program(payload, training, budget, *, risk_quantile=.5,
-                            feature_mapping=None):
+                            feature_mapping=None, execution_scope='procedure'):
     """Execute a saved operator plan and refit its answer on newly supplied rows.
 
     This reuses the research procedure's selected coordinates, not its old
     coefficients or validation verdict. A resumed proposal needs fresh external
-    validation just like a newly generated one.
+    validation just like a newly generated one. ``retained_coordinates`` answers
+    the narrower fixed-structure question: refit exactly the saved graph inputs,
+    without invoking a conditional method's separate gate/window search.
     """
     rows = list(training)
     if len(rows) < 6:
         return None
+    if execution_scope == 'retained_coordinates':
+        if feature_mapping:
+            from .research_drafts import _rebind_step
+            payload = _rebind_step(payload, feature_mapping)
+        graph = ResearchGraph.from_dict(payload['graph'])
+        terms = [graph.nodes[key].answer for key in payload['term_nodes']]
+        if not terms or any(term is None for term in terms):
+            return None
+        start = budget.spent
+        fit = _Fitter(rows, budget, risk_quantile).fit(terms)
+        if fit is None:
+            return None
+        steps = []
+        for original in payload.get('selection_steps', []):
+            step = deepcopy(original)
+            step['program'] = Program.from_dict(step['program'])
+            step['historical'] = True
+            steps.append(step)
+        structure = next((step for step in reversed(payload.get('selection_steps', []))
+            if step['operation'] == 'discover_conditional_coordinates'), None)
+        steps.append({'operation': 'refit_research_program',
+            'question': 'Refit the frozen computation coordinates on the newly paid evidence',
+            'program': fit['program'], 'loss': fit['loss'],
+            'execution_scope': execution_scope,
+            **({'retained_structure': {key: deepcopy(structure[key]) for key in
+                ('gate_coordinate', 'threshold', 'threshold_interval', 'width', 'placement')
+                if key in structure}} if structure is not None else {})})
+        result = _entry(fit, steps, len(rows), budget.spent - start)
+        result['research_program'].update(reused_procedure=True,
+            execution_scope=execution_scope)
+        return result
+    if execution_scope != 'procedure':
+        raise ValueError('research replay scope must be procedure or retained_coordinates')
     if any(step["operation"] == "discover_decoded_conditional_coordinates"
            for step in payload.get("selection_steps", [])):
         from .decoded_conditional_coordinates import replay_decoded_conditional_coordinates

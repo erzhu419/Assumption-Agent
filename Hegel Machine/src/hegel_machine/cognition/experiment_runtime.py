@@ -30,22 +30,37 @@ class PythonExecutionDeadline(ValueError):
     """A bounded host preparation or score exhausted its Python allowance."""
 
 
+class ActivityExecutionDeadline(RuntimeError):
+    """The whole research activity window ended, including its host work."""
+
+
 @contextmanager
-def python_execution_deadline(seconds):
+def python_execution_deadline(seconds, *, activity=False):
     """Bound synchronous preparation/scoring in the worker's main thread.
 
-    Scope metadata uses the existing atomic writers. Callers commit candidate
-    retention after this context exits; retained-parent mutations are not timed
-    interrupts.
+    Local score limits return partial Python work through their existing caller.
+    An activity limit instead ends the whole research unit. Nested score limits
+    preserve the earlier parent's exception so they cannot consume that cutoff.
     """
+    deadline_error = ActivityExecutionDeadline if activity else PythonExecutionDeadline
+    message = ('Research activity time budget exhausted' if activity
+               else 'Python execution time budget exhausted')
     if seconds <= 0:
-        raise PythonExecutionDeadline('Python execution time budget exhausted')
+        raise deadline_error(message)
     previous_handler = signal.getsignal(signal.SIGALRM)
     previous_timer = signal.getitimer(signal.ITIMER_REAL)
     started = monotonic()
+    parent_expires_first = bool(previous_timer[0] and previous_timer[0] <= seconds)
+    parent_delivered = False
 
     def exhausted(signum, frame):
-        raise PythonExecutionDeadline('Python execution time budget exhausted')
+        nonlocal parent_delivered
+        if parent_expires_first and callable(previous_handler):
+            # The enclosing activity still owns its earlier cutoff. A local
+            # scoring timer must not relabel it as a catchable Python limit.
+            parent_delivered = True
+            previous_handler(signum, frame)
+        raise deadline_error(message)
 
     signal.signal(signal.SIGALRM, exhausted)
     signal.setitimer(signal.ITIMER_REAL,
@@ -55,7 +70,7 @@ def python_execution_deadline(seconds):
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0.)
         signal.signal(signal.SIGALRM, previous_handler)
-        if previous_timer[0]:
+        if previous_timer[0] and not parent_delivered:
             signal.setitimer(signal.ITIMER_REAL,
                 max(.000001, previous_timer[0] - (monotonic() - started)), previous_timer[1])
 

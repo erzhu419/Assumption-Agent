@@ -7,6 +7,7 @@ and confirmation remain in Common's existing executor.
 
 from copy import deepcopy
 from dataclasses import replace
+from pathlib import Path
 
 from .language import Program
 from .research_episodes import _child_ref, load_source_values
@@ -87,6 +88,12 @@ An optional retained_research_program_refs list addresses whole native candidate
 records whose Program and procedure output must equal an actual declared parent.
 The existing saved procedure is refitted on training only and offered to the
 same composition search; duplicate procedure references do not repeat a refit.
+retained_replay_scope:'retained_coordinates' refits only the saved graph inputs;
+the default 'procedure' also executes its existing conditional search. The scope
+is part of the declared plan and therefore of the route's exact cache basis.
+paid_direction_reuse may retain completed unchanged directions by their saved
+candidate references; their exact paid rows, split, parent Programs and public
+input contract must match. Their historical cost stays attached to the source.
 It reuses the finite native researcher on separate paid trajectories, retains
 every declared parent, and exports its measured alternatives for the ordinary
 full-pool research_choice. It neither adopts a task model nor resolves the child
@@ -95,12 +102,34 @@ native_representation_ref addresses the one complete result; the route and
 question histories retain costs, decisions and exact candidate field references.
 Use load_native_representation_result to restore the selected candidate's graph.
 An acquired method-use question declares method_use_plan={candidate_id,binding}
-and its actual parent_id. Under an existing funded method-learning mission,
+and its actual parent_id. Its optional action_revision declares
+{ordinary_method_path,ordinary_proposal_ref,segments:[{root_result_ref,
+decision_start_ref}],pair_refs:[...]} to prepare at most P0+2 addressed Python
+action revisions. Only actual matched outcomes may support installation;
+preparation does not authorize scientific execution. A whole Python delivery
+can return run {operator:'method_action_feedback',candidate_id,binding,result_ref,
+comparison_ref,frozen_prediction_refs:[...]}, retaining the original call/profile.
+That whole return consumes one available question in its continuing, funded
+method agenda and reports method_research. An equivalent existing executable
+with actual completed support is reused. A genuinely new body returns
+validation_requests with a method_pair_ref accepted by the existing registered
+paired-study preparer; it does not create a new case, budget or evaluation set.
+Under an existing funded method-learning mission,
 the route freezes the paid method feedback through theory_consolidation, then
 uses the ordinary method decision consumer. Its next_action resumes that parent
 through research_route: unchanged unhelpful work is deferred, while unknown or
 changed evidence retains bounded exploration. This does not purchase evidence,
 fit a predictor, or turn a development return into independent support.
+For an object laboratory with measured focus, quantity and drive bindings,
+run {operator:'partial_role_experiment',model_ref,selected_values_ref,
+records_ref,sources_ref,allocation:{compute:...}} reuses the existing dependency
+experiment researcher. spec_ref may supply the original public contract.
+The result quotes all missing corners of a paired experiment. Execute its
+actions with ordinary query, then pass the saved result as previous_ref.
+records:'common' consumes the actual object transitions retained by query and
+can be used in query.after_observation. Only a complete measured pair produces
+a method_object; save that object and include it in a later sources_ref to
+rebind its role/history recipe to that apparatus's measured controls.
 """
 
 
@@ -332,6 +361,39 @@ def resolved_theories(agent, *, pending_theory=None):
     return result
 
 
+_POOL_BASIS_FIELDS = ('id', 'version', 'source_ref', 'source_status',
+    'forecast_ref', 'forecast_source_version', 'compatible')
+
+
+def _resolved_pool_basis(agent):
+    """Project routing identity without copying complete Programs or checks.
+
+    Source resolution and scoped failures are the same as the full consumer.
+    Forecast validation still uses its ordinary saved-column reader; it receives
+    only metadata, so its independent copy does not copy the world Program pool.
+    """
+    versions = _resolved_theory_versions(agent)
+    refutations = _retained_scope_refutations(agent, [(theory, reference)
+        for theory, reference, current in versions])
+    result = []
+    for view, _, current in versions:
+        if not current:
+            continue
+        metadata = {key: deepcopy(view[key]) for key in _POOL_BASIS_FIELDS if key in view}
+        if refutations and view.get('program'):
+            program = Program.from_dict(view['program']).expanded()
+            if any(all(view.get(key) == failed.get(key) for key in
+                    ('role_signature', 'output_unit', 'context_ref'))
+                    for failed, _, _ in refutations.get(program, ())):
+                metadata['compatible'] = False
+        result.append(metadata)
+    if any(theory.get('forecast_ref') for theory in result):
+        from .retained_forecasts import resolve_forecast_references
+        result = resolve_forecast_references(result, agent.workspace)
+    return [{key: theory[key] for key in _POOL_BASIS_FIELDS if key in theory}
+        for theory in result]
+
+
 def scoped_numeric_refutation(agent, declaration):
     """Check only this incoming Program against the complete retained failures."""
     versions = _resolved_theory_versions(agent, declaration)
@@ -366,14 +428,21 @@ def _install_proposals(agent, proposals):
                     uses.append(deepcopy(use))
 
 
-def _refresh_completion(agent, mission, allowance, *, compute_limit=None):
-    for question in agent.questions:
+def _refresh_completion(agent, mission, allowance, *, compute_limit=None, questions=None):
+    # Completion flags and lazy support-edge version binding cannot change the
+    # retained source versions, scoped failures or saved forecast columns.
+    # Share one read-only projection here; the next call resolves fresh inputs.
+    pool_basis = None
+    for question in agent.questions if questions is None else questions:
         owner = effective_question_mission(question, mission)
         available = min(allowance, mission_compute_remaining(agent, owner))
         execution = question.get('routing_execution')
         if not execution:
             continue
-        unchanged = execution['basis'] == _basis(agent, question, owner, compute_limit=compute_limit)
+        if pool_basis is None:
+            pool_basis = _resolved_pool_basis(agent)
+        unchanged = execution['basis'] == _basis(agent, question, owner,
+            compute_limit=compute_limit, pool_basis=pool_basis)
         incomplete = execution['result']['status'] in {'scoped_unknown', 'UNKNOWN_MATCH'}
         if unchanged and (not incomplete or available <= execution['allowance']):
             question['completed_agenda_basis'] = deepcopy(question.get('agenda_basis') or {
@@ -383,7 +452,7 @@ def _refresh_completion(agent, mission, allowance, *, compute_limit=None):
             question.pop('completed_agenda_basis', None)
 
 
-def _basis(agent, question, mission, *, compute_limit=None):
+def _basis(agent, question, mission, *, compute_limit=None, pool_basis=None):
     from .theory_consolidation import LIBRARY_PATH, theory_library_candidate_versions
 
     mission = effective_question_mission(question, mission)
@@ -402,9 +471,7 @@ def _basis(agent, question, mission, *, compute_limit=None):
         'uses': deepcopy(question.get('use_sites', [])),
         'program_sources': {path: (agent.workspace / path).read_text()
                             for path in use_paths if path and (agent.workspace / path).is_file()},
-        'pool': [{key: deepcopy(theory[key]) for key in ('id', 'version', 'source_ref', 'source_status',
-            'forecast_ref', 'forecast_source_version', 'compatible') if key in theory}
-            for theory in resolved_theories(agent)],
+        'pool': _resolved_pool_basis(agent) if pool_basis is None else pool_basis,
         'parameter_answer_version': question.get('executable_answer', {}).get('version'),
         'target': deepcopy(question.get('theory_target')),
         'experiments': deepcopy(question.get('resolution_experiments', [])),
@@ -431,6 +498,16 @@ def _basis(agent, question, mission, *, compute_limit=None):
     if has_method_use_plan(question):
         basis['method_use_plan'] = deepcopy(question['method_use_plan'])
         basis['method_use_agenda_basis'] = deepcopy(question.get('agenda_basis'))
+        if (question['method_use_plan'].get('ordinary_return_refs')
+                or question['method_use_plan'].get('native_return_refs')):
+            # The same retained returns do not become new evidence when the
+            # next episode has a smaller remaining task allocation. An
+            # unfinished analysis can still resume through the allowance
+            # comparison in _method_use_route / _refresh_completion.
+            basis.pop('compute_limit')
+            ordinary = agent.workspace / 'ordinary.py'
+            basis['method_current_executor'] = (ordinary.read_text(encoding='utf-8')
+                if agent.knowledge.get('finite_native_author') and ordinary.is_file() else None)
     return basis
 
 
@@ -690,18 +767,29 @@ def _native_representation_route(agent, question, laboratory, pool, mission, com
             validation_records=plan['validation_records'],
             compute_limit=min(plan['compute_limit'], allowance),
             max_candidates=plan.get('max_candidates', 8),
-            retained_research_program_refs=plan.get('retained_research_program_refs'))
+            retained_research_program_refs=plan.get('retained_research_program_refs'),
+            retained_replay_scope=plan.get('retained_replay_scope', 'procedure'),
+            paid_direction_reuse=plan.get('paid_direction_reuse'))
     finally:
         debit_mission_compute(agent, mission, start)
     round_index = len(question['native_representation_research']) - 1
     receipt = question['native_representation_research'][round_index]
     native_ref = receipt['source_ref']
     question_index = agent.questions.index(question)
+    export_root = Path('native_representations') / f'question_{question_index:04d}'
+    existing_rounds = [path.name for path in (agent.workspace / export_root).glob('round_*')]
+    existing_rounds.extend(Path(path).parts[2] for path in agent.candidate_paths
+        if len(Path(path).parts) >= 4 and Path(path).parts[:2] == export_root.parts)
+    # Restored question receipts can be shorter than the preserved source
+    # bank. A new study must never reuse an existing executable's address.
+    export_round = max([round_index, *(int(name.removeprefix('round_')) + 1
+        for name in existing_rounds if name.startswith('round_')
+        and name.removeprefix('round_').isdigit())])
     exports = []
     for index, candidate in enumerate(native['candidates']):
         program = Program.from_dict(candidate['program'])
         path = (f'native_representations/question_{question_index:04d}/'
-                f'round_{round_index:04d}/candidate_{index:04d}.py')
+                f'round_{export_round:04d}/candidate_{index:04d}.py')
         agent._save(path, export_temporal_program(program, feature_names=tuple(controls)))
         if path not in agent.candidate_paths:
             agent.candidate_paths.append(path)
@@ -714,6 +802,7 @@ def _native_representation_route(agent, question, laboratory, pool, mission, com
     result = {'status': ('native_representation_candidates_ready' if native.get('comparison_completed')
         else 'scoped_unknown'), 'question_id': question['id'], 'cache_hit': False,
         'native_representation': deepcopy(receipt), 'native_representation_ref': deepcopy(native_ref),
+        'export_round_index': export_round,
         'exported_models': exports,
         'selected_model': selected_model, 'retained_parent_theory_ids': list(identifiers),
         'parent_revision_completed': False, 'representation_child_resolved': False,
@@ -725,11 +814,54 @@ def _native_representation_route(agent, question, laboratory, pool, mission, com
     return result
 
 
+def consume_method_return_agenda(agent, feedback, laboratory, *, compute_limit=None):
+    """Consume funded method work just published by a real ordinary return.
+
+    Method formation may use its declared mission, but cannot silently borrow
+    an unfinished world's remaining research allocation. The existing agenda
+    chooses among the returned questions; this does not execute a proposed
+    scientific procedure or buy validation labels.
+    """
+    identities = {(item['question_id'], item.get('meaning_version', 1))
+                  for item in feedback.get('method_question_refs', [])}
+    questions = [item for item in agent.questions
+        if (item['id'], item.get('meaning_version', 1)) in identities
+        and has_method_use_plan(item)]
+    funded = [item for item in questions if effective_question_mission(
+        item, agent.research_mission).get('purpose') in {'method_learning', 'theory_learning'}]
+    if not funded:
+        return {'status': 'method_return_retained', 'reason': 'declared_method_mission_required',
+                'new_compute_cost': 0, 'question_refs': deepcopy(feedback.get('method_question_refs', []))}
+    available = max(0, agent.config.compute_budget - agent.costs['compute_cost'])
+    if compute_limit is not None:
+        available = min(available, max(0, compute_limit))
+    # Reuse the returned work's actual mission and its usage, not a fresh grant.
+    mission = effective_question_mission(funded[0], agent.research_mission)
+    available = min(available, mission_compute_remaining(agent, mission))
+    _refresh_completion(agent, mission, available, questions=funded)
+    agenda = build_agenda(funded, {}, [], mission=mission,
+                         budget={'compute': available, 'author_calls': 0})
+    selected = agenda.get('selected_question_id')
+    if selected is None:
+        return {'status': 'method_return_retained', 'agenda': agenda, 'new_compute_cost': 0}
+    active = getattr(agent, '_active_question_id', None)
+    try:
+        result = agent._execute('run', {'operator': 'research_route',
+            'research_question': {'id': selected}, 'allocation': {'compute': available}}, laboratory)
+    finally:
+        agent._active_question_id = active
+    return {'status': result['status'], 'question_id': selected,
+        'new_compute_cost': result.get('new_compute_cost', 0),
+        'research_result': result, 'next_action': result.get('next_action')}
+
+
 def _method_use_route(agent, arguments, laboratory, question, mission, compute_limit):
     from .method_feedback import procedure_use_decision, research_method_conditions
     from .theory_consolidation import consolidate_research
 
     plan = question['method_use_plan']
+    if arguments.get('method_action_revision'):
+        plan['action_revision'] = deepcopy(arguments['method_action_revision'])
     if arguments.get('method_step_revision'):
         plan['step_revision'] = deepcopy(arguments['method_step_revision'])
     basis = _basis(agent, question, mission, compute_limit=compute_limit)
@@ -740,6 +872,34 @@ def _method_use_route(agent, arguments, laboratory, question, mission, compute_l
             and (previous['result']['status'] != 'scoped_unknown' or allowance <= previous['allowance'])):
         return {**deepcopy(previous['result']), 'cache_hit': True, 'new_compute_cost': 0}
     start = agent.costs['compute_cost']
+    if plan.get('native_return_refs') or plan.get('action_revision') or plan.get('ordinary_return_refs'):
+        from .method_action_research import (research_method_actions,
+            review_python_method_returns, review_native_method_returns)
+        public_spec = (laboratory.public_spec() if laboratory is not None else
+            (plan.get('action_revision') or {}).get('public_spec', {}))
+        if plan.get('native_return_refs'):
+            action = review_native_method_returns(agent, question, compute_limit=allowance)
+        elif plan.get('ordinary_return_refs') and not arguments.get('method_action_revision'):
+            action = review_python_method_returns(agent, question,
+                public_spec=public_spec, compute_limit=allowance)
+        else:
+            action = research_method_actions(agent, question, plan['action_revision'],
+                public_spec=public_spec, compute_limit=allowance)
+        debit_mission_compute(agent, mission, start)
+        result = {'question_id': question['id'], 'method_action_research': action,
+            'status': action['status'], 'next_action': action.get('next_action'),
+            'new_compute_cost': agent.costs['compute_cost'] - start,
+            'parent_revision_completed': False, 'support_updated': False,
+            'independent_confirmation': False, 'cache_hit': False}
+        if action['status'].startswith('complete_'):
+            question['completed_agenda_basis'] = question_work_basis(question)
+        else:
+            question.pop('completed_agenda_basis', None)
+        question['method_use_result'] = deepcopy(result)
+        question['routing_execution'] = {'basis': _basis(agent, question, mission, compute_limit=compute_limit),
+            'allowance': allowance, 'version': (previous or {}).get('version', 0) + 1,
+            'result': deepcopy(result)}
+        return result
     if plan.get('step_revision'):
         from .method_feedback import research_method_steps
         request = plan['step_revision']
@@ -887,7 +1047,10 @@ def route_research(agent, arguments, laboratory, question=None):
     agenda = build_agenda(agent.questions, agent.research_candidates, pool, mission=mission,
                           budget={'compute': allowance, 'author_calls': 0})
     agent.research_agenda = deepcopy(agenda)
-    if agenda.get('status') == 'task_supported':
+    if (agenda.get('status') == 'task_supported' and not
+            (question is not None and has_method_use_plan(question)
+             and effective_question_mission(question, mission).get('purpose')
+             in {'method_learning', 'theory_learning'})):
         return {**agenda, 'theory_status': 'unresolved', 'new_compute_cost': 0}
     if question is None:
         selected = agenda.get('selected_question_id')

@@ -65,6 +65,11 @@ class RelationIntervalResearch:
         self._inherited_domains = {}
         self._expanded_domains = {}
         self._local_context = None
+        self._paid_partition = None
+        self._readout_fit = None
+        self._parameter_terms = None
+        self.reuse_statistics = {"partition_rows_bound": 0, "geometry_paid_rows_reused": 0,
+                                 "inherited_predictions_reused": 0}
         self.status = "no_relation_interval"
         prior_by_source = {prior["source_concept_id"]: prior for prior in priors
                            if prior.get("status") != "revoked"}
@@ -93,6 +98,10 @@ class RelationIntervalResearch:
                         "source_concept_id": item.get("source_concept_id") or source})
                     if item.get("prior_radius_intervals") != item["radius_intervals"] and item.get("prior_radius_intervals"):
                         self._inherited_domains[symbol] = deepcopy(item["prior_radius_intervals"])
+                if source is None and node is program and saved.get("parameter_terms"):
+                    self._parameter_terms = [_bind(_replace_leaves(
+                        Program.from_dict(term), bindings), rename)
+                        for term in saved["parameter_terms"]]
                 for context in saved.get("evidence_contexts", []):
                     context = deepcopy(context)
                     context["parameter_template"] = _bind(
@@ -173,6 +182,8 @@ class RelationIntervalResearch:
         if rename:
             self.parameters = parameters
             self.template = _bind(self.template, rename)
+            if self._parameter_terms is not None:
+                self._parameter_terms = [_bind(term, rename) for term in self._parameter_terms]
             contexts = []
             for context in self.evidence_contexts:
                 context["parameter_template"] = _bind(
@@ -193,6 +204,7 @@ class RelationIntervalResearch:
         for parameter in self.parameters:
             parameter.setdefault("prior_radius_intervals", deepcopy(parameter["radius_intervals"]))
         self.original = dict(self.values)
+        self._retain_fitted_columns(structure, research_program)
         kernels = recall_relation_kernels(self.template, self.parameters, priors, budget)
         for parameter in self.parameters:
             sources = kernels.get(parameter["symbol"], [])
@@ -207,6 +219,45 @@ class RelationIntervalResearch:
                 interval for source in sources for interval in source["radius_intervals"])
         if self.parameters:
             self.status = "unresolved"
+
+    def _retain_fitted_columns(self, structure, research_program):
+        """Carry the paid readout through a parameter edit, without another fit."""
+        from .structural_research_program import (
+            research_program_fit_contract, structural_program_fit_contract)
+
+        if research_program and research_program.get("term_nodes"):
+            fit = research_program_fit_contract(research_program)
+        elif structure and structure.get("fits") and "fit_terms" in structure["fits"][0]:
+            fit = structural_program_fit_contract(self.program, structure)
+        else:
+            return
+        if fit["program"].expanded().simplified() != self.program.expanded().simplified():
+            raise ValueError("Interval readout belongs to a different response")
+        terms = fit["fit_terms"]
+        if self._parameter_terms is None:
+            # Match the actual relation computation, including its measured
+            # roles and predicate. Equal numerical radii alone do not bind it.
+            keys = {item["symbol"]: {kernel_key(node) for node in
+                    _parameter_relations(self.template, item["symbol"])}
+                    for item in self.parameters}
+            templates = []
+            for term in terms:
+                marked = term
+                relations = _relations(term.expanded())
+                for item in self.parameters:
+                    related = {node for node in relations
+                        if node.children[0] == Program("const", value=item["radius"])
+                        and kernel_key(node) in keys[item["symbol"]]}
+                    if related:
+                        marked = _mark_relations(marked, related, item["symbol"])
+                templates.append(marked)
+            self._parameter_terms = templates
+        bindings = {symbol: Program("const", value=value) for symbol, value in self.original.items()}
+        if len(self._parameter_terms) != len(terms) or any(
+                _bind(template, bindings).expanded().simplified() != term.expanded().simplified()
+                for template, term in zip(self._parameter_terms, terms)):
+            raise ValueError("Interval parameter columns differ from the saved readout")
+        self._readout_fit = fit
 
     @property
     def intervals(self):
@@ -245,10 +296,16 @@ class RelationIntervalResearch:
                   "program": program, "loss": error, "parameter_template": self.template.to_dict(),
                   "parameters": parameters, "parameter_index": index, "radius_interval": list(interval),
                   "evidence_contexts": deepcopy(self.evidence_contexts),
-                  "parameter_terms": [self.template.to_dict()],
+                  "parameter_terms": [term.to_dict() for term in self._parameter_terms]
+                      if self._readout_fit is not None else [self.template.to_dict()],
                   "compact_replacement": self.compact_replacement}]
         fit = {"program": program, "terms": [program], "fit_terms": [program],
                "coefficients": [0., 1.], "loss": error}
+        if self._readout_fit is not None:
+            bindings = {key: Program("const", value=value) for key, value in values.items()}
+            terms = [_bind(term, bindings).simplified() for term in self._parameter_terms]
+            fit.update(terms=terms, fit_terms=terms,
+                       coefficients=list(self._readout_fit["coefficients"]))
         entry = _entry(fit, steps, rows, cost, self.candidate_serial)
         self.candidate_serial += 1
         entry.update(parameter_index=index, parameter_values=dict(values),
@@ -294,7 +351,61 @@ class RelationIntervalResearch:
         self.status = "unresolved"
         return True
 
-    def _supports_inherited_evidence(self, values, budget, tolerance):
+    def reuse_paid_partition(self, paid_rows, completed_entry):
+        """Bind a completed same-scene partition to its actual paid prefix.
+
+        An earlier complete radius pass already split these observations at
+        every measured edge. Only appended observations can introduce a cut
+        inside one of its supported cells. This is not a transferred-domain
+        assumption: the executable answer, template and parameters must match
+        this restored research, and later use keeps the exact paid row prefix.
+        """
+        self._paid_partition = None
+        self.reuse_statistics["partition_rows_bound"] = 0
+        payload = completed_entry.get("research_program") or {}
+        saved = next((step for step in reversed(payload.get("selection_steps", []))
+                      if step["operation"] == "resolve_relation_intervals"), None)
+        index = completed_entry.get("parameter_index")
+        if (saved is None or payload.get("fit_rows") != len(paid_rows)
+                or index is None or not 0 <= index < len(self.parameters)
+                or completed_entry["candidate"].program != self.program
+                or saved["parameter_template"] != self.template.to_dict()
+                or saved["parameters"] != self.parameters
+                or completed_entry.get("parameter_values") != self.values
+                or completed_entry.get("selection_basis") != "all_acquired_evidence"):
+            return False
+        self._remember_completed_partition(paid_rows, index)
+        return True
+
+    def _remember_completed_partition(self, paid_rows, index):
+        """Retain one actually completed partition for the ordinary next pass."""
+        self._paid_partition = {"rows": deepcopy(tuple(paid_rows)), "template": self.template,
+            "parameters": deepcopy(self.parameters), "values": dict(self.values),
+            "partitioned_symbol": self.parameters[index]["symbol"]}
+        self.reuse_statistics["partition_rows_bound"] = len(paid_rows)
+
+    def _new_geometry_rows(self, paid_rows, parameter):
+        saved = self._paid_partition
+        if (saved is None or self.template != saved["template"]
+                or parameter["symbol"] != saved["partitioned_symbol"]):
+            return paid_rows
+        prefix = saved["rows"]
+        if len(paid_rows) < len(prefix) or any(old != current for old, current in zip(prefix, paid_rows)):
+            return paid_rows
+        previous = next((item for item in saved["parameters"]
+                         if item["symbol"] == parameter["symbol"]), None)
+        if (previous is None or parameter.get("source_concept_id") != previous.get("source_concept_id")
+                or any(self.values[symbol] != value for symbol, value in saved["values"].items()
+                       if symbol != parameter["symbol"])
+                or not all(any(old_low <= low and high <= old_high
+                               for old_low, old_high in previous["radius_intervals"])
+                           for low, high in parameter["radius_intervals"])):
+            return paid_rows
+        self.reuse_statistics["geometry_paid_rows_reused"] += len(prefix)
+        return paid_rows[len(prefix):]
+
+    def _supports_inherited_evidence(self, values, budget, tolerance, *,
+                                     evaluated_program=None, evaluated_rows=(), evaluated_errors=None):
         # Historical targets belong to their historical complete response.
         # A new sum/window consumer inherits the parameter evidence, not those
         # targets as if they had been observed for today's output.
@@ -302,11 +413,22 @@ class RelationIntervalResearch:
             program = _bind(Program.from_dict(context["parameter_template"]), {
                 key: Program("const", value=values.get(key, value))
                 for key, value in context["parameters"].items()})
+            same_response = (evaluated_program is not None and evaluated_errors is not None
+                             and program.expanded().simplified() == evaluated_program.expanded().simplified())
             for trajectory in context["trajectories"]:
-                if not budget.spend(len(trajectory)):
+                errors, missing = [], []
+                for payload in trajectory:
+                    row = Observation(payload["features"], payload["target"], tuple(payload["history"]))
+                    matched = next((current for current in evaluated_rows if current == row), None) if same_response else None
+                    if matched is None:
+                        missing.append(row)
+                    else:
+                        errors.append(evaluated_errors[id(matched)])
+                        self.reuse_statistics["inherited_predictions_reused"] += 1
+                if not budget.spend(len(missing)):
                     return None
-                error = sum((program.predict(Observation(row["features"], row["target"],
-                    tuple(row["history"]))) - row["target"]) ** 2 for row in trajectory) / len(trajectory)
+                errors.extend((program.predict(row) - row.target) ** 2 for row in missing)
+                error = sum(errors) / len(trajectory)
                 if error > max(tolerance, context["tolerance"]):
                     return False
         return True
@@ -355,7 +477,7 @@ class RelationIntervalResearch:
             geometry_depth = max((node.history_depth for node in relations), default=0)
             geometry_fields = sorted({name for node in relations for name, _ in node.observed_variables()})
             frames = {}
-            for row in paid_rows:
+            for row in self._new_geometry_rows(paid_rows, parameter):
                 history = row.history
                 for position in range(max(0, len(history) - self.program.history_depth), len(history) + 1):
                     point = row.features if position == len(history) else history[position]
@@ -380,7 +502,8 @@ class RelationIntervalResearch:
                         error = sum(errors[id(row)] for row in paid_rows) / len(paid_rows)
                         if error <= tolerance and all(sum(errors[key] for key in trajectory) / len(trajectory)
                                                       <= tolerance for trajectory in trajectory_ids):
-                            inherited = self._supports_inherited_evidence(values, budget, tolerance)
+                            inherited = self._supports_inherited_evidence(values, budget, tolerance,
+                                evaluated_program=program, evaluated_rows=evaluated_rows, evaluated_errors=errors)
                             if inherited is None:
                                 self.status = "compute_exhausted"
                                 return []
@@ -404,12 +527,16 @@ class RelationIntervalResearch:
                     error = sum(errors[id(row)] for row in paid_rows) / len(paid_rows)
                     if (error <= tolerance and all(sum(errors[key] for key in trajectory) / len(trajectory)
                             <= tolerance for trajectory in trajectory_ids) and
-                            self._supports_inherited_evidence(self.original, budget, tolerance)):
+                            self._supports_inherited_evidence(self.original, budget, tolerance,
+                                evaluated_program=self.program, evaluated_rows=evaluated_rows,
+                                evaluated_errors=errors)):
                         candidates = [item for item in candidates if item[0] != self.original]
                         candidates.insert(0, (dict(self.original), tuple(retained), error))
                 self.status = "unresolved"
-                return [self._entry(values, interval, index, error, len(paid_rows), budget.spent - start)
-                        for values, interval, error in candidates]
+                entries = [self._entry(values, interval, index, error, len(paid_rows), budget.spent - start)
+                           for values, interval, error in candidates]
+                self._remember_completed_partition(paid_rows, index)
+                return entries
             if self.reopen("current_relation_counterexample", parameter_index=index):
                 return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
             # A source search range is not a physical limit. Once all of its

@@ -13,7 +13,7 @@ _ANSWER_FIELDS = ('answer', 'executable_answer', 'answer_history', 'structural_a
                   'authored_status', 'evidence_status', 'check_results', 'analysis_scope',
                   'evidence', 'revision_index', 'reviewed_through_observation',
                   'child_answers', 'reviewed_child_answers', 'research_return',
-                  'last_program_result', 'native_condition_research', 'semantic_answer',
+                  'last_program_result', 'native_condition_research', 'native_structure_planning', 'semantic_answer',
                   'semantic_answer_history', 'query_execution', 'applied_question_use',
                   'support_paths', 'support_path_status', 'representation_diagnostic',
                   'representation_assessments', 'compilation', 'pending_author_work',

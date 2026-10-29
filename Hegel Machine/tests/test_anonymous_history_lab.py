@@ -151,8 +151,10 @@ def test_paid_counterexample_blocks_repeated_confirmation_and_allows_actual_revi
     assert agent.model is None and len(agent.confirmations) == 1
     assert lab.costs == prior_lab
     assert agent.costs['observation_cost'] == prior_costs['observation_cost']
-    assert agent.costs['compute_cost'] - prior_costs['compute_cost'] == len(agent.rows) == 26
-    assert calls == [('model.py', 2), ('model.py', 26)]
+    # Fresh labels expanded the evidence: score the current fitting context and
+    # the retained old fitting context on the same 26 rows before retention.
+    assert agent.costs['compute_cost'] - prior_costs['compute_cost'] == 2 * len(agent.rows) == 52
+    assert calls == [('model.py', 2), ('model.py', 26), ('_evaluated_model/model.py', 26)]
 
     # The agent remains able to edit and test its own source against the same
     # accumulated evidence; the failed submission does not end the investigation.
@@ -164,4 +166,5 @@ def test_paid_counterexample_blocks_repeated_confirmation_and_allows_actual_revi
     assert agent.model == 'model.py' and len(agent.confirmations) == 2
     assert agent.costs['observation_cost'] == lab.costs['observation_cost'] == 50
     assert agent.costs['compute_cost'] - before_revision['compute_cost'] == 26 + 24
-    assert calls == [('model.py', 2), ('model.py', 26), ('model.py', 26)]
+    assert calls == [('model.py', 2), ('model.py', 26),
+                     ('_evaluated_model/model.py', 26), ('model.py', 26)]

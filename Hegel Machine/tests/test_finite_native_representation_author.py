@@ -108,8 +108,15 @@ def test_standalone_common_author_executes_the_new_route_from_its_comparison_fee
     result = agent._execute('run', {'operator': 'procedure', 'path': 'shared/author.py',
                                   'max_steps': 2, 'confirm': False}, lab)
     operators = [entry['proposal']['arguments']['operator'] for entry in result['steps']]
-    assert operators == ['research_choice', 'research_route'], result
-    assert result['steps'][-1]['feedback']['status'] == 'native_representation_candidates_ready'
+    # scene already paid for the old comparison. Reuse it, perform the actual
+    # representation work, then compare every new export with that old parent.
+    assert operators == ['research_route', 'research_choice'], result
+    native = result['steps'][0]['feedback']
+    compared = result['steps'][1]['feedback']
+    assert native['status'] == 'native_representation_candidates_ready'
+    assert compared['models_completed'] == compared['models_requested']
+    assert {'old.py', *(entry['model'] for entry in native['exported_models'])} <= {
+        entry['path'] for entry in compared['evaluations']}
     assert agent.costs['model_calls'] == agent.costs['observation_cost'] == 0
 
 
@@ -282,9 +289,12 @@ def test_standalone_author_consumes_saved_competing_program_without_collision(tm
     result = agent._execute('run', {'operator': 'procedure', 'path': 'shared/author.py',
                                   'max_steps': 2, 'confirm': False}, lab)
     operators = [entry['proposal']['arguments']['operator'] for entry in result['steps']]
-    assert operators == ['research_choice', 'research_route'], result
-    native = result['steps'][-1]['feedback']['native_representation']
+    assert operators == ['research_route', 'research_choice'], result
+    native = result['steps'][0]['feedback']['native_representation']
     assert native['alternative_representation_basis'] == 'retained_alternative_has_different_task_predictions'
-    assert native['origin'] == result['steps'][-1]['proposal']['arguments']['research_question']['origin']
+    assert native['origin'] == result['steps'][0]['proposal']['arguments']['research_question']['origin']
     assert native['origin'] != 'computed_representation_conflict'
     assert native['candidates'] and agent.costs['model_calls'] == agent.costs['observation_cost'] == 0
+    compared = result['steps'][1]['feedback']
+    assert compared['models_completed'] == compared['models_requested']
+    assert 'old.py' in {entry['path'] for entry in compared['evaluations']}

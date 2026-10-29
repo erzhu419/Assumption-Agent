@@ -80,6 +80,73 @@ def test_one_save_reuses_large_source_member_spans_and_equality(tmp_path, monkey
         assert source._member_cache_entries <= storage._JSON_MEMBER_CACHE_ENTRIES
 
 
+def test_writer_reuses_only_its_unchanged_published_root_layout(tmp_path, monkeypatch):
+    path = tmp_path / 'research_state.json'
+    value = {'history': [{'index': i, 'failure': 'retained counterexample' * 12}
+                         for i in range(900)], 'compute': 17}
+    storage.write_json_checkpoint(path, value, indent=None)
+    storage.write_json_checkpoint(path, value, indent=None)
+    members = storage._JsonSource.members
+    roots = []
+
+    def published_root(source, node=None, **kwargs):
+        if node is None:
+            assert source.fields is not None, 'rescanned an unchanged published root'
+            roots.append(source.path)
+        return members(source, node, **kwargs)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(storage._JsonSource, 'members', published_root)
+        value['compute'] = 18
+        storage.write_json_checkpoint(path, value, indent=None)
+        storage.write_json_checkpoint(path, value, indent=None)
+    assert roots and storage.read_json_checkpoint(path) == value
+    _, fields = storage._checkpoint_layouts[path.absolute()]
+    assert fields['history'][0] is None  # Metadata spans hold no live history.
+    value['history'][-1]['failure'] = 'authored change of the same supported file'
+    path.write_text(json.dumps(value))
+    with ExitStack() as opened:
+        source = storage._JsonSource(path, opened)
+        assert source.fields is None
+    assert storage.read_json_checkpoint(path) == value
+
+
+def test_published_layout_points_past_alignment_spaces_to_the_actual_json_value(
+        tmp_path, monkeypatch):
+    shared_filesystem(monkeypatch)
+    path = tmp_path / 'research_state.json'
+    value = {'header': 'old', 'history': list(range(20000)), 'cost': 17}
+    path.write_text(json.dumps(value))
+    value['header'] = 'a longer authored header before the unchanged history'
+    storage.write_json_checkpoint(path, value, indent=None)
+    _, fields = storage._checkpoint_layouts[path.absolute()]
+    with path.open('rb') as saved:
+        saved.seek(fields['history'][1])
+        assert saved.read(1) == b'['
+    assert fields['history'][0] is None and fields['cost'][0] == 17
+    value['history'][-1] = -1
+    value['cost'] = 18
+    storage.write_json_checkpoint(path, value, indent=None)
+    assert storage.read_json_checkpoint(path) == value
+
+
+def test_small_published_metadata_does_not_evict_a_large_checkpoint_layout(tmp_path, monkeypatch):
+    from collections import OrderedDict
+    shared_filesystem(monkeypatch)
+    monkeypatch.setattr(storage, '_checkpoint_layouts', OrderedDict())
+    path = tmp_path / 'research_state.json'
+    value = {'history': list(range(20000)), 'cost': 17}
+    path.write_text(json.dumps(value))
+    storage.write_json_checkpoint(path, value, indent=None)
+    assert path.absolute() in storage._checkpoint_layouts
+    for index in range(20):
+        metadata = tmp_path / f'metadata_{index}.json'
+        storage.write_json_checkpoint(metadata, {'cost': index}, base=path, indent=None)
+        assert storage.read_json_checkpoint(metadata) == {'cost': index}
+        assert metadata.absolute() not in storage._checkpoint_layouts
+    assert path.absolute() in storage._checkpoint_layouts
+
+
 def test_bounded_encoder_failure_keeps_previous_complete_snapshot(tmp_path):
     path = tmp_path / 'research_state.json'
     original = {'paid': 97, 'retained': 'original failure ' * 10000}
@@ -455,6 +522,24 @@ def test_appended_comparison_shares_paid_score_prefix_and_retains_new_failure(tm
     assert json.loads(source.read_text()) == previous
     # Both the old execution and the new execution's score prefix share data.
     assert sum(length for _, length, _ in copied) > 2 * 200000
+
+
+def test_equal_retained_history_shares_one_complete_range(tmp_path, monkeypatch):
+    copied = shared_filesystem(monkeypatch)
+    source, target = tmp_path / 'source.json', tmp_path / 'research_state.json'
+    history = [{'operator': 'research_choice', 'evaluations': [
+        {'model': f'model_{index}.py', 'residuals': list(range(1000)),
+         'retention_decision': {'status': 'incumbent_retained'}}
+        for index in range(30)], 'compute_cost': turn}
+        for turn in range(4)]
+    original = {'operator_results': history, 'compute_cost': 97}
+    source.write_text(json.dumps(original))
+    current = {**original, 'compute_cost': 98}
+    storage.write_json_checkpoint(target, current, base=source, indent=None)
+    assert json.loads(target.read_text()) == current
+    # Equal old owners need no score-by-score rewrite to obtain sharing.
+    # Changed/appended owners still use the existing finer-grained path.
+    assert max(length for _, length, _ in copied) > len(json.dumps(history)) * .9
 
 
 def test_changed_score_between_equal_runs_does_not_reuse_an_old_decision(tmp_path, monkeypatch):

@@ -229,6 +229,8 @@ def _discover_structure(observations, schema, *, budget, transitions=(), radius_
         record = {"family": family, "training_loss": error, "effective_dimension": dimension,
                   "raw_dimension": len(schema.feature_names), "radius": radius, "window": window,
                   "response_basis": response_basis,
+                  "fit_terms": terms,
+                  "coefficients": list(coefficients),
                   "candidate_id": f"structure:{family}:{len(records)}", "program": program}
         if response_basis is not None:
             record["response_terms"] = [term.to_dict() for term in response_bases[response_basis]]
@@ -414,7 +416,8 @@ def _discover_structure(observations, schema, *, budget, transitions=(), radius_
         seen.add(record["program"])
         candidates.append(Candidate(record["candidate_id"], record["program"], "representation",
                                     f"Use observed {record['family'].replace('_', ' ')} structure"))
-        fit_record = {key: value for key, value in record.items() if key != "program"}
+        fit_record = {key: value for key, value in record.items() if key not in ("program", "fit_terms")}
+        fit_record["fit_terms"] = [term.to_dict() for term in record["fit_terms"]]
         radius = record["radius"]
         fit_record["radius_interval"] = None if radius is None else (
             max((distance for distance in distances if distance < radius), default=0.),

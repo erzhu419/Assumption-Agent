@@ -57,7 +57,10 @@ class EmpiricalScope:
 
     @classmethod
     def measured(cls, spec: TaskSpec, program: Program,
-                 observations: Sequence[Observation]) -> "EmpiricalScope":
+                 observations: Sequence[Observation], *,
+                 paid_support_matches: Sequence[bool] | None = None) -> "EmpiricalScope":
+        if paid_support_matches is not None and len(paid_support_matches) != len(observations):
+            raise ValueError("Paid support mask must align with the measured observations")
         support = []
         for name, lag in sorted(program.observed_variables()):
             values = [value for row in observations if (value := _read(row, name, lag)) is not None]
@@ -66,7 +69,9 @@ class EmpiricalScope:
         return cls(spec.task_id, spec.context.get("system_id"), support=support,
                    observed_rows=len(observations),
                    fallback=sum(row.target for row in observations) / len(observations) if observations else 0.0,
-                   support_examples=[_row_payload(row) for row in observations if prediction_matches(program, row)])
+                   support_examples=[_row_payload(row) for index, row in enumerate(observations)
+                       if (prediction_matches(program, row) if paid_support_matches is None
+                           else paid_support_matches[index])])
 
     def matches_conditions(self, row: Observation) -> bool:
         if self.predicate is not None:
@@ -1240,19 +1245,25 @@ class KnowledgeLibrary:
         self._refresh_definitions()
 
     def record_use(self, concept_id: str, task_id: str, *, spec: TaskSpec | None = None,
-                   observations: Sequence[Observation] | None = None) -> None:
+                   observations: Sequence[Observation] | None = None,
+                   paid_support_matches: Sequence[bool] | None = None) -> None:
+        if paid_support_matches is not None and len(paid_support_matches) != len(observations or ()):
+            raise ValueError("Paid support mask must align with the recorded observations")
         concept = next(c for c in self.concepts if c.concept_id == concept_id)
         if task_id not in concept.successful_tasks:
             concept.successful_tasks.append(task_id)
         concept.reuse_history.append({"task_id": task_id, "kind": "executed_program"})
         if spec is not None:
-            self._record_scope(concept, spec, observations)
+            self._record_scope(concept, spec, observations, paid_support_matches=paid_support_matches)
             local = self._scope_for(concept, spec)
             if local and (local.conditions or local.predicate):
                 self._refresh_condition_templates(concept, local)
 
     def learn(self, candidate: Candidate, spec: TaskSpec,
-              observations: Sequence[Observation] | None = None) -> tuple[str, bool]:
+              observations: Sequence[Observation] | None = None, *,
+              paid_support_matches: Sequence[bool] | None = None) -> tuple[str, bool]:
+        if paid_support_matches is not None and len(paid_support_matches) != len(observations or ()):
+            raise ValueError("Paid support mask must align with the learning observations")
         candidate = replace(candidate, program=candidate.program.simplified())
         equivalent = candidate.program.expanded().simplified()
         for concept in self.concepts:
@@ -1272,7 +1283,8 @@ class KnowledgeLibrary:
                     self.abstracts = [template for template in self.abstracts if template.source_concept_id != concept.concept_id]
                     self.abstracts.extend(replacements)
                     self._refresh_definitions()
-                self.record_use(concept.concept_id, spec.task_id, spec=spec, observations=observations)
+                self.record_use(concept.concept_id, spec.task_id, spec=spec, observations=observations,
+                                paid_support_matches=paid_support_matches)
                 self._record_abstract_use(candidate, spec.task_id)
                 return concept.concept_id, False
         concept_id = f"concept_{self.next_concept_index:04d}"
@@ -1285,7 +1297,7 @@ class KnowledgeLibrary:
         concept = Concept(concept_id, candidate.program, spec.risk_quantile,
                           spec.task_id, candidate.operation, successful_tasks=[spec.task_id],
                           parents=parents, generation=generation)
-        self._record_scope(concept, spec, observations)
+        self._record_scope(concept, spec, observations, paid_support_matches=paid_support_matches)
         self.concepts.append(concept)
         self.abstracts.extend(extract_templates(candidate.program, concept_id, object_schema=_object_schema(spec)))
         self._refresh_definitions()
@@ -1294,14 +1306,20 @@ class KnowledgeLibrary:
 
     @staticmethod
     def _record_scope(concept: Concept, spec: TaskSpec,
-                      observations: Sequence[Observation] | None) -> None:
+                      observations: Sequence[Observation] | None, *,
+                      paid_support_matches: Sequence[bool] | None = None) -> None:
         if not observations:
             return
         applicable = KnowledgeLibrary._scope_for(concept, spec)
-        supported = [row for row in observations if applicable.matches_conditions(row)] if applicable else list(observations)
+        indices = [index for index, row in enumerate(observations)
+                   if applicable is None or applicable.matches_conditions(row)]
+        supported = [observations[index] for index in indices]
         if not supported:
             return
-        measured = EmpiricalScope.measured(spec, concept.program, supported)
+        matches = ([paid_support_matches[index] for index in indices]
+                   if paid_support_matches is not None else None)
+        measured = EmpiricalScope.measured(spec, concept.program, supported,
+                                         paid_support_matches=matches)
         if applicable is not None:
             measured.conditions = [dict(condition) for condition in applicable.conditions]
             measured.predicate = deepcopy(applicable.predicate)

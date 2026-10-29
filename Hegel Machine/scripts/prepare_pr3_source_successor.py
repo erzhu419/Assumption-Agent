@@ -664,6 +664,755 @@ def _freeze_removal(plan, library_ref, library, baseline, index_ref, indexed,
         'restored_candidate_versions': deepcopy(manifest['restored_candidate_versions'])}, view, index_view
 
 
+def prepare_method_action_successors(selection, spec, output=None, *, ordinary_use_feedback_refs=()):
+    """Prepare the existing successor protocol only after a supported new body.
+
+    This adapter never creates a laboratory, labels, archive copies or a new
+    allowance. The additional four-cell layout is a frozen installation matrix,
+    not permission to bypass the ordinary registered executor.
+    """
+    from hegel_machine.cognition.method_action_research import read_method_reference
+    from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+    from scripts import run_anonymous_revision_inquiry as study
+
+    unavailable = {'status': 'not_eligible', 'execution_authorized': False,
+        'new_observations': 0, 'new_fits': 0, 'new_predictions': 0, 'new_model_calls': 0,
+        'target_labels_generated_or_read': False}
+    if selection.get('local_program_supported') is not True or not selection.get('local_support_refs'):
+        return {**unavailable, 'reason': 'no_supported_executable_method_revision'}
+    if not ordinary_use_feedback_refs or not spec.get('frozen_method_ref'):
+        return {**unavailable, 'reason': 'actual_ordinary_use_and_frozen_method_required'}
+    candidate = read_method_reference(spec['frozen_method_ref'], ROOT)
+    if (candidate.get('kind') != 'python_research_method'
+            or candidate.get('execution', {}).get('kind') != 'python_select_actions'):
+        return {**unavailable, 'reason': 'ordinary_python_method_carrier_required'}
+    returns = [read_method_reference(reference, ROOT) for reference in ordinary_use_feedback_refs]
+    if not any(item.get('execution_complete') is True
+               and item.get('execution_carrier') == 'python_select_actions'
+               and item.get('method_ref') == {'id': candidate['id'], 'version': candidate['version']}
+               for item in returns):
+        return {**unavailable, 'reason': 'complete_actual_ordinary_use_required'}
+    sources = spec.get('target_sources', [])
+    identifiers = [source.get('physical_source_id') for source in sources]
+    if (len(sources) != 3 or any(not value for value in identifiers) or len(set(identifiers)) != 3
+            or set(identifiers).intersection(spec.get('used_physical_source_ids', []))
+            or any(not source.get('generation_rule_ref') for source in sources)):
+        return {**unavailable, 'reason': 'three_registered_unexposed_physical_sources_required'}
+    if not spec.get('exposed_material_refs') or not spec.get('common_material_refs'):
+        return {**unavailable, 'reason': 'exposure_and_common_strong_material_scope_required'}
+    if any(not spec.get('cost_refs', {}).get(name)
+           for name in ('source', 'proposals', 'installation', 'target_budget')):
+        return {**unavailable, 'reason': 'complete_original_cost_references_required'}
+    settings = spec['target']
+    if any(name not in settings.get('limits', {}) for name in ('compute_budget',
+            'observation_budget', 'confirmation_rows', 'execution_seconds',
+            'max_model_calls', 'token_budget')):
+        return {**unavailable, 'reason': 'explicit_target_resources_required'}
+    limits = InquiryLLMConfig(**settings['limits'])
+    if limits.max_model_calls != 0 or limits.token_budget != 0:
+        raise ValueError('the finite successor retains zero model calls and tokens')
+    organization = {**deepcopy(spec['organization']), 'phase': 'target', 'theories': []}
+    plan = study.protocol(kinds=[source['kind'] for source in sources], cases=1,
+        seed=settings['seed'], arms=study.ORGANIZATION_ARMS, config=limits,
+        research_organization=organization, author=spec['author'],
+        archive=spec['materials']['baseline_archive'])
+    if {case['seed'] for case in plan['cases']}.intersection(spec.get('used_task_seeds', [])):
+        return {**unavailable, 'reason': 'exposed_task_cannot_be_renamed_as_a_successor'}
+    for case, source in zip(plan['cases'], sources):
+        case['physical_source_id'] = source['physical_source_id']
+        case['generation_rule_ref'] = deepcopy(source['generation_rule_ref'])
+    design = spec.get('design', 'whole_strategy')
+    if design == 'whole_strategy':
+        treatments = [('A', 'archive'), ('B', 'fixed_pr2'), ('C', 'pr3')]
+    elif design == 'body_guard_factorial':
+        bindings = spec.get('body_guard_bindings', {})
+        if set(bindings) != {'M0G0', 'M1G0', 'M0G1', 'M1G1'}:
+            return {**unavailable, 'reason': 'all_four_frozen_body_guard_installations_required'}
+        treatments = [('A', 'archive'), ('M0G0', 'fixed_pr2'),
+            ('M1G0', 'pr3'), ('M0G1', 'pr3'), ('M1G1', 'pr3')]
+    else:
+        raise ValueError('select whole_strategy or body_guard_factorial')
+    trials = [{'case_id': case['id'], 'physical_source_id': case['physical_source_id'],
+        'treatment': treatment, 'organization_arm': arm,
+        'installation_ref': (None if treatment == 'A' else deepcopy(
+            spec.get('body_guard_bindings', {}).get(treatment,
+                spec['frozen_method_ref'] if treatment == 'C' else spec.get('baseline_method_ref'))))}
+        for case in plan['cases'] for treatment, arm in treatments]
+    registration = {'status': 'prepared_not_executed', 'execution_authorized': False,
+        'plan': plan, 'trials': trials, 'trial_count': len(trials),
+        'design': design, 'frozen_method_ref': deepcopy(spec['frozen_method_ref']),
+        'paired_support_refs': deepcopy(selection['local_support_refs']),
+        'ordinary_use_feedback_refs': deepcopy(list(ordinary_use_feedback_refs)),
+        'exposed_material_refs': deepcopy(spec['exposed_material_refs']),
+        'common_material_refs': deepcopy(spec['common_material_refs']),
+        'shared_controls': {'complete_strong_pool': True, 'same_cache_capability': True,
+            'ordinary_old_language_reconstruction_allowed': True,
+            'new_target_products_shared_between_arms': False,
+            'public_fixes_are_not_learned_object_effects': True},
+        'cost_refs': deepcopy(spec.get('cost_refs', {})),
+        'cost_scope': 'source_proposals_installation_targets_failures_known_and_unknown_once',
+        'source_net_benefit': 'UNKNOWN',
+        'wrong_transfer': {'status': 'UNKNOWN', 'requires': 'actual_matched_target_counterfactual'},
+        'over_rejection': {'status': 'UNKNOWN', 'requires': 'actual_legal_rejected_method_counterfactual'},
+        'runtime': 'existing_registered_executor_fresh_mainline_freeze_at_separately_authorized_launch',
+        'target_labels_generated_or_read': False, 'new_compute_cost': 0,
+        'new_observations': 0, 'new_fits': 0, 'new_predictions': 0, 'new_model_calls': 0}
+    if output is not None:
+        output = Path(output).resolve()
+        if (output / 'registration.json').exists():
+            raise ValueError('use a fresh preparation directory')
+        output.mkdir(parents=True, exist_ok=True)
+        _write(output / 'registration.json', registration)
+    return registration
+
+
+def _restore_paid_structure_planning(agent, laboratory, source, planning):
+    """Attach one paid planning delta to its exact retained source question."""
+    from hegel_machine.cognition.native_condition_research import native_structure_planning_contract
+
+    owner = source['planning_question_ref']
+    question = next((item for item in agent.questions if item['id'] == owner['question_id']
+        and item.get('meaning_version', 1) == owner['meaning_version']), None)
+    if question is None or planning.get('question_meaning_version') != owner['meaning_version']:
+        raise ValueError('paid structure planning belongs to another question meaning')
+    rounds = question.get('native_condition_research', [])
+    basis = planning['basis']
+    index = basis['source_round_index']
+    if (not rounds or index != rounds[-1]['round_index']
+            or planning.get('source_round_index') != index):
+        raise ValueError('paid structure planning requires its original current native bank')
+    expected = native_structure_planning_contract(laboratory.public_spec(), agent.observations, rounds[-1])
+    if not planning.get('planning_complete') or basis != expected:
+        raise ValueError('paid structure planning inputs differ from the restored paid evidence')
+    state = str((Path(source['training_ref']['file']).parent / 'research_state.json').resolve())
+    prefix = ['questions', agent.questions.index(question), 'native_condition_research', index]
+    if planning.get('source_ref') != {'file': state, 'json_path': prefix}:
+        raise ValueError('paid structure planning requires its literal original source reference')
+    expected_refs = [{'file': state, 'json_path': [*prefix, 'candidates', candidate]}
+                     for candidate in basis['candidate_indices']]
+    for proposed in planning.get('proposed_experiments', []):
+        target = proposed['structural_discrimination']
+        if (target.get('source_question_ref') != owner
+                or target.get('source_round_index') != index
+                or target.get('hypothesis_refs') != expected_refs):
+            raise ValueError('paid structural predictions lost their source candidate bindings')
+    retained = question.setdefault('native_structure_planning', [])
+    position = planning['planning_index']
+    if position == len(retained):
+        retained.append(deepcopy(planning))
+    elif not (0 <= position < len(retained) and retained[position] == planning):
+        raise ValueError('paid structure planning position conflicts with retained results')
+    return question
+
+
+def make_retained_method_pairing_factories(registration, output):
+    """Bind the actual retained Common scene to the existing paired runner.
+
+    Constructing these callbacks only reads the registration. Their execution
+    uses the original optimized restore, accounting, procedure and evaluator;
+    no historical runtime is imported as the current implementation.
+    """
+    from dataclasses import asdict, replace
+    from hegel_machine.cognition.method_action_research import read_method_reference
+    from hegel_machine.cognition.registered_source_scene import restore_retained_common_scene
+    from hegel_machine.cognition.anonymous_research_archive import resolve_workspace_archive
+    from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
+    from hegel_machine.cognition.experiment_runtime import physical_cpu_groups, _initialize_worker
+
+    output = Path(output).resolve()
+    source = registration['source_scene']
+    panel = {}
+
+    def admitted():
+        if registration.get('execution_authorized') is not True or not registration.get('approval_ref'):
+            raise ValueError('the retained paired factories require their admitted frozen registration')
+
+    def metadata(reference):
+        return (read_method_reference(reference, ROOT) if reference.get('json_path') else
+                _read(reference['file']))
+
+    def restore(name, contract, destination, *, retained_source=None):
+        admitted()
+        selected_source = retained_source or source
+        resumed = None
+        if registration.get('continuation') and name == '10' and retained_source is None:
+            from scripts.run_method_action_pairing import _pair_continuation
+            resumed = _pair_continuation(registration)['outcomes'][name]
+            selected_source = {**source,
+                'training_ref': resumed['continuation_state_ref'],
+                'paid_observations_ref': resumed['continuation_data_ref'],
+                'costs_ref': resumed['continuation_costs_ref']}
+        workers = registration['maximum_physical_cores']
+        if type(workers) is not int or not 1 <= workers <= 8:
+            raise ValueError('retain the registered one-to-eight physical-core allowance')
+        _initialize_worker(physical_cpu_groups(1, workers)[0])
+        plan = metadata(selected_source['plan_ref'])
+        case = next(item for item in plan['cases'] if item['id'] == selected_source['case_id'])
+        logical_source = source if resumed is not None else selected_source
+        if (contract['start_state_ref'] != logical_source['training_ref']
+                or contract['data_ref'] != logical_source['paid_observations_ref']):
+            raise ValueError('this factory restores the literal D0 source; shared D1 needs its paid scene reference')
+        costs = read_method_reference(selected_source['costs_ref'], ROOT)
+        limits = replace(InquiryLLMConfig(**plan['limits']),
+            compute_budget=costs['compute_cost'] + contract['compute_cap'],
+            observation_budget=costs['observation_cost'] + contract['observation_cap'],
+            execution_seconds=costs['python_execution_seconds'] + contract['time_limits']['billed_python_seconds'],
+            max_model_calls=0, token_budget=0)
+        knowledge = metadata(selected_source['initial_archive_ref'])
+        while set(knowledge) == {'source_ref'}:
+            knowledge = metadata(knowledge['source_ref'])
+        knowledge = resolve_workspace_archive(knowledge)
+        workspace = Path(destination) / case['id'] / 'pr3'
+        scene = restore_retained_common_scene(Path(selected_source['training_ref']['file']).parent,
+            workspace, plan=plan, case=case, knowledge=knowledge, limits=limits, starting_costs=costs)
+        agent, laboratory = scene['agent'], scene['lab']
+        if len(agent.rows) != contract['scope']['paid_rows'] or len(scene['models']) != contract['scope']['pool_models']:
+            raise ValueError('the restored paid rows or complete strong pool changed; re-quote before work')
+        if selected_source.get('planning_result_ref') is not None:
+            _restore_paid_structure_planning(agent, laboratory, logical_source,
+                metadata(selected_source['planning_result_ref']))
+            scene['planning_result_ref'] = deepcopy(selected_source['planning_result_ref'])
+        if resumed is not None:
+            scene['physical_resume_state_ref'] = deepcopy(selected_source['training_ref'])
+            scene['prior_outcome_ref'] = deepcopy(
+                registration['continuation']['outcome_refs'][name])
+        if contract.get('execution_role') == 'retained_parent_baseline':
+            from scripts.run_method_action_pairing import _registered_retained_parent
+            declaration = contract['retained_parent']
+            reference = declaration['source_ref']
+            if (Path(reference['file']).resolve() !=
+                    (Path(selected_source['training_ref']['file']).parent / 'research_state.json').resolve()
+                    or reference.get('json_path') != ['evaluated_model']):
+                raise ValueError('retain the literal parent at this registered source checkpoint')
+            parent = _registered_retained_parent(agent, contract)
+            question = agent.knowledge['finite_native_author']['question']
+            scene.update(path=parent['model'],
+                question_ref={'id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+                profile_ref=None, origin_ref=deepcopy(declaration['author_work_ref']),
+                scope=deepcopy(contract['scope']),
+                cost_refs=[selected_source['costs_ref'], selected_source['unknown_cost_ref']],
+                native_attempt_limit=1)
+            scene.update({field: deepcopy(contract[field]) for field in (
+                'start_state_ref', 'data_ref', 'split_ref', 'quality_contract_ref',
+                'resource_contract_ref', 'evaluation_ref')})
+            return scene
+        from hegel_machine.cognition.finite_native_author import export_finite_native_author
+        from hegel_machine.cognition.research_programs import export_research_selection_program
+        from hegel_machine.cognition.theory_consolidation import (
+            install_python_research_method, library_entry_reference)
+        from hegel_machine.cognition.method_feedback import begin_method_feedback, _profile_ref
+
+        ordinary_path = (contract['request']['ordinary_method_path'] if name == 'ordinary_use'
+            else contract['selection_plan']['ordinary_method_path'])
+        agent._save(ordinary_path, export_finite_native_author())
+        candidate = None
+        if name != 'ordinary_use':
+            candidate = install_python_research_method(agent, candidate_id=contract['method_ref']['id'],
+                source=export_research_selection_program(contract['selection_plan']),
+                selection_plan=contract['selection_plan'], source_refs=contract['method_source_refs'],
+                max_steps=contract['max_steps'], selection_ref=contract.get('selection_ref'))
+            if candidate['version'] != contract['method_ref']['version']:
+                raise ValueError('restored method version differs from the frozen cell')
+            artifact = library_entry_reference(agent, 'candidates', candidate['id'])
+            artifact = {**artifact, 'file': str(agent.workspace / artifact['file'])}
+            scene['method_artifact_ref'] = artifact
+        question = agent.knowledge['finite_native_author']['question']
+        agent._active_question_id = question['id']
+        context = begin_method_feedback(agent, laboratory, candidate=candidate)
+        profile_ref = _profile_ref(agent, context['profile'])
+        scene.update(path=candidate['execution']['path'] if candidate is not None else ordinary_path,
+            question_ref={'id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+            profile_ref=profile_ref, origin_ref={'file': str(workspace / 'research_state.json'),
+                'json_path': ['method_results', len(agent.method_results)]},
+            scope={**contract['scope'], 'paid_rows': len(agent.rows), 'pool_models': len(scene['models'])},
+            cost_refs=[selected_source['costs_ref'], selected_source['unknown_cost_ref']],
+            native_attempt_limit=1)
+        scene.update({field: deepcopy(contract[field]) for field in (
+            'start_state_ref', 'data_ref', 'split_ref', 'quality_contract_ref',
+            'resource_contract_ref', 'evaluation_ref')})
+        registered_models = tuple(scene['models'])
+        def before_step(lab):
+            agent._active_question_id = question['id']
+            opened = agent._before_model_turn(lab)
+            if (registration.get('comparison_kind') == 'additional_research_vs_retained_parent'
+                    and selected_source.get('planning_result_ref') is not None):
+                from hegel_machine.cognition.finite_native_author import _comparison_models
+                from hegel_machine.cognition.python_research_routing import validated_candidates
+                native = [entry for owner in agent.questions
+                          for entry in owner.get('native_condition_research', [])]
+                models = _comparison_models(agent.knowledge['finite_native_author']['predictor_paths'],
+                    agent.candidate_paths, native)
+                models = list(dict.fromkeys([*models, *validated_candidates(agent)]))
+                if tuple(models) != registered_models:
+                    unit = agent._organization_state.get('registered_method_unit')
+                    if unit is not None:
+                        unit.update(phase='requires_rebind', required_scope={
+                            **unit['current_scope'], 'pool_models': len(models)})
+                    raise ValueError('paid planning comparison pool changed during public preparation; '
+                                     're-quote before policy, acquisition or scoring')
+            return opened
+        scene['before_step'] = before_step
+
+        def after_step(lab):
+            agent._organization_state['finite_author']['completed_steps'] += 1
+            agent._after_model_turn(lab)
+        scene['after_step'] = after_step
+        return scene
+
+    def prepare_evaluation():
+        admitted()
+        frozen = output / 'frozen_outputs.json'
+        if not frozen.is_file():
+            raise ValueError('commit every cell output before opening evaluation labels')
+        reference = next(iter(registration['cells'].values()))['evaluation_ref']
+        contract = metadata(reference)
+        if panel:
+            return panel['receipt_ref']
+        if contract.get('paid_rows_ref'):
+            rows = read_method_reference(contract['paid_rows_ref'], ROOT)
+            rows = [row for record in rows for row in record['rows']] if rows and 'rows' in rows[0] else rows
+        else:
+            from scripts.run_anonymous_revision_inquiry import AnonymousHistoryLab
+            plan = metadata(source['plan_ref'])
+            case = next(item for item in plan['cases'] if item['id'] == source['case_id'])
+            laboratory = AnonymousHistoryLab(kind=case['kind'], seed=case['seed'])
+            observation_reserve = registration['components']['Qeval_predictions']['observations']
+            if type(contract.get('rows')) is not int or not 0 <= contract['rows'] <= observation_reserve:
+                raise ValueError('the evaluation rows exceed the registered shared acquisition reserve')
+            if contract.get('actions'):
+                # action_cost validates every public sequence without running
+                # the apparatus. Reject the whole panel before its first buy.
+                planned_rows = sum(laboratory.action_cost(action) for action in contract['actions'])
+                if planned_rows != contract['rows']:
+                    raise ValueError('the declared evaluation actions differ from the frozen row allowance')
+                records = [laboratory.execute(action) for action in contract['actions']]
+                rows = [row for record in records for row in record['rows']]
+            elif contract.get('sampler') == 'registered_evaluation_rows':
+                rows = laboratory.evaluation_rows(length=contract['rows'], seed=contract['evaluation_seed'])
+            else:
+                raise ValueError('Qeval requires its explicit actions or declared evaluator sampler')
+        if len(rows) != contract['rows']:
+            raise ValueError('evaluation panel differs from the frozen row allowance')
+        path = output / 'shared_evaluation_panel.json'
+        _write(path, {'rows': [asdict(row) if hasattr(row, 'features') else row for row in rows],
+            'evaluation_ref': reference, 'data_role': 'frozen_development_evaluation',
+            'costs_once': {'observation_cost': 0 if contract.get('paid_rows_ref') else len(rows),
+                'model_calls': 0}, 'fits': 0, 'all_predictors_frozen_before_labels': True})
+        panel.update(rows=rows, contract=contract,
+            receipt_ref={'file': str(path), 'json_path': []})
+        return panel['receipt_ref']
+
+    def evaluate(name, frozen, evaluation_ref, account):
+        from scripts.run_anonymous_revision_inquiry import evaluate_terminal_model
+        from hegel_machine.cognition.code_agent import _closed_temporal_export, python_model_context
+        admitted()
+        workspace, inner = python_model_context(frozen['workspace'], frozen['model'])
+        if not _closed_temporal_export(workspace, inner):
+            return {'loss': None, 'coverage': None, 'completed': False,
+                'reason': 'frozen_no_refit_contract_unavailable', 'prediction_status': 'UNKNOWN'}
+        if not panel:
+            raise ValueError('prepare the shared evaluator panel after all outputs freeze')
+        rows, contract = panel['rows'], panel['contract']
+        if contract['mse_threshold'] != account.config.confirmation_mse_threshold:
+            raise ValueError('evaluation must retain the original quality threshold')
+        if account.costs['compute_cost'] + len(rows) > account.config.compute_budget:
+            raise ValueError('frozen prediction is outside the registered cell allowance')
+        original = (workspace / inner).read_bytes()
+        account.costs['compute_cost'] += len(rows)
+        started = monotonic()
+        try:
+            measured = evaluate_terminal_model(workspace, inner, rows, timeout_seconds=min(
+                contract['execution_timeout_seconds'],
+                account.config.execution_seconds - account.costs['python_execution_seconds']))
+        finally:
+            account.costs['python_execution_seconds'] += monotonic() - started
+        if (workspace / inner).read_bytes() != original:
+            raise ValueError('frozen predictor changed during the no-fit evaluation')
+        prediction_path = output / name / 'frozen_evaluation.json'
+        prediction_path.parent.mkdir(parents=True, exist_ok=True)
+        _write(prediction_path, {'frozen_model': frozen,
+            'evaluation_rows_ref': {**panel['receipt_ref'], 'json_path': ['rows']},
+            'evaluation_ref': evaluation_ref, 'evaluation': measured})
+        loss = measured.get('mse') if measured.get('returncode') == 0 else None
+        return {'loss': loss, 'quality': {'loss': loss, 'threshold': contract['mse_threshold']},
+            'coverage': len(rows) if loss is not None else None,
+            'completed': loss is not None and loss <= contract['mse_threshold']}
+
+    def ordinary_use(pair_refs, outcome_refs, destination):
+        admitted()
+        from hegel_machine.cognition.experiment_runtime import (
+            python_execution_deadline, checkpoint_execution, ExecutionTiming)
+        from scripts.run_method_action_pairing import (execute_registered_method_unit, _freeze,
+            measured_execution_timing, execution_timing_fields, METHOD_UNIT_PHASES)
+        use = registration['ordinary_use']
+        previous_outcome = read_method_reference(outcome_refs[use['continue_cell']], ROOT)
+        if not previous_outcome.get('execution_complete'):
+            receipt = {'status': 'ordinary_use_unresolved_incomplete_cell',
+                'continued_cell': use['continue_cell'],
+                'continued_outcome_ref': outcome_refs[use['continue_cell']],
+                'new_compute_cost': 0, 'new_observations': 0,
+                'data_role': 'same_development_cell_continuation', 'independent_support': False,
+                'old_unknown_cost_ref': source['unknown_cost_ref']}
+            _write(Path(destination) / 'ordinary_use_receipt.json', receipt)
+            return receipt
+        restore_started = monotonic()
+        continued = retained_method_use_continuation(source, use, outcome_refs)
+        scene = restore('ordinary_use', continued['contract'], Path(destination) / 'ordinary_use',
+            retained_source=continued['source'])
+        agent, laboratory = scene['agent'], scene['lab']
+        recovery_seconds = monotonic() - restore_started
+        before = dict(agent.costs)
+        tested_ref = continued['tested_candidate_ref']
+        tested = read_method_reference(tested_ref, ROOT)
+        method_question = retained_method_use_question(use, tested,
+            continued['method_invocation_binding'], scene['question_ref'])
+        request = {**deepcopy(use['request']), 'pair_refs': deepcopy(pair_refs),
+            'tested_candidate_ref': tested_ref, 'paired_candidate_id': tested['id']}
+        from hegel_machine.cognition.experiment_runtime import PythonExecutionDeadline, ActivityExecutionDeadline
+        entered, rescue_seconds = monotonic(), 0.
+        host_phases = ExecutionTiming((*METHOD_UNIT_PHASES, 'method_return_review'))
+        result, choice, invoked, finalized, frozen_parent = {}, {}, None, None, None
+        fresh_quote = None
+        failure_status = None
+        try:
+            with measured_execution_timing() as meter, python_execution_deadline(
+                    use['time_limits']['active_wall_seconds'], activity=True):
+                if use['observation_cap'] != 0:
+                    raise ValueError('ordinary use continues paid material without a new acquisition allowance')
+                initial_view = quote_retained_method_use(agent, laboratory.public_spec(), tested,
+                    compute_cap=use['compute_cap'])
+                proposal_path = Path(destination) / 'ordinary_use/current_ordinary_proposal.json'
+                _write(proposal_path, initial_view['ordinary_proposal'])
+                request['ordinary_proposal_ref'] = {'file': str(proposal_path), 'json_path': []}
+                with host_phases.phase('method_return_review'):
+                    result = agent._execute('run', {'operator': 'research_route',
+                        'research_question': method_question,
+                        'method_action_revision': request, 'allocation': {'compute': use['compute_cap']}}, laboratory)
+                next_action = result.get('next_action')
+                if next_action is not None:
+                    arguments = next_action.get('arguments', {})
+                    if next_action.get('action') != 'run' or arguments.get('operator') != 'procedure':
+                        raise ValueError('a supported Python method must return its ordinary procedure action')
+
+                    agent._active_question_id = scene['question_ref']['id']
+                    installed = result['method_action_research']['installed_candidate']
+                    remaining_compute = agent.config.compute_budget - agent.costs['compute_cost']
+                    fresh_quote = quote_retained_method_use(agent, laboratory.public_spec(), installed,
+                        compute_cap=remaining_compute)
+                    fresh_quote = _reserve_registered_method_closure(fresh_quote, use,
+                        compute_cap=remaining_compute)
+                    exports = (fresh_quote.get('complete_quote') or {}).get('max_exported_models', 0)
+                    if exports > use['scope']['max_exports']:
+                        fresh_quote.update(status='UNKNOWN', reason='next_export_scope_requires_new_quote')
+                    _write(Path(destination) / 'ordinary_use/fresh_complete_quote.json', fresh_quote)
+                    if fresh_quote['status'] != 'available':
+                        failure_status = 'ordinary_use_unresolved_no_funded_complete_unit'
+                        next_action = None
+
+                if next_action is not None:
+
+                    def checkpoint(lab):
+                        with checkpoint_execution():
+                            agent._prepare_program_state()
+                            _write(agent.workspace / 'training.json', agent.checkpoint_result('researching'))
+                    agent._active_question_id = scene['question_ref']['id']
+                    invoked = execute_registered_method_unit(agent, laboratory, arguments['path'],
+                        max_steps=arguments['max_steps'], before_step=scene['before_step'],
+                        after_step=scene['after_step'], checkpoint=checkpoint, native_attempt_limit=1,
+                        execution_timing=host_phases,
+                        research_compute_reserve=(fresh_quote['required_compute']
+                            - fresh_quote['closure_reserve_compute']),
+                        research_compute_ceiling=(agent.config.compute_budget
+                            - fresh_quote['closure_reserve_compute']))
+                    from hegel_machine.cognition.finite_native_author import _comparison_models
+                    from hegel_machine.cognition.python_research_routing import validated_candidates
+                    rounds = [round_ for question in agent.questions
+                        for round_ in question.get('native_condition_research', [])]
+                    models = _comparison_models(scene['models'], agent.candidate_paths, rounds)
+                    models = list(dict.fromkeys([*models, *validated_candidates(agent)]))
+                    if len(models) > scene['scope']['pool_models'] + use['scope']['max_exports']:
+                        raise ValueError('actual candidate pool exceeded the frozen ordinary comparison quote')
+                    with host_phases.phase('final_comparison'):
+                        choice = agent._execute('run', {'operator': 'research_choice',
+                            'models': models, 'research_question': deepcopy(scene['question_ref'])}, laboratory)
+                    complete = (not choice.get('error') and not choice.get('truncated')
+                        and choice.get('models_requested') == choice.get('models_completed') == len(models))
+                    model = invoked.get('model')
+                    if use['return_contract'] == 'retained_parent' and complete:
+                        model = (agent._evaluated_summary() or {}).get('model')
+                    if model and complete:
+                        with host_phases.phase('freeze'):
+                            frozen_parent = _freeze(agent, model, Path(destination) / 'ordinary_use/frozen')
+                    comparison_path = Path(destination) / 'ordinary_use/comparison.json'
+                    comparison_ref = {'file': str(comparison_path), 'json_path': []}
+                    comparison_index = next(index for index in reversed(range(len(agent.operator_results)))
+                        if agent.operator_results[index].get('operator') == 'research_choice')
+                    _write(comparison_path, {**{key: deepcopy(choice[key]) for key in (
+                        'operator', 'models_requested', 'models_completed', 'paid_rows', 'truncated',
+                        'error', 'evaluated_model', 'compute_cost', 'python_execution_seconds') if key in choice},
+                        'source_ref': {'file': str(agent.workspace / 'research_state.json'),
+                            'json_path': ['operator_results', comparison_index]}})
+                    delivery_path = Path(destination) / 'ordinary_use/delivery.json'
+                    delivery_ref = {'file': str(delivery_path), 'json_path': []}
+                    _write(delivery_path, ordinary_method_delivery(agent, scene, invoked, choice,
+                        comparison_ref=comparison_ref, model=model, frozen_model=frozen_parent,
+                        costs_before=before))
+                    finalized = agent._execute('run', {'operator': 'method_action_feedback',
+                        'candidate_id': installed['id'], 'binding': invoked['method_invocation_binding'],
+                        'result_ref': delivery_ref, 'comparison_ref': comparison_ref,
+                        'frozen_prediction_refs': []}, laboratory)
+                else:
+                    choice = {}
+                with host_phases.phase('final_save'), host_phases.phase('checkpoint'), checkpoint_execution():
+                    _write(agent.workspace / 'training.json', agent.checkpoint_result('researching'))
+        except Exception as error:
+            failure_status = ('time_exhausted' if isinstance(error, (PythonExecutionDeadline, ActivityExecutionDeadline))
+                else 'execution_error')
+            result = {**result, 'execution_error': f'{type(error).__name__}: {error}'}
+            rescue_started = monotonic()
+            with host_phases.phase('exception_rescue'), host_phases.phase('checkpoint'), checkpoint_execution():
+                _write(agent.workspace / 'training.json', agent.checkpoint_result('researching'))
+            rescue_seconds = monotonic() - rescue_started
+        receipt = {'status': failure_status or ('ordinary_method_invoked' if invoked is not None
+                else 'complete_negative_no_new_method'),
+            'route_result': result, 'procedure_result': invoked,
+            'whole_method_feedback': finalized, 'frozen_parent': frozen_parent,
+            'comparison_complete': bool(choice and not choice.get('error') and not choice.get('truncated')
+                and choice.get('models_requested') == choice.get('models_completed')),
+            'feedback_ref': {'file': str(agent.workspace / 'shared/theory_library.json'),
+                'json_path': ['method_feedback']},
+            'costs': {key: value - before[key] for key, value in agent.costs.items()},
+            'old_unknown_cost_ref': source['unknown_cost_ref'], 'outcome_refs': outcome_refs,
+            'continued_cell': use['continue_cell'],
+            'continued_state_ref': continued['source']['training_ref'],
+            'tested_candidate_ref': tested_ref, 'fresh_complete_quote': fresh_quote,
+            'method_question_ref': {'question_id': method_question['id'],
+                'meaning_version': method_question.get('meaning_version', 1)},
+            'ordinary_use_scope': continued['contract']['scope'],
+            'data_role': 'same_development_cell_continuation', 'independent_support': False,
+            'timing': {'activity_wall_seconds': monotonic() - entered - rescue_seconds,
+                'rescue_preservation_seconds': rescue_seconds, 'recovery_seconds': recovery_seconds,
+                'administrative_pause_seconds': 0.,
+                'administrative_pause_scope': 'this new stage contains no operator-requested pause'}}
+        receipt['timing'].update(execution_timing_fields(meter,
+            receipt['timing']['activity_wall_seconds']))
+        receipt['host_phase_timing'] = {**host_phases.result(),
+            'phase_totals_are_additive': False,
+            'phase_scope': 'procedure includes hooks and step checkpoints; final/rescue saves include checkpoint'}
+        _write(Path(destination) / 'ordinary_use_receipt.json', receipt)
+        return receipt
+
+    return {'restore_cell': restore, 'prepare_evaluation': prepare_evaluation,
+        'evaluate_frozen': evaluate, 'ordinary_use': ordinary_use}
+
+
+def ordinary_method_delivery(agent, scene, invoked, comparison, *, comparison_ref,
+                             model, frozen_model, costs_before):
+    """Return the executed method's original evidence through existing refs."""
+    from hegel_machine.cognition.method_action_research import read_method_reference
+    from hegel_machine.cognition.theory_consolidation import library_entry_reference
+
+    binding = invoked['method_invocation_binding']
+    references = agent.theory_consolidation['method_feedback'][binding['candidate_id']]['outcome_refs']
+    original = next(record for reference in references
+        for record in [read_method_reference(reference, agent.workspace)]
+        if record['origin_ref'] == binding['origin_ref'])
+    question = next(item for item in agent.questions if item['id'] == scene['question_ref']['id'])
+    artifact = library_entry_reference(agent, 'candidates', binding['candidate_id'])
+    artifact = {**artifact, 'file': str(agent.workspace / artifact['file'])}
+    complete = (type(comparison.get('models_requested')) is int
+        and not comparison.get('error') and not comparison.get('truncated')
+        and comparison.get('models_requested') == comparison.get('models_completed'))
+    delivery = {key: deepcopy(scene[key]) for key in (
+        'start_state_ref', 'data_ref', 'split_ref', 'quality_contract_ref',
+        'resource_contract_ref', 'evaluation_ref')}
+    delivery.update(status=invoked['status'], execution_complete=bool(complete and model),
+        frozen_model=deepcopy(frozen_model), profile_ref=deepcopy(original['profile_ref']),
+        origin_ref=deepcopy(binding['origin_ref']),
+        method_ref=deepcopy(original['method_ref']), method_artifact_ref=artifact,
+        method_invocation_binding=deepcopy(binding),
+        comparison={key: deepcopy(comparison[key]) for key in (
+            'models_requested', 'models_completed', 'truncated', 'error') if key in comparison},
+        complete_comparison_ref=deepcopy(comparison_ref),
+        actual_action_content=deepcopy(invoked.get('actual_action_content', [])),
+        costs={key: value - costs_before[key] for key, value in agent.costs.items()},
+        cost_refs=deepcopy(scene['cost_refs']))
+    source_id = question.get('theory_target', {}).get('context_ref', {}).get('source_id')
+    if source_id is not None:
+        delivery['source_id'] = deepcopy(source_id)
+    for key in ('native_representation_returns', 'native_research_complete', 'actual_action_refs',
+                'native_boundary_refs', 'procedure_steps_consumed', 'registered_research_unit'):
+        if key in invoked:
+            delivery[key] = deepcopy(invoked[key])
+    return delivery
+
+
+def retained_method_use_continuation(source, use, outcome_refs):
+    """Bind ordinary use to the explicitly registered, already-paid cell end.
+
+    A second cold start would purchase the cell's own Q and fitted candidates
+    again. Only small outcome metadata is read here; the usual selected-field
+    restoration remains the sole owner of the actual scene and paid cursors.
+    """
+    from hegel_machine.cognition.method_action_research import read_method_reference
+
+    name = use.get('continue_cell')
+    if name not in outcome_refs:
+        raise ValueError('ordinary use requires an explicitly registered completed cell')
+    reference = outcome_refs[name]
+    outcome = read_method_reference(reference, ROOT)
+    if not outcome.get('execution_complete'):
+        raise ValueError('an incomplete cell is not a completed ordinary-use source')
+    state = outcome.get('continuation_state_ref')
+    scope = outcome.get('continuation_scope')
+    if (not state or Path(state['file']).name != 'training.json'
+            or not outcome.get('costs_after') or not scope or not outcome.get('method_artifact_ref')
+            or not outcome.get('method_invocation_binding')):
+        raise ValueError('the ended cell must retain its canonical paid state, account and scope')
+    limits = use['continuation_scope_limits']
+    if (scope['paid_rows'] > limits['max_paid_rows']
+            or scope['pool_models'] > limits['max_pool_models']):
+        raise ValueError('the ended cell exceeds the registered next-state scope; re-quote before ordinary use')
+    costs_ref = {**reference, 'json_path': [*reference.get('json_path', []), 'costs_after']}
+    data_ref = {**state, 'json_path': ['paid_observations']}
+    return {'tested_candidate_ref': outcome['method_artifact_ref'],
+        'method_invocation_binding': outcome['method_invocation_binding'],
+        'source': {**source, 'training_ref': state,
+                'costs_ref': costs_ref, 'paid_observations_ref': data_ref},
+        'contract': {**{field: outcome[field] for field in
+                ('split_ref', 'quality_contract_ref', 'evaluation_ref') if field in outcome},
+            **use, 'start_state_ref': state, 'data_ref': data_ref,
+            'scope': {**use['scope'], **scope}}}
+
+
+def retained_method_use_question(use, candidate, binding, parent_ref):
+    """Bind the method question to its actual paid invocation and current parent."""
+    if (binding.get('candidate_id') != candidate['id']
+            or binding.get('candidate_version') != candidate['version']
+            or not binding.get('origin_ref') or not binding.get('paid_cutoff')):
+        raise ValueError('the method problem requires its actual executed candidate binding')
+    declaration = use['research_question']
+    declared = declaration.get('method_use_plan', {}).get('candidate_id')
+    if declared is not None and declared != candidate['id']:
+        raise ValueError('the executed method differs from the frozen ordinary-use declaration')
+    return {**deepcopy(declaration), 'kind': 'method_use',
+        'parent_id': parent_ref['id'],
+        'parent_question_ref': {'question_id': parent_ref['id'],
+            'meaning_version': parent_ref.get('meaning_version', 1)},
+        'method_use_plan': {'candidate_id': candidate['id'], 'binding': deepcopy(binding)},
+        'answer_type': 'research_action', 'query_semantics': {'mode': 'solution_relation'},
+        'use_sites': [{'kind': 'select_research_action', 'question_id': parent_ref['id']}]}
+
+
+def _reserve_registered_method_closure(quote, use, *, compute_cap):
+    """Keep the registered common-output closure funded beside the fresh work."""
+    if 'closure_compute_reserved' not in use or quote.get('status') != 'available':
+        return quote
+    required = quote.get('required_compute')
+    fresh = quote.get('closure_reserve_compute')
+    registered = use['closure_compute_reserved']
+    if any(type(value) is not int or value < 0 for value in (required, fresh, registered)):
+        return {**quote, 'status': 'UNKNOWN', 'reason': 'complete_closure_quote_required'}
+    closure = max(fresh, registered)
+    required += closure - fresh
+    return {**quote, 'required_compute': required, 'closure_reserve_compute': closure,
+        'fresh_closure_reserve_compute': fresh, 'registered_closure_reserve_compute': registered,
+        'status': 'available' if required <= compute_cap else 'complete_unit_unfunded'}
+
+
+def quote_retained_method_use(agent, public_spec, candidate, *, compute_cap):
+    """Project the real next ordinary selection against fresh paid-only offers.
+
+    The frozen ordinary source runs only its pure selector. Existing live state
+    and the span reader supply references without decoding the portable scene;
+    neither the selector nor this quote executes an action or grants resources.
+    """
+    from hegel_machine.cognition.finite_native_author import (
+        publish_research_options, research_segment_options, research_action_semantics,
+        ordinary_completion_reserve)
+    from hegel_machine.cognition.method_action_research import read_method_reference
+    from hegel_machine.cognition.method_feedback import begin_method_feedback
+    from hegel_machine.cognition.method_conditions import method_condition_features, method_condition_support
+
+    state = agent._program_state()
+    decision = {'research_options': publish_research_options(agent, public_spec)}
+    # _native_work_action consumes this same normal publication. It contains
+    # quotations and addresses, never a second copy of the strong index.
+    _write(agent.workspace / 'method_decision.json', decision)
+    plan = candidate['selection_plan']
+    path = candidate['execution']['path']
+    start = agent.program_contexts.get(path, {}).get('start', len(agent.method_results))
+    memory = {**agent.knowledge, 'research_state': state, 'method_decision': decision,
+        'program_results': [entry for entry in agent.method_results[start:] if entry.get('path') == path],
+        'ordinary_method_path': plan['ordinary_method_path'], 'research_selection_plan': plan}
+    context = begin_method_feedback(agent, SimpleNamespace(public_spec=lambda: public_spec), candidate=candidate)
+    # The real selection profile is public; no return, Qeval label or future
+    # target enters it. Common uses this same current-profile calculation.
+    if plan.get('condition') is not None:
+        if context is None:
+            context = {'profile': getattr(agent, '_method_use_profile', None) or {}}
+        profile = context['profile']
+        memory['method_condition_features'] = method_condition_features(profile,
+            plan.get('condition_feature_paths', []))
+        memory['method_condition_support'] = method_condition_support(profile,
+            read_method_reference(candidate['selection_ref'], agent.workspace))
+    ordinary_path = agent.workspace / plan['ordinary_method_path']
+    namespace = {'__file__': str(ordinary_path)}
+    exec(compile(ordinary_path.read_text(encoding='utf-8'), str(ordinary_path), 'exec'), namespace)
+    namespace['_state'] = lambda _: state
+    namespace['_json_reference_value'] = lambda reference: read_method_reference(reference, agent.workspace)
+    compiled = {}
+    exec(compile((agent.workspace / path).read_text(encoding='utf-8'), path, 'exec'), compiled)
+    previous_directory = Path.cwd()
+    try:
+        os.chdir(agent.workspace)
+        ordinary = namespace['select_actions'](public_spec, agent.observations, memory)
+        selected = namespace['select_research_segment'](public_spec, agent.observations, memory,
+            plan=plan, ordinary_select_actions=lambda *_: ordinary,
+            condition=compiled['_condition'] if plan.get('condition') is not None else None)
+        view = research_segment_options(public_spec, agent.observations, memory,
+            state=state, decision=decision)
+    finally:
+        os.chdir(previous_directory)
+    semantic = research_action_semantics(selected, selected.get('program_binding'))
+    matched = next((option for option in view['options'] if option['semantic_action'] == semantic), None)
+    result = {'status': 'UNKNOWN', 'ordinary_proposal': ordinary, 'selected_proposal': selected,
+        'paid_only': True, 'new_observations': 0, 'scope': {'paid_rows': len(agent.rows),
+            'pool_models': len(agent.knowledge['finite_native_author']['predictor_paths'])},
+        'excluded_options': view['excluded'], 'compute_cap': compute_cap,
+        'no_actions_executed': True, 'completion_is_not_guaranteed': True}
+    if matched is None:
+        if (selected.get('action') in {'finish', 'evaluate'}
+                or selected.get('arguments', {}).get('operator') == 'research_choice'):
+            question = next(item for item in agent.questions if item['id'] == agent._active_question_id)
+            reserve = ordinary_completion_reserve(agent, question)
+            if reserve is not None:
+                required = reserve['compute_cost']
+                result.update(status='available' if required <= compute_cap else 'complete_unit_unfunded',
+                    scope_kind='common_closure_only', required_compute=required,
+                    closure_reserve_compute=required)
+                return result
+        result['reason'] = 'fresh_selected_work_has_no_complete_paid_only_quote'
+        return result
+    quote = matched['complete_quote']
+    if quote['observation_cost'] != 0:
+        result['reason'] = 'next_work_requires_unapproved_new_observations'
+        return result
+    unit = quote.get('research_unit') or {}
+    reserve = unit.get('completion_reserve') or {}
+    closure = reserve.get('compute_cost') if reserve else (
+        quote.get('comparison_compute', 0) + quote.get('finish_compute', 0))
+    if type(closure) is not int or closure <= 0:
+        result['reason'] = 'fresh_complete_comparison_and_parent_reserve_required'
+        return result
+    required = quote['compute_cost']
+    result.update(status='available' if required <= compute_cap else 'complete_unit_unfunded',
+        required_compute=required, closure_reserve_compute=closure,
+        complete_quote=deepcopy(quote), proposal_ref=deepcopy(matched['proposal_ref']),
+        selected_family=matched['family'], scope_kind='bounded_paid_research_and_complete_closure')
+    return result
+
+
 def prepare_frozen_successor(spec, output):
     """Freeze reviewable successor inputs from existing source results only.
 
@@ -996,18 +1745,18 @@ def _run_prepared_plan(plan, destination, knowledge, *, workers=8):
         prepare_prefix=prepare_prefix, agent_factory=agent_factory, workers=workers)
 
 
-def _prepared_callbacks(plan):
+def _prepared_callbacks(plan, *, case_id=None):
     from scripts import run_anonymous_revision_inquiry as study
 
     def agent_factory(provider, workspace, **kwargs):
-        case_id = Path(workspace).parent.name
+        prepared_case_id = case_id if case_id is not None else Path(workspace).parent.name
         kwargs['knowledge']['finite_native_author']['question'] = deepcopy(
-            plan['prepared_public_questions'][case_id])
-        score_index = plan.get('paid_score_index_refs_by_case', {}).get(case_id)
+            plan['prepared_public_questions'][prepared_case_id])
+        score_index = plan.get('paid_score_index_refs_by_case', {}).get(prepared_case_id)
         if score_index is not None:
             kwargs['knowledge'].setdefault('files', {})[
                 '_paid_python_scores/_evaluated_model/assessments.json'] = json.dumps(
-                    _target_paid_score_index(score_index, plan['prepared_public_questions'][case_id]))
+                    _target_paid_score_index(score_index, plan['prepared_public_questions'][prepared_case_id]))
         index_view = plan.get('target_intervention', {}).get('index_view_ref')
         if index_view and kwargs['arm'] == 'pr3':
             kwargs['knowledge']['theory_index'] = deepcopy(index_view)
@@ -1196,7 +1945,8 @@ def run_prepared_source_comparisons(output):
     snapshot = sorted({str(path.relative_to(ROOT))
         for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
         {'scripts/run_anonymous_revision_inquiry.py', 'scripts/prepare_pr3_source_successor.py',
-         'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py'})
+         'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py',
+         'scripts/run_method_action_pairing.py'})
     for name in snapshot:
         frozen = destination / 'source_at_run' / name
         frozen.parent.mkdir(parents=True, exist_ok=True)
@@ -1456,7 +2206,8 @@ def run_prepared_source_research(output):
     snapshot = sorted({str(path.relative_to(ROOT))
         for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
         {'scripts/run_anonymous_revision_inquiry.py', 'scripts/prepare_pr3_source_successor.py',
-         'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py'})
+         'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py',
+         'scripts/run_method_action_pairing.py'})
     for name in snapshot:
         frozen = destination / 'source_at_run' / name
         frozen.parent.mkdir(parents=True, exist_ok=True)
@@ -1642,19 +2393,24 @@ def _saved_scene_projection(source, training, state, seed):
     return previous, projected, native, models
 
 
-def _retain_scene_score_index(source, destination):
-    """Reuse only immutable prior score scopes on at most the97 available rows."""
+def _retain_scene_score_index(source, destination, *, paid_rows):
+    """Retain paid scopes up to this restored scene's actual row count.
+
+    Exact rows, question and model context remain ordinary scorer checks.
+    A historical 97-row prefix must not truncate a later complete scene.
+    """
     original = Path(source) / '_paid_python_scores/_evaluated_model/assessments.json'
     if not original.is_file():
         return {'retained_scopes': 0, 'retained_assessments': 0}
     index = _read(original)
-    scopes = [item for item in index['scopes'] if len(_value(item)['rows']) <= 97]
+    scopes = [item for item in index['scopes'] if len(_value(item)['rows']) <= paid_rows]
     eligible = {item['file'] for item in scopes}
     assessments = [item for item in index['assessments']
                    if _value(item)['scope_ref']['file'] in eligible]
     _write(Path(destination) / '_paid_python_scores/_evaluated_model/assessments.json',
            {'scopes': scopes, 'assessments': assessments, 'contexts': []})
     return {'retained_scopes': len(scopes), 'retained_assessments': len(assessments),
+        'available_paid_rows': paid_rows,
         'source_index_ref': {'file': str(original), 'json_path': []},
         'context_identity_still_checked_by_ordinary_scorer': True}
 
@@ -1898,7 +2654,7 @@ def accept_prepared_saved_scene(preparation, output=None, *, branch_views=None):
         if missing:
             _write(workspace / 'missing_predictors.json', missing)
             raise ValueError(f'the strong saved pool has{len(missing)} unavailable predictor paths')
-        cache = _retain_scene_score_index(source, workspace)
+        cache = _retain_scene_score_index(source, workspace, paid_rows=len(agent.rows))
         agent.knowledge['finite_native_author']['question'] = deepcopy(
             original['method_results'][9]['proposal']['research_question'])
         reserve = ordinary_completion_reserve(agent, agent.questions[1])
@@ -2114,7 +2870,7 @@ def accept_prepared_retained_scene(registration, *, output=None):
                     or question.get('theory_target', {}).get('revision_fitting')):
                 question['frozen_library_path'] = str(path)
         save_library(agent)
-        cache = _retain_scene_score_index(source, agent.workspace)
+        cache = _retain_scene_score_index(source, agent.workspace, paid_rows=len(agent.rows))
         agent._prepare_program_state()
         event_start, method_start = len(agent.events), len(agent.method_results)
         progress = retained_research_progress(agent, event_start=event_start, method_start=method_start)
@@ -2412,7 +3168,8 @@ def run_prepared_saved_scene(preparation, output=None, *, accepted_scene=None, w
     snapshot = sorted({str(path.relative_to(ROOT))
         for path in (ROOT / 'src/hegel_machine').rglob('*.py')} |
         {'scripts/run_anonymous_revision_inquiry.py', 'scripts/prepare_pr3_source_successor.py',
-         'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py'})
+         'scripts/run_online_inquiry_llm.py', 'scripts/run_online_inquiry_study.py',
+         'scripts/run_method_action_pairing.py'})
     for name in snapshot:
         frozen = output / 'source_at_run' / name
         frozen.parent.mkdir(parents=True, exist_ok=True)
@@ -2537,7 +3294,7 @@ def main():
     parser.add_argument('--spec', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--resume-from', type=Path)
-    parser.add_argument('--stage', choices=('source', 'successor', 'saved-scene-run', 'registered-source-run', 'frozen-parent-evaluation', 'representation-research', 'recursive-preparation', 'recursive-revision'), default='source')
+    parser.add_argument('--stage', choices=('source', 'successor', 'saved-scene-run', 'registered-source-run', 'frozen-parent-evaluation', 'representation-research', 'representation-pair', 'recursive-preparation', 'recursive-revision'), default='source')
     arguments = parser.parse_args()
     if arguments.stage in {'recursive-preparation', 'recursive-revision'}:
         from hegel_machine.cognition.registered_source_control import (
@@ -2555,6 +3312,13 @@ def main():
                 _read(arguments.spec), arguments.output), [None], 8)[0]
             print(json.dumps({'status': result['status'],
                 'summary': str(arguments.output / 'summary.json')}))
+        return
+    if arguments.stage == 'representation-pair':
+        from hegel_machine.cognition.registered_source_control import run_registered_representation_pair
+        if arguments.resume_from is not None:
+            parser.error('the frozen representation pair uses its declared common source')
+        result = run_registered_representation_pair(_read(arguments.spec), arguments.output)
+        print(json.dumps({'status': result['status'], 'summary': str(arguments.output / 'summary.json')}))
         return
     if arguments.stage == 'representation-research':
         from hegel_machine.cognition.experiment_runtime import run_process_trials

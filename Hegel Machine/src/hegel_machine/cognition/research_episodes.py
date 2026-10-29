@@ -154,6 +154,345 @@ def load_episode_sources(references, workspace):
              'episode': loaded['value']} for loaded in load_source_values(references, workspace)]
 
 
+def extract_method_segment(agent, *, root_result_ref, decision_start_ref):
+    """Project an existing result's addressed dependencies, never scientific work.
+
+    Only referenced ancestors and the declared call start are read. Large JSON
+    containers remain file-backed spans; programs, rows and predictions stay in
+    their original stores. A read dependency is not a measured causal benefit.
+    """
+    from contextlib import ExitStack
+    from .checkpoint_storage import _JsonSource
+
+    workspace = Path(agent.workspace)
+    missing, nodes, sources, products, spans, array_members = [], [], {}, [], {}, {}
+
+    def address(reference):
+        result = _canonical(reference)
+        if result.get('file'):
+            path = Path(result['file'])
+            result['file'] = str(path if path.is_absolute() else workspace / path)
+        return result
+
+    root, start = address(root_result_ref), address(decision_start_ref)
+    call = deepcopy(start)
+
+    def append(items, value):
+        if value not in items:
+            items.append(deepcopy(value))
+
+    def absent(reference, reason):
+        append(missing, {'ref': reference, 'reason': reason})
+
+    def owner(reference):
+        parts = _path(reference)
+        if len(parts) >= 2 and parts[0] in {'method_results', 'operator_results', 'events', 'assessments'}:
+            return {**reference, 'json_path': parts[:2]}
+        if len(parts) >= 4 and parts[0] == 'questions' and parts[2] == 'native_condition_research':
+            length = 6 if len(parts) >= 6 and parts[4] == 'candidates' else 4
+            return {**reference, 'json_path': parts[:length]}
+        return reference
+
+    with ExitStack() as opened:
+        def locate(reference):
+            if reference.get('archive') or not reference.get('file'):
+                absent(reference, 'external_or_unaddressed_dependency')
+                return None
+            path = Path(reference['file'])
+            if not path.is_file():
+                absent(reference, 'source_unavailable')
+                return None
+            if path.suffix != '.json':
+                return None
+            key = str(path)
+            if key not in sources:
+                sources[key] = _JsonSource(path, opened)
+            source, span = sources[key], None
+            prefix = []
+            for part in _path(reference):
+                prefix.append(part)
+                saved = (key, tuple(prefix))
+                if saved in spans:
+                    span = spans[saved]
+                    continue
+                if span is not None and source.text[span[1]] == 91:
+                    array = (key, span[1])
+                    if array not in array_members:
+                        array_members[array] = source.members(span)
+                    members = array_members[array]
+                else:
+                    members = source.members(span, keys={part})
+                if part not in members:
+                    absent(reference, 'referenced_instance_unavailable')
+                    return None
+                span = members[part]
+                spans[saved] = span
+            return source, span
+
+        def fields(reference, keys=None):
+            located = locate(reference)
+            return located[0].members(located[1], keys=keys) if located else {}
+
+        def read(reference):
+            located = locate(reference)
+            if located is None:
+                return None
+            source, span = located
+            if span is None:
+                # A whole document is not a thin value. Its members are read
+                # individually by the projection below.
+                return None
+            return json.loads(source.text[span[1]:span[2]])
+
+        def reference_value(value):
+            return isinstance(value, dict) and bool(value.get('file') or value.get('archive')
+                or 'json_path' in value or 'field' in value)
+
+        def project(reference):
+            node = {'step_ref': deepcopy(reference), 'action_ref': deepcopy(reference),
+                'call_ref': deepcopy(call), 'read_refs': [], 'produced_refs': [],
+                'depends_on_refs': [], 'cost_refs': [], 'execution_status': 'UNKNOWN'}
+            parts, start_parts = _path(reference), _path(start)
+            node['is_execution'] = (len(parts) == 2 and parts[0] in
+                {'method_results', 'operator_results', 'events'})
+            if (reference.get('file') != start.get('file') or parts[:1] != start_parts[:1]
+                    or len(parts) >= 2 and len(start_parts) >= 2
+                    and isinstance(parts[1], int) and isinstance(start_parts[1], int)
+                    and parts[1] < start_parts[1]):
+                node['call_ref'] = None
+            if (len(parts) >= 6 and parts[0] == 'questions'
+                    and parts[2] == 'native_condition_research' and parts[4] == 'candidates'):
+                append(node['read_refs'], {**reference, 'json_path': [*parts[:4], 'fit_record_indices']})
+                question = {**reference, 'json_path': parts[:2]}
+                present = fields(question, {'id', 'meaning_version'})
+                node['question_ref'] = {('question_id' if key == 'id' else key):
+                    read(_child_ref(question, key)) for key in present}
+            inspected, model_reads = [], []
+            metadata_keys = {
+                'action', 'operator', 'status', 'error', 'reason', 'truncated', 'execution_complete',
+                'administrative_censoring', 'censored', 'research_question_id', 'question_id',
+                'question_meaning_version', 'meaning_version', 'models_requested', 'models_completed',
+                'compute_cost', 'new_compute_cost', 'python_execution_seconds', 'operator_execution_timing',
+                'costs', 'costs_before', 'costs_after', 'fit_record_indices', 'record_indices',
+                'reused_record_indices', 'path', 'model', 'program', 'evaluated_model', 'boundary_update',
+                'candidates', 'exported_models', 'feedback', 'proposal', 'arguments', 'result',
+                'native_condition_research', 'research_question', 'question', 'paid_score_reuse',
+                'execution_context', 'retained_comparison', 'retention_decision', 'incumbent',
+                'candidate', 'evaluations', 'after_observation_results', 'full_content_file', 'json_path',
+                'action_ref', 'step_ref', 'call_ref', 'before_ref', 'source_ref', 'fit_state_refs',
+                'read_refs', 'produced_refs', 'depends_on_refs', 'cost_refs', 'question_ref',
+                'program_ref', 'program_source_ref', 'research_program_ref', 'fit_evidence_ref',
+                'fit_record_indices_ref', 'observed_record_count_ref', 'parameter_terms_refs',
+                'execution_basis_ref', 'scope_ref', 'score_result_ref', 'transfer_ref', 'export_ref',
+                'origin_ref', 'feedback_ref', 'before_evaluation_ref', 'after_evaluation_ref',
+                'closed_prediction_state_ref', 'profile_ref', 'method_source_ref', 'source_refs',
+            }
+
+            def scan(current):
+                if current in inspected:
+                    return
+                inspected.append(current)
+                members = fields(current, metadata_keys)
+                for key in members:
+                    child = _child_ref(current, key)
+                    if key in {'action', 'operator', 'status', 'error', 'reason', 'truncated',
+                            'execution_complete', 'administrative_censoring', 'censored',
+                            'research_question_id', 'question_id', 'question_meaning_version',
+                            'meaning_version', 'models_requested', 'models_completed'}:
+                        value = read(child)
+                        if key in {'operator', 'action'} and isinstance(value, str):
+                            node['action'] = value
+                        elif key in {'research_question_id', 'question_id'}:
+                            node.setdefault('question_ref', {})['question_id'] = value
+                        elif key in {'question_meaning_version', 'meaning_version'}:
+                            node.setdefault('question_ref', {})['meaning_version'] = value
+                        elif key not in {'action', 'operator'}:
+                            node.setdefault('result', {})[key] = value
+                    elif key in {'compute_cost', 'new_compute_cost', 'python_execution_seconds',
+                            'operator_execution_timing', 'costs', 'costs_before', 'costs_after'}:
+                        append(node['cost_refs'], child)
+                    elif key == 'call_ref':
+                        node['call_ref'] = read(child)
+                    elif key == 'question_ref':
+                        saved = read(child)
+                        if isinstance(saved, dict) and 'question_id' in saved:
+                            node['question_ref'] = saved
+                        elif reference_value(saved):
+                            append(node['read_refs'], address(saved))
+                    elif key.endswith('_ref') or key.endswith('_refs'):
+                        # Reference maps (fit_state_refs, for example) are
+                        # traversed without decoding their neighbouring payload.
+                        def refs(at):
+                            value = read(at) if at != current and key.endswith('_ref') else None
+                            if reference_value(value):
+                                append(node['produced_refs'] if key == 'produced_refs' else node['read_refs'],
+                                    address(value))
+                                return
+                            for part in fields(at):
+                                nested = _child_ref(at, part)
+                                nested_fields = fields(nested)
+                                if 'file' in nested_fields or 'archive' in nested_fields or 'json_path' in nested_fields:
+                                    value = read(nested)
+                                    if reference_value(value):
+                                        append(node['produced_refs'] if key == 'produced_refs' else node['read_refs'],
+                                            address(value))
+                                elif nested_fields:
+                                    refs(nested)
+                        if key == 'cost_refs':
+                            before = len(node['read_refs'])
+                            refs(child)
+                            for saved in node['read_refs'][before:]:
+                                append(node['cost_refs'], saved)
+                        else:
+                            refs(child)
+                    elif key in {'fit_record_indices', 'record_indices', 'reused_record_indices'}:
+                        for index in read(child):
+                            append(node['read_refs'], address({'file': 'laboratory_observations.json',
+                                'json_path': [index]}))
+                    elif key == 'path' and _path(current)[-1:] != ['execution_context']:
+                        value = read(child)
+                        if isinstance(value, str):
+                            if _path(current) == _path(reference):
+                                node['method_source_ref'] = child
+                            else:
+                                append(model_reads, address({'file': value, 'json_path': []}))
+                    elif key == 'model' and current == reference and (
+                            len(parts) >= 6 and parts[0] == 'questions'
+                            and parts[2] == 'native_condition_research' and parts[4] == 'candidates'):
+                        value = read(child)
+                        if isinstance(value, str):
+                            append(node['produced_refs'], address({'file': value, 'json_path': []}))
+                    elif key in {'program', 'evaluated_model', 'boundary_update'}:
+                        append(node['produced_refs'], child)
+                        if key == 'boundary_update':
+                            scan(child)
+                    elif key in {'candidates', 'exported_models'}:
+                        origin = current
+                        if 'full_content_file' in members and 'json_path' in members:
+                            origin = address({'file': read(_child_ref(current, 'full_content_file')),
+                                'json_path': read(_child_ref(current, 'json_path'))})
+                        for index in fields(child):
+                            candidate = _child_ref(child, index)
+                            metadata = fields(candidate, {'model', 'program'})
+                            if 'model' in metadata:
+                                model = read(_child_ref(candidate, 'model'))
+                                if isinstance(model, str):
+                                    product = address({'file': model, 'json_path': []})
+                                    append(node['produced_refs'], product)
+                                    producer = _child_ref(origin, 'candidates', index) if (
+                                        key == 'candidates' and origin != current) else candidate
+                                    entry = {'product_ref': product, 'producer_ref': producer}
+                                    if entry not in products:
+                                        products.append(entry)
+                            if 'program' in metadata:
+                                append(node['produced_refs'], _child_ref(candidate, 'program'))
+                    elif key in {'feedback', 'proposal', 'arguments', 'result', 'native_condition_research',
+                            'research_question', 'question', 'paid_score_reuse', 'execution_context',
+                            'retained_comparison', 'retention_decision', 'incumbent', 'candidate'}:
+                        scan(child)
+                    elif key in {'evaluations', 'after_observation_results'}:
+                        for index in fields(child):
+                            scan(_child_ref(child, index))
+                    elif key == 'full_content_file' and 'json_path' in members:
+                        append(node['read_refs'], address({'file': read(child),
+                            'json_path': read(_child_ref(current, 'json_path'))}))
+            scan(reference)
+            # Nested callbacks and evaluations retain their own references;
+            # they must not rename the surrounding actual query/run action.
+            if node['is_execution']:
+                top = fields(reference, {'proposal', 'action', 'arguments', 'operator'})
+                authored = _child_ref(reference, 'proposal') if 'proposal' in top else reference
+                action = read(_child_ref(authored, 'action')) if 'proposal' in top or 'action' in top else None
+                if action == 'run':
+                    node['action'] = read(_child_ref(authored, 'arguments', 'operator')) or action
+                elif action:
+                    node['action'] = action
+                elif 'operator' in top:
+                    node['action'] = read(_child_ref(reference, 'operator'))
+            node.setdefault('action', 'read_retained_artifact')
+            result = node.get('result', {})
+            status = result.get('status')
+            if result.get('administrative_censoring') or result.get('censored'):
+                node['execution_status'] = 'administrative_censoring'
+            elif result.get('error'):
+                node['execution_status'] = 'error'
+            elif result.get('truncated') or result.get('execution_complete') is False or (
+                    isinstance(status, str) and any(term in status for term in
+                        ('incomplete', 'exhausted', 'not_executed'))):
+                node['execution_status'] = 'resource_stop'
+            elif result.get('models_requested') is not None:
+                node['execution_status'] = ('completed' if result.get('models_requested')
+                    == result.get('models_completed') else 'UNKNOWN')
+            elif result.get('execution_complete') is True or status in {
+                    'completed', 'boundary_refined', 'structure_mismatch', 'candidates_require_evaluation'}:
+                node['execution_status'] = 'completed'
+            for saved in model_reads:
+                append(node['read_refs'], saved)
+            for saved in node['produced_refs']:
+                if not any(item['product_ref'] == saved for item in products):
+                    products.append({'product_ref': deepcopy(saved), 'producer_ref': deepcopy(reference)})
+            return node
+
+        pending = [owner(start), owner(root)]
+        while pending:
+            reference = pending.pop(0)
+            if any(node['step_ref'] == reference for node in nodes):
+                continue
+            if locate(reference) is None:
+                if reference.get('file') and Path(reference['file']).is_file() and not _path(reference):
+                    nodes.append({'step_ref': reference, 'action_ref': reference, 'call_ref': call,
+                        'action': 'read_retained_artifact', 'execution_status': 'UNKNOWN',
+                        'read_refs': [], 'produced_refs': [reference], 'depends_on_refs': [], 'cost_refs': []})
+                continue
+            product_count = len(products)
+            node = project(reference)
+            nodes.append(node)
+            for dependency in node['read_refs']:
+                ancestor = owner(dependency)
+                if ancestor != reference:
+                    append(node['depends_on_refs'], ancestor)
+                    append(pending, ancestor)
+                for product in products:
+                    if product['product_ref'] == dependency:
+                        producer = owner(product['producer_ref'])
+                        if producer != reference:
+                            append(node['depends_on_refs'], producer)
+                            append(pending, producer)
+            # Newly addressed producers can close an earlier model read, too.
+            for product in products[product_count:]:
+                producer = owner(product['producer_ref'])
+                for previous in nodes:
+                    for dependency in previous['read_refs']:
+                        if product['product_ref'] == dependency and producer != previous['step_ref']:
+                            append(previous['depends_on_refs'], producer)
+                            append(pending, producer)
+        # A comparison may name an export path while the actual native result
+        # supplies its exact producer. Match those existing instances, not fit
+        # names or candidate rank. Baseline files remain external inputs.
+        for node in nodes:
+            for saved in node['read_refs']:
+                for product in products:
+                    if product['product_ref'] == saved:
+                        append(node['depends_on_refs'], owner(product['producer_ref']))
+        initial = next((node for node in nodes if node['step_ref'] == owner(start)), {})
+        terminal = next((node for node in nodes if node['step_ref'] == owner(root)), {})
+        start_fields = fields(owner(start), {'evidence_before', 'before_ref', 'public_before_call',
+            'costs_before', 'before_costs'})
+        state_refs = [_child_ref(owner(start), key) for key in
+            ('evidence_before', 'before_ref', 'public_before_call', 'costs_before', 'before_costs')
+            if key in start_fields]
+        return {'status': 'UNKNOWN' if missing else 'reference_grounded',
+            'root_result_ref': root, 'decision_start_ref': start, 'call_ref': call,
+            'start_state_refs': state_refs, 'question_ref': terminal.get('question_ref', initial.get('question_ref')),
+            'start_state_status': 'addressed_scope_only' if state_refs else 'UNKNOWN',
+            'method_source_ref': initial.get('method_source_ref'), 'nodes': nodes,
+            'execution_status': terminal.get('execution_status', 'UNKNOWN'),
+            'cost_refs': [ref for node in nodes for ref in node['cost_refs']
+                if not any(ref in prior['cost_refs'] for prior in nodes[:nodes.index(node)])],
+            'missing_dependencies': missing,
+            'dependency_scope': 'actual_product_reads_not_causal_step_credit'}
+
+
 def project_method_use_feedback(source_ref, workspace):
     """Project an addressed historical use into Common's method-return record.
 

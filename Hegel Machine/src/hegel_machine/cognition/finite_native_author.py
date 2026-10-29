@@ -14,6 +14,7 @@ collision evidence may trigger this ordinary tool in every registered group.
 from copy import deepcopy
 import json
 from pathlib import Path
+from math import isfinite
 
 
 def export_finite_native_author():
@@ -139,6 +140,577 @@ def _action(proposal, question):
     return result
 
 
+def _bound_research_proposal(proposal, question):
+    result = deepcopy(proposal)
+    owner = result.get('research_question') or result.get('arguments', {}).get('research_question') \
+        or result.get('arguments', {}).get('question') or {}
+    if isinstance(owner, str) and owner == question.get('id'):
+        owner = {'id': owner}
+    if (not owner or isinstance(owner, dict) and owner.get('id') == question.get('id')
+            and owner.get('meaning_version', question.get('meaning_version', 1))
+                == question.get('meaning_version', 1)):
+        fields = ('id', 'question', 'parent_id', 'depends_on', 'meaning_version',
+                  'kind', 'answer_type', 'query_semantics', 'context_ref', 'answer_resolution_ref')
+        result['research_question'] = {key: deepcopy(owner.get(key, question.get(key)))
+            for key in fields if key in owner or key in question}
+        result['research_question'].setdefault('meaning_version', 1)
+    return result
+
+
+def research_action_semantics(proposal, binding=None):
+    """Compare executable proposals, excluding their locations and commentary.
+
+    A Python path alone is not exposed program content. Callers comparing two
+    different bound programs supply the existing binding/replay input view.
+    Native terms, evidence selections, callbacks and resource limits remain.
+    This finite comparison only groups trials on the declared public scene.
+    """
+    locations = {'id', 'version', 'method_id', 'theory_id', 'candidate_id',
+        'source_id', 'question_id', 'path', 'file', 'json_path', 'source_ref',
+        'proposal_ref', 'method_ref', 'source_refs', 'description', 'reason',
+        'question', 'lesson', 'status', 'scope_note'}
+
+    def value(item):
+        if isinstance(item, dict):
+            return {key: value(child) for key, child in item.items()
+                if key not in locations and not key.endswith('_ref')}
+        if isinstance(item, (list, tuple)):
+            return [value(child) for child in item]
+        return item
+
+    result = {'action': proposal.get('action'),
+        'arguments': value(proposal.get('arguments', {}))}
+    owner = proposal.get('research_question') or proposal.get('arguments', {}).get('question')
+    if isinstance(owner, dict):
+        result['question_semantics'] = {key: value(owner[key]) for key in (
+            'meaning_version', 'kind', 'answer_type', 'query_semantics', 'context_ref',
+            'answer_resolution_ref') if key in owner}
+    if binding is not None:
+        result['program_binding'] = value(binding)
+    return result
+
+
+def _complete_research_attempt(proposal, results, paid_rows, binding=None, question=None):
+    expected = research_action_semantics(proposal, binding)
+    for entry in results:
+        feedback = entry.get('feedback') or {}
+        if (entry.get('evidence_before', entry.get('evidence_after', {})).get('rows') != paid_rows
+                or feedback.get('error') or feedback.get('truncated')):
+            continue
+        if question is not None and feedback.get('question_meaning_version', 1) != question.get('meaning_version', 1):
+            continue
+        actual = entry.get('proposal') or {}
+        if question is not None:
+            actual = _bound_research_proposal(actual, question)
+        if research_action_semantics(actual, entry.get('program_binding', actual.get('program_binding'))) != expected:
+            continue
+        native = feedback.get('native_condition_research') or {}
+        representation = feedback.get('native_representation') or {}
+        if representation and question is not None and feedback.get('research_question_id') != question['id']:
+            continue
+        if (feedback.get('execution_complete') is True or
+                feedback.get('status') in {'completed', 'complete', 'transferred'} or
+                representation.get('comparison_completed') is True
+                and representation.get('research_completion') == 'bounded_search_completed' or
+                native.get('status') in {'candidates_require_evaluation', 'matched_evidence_without_candidate'}):
+            return True
+    return False
+
+
+def _representation_method_plans(contract, question, observations, theory_index):
+    """Offer existing local and whole-state research on this actual paid scene.
+
+    These are alternative algorithms, not a learned preference or transferred
+    model parameters. Exact scene bindings remain part of the chosen action.
+    """
+    plan = contract.get('native_representation_plan') or question.get('native_representation_plan')
+    if question.get('kind') != 'program_revision' or not isinstance(plan, dict):
+        return []
+    identifiers, validation = plan.get('parent_theory_ids'), plan.get('validation_records')
+    if (not isinstance(identifiers, list) or not identifiers
+            or len(set(identifiers)) != len(identifiers)
+            or not isinstance(validation, list) or not validation
+            or any(type(index) is not int or not 0 <= index < len(observations) for index in validation)
+            or type(plan.get('compute_limit')) is not int or plan['compute_limit'] <= 0
+            or type(plan.get('max_candidates')) is not int or plan['max_candidates'] < 2):
+        return []
+    parents = [theory_index.get(identifier, {}).get('program') for identifier in identifiers]
+    if not all(isinstance(program, dict) for program in parents):
+        return []
+    training = [row for index, record in enumerate(observations) if index not in validation
+                for row in record.get('rows', [])]
+    closed = any(program.get('op') == 'state_replay'
+        and program.get('children', [{}])[0].get('op') == 'if'
+        and program['children'][0].get('children', [{}])[0].get('op') == 'available'
+        for program in parents)
+    if (not closed or len({row['target'] for row in training}) != 2
+            or not any(row.get('history') for row in training)):
+        return []
+    ordinary = deepcopy(plan)
+    broad = {**deepcopy(plan), 'search_directions': ['discrete_state']}
+    return [('ordinary', ordinary), *([] if broad == ordinary else [('whole_state', broad)])]
+
+
+def _representation_research_proposal(question, plan):
+    declaration = {key: deepcopy(question[key]) for key in (
+        'id', 'question', 'kind', 'parent_id', 'depends_on', 'answer_type', 'meaning_version',
+        'origin', 'context_ref', 'query_semantics', 'answer_resolution_ref', 'use_sites',
+        'theory_target', 'representation_diagnostic', 'representation_research_basis')
+        if key in question}
+    return {'action': 'run', 'arguments': {'operator': 'research_route',
+        'research_question': declaration, 'native_representation_plan': deepcopy(plan)}}
+
+
+def _representation_segment_problem(option, question, contract, observations, state):
+    expected = _representation_method_plans(contract, question, observations,
+                                           state.get('theory_index', {}))
+    proposal = option['proposal']
+    arguments = proposal.get('arguments', {})
+    plan = arguments.get('native_representation_plan')
+    if (proposal.get('action') != 'run' or arguments.get('operator') != 'research_route'
+            or not any(plan == candidate for _, candidate in expected)):
+        return 'current_paid_representation_plan_required'
+    # Every direction can export its own bounded candidates; saved procedures
+    # and the optional scope candidate supplement those original slots.
+    directions = len(plan['search_directions']) if plan.get('search_directions') else 5
+    exports = directions * plan['max_candidates'] + len(plan.get('retained_research_program_refs', []))
+    exports += bool(plan.get('scope_plan'))
+    quote = option.get('complete_quote', {})
+    if (quote.get('bounded_research_compute') != plan['compute_limit']
+            or quote.get('max_exported_models') != exports
+            or quote.get('observation_cost') != 0):
+        return 'complete_representation_unit_quote_required'
+    return None
+
+
+def research_segment_options(public_spec, observations, memory, *, state=None, decision=None):
+    """Expose only current, fully quoted ordinary R/N/Q proposals; never run one."""
+    state = _state(memory) if state is None else state
+    if decision is None:
+        decision = memory.get('method_decision')
+        if decision is None:
+            path = Path('method_decision.json')
+            decision = json.loads(path.read_text()) if path.is_file() else {}
+    state = state or {}
+    contract = memory.get('finite_native_author') or {}
+    declaration = contract.get('question') or {}
+    question = next((item for item in state.get('questions', [])
+        if item.get('id') == declaration.get('id')), declaration)
+    rows = sum(len(record.get('rows', [])) for record in observations)
+    native = [entry['native_condition_research'] for entry in state.get('operator_results', [])
+        if entry.get('operator') == 'native_condition_research'
+        and entry.get('research_question_id') == question.get('id')
+        and entry.get('question_meaning_version', 1) == question.get('meaning_version', 1)
+        and entry.get('native_condition_research')]
+    latest = native[-1] if native else {}
+    models = _comparison_models(contract.get('predictor_paths', []),
+        state.get('exported_candidate_paths', []), native)
+    for entry in state.get('operator_results', []):
+        if entry.get('operator') == 'refit' and entry.get('status') == 'refit_supported_on_validation':
+            models.append(entry['path'])
+        elif entry.get('operator') == 'response':
+            models.extend(item['path'] for item in entry.get('candidates', [])
+                if item.get('validation_mse') is not None and item['validation_mse'] <= 1e-10)
+    models = list(dict.fromkeys(models))
+    results = [*state.get('method_results', []), *memory.get('program_results', [])]
+    limits, costs = state.get('limits', {}), state.get('costs', {})
+    remaining = {name: max(0, limits.get(limit, 0) - costs.get(name, 0))
+        for name, limit in (('compute_cost', 'compute_budget'),
+                            ('observation_cost', 'observation_budget'))}
+    raw = []
+    for index, option in enumerate(decision.get('research_options', [])):
+        reference = {'file': 'method_decision.json', 'json_path': ['research_options', index]}
+        if option.get('id') == 'native_condition_research':
+            for execution_index, entry in enumerate(option.get('current_executions', [])):
+                offer = entry.get('compute_continuation') or {}
+                unit = offer.get('research_unit') or {}
+                reserve = unit.get('completion_reserve') or {}
+                raw.append({'family': 'N', 'proposal': offer.get('action'),
+                    'proposal_ref': {**reference, 'json_path': [*reference['json_path'],
+                        'current_executions', execution_index, 'compute_continuation', 'action']},
+                    'question_ref': {'id': entry.get('question_id'),
+                        'meaning_version': question.get('meaning_version', 1)},
+                    'round_index': entry.get('round_index'),
+                    'complete_quote': {'status': offer.get('status'),
+                        'compute_cost': unit.get('minimum_compute'), 'observation_cost': 0,
+                        'paid_rows': unit.get('quoted_paid_rows'),
+                        'retained_pool_models': reserve.get('retained_pool_models'),
+                        'max_exported_models': reserve.get('max_exported_models'),
+                        'remaining_execution_seconds': offer.get('remaining_execution_seconds'),
+                        'research_unit': unit}, 'work_reason': unit.get('work_reason')})
+        elif option.get('proposal'):
+            raw.append({**deepcopy(option), 'proposal_ref': option.get('proposal_ref', reference)})
+    options, excluded = [], []
+    for option in raw:
+        proposal = _bound_research_proposal(option.get('proposal') or {}, question)
+        quote = option.get('complete_quote') or {}
+        family = option.get('family')
+        owner = option.get('question_ref') or proposal.get('research_question') or {}
+        actual_owner = proposal.get('research_question') or {}
+        reason = None
+        if (family not in {'R', 'N', 'Q'} or not proposal.get('action')
+                or owner.get('id', question.get('id')) != question.get('id')
+                or owner.get('meaning_version', 1) != question.get('meaning_version', 1)
+                or not isinstance(actual_owner, dict)
+                or actual_owner.get('id') != question.get('id')
+                or actual_owner.get('meaning_version', 1) != question.get('meaning_version', 1)):
+            reason = 'current_question_proposal_required'
+        elif (quote.get('status') != 'available' or quote.get('paid_rows') != rows
+                or quote.get('retained_pool_models') != len(models)
+                or type(quote.get('max_exported_models')) is not int
+                or any(type(quote.get(key)) not in (int, float) or not isfinite(quote[key])
+                       or quote[key] < 0 for key in ('compute_cost', 'observation_cost'))
+                or not isinstance(quote.get('remaining_execution_seconds'), (int, float))
+                or quote['remaining_execution_seconds'] <= 0):
+            reason = 'fresh_complete_quote_required'
+        elif any(quote[key] > remaining[key] for key in ('compute_cost', 'observation_cost')):
+            reason = 'complete_unit_unfunded'
+        elif (family == 'N' and proposal.get('arguments', {}).get('operator') == 'research_route'
+                and (problem := _representation_segment_problem(
+                    {**option, 'proposal': proposal}, question, contract, observations, state))):
+            reason = problem
+        elif (family == 'N' and proposal.get('arguments', {}).get('operator') != 'research_route'
+                and proposal.get('arguments', {}).get('structure_planning') is not None
+                and not _structure_planning_option_matches(option, public_spec, observations, question)):
+            reason = 'current_unplanned_structural_ambiguity_required'
+        elif family == 'N' and proposal.get('arguments', {}).get('operator') != 'research_route' and proposal.get('arguments', {}).get('structure_planning') is None and (option.get('round_index') != latest.get('round_index')
+                or not (latest.get('status') == 'search_incomplete'
+                    or option.get('work_reason') == 'new_paid_evidence'
+                    and len(latest.get('fit_evidence', [])) < rows
+                    or option.get('work_reason') == 'changed_construction'
+                    and option.get('construction_before') is not None
+                    and any(research_action_semantics(proposal)[key] != research_action_semantics(
+                        option['construction_before'])[key] for key in ('action', 'arguments')))):
+            reason = 'no_unfinished_or_changed_native_work'
+        elif (family == 'N' and proposal.get('arguments', {}).get('operator') != 'research_route'
+                and proposal.get('arguments', {}).get('structure_planning') is None
+                and max(len(latest.get('candidates', [])),
+                len(latest.get('exported_models', [])))
+                + len(proposal.get('arguments', {}).get('programs', []))
+                + proposal.get('arguments', {}).get('max_candidates', 0)
+                > quote['max_exported_models']):
+            reason = 'changed_export_bound_requires_new_quote'
+        elif (family == 'R' and type((option.get('program_binding') or {}).get('source_seed_count')) is int
+                and option['program_binding']['source_seed_count'] > quote['max_exported_models']):
+            reason = 'changed_export_bound_requires_new_quote'
+        elif family in {'N', 'R'} and _complete_research_attempt(
+                proposal, results, rows, option.get('program_binding'), question):
+            reason = 'same_completed_research'
+        elif family == 'R' and option.get('program_binding') is None:
+            reason = 'executable_program_binding_required'
+        elif family == 'Q':
+            reason = _query_segment_problem(option, public_spec, observations,
+                question, contract, results, rows)
+        if reason:
+            excluded.append({'proposal_ref': deepcopy(option.get('proposal_ref')),
+                'family': family, 'reason': reason})
+        else:
+            options.append({**deepcopy(option), 'proposal': proposal,
+                'question_declaration': deepcopy(proposal['research_question']),
+                'semantic_action': research_action_semantics(
+                proposal, option.get('program_binding'))})
+    return {'options': options, 'excluded': excluded,
+        'question_declaration': _bound_research_proposal({'action': 'run'}, question)['research_question'],
+        'scope': 'current_quoted_public_options_no_fitting_prediction_or_acquisition'}
+
+
+def _query_segment_problem(option, public_spec, observations, question, contract, results, rows):
+    proposal = option['proposal']
+    arguments = proposal.get('arguments', {})
+    actions = arguments.get('actions', [])
+    names = {item['name'] if isinstance(item, dict) else item for item in public_spec.get('controls', [])}
+    bounds = public_spec.get('feature_bounds', {})
+    for action in actions:
+        sequence = action.get('sequence', [])
+        if (action.get('kind') != 'trajectory' or not sequence
+                or len(sequence) > public_spec.get('max_probe_length', float('inf'))
+                or any(set(point) != names or any(type(value) not in (int, float)
+                    or not isfinite(value) or name in bounds
+                    and not bounds[name][0] <= value <= bounds[name][1]
+                    or name in public_spec.get('control_levels', {})
+                    and value not in public_spec['control_levels'][name]
+                    for name, value in point.items()) for point in sequence)):
+            return 'illegal_public_query'
+    pairs = option.get('matched_action_pairs', [])
+    difference = option.get('predicted_separation', 0) > 0 or any(
+        pair.get('predicted_separation', 0) > 0 for pair in pairs)
+    pending_pair = bool(option.get('unfinished_pair_ref') and pairs)
+    local = option.get('local_conditional_interval')
+    structural = option.get('structural_discrimination')
+    if local is not None and not _local_interval_query_matches(option, question, observations):
+        return 'actual_local_interval_and_matched_consumer_required'
+    if structural is not None and not _structural_query_matches(option, question, observations):
+        return 'saved_structural_forecast_and_matched_consumer_required'
+    if (not actions or not (difference or pending_pair or local is not None)
+            or not (arguments.get('after_observation') or option.get('research_continuation'))):
+        return 'bound_distinction_and_analysis_required'
+    if any(any(type(pair.get(key)) is not int or not 0 <= pair[key] < len(actions)
+        for key in ('reference_action_index', 'action_index')) for pair in pairs):
+        return 'complete_pair_required'
+    records = paid_experiment_record_indices(actions, observations, public_spec, question, contract)
+    needed = sum(len(action['sequence']) for action, record in zip(actions, records) if record is None)
+    if option['complete_quote']['observation_cost'] != needed:
+        return 'complete_remaining_pair_quote_required'
+    if all(record is not None for record in records):
+        if (structural is None and not any('boundary_update' in callback
+                for callback in arguments.get('after_observation', []))):
+            return 'physical_answer_already_available'
+        if any(not (entry.get('feedback') or {}).get('error')
+                and (entry.get('feedback') or {}).get('record_indices') == records
+                and _boundary_callbacks_completed(_action(proposal, question),
+                    entry['feedback'], records) for entry in results):
+            return 'same_analysis_already_completed'
+    return None
+
+
+def _structure_planning_option_matches(option, public_spec, observations, question):
+    from hegel_machine.cognition.native_condition_research import native_structure_planning_contract
+    rounds = question.get('native_condition_research', [])
+    if not rounds:
+        return False
+    requested = option['proposal'].get('arguments', {}).get('structure_planning')
+    expected = native_structure_planning_contract(public_spec, observations, rounds[-1])
+    return (expected is not None and requested == expected
+        and option.get('round_index') == rounds[-1]['round_index']
+        and not any(item.get('planning_complete') and item.get('basis') == expected
+                    and item.get('question_meaning_version') == question.get('meaning_version', 1)
+                    for item in question.get('native_structure_planning', [])))
+
+
+def _structural_query_matches(option, question, observations):
+    """Consume an actual paid forecast result, not a hand supplied separation."""
+    target = option['structural_discrimination']
+    rounds = question.get('native_condition_research', [])
+    if not rounds or target.get('source_round_index') != rounds[-1]['round_index']:
+        return False
+    for plan in question.get('native_structure_planning', []):
+        if (not plan.get('planning_complete')
+                or plan.get('question_meaning_version') != question.get('meaning_version', 1)
+                or plan.get('source_round_index') != rounds[-1]['round_index']
+                or plan.get('basis', {}).get('observed_record_count') != len(observations)):
+            continue
+        for proposed in plan.get('proposed_experiments', []):
+            if proposed.get('structural_discrimination') != target:
+                continue
+            args = option['proposal'].get('arguments', {})
+            if args.get('actions') != proposed['query_action']['arguments']['actions']:
+                return False
+            callbacks = args.get('after_observation', [])
+            child = args.get('question', {})
+            saved_child = proposed['query_action']['arguments'].get('question', {})
+            return (bool(target.get('forecast_witnesses'))
+                and option.get('predicted_separation') == proposed.get('predicted_separation')
+                and len(callbacks) == 1 and callbacks[0].get('operator') == 'native_condition_research'
+                and 'boundary_update' not in callbacks[0]
+                and callbacks[0].get('structural_discrimination') == target
+                and callbacks[0].get('structural_question_id') == saved_child.get('id')
+                and callbacks[0].get('research_question', {}).get('id') == question.get('id')
+                and child.get('id') == saved_child.get('id')
+                and child.get('parent_id') == question.get('id')
+                and child.get('structure_target') == target
+                and callbacks[0].get('matched_pairs') == proposed['research_continuation']['matched_pairs'])
+    return False
+
+
+def _local_interval_query_matches(option, question, observations):
+    """Bind a local question to measured evidence, never to an invented score."""
+    local = option['local_conditional_interval']
+    rounds = question.get('native_condition_research', [])
+    if not rounds or rounds[-1].get('round_index') != local.get('round_index'):
+        return False
+    evidence_index = local.get('evidence_index')
+    evidence_rows = rounds[-1].get('evidence', [])
+    if type(evidence_index) is not int or not 0 <= evidence_index < len(evidence_rows):
+        return False
+    evidence = evidence_rows[evidence_index]
+    if (evidence.get('status') != 'conditional'
+            or evidence.get('conditional_gain', 0) <= 1e-10
+            or evidence.get('conditional_loss', float('inf')) > 1e-10
+            or any(local.get(key) != evidence.get(key)
+                   for key in ('control', 'background', 'threshold_interval'))):
+        return False
+    left, right = local['threshold_interval']
+    if right <= left:
+        return False
+    arguments = option['proposal'].get('arguments', {})
+    actions = arguments.get('actions', [])
+    callbacks = arguments.get('after_observation', [])
+    if (len(actions) != 2 or len(callbacks) != 1
+            or callbacks[0].get('operator') != 'native_condition_research'
+            or 'boundary_update' in callbacks[0] or 'record_indices' in callbacks[0]
+            or callbacks[0].get('matched_pairs') != [
+                {'reference_record_index': len(observations), 'record_index': len(observations) + 1}]):
+        return False
+    reference, scan = (action.get('sequence', []) for action in actions)
+    control, background = local['control'], local['background']
+    if (min(len(reference), len(scan)) < 8 or scan[0] != background
+            or any(point != background for point in reference)
+            or any(any(value != background[name] for name, value in point.items() if name != control)
+                   or not left <= point[control] <= right for point in scan[1:])
+            or not any(left < point[control] < right for point in scan[1:])):
+        return False
+    references = evidence.get('reference_record_indices', [evidence.get('reference_record_index')])
+    return any(index is not None and reference == [row['features'] for row in observations[index]['rows']]
+               for index in references)
+
+
+def _current_query_action(experiment, public_spec, observations, memory, state, question):
+    """Give P0 the same shared Q callback/price repair, preserving its Q order."""
+    original = experiment['query_action']
+    if not experiment.get('research_continuation'):
+        return _action(original, question)
+    decision = memory.get('method_decision')
+    if decision is None:
+        path = Path('method_decision.json')
+        if not path.is_file():
+            return _action(original, question)
+        decision = json.loads(path.read_text())
+    for item in decision.get('research_options', []):
+        if (item.get('family') == 'Q' and item.get('query_action') == original
+                and item.get('matched_action_pairs', []) == experiment.get('matched_action_pairs', [])):
+            view = research_segment_options(public_spec, observations, memory, state=state,
+                decision={'research_options': [item]})
+            if view['options']:
+                return deepcopy(view['options'][0]['proposal'])
+            return _author_work('complete_query_research_unit_unavailable',
+                ['a current payable complete query and original analysis contract'],
+                complete_quote=deepcopy(item.get('complete_quote')),
+                excluded=deepcopy(view['excluded']))
+    return _author_work('complete_query_research_unit_quote_required',
+        ['future-data complete quotation for the actual proposed query and continuation'])
+
+
+def _bind_paid_startup_witnesses(action, memory):
+    """Bind current paid local-repair witnesses without changing the old pool.
+
+    The condition's pool summary alone cannot allocate a bounded candidate
+    slot. Resolve its actual executions to retained parent identities, keeping
+    one alias per execution and the paid evidence references. The local fitter
+    still has to fit and compare the resulting candidates itself.
+    """
+    pool = memory.get('method_candidate_pool') or {}
+    native = action['arguments']['native_representation_plan']
+    identifiers = set(native['parent_theory_ids'])
+    priority, references = [], []
+    for witness in pool.get('witnesses', []) if pool.get('status') == 'observed' else []:
+        transition = witness.get('transition') or {}
+        if (transition.get('status') != 'observed'
+                or transition.get('guard_depth') is None
+                or transition.get('mature_first_divergences') != 0
+                or transition.get('startup_first_divergences', 0) <= 0
+                or not witness.get('execution_ref')):
+            continue
+        identifier = next((model.removesuffix('.py') for model in witness.get('models', [])
+            if model.removesuffix('.py') in identifiers), None)
+        if identifier is None or identifier in priority:
+            continue
+        priority.append(identifier)
+        references.append({'parent_theory_id': identifier,
+            'execution_ref': deepcopy(witness['execution_ref']),
+            'transition_refs': deepcopy(transition.get('source_refs', []))})
+    if priority:
+        native['startup_parent_priority'] = priority
+        native['startup_parent_witness_refs'] = references
+    return action
+
+
+def select_research_segment(public_spec, observations, memory, *, plan,
+                            ordinary_select_actions, condition=None):
+    """Select at most two learned segments, retaining ordinary delivery duties.
+
+    The ordinary program owns comparison, parent retention and finish. A policy
+    only chooses among the current public, fully funded proposals. Its saved
+    action is a semantic selector, never an old action/quote to replay.
+    """
+    ordinary = ordinary_select_actions(public_spec, observations, memory)
+    arguments = ordinary.get('arguments', {})
+    if (ordinary.get('action') in {'finish', 'evaluate'}
+            or arguments.get('operator') == 'research_choice'):
+        return ordinary
+    view = research_segment_options(public_spec, observations, memory)
+    options = view['options']
+    branch = plan
+    if plan.get('condition') is not None:
+        # The compiler supplies the existing exported condition evaluator. A
+        # missing public feature does not silently choose the false branch.
+        if condition is None:
+            return ordinary
+        try:
+            selected = condition(memory)
+        except (KeyError, TypeError, ValueError):
+            return ordinary
+        if selected is None:
+            return ordinary
+        branch = plan.get('when_true' if selected else 'when_false') or {}
+    selectors = [item for item in (branch.get('first_segment'), branch.get('second_segment'))
+                 if item is not None]
+    current_question = research_action_semantics({'action': 'run',
+        'research_question': view['question_declaration']})['question_semantics']
+    selectors = [{**item, 'question_semantics': current_question}
+        if 'question_semantics' not in item and not item.get('followup_of_first_segment')
+            and 'current_option' not in item
+        else item for item in selectors]
+    if len(selectors) > 2:
+        raise ValueError('a short research program permits at most two learned segments')
+    history = memory.get('program_results', [])
+    completed, completed_options = [], []
+    for entry in history:
+        proposal, feedback = entry.get('proposal') or {}, entry.get('feedback') or {}
+        if 'research_segment_index' not in proposal:
+            continue
+        completed.append(research_action_semantics(proposal,
+            entry.get('program_binding', proposal.get('program_binding'))))
+        completed_options.append(proposal.get('research_segment_option'))
+    if len(completed) >= len(selectors):
+        return ordinary
+    requested = selectors[len(completed)]
+    # A true first segment return is necessary before a learned second choice;
+    # callback/closure actions in between do not consume another learned slot.
+    if completed and ((selectors[0]['current_option'] != completed_options[0])
+            if 'current_option' in selectors[0] else completed[0] != selectors[0]):
+        return ordinary
+    if 'current_option' in requested:
+        descriptor = requested['current_option']
+        selected = next((item for item in options
+            if {'id': item.get('id'), 'family': item.get('family')} == descriptor), None)
+    elif requested.get('followup_of_first_segment'):
+        first = next((entry for entry in history
+            if entry.get('proposal', {}).get('research_segment_index') == 0), None)
+        feedback = (first or {}).get('feedback') or {}
+        planned = feedback.get('structure_planning') or {}
+        reference = feedback.get('source_ref') or {}
+        source_basis = ((first or {}).get('proposal', {}).get('arguments') or {}).get('structure_planning')
+        if (len(completed) != 1 or requested.get('purpose') != 'conditional_history_structure'
+                or not planned.get('planning_complete') or planned.get('basis') != source_basis
+                or feedback.get('error') or not reference.get('file') or not reference.get('json_path')):
+            return ordinary
+        selected = None
+        for index, experiment in enumerate(planned.get('proposed_experiments', [])):
+            expected_ref = {**reference, 'json_path': [*reference['json_path'],
+                'proposed_experiments', index, 'query_action']}
+            selected = next((item for item in options if item['family'] == 'Q'
+                and item.get('purpose') == requested['purpose']
+                and item.get('proposal_ref') == expected_ref
+                and item.get('structural_discrimination') == experiment.get('structural_discrimination')
+                and item['proposal'].get('arguments', {}).get('actions')
+                    == experiment['query_action']['arguments'].get('actions')), None)
+            if selected is not None:
+                break
+    else:
+        selected = next((item for item in options if item['semantic_action'] == requested), None)
+    if selected is None:
+        return ordinary
+    action = deepcopy(selected['proposal'])
+    action['research_segment_index'] = len(completed)
+    if 'current_option' in requested:
+        action['research_segment_option'] = deepcopy(requested['current_option'])
+        if requested.get('parent_binding') == 'paid_startup_witnesses':
+            action = _bind_paid_startup_witnesses(action, memory)
+    if selected.get('program_binding') is not None:
+        action['program_binding'] = deepcopy(selected['program_binding'])
+    return action
+
+
 def paid_experiment_record_indices(actions, observations, public_spec, question, contract,
                                    *, prediction_rows=None):
     """Bind reset-trajectory answers to their actual paid records, without buying.
@@ -199,6 +771,25 @@ def _boundary_callbacks_completed(proposal, feedback, record_indices):
     """An acquired point does not complete a later native boundary analysis."""
     arguments = proposal.get('arguments', {})
     owner = proposal.get('research_question') or arguments.get('question') or {}
+    target = proposal.get('structural_discrimination')
+    if target is not None:
+        for callback in arguments.get('after_observation', []):
+            if callback.get('structural_discrimination') != target:
+                return False
+            mapping = feedback.get('record_index_map', {})
+            expected_pairs = [{key: mapping.get(str(value), mapping.get(value, value))
+                for key, value in pair.items()} for pair in callback.get('matched_pairs', [])]
+            if not any(outcome.get('operator') == 'native_condition_research'
+                    and not outcome.get('error')
+                    and outcome.get('research_question_id') == owner.get('id')
+                    and outcome.get('native_condition_research', {}).get('status')
+                        in {'candidates_require_evaluation', 'matched_evidence_without_candidate',
+                            'frozen_predictions_compared'}
+                    and outcome.get('native_condition_research', {}).get('structural_discrimination', {}).get('target') == target
+                    and outcome['native_condition_research']['structural_discrimination'].get('matched_pairs') == expected_pairs
+                    for outcome in feedback.get('after_observation_results', [])):
+                return False
+        return bool(arguments.get('after_observation'))
     for callback in arguments.get('after_observation', []):
         selected = callback.get('boundary_update')
         if selected is None:
@@ -307,7 +898,8 @@ def _method_use_action(state, memory, question, paid_rows):
     return _action(proposal, question) if not _attempted(proposal, results, paid_rows) else None
 
 
-def _completed_choice(results, models, paid_rows, question, state):
+def _completed_choice(results, models, paid_rows, question, state, *,
+                      paid_rows_view=None, public_spec=None, workspace=None):
     """Reuse a matching completed comparison, including an earlier author version.
 
     The ordinary execution feedback retains the actual question and meaning
@@ -326,10 +918,25 @@ def _completed_choice(results, models, paid_rows, question, state):
             expected.extend(item['path'] for item in result.get('candidates', [])
                 if item.get('validation_mse') is not None and item['validation_mse'] <= 1e-10)
     expected = list(dict.fromkeys(expected))
-    for entry in reversed(results):
+    # Registered unit closure calls the same ordinary operator directly,
+    # outside select_actions. Its complete report is not another method step.
+    # Reuse that actual report rather than pricing/scoring the strong pool again.
+    completed = [*results, *({'proposal': {'action': 'run',
+        'arguments': entry.get('arguments', {})}, 'feedback': entry}
+        for entry in state.get('operator_results', [])
+        if entry.get('operator') == 'research_choice')]
+    for entry in reversed(completed):
         proposal, feedback = entry.get('proposal') or {}, entry.get('feedback') or {}
         arguments = proposal.get('arguments', {})
         evaluations = feedback.get('evaluations', [])
+        if (feedback.get('operator') == 'research_choice'
+                and feedback.get('research_question_id') is None
+                and paid_rows_view is not None and public_spec is not None):
+            from hegel_machine.cognition.paid_score_history import paid_comparison_scope_owner
+            owner = paid_comparison_scope_owner(feedback, question=question,
+                rows=paid_rows_view, public_spec=public_spec, workspace=workspace)
+            if owner is not None:
+                feedback = {**feedback, **owner}  # A read-only view; old reports stay unchanged.
         if (proposal.get('action') == 'run' and arguments.get('operator') == 'research_choice'
                 and arguments.get('models') == models
                 and feedback.get('operator') == 'research_choice'
@@ -351,13 +958,8 @@ def _native_work_action(state, results, question, latest, paid_rows, observed_re
         return None
     owner = state['questions'][owner_index]
     meaning = owner.get('meaning_version', 1)
-    refit_unavailable = any((entry.get('proposal') or {}).get('arguments', {}).get('operator') == 'refit'
-            and entry.get('feedback', {}).get('status') == 'refit_unavailable'
-            and entry['feedback'].get('research_question_id') == question['id']
-            and entry['feedback'].get('question_meaning_version', 1) == meaning
-            and entry.get('evidence_after', {}).get('rows') == paid_rows for entry in results)
     new_evidence = latest.get('observed_record_count', observed_records) < observed_records
-    if not (refit_unavailable or new_evidence or latest.get('status') == 'search_incomplete'):
+    if not (new_evidence or latest.get('status') == 'search_incomplete'):
         return None
     path = Path('method_decision.json')
     if not path.is_file():
@@ -768,6 +1370,378 @@ def ordinary_completion_reserve(agent, question):
         'comparison_compute_per_new_proposal': rows}
 
 
+def _complete_representation_quote(*, rows, models, core, extra_rows, exports,
+        confirmation_rows, remaining_compute, remaining_observations,
+        remaining_seconds, preparation=0, deliveries=0, completion=None):
+    """Shared ordinary ceiling for research, the full pool and parent delivery."""
+    comparison_rows = rows + extra_rows
+    comparison = comparison_rows * (models + exports)
+    finish = comparison_rows * (deliveries + 1) + confirmation_rows
+    if completion is not None:
+        comparison = completion['comparison_compute_cost']
+        finish = completion['finish_compute_cost']
+    total = preparation + core + comparison + finish
+    reused = (completion or {}).get('retained_score_refs', {})
+    return {'status': ('available' if total <= remaining_compute and remaining_seconds > 0
+                      and extra_rows <= remaining_observations else
+                      'execution_time_exhausted' if remaining_seconds <= 0 else 'complete_unit_unfunded'),
+        'compute_cost': total, 'observation_cost': extra_rows, 'measurement_cost': 0,
+        'paid_rows': rows, 'retained_pool_models': models, 'max_exported_models': exports,
+        'remaining_execution_seconds': remaining_seconds, 'preparation_compute': preparation,
+        'bounded_research_compute': core, 'comparison_compute': comparison,
+        'finish_compute': finish, 'comparison_paid_rows': comparison_rows,
+        'estimate_is_completion_guarantee': False,
+        **({'retained_score_refs': deepcopy(reused), 'reused_retained_models': len(reused)} if reused else {}),
+        'scope': ('bounded_attempt_and_complete_pool_parent_closure_with_paid_retained_scores'
+            if reused else 'bounded_attempt_and_complete_pool_parent_closure_cold_comparison_ceiling')}
+
+
+def _unchanged_completed_score_refs(agent, comparison):
+    """Use completed paid comparisons while the actual executable contexts match."""
+    from .code_agent import python_model_context_matches
+    from .method_action_research import read_method_reference
+
+    references = {}
+    for entry in (comparison or {}).get('evaluations', []):
+        reference = entry.get('paid_score_reuse', {}).get('execution_basis_ref')
+        if reference is None:
+            return {}
+        assessment = read_method_reference(reference, agent.workspace)
+        context = assessment['execution_context']
+        if not python_model_context_matches(agent.workspace, entry['path'],
+                context['workspace'], context['model']):
+            return {}
+        references[entry['path']] = reference
+    return references
+
+
+def publish_research_options(agent, public_spec=None):
+    """Price actual ordinary proposals, without fitting or acquiring evidence.
+
+    Native continuation keeps its existing quote. R uses the proposal's own
+    bounded allocation, not another method's historical cost. Q is exposed only
+    when its existing callback supplies a bounded complete analysis contract.
+    Unchanged paid scores close the retained pool; new exports and the original
+    finish retain their full explicit prediction allowance.
+    """
+    from .structural_inquiry import native_condition_method
+    from .python_research_routing import validated_candidates
+
+    native = native_condition_method(agent)
+    published = [native] if native is not None else []
+    contract = agent.knowledge.get('finite_native_author') or {}
+    question = next((item for item in agent.questions
+        if item.get('id') == agent._active_question_id), None)
+    if question is not None and question.get('kind') in {'method_use', 'method_learning'}:
+        parent = (question.get('parent_question_ref') or {}).get('question_id', question.get('parent_id'))
+        if parent == (contract.get('question') or {}).get('id'):
+            question = next((item for item in agent.questions if item.get('id') == parent), question)
+    if question is None or not contract:
+        return published
+    rows = len(agent.rows)
+    rounds = question.get('native_condition_research', [])
+    declared_models = _comparison_models(contract.get('predictor_paths', []), agent.candidate_paths, rounds)
+    models = list(dict.fromkeys([*declared_models, *validated_candidates(agent)]))
+    results = [entry for entry in agent.method_results
+        if entry.get('feedback', {}).get('research_question_id') == question['id']
+        and entry['feedback'].get('question_meaning_version', 1) == question.get('meaning_version', 1)]
+    current = _completed_choice(results, declared_models, rows, question, {'questions': agent.questions,
+        'operator_results': agent.operator_results}, paid_rows_view=agent.rows,
+        public_spec=public_spec, workspace=getattr(agent, 'workspace', None))
+    preparation = 0 if current is not None else rows * len(models)
+    remaining = max(0, agent.config.compute_budget - agent.costs['compute_cost'])
+    seconds = max(0., agent.config.execution_seconds - agent.costs['python_execution_seconds'])
+    deliveries = len(agent._inquiry_stack)
+
+    def quote(core, extra_rows, exports, completion=None):
+        return _complete_representation_quote(rows=rows, models=len(models), core=core,
+            extra_rows=extra_rows, exports=exports, confirmation_rows=agent.config.confirmation_rows,
+            remaining_compute=remaining,
+            remaining_observations=agent.config.observation_budget - agent.costs['observation_cost'],
+            remaining_seconds=seconds, preparation=preparation, deliveries=deliveries,
+            completion=completion)
+
+    representation_plans = _representation_method_plans(
+        contract, question, agent.observations, getattr(agent, 'theory_index', {}))
+    retained_scores = _unchanged_completed_score_refs(agent, current) if representation_plans else {}
+    for label, plan in representation_plans:
+        direction_count = len(plan['search_directions']) if plan.get('search_directions') else 5
+        exports = direction_count * plan['max_candidates'] \
+            + len(plan.get('retained_research_program_refs', [])) + bool(plan.get('scope_plan'))
+        completion = ({'comparison_compute_cost': rows * exports,
+            'finish_compute_cost': rows * (deliveries + 1) + agent.config.confirmation_rows,
+            'retained_score_refs': retained_scores}
+            if retained_scores and set(retained_scores) == set(models) else None)
+        published.append({'id': f'native_representation:{label}', 'family': 'N',
+            'work_reason': 'paid_parent_program_revision',
+            'proposal': _representation_research_proposal(question, plan),
+            'question_ref': {'id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+            'proposal_ref': {'file': 'method_decision.json', 'json_path': [
+                'research_options', len(published), 'proposal']},
+            'complete_quote': quote(plan['compute_limit'], 0, exports, completion=completion)})
+
+    for index, child in enumerate(agent.questions):
+        result = (child.get('routing_execution') or {}).get('result') or {}
+        proposal = result.get('next_action') or {}
+        arguments = proposal.get('arguments') or {}
+        candidate = agent.theory_consolidation.get('candidates', {}).get(arguments.get('candidate_id'), {})
+        allocation = arguments.get('allocation') or {}
+        fitting = arguments.get('research_program_fitting') or {}
+        mapping, roles = arguments.get('mapping', {}), arguments.get('role_signature', {})
+        if (child.get('parent_id') != question['id'] or proposal.get('action') != 'run'
+                or arguments.get('operator') != 'theory_transfer'
+                or candidate.get('kind') != 'research_program'
+                or type(allocation.get('compute')) is not int or allocation['compute'] <= 0
+                or not fitting.get('validation_records')
+                or any(type(value) is not int or not 0 <= value < len(agent.observations)
+                       for value in fitting['validation_records'])
+                or len(set(fitting['validation_records'])) == len(agent.observations)
+                or set(mapping) != set(candidate.get('role_signature', {}))
+                or len(set(mapping.values())) != len(mapping)
+                or any(roles.get(name) != candidate['role_signature'][role]
+                       for role, name in mapping.items())
+                or arguments.get('output_unit') != candidate.get('output_unit')
+                or arguments.get('context_family_ref', arguments.get('context_ref'))
+                    != candidate.get('scope', {}).get('context_ref')):
+            continue
+        binding = {'research_program_contract': deepcopy(candidate['research_program_contract']),
+            'mapping': deepcopy(mapping), 'role_signature': deepcopy(roles),
+            'output_unit': arguments['output_unit'], 'context_ref': deepcopy(arguments.get('context_ref')),
+            'research_program_fitting': deepcopy(fitting), 'seed_policy': candidate.get('seed_policy'),
+            'source_seed_count': len(candidate.get('source_seed_inputs', []))}
+        complete = any(entry.get('result', {}).get('search_completed') is True
+            and entry.get('basis', {}).get('binding', {}).get('paid_cutoff') == {
+                'records': len(agent.observations), 'rows': rows}
+            and all(entry.get('basis', {}).get('binding', {}).get(key) == value for key, value in (
+                ('mapping', mapping), ('source_refs', candidate.get('research_program_source_refs')),
+                ('research_program_contract', candidate['research_program_contract'])))
+            and entry.get('basis', {}).get('fitting') == fitting
+            for entry in agent.theory_consolidation.get('executions', {}).values())
+        exports = len(candidate.get('research_program_source_refs', []))
+        if complete or not exports:
+            continue
+        published.append({'family': 'R', 'proposal': deepcopy(proposal),
+            'question_ref': {'id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+            'proposal_ref': {'file': 'research_state.json', 'json_path': [
+                'questions', index, 'routing_execution', 'result', 'next_action']},
+            'program_binding': binding, 'complete_quote': quote(allocation['compute'], 0, exports)})
+    if not public_spec:
+        return published
+    for round_ in rounds[-1:]:
+        from .native_condition_research import (
+            propose_local_conditional_scans, native_structure_planning_contract)
+        original = round_.get('proposed_experiments', [])
+        continuation = next((item['research_continuation'] for item in original
+            if (item.get('research_continuation') or {}).get('operator') == 'native_condition_research'), None)
+        source_ref = {'file': 'research_state.json', 'json_path': ['questions',
+            agent.questions.index(question), 'native_condition_research', round_['round_index']]}
+        planning = native_structure_planning_contract(public_spec, agent.observations, round_)
+        plans = question.get('native_structure_planning', [])
+        if (planning is not None and round_.get('observed_record_count') == len(agent.observations)
+                and not any(p.get('planning_complete') and p.get('basis') == planning
+                    and p.get('question_meaning_version') == question.get('meaning_version', 1) for p in plans)):
+            from types import SimpleNamespace
+            from .structural_inquiry import (
+                _native_compute_continuation, _native_completion_reserve, _structure_preparation_quote)
+            # Only future input/history shape is needed for the closed Q unit.
+            length = planning['length']
+            background = round_['evidence'][planning['evidence_index']]['background']
+            planned = [SimpleNamespace(features=dict(background),
+                history=tuple(dict(background) for _ in range(position)))
+                for position in range(length)]
+            future = SimpleNamespace(**{**vars(agent), 'rows': [*agent.rows, *planned]})
+            exports = max(len(round_.get('candidates', [])), len(round_.get('exported_models', []))) \
+                + contract['max_candidates']
+            reserve = _native_completion_reserve(future, question, exports)
+            if 'max_exported_models' in reserve:
+                deferred = {'operator': 'native_condition_research',
+                    'research_question': {'id': question['id']}, 'max_candidates': contract['max_candidates']}
+                evidence = round_['evidence'][planning['evidence_index']]
+                structural_preparation = _structure_preparation_quote(future, question, public_spec,
+                    source_round_index=round_['round_index'], control=evidence['control'],
+                    background=evidence['background'], witness_count=2,
+                    future_shape={'matched_rows': length, 'max_history': length - 1,
+                        'levels': [evidence['background'][evidence['control']],
+                                   *evidence['threshold_interval']]})
+                followup = _native_compute_continuation(future, question, round_, deferred, reserve,
+                    structural_preparation=structural_preparation)
+                core = planning['proposal_compute'] + followup['research_unit']['search_compute']
+                priced = quote(core, length, exports, completion=reserve)
+                priced.update(planning_compute=planning['proposal_compute'],
+                    following_research_compute=followup['research_unit']['search_compute'],
+                    scope='saved_structure_design_then_one_possible_matched_query_and_full_pool_parent_closure')
+                published.append({'family': 'N', 'work_reason': 'unplanned_structural_ambiguity',
+                    'round_index': round_['round_index'],
+                    'proposal': {'action': 'run', 'arguments': {'operator': 'native_condition_research',
+                        'research_question': {'id': question['id']}, 'structure_planning': planning,
+                        'max_compute': planning['proposal_compute'], 'max_candidates': contract['max_candidates']}},
+                    'question_ref': {'id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+                    'proposal_ref': {'file': 'method_decision.json', 'json_path': [
+                        'research_options', len(published), 'proposal']},
+                    'source_ref': deepcopy(source_ref), 'complete_quote': priced,
+                    'followup_complete_quote': deepcopy(followup)})
+        local = (propose_local_conditional_scans(public_spec, agent.observations, round_,
+            continuation=continuation, source_ref=source_ref) if continuation is not None else [])
+        planned_experiments = [(item, {'file': 'research_state.json', 'json_path': [
+            'questions', agent.questions.index(question), 'native_structure_planning', plan['planning_index'],
+            'proposed_experiments', index, 'query_action']})
+            for plan in plans if plan.get('planning_complete')
+                and plan.get('question_meaning_version') == question.get('meaning_version', 1)
+                and plan.get('source_round_index') == round_['round_index']
+                and plan.get('basis', {}).get('observed_record_count') == len(agent.observations)
+            for index, item in enumerate(plan.get('proposed_experiments', []))]
+        experiments = [*((item, {'file': 'research_state.json', 'json_path': [
+            *source_ref['json_path'], 'proposed_experiments', index, 'query_action']})
+            for index, item in enumerate(original)), *planned_experiments,
+            *((item, None) for item in local)]
+        for experiment, retained_proposal_ref in experiments:
+            proposal = deepcopy(experiment.get('query_action') or {})
+            callbacks = proposal.get('arguments', {}).get('after_observation', [])
+            deferred = experiment.get('research_continuation') or {}
+            future_offer = None
+            if not callbacks and deferred.get('operator') == 'native_condition_research':
+                if not public_spec.get('reset'):
+                    continue
+                from types import SimpleNamespace
+                from .structural_inquiry import (
+                    _native_compute_continuation, _native_completion_reserve, _structure_preparation_quote)
+
+                actions = proposal.get('arguments', {}).get('actions', [])
+                records = paid_experiment_record_indices(actions, agent.observations, public_spec,
+                    question, contract)
+                # Only shape/control history enters this future-data quote.
+                # There is deliberately no target, simulated output or fit.
+                planned = [SimpleNamespace(features=point, history=tuple(action['sequence'][:position]))
+                    for action, record in zip(actions, records) if record is None
+                    for position, point in enumerate(action.get('sequence', []))]
+                retained_count = max(len(round_.get('candidates', [])), len(round_.get('exported_models', [])))
+                if ((not planned and experiment.get('structural_discrimination') is None)
+                        or 'search_stages' not in round_
+                        or type(deferred.get('max_candidates')) is not int):
+                    continue
+                projected = vars(agent).copy()
+                projected['rows'] = [*agent.rows, *planned]
+                future = SimpleNamespace(**projected)
+                exports = retained_count + len(deferred.get('programs', [])) + deferred['max_candidates']
+                reserve = _native_completion_reserve(future, question, exports)
+                if 'max_exported_models' not in reserve:
+                    continue
+                quoted_round = round_
+                if not planned and experiment.get('structural_discrimination') is not None:
+                    from .conditional_coordinates import conditional_search_allowance
+                    quoted_round = {**round_, 'search_allowance_estimate': {
+                        'conditional_joint_attempt': conditional_search_allowance(
+                            len(public_spec['controls']), rows, max(len(row.history) for row in agent.rows))}}
+                structural_preparation = None
+                target = experiment.get('structural_discrimination')
+                if target is not None:
+                    sequence = actions[-1]['sequence']
+                    future_shape = ({'matched_rows': len(sequence), 'max_history': len(sequence) - 1,
+                        'levels': list({point[target['control']] for point in sequence})}
+                        if planned else None)
+                    pairs = ([] if planned else [{'reference_record_index': records[0],
+                                                  'record_index': records[1]}])
+                    structural_preparation = _structure_preparation_quote(future, question, public_spec,
+                        source_round_index=target['source_round_index'], control=target['control'],
+                        background=target['background'], matched_pairs=pairs, future_shape=future_shape,
+                        witness_count=len(target['forecast_witnesses']))
+                future_offer = _native_compute_continuation(future, question, quoted_round, deferred, reserve,
+                    structural_preparation=structural_preparation)
+                callback = deepcopy(deferred)
+                callback['max_compute'] = future_offer['research_unit']['search_compute']
+                proposal.setdefault('arguments', {})['after_observation'] = [callback]
+                callbacks = [callback]
+            if not callbacks or any(callback.get('operator') != 'native_condition_research'
+                    or 'boundary_update' not in callback and future_offer is None
+                    or type(callback.get('max_compute')) is not int
+                    or callback['max_compute'] < 0 for callback in callbacks):
+                continue
+            actions = proposal.get('arguments', {}).get('actions', [])
+            records = paid_experiment_record_indices(actions, agent.observations, public_spec,
+                question, contract)
+            extra = sum(len(action.get('sequence', [])) for action, record in zip(actions, records)
+                        if record is None)
+            retained = []
+            for previous in rounds:
+                for candidate in previous.get('candidates', []):
+                    if candidate.get('program') not in retained:
+                        retained.append(candidate.get('program'))
+            exports = len(retained) + sum(callback.get('max_candidates', 8) for callback in callbacks)
+            completion = None
+            if future_offer is not None:
+                completion = future_offer['research_unit']['completion_reserve']
+                exports = completion['max_exported_models']
+            published.append({**deepcopy(experiment), 'family': 'Q', 'proposal': deepcopy(proposal),
+                'question_ref': {'id': question['id'], 'meaning_version': question.get('meaning_version', 1)},
+                'proposal_ref': retained_proposal_ref or {'file': 'method_decision.json',
+                    'json_path': ['research_options', len(published), 'proposal']},
+                'complete_quote': quote(sum(callback['max_compute'] for callback in callbacks),
+                    extra, exports, completion=completion),
+                **({'unfinished_pair_ref': {'file': 'research_state.json', 'json_path': ['questions',
+                    agent.questions.index(question), 'native_condition_research', round_['round_index']]}}
+                   if round_.get('status') == 'needs_matched_evidence'
+                   and experiment.get('matched_action_pairs') else {}),
+                **({'future_compute_continuation': future_offer,
+                    'common_closure_quote_repair': True} if future_offer is not None else {})})
+    return published
+
+
+def _representation_frontier_action(question, choice, state, observations, models):
+    """Spend on a current measured tie only with its complete continuation funded."""
+    current = next((item for item in state.get('questions', [])
+        if item.get('id') == question['id']), {})
+    rounds = current.get('native_representation_research', [])
+    if not rounds:
+        return None
+    frontier = rounds[-1].get('experiment_frontier') or {}
+    rows = sum(len(record.get('rows', [])) for record in observations)
+    if (not frontier or frontier.get('paid_rows') != rows
+            or frontier.get('observed_record_count') != len(observations)):
+        return None
+    limits, costs = state.get('limits', {}), state.get('costs', {})
+    threshold = limits.get('confirmation_mse_threshold', 1e-10)
+    # A genuinely better strong-pool result discharges this weaker local tie.
+    native = rounds[-1]
+    current_mse = (choice.get('evaluated_model') or {}).get('mse')
+    support_mse = (frontier['training_mse'] * native['fitting_rows']
+        + frontier['validation_mse'] * native['validation_rows']) / rows
+    if current_mse is None or current_mse + threshold < support_mse:
+        return None
+    proposal = deepcopy(frontier['query_action'])
+    plan = proposal['arguments']['after_observation'][0]['native_representation_plan']
+    added = frontier['observation_cost']
+    confirmation = limits.get('confirmation_rows', 0)
+    directions = plan.get('search_directions') or native['available_search_directions']
+    exports = len(directions) * plan['max_candidates'] + len(plan.get('retained_research_program_refs', []))
+    exports += bool(plan.get('scope_plan'))
+    future_rows = rows + added
+    remaining = max(0, limits.get('compute_budget', 0) - costs.get('compute_cost', 0))
+    quote = _complete_representation_quote(rows=rows, models=len(models), core=0,
+        extra_rows=added, exports=exports, confirmation_rows=confirmation,
+        remaining_compute=remaining,
+        remaining_observations=limits.get('observation_budget', 0) - costs.get('observation_cost', 0) - confirmation,
+        remaining_seconds=limits.get('execution_seconds', float('inf')) - costs.get('python_execution_seconds', 0),
+        deliveries=1)
+    # The declared search allocation is a cap, not a minimum purchase. Leave
+    # complete comparisons/confirmation first, then bound the same researcher
+    # by the remaining original account, as the historical continuation does.
+    core = min(plan['compute_limit'], max(0, remaining - quote['compute_cost']))
+    validation = native['validation_rows']
+    training = future_rows - validation
+    capacity = max(2 * plan['max_candidates'], exports)
+    comparison_floor = len(plan['parent_theory_ids']) * future_rows + (capacity + 2) * validation
+    first_work = ((plan['max_candidates'] + 2) * training
+                  if directions[0] == 'startup_revision' else 2 * future_rows)
+    minimum = comparison_floor + len(directions) * first_work
+    if quote['status'] != 'available' or core < minimum:
+        return None
+    plan['compute_limit'] = core
+    proposal['complete_quote'] = {**quote, 'compute_cost': quote['compute_cost'] + core,
+        'bounded_research_compute': core, 'minimum_native_compute': minimum,
+        'confirmation_rows_reserved': confirmation}
+    return _action(proposal, question)
+
+
 def select_actions(public_spec, observations, memory):
     contract = memory.get('finite_native_author') or {}
     question = contract.get('question') or {}
@@ -845,13 +1819,45 @@ def select_actions(public_spec, observations, memory):
     # validated refit/response exports itself. Its retention/confirmation gate
     # decides among them before another purchase or refinement can intervene.
     # This procedure never selects the native minimum.
-    choice = _completed_choice(results, models, paid_rows, question, state)
+    choice = _completed_choice(results, models, paid_rows, question, state,
+        paid_rows_view=[row for record in observations for row in record.get('rows', [])],
+        public_spec=public_spec)
     current_choice = choice is not None
     if models and not current_choice:
         return _action({'action': 'run', 'arguments': {'operator': 'research_choice', 'models': models}}, question)
     method_use = _method_use_action(state, memory, question, paid_rows)
     if method_use is not None:
         return method_use
+    frontier = _representation_frontier_action(question, choice, state, observations, models)
+    if frontier is not None:
+        return frontier
+    # A complete current-pool comparison already applies the ordinary support,
+    # validation and confirmation-capacity gates. Consume its ready delivery
+    # before an outstanding representation plan starts another search.
+    if (current_choice and (choice.get('next_action') or {}).get('action') in {'finish', 'evaluate'}
+            and not _attempted(choice['next_action'], results, paid_rows)):
+        return _action(choice['next_action'], question)
+    representation_plans = _representation_method_plans(
+        contract, question, observations, state.get('theory_index', {}))
+    if representation_plans:
+        completed_representation = any(
+            _complete_research_attempt(_bound_research_proposal(
+                _representation_research_proposal(question, plan), question),
+                results, paid_rows, question=question) for _, plan in representation_plans)
+        if completed_representation:
+            if current_choice and choice.get('next_action') and not _attempted(choice['next_action'], results, paid_rows):
+                return _action(choice['next_action'], question)
+            return _author_work('completed_representation_requires_new_research_decision',
+                ['changed evidence or an explicitly revised research plan'],
+                question_ref={'question_id': question['id'], 'meaning_version': meaning})
+        options = research_segment_options(public_spec, observations, memory, state=state)
+        ordinary = next((item for item in options['options']
+            if item.get('id') == 'native_representation:ordinary'), None)
+        if ordinary is not None:
+            return ordinary['proposal']
+        return _author_work('complete_representation_unit_quote_required',
+            ['current public representation research options with complete comparison and finish capacity'],
+            excluded=options['excluded'])
     if current_choice:
         representation = _representation_action(contract, question, choice, state, memory, paid_rows)
         if representation is not None:
@@ -887,7 +1893,8 @@ def select_actions(public_spec, observations, memory):
                 # The same physical answer can support a new boundary step.
                 # Query reuse will bind these original indices and execute its
                 # existing continuation without purchasing another trajectory.
-                if any('boundary_update' in step for step in arguments.get('after_observation', [])):
+                if (proposal.get('structural_discrimination') is not None
+                        or any('boundary_update' in step for step in arguments.get('after_observation', []))):
                     return not _attempted(_action(proposal, question), results, paid_rows,
                                           paid_record_indices=records)
                 return False
@@ -901,15 +1908,21 @@ def select_actions(public_spec, observations, memory):
             if (proposal and (refine and experiment.get('purpose') == 'conditional_boundary'
                               or latest.get('status') == 'needs_matched_evidence')
                     and unanswered(proposal)):
-                return _action(proposal, question)
+                return _current_query_action(experiment, public_spec, observations, memory, state, question)
     if latest is None:
         return {'action': 'run', 'arguments': {'operator': 'native_condition_research',
             'research_question': deepcopy(question), 'max_compute': contract['max_compute'],
             'max_candidates': contract['max_candidates']}}
-    for experiment in latest.get('proposed_experiments', []):
+    planning_queries = [experiment for current in state.get('questions', []) if current.get('id') == question['id']
+        for plan in current.get('native_structure_planning', [])
+        if plan.get('planning_complete') and plan.get('source_round_index') == latest.get('round_index')
+            and plan.get('question_meaning_version') == question.get('meaning_version', 1)
+            and plan.get('basis', {}).get('observed_record_count') == len(observations)
+        for experiment in plan.get('proposed_experiments', [])]
+    for experiment in [*latest.get('proposed_experiments', []), *planning_queries]:
         proposal = experiment.get('query_action')
         if proposal and unanswered(proposal):
-            return _action(proposal, question)
+            return _current_query_action(experiment, public_spec, observations, memory, state, question)
     if paid_answers:
         return _author_work('paid_experiments_already_answered',
             ['resume unfinished computation or propose an experiment with different public inputs'],

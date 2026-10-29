@@ -258,7 +258,7 @@ def test_structured_missing_input_obligation_survives_the_actual_procedure(tmp_p
     assert lab.paid == agent.costs['model_calls'] == 0
 
 
-def test_author_source_update_reuses_completed_choice_then_refit_and_published_same_bank(tmp_path, monkeypatch):
+def test_author_update_does_not_resell_completed_bank_and_explicit_alias_comparison_reuses_scores(tmp_path, monkeypatch):
     contract = declaration()
     contract['predictor_paths'] = ['archive/_evaluated_model/old.py']
     previous_source = export_finite_native_author() + '\n# previous frozen author version\n'
@@ -302,22 +302,27 @@ def test_author_source_update_reuses_completed_choice_then_refit_and_published_s
                         no_new_python_score)
     before = deepcopy(agent.costs)
     result = agent._execute('run', {'operator': 'procedure', 'path': POLICY,
-        'max_steps': 3, 'confirm': False}, lab)
+        'max_steps': 1, 'confirm': False}, lab)
     steps = result['steps']
-    assert [entry['proposal']['arguments']['operator'] for entry in steps] == [
-        'refit', 'native_condition_research', 'research_choice'], result
+    assert [entry['proposal']['arguments']['operator'] for entry in steps] == ['refit'], result
     assert steps[0]['feedback']['status'] == 'refit_unavailable'
-    resumed = steps[1]['proposal']['arguments']
-    assert resumed['max_compute'] == contract['max_compute']
-    assert resumed['max_candidates'] == contract['max_candidates']
-    assert resumed['programs'] == programs and resumed['basis'] == basis
+    monkeypatch.chdir(tmp_path)
+    agent._prepare_program_state()
+    proposed = select_actions(lab.public_spec(), agent.observations, agent._program_memory(POLICY, {}))
+    assert proposed.get('arguments', {}).get('operator') != 'native_condition_research'
+    assert len(owner['native_condition_research']) == 1
+    # Exercise paid alias reuse explicitly as an engineering control. The
+    # ordinary author above did not choose this redundant completed search.
+    agent._execute('run', {'operator': 'native_condition_research',
+        'research_question': contract['question'], 'programs': programs, 'basis': basis,
+        'max_compute': contract['max_compute'], 'max_candidates': contract['max_candidates']}, lab)
     assert owner['native_condition_research'][0] == original
     assert len(owner['native_condition_research']) == 2
     expected = contract['predictor_paths'] + [candidate['model']
         for round_ in owner['native_condition_research'] for candidate in round_['candidates']]
-    assert steps[-1]['proposal']['arguments']['models'] == expected
-    assert [item['path'] for item in steps[-1]['feedback']['evaluations']] == expected
-    compared = steps[-1]['feedback']
+    compared = agent._execute('run', {'operator': 'research_choice', 'models': expected,
+        'research_question': contract['question']}, lab)
+    assert [item['path'] for item in compared['evaluations']] == expected
     assert compared['reused_score_count'] == 5
     assert compared['new_scored_count'] == 0
     for retained, repeated in zip(choice['evaluations'], compared['evaluations'][:3]):
@@ -400,13 +405,6 @@ def test_same_bank_requires_actual_current_full_scope_refit_failure_and_keeps_fi
     (tmp_path / 'method_decision.json').write_text(json.dumps({'research_options': [
         {'id': 'native_condition_research', 'current_executions': [entry]}]}))
     proposed = select_actions({'controls': ['u']}, observations(), memory)
-    if changed == 'attempted':
-        assert proposed['arguments'] == entry['resume_action']['arguments']
-        state['method_results'].append({'proposal': deepcopy(proposed),
-            'feedback': {'operator': 'native_condition_research',
-                'research_question_id': question['id'], 'question_meaning_version': 1},
-            'evidence_after': {'rows': 1}})
-        proposed = select_actions({'controls': ['u']}, observations(), memory)
     if changed == 'finish':
         assert proposed['action'] == 'finish'
     else:

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="8" time="14.141" timestamp="2026-10-28T13:43:36.486154+08:00" hostname="FATHERSUCKERMSI"><testcase classname="tests.test_cognition_conditional_experiments" name="test_json_transferred_agent_rewrites_experiments_after_controls_scale_and_mechanism_change" time="12.460"><failure message="AssertionError: /tmp/pytest-of-erzhu419/pytest-244/test_json_transferred_agent_re0/changed_research.json&#10;assert (8 == 7)">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-244/test_json_transferred_agent_re0')
+
+    def test_json_transferred_agent_rewrites_experiments_after_controls_scale_and_mechanism_change(tmp_path):
+        library = KnowledgeLibrary()
+        source = UnspecifiedBranchLab('outside_window', 3, gate_axis=0)
+        first = UnifiedResearchAgent(replace(CONFIG, seed=9315101),
+            library=library, measurement_budget=0).run(source)
+        assert first['research_program'] is not None
+        stored = json.loads(json.dumps(library.to_dict()))
+        restored = KnowledgeLibrary.from_dict(stored)
+        changed = UnspecifiedBranchLab('inside_window', 7, gate_axis=0,
+            names=('p', 'q', 'r'), control_scale=2.3, response_scale=1.25,
+            threshold=.413, task_id='unlabelled_apparatus_episode_2')
+        report = UnifiedResearchAgent(replace(CONFIG, seed=9316101),
+            library=restored, measurement_budget=0).run(changed)
+        saved = tmp_path / 'changed_research.json'
+        saved.write_text(json.dumps(report))
+        assert report['research_program'] is not None, str(saved)
+        step = latest_condition(report['research_program'])
+&gt;       assert step['width'] == 7 and step['placement'] == 'inside_window', str(saved)
+E       AssertionError: /tmp/pytest-of-erzhu419/pytest-244/test_json_transferred_agent_re0/changed_research.json
+E       assert (8 == 7)
+
+tests/test_cognition_conditional_experiments.py:258: AssertionError</failure></testcase><testcase classname="tests.test_cognition_workflow_budget" name="test_all_replay_fits_share_one_cap_and_leave_native_confirmation_funded[False]" time="0.010" /><testcase classname="tests.test_cognition_workflow_budget" name="test_all_replay_fits_share_one_cap_and_leave_native_confirmation_funded[True]" time="0.022" /><testcase classname="tests.test_cognition_unified_workflows" name="test_native_workflow_replays_paid_rows_and_leaves_confirmation_to_native_gate" time="0.002" /><testcase classname="tests.test_cognition_unified_workflows" name="test_failed_confirmation_keeps_its_frozen_fit_when_same_program_is_refitted" time="0.002" /><testcase classname="tests.test_cognition_unified_workflows" name="test_growth_comparison_runs_native_fits_on_one_legal_purchase" time="0.001" /><testcase classname="tests.test_cognition_unified_workflows" name="test_legacy_temporal_research_compiles_and_executes_with_native_costs" time="0.967" /><testcase classname="tests.test_cognition_unified_workflows" name="test_unavailable_high_return_plan_yields_to_executable_alternative_and_carries_demand" time="0.026" /></testsuite></testsuites>

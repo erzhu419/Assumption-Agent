@@ -6,12 +6,14 @@ existing fitter. Frozen source methods and their paid records stay available.
 """
 
 from copy import deepcopy
+from dataclasses import asdict
+import json
 from math import isfinite
 from pathlib import Path
 
 from .checkpoint_storage import clone_or_copy, write_json_checkpoint
 from .language import Program
-from .method_conditions import method_profile, method_use_decision
+from .method_conditions import method_profile, method_use_decision, paid_transition_evidence
 from .models import Observation, TaskSpec
 from .research_episodes import load_source_values
 from .research_methods import observe_common_method_return
@@ -28,15 +30,397 @@ def _store(agent, name, value, *, base=None):
     return {'file': str(path), 'json_path': []}
 
 
+def restore_python_method_bodies(agent, entries):
+    """Restore executable dependencies before a new research episode begins."""
+    from .method_action_research import read_method_reference
+    from .code_agent import _copy_model_file
+    from .theory_consolidation import _save
+
+    members = []
+    for entry in entries:
+        candidate = read_method_reference(entry['candidate_ref'], agent.workspace)
+        identifier = candidate['id']
+        existing = agent.theory_consolidation.setdefault('candidates', {}).get(identifier)
+        if existing is not None and existing != candidate:
+            raise ValueError('method topic restoration requires the original candidate body')
+        agent.theory_consolidation['candidates'][identifier] = deepcopy(candidate)
+        original = Path(entry['workspace'])
+        paths = [candidate['execution']['path'], candidate['selection_plan']['ordinary_method_path']]
+        selection = candidate.get('selection_ref')
+        if selection and not Path(selection['file']).is_absolute():
+            paths.append(selection['file'])
+        for relative in paths:
+            source, destination = original / relative, agent.workspace / relative
+            if destination.resolve() == source.resolve():
+                continue
+            if destination.exists() and destination.read_bytes() == source.read_bytes():
+                continue
+            if destination.exists():
+                raise ValueError('method topic source differs at its retained path')
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            _copy_model_file(source, destination)
+        member = {'id': identifier, 'version': candidate['version']}
+        if member not in members:
+            members.append(member)
+        group = agent.theory_consolidation.setdefault('method_feedback', {}).setdefault(
+            identifier, {'outcome_refs': []})
+        for reference in entry.get('outcome_refs', []):
+            record = read_method_reference(reference, agent.workspace)
+            origins = [read_method_reference(item, agent.workspace).get('origin_ref', item)
+                       for item in group['outcome_refs']]
+            if record.get('origin_ref', reference) not in origins:
+                group['outcome_refs'].append(deepcopy(reference))
+                _observe_return(agent, group, record, reference)
+    _save(agent)
+    return members
+
+
+def ensure_python_method_topic(agent, *, parent_question_ref, candidate_refs=(),
+                               topic_ref=None, candidate_sources=(), mission=None):
+    """Continue one declared method problem across actual source episodes.
+
+    Only its small question/return records and the existing method manifests
+    travel. Paid observations, model banks and research archives stay referenced.
+    """
+    from .method_action_research import read_method_reference
+    from .question_agenda import adopt_research_mission
+    from .theory_consolidation import _save
+
+    retained = read_method_reference(topic_ref, agent.workspace) if topic_ref else None
+    members = list(candidate_refs)
+    imports = [*(retained.get('methods', []) if retained else []), *candidate_sources]
+    for member in restore_python_method_bodies(agent, imports):
+        if member not in members:
+            members.append(member)
+    if retained:
+        for saved in retained.get('questions', [retained['question']]):
+            existing = next((q for q in agent.questions if q['id'] == saved['id']), None)
+            if existing is None:
+                agent._open_question(deepcopy(saved))
+        identifier = retained['question']['id']
+    else:
+        identifier = parent_question_ref.get('question_id', parent_question_ref.get('id')) + ':method_choice'
+    owner = next((q for q in agent.questions if q['id'] == identifier), None)
+    if owner is None:
+        owner = agent._open_question({'id': identifier, 'kind': 'method_use',
+            'question': 'Which supported research program should serve this continuing method problem?',
+            'meaning_version': 1, 'answer_type': 'research_method',
+            'parent_id': parent_question_ref.get('question_id', parent_question_ref.get('id')),
+            'candidate_method_refs': []})
+    if mission is not None:
+        owner['mission'] = adopt_research_mission(owner.get('mission', {}), mission)
+    topic = {'question_id': owner['id'], 'meaning_version': owner.get('meaning_version', 1)}
+    for member in members:
+        if member not in owner.setdefault('candidate_method_refs', []):
+            owner['candidate_method_refs'].append(deepcopy(member))
+        group = agent.theory_consolidation.setdefault('method_feedback', {}).setdefault(
+            member['id'], {'outcome_refs': []})
+        group['method_question_ref'] = deepcopy(topic)
+        for reference in owner.get('method_action_returns', []):
+            record = read_method_reference(reference, agent.workspace)
+            if record.get('method_ref') == member and reference not in group['outcome_refs']:
+                group['outcome_refs'].append(deepcopy(reference))
+                _observe_return(agent, group, record, reference)
+    if members:
+        owner.setdefault('method_use_plan', {'candidate_id': members[0]['id'], 'binding': {}})
+    _save(agent)
+    return owner
+
+
+def export_python_method_topic(agent, owner):
+    """Freeze the current small method topic and reference its installed bodies."""
+    from .theory_consolidation import (_save, library_entry_reference,
+                                       theory_library_candidate_versions)
+    from .method_action_research import read_method_reference
+    from .question_agenda import mission_compute_remaining
+
+    # Synchronize the shared mission debit before transporting it to an episode.
+    if owner.get('mission'):
+        mission_compute_remaining(agent, owner['mission'])
+    topic = {'question_id': owner['id'], 'meaning_version': owner.get('meaning_version', 1)}
+    fields = ('id', 'kind', 'meaning_version', 'question', 'answer_type', 'parent_id',
+        'parent_question_ref', 'query_semantics', 'context_ref', 'theory_target', 'status',
+        'mission', 'method_use_plan', 'candidate_method_refs', 'method_action_returns',
+        'agenda_basis', 'completed_agenda_basis', 'routing_execution', 'method_use_result',
+        'origin_method_question_ref', 'use_sites', 'depends_on', 'method_content_proposal_refs')
+    questions = [{key: deepcopy(q[key]) for key in fields if key in q}
+        for q in agent.questions if q['id'] == owner['id'] or q.get('origin_method_question_ref') == topic]
+    _save(agent)
+    methods = []
+    for member in theory_library_candidate_versions(agent):
+        if member not in owner.get('candidate_method_refs', []):
+            continue
+        candidate = agent.theory_consolidation.get('candidates', {}).get(member['id'])
+        if candidate is None or candidate['version'] != member['version']:
+            continue
+        reference = library_entry_reference(agent, 'candidates', member['id'])
+        methods.append({'candidate_ref': {**reference, 'file': str(agent.workspace / reference['file'])},
+            'workspace': str(agent.workspace), 'outcome_refs': deepcopy(
+                agent.theory_consolidation.get('method_feedback', {}).get(member['id'], {}).get('outcome_refs', []))})
+    payload = {'question': next(q for q in questions if q['id'] == owner['id']),
+               'questions': questions, 'methods': methods}
+    previous = owner.get('method_topic_export_ref')
+    if previous and read_method_reference(previous, agent.workspace) == payload:
+        return deepcopy(previous)
+    number = 0
+    while (agent.workspace / 'method_feedback' / f'topic_{number:04d}.json').exists():
+        number += 1
+    reference = _store(agent, f'topic_{number:04d}.json', payload)
+    owner['method_topic_export_ref'] = deepcopy(reference)
+    return reference
+
+
 def _rows(agent):
     return [row if hasattr(row, 'features') else Observation(row['features'], row['target'],
         tuple(row.get('history', []))) for row in agent.rows]
 
 
-def begin_method_feedback(agent, laboratory):
+def _profile_rows(agent):
+    """Recover measured response history for the profile, never the predictor."""
+    from .legacy_research_bridge import InquiryResearchLab
+    from .models import Observation
+
+    rows = _rows(agent)
+    measured = {}
+    for record in getattr(agent, 'observations', []):
+        indices = record.get('row_indices', [])
+        payloads = record.get('rows', [])
+        if (not indices or len(indices) != len(payloads) or any(index >= len(rows) for index in indices)
+                or any(payload['features'] != rows[index].features or payload['target'] != rows[index].target
+                    or tuple(payload.get('history', [])) != rows[index].history
+                    for index, payload in zip(indices, payloads))
+                or any(len(payload.get('history', [])) != position
+                    for position, payload in enumerate(payloads))):
+            continue
+        for index, row in zip(indices, InquiryResearchLab.measured_rows(record)):
+            measured[index] = Observation(rows[index].features, row.target, row.history)
+    return [measured.get(index, row) for index, row in enumerate(rows)]
+
+
+def _paid_model_transition_evidence(agent, public, model, reference, *, rows, mse):
+    """Project one matching saved execution; no new model prediction is made."""
+    import ast
+    from .code_agent import (_closed_temporal_export, literal_python_model_context_matches,
+                             python_model_context_matches, python_model_context)
+    from .temporal_operator_agent import (
+        _closed_prediction_values, _same_closed_prediction_scope, paid_python_evaluation_contract)
+
+    unknown = {'status': 'unknown', 'reason': 'current_retained_prediction_columns_unavailable'}
+    assessment = _read(agent, reference)
+    result = assessment['result']
+    if (not assessment.get('closed_prediction_state') or result.get('returncode') != 0
+            or result.get('timeout') or result.get('mse') != mse):
+        return unknown
+    scope = _read(agent, assessment['scope_ref'])
+    expected = {**scope, 'rows': rows, 'public_spec': public,
+                'revisions': deepcopy(agent.revisions),
+                'evaluation_contract': paid_python_evaluation_contract()}
+    if not _same_closed_prediction_scope(scope, json.loads(json.dumps(expected))):
+        return unknown
+    context = assessment['execution_context']
+    directory, inner = python_model_context(agent.workspace, model)
+    literal = _closed_temporal_export(directory, inner)
+    matches = literal_python_model_context_matches if literal else python_model_context_matches
+    if not matches(agent.workspace, model,
+            context['workspace'], context['model']):
+        return unknown
+    depth = None
+    if literal:
+        encoded = ast.literal_eval((directory / inner).read_text().splitlines()[1][len('_PROGRAM = '):])
+        body = encoded[4][0] if encoded[0] == 'state_replay' else encoded
+        guard = body[4][0] if body[0] == 'if' else None
+        depth = guard[3] if guard is not None and guard[0] == 'available' else None
+    predictions_ref = {**reference, 'json_path': [
+        *reference.get('json_path', []), 'closed_prediction_state']}
+    values = _closed_prediction_values(predictions_ref, agent.workspace)['predictions']
+    return paid_transition_evidence(getattr(agent, 'observations', []), rows, values,
+        guard_depth=depth, squared_error_threshold=agent.config.confirmation_mse_threshold,
+        source_refs=[predictions_ref, assessment['scope_ref']])
+
+
+def retained_transition_evidence(agent, public, retained=None):
+    """Project an actually retained current score; do not predict or refit."""
+    retained = retained if retained is not None else agent._evaluated_summary()
+    unknown = {'status': 'unknown', 'reason': 'current_retained_prediction_columns_unavailable'}
+    if not retained or retained.get('evaluated_rows') != len(agent.rows):
+        return unknown
+    model = retained['model']
+    if not (agent.workspace / model).is_file():
+        return unknown
+    names = {model, retained.get('source_model')}
+    rows = json.loads(json.dumps([asdict(row) for row in _rows(agent)]))
+    for operator in reversed(getattr(agent, 'operator_results', [])):
+        for evaluation in reversed(operator.get('evaluations', [])):
+            choices = [evaluation]
+            if evaluation.get('retained_comparison'):
+                choices.append(evaluation['retained_comparison'])
+            for item in choices:
+                if item.get('path', item.get('model')) not in names:
+                    continue
+                reference = item.get('paid_score_reuse', {}).get('execution_basis_ref')
+                if not reference:
+                    continue
+                projected = _paid_model_transition_evidence(agent, public, model, reference,
+                    rows=rows, mse=retained.get('mse'))
+                if projected['status'] == 'observed':
+                    return projected
+    return unknown
+
+
+def paid_pool_transition_evidence(agent, public, *, models=None):
+    """Describe the actual research pool using its already paid predictions.
+
+    An error-free mature prefix is an observed diagnostic, not a promise that
+    startup repair will succeed. Missing scores and unexposed guards stay unknown.
+    Equal-score competitors remain visible even when the incumbent won a tie.
+    """
+    models = list(dict.fromkeys(models if models is not None else
+        agent.knowledge.get('finite_native_author', {}).get('predictor_paths', [])))
+    if not models:
+        return None
+    rows = json.loads(json.dumps([asdict(row) for row in _rows(agent)]))
+    evaluations = {model: [] for model in models}
+    for operator in reversed(getattr(agent, 'operator_results', [])):
+        for item in reversed(operator.get('evaluations', [])):
+            model = item.get('path', item.get('model'))
+            if model in evaluations and item.get('paid_score_reuse', {}).get('execution_basis_ref'):
+                evaluations[model].append(item)
+    witnesses, unknown, executions = [], [], []
+    for model in models:
+        matched = None
+        if (agent.workspace / model).is_file():
+            for item in evaluations[model]:
+                reference = item['paid_score_reuse']['execution_basis_ref']
+                projected = _paid_model_transition_evidence(agent, public, model, reference,
+                    rows=rows, mse=item.get('mse'))
+                if projected['status'] == 'observed':
+                    matched = projected
+                    if reference not in executions:
+                        executions.append(reference)
+                        witnesses.append({'models': [model], 'execution_ref': deepcopy(reference),
+                                          'transition': projected})
+                    else:
+                        witnesses[executions.index(reference)]['models'].append(model)
+                    break
+        if matched is None:
+            unknown.append(model)
+    guarded = [item['transition'] for item in witnesses
+               if item['transition'].get('guard_depth') is not None]
+    return {'status': 'observed' if witnesses else 'unknown',
+        'models_requested': len(models), 'known_executions': len(witnesses),
+        'unknown_prediction_models': len(unknown), 'guarded_executions': len(guarded),
+        'unknown_guard_executions': len(witnesses) - len(guarded),
+        'min_mature_first_divergences': min((item['mature_first_divergences'] for item in guarded), default=None),
+        'startup_only_first_error_executions': sum(item['startup_first_divergences'] > 0
+            and item['mature_first_divergences'] == 0 for item in guarded) if guarded else None,
+        'correct_executions': sum(item['transition']['error_rows'] == 0 for item in witnesses),
+        'witnesses': witnesses, 'unknown_models': unknown,
+        'evidence_scope': 'same_paid_rows_before_method_call_not_repair_success'}
+
+
+def _pre_use_research_state(agent, owner, retained, public=None):
+    """Read existing stage/quote references before the proposed call executes."""
+    rounds = owner.get('native_condition_research', [])
+    latest = rounds[-1] if rounds else {}
+    offer = latest.get('compute_continuation') or {}
+    unit = offer.get('research_unit') or {}
+    minimum = unit.get('minimum_compute')
+    remaining = agent.config.compute_budget - agent.costs['compute_cost']
+    seconds = agent.config.execution_seconds - agent.costs['python_execution_seconds']
+    current_quote = unit.get('quoted_paid_rows') == len(agent.rows)
+    stages = latest.get('search_stages', [])
+    reference = {'file': str(agent.workspace / 'research_state.json'), 'json_path': []}
+    position = next((i for i, question in enumerate(agent.questions) if question is owner), None)
+    comparison = next(((i, item.get('feedback') or {}) for i, item in reversed(
+        list(enumerate(getattr(agent, 'method_results', [])))) if
+        (item.get('feedback') or {}).get('operator') == 'research_choice' and
+        (item.get('feedback') or {}).get('research_question_id') == owner.get('id')), None)
+    from .finite_native_author import _comparison_models
+    expected = set(_comparison_models(
+        (getattr(agent, 'knowledge', {}).get('finite_native_author') or {}).get('predictor_paths', []),
+        getattr(agent, 'candidate_paths', []), rounds))
+    stale = True if retained and retained.get('evaluated_rows') != len(agent.rows) else None
+    if comparison and expected and comparison[1].get('paid_rows') is not None:
+        value = comparison[1]
+        stale = (value['paid_rows'] != len(agent.rows) or bool(value.get('truncated'))
+            or value.get('models_requested') != value.get('models_completed')
+            or {item.get('path') for item in value.get('evaluations', [])} != expected)
+    reserve = unit.get('completion_reserve') or {}
+    current_quote = current_quote and (not expected or reserve.get('retained_pool_models') == len(expected))
+    sources = {'costs': {**reference, 'json_path': ['costs']},
+        'retained_parent': {**reference, 'json_path': ['evaluated_model']}}
+    if position is not None:
+        sources['question'] = {**reference, 'json_path': ['questions', position]}
+        if rounds:
+            sources['native_round'] = {**reference, 'json_path': [
+                'questions', position, 'native_condition_research', len(rounds) - 1]}
+    if comparison:
+        sources['comparison'] = {**reference, 'json_path': ['method_results', comparison[0], 'feedback']}
+    evidence = {'unconsumed_answer': None, 'new_distinction': None,
+        'distinguishing_experiment_available': None}
+    update = latest.get('boundary_update') or {}
+    if update.get('status') in {'boundary_refined', 'structure_mismatch'}:
+        evidence['new_distinction'] = True
+    if public is not None and latest.get('proposed_experiments'):
+        from .finite_native_author import paid_experiment_record_indices, _boundary_callbacks_completed
+        contract = (getattr(agent, 'knowledge', {}).get('finite_native_author') or {})
+        pending, legal, reads = [], [], []
+        for index, experiment in enumerate(latest['proposed_experiments']):
+            proposal = experiment.get('query_action') or {}
+            args = proposal.get('arguments') or {}
+            commands = args.get('actions') or []
+            indices = paid_experiment_record_indices(commands, agent.observations, public, owner, contract)
+            if commands and all(value is not None for value in indices) and args.get('after_observation'):
+                completed = any(_boundary_callbacks_completed(proposal, item.get('feedback') or {}, indices)
+                    for item in getattr(agent, 'method_results', []))
+                pending.append(not completed)
+                reads.append({'record_refs': [{'file': str(agent.workspace / 'laboratory_observations.json'),
+                    'json_path': [value]} for value in indices],
+                    'proposal_index': index, 'analysis_completed': completed})
+            bounds = public.get('feature_bounds') or {}
+            names = {item['name'] if isinstance(item, dict) else item for item in public.get('controls', [])}
+            levels = public.get('control_levels') or {}
+            valid = bool(commands) and bool(public.get('reset')) and all(
+                command.get('kind') == 'trajectory' and isinstance(command.get('sequence'), list)
+                and 0 < len(command['sequence']) <= public.get('max_probe_length', 0)
+                and all(set(point) == names and all(type(value) in (int, float) and isfinite(value)
+                    and (name not in bounds or bounds[name][0] <= value <= bounds[name][1])
+                    and (name not in levels or any(abs(value - level) <= 1e-9 for level in levels[name]))
+                    for name, value in point.items()) for point in command['sequence']) for command in commands)
+            separations = ([experiment['predicted_separation']]
+                if 'predicted_separation' in experiment else [])
+            separations.extend(pair.get('predicted_separation')
+                for pair in experiment.get('matched_action_pairs', []))
+            measured = [value for value in separations
+                if type(value) in (int, float) and isfinite(value)]
+            distinction = (True if any(value > 0 for value in measured)
+                else False if separations and len(measured) == len(separations) else None)
+            legal.append(distinction if valid else False)
+        if pending:
+            evidence['unconsumed_answer'] = any(pending)
+            sources['paid_answer_analyses'] = reads
+        if 'reset' in public:
+            evidence['distinguishing_experiment_available'] = (True if any(value is True for value in legal)
+                else False if legal and all(value is False for value in legal) else None)
+    return {'stage': latest.get('status'),
+        'last_unfinished_request': {'operator': 'native_condition_research' if rounds else None,
+            'status': latest.get('status'), 'stage': stages[-1].get('stage') if stages else None},
+        'evidence': evidence,
+        'budget': {'minimum_compute': minimum if current_quote else None,
+            'remaining_compute': remaining, 'remaining_seconds': seconds,
+            'complete_unit_payable': (remaining >= minimum and seconds > 0
+                if current_quote and type(minimum) is int else None)},
+        'comparison': {'stale': stale,
+            'paid_rows': comparison[1].get('paid_rows') if comparison else None,
+            'models_requested': comparison[1].get('models_requested') if comparison else None,
+            'models_completed': comparison[1].get('models_completed') if comparison else None},
+        'source_refs': sources}
+
+
+def begin_method_feedback(agent, laboratory, *, candidate=None):
     """Capture public conditions before a method or comparison can change them."""
     library = agent.theory_consolidation
-    if laboratory is None or not any(item.get('kind') == 'research_program'
+    if laboratory is None or not any(item.get('kind') in {'research_program', 'python_research_method'}
             for item in library.get('candidates', {}).values()):
         return None
     public = laboratory.public_spec()
@@ -51,14 +435,21 @@ def begin_method_feedback(agent, laboratory):
     parent = library_parent = (owner.get('theory_target') or {}).get('parent_theory_id')
     parent = agent.theory_index.get(parent, {}) if parent else {}
     program = Program.from_dict(parent['program']) if parent.get('program') else None
-    profile = method_profile(spec, _rows(agent), program,
+    research_state = _pre_use_research_state(agent, owner, retained, public)
+    pool = paid_pool_transition_evidence(agent, public)
+    if pool is not None:
+        research_state['candidate_pool'] = pool
+    profile = method_profile(spec, _profile_rows(agent), program,
         residual_loss=retained.get('mse') if retained.get('evaluated_rows') == len(agent.rows) else None,
-        minimum_improvement=agent.config.confirmation_mse_threshold)
+        minimum_improvement=agent.config.confirmation_mse_threshold,
+        research_state=research_state if (candidate or {}).get('kind') == 'python_research_method' else None,
+        transition_evidence=retained_transition_evidence(agent, public, retained))
     profile['representation'].pop('program', None)
     profile['data']['controllable'] = True
     if program is None and retained:
         profile['representation']['kind'] = 'not_exposed'
     return {'profile': profile, 'retained_model': deepcopy(retained),
+        'research_state': research_state,
         'parent_theory_id': library_parent,
         'question_ref': {'question_id': owner.get('id'),
             'meaning_version': owner.get('meaning_version', 1)},
@@ -201,10 +592,32 @@ def _observe_return(agent, group, record, reference):
     if record.get('process_comparison_ref'):
         value['process_comparison'] = _read(agent, record['process_comparison_ref'])
     group['returns'] = observe_common_method_return(value, group.get('returns'))
+    from .method_conditions import method_delivery_outcome
+
+    # Invocation identity, not repeated ingestion, is the reliability denominator.
+    entries = group['returns'].setdefault('delivery_outcomes', [])
+    origin = deepcopy(record.get('origin_ref', reference))
+    entry = next((item for item in entries if item['origin_ref'] == origin), None)
+    if entry is None:
+        entry = {'origin_ref': origin, 'cost_refs': []}
+        entries.append(entry)
+    entry.update(status=method_delivery_outcome(record), world_support_updated=False)
+    for cost_ref in record.get('cost_refs', []):
+        if cost_ref not in entry['cost_refs']:
+            entry['cost_refs'].append(deepcopy(cost_ref))
+    counts = {name: sum(item['status'] == name for item in entries) for name in (
+        'delivered', 'resource_non_delivery', 'execution_failure',
+        'administratively_censored', 'unresolved')}
+    group['returns']['delivery_reliability'] = {**counts,
+        'method_outcome_denominator': sum(counts[name] for name in (
+            'delivered', 'resource_non_delivery', 'execution_failure')),
+        'total_invocations': len(entries), 'world_refutations': 0}
 
 
 def _replace_feedback_record(agent, group, reference, record):
     """Update a restored use locally while retaining its paid origin identity."""
+    if _read(agent, reference) == record:
+        return deepcopy(reference)
     source = Path(reference['file'])
     source = source if source.is_absolute() else agent.workspace / source
     directory = agent.workspace / 'method_feedback'
@@ -237,13 +650,18 @@ def publish_method_use_questions(agent, proposals, *, binding, context):
     mission = next((value for value in (context.get('mission'), owner.get('mission'))
         if value and value.get('purpose') in {'method_learning', 'theory_learning'}), None)
     for proposal in proposals:
+        method_plan = {'candidate_id': binding['candidate_id'], 'binding': deepcopy(binding)}
+        for field in ('ordinary_return_refs', 'ordinary_return_basis'):
+            if field in proposal.get('method_use_plan', {}):
+                method_plan[field] = deepcopy(proposal['method_use_plan'][field])
         references = deepcopy(proposal.get('evidence_refs', []))
         returns = []
         for reference in references:
             record = _read(agent, reference)
             retained = {key: deepcopy(record[key]) for key in
                 ('method_ref', 'profile_ref', 'status', 'execution_complete', 'execution_error',
-                 'administrative_censoring', 'censored') if key in record}
+                 'administrative_censoring', 'censored', 'method_content_source',
+                 'method_artifact_ref', 'prior_selection_plan_ref') if key in record}
             for field, keys in (
                 ('working_comparison', ('complete', 'same_rows', 'before_loss', 'after_loss', 'data_role',
                                         'rows', 'requested_pool_size')),
@@ -265,9 +683,11 @@ def publish_method_use_questions(agent, proposals, *, binding, context):
             and q.get('agenda_basis', {}).get('evidence_basis') == evidence), None)
         if old is not None:
             changed = old.get('agenda_basis') != agenda_basis
+            if 'ordinary_return_refs' in method_plan:
+                method_plan = {**deepcopy(old.get('method_use_plan', {})), **method_plan}
             old.update(deepcopy(proposal), agenda_basis=agenda_basis,
                 theory_target=deepcopy(context.get('theory_target', owner.get('theory_target', {}))),
-                method_use_plan={'candidate_id': binding['candidate_id'], 'binding': deepcopy(binding)})
+                method_use_plan=method_plan)
             if changed:
                 old['status'] = 'open'
             if mission is not None:
@@ -282,7 +702,7 @@ def publish_method_use_questions(agent, proposals, *, binding, context):
             'parent_question_ref': deepcopy(parent),
             'agenda_basis': agenda_basis,
             'theory_target': deepcopy(context.get('theory_target', owner.get('theory_target', {}))),
-            'method_use_plan': {'candidate_id': binding['candidate_id'], 'binding': deepcopy(binding)},
+            'method_use_plan': method_plan,
             'use_sites': [{'kind': 'select_research_action', 'question_id': parent.get('question_id')}]}
         current = agent._open_question(question)
         if mission is not None:
@@ -508,6 +928,236 @@ def record_method_execution_error(agent, context, error):
     _observe_return(agent, group, record, reference)
     from .theory_consolidation import _save
     _save(agent)
+
+
+def record_python_method_feedback(agent, candidate, binding, result, context):
+    """Return an actual select_actions invocation to the existing method topic.
+
+    This records its own content/version and original costs. It does not give
+    a Python strategy the native method's two-source support or a counterfactual
+    return for an alternative that was never executed.
+    """
+    if context is None or not context.get('profile'):
+        return {'status': 'pre_use_profile_required', 'world_support_updated': False}
+    identifier = candidate['id']
+    group = agent.theory_consolidation.setdefault('method_feedback', {}).setdefault(
+        identifier, {'outcome_refs': []})
+    origin = deepcopy(binding.get('origin_ref') or result.get('origin_ref') or {
+        'file': str(agent.workspace / 'research_state.json'),
+        'json_path': ['method_results', len(agent.method_results) - 1]})
+    previous = next(((reference, _read(agent, reference)) for reference in group['outcome_refs']
+        if _read(agent, reference).get('origin_ref', reference) == origin), None)
+    method = {'id': identifier, 'version': candidate['version']}
+    before_profile = deepcopy(context['profile'])
+    if context.get('research_state') is not None:
+        before_profile['research'] = deepcopy(context['research_state'])
+    retained_profile = (previous[1].get('profile_ref') if previous
+        and _read(agent, previous[1]['profile_ref']) == before_profile else None)
+    evidence = (deepcopy(previous[1]['evidence_basis']) if previous
+                else method_evidence_basis(binding, agent=agent))
+    record = {**(deepcopy(previous[1]) if previous else {}), 'method_ref': method,
+        'invoked_method_ref': deepcopy(method), 'origin_ref': origin,
+        'profile_ref': retained_profile or _profile_ref(agent, before_profile),
+        'evidence_basis': evidence,
+        'parent_question_ref': deepcopy(context.get('question_ref', {})),
+        'theory_target': deepcopy(context.get('theory_target', {})),
+        'invocation_binding': deepcopy(binding), 'execution_carrier': 'python_select_actions',
+        'status': result.get('status', 'unresolved'),
+        'execution_complete': result.get('execution_complete'), 'generated_theories': [],
+        'fit_compute_cost': None, 'world_support_updated': False, 'independent_confirmation': False}
+    for field in ('execution_error', 'administrative_censoring', 'censored',
+                  'working_comparison', 'paired_future', 'process_comparison_ref',
+                  'paired_action_comparison_ref', 'costs_ref', 'costs', 'cost_intervals',
+                  'actual_result_ref', 'complete_comparison_ref', 'frozen_prediction_refs',
+                  'method_content_source', 'method_artifact_ref', 'prior_selection_plan_ref'):
+        if field in result:
+            record[field] = deepcopy(result[field])
+    costs = list(record.get('cost_refs', []))
+    for reference in result.get('cost_refs', []):
+        if reference not in costs:
+            costs.append(deepcopy(reference))
+    record['cost_refs'] = costs
+    if previous:
+        reference = _replace_feedback_record(agent, group, previous[0], record)
+    else:
+        reference = _store_new_use(agent, record)
+        group['outcome_refs'].append(reference)
+    _observe_return(agent, group, record, reference)
+    return_fields = ('method_ref', 'origin_ref', 'status', 'execution_complete', 'execution_error',
+        'administrative_censoring', 'censored', 'actual_result_ref', 'complete_comparison_ref',
+        'frozen_prediction_refs', 'costs', 'cost_refs', 'method_content_source',
+        'method_artifact_ref', 'prior_selection_plan_ref')
+
+    def return_basis(references):
+        return [{'feedback_ref': deepcopy(item), **{key: deepcopy(value[key])
+            for key in return_fields if key in value}}
+            for item in references for value in [_read(agent, item)]]
+
+    topic = group.get('method_question_ref') or candidate.get('method_question_ref')
+    accumulated = list(group['outcome_refs'])
+    if topic:
+        owner = next((question for question in agent.questions
+            if question['id'] == topic['question_id']
+            and question.get('meaning_version', 1) == topic.get('meaning_version', 1)), None)
+        if owner is not None:
+            if owner.get('mission', {}).get('purpose') in {'method_learning', 'theory_learning'}:
+                context = {**context, 'mission': owner['mission']}
+            returns = owner.setdefault('method_action_returns', [])
+            if previous and previous[0] in returns:
+                returns[returns.index(previous[0])] = deepcopy(reference)
+            for item in group['outcome_refs']:
+                if item not in returns:
+                    returns.append(deepcopy(item))
+            methods = owner.setdefault('candidate_method_refs', [])
+            if method not in methods:
+                methods.append(deepcopy(method))
+            # A method topic can compare and revise several real methods. Keep
+            # all its ordinary returns, not only those of the latest caller.
+            accumulated = list(returns)
+            plan = owner.setdefault('method_use_plan', {
+                'candidate_id': identifier, 'binding': deepcopy(binding)})
+            updated = {'ordinary_return_refs': deepcopy(returns),
+                'ordinary_return_basis': return_basis(returns)}
+            if any(plan.get(key) != value for key, value in updated.items()):
+                plan.update(updated)
+                owner['status'] = 'open'
+                owner.pop('completed_agenda_basis', None)
+    proposal = {'kind': 'method_use', 'answer_type': 'research_action',
+        'question': 'Which matched research program should the current public research state use?',
+        'query_semantics': {'mode': 'solution_relation'},
+        'alternatives': ['ordinary_research', 'use_alternative_research', 'acquire_distinguishing_evidence'],
+        'evidence_refs': deepcopy(accumulated),
+        'origin_method_question_ref': deepcopy(topic),
+        'method_use_plan': {'ordinary_return_refs': deepcopy(accumulated),
+            'ordinary_return_basis': return_basis(accumulated)},
+        'parent_use': {'kind': 'select_research_action', 'method_ref': deepcopy(method)}}
+    questions = publish_method_use_questions(agent, [proposal], binding=binding,
+        context={**context, 'evidence_basis': evidence})
+    from .theory_consolidation import _save
+    _save(agent)
+    return {'status': 'recorded', 'feedback_ref': reference, 'origin_ref': origin,
+        'method_question_refs': questions, 'delivery_reliability': deepcopy(
+            group['returns']['delivery_reliability']), 'world_support_updated': False}
+
+
+def finalize_python_method_feedback(agent, candidate, binding, context, *, result_ref,
+                                    comparison_ref=None, frozen_prediction_refs=()):
+    """Attach one whole invocation's actual completion and exact result refs.
+
+    A completed comparison is delivery evidence, not a relative action label.
+    The paired-action reader owns preference learning; no per-step MSE is
+    converted into a fictional complete-method or counterfactual gain here.
+    """
+    actual = _read(agent, result_ref)
+    comparison = _read(agent, comparison_ref) if comparison_ref else actual.get('comparison', {})
+    complete = (actual.get('execution_complete') is True and bool(comparison)
+        and not comparison.get('error') and not comparison.get('truncated')
+        and type(comparison.get('models_requested')) is int
+        and comparison['models_requested'] == comparison.get('models_completed'))
+    result = {key: deepcopy(actual[key]) for key in ('status', 'execution_error',
+        'administrative_censoring', 'censored', 'cost_refs', 'costs_ref', 'costs', 'cost_intervals')
+        if key in actual}
+    result.update(execution_complete=complete, actual_result_ref=deepcopy(result_ref),
+        complete_comparison_ref=deepcopy(comparison_ref),
+        frozen_prediction_refs=deepcopy(list(frozen_prediction_refs)))
+    source_task = (actual.get('source_task_ref') or context.get('source_task_ref')
+        or binding.get('source_task_ref'))
+    source_id = (actual.get('source_id') or context.get('theory_target', {}).get(
+        'context_ref', {}).get('source_id'))
+    if source_task is None and source_id is not None:
+        source_task = {'source_id': deepcopy(source_id)}
+    if (complete and source_task and actual.get('profile_ref')
+            and actual.get('start_state_ref') and actual.get('native_representation_returns')):
+        # The original outcome owns native results, scores and the pre-use
+        # state. A tiny reference is sufficient; never recopy its archive or
+        # equate two snapshots of one task with two independent sources.
+        result['method_content_source'] = {'source_task_ref': deepcopy(source_task),
+            'outcome_ref': deepcopy(result_ref)}
+    if actual.get('method_artifact_ref'):
+        result['method_artifact_ref'] = deepcopy(actual['method_artifact_ref'])
+        if isinstance(_read(agent, actual['method_artifact_ref']).get('selection_plan'), dict):
+            result['prior_selection_plan_ref'] = {**deepcopy(actual['method_artifact_ref']),
+                'json_path': [*actual['method_artifact_ref'].get('json_path', []), 'selection_plan']}
+    if complete:
+        result['status'] = 'completed'
+    return record_python_method_feedback(agent, candidate, binding, result, context)
+
+
+def research_paired_method_conditions(agent, method_ref, pair_refs, compute_limit, *,
+                                      max_conditions=8, target_profile=None):
+    """Read exact referenced outcome contracts; never fit or run either arm."""
+    from .method_conditions import research_paired_method_conditions as research
+    from .models import SearchBudget
+
+    pairs = []
+    for reference in pair_refs:
+        pair = _read(agent, reference)
+        item = {**deepcopy(pair), 'feedback_ref': deepcopy(reference)}
+        if pair.get('comparison_kind') == 'additional_research_vs_retained_parent':
+            # This baseline is a declared predictor, not a completed method
+            # invocation with a method-use profile. Keep its actual return;
+            # the preference consumer preserves the narrower interpretation.
+            item.update({side: _read(agent, pair[f'{side}_ref'])
+                         for side in ('baseline', 'challenger')})
+            pairs.append(item)
+            continue
+        for side in ('baseline', 'challenger'):
+            outcome_ref = pair[f'{side}_ref']
+            outcome = _read(agent, outcome_ref)
+            value = deepcopy(outcome)
+            if outcome.get('original_pair_completed') is False:
+                item[side] = value
+                continue
+            value['profile'] = _read(agent, outcome['profile_ref'])
+            value['basis'] = {}
+            for name in ('start_state', 'data', 'split', 'quality_contract', 'resource_contract', 'evaluation'):
+                # The actual frozen contract reference is identity, not a
+                # caller's matching boolean. We do not expand large snapshots.
+                if outcome.get(f'{name}_ref') is not None:
+                    value['basis'][name] = deepcopy(outcome[f'{name}_ref'])
+                elif name in outcome:
+                    value['basis'][name] = deepcopy(outcome[name])
+            if not value.get('quality') and 'loss' in value and outcome.get('quality_contract_ref'):
+                contract = _read(agent, outcome['quality_contract_ref'])
+                value['quality'] = {'loss': value['loss'], 'threshold': contract.get('threshold')}
+            if outcome.get('resource_contract_ref'):
+                resource = _read(agent, outcome['resource_contract_ref'])
+                if 'time_limits' in resource:
+                    value['registered_time_limits'] = deepcopy(resource['time_limits'])
+            item[side] = value
+        # A later, shared readout is feedback about these same invocations,
+        # not another source or an opportunity to reselect their predictors.
+        # Keep the paid working comparison in its original referenced record.
+        if pair.get('paired_future_ref') is not None:
+            evaluated = _read(agent, pair['paired_future_ref'])
+            frozen = _read(agent, pair['frozen_predictors_ref'])
+            if evaluated.get('status') != 'frozen_pair_readout_completed':
+                raise ValueError('A completed shared frozen readout is required')
+            rows = evaluated['rows']
+            for side in ('baseline', 'challenger'):
+                value, score = item[side], evaluated['arms'][side]
+                if (not value.get('execution_complete') or not value.get('full_comparison')
+                        or frozen[side]['selected_ref'] != value.get('selected_ref')
+                        or len(score['predictions']) != rows):
+                    raise ValueError('Frozen evaluation must belong to the actual returned predictor')
+                value['working_quality'] = deepcopy(value['quality'])
+                value['quality'] = {**value['quality'], 'loss': score['mse']}
+                value.update(loss=score['mse'], coverage=rows,
+                    completed=score['mse'] <= value['quality']['threshold'])
+                value['basis']['evaluation'] = deepcopy(pair['paired_future_ref'])
+                # Each frozen predictor was actually evaluated once per row;
+                # the common acquisition remains a shared source cost.
+                value['costs']['compute_cost'] += rows
+            item.update(evaluation_role='paired_future', evaluation_lifecycle={
+                'all_outputs_frozen_before_labels': True, 'labels_revealed': True,
+                'role': 'development_after_freeze'})
+        pairs.append(item)
+    budget = SearchBudget(max(0, compute_limit))
+    result = research(method_ref, pairs, budget, max_conditions=max_conditions,
+        target_profile=target_profile)
+    agent.costs['compute_cost'] += budget.spent
+    return {**result, 'new_compute_cost': budget.spent, 'pair_refs': deepcopy(pair_refs),
+        'independent_support': False, 'support_updated': False}
 
 
 def research_method_conditions(agent, candidate_id, compute_limit, *, public_experiments=()):

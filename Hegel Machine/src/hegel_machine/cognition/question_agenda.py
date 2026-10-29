@@ -34,8 +34,9 @@ def has_executable_query(question):
 def has_method_use_plan(question):
     plan = question.get('method_use_plan')
     return (question.get('kind') == 'method_use' and isinstance(plan, dict)
-            and isinstance(plan.get('candidate_id'), str) and bool(plan['candidate_id'])
-            and isinstance(plan.get('binding'), dict))
+            and (bool(plan.get('native_return_refs')) or (
+                isinstance(plan.get('candidate_id'), str) and bool(plan['candidate_id'])
+                and isinstance(plan.get('binding'), dict))))
 
 
 def merge_question_proposal(existing, proposal):

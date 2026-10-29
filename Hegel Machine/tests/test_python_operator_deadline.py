@@ -12,7 +12,7 @@ from time import monotonic, sleep
 import pytest
 
 from hegel_machine.cognition.experiment_runtime import (
-    PythonExecutionDeadline, python_execution_deadline,
+    ActivityExecutionDeadline, PythonExecutionDeadline, python_execution_deadline,
 )
 from hegel_machine.cognition.proposers import _run
 from test_python_paid_score_reuse import MODELS, choose, no_execution, scene
@@ -220,4 +220,63 @@ def test_deadline_preserves_original_exception_and_clears_timer():
         with python_execution_deadline(1.):
             raise OSError('original failure')
     assert signal.getsignal(signal.SIGALRM) is handler
+    assert signal.getitimer(signal.ITIMER_REAL) == (0., 0.)
+
+
+def test_nested_score_cannot_consume_the_earlier_activity_deadline():
+    handler = signal.getsignal(signal.SIGALRM)
+    continued = []
+    with pytest.raises(ActivityExecutionDeadline, match='activity time budget'):
+        with python_execution_deadline(.05, activity=True):
+            try:
+                with python_execution_deadline(.5):
+                    sleep(.2)
+            except PythonExecutionDeadline:
+                continued.append('converted_to_local_python_budget')
+            continued.append('continued_past_activity_cutoff')
+    assert continued == []
+    assert signal.getsignal(signal.SIGALRM) is handler
+    assert signal.getitimer(signal.ITIMER_REAL) == (0., 0.)
+
+
+def test_shorter_local_python_deadline_restores_the_activity_timer():
+    local_returns = []
+    with pytest.raises(ActivityExecutionDeadline):
+        with python_execution_deadline(.15, activity=True):
+            try:
+                with python_execution_deadline(.03):
+                    sleep(.2)
+            except PythonExecutionDeadline:
+                local_returns.append('partial_python_result')
+            assert signal.getitimer(signal.ITIMER_REAL)[0] > 0
+            sleep(.3)
+    assert local_returns == ['partial_python_result']
+    assert signal.getitimer(signal.ITIMER_REAL) == (0., 0.)
+
+
+def test_activity_cutoff_preserves_paid_scores_without_becoming_a_local_truncation(
+        tmp_path, monkeypatch):
+    agent, lab = scene(tmp_path)
+    choose(agent, lab)
+    incumbent, before = deepcopy(agent.evaluated_model), deepcopy(agent.costs)
+    scores = agent.workspace / '_paid_python_scores/_evaluated_model/assessments.json'
+    paid = scores.read_bytes()
+    prepare = agent._paid_python_score_scope
+
+    def delayed(spec):
+        result = prepare(spec)
+        sleep(.2)
+        return result
+
+    monkeypatch.setattr(agent, '_paid_python_score_scope', delayed)
+    monkeypatch.setattr('hegel_machine.cognition.online_inquiry_llm.evaluate_python_model', no_execution)
+    with pytest.raises(ActivityExecutionDeadline):
+        with python_execution_deadline(.05, activity=True):
+            choose(agent, lab)
+    assert agent.costs['compute_cost'] == before['compute_cost']
+    assert agent.costs['python_execution_seconds'] > before['python_execution_seconds']
+    assert agent.evaluated_model == incumbent and scores.read_bytes() == paid
+    assert agent._paid_python_comparison is None
+    assert agent.operator_results[-1]['error'] == 'Research activity time budget exhausted'
+    assert not agent.operator_results[-1].get('truncated')
     assert signal.getitimer(signal.ITIMER_REAL) == (0., 0.)

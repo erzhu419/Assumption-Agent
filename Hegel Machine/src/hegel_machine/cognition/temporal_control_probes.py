@@ -80,6 +80,16 @@ def propose_temporal_control_probes(command_spec, executable, spend, *, serial=0
         predicate_boundary_groups, solve_joint_boundary)
     from .program_condition_sets import compound_predicate_regions, solve_compound_region
 
+    def uses_state_replay(program):
+        return program.op == 'state_replay' or any(uses_state_replay(child)
+                                                  for child in program.children)
+
+    if any(uses_state_replay(program.expanded()) for program in executable):
+        # Endogenous predictions are not public prefix-control coordinates.
+        # The numerical forecast path supports replay; this symbolic flattener
+        # does not yet unroll a learned transition's internal state.
+        return []
+
     depth = max(control_history_depth(program) for program in executable)
     def recurrent(program):
         return program.op == "accumulate" or any(recurrent(child) for child in program.children)

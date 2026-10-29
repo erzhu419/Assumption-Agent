@@ -31,6 +31,16 @@ def _research_response_terms(parent, budget):
                 for key in procedure["term_nodes"]]
     if (parent or {}).get("candidate") is not None:
         from .response_basis import relation_free_response_terms
+        if procedure and any(step["operation"] == "resolve_relation_intervals"
+                for step in procedure.get("selection_steps", [])):
+            from .structural_research_program import research_program_fit_contract
+            fitted = research_program_fit_contract(procedure)
+            if fitted["program"] == parent["candidate"].program:
+                # A saved zero-weight response coordinate can become useful
+                # when a new relation range is fitted. Keep the actual graph
+                # columns, rather than recovering only the current nonzeros.
+                return list(dict.fromkeys(term for column in fitted["fit_terms"]
+                    for term in relation_free_response_terms(column, budget)))
         return relation_free_response_terms(parent["candidate"].program, budget)
     return []
 
@@ -125,6 +135,8 @@ def propose_response_revisions(spec, training, budget, *, parent, tolerance=1e-8
 
 
 def _entries(discovery, search, spec, training, budget, tolerance):
+    from .structural_research_program import attach_structural_research_program
+
     entries = []
     for candidate, fit in zip(discovery.candidates, discovery.fits):
         candidate = replace(candidate, candidate_id=f"{candidate.candidate_id}:{search}")
@@ -143,9 +155,10 @@ def _entries(discovery, search, spec, training, budget, tolerance):
             if not budget.spend(len(training)):
                 break
             training_loss = loss(candidate.program, training, 0., spec.risk_quantile)
-        entries.append({"candidate": candidate, "kind": f"structural:{fit['family']}",
+        entry = {"candidate": candidate, "kind": f"structural:{fit['family']}",
                         "family_id": _FAMILIES[fit["family"]], "training_loss": training_loss,
-                        "structure": structure, "structure_search": search})
+                        "structure": structure, "structure_search": search}
+        entries.append(attach_structural_research_program(entry, fit_rows=len(training)))
     return entries
 
 

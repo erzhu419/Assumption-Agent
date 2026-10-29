@@ -67,7 +67,7 @@ def resume_object_induction(agent, laboratory, channels, acquire, batches, budge
         and set(item.get("raw_control_features", [])) == set(spec.feature_bounds)
         and set(item.get("raw_sensor_features", [])) == set(spec.feature_names)]
     source_ids = [item["model_id"] for item in sources]
-    methods = ObjectDependencyMethods([previous, *sources], budget=budget, actions=actions)
+    methods = agent._dependency_methods([previous, *sources], budget=budget, actions=actions)
     actions.append({"action": "resume_object_induction", "object_model_id": previous.get("model_id"),
         "channels": list(channels), "paid_transition_rows": old_rows,
         "paid_probe_ids": list(dict.fromkeys(row["probe_id"] for row in initial_records)),

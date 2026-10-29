@@ -16,6 +16,79 @@ from .models import Observation, Probe, SearchBudget
 from .scale_bindings import bind_measurement_arguments, control_history_depth
 
 
+def review_paid_program_competition(command_spec, hypotheses, paid_records, budget, *,
+        score_scope_ref, score_rows, control_levels, tolerance=1e-7, serial=0, length=4):
+    """Reconsider a pending experiment using completed frozen-model readouts.
+
+    The caller binds each score to its frozen program and this same paid scope.
+    In particular, a successful incumbent's existing confirmation is consumed
+    directly. Only still-compatible programs enter the historical planner;
+    this function neither fits models nor asks the laboratory for observations.
+    """
+    from copy import deepcopy
+    from .program_disagreement_probes import propose_program_disagreement_probes
+
+    start, checked, survivors = budget.spent, [], []
+    for hypothesis in hypotheses:
+        score = hypothesis['score']
+        loss = score.get('mse')
+        complete = (score.get('returncode') == 0 and not score.get('timeout')
+            and not score.get('truncated')
+            and score.get('evaluation_rows', score.get('rows')) == score_rows
+            and isinstance(loss, (int, float)) and isfinite(loss))
+        status = ('supported_on_paid_scope' if loss <= tolerance else 'counterexample') \
+            if complete else 'incomplete'
+        checked.append({'candidate_id': hypothesis['candidate_id'], 'status': status,
+            'mse': loss, 'score_ref': deepcopy(hypothesis['score_ref'])})
+        if status == 'supported_on_paid_scope':
+            survivors.append(hypothesis)
+    result = {'status': 'paid_competition_reviewed', 'hypotheses': checked,
+        'survivor_ids': [item['candidate_id'] for item in survivors],
+        'score_scope_ref': deepcopy(score_scope_ref), 'score_rows': score_rows,
+        'plan': None, 'new_fits': 0, 'new_observations': 0, 'new_scores': 0,
+        'compute_cost': 0, 'old_plan_reused': False}
+    if any(item['status'] == 'incomplete' for item in checked):
+        result['status'] = 'paid_comparison_incomplete'
+        return result
+    if len(survivors) < 2:
+        result['status'] = 'competition_resolved_on_paid_scope' if survivors else 'all_refuted'
+        return result
+    programs = [Program.from_dict(item['program']) for item in survivors]
+    proposals = propose_program_disagreement_probes(command_spec, programs, budget,
+        serial=serial, length=length, control_levels=control_levels)
+    known = [tuple(row['features'] for row in record.get('rows', [])) for record in paid_records]
+    eligible = []
+    for proposal in proposals:
+        if (proposal['predicted_separation'] <= tolerance or any(
+                len(values) != proposal['probe'].cost
+                or any(value is None or not isfinite(value) for value in values)
+                for values in proposal['predictions'])):
+            continue
+        plan = {'probe': proposal['probe'], 'hypotheses': [
+            {'hypothesis_id': item.get('hypothesis_id', item['candidate_id']),
+             'candidate_id': item['candidate_id'], 'program': deepcopy(item['program']),
+             'predictions': list(predictions), 'score_ref': deepcopy(item['score_ref'])}
+            for item, predictions in zip(survivors, proposal['predictions'], strict=True)],
+            'predicted_fields': {}, 'forecast_status': 'predicted_distinction',
+            'predicted_separation': proposal['predicted_separation'],
+            'proposal_source': 'program_disagreement', 'compute_cost': 0,
+            'design': {key: deepcopy(value) for key, value in proposal.items()
+                       if key not in {'probe', 'predictions'}}}
+        plan = shorten_discriminating_probe(plan, budget, tolerance=tolerance)
+        # Complete reset prefixes already have measured answers; the planner
+        # may not turn one of them into another purchase after shortening.
+        if not any(tuple(plan['probe'].sequence) == sequence[:plan['probe'].cost]
+                   for sequence in known):
+            eligible.append(plan)
+    result.update(compute_cost=budget.spent - start,
+        proposed_count=len(proposals), eligible_count=len(eligible),
+        status='distinguishing_experiment_available' if eligible else 'no_new_distinguishing_probe')
+    if eligible:
+        result['plan'] = max(eligible, key=lambda plan: (
+            plan['predicted_separation'] / plan['probe'].cost, -plan['probe'].cost))
+    return result
+
+
 def _forecast(program, sequence):
     history, values = [], []
     for point in sequence:

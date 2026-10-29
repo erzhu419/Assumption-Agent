@@ -8,6 +8,7 @@ external tools disabled. The user's configured model and login are inherited.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from contextvars import ContextVar
 import json
 from math import isfinite
 import os
@@ -22,6 +23,11 @@ from typing import Any, Sequence
 from .evaluation import predict
 from .language import Program
 from .models import Candidate, Observation, Probe, SearchBudget, TaskSpec
+
+
+# The authorized caller owns this optional wall-time consumer. Child processes
+# have private context copies; their work is not added to the parent's clock.
+_EXECUTION_TIMING = ContextVar('hegel_execution_timing', default=None)
 
 
 @dataclass
@@ -144,23 +150,30 @@ def build_prompt(observations: Sequence[Observation], incumbent: Program,
 
 
 def _run(command: list[str], prompt: str, timeout: float, cwd: str) -> tuple[int, str, str, bool]:
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True, cwd=cwd,
-                               start_new_session=True)
+    started = monotonic()
     try:
-        stdout, stderr = process.communicate(prompt, timeout=timeout)
-        return process.returncode, stdout, stderr, False
-    except BaseException as error:
-        # A host scoring deadline can interrupt communicate before its own
-        # timeout. Reap this same existing process group before propagating it.
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, cwd=cwd,
+                                   start_new_session=True)
         try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        stdout, stderr = process.communicate()
-        if isinstance(error, subprocess.TimeoutExpired):
-            return process.returncode, stdout, stderr, True
-        raise
+            stdout, stderr = process.communicate(prompt, timeout=timeout)
+            return process.returncode, stdout, stderr, False
+        except BaseException as error:
+            # A host scoring deadline can interrupt communicate before its own
+            # timeout. Reap this same existing process group before propagating it.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = process.communicate()
+            if isinstance(error, subprocess.TimeoutExpired):
+                return process.returncode, stdout, stderr, True
+            raise
+    finally:
+        consumer = _EXECUTION_TIMING.get()
+        if consumer is not None:
+            consumer['direct_external_python_seconds'] += monotonic() - started
+            consumer['direct_external_python_calls'] += 1
 
 
 def _events(stdout: str) -> tuple[list[dict], list[str]]:

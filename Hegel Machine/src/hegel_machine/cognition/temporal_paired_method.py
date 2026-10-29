@@ -309,7 +309,8 @@ adds no scientific support: fresh predictive confirmation still determines adopt
     def _procedure_budget_status(self):
         if self.costs["python_execution_seconds"] >= self.config.execution_seconds:
             return "python_execution_budget_exhausted"
-        if self.config.observation_budget - self.costs["observation_cost"] < self.config.confirmation_rows:
+        if (self._procedure_confirmation_allowed and
+                self.config.observation_budget - self.costs["observation_cost"] < self.config.confirmation_rows):
             return "confirmation_budget_exhausted"
         return None
 

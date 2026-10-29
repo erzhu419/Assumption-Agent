@@ -188,8 +188,8 @@ def stub_restoration(monkeypatch, material, pool, library, *, restore_source=Non
     monkeypatch.setattr(scene, 'resolved_theories', lambda agent: list(agent.theory_index.values()))
     monkeypatch.setattr(question_routing, '_retained_revision_inputs',
                         lambda *args: deepcopy(inputs))
-    monkeypatch.setattr(prepare, '_retain_scene_score_index', lambda *args:
-                        {'retained_scopes': 1, 'retained_assessments': 2})
+    monkeypatch.setattr(prepare, '_retain_scene_score_index', lambda *args, paid_rows:
+                        {'retained_scopes': 1, 'retained_assessments': 2, 'available_paid_rows': paid_rows})
     monkeypatch.setattr(theory_consolidation, '_same_relation_work', lambda *args: True)
     monkeypatch.setattr(theory_consolidation, '_retained_parent_contract',
                         lambda agent, parent: deepcopy(parent))

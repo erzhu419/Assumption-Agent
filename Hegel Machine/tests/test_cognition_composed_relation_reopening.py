@@ -209,12 +209,19 @@ def learned_source_library():
     return json.loads(json.dumps(agent.library.to_dict()))
 
 
-def test_random_confirmation_does_not_discard_unresolved_relation_rivals(learned_source_library):
+@pytest.mark.parametrize('automatic_partition_reuse', [False, True])
+def test_random_confirmation_does_not_discard_unresolved_relation_rivals(
+        learned_source_library, monkeypatch, automatic_partition_reuse):
     from hegel_machine.cognition.anonymous_object_lab import AnonymousObjectLab
     from hegel_machine.cognition.memory import KnowledgeLibrary
     from hegel_machine.cognition.models import ResearchConfig
     from hegel_machine.cognition.unified_research import UnifiedResearchAgent
 
+    if not automatic_partition_reuse:
+        # Preserve the original finite-allowance failure: random confirmation
+        # must not erase rivals when their interval research is still pending.
+        monkeypatch.setattr(RelationIntervalResearch, '_remember_completed_partition',
+                            lambda *args: None)
     config = ResearchConfig(observation_budget=256, compute_budget=180000, max_rounds=6,
         minimum_improvement=1e-7, seed=99534001)
     library = KnowledgeLibrary.from_dict(deepcopy(learned_source_library))
@@ -224,13 +231,23 @@ def test_random_confirmation_does_not_discard_unresolved_relation_rivals(learned
         report = UnifiedResearchAgent(config, library=library, measurement_budget=3072).run(lab)
 
     actions = report["actions"]
-    assert report["status"] == "unresolved"
     assert any(action["action"] == "plan_inherited_relation_experiment" for action in actions)
     retained = [action for action in actions if action["action"] == "retain_relation_competition"]
-    assert retained and retained[-1]["reason"] == "relation_experiment_left_candidates_unresolved"
-    assert retained[-1]["surviving_candidates"]
     confirmations = [action for action in actions if action["action"] == "validate_frozen_program"]
-    assert confirmations and not confirmations[-1]["accepted"]
+    assert confirmations
+    if automatic_partition_reuse:
+        # Reusing paid geometry leaves enough of the same allowance to finish
+        # the actual interval research before accepting the fresh readout.
+        assert report["status"] == "completed" and confirmations[-1]["accepted"]
+        conditioned = [action for action in actions
+                       if action["action"] == "condition_inherited_relation_intervals"]
+        assert conditioned[-1]["intervals"]
+        assert all(item["radius_interval"][1] - item["radius_interval"][0] <= 1e-6
+                   for item in conditioned[-1]["intervals"])
+    else:
+        assert report["status"] == "unresolved" and not confirmations[-1]["accepted"]
+        assert retained and retained[-1]["reason"] == "relation_experiment_left_candidates_unresolved"
+        assert retained[-1]["surviving_candidates"]
     assert confirmations[-1]["loss"] < 1e-7
     assert report["costs"]["observation_cost"] <= 256
     assert report["costs"]["compute_cost"] <= 180000

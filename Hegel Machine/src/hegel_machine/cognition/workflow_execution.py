@@ -95,7 +95,8 @@ class WorkflowEpisode:
         self.confirmations.append((program, identifier, float(measured_loss),
                                    self.fit_ids[program], accepted))
 
-    def _replay_plan(self, method, *, legal_views, projectable, limits, confirmation_length):
+    def _replay_plan(self, method, *, legal_views, projectable, limits, confirmation_length,
+                     continuation_reserve=None):
         """Check executable bindings and known acquisition/confirmation demand.
 
         Fit search is paid by the native SearchBudget during execution. The
@@ -157,15 +158,22 @@ class WorkflowEpisode:
                 confirmation_views.update(choices[step["node_id"]])
         confirmation_rate = max((sum(rates[name] for name in view)
                                  for view in confirmation_views), default=0)
-        if (rows_needed + confirmation_length > limits["observation_remaining"] or
-                measurement_needed + confirmation_length * confirmation_rate > limits["measurement_remaining"] or
-                2 * (rows_needed + confirmation_length) > limits["compute_remaining"]):
-            return None, "execution_and_confirmation_not_funded"
+        reserved = continuation_reserve or {}
+        if (rows_needed + confirmation_length + reserved.get("observation_rows", 0)
+                > limits["observation_remaining"] or
+                measurement_needed + confirmation_length * confirmation_rate
+                + reserved.get("measurement_cost", 0) > limits["measurement_remaining"] or
+                2 * (rows_needed + confirmation_length) + reserved.get("compute_cost", 0)
+                > limits["compute_remaining"]):
+            return None, ("execution_confirmation_and_continuation_not_funded" if reserved
+                          else "execution_and_confirmation_not_funded")
         return {"steps": steps, "observation_rows": rows_needed,
-                "measurement_cost": measurement_needed}, None
+                "measurement_cost": measurement_needed,
+                "continuation_reserve": deepcopy(reserved)}, None
 
     def replay(self, *, acquire, project, fit, legal_views, remaining,
-               confirmation_length, threshold, diagnostics, actions, projectable=None):
+               confirmation_length, threshold, diagnostics, actions, projectable=None,
+               continuation_reserve=None):
         self.diagnostics.update({key: value for key, value in diagnostics.items()
                                  if isinstance(value, (int, float)) and math.isfinite(value)})
         for key in ("transfer_condition", "downstream_demands"):
@@ -176,10 +184,13 @@ class WorkflowEpisode:
         plans, alternatives = {}, []
         for candidate in self.book.methods:
             plan, reason = self._replay_plan(candidate, legal_views=views,
-                projectable=projectable, limits=limits, confirmation_length=confirmation_length)
+                projectable=projectable, limits=limits, confirmation_length=confirmation_length,
+                continuation_reserve=continuation_reserve)
             if plan is None:
                 actions.append({"action": "defer_research_workflow",
-                    "method_id": candidate["method_id"], "reason": reason})
+                    "method_id": candidate["method_id"], "reason": reason,
+                    **({"continuation_reserve": deepcopy(continuation_reserve)}
+                       if continuation_reserve else {})})
                 continue
             plans[candidate["method_id"]] = plan
             alternatives.append(candidate)
@@ -192,6 +203,7 @@ class WorkflowEpisode:
         value = self.book.knowledge_value(method, self.diagnostics)
         actions.append({"action": "replay_research_workflow", "method_id": method["method_id"],
                         "nodes": len(steps), "planned_observation_rows": rows_needed,
+                        "continuation_reserve": deepcopy(plan["continuation_reserve"]),
                         "diagnostics": deepcopy(self.diagnostics),
                         "knowledge_priority": list(value["priority"]),
                         "selection_value": deepcopy(value),

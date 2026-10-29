@@ -942,24 +942,553 @@ def run_registered_representation_research(registration, output):
     comparison. Only the named failed parents supply composition inputs to the
     local representation researcher; those two roles are recorded separately.
     """
-    import ast
-    from dataclasses import asdict
-    from .anonymous_history_lab import AnonymousHistoryLab
-    from .common_archive_inquiry import CommonArchiveInquiryAgent
-    from .language import Program
-    from .models import Observation
     from .online_inquiry_llm import InquiryLLMConfig
     from .paid_score_history import retain_comparison_history
     from .question_routing import register_theories
+    from .experiment_runtime import python_execution_deadline, ActivityExecutionDeadline
+    from contextlib import nullcontext
 
     if registration.get('execution_admitted') is not True:
         raise ValueError('register the development material and complete budget first')
     if not registration['material']['exposed_terminal_as_development']:
         raise ValueError('the old terminal rows are exposed development material')
+    limits = registration['limits']
+    source_scene = registration.get('source_scene')
+    if source_scene is not None and any(not isinstance(limits.get(name), (int, float))
+            or limits[name] <= 0 for name in ('activity_seconds', 'native_host_seconds')):
+        raise ValueError('retained representation research needs activity and native host hard windows')
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     _write(output / 'registration.json', registration)
     started = monotonic()
+    if source_scene is not None:
+        from .anonymous_research_archive import resolve_workspace_archive
+        from .research_episodes import load_source_values
+        from .registered_source_scene import (
+            restore_retained_common_scene, admit_exposed_representation_evidence)
+
+        read_ref = lambda reference: load_source_values([reference], output)[0]['value']
+        plan = read_ref(source_scene['plan_ref'])
+        case = next(item for item in plan['cases'] if item['id'] == source_scene['case_id'])
+        knowledge = read_ref(source_scene['initial_archive_ref'])
+        while set(knowledge) == {'source_ref'}:
+            knowledge = read_ref(knowledge['source_ref'])
+        knowledge = resolve_workspace_archive(knowledge)
+        prior_costs = read_ref(source_scene['costs_ref'])
+        config = replace(InquiryLLMConfig(**plan['limits']),
+            compute_budget=prior_costs['compute_cost'] + limits['compute'],
+            execution_seconds=prior_costs['python_execution_seconds'] + limits['python_seconds'],
+            observation_budget=prior_costs['observation_cost'] + limits['new_observation_rows'],
+            max_model_calls=0, token_budget=0)
+        scene = restore_retained_common_scene(Path(source_scene['training_ref']['file']).parent,
+            output / 'workspace', plan=plan, case=case, knowledge=knowledge,
+            limits=config, starting_costs=prior_costs)
+        agent, laboratory = scene['agent'], scene['lab']
+        material = {**registration['material'], 'compute_limit': limits['per_unit_compute'],
+                    'max_candidates': limits['max_candidates']}
+        admitted = admit_exposed_representation_evidence(scene, material)
+        if registration.get('paid_direction_reuse'):
+            question = next(item for item in agent.questions
+                if item['id'] == admitted['question_ref']['id'])
+            question['native_representation_plan']['paid_direction_reuse'] = deepcopy(
+                registration['paid_direction_reuse'])
+        validation = admitted['split']['validation_records']
+        parents = [agent.theory_index[identifier] for identifier in admitted['parent_theory_ids']]
+        models = [admitted['original_parent_model']]
+        complete_pool = scene['models']
+        initial = {'retained_partial_evaluation_ref': registration['material']['evaluation_ref'],
+            'retained_paid_account_ref': source_scene['costs_ref'],
+            'development_admission': admitted, 'new_fits': 0, 'new_scores': 0}
+    else:
+        agent, laboratory, parents, models, complete_pool, initial, validation = (
+            _prepare_fresh_representation_material(registration, output))
+        prior_costs = {key: 0 for key in agent.costs}
+    if registration.get('paid_candidate_assessment_refs'):
+        from .paid_score_history import retain_paid_assessment_references
+        initial['paid_candidate_score_reuse'] = retain_paid_assessment_references(
+            agent, registration['paid_candidate_assessment_refs'])
+    agent._write_evidence()
+    _write(output / 'initial_evaluations.json', initial)
+    _write(output / 'complete_retained_roster.json', complete_pool)
+    rounds, comparison = [], {}
+    timing = {'recovery_and_material_seconds': monotonic() - started,
+        'native_host_seconds': 0., 'activity_wall_seconds': 0., 'preservation_seconds': 0.}
+    status, phase, error = 'started', 'preflight', None
+    remaining = agent._remaining_compute()
+    retained_models = list(dict.fromkeys([*complete_pool, *models, *agent.candidate_paths]))
+    question_plan = next((question.get('native_representation_plan') or {}
+        for question in agent.questions if question['id'] == agent._active_question_id), {})
+    exports_per_unit = 3 * limits['max_candidates'] + len(
+        question_plan.get('retained_research_program_refs', []))
+    rows = len(agent.rows)
+    registered_scope = registration.get('scope')
+    scope_mismatch = None
+    if registered_scope is not None and (rows != registered_scope['paid_rows']
+            or len(complete_pool) != registered_scope['pool_models']):
+        scope_mismatch = {'expected': deepcopy(registered_scope),
+            'actual': {'paid_rows': rows, 'pool_models': len(complete_pool)},
+            'reason': 'The restored paid scene differs from its frozen scope.'}
+    # Fund the cold full pool plus bounded exports, the selected draft's score
+    # and a possible stale-incumbent score before spending on native research.
+    score_question = (agent.knowledge.get('finite_native_author') or {}).get('question', {})
+    paid_quote = None
+    activity_started, preflight_error = monotonic(), None
+    if source_scene is not None and scope_mismatch is None:
+        scene['research_question_ref'] = {'question_id': score_question['id'],
+            'meaning_version': score_question.get('meaning_version', 1)}
+        try:
+            with python_execution_deadline(limits['activity_seconds'], activity=True):
+                paid_quote = quote_joint_paid_scores(scene)
+        except ActivityExecutionDeadline as failure:
+            preflight_error = f'{type(failure).__name__}: {failure}'
+    old_pool_compute = (paid_quote['unpaid_scoring_compute'] if paid_quote is not None
+                        else rows * len(retained_models))
+    closing_compute = old_pool_compute + rows * (
+        limits['research_units'] * (exports_per_unit + 1) + 1)
+    unit_compute = limits['research_units'] * limits['per_unit_compute']
+    complete_quote = {'research_compute': unit_compute, 'closing_compute': closing_compute,
+        'required_compute': unit_compute + closing_compute, 'available_compute': remaining,
+        'paid_rows': rows, 'retained_models': len(retained_models),
+        'max_exports_per_unit': exports_per_unit,
+        'registered_scope': deepcopy(registered_scope),
+        'old_pool_unpaid_scoring_compute': old_pool_compute,
+        'old_pool_paid_quote': ({key: value for key, value in paid_quote.items()
+            if key not in {'missing_models', 'paid_execution_refs'}} if paid_quote is not None else None),
+        'scope': 'Strict existing paid-scope reuse plus bounded exports and selected/stale scores; no pool reduction.'}
+    _write(output / 'complete_unit_budget.json', complete_quote)
+    timing['preflight_seconds'] = monotonic() - activity_started
+    original_ceiling = getattr(agent, '_unit_research_compute_ceiling', None)
+    frozen = None
+    try:
+        if scope_mismatch is not None:
+            status = 'requires_new_quote'
+        elif preflight_error:
+            status, error = 'activity_window_exhausted', preflight_error
+        elif source_scene is not None and source_scene.get('shared_preparation_ref') and old_pool_compute:
+            status = 'shared_preparation_scope_unavailable'
+        elif source_scene is not None and remaining < complete_quote['required_compute']:
+            status = 'insufficient_complete_research_budget'
+        else:
+            if source_scene is not None:
+                agent._unit_research_compute_ceiling = agent.config.compute_budget - closing_compute
+            with (python_execution_deadline(limits['activity_seconds']
+                    - (monotonic() - activity_started), activity=True)
+                    if source_scene is not None else nullcontext()):
+                for number in range(limits['research_units']):
+                    conflicts = [question for question in agent.questions
+                        if question.get('kind') == 'representation' and question.get('status') == 'open'
+                        and question.get('origin') == 'computed_representation_conflict'
+                        and not question.get('native_representation_completed')]
+                    if not conflicts:
+                        break
+                    question = next((q for q in conflicts if q['id'] == agent._active_question_id), None)
+                    if question is None:
+                        if number:
+                            break
+                        question = conflicts[0]
+                    native_plan = deepcopy(question.get('native_representation_plan') or {})
+                    native_plan.update(parent_theory_ids=[item['id'] for item in parents],
+                        validation_records=validation, compute_limit=limits['per_unit_compute'],
+                        max_candidates=limits['max_candidates'])
+                    phase, native_started = f'native_unit_{number + 1}', monotonic()
+                    try:
+                        with (python_execution_deadline(limits['native_host_seconds']
+                                - timing['native_host_seconds'], activity=True)
+                                if source_scene is not None else nullcontext()):
+                            result = agent._execute('run', {'operator': 'research_route',
+                                'research_question': {'id': question['id']},
+                                'native_representation_plan': native_plan}, laboratory)
+                    finally:
+                        timing['native_host_seconds'] += monotonic() - native_started
+                    round_ = {'research': result, 'actual_evaluation': None}
+                    rounds.append(round_)
+                    selected = result.get('selected_model')
+                    phase = f'selected_draft_evaluation_{number + 1}'
+                    evaluated = agent._execute('evaluate', {'model': selected,
+                        **({'research_question': {'id': score_question['id']}}
+                           if source_scene is not None else {})}, laboratory) if selected else None
+                    round_['actual_evaluation'] = evaluated
+                    if evaluated is not None:
+                        diagnostic = evaluated.get('representation_diagnostic', {})
+                        separated = evaluated.get('returncode') == 0 and diagnostic.get('empirical_mse_floor') == 0
+                        quality_met = (evaluated.get('returncode') == 0 and evaluated.get('mse') is not None
+                                       and evaluated['mse'] <= agent.config.confirmation_mse_threshold)
+                        question.update(returned_model=selected, representation_return={
+                            'model': selected, 'diagnostic': deepcopy(diagnostic),
+                            'mse': evaluated.get('mse'), 'scope': 'exposed_development_rows',
+                            'input_distinction_recovered': separated, 'prediction_criterion_satisfied': quality_met})
+                        if separated and quality_met:
+                            question.update(status='resolved_on_paid_rows', native_representation_completed=True)
+                            parent = next(q for q in agent.questions if q['id'] == question['parent_id'])
+                            parent['status'] = 'reopened'
+                        else:
+                            # Ending one attempt does not resolve an unexplained response,
+                            # even when the new representation separates the known pair.
+                            question['native_representation_completed'] = True
+                            question['status'] = 'open'
+                            question['representation_return']['next_research'] = (
+                                'response_or_composition_revision' if separated else 'representation_revision')
+                            native = result.get('native_representation', {}).get('selected')
+                            if native and 'program' not in native:
+                                from .representation_inquiry import load_native_representation_result
+                                native = load_native_representation_result(
+                                    result['native_representation_ref'], agent.workspace)['selected']
+                            if native:
+                                declaration = {'id': f'representation_parent:{number}', 'program': native['program']}
+                                register_theories(agent, [declaration])
+                                parents.append(declaration)
+                    elif result.get('status') == 'native_representation_candidates_ready':
+                        question.update(native_representation_completed=True,
+                            representation_return={'status': 'parent_retained_no_new_model',
+                                'prediction_criterion_satisfied': False,
+                                'next_research': 'representation_or_response_revision'})
+                    _write(output / f'unit_{number + 1}.json', round_)
+                phase = 'complete_strong_pool_comparison'
+                comparison_models = list(dict.fromkeys([*complete_pool, *models, *agent.candidate_paths]))
+                added = len(set(comparison_models) - set(complete_pool))
+                if registered_scope is not None and added > registered_scope['max_exports']:
+                    scope_mismatch = {'expected': deepcopy(registered_scope),
+                        'actual': {'paid_rows': len(agent.rows), 'pool_models': len(complete_pool),
+                                   'new_exports': added},
+                        'reason': 'The bounded research exported more models than its frozen quote.'}
+                    raise ValueError('the actual candidate scope requires a new complete quote')
+                comparison = agent._execute('run', {'operator': 'research_choice',
+                    'models': comparison_models,
+                    **({'research_question': {'id': score_question['id']}}
+                       if source_scene is not None else {})}, laboratory)
+                comparison = retain_comparison_history(comparison)
+                _write(output / 'complete_comparison.json', comparison)
+                status = ('completed' if not comparison.get('truncated')
+                    and comparison.get('models_requested') == comparison.get('models_completed')
+                    else 'comparison_incomplete')
+                if status == 'completed' and any(entry['research'].get('status') == 'scoped_unknown'
+                        for entry in rounds):
+                    status = 'native_research_incomplete'
+                if status == 'completed' and agent._evaluated_summary():
+                    from scripts.run_method_action_pairing import _freeze
+                    from .code_agent import _closed_temporal_export
+                    phase = 'freeze_actual_pool_winner'
+                    frozen = _freeze(agent, agent._evaluated_summary()['model'], output / 'frozen')
+                    if not _closed_temporal_export(Path(frozen['workspace']), frozen['model']):
+                        status = 'frozen_no_refit_contract_unavailable'
+    except ActivityExecutionDeadline as failure:
+        status, error = 'activity_window_exhausted', f'{type(failure).__name__}: {failure}'
+    except Exception as failure:
+        status = 'requires_new_quote' if scope_mismatch is not None else 'execution_failed'
+        error = f'{type(failure).__name__}: {failure}'
+    finally:
+        if original_ceiling is None:
+            agent.__dict__.pop('_unit_research_compute_ceiling', None)
+        else:
+            agent._unit_research_compute_ceiling = original_ceiling
+        timing['activity_wall_seconds'] = monotonic() - activity_started
+    summary = {'status': status, 'phase': phase, 'error': error,
+        'execution_complete': status == 'completed' and frozen is not None,
+        'frozen_model': frozen,
+        'scope_mismatch': scope_mismatch,
+        'scope': 'native_representation_development_not_independent_confirmation',
+        'complete_unit_quote': complete_quote, 'timing': timing,
+        'material': deepcopy(registration['material']),
+        'complete_retained_paths': len(complete_pool), 'old_parents_retained': models,
+        'research_unit_count': len(rounds), 'units': [str(output / f'unit_{n + 1}.json')
+            for n in range(len(rounds))], 'final_parent': agent._evaluated_summary(),
+        'comparison_requested': comparison.get('models_requested'),
+        'comparison_completed': comparison.get('models_completed'),
+        'costs': deepcopy(agent.costs),
+        'new_stage_costs': {key: value - prior_costs.get(key, 0) for key, value in agent.costs.items()},
+        'questions_ref': {'file': str(output / 'final_state.json'), 'json_path': ['online_questions']},
+        'new_observations': 0, 'provider_calls': 0, 'wall_seconds': monotonic() - started,
+        'source_costs_ref': deepcopy(registration['source_costs_ref']),
+        'independent_transfer': 'UNTESTED', 'original_world_threshold': 1e-10}
+    def save_paid_state():
+        with checkpoint_execution():
+            _write(canonical, agent.checkpoint_result(
+                'development_completed' if summary['status'] == 'completed' else 'development_incomplete'))
+            clone_or_copy(canonical, output / 'final_state.json')
+
+    canonical = agent.workspace / 'training.json'
+    normal_save_started = monotonic()
+    try:
+        with (python_execution_deadline(limits['activity_seconds']
+                - timing['activity_wall_seconds'], activity=True)
+                if source_scene is not None else nullcontext()):
+            save_paid_state()
+        timing['normal_checkpoint_seconds'] = monotonic() - normal_save_started
+        timing['activity_wall_seconds'] += timing['normal_checkpoint_seconds']
+    except ActivityExecutionDeadline as failure:
+        timing['normal_checkpoint_seconds'] = monotonic() - normal_save_started
+        timing['activity_wall_seconds'] += timing['normal_checkpoint_seconds']
+        exhausted_phase = (summary['phase'] if summary['status'] == 'activity_window_exhausted'
+                           else 'final_checkpoint')
+        summary.update(status='activity_window_exhausted', execution_complete=False,
+            error=summary.get('error') or f'{type(failure).__name__}: {failure}', phase=exhausted_phase)
+        preservation_started = monotonic()
+        save_paid_state()
+        timing['preservation_seconds'] = monotonic() - preservation_started
+    summary['continuation_state_ref'] = {'file': str(canonical), 'json_path': []}
+    summary['continuation_data_ref'] = {'file': str(canonical), 'json_path': ['paid_observations']}
+    summary['continuation_costs_ref'] = {'file': str(output / 'summary.json'), 'json_path': ['costs']}
+    summary['wall_seconds'] = monotonic() - started
+    _write(output / 'summary.json', summary)
+    return summary
+
+
+def run_registered_representation_pair(registration, output):
+    """Compare one bounded repair with the same fully scored retained pool.
+
+    The common old-pool comparison is bought once. Each policy is charged that
+    preparation, while the project ledger charges it once and the challenger
+    restores its exact paid scene. Frozen readout uses the existing evaluator.
+    """
+    from types import SimpleNamespace
+    from .online_inquiry_llm import InquiryLLMConfig
+    from .method_action_research import read_method_reference
+    from .code_agent import literal_python_model_context_matches
+    from .experiment_runtime import (run_process_trials, python_execution_deadline,
+        physical_cpu_groups, _initialize_worker)
+    from scripts.prepare_pr3_source_successor import make_retained_method_pairing_factories
+
+    cells = registration.get('cells', {})
+    if (registration.get('execution_authorized') is not True or not registration.get('approval_ref')
+            or set(cells) != {'00', '10'}):
+        raise ValueError('approve the frozen two-cell representation contract before execution')
+    workers = registration['maximum_physical_cores']
+    if type(workers) is not int or not 1 <= workers <= 8:
+        raise ValueError('retain the one-to-eight physical-core cap')
+    equal = ('compute', 'python_seconds', 'activity_seconds', 'native_host_seconds',
+             'per_unit_compute', 'max_candidates')
+    if any(cells['00']['limits'][key] != cells['10']['limits'][key] for key in equal):
+        raise ValueError('both policies require the same complete resource allowance')
+    if [cells[name]['limits']['research_units'] for name in ('00', '10')] != [0, 1]:
+        raise ValueError('retain the complete old-pool control and one bounded repair')
+    if any(cells[name]['limits']['new_observation_rows'] != 0 for name in ('00', '10')):
+        raise ValueError('the repair uses paid development evidence, without new research observations')
+    if any(not isinstance(cells[name].get('scope'), dict) or any(
+            type(cells[name]['scope'].get(key)) is not int or cells[name]['scope'][key] < 0
+            for key in ('paid_rows', 'pool_models', 'max_exports')) for name in ('00', '10')):
+        raise ValueError('freeze the paid-row, full-pool and new-export scope for both cells')
+    if (any(cells['00']['scope'][key] != cells['10']['scope'][key]
+            for key in ('paid_rows', 'pool_models')) or cells['00']['scope']['max_exports'] != 0):
+        raise ValueError('the shared preparation must retain the same complete old pool without new exports')
+    component = registration['components']['Qeval_predictions']
+    if (component['compute'], component['observations']) != (48, 24):
+        raise ValueError('retain one shared24-row readout and48 predictions')
+    readout_python = component['python_seconds_per_arm']
+    readout_activity = component['activity_seconds_per_arm']
+    if readout_python <= 0 or readout_activity <= 0:
+        raise ValueError('reserve the frozen prediction windows before research')
+    _initialize_worker(physical_cpu_groups(1, workers)[0])
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    _write(output / 'registration.json', registration)
+    started = monotonic()
+    source_costs = read_method_reference(registration['source_scene']['costs_ref'], output)
+    outcomes, outcome_refs, common = {}, {}, None
+    for name in ('00', '10'):
+        cell = cells[name]
+        limits = deepcopy(cell['limits'])
+        source = deepcopy(registration['source_scene'])
+        if common is not None:
+            # Only the unchanged old pool was selected in the common phase.
+            # Its actual winner is the strong control; the local counterexample
+            # subject remains the originally refuted Program in the material.
+            source.update(training_ref=common['continuation_state_ref'],
+                paid_observations_ref=common['continuation_data_ref'],
+                costs_ref=common['continuation_costs_ref'],
+                shared_preparation_ref={'file': str(output / '00/summary.json'), 'json_path': []})
+            limits['compute'] -= common['new_stage_costs']['compute_cost']
+            limits['python_seconds'] -= common['new_stage_costs']['python_execution_seconds']
+            limits['activity_seconds'] -= common['timing']['activity_wall_seconds']
+        limits['compute'] -= 24
+        limits['python_seconds'] -= readout_python
+        limits['activity_seconds'] -= readout_activity
+        if any(limits[key] <= 0 for key in ('compute', 'python_seconds', 'activity_seconds')):
+            outcomes[name] = {'status': 'remaining_complete_stage_unfunded',
+                'execution_complete': False, 'frozen_model': None,
+                'new_stage_costs': {key: 0 for key in source_costs},
+                'reason': 'Common preparation and readout reserves exhaust the frozen policy allowance.'}
+        else:
+            single = {'execution_admitted': True, 'source_scene': source,
+                'material': deepcopy(registration['material']), 'limits': limits,
+                'scope': deepcopy(cell['scope']),
+                'source_costs_ref': deepcopy(registration['source_costs_ref'])}
+            try:
+                result = run_process_trials(lambda unused: run_registered_representation_research(
+                    single, output / name), [None], workers)[0]
+                outcomes[name] = result
+            except Exception as error:
+                outcomes[name] = {'status': 'cell_execution_error', 'execution_complete': False,
+                    'error': f'{type(error).__name__}: {error}', 'frozen_model': None,
+                    'new_stage_costs': None,
+                    'scope': 'Read the retained cell checkpoint for paid work; unknown costs are not zero.'}
+        outcome_refs[name] = {'file': str(output / name / 'outcome.json'), 'json_path': []}
+        _write(Path(outcome_refs[name]['file']), outcomes[name])
+        if name == '00':
+            if not outcomes[name].get('execution_complete'):
+                break
+            common = outcomes[name]
+    frozen = {name: result['frozen_model'] for name, result in outcomes.items()
+              if result.get('execution_complete') and result.get('frozen_model')}
+    common_costs = deepcopy(common['new_stage_costs']) if common is not None else {}
+    common_activity = common['timing']['activity_wall_seconds'] if common is not None else 0.
+    lifecycle = {'role': 'development_after_freeze', 'all_outputs_frozen_before_labels':
+        set(frozen) == {'00', '10'}, 'labels_revealed': False, 'receipt_ref': None,
+        'status': 'outputs_frozen' if set(frozen) == {'00', '10'} else 'blocked_incomplete_outputs'}
+    manifest = {'models': frozen, 'outcome_refs': outcome_refs,
+        'evaluation_labels_opened': False, 'evaluation_lifecycle': lifecycle}
+    _write(output / 'frozen_outputs.json', manifest)
+    shared_costs, evaluation_error = {}, None
+    if lifecycle['all_outputs_frozen_before_labels']:
+        callbacks = make_retained_method_pairing_factories(registration, output)
+        evaluate, prepare = callbacks['evaluate_frozen'], callbacks['prepare_evaluation']
+        try:
+            evaluation_started = monotonic()
+            shared_costs = None  # A failed acquisition is not evidence of zero cost.
+            shared = prepare()
+            _write(output / 'shared_evaluation_preparation.json', {'receipt': shared,
+                'wall_seconds': monotonic() - evaluation_started,
+                'charged_to': 'shared_Qeval_once'})
+            panel = read_method_reference(shared, output)
+            shared_costs = panel['costs_once']
+            lifecycle.update(labels_revealed=True, receipt_ref=shared,
+                             status='development_evaluation_after_freeze')
+            for name in ('00', '10'):
+                limits = cells[name]['limits']
+                result = outcomes[name]
+                account = SimpleNamespace(costs=deepcopy(result['costs']),
+                    config=InquiryLLMConfig(
+                        compute_budget=source_costs['compute_cost'] + limits['compute'],
+                        execution_seconds=source_costs['python_execution_seconds'] + limits['python_seconds'],
+                        confirmation_mse_threshold=1e-10, max_model_calls=0))
+                before = deepcopy(account.costs)
+                used = result['timing']['activity_wall_seconds']
+                if name == '10':
+                    used += common_activity
+                prediction_started = monotonic()
+                attribution = None
+                try:
+                    with python_execution_deadline(limits['activity_seconds'] - used, activity=True):
+                        same_model = (name == '10' and literal_python_model_context_matches(
+                            frozen['10']['workspace'], frozen['10']['model'],
+                            frozen['00']['workspace'], frozen['00']['model']))
+                        if same_model:
+                            attribution = deepcopy(outcomes['00'].get('frozen_prediction_costs', {}))
+                            source = output / '00/frozen_evaluation.json'
+                            rows_ref = {**shared, 'json_path': [*shared.get('json_path', []), 'rows']}
+                            saved = (read_method_reference({'file': str(source), 'json_path': []}, output)
+                                     if source.is_file() else None)
+                            if (not outcomes['00'].get('execution_complete') or saved is None
+                                    or saved.get('evaluation_rows_ref') != rows_ref
+                                    or saved.get('evaluation', {}).get('returncode') != 0):
+                                measured = {}
+                                result.update(status='shared_frozen_prediction_unresolved',
+                                              execution_complete=False)
+                            else:
+                                measured = {key: deepcopy(outcomes['00'][key]) for key in
+                                    ('loss', 'quality', 'coverage', 'completed') if key in outcomes['00']}
+                                attribution = deepcopy(outcomes['00']['frozen_prediction_costs'])
+                                result['frozen_prediction_reuse'] = {
+                                    'source_ref': {'file': str(source), 'json_path': ['evaluation']},
+                                    'match_basis': 'identical_closed_literal_execution_on_shared_panel',
+                                    'project_execution_cost': 0,
+                                    'policy_cost_scope': 'Attribute the same paid prediction work to each policy; '
+                                        'cash deduplication is not scientific method benefit.'}
+                                origin = saved['evaluation']
+                                reused = {key: deepcopy(value) for key, value in origin.items()
+                                          if key not in {'predictions', 'representation_diagnostic'}}
+                                for field in ('predictions', 'representation_diagnostic'):
+                                    if field in origin:
+                                        reused[field + '_ref'] = {'file': str(source),
+                                            'json_path': ['evaluation', field]}
+                                _write(output / name / 'frozen_evaluation.json', {
+                                    'frozen_model': deepcopy(frozen[name]), 'evaluation_rows_ref': rows_ref,
+                                    'evaluation_ref': deepcopy(cells[name]['evaluation_ref']),
+                                    'evaluation': reused,
+                                    'reused_frozen_readout_ref': result['frozen_prediction_reuse']['source_ref']})
+                        else:
+                            measured = evaluate(name, frozen[name], cells[name]['evaluation_ref'], account)
+                    result.update({key: measured[key] for key in ('loss', 'quality', 'coverage', 'completed')
+                                   if key in measured})
+                    if measured.get('loss') is None:
+                        result.update(status='frozen_prediction_unresolved', execution_complete=False)
+                except Exception as error:
+                    result.update(status='frozen_prediction_failed', execution_complete=False,
+                        prediction_error=f'{type(error).__name__}: {error}')
+                result['frozen_prediction_seconds'] = monotonic() - prediction_started
+                result['policy_frozen_prediction_seconds'] = (
+                    outcomes['00']['frozen_prediction_seconds'] if attribution is not None
+                    else result['frozen_prediction_seconds'])
+                result['timing']['activity_wall_seconds'] += result['frozen_prediction_seconds']
+                result['frozen_prediction_costs'] = {key: account.costs[key] - value
+                    for key, value in before.items()}
+                result['policy_frozen_prediction_costs'] = (attribution if attribution is not None
+                    else deepcopy(result['frozen_prediction_costs']))
+                result['new_stage_costs'] = {key: result['new_stage_costs'][key]
+                    + result['frozen_prediction_costs'].get(key, 0) for key in result['new_stage_costs']}
+                result['costs'] = account.costs
+                _write(Path(outcome_refs[name]['file']), result)
+        except Exception as error:
+            evaluation_error = f'{type(error).__name__}: {error}'
+            lifecycle['status'] = 'evaluation_preparation_failed'
+            if shared_costs is None:
+                lifecycle['labels_revealed'] = None
+                lifecycle['exposure_scope'] = 'Failed acquisition; partial exposure and cost remain unknown.'
+        manifest['evaluation_labels_opened'] = lifecycle['labels_revealed']
+        _write(output / 'frozen_outputs.json', manifest)
+    known_keys = ('compute_cost', 'observation_cost', 'measurement_cost',
+                  'python_execution_seconds', 'model_calls', 'reported_tokens')
+    project_costs = ({key: sum(item['new_stage_costs'].get(key, 0) for item in outcomes.values())
+                     + shared_costs.get(key, 0) for key in known_keys}
+        if shared_costs is not None and all(item.get('new_stage_costs') is not None
+                                           for item in outcomes.values()) else None)
+    policy_costs = {}
+    for name, result in outcomes.items():
+        new = result.get('new_stage_costs')
+        if new is not None:
+            policy_costs[name] = {key: new.get(key, 0)
+                + (common_costs.get(key, 0) if name == '10' else 0)
+                + result.get('policy_frozen_prediction_costs', {}).get(key, 0)
+                - result.get('frozen_prediction_costs', {}).get(key, 0)
+                for key in known_keys}
+    losses = [outcomes.get(name, {}).get('loss') for name in ('00', '10')]
+    pair = {'baseline_ref': outcome_refs.get('00'), 'challenger_ref': outcome_refs.get('10'),
+        'comparison_kind': 'bounded_representation_repair_vs_complete_retained_pool',
+        'frozen_predictive_comparison': {'baseline_loss': losses[0], 'challenger_loss': losses[1],
+            'challenger_minus_baseline': losses[1] - losses[0]
+                if all(isinstance(value, (int, float)) for value in losses) else None},
+        'evaluation_lifecycle': lifecycle, 'independent_support': False}
+    _write(output / 'pair_00_10.json', pair)
+    result = {'status': 'completed_development_pairing' if all(
+        outcomes.get(name, {}).get('execution_complete') and isinstance(outcomes[name].get('loss'), (int, float))
+        for name in ('00', '10')) else 'development_pairing_incomplete',
+        'outcome_refs': outcome_refs, 'pair_ref': {'file': str(output / 'pair_00_10.json'), 'json_path': []},
+        'costs_once': project_costs, 'policy_costs_including_shared_preparation': policy_costs,
+        'policy_activity_wall_seconds_including_shared_preparation': {
+            name: (item['timing']['activity_wall_seconds']
+                   + (common_activity if name == '10' else 0.)
+                   + item.get('policy_frozen_prediction_seconds', 0.)
+                   - item.get('frozen_prediction_seconds', 0.)) if item.get('timing') else None
+            for name, item in outcomes.items()},
+        'shared_readout_costs_once': shared_costs, 'evaluation_error': evaluation_error,
+        'prior_costs_ref': deepcopy(registration['source_costs_ref']),
+        'unknown_cost_ref': deepcopy(registration['source_scene']['unknown_cost_ref']),
+        'evaluation_lifecycle': lifecycle, 'ordinary_use': 'not_in_this_registration',
+        'wall_seconds': monotonic() - started, 'maximum_physical_cores': workers,
+        'independent_support': False}
+    _write(output / 'summary.json', result)
+    return result
+
+
+def _prepare_fresh_representation_material(registration, output):
+    """Keep the existing standalone material input for its earlier callers."""
+    import ast
+    from .anonymous_history_lab import AnonymousHistoryLab
+    from .common_archive_inquiry import CommonArchiveInquiryAgent
+    from .language import Program
+    from .models import Observation
+    from .online_inquiry_llm import InquiryLLMConfig
+    from .question_routing import register_theories
+
     read = lambda name: json.loads(Path(registration['material'][name]).read_text())
     records = read('paid_records')
     terminal = read('exposed_rows')
@@ -985,8 +1514,7 @@ def run_registered_representation_research(registration, output):
     agent.rows = [Observation(dict(row['features']), float(row['target']),
         tuple(dict(point) for point in row.get('history', [])))
         for record in records for row in record['rows']]
-    agent._save('observations.json', json.dumps([asdict(row) for row in agent.rows]))
-    agent._save('laboratory_observations.json', json.dumps(records))
+    agent._write_evidence()
     parents, models = [], []
     def decode(node):
         op, value, name, lag, children = node
@@ -1006,78 +1534,13 @@ def run_registered_representation_research(registration, output):
     initial = {}
     for name in models:
         initial[name] = agent._execute('evaluate', {'model': name}, laboratory)
-    _write(output / 'initial_evaluations.json', initial)
     complete_pool = []
     for roster in registration['retained_rosters']:
         for model in json.loads(Path(roster['file']).read_text()):
             resolved = str((Path(roster['workspace']) / model).resolve())
             if resolved not in complete_pool:
                 complete_pool.append(resolved)
-    _write(output / 'complete_retained_roster.json', complete_pool)
-    rounds = []
-    for number in range(limits['research_units']):
-        conflicts = [question for question in agent.questions
-            if question.get('kind') == 'representation' and question.get('status') == 'open'
-            and question.get('origin') == 'computed_representation_conflict'
-            and not question.get('native_representation_completed')]
-        if not conflicts:
-            break
-        question = next((q for q in conflicts if q['id'] == agent._active_question_id), None)
-        if question is None:
-            if number:
-                break
-            question = conflicts[0]
-        result = agent._execute('run', {'operator': 'research_route',
-            'research_question': {'id': question['id']},
-            'native_representation_plan': {'parent_theory_ids': [item['id'] for item in parents],
-                'validation_records': validation, 'compute_limit': limits['per_unit_compute'],
-                'max_candidates': limits['max_candidates']}}, laboratory)
-        selected = result.get('selected_model')
-        evaluated = agent._execute('evaluate', {'model': selected}, laboratory) if selected else None
-        if evaluated is not None:
-            diagnostic = evaluated.get('representation_diagnostic', {})
-            question.update(returned_model=selected, representation_return={
-                'model': selected, 'diagnostic': deepcopy(diagnostic),
-                'mse': evaluated.get('mse'), 'scope': 'exposed_development_rows'})
-            if (evaluated.get('returncode') == 0 and diagnostic.get('empirical_mse_floor') == 0):
-                question.update(status='resolved_on_paid_rows', native_representation_completed=True)
-                parent = next(q for q in agent.questions if q['id'] == question['parent_id'])
-                parent['status'] = 'reopened'
-            else:
-                # Keep the actual new draft and its counterexample as the next
-                # research object, rather than revisiting an unchanged parent.
-                question['native_representation_completed'] = True
-                native = result.get('native_representation', {}).get('selected')
-                if native and 'program' not in native:
-                    from .representation_inquiry import load_native_representation_result
-                    native = load_native_representation_result(
-                        result['native_representation_ref'], agent.workspace)['selected']
-                if native:
-                    declaration = {'id': f'representation_parent:{number}', 'program': native['program']}
-                    register_theories(agent, [declaration])
-                    parents.append(declaration)
-        rounds.append({'research': result, 'actual_evaluation': evaluated})
-        _write(output / f'unit_{number + 1}.json', rounds[-1])
-    comparison = agent._execute('run', {'operator': 'research_choice',
-        'models': list(dict.fromkeys([*complete_pool, *models, *agent.candidate_paths]))}, laboratory)
-    comparison = retain_comparison_history(comparison)
-    _write(output / 'complete_comparison.json', comparison)
-    summary = {'status': 'completed' if not comparison.get('truncated') else 'comparison_incomplete',
-        'scope': 'native_representation_development_not_independent_confirmation',
-        'material': deepcopy(registration['material']),
-        'complete_retained_paths': len(complete_pool), 'old_parents_retained': models,
-        'research_unit_count': len(rounds), 'units': [str(output / f'unit_{n + 1}.json')
-            for n in range(len(rounds))], 'final_parent': agent._evaluated_summary(),
-        'comparison_requested': comparison.get('models_requested'),
-        'comparison_completed': comparison.get('models_completed'),
-        'costs': deepcopy(agent.costs), 'questions_ref': {
-            'file': str(output / 'final_state.json'), 'json_path': ['online_questions']},
-        'new_observations': 0, 'provider_calls': 0, 'wall_seconds': monotonic() - started,
-        'source_costs_ref': deepcopy(registration['source_costs_ref']),
-        'independent_transfer': 'UNTESTED', 'original_world_threshold': 1e-10}
-    _write(output / 'summary.json', summary)
-    _write(output / 'final_state.json', agent.checkpoint_result('development_completed'))
-    return summary
+    return agent, laboratory, parents, models, complete_pool, initial, validation
 
 
 def _frozen_parent_metrics(predictions, rows, indices):

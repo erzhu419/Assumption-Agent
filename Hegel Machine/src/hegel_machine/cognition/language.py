@@ -198,6 +198,20 @@ class EvaluationContext:
                 return 0.0
             return self._evaluate(program.children[0], bindings) - self._at_history(
                 program.children[0], bindings, len(observation.history) - program.lag)
+        if program.op == "state_replay":
+            # The learned transition keeps its startup and state conditions.
+            # Close its response history using predictions, not measured labels.
+            from .models import Observation
+            predicted_history = []
+            for point in (*observation.history, observation.features):
+                features = {name: value for name, value in point.items() if name != "__target__"}
+                local = EvaluationContext(Observation(features, 0.0, tuple(predicted_history)))
+                value = local._evaluate(program.children[0], bindings)
+                self.primitive_steps += local.primitive_steps
+                self.call_evaluations += local.call_evaluations
+                self.cache_hits += local.cache_hits
+                predicted_history.append({**features, "__target__": value})
+            return value
         if program.op == "accumulate":
             # Replay only the recorded prefix. Each drive sees that prefix's
             # current features and earlier history, never a later observation.
@@ -254,7 +268,8 @@ class Program:
             "const": 0, "feature": 0, "lag": 0, "available": 0, "arg": 0, "abs": 1, "not": 1,
             "add": 2, "sub": 2, "mul": 2, "min": 2, "max": 2,
             "ge": 2, "lt": 2, "and": 2, "or": 2, "if": 3, "accumulate": 2,
-            "window_sum": 1, "event_delta": 1, "object_sum": len(self.children),
+            "window_sum": 1, "event_delta": 1, "state_replay": 1,
+            "object_sum": len(self.children),
             "neighbor_sum": len(self.children), "relation_sum": len(self.children),
         }
         if self.op == "call":
@@ -281,6 +296,8 @@ class Program:
             raise ValueError("an observed variable needs a name")
         if self.op in {"lag", "available", "window_sum", "event_delta"} and self.lag < 1:
             raise ValueError("lag 1 denotes the most recent historical observation")
+        if self.op == "state_replay" and self.children[0].minimum_history_depth:
+            raise ValueError("state replay needs a transition that executes from reset")
 
     @cached_property
     def size(self) -> int:
@@ -293,7 +310,7 @@ class Program:
     def history_depth(self) -> int:
         if self.op == "call":
             return self.expanded().history_depth
-        if self.op == "accumulate":
+        if self.op in {"accumulate", "state_replay"}:
             # One indicates historical dependence, not a truncated memory:
             # execution folds the entire recorded trajectory at every length.
             return max(1, *(child.history_depth for child in self.children))
@@ -345,6 +362,9 @@ class Program:
         variables = {(str(self.name), self.lag if self.op == "lag" else 0)} if self.op in {"feature", "lag"} else set()
         for child in self.children:
             variables.update(child._observed_variables)
+        if self.op == "state_replay":
+            variables = {(name, lag) for name, lag in variables
+                         if name != "__target__" or lag == 0}
         return frozenset(variables)
 
     def remap_features(self, mapping: dict[str, str]) -> "Program":

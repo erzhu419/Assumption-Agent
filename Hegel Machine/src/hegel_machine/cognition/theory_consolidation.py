@@ -1235,6 +1235,16 @@ def transfer_theory(agent, arguments, laboratory=None):
     if path == LIBRARY_PATH:
         agent.theory_consolidation = library
     candidate = library['candidates'][arguments['candidate_id']]
+    if candidate['kind'] == 'python_research_method':
+        execution = candidate['execution']
+        action = {'action': 'run', 'arguments': {'operator': 'procedure',
+            'path': execution['path'], 'max_steps': execution['max_steps'], 'confirm': False}}
+        if laboratory is None:
+            return {'status': 'author_work_request', 'reason': 'ordinary_procedure_execution_required',
+                'execute_action': action, 'new_compute_cost': 0}
+        # The ordinary consumer owns acquisition, fitting, comparison and costs.
+        # A Python select_actions strategy is never a native Program replay.
+        return agent._execute(action['action'], action['arguments'], laboratory)
     if candidate['kind'] == 'research_program':
         return _transfer_research_program(agent, arguments, candidate, path)
     if candidate['kind'] in {'program_context_relation', 'program_revision_relation'}:
@@ -1260,6 +1270,79 @@ def transfer_theory(agent, arguments, laboratory=None):
         compute_allowance=arguments.get('allocation', {}).get('compute'),
         retained_counterexample_refs=_retained_binding_failures(agent, library, path, binding,
             documents=arguments.get('_source_documents')))
+
+
+def install_python_research_method(agent, *, candidate_id, source, selection_plan,
+                                  source_refs, paired_support_refs=(), max_steps=48,
+                                  previous_method_ref=None, selection_ref=None, method_question_ref=None):
+    """Register one finite Python revision without inheriting another body's support."""
+    if not isinstance(max_steps, int) or max_steps < 1:
+        raise ValueError('positive ordinary procedure step bound required')
+    from .research_programs import export_research_selection_program
+    # The existing finite compiler validates one branch and at most two
+    # optional learned segments; common closure actions remain compulsory.
+    expected_source = export_research_selection_program(selection_plan)
+    if source != expected_source:
+        raise ValueError('the registered method must be the finite selection compiler output')
+    ordinary = selection_plan.get('ordinary_method_path')
+    if not ordinary or not (agent.workspace / ordinary).is_file():
+        raise ValueError('actual ordinary method source required')
+    ordinary_source = (agent.workspace / ordinary).read_text(encoding='utf-8')
+    compile(source, candidate_id, 'exec')
+    method_path = f"shared/{candidate_id.replace(':', '_')}.py"
+    base_path = f"shared/{candidate_id.replace(':', '_')}_ordinary.py"
+    selection_plan = {**deepcopy(selection_plan), 'ordinary_method_path': base_path}
+    source = export_research_selection_program(selection_plan)
+    selection = {}
+    if selection_ref is not None:
+        from .method_action_research import read_method_reference
+        selection = read_method_reference(selection_ref, agent.workspace)
+    if selection_plan.get('condition') is not None and not selection.get('general_guard_supported'):
+        raise ValueError('a method guard requires its actual paired group-validation result')
+    candidate = {'id': candidate_id, 'version': 1, 'kind': 'python_research_method',
+        'execution': {'kind': 'python_select_actions', 'path': method_path, 'max_steps': max_steps},
+        'selection_plan': deepcopy(selection_plan), 'source_evidence_refs': deepcopy(list(source_refs)),
+        'paired_support_refs': deepcopy(list(paired_support_refs)),
+        'previous_method_ref': deepcopy(previous_method_ref),
+        'method_question_ref': deepcopy(method_question_ref),
+        'ordinary_source_ref': {'file': ordinary},
+        'selection_ref': deepcopy(selection_ref),
+        'scope': {'status': 'local_development',
+                  'general_guard_supported': selection.get('general_guard_supported', False)},
+        'source_ids': [], 'learned_utility_trigger': selection.get('general_guard_supported', False),
+        'world_support_transferred': False}
+    existing = agent.theory_consolidation.setdefault('candidates', {}).get(candidate_id)
+    if existing is not None and existing != candidate:
+        raise ValueError('a changed body requires a new candidate id')
+    if existing is not None:
+        if (agent.workspace / method_path).read_text(encoding='utf-8') != source:
+            raise ValueError('registered Python method source changed')
+        if (agent.workspace / base_path).read_text(encoding='utf-8') != ordinary_source:
+            raise ValueError('a changed ordinary source requires a new candidate id')
+        return deepcopy(candidate)
+    from .code_agent import _copy_model_file
+    # Preserve the actual ordinary source with the established reflink copier;
+    # future edits to the source policy cannot silently change this method body.
+    (agent.workspace / base_path).parent.mkdir(parents=True, exist_ok=True)
+    _copy_model_file(agent.workspace / ordinary, agent.workspace / base_path)
+    agent.files[base_path] = ordinary_source
+    agent._save(method_path, source)
+    agent.theory_consolidation['candidates'][candidate_id] = candidate
+    manifest = deepcopy(agent.manifest or agent.knowledge.get('manifest', {}))
+    registered = agent.workspace / 'shared/knowledge.json'
+    if registered.is_file():
+        manifest = json.loads(registered.read_text(encoding='utf-8'))
+    methods = manifest.setdefault('research_programs', [])
+    methods.append({'id': candidate_id, 'path': method_path, 'max_steps': max_steps,
+        'candidate_kind': 'python_research_method', 'candidate_version': 1,
+        'source_evidence_refs': deepcopy(list(source_refs)),
+        'paired_support_refs': deepcopy(list(paired_support_refs))})
+    agent.knowledge['manifest'] = manifest
+    if agent.manifest is not None:
+        agent.manifest = deepcopy(manifest)
+    agent._save('shared/knowledge.json', json.dumps(manifest, indent=2))
+    _save(agent)
+    return deepcopy(candidate)
 
 
 def _transfer_research_program(agent, arguments, candidate, path):
@@ -1520,9 +1603,15 @@ def recall_frozen_theories(agent, question, arguments):
     selected_library = read_theory_library(agent, path, source_libraries=source_libraries,
                                            source_documents=source_documents)
     source_libraries[path] = selected_library
-    candidates = selected_library.get('candidates', {})
+    # Python strategies are available through the ordinary manifest. Native
+    # recall enumerates typed world Programs and must not reinterpret them.
+    candidates = {key: value for key, value in selected_library.get('candidates', {}).items()
+                  if value.get('kind') != 'python_research_method'}
     if not candidates:
-        return {'status': 'no_frozen_candidates', 'generated_theory_ids': [], 'new_compute_cost': 0}
+        methods = [value['execution'] for value in selected_library.get('candidates', {}).values()
+                   if value.get('kind') == 'python_research_method']
+        return {'status': 'ordinary_methods_available' if methods else 'no_frozen_candidates',
+            'ordinary_methods': deepcopy(methods), 'generated_theory_ids': [], 'new_compute_cost': 0}
     mission = effective_question_mission(question, agent.research_mission)
     if mission.get('purpose') in {'theory_learning', 'method_learning'}:
         allocation = _allocation(agent, arguments, question)

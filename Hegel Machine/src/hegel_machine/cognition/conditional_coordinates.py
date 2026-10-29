@@ -22,6 +22,12 @@ def conditional_search_allowance(feature_count, row_count, history_length=0):
 
 
 def _masked(term, condition, side, width, placement):
+    """Place a condition at now, or independently at each window prefix.
+
+    Program.window_sum evaluates its child with that historical sample's own
+    earlier history. A lag in either term or condition therefore keeps its
+    relative meaning; it must not be shifted or materialized a second time.
+    """
     zero = Program("const", value=0.)
     if placement == "outside_window" and width > 1:
         term = Program("window_sum", lag=width, children=(term,))
@@ -31,12 +37,20 @@ def _masked(term, condition, side, width, placement):
             if placement == "inside_window" and width > 1 else masked)
 
 
+def _public_coordinate(term, names):
+    # required_features() deliberately omits lagged variables. Check the
+    # actual public reads instead so history-only coordinates survive while
+    # past targets do not become an undeclared measurement.
+    variables = term.observed_variables()
+    return ((bool(variables) or term.op == "available")
+            and all(name in names for name, _ in variables))
+
+
 def _coordinates(spec, rows, basis):
     names = set.intersection(*(set(row.features) for row in rows)) - {"__target__"}
     available = [Program("feature", name=name) for name in spec.feature_names if name in names]
     measured = list(dict.fromkeys([*available, *(term for term in basis
-        if term.history_depth == 0 and term.required_features()
-        and term.required_features() <= names)]))
+        if _public_coordinate(term, names))]))
     return available, measured
 
 
@@ -47,8 +61,8 @@ def _search(spec, rows, budget, *, basis, gates, max_candidates, reused=False,
     available, basis = _coordinates(spec, rows, basis)
     if not basis or not gates:
         return []
-    gates = list(dict.fromkeys(term for term in gates if term.history_depth == 0
-        and term.required_features() <= set.intersection(*(set(row.features) for row in rows))))
+    names = set.intersection(*(set(row.features) for row in rows)) - {"__target__"}
+    gates = list(dict.fromkeys(term for term in gates if _public_coordinate(term, names)))
     basis.append(Program("const", value=1.))
     upper = max(len(row.history) for row in rows)
     upper = max(1, upper)
@@ -335,17 +349,272 @@ def _search(spec, rows, budget, *, basis, gates, max_candidates, reused=False,
     return claims
 
 
+def _linear_coordinates(program, *, keep_constant=False):
+    """Recover the response terms in an existing fitted expression."""
+    if program.op in {"add", "sub"}:
+        return [term for child in program.children
+                for term in _linear_coordinates(child, keep_constant=keep_constant)]
+    if program.op == "mul" and any(child.op == "const" for child in program.children):
+        nonconstant = next((child for child in program.children if child.op != "const"), None)
+        return (_linear_coordinates(nonconstant, keep_constant=keep_constant)
+                if nonconstant is not None else [Program("const", value=1.)] if keep_constant else [])
+    if program.op == "const":
+        return [Program("const", value=1.)] if keep_constant and program.value != 0. else []
+    return [program]
+
+
+def _retained_conditional_seeds(programs, research_programs, names):
+    """Read hypotheses from saved answers, never from an apparatus description."""
+    programs = list(programs)
+    for payload in research_programs:
+        output = payload.get("graph", {}).get("nodes", {}).get(payload.get("output_node"), {})
+        if output.get("answer"):
+            programs.append(Program.from_dict(output["answer"]))
+    seeds, seen = [], set()
+    for source_index, program in enumerate(programs):
+        terms = list(dict.fromkeys(_linear_coordinates(program.expanded())))
+        groups = {}
+        for term in terms:
+            body, width, placement = term, 1, "inside_window"
+            if body.op == "window_sum":
+                width, body = body.lag, body.children[0]
+            if body.op != "if":
+                continue
+            condition, *branches = body.children
+            if condition.op != "ge" or condition.children[1].op != "const":
+                continue
+            gate, boundary = condition.children
+            if not _public_coordinate(gate, names):
+                continue
+            responses = [branch for branch in branches
+                         if branch.op != "const" or branch.value != 0.]
+            if not responses:
+                continue
+            if width == 1 and all(branch.op == "window_sum" for branch in responses):
+                widths = {branch.lag for branch in responses}
+                if len(widths) != 1:
+                    continue
+                width, placement = widths.pop(), "outside_window"
+                responses = [branch.children[0] for branch in responses]
+            basis = []
+            for response in responses:
+                basis.extend(_linear_coordinates(response, keep_constant=True))
+            if not basis or any(term.op != "const" and not _public_coordinate(term, names)
+                                for term in basis):
+                continue
+            key = gate, boundary.value, width, placement
+            group = groups.setdefault(key, {"basis": [], "terms": []})
+            group["basis"].extend(basis)
+            group["terms"].append(term)
+        for (gate, threshold, width, placement), group in groups.items():
+            basis = tuple(dict.fromkeys(group["basis"]))
+            background = tuple(term for term in terms if term not in group["terms"])
+            key = gate, threshold, width, placement, basis, background
+            if key not in seen:
+                seen.add(key)
+                seeds.append({"gate": gate, "threshold": threshold, "width": width,
+                    "placement": placement, "basis": basis, "background": background,
+                    "source_index": source_index})
+    return seeds
+
+
+def _seeded_search(spec, rows, budget, *, seeds, basis, gates, max_candidates,
+                   width_candidates, placement_candidates, receipt):
+    """Finish incumbent-plus-coordinate fits before revising their parameters."""
+    count, start = len(rows), budget.spent
+    fitter = _Fitter(rows, budget, spec.risk_quantile)
+    upper = max(1, max(len(row.history) + 1 for row in rows))
+    trials, measured, prepared, gate_support = [], {}, [], {}
+    fits_before = budget.completed_fits
+    receipt.update({"strategy": "retained_conditional_revision", "seed_count": len(seeds),
+        "completed_baseline_fits": 0, "completed_joint_fits": 0, "parameter_trials": trials})
+
+    def terms_for(seed, coordinate_basis, gate, threshold, width, placement):
+        condition = Program("ge", children=(gate, Program("const", value=threshold)))
+        return list(dict.fromkeys([*seed["background"], *(_masked(term, condition, side,
+            width, placement) for term in coordinate_basis for side in (True, False))]))
+
+    def support(gate):
+        if gate not in gate_support:
+            required = count * (1 + (gate not in fitter.columns))
+            if not budget.can_spend(required):
+                return None
+            column = fitter.column(gate)
+            if column is None or not budget.spend(count):
+                return None
+            gate_support[gate] = Counter(column)
+        return gate_support[gate]
+
+    def evaluate(seed_index, coordinate_basis, gate, threshold, width, placement, stage):
+        key = seed_index, coordinate_basis, gate, threshold, width, placement
+        if key in measured:
+            return measured[key]
+        seed = seeds[seed_index]
+        terms = terms_for(seed, coordinate_basis, gate, threshold, width, placement)
+        if len(terms) + 3 >= count:
+            return None
+        before = budget.spent
+        required = (sum(term not in fitter.columns for term in terms) + 2) * count
+        if gate not in gate_support:
+            required += count * (1 + (gate not in fitter.columns))
+        if not budget.can_spend(required):
+            return None
+        occurrences = support(gate)
+        if occurrences is None:
+            return None
+        fit = fitter.fit(terms)
+        if fit is None:
+            return None
+        lower = [value for value in occurrences if value < threshold]
+        higher = [value for value in occurrences if value >= threshold]
+        interval = [max(lower), min(higher)] if lower and higher else None
+        record = {"stage": stage, "source_index": seed["source_index"],
+            "gate_coordinate": gate.to_dict(), "threshold": threshold,
+            "threshold_interval": interval,
+            "width": width, "placement": placement, "loss": fit["loss"],
+            "terms": len(fit["fit_terms"]), "compute_cost": budget.spent - before}
+        trials.append(record)
+        measured[key] = fit, record, coordinate_basis
+        if stage == "retained_baseline":
+            receipt["completed_baseline_fits"] += 1
+        elif stage == "add_branch_coordinate":
+            receipt["completed_joint_fits"] += 1
+        return measured[key]
+
+    # Reserve a complete baseline and one augmentation before evaluating columns.
+    # Other candidates cannot consume the money needed to finish this unit.
+    for seed_index, seed in enumerate(seeds):
+        branch_basis = seed["basis"]
+        additions = [term for term in basis if term not in branch_basis and term.op != "const"]
+        parameters = seed["gate"], seed["threshold"], seed["width"], seed["placement"]
+        baseline_terms = terms_for(seed, branch_basis, *parameters)
+        joint_terms = terms_for(seed, (*branch_basis, additions[0]), *parameters) if additions else []
+        missing = len(set([*baseline_terms, *joint_terms]) - fitter.columns.keys())
+        required = (missing + (4 if additions else 2)) * count
+        if seed["gate"] not in gate_support:
+            required += count * (1 + (seed["gate"] not in fitter.columns))
+        if not budget.can_spend(required):
+            receipt["minimum_complete_fit_compute"] = required
+            break
+        baseline = evaluate(seed_index, branch_basis, *parameters, "retained_baseline")
+        if baseline is None:
+            continue
+        options = [baseline]
+        for coordinate in additions:
+            proposal = evaluate(seed_index, (*branch_basis, coordinate), *parameters,
+                                "add_branch_coordinate")
+            if proposal is not None:
+                options.append(proposal)
+        prepared.append((seed_index, min(options, key=lambda item: _rank(item[0]))))
+
+    def neighbouring_boundaries(gate, threshold):
+        occurrences = support(gate)
+        if occurrences is None:
+            return []
+        distinct, seen, brackets = sorted(occurrences), 0, []
+        for left, right in zip(distinct, distinct[1:]):
+            seen += occurrences[left]
+            if seen >= 3 and count - seen >= 3:
+                brackets.append((left + right) / 2.)
+        lower = [value for value in brackets if value < threshold - 1e-12]
+        higher = [value for value in brackets if value > threshold + 1e-12]
+        return ([lower[-1]] if lower else []) + ([higher[0]] if higher else [])
+
+    for seed_index, initial in prepared:
+        best = initial
+        for _ in range(2):
+            fit, record, coordinate_basis = best
+            if fit["loss"] <= 1e-12:
+                break
+            gate = Program.from_dict(record["gate_coordinate"])
+            threshold, width, placement = record["threshold"], record["width"], record["placement"]
+            boundaries = neighbouring_boundaries(gate, threshold)
+            widths = (list(width_candidates) if width_candidates is not None else
+                      [width - 1, width + 1, max(1, width // 2), min(upper, width * 2)])
+            widths = list(dict.fromkeys(int(value) for value in widths
+                                       if 1 <= int(value) <= upper and int(value) != width))
+            placements = ([value for value in placement_candidates
+                           if value in {"inside_window", "outside_window"} and value != placement]
+                          if placement_candidates is not None else
+                          ["outside_window" if placement == "inside_window" else "inside_window"])
+            alternatives = [item for item in dict.fromkeys(gates) if item != gate]
+            axes = [ [(gate, value, width, placement) for value in boundaries],
+                     [(gate, threshold, value, placement) for value in widths],
+                     [(gate, threshold, width, value) for value in placements],
+                     [(value, threshold, width, placement) for value in alternatives[:8]] ]
+            # Interleave changes: one bad boundary cannot consume every window
+            # and placement attempt. Next round revises the measured best joint fit.
+            for offset in range(max(map(len, axes), default=0)):
+                for axis in axes:
+                    if offset >= len(axis):
+                        continue
+                    proposal = evaluate(seed_index, coordinate_basis, *axis[offset], "revise_condition")
+                    if proposal is not None and _rank(proposal[0]) < _rank(best[0]):
+                        best = proposal
+            if best is initial:
+                break
+            initial = best
+
+    options = sorted(measured.values(), key=lambda item: _rank(item[0]))
+    options = list({fit["program"]: (fit, record, coordinate_basis)
+                    for fit, record, coordinate_basis in reversed(options)}.values())
+    options.sort(key=lambda item: _rank(item[0]))
+    # The complete original response remains a competing fit even if its local
+    # training rank is lower. The caller also retains the unchanged old Program.
+    baseline = next((item for item in measured.values()
+                     if item[1]["stage"] == "retained_baseline"), None)
+    selected = options[:max_candidates]
+    if baseline is not None and max_candidates > 1 and all(item[0]["program"] !=
+            baseline[0]["program"] for item in selected):
+        selected[-1:] = [baseline]
+    claims = []
+    for index, (fit, record, coordinate_basis) in enumerate(selected):
+        step = {"operation": "discover_conditional_coordinates",
+            "question": "Revise a retained conditional response jointly with a measured coordinate",
+            "program": fit["program"], "loss": fit["loss"],
+            "gate_coordinate": record["gate_coordinate"], "threshold": record["threshold"],
+            "threshold_interval": record["threshold_interval"],
+            "width": record["width"], "placement": record["placement"],
+            "history_bound": upper, "branch_basis": [term.to_dict() for term in coordinate_basis],
+            "parameter_terms": [term.to_dict() for term in fit["fit_terms"]],
+            "retained_source_index": record["source_index"], "parameter_trials": trials,
+            "revision_stage": record["stage"]}
+        entry = _entry(fit, [step], count, budget.spent - start, index)
+        entry["candidate"] = replace(entry["candidate"], candidate_id=f"conditional_revision:{index}",
+            rationale="Retained response jointly refitted with current evidence before local condition revision")
+        claims.append(entry)
+    receipt.update({"status": ("partial_local_revision" if budget.last_denied_request else "completed")
+            if claims else "no_completed_fit",
+        "compute_spent": budget.spent - start, "completed_fits": budget.completed_fits - fits_before,
+        "last_denied_request": budget.last_denied_request})
+    return claims
+
+
 def propose_conditional_coordinates(spec, rows, budget, *, basis, max_candidates=8,
                                     gate_names=None, width_candidates=None,
-                                    placement_candidates=None):
-    """Fit conditional response hypotheses using purchased rows alone."""
+                                    placement_candidates=None, gate_coordinates=None,
+                                    retained_programs=(), retained_research_programs=(), receipt=None):
+    """Fit conditional response hypotheses using purchased rows alone.
+
+    Explicit gate coordinates may be computations over recorded history.
+    Without nominations, retain the original current-feature gate search.
+    Startup behavior is the coordinate's own Program, including any guards;
+    this search never fills unavailable history with an invented observation.
+    """
     rows = list(rows)
     if len(rows) < 8 or max_candidates < 1:
         return []
     available, measured = _coordinates(spec, rows, basis)
-    gates = available[:8]
+    gates = available[:8] if gate_coordinates is None else list(gate_coordinates)
     if gate_names is not None:
         gates = [gate for gate in gates if gate.op == "feature" and gate.name in gate_names]
+    names = set.intersection(*(set(row.features) for row in rows)) - {"__target__"}
+    seeds = _retained_conditional_seeds(retained_programs, retained_research_programs, names)
+    if seeds:
+        return _seeded_search(spec, rows, budget, seeds=seeds, basis=measured,
+            gates=[term for term in gates if _public_coordinate(term, names)],
+            max_candidates=max_candidates, width_candidates=width_candidates,
+            placement_candidates=placement_candidates, receipt={} if receipt is None else receipt)
     return _search(spec, rows, budget, basis=measured, gates=gates,
                    max_candidates=max_candidates, width_candidates=width_candidates,
                    placement_candidates=placement_candidates)
@@ -357,7 +626,8 @@ def propose_experimental_conditional_coordinates(spec, rows, budget, *, basis,
 
     Matched experiments nominate a coordinate and its temporal support. Their
     measured boundary brackets guide the search; all purchased fitting rows
-    still have to agree with the resulting joint response.
+    still have to agree with the resulting joint response. Only explained local
+    responses restrict support; misfitting alternatives retain finite visits.
     """
     rows = list(rows)
     if len(rows) < 8:
@@ -366,58 +636,68 @@ def propose_experimental_conditional_coordinates(spec, rows, budget, *, basis,
     fitter = _Fitter(rows, budget, spec.risk_quantile)
     names = set.intersection(*(set(row.features) for row in rows)) - {"__target__"}
     measured_basis = list(dict.fromkeys(term for term in basis
-        if term.history_depth == 0 and term.required_features() <= names))
+        if _public_coordinate(term, names)))
     measured_basis.append(Program("const", value=1.))
     if 2 * len(measured_basis) + 3 >= count:
         return []
     trials, tested, families = [], {}, []
     exploratory_families = set()
-    supported = [item for item in evidence if item.get("gain", 0.) > 1e-10]
-    supported.sort(key=lambda item: (
+    proposals = [item for item in evidence if item.get("gain", 0.) > 1e-10]
+    proposals.sort(key=lambda item: (
+        not (item.get("conditional_loss", float("inf")) <= 1e-10
+             and item.get("condition_identified", True)),
         len(item.get("width_candidates", [item.get("width")])) *
         len(item.get("placement_candidates", [item.get("placement")])),
         item.get("conditional_loss", float("inf"))))
-    nominated_controls = set()
-    measured_brackets = {}
-    for item in supported:
+    measured_brackets, current_family_count = {}, 0
+    for item in proposals:
         control = item.get("control")
         interval = item.get("threshold_interval")
         width = item.get("width")
         if (control not in spec.feature_names or not interval or width is None
                 or item.get("gain", 0.) <= 1e-10):
             continue
-        if control in nominated_controls:
-            continue
-        nominated_controls.add(control)
+        identified = (item.get("conditional_loss", float("inf")) <= 1e-10
+                      and item.get("condition_identified", True))
         interval = list(interval)
-        for other in supported:
+        for other in proposals if identified else ():
             other_interval = other.get("threshold_interval")
-            if other.get("control") == control and other_interval:
+            if (other.get("control") == control and other_interval
+                    and other.get("conditional_loss", float("inf")) <= 1e-10
+                    and other.get("condition_identified", True)):
                 intersection = [max(interval[0], other_interval[0]),
                                 min(interval[1], other_interval[1])]
                 if intersection[0] < intersection[1]:
                     interval = intersection
         gate = Program("feature", name=control)
-        column = fitter.column(gate)
-        if column is None or not budget.spend(count):
-            break
-        # Include history controls too: an inside-window gate is evaluated at
-        # past input values, not only at the present comparison row.
-        values = sorted({*column, *(past[control] for row in rows for past in row.history
-                                   if control in past)})
-        measured_brackets[control] = tuple(zip(values, values[1:]))
+        if control not in measured_brackets:
+            column = fitter.column(gate)
+            if column is None or not budget.spend(count):
+                break
+            # An inside-window gate also acts on the actually measured history.
+            values = sorted({*column, *(past[control] for row in rows for past in row.history
+                                       if control in past)})
+            measured_brackets[control] = tuple(zip(values, values[1:]))
         brackets = [(left, right) for left, right in measured_brackets[control]
-                    if right > interval[0] and left < interval[1]]
+                    if not identified or (right > interval[0] and left < interval[1])]
         if not brackets:
             continue
-        placements = item.get("placement_candidates", [item.get("placement", "inside_window")])
-        widths = item.get("width_candidates", [width])
-        for proposed_width in widths:
-            for placement in placements:
-                family = (gate, int(proposed_width), placement, tuple(brackets))
-                if family not in families:
-                    families.append(family)
-    current_family_count = len(families)
+        alternatives = (item.get("competing_structures", ()) if not identified else ())
+        if not alternatives:
+            alternatives = [{"width": proposed_width, "placement": placement}
+                for proposed_width in item.get("width_candidates", [width])
+                for placement in item.get("placement_candidates",
+                                           [item.get("placement", "inside_window")])]
+        for alternative in alternatives:
+            family = (gate, int(alternative["width"]), alternative["placement"], tuple(brackets))
+            if family not in families:
+                families.append(family)
+                if identified:
+                    current_family_count += 1
+                if item.get("conditional_loss", 0.) > 1e-10:
+                    # The old finite exploration first visits every retained
+                    # structure, then refines the most useful paid response.
+                    exploratory_families.add(family)
     # A background can expose a useful temporal structure without explaining
     # its whole response. Its cutoff remains a proposal: varied controls and
     # measured history may revise it anywhere in their actual support.
@@ -625,6 +905,23 @@ def replay_conditional_coordinates(payload, rows, budget, *, risk_quantile=.5,
     spec = TaskSpec("conditional_method_replay", "Retest measured conditional response", names,
                     (), (), risk_quantile=risk_quantile)
     available, measured = _coordinates(spec, rows, basis)
+    if saved.get("revision_stage"):
+        # A learned incumbent revision includes other response terms as well
+        # as the selected conditional group. Replay its actual answer so a
+        # changed boundary does not discard that retained background law.
+        retained = graph.nodes[payload["output_node"]].answer
+        if feature_mapping:
+            retained = bind_measurement_arguments(retained, feature_mapping)
+        claims = propose_conditional_coordinates(spec, rows, budget, basis=measured,
+            retained_programs=[retained], gate_coordinates=list(dict.fromkeys([gate, *available])),
+            max_candidates=1)
+        if not claims:
+            return None
+        selected = min(claims, key=lambda item: (
+            0. if item["training_loss"] < 1e-12 else item["training_loss"],
+            item["candidate"].program.size))
+        selected["research_program"]["reused_procedure"] = True
+        return selected
     start = budget.spent
     fitter = _Fitter(rows, budget, risk_quantile)
     retained_fit = fitter.fit(retained_terms) if retained_terms else None

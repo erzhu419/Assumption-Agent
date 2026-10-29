@@ -83,8 +83,8 @@ def test_restore_keeps_source_work_and_common_pool_while_varying_availability(tm
     monkeypatch.setattr(scene, 'save_theory_library', lambda agent: None)
     monkeypatch.setattr(scene, 'save_theory_index', lambda agent: None)
     monkeypatch.setattr(scene, 'resolved_theories', lambda agent: list(agent.theory_index.values()))
-    monkeypatch.setattr(prepare, '_retain_scene_score_index', lambda source, workspace:
-                        {'retained_scopes': 1, 'retained_assessments': 2})
+    monkeypatch.setattr(prepare, '_retain_scene_score_index', lambda source, workspace, *, paid_rows:
+                        {'retained_scopes': 1, 'retained_assessments': 2, 'available_paid_rows': paid_rows})
     results = [scene.restore_registered_source_scene(registration, arm, tmp_path / arm, material=material)
                for arm in ('remove', 'keep')]
     for result in results:
@@ -100,6 +100,7 @@ def test_restore_keeps_source_work_and_common_pool_while_varying_availability(tm
         assert len(agent.theory_index) == 3
         assert result['parent']['_contract_source'] == material['parent_contract']
         assert result['validation']['new_fits'] == result['validation']['new_predictions'] == 0
+        assert result['validation']['retained_score_index']['available_paid_rows'] == len(agent.rows)
         assert result['lab'].kind == 'hysteresis'
     assert list(results[0]['agent'].theory_consolidation['candidates']) == ['old']
     assert list(results[1]['agent'].theory_consolidation['candidates']) == ['old', 'new']

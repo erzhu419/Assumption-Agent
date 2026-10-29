@@ -15,6 +15,7 @@ from contextlib import ExitStack
 
 
 _checkpoint_sources = {}
+_checkpoint_layouts = OrderedDict()
 _JSON_SHARED_MINIMUM = 64 * 1024
 _JSON_ENCODED_COMPARE_MAXIMUM = 1024 * 1024
 _JSON_DECODE_CHUNK = 8 * 1024 * 1024
@@ -29,6 +30,24 @@ _JSON_SCALAR_TOKEN = re.compile(rb'[^,\]}\s]+')
 def _published_text_version(path):
     state = path.stat()
     return (state.st_dev, state.st_ino, state.st_size, state.st_mtime_ns, state.st_ctime_ns)
+
+
+def _remember_checkpoint_layout(path, fields):
+    """Reuse published top-level spans, never a decoded history or open mapping."""
+    path = Path(path).absolute()
+    version = _published_text_version(path)
+    # Root scalars are metadata in experiment states. An ordinary authored
+    # document can contain large scalar text; keep that text out of this cache.
+    if (version[2] < _JSON_SHARED_MINIMUM
+            or len(fields) > _JSON_MEMBER_CACHE_ENTRIES
+            or any(isinstance(node[0], str) and len(node[0]) > _JSON_ENCODE_CHUNK
+                   for node in fields.values())):
+        _checkpoint_layouts.pop(path, None)
+        return
+    _checkpoint_layouts[path] = (version, fields)
+    _checkpoint_layouts.move_to_end(path)
+    while len(_checkpoint_layouts) > 16:
+        _checkpoint_layouts.popitem(last=False)
 
 
 def published_checkpoint_text(agent, path):
@@ -62,6 +81,51 @@ def checkpoint_file_text(agent, path):
     return path.read_text(encoding='utf-8')
 
 
+def _json_container_end(text, position, depth):
+    """Skip large history containers in bounded C-array batches.
+
+    The small-value scanner has already reached an unquoted structural mark.
+    Count only unquoted braces/brackets; escaped quotes and backslash runs can
+    cross batches in authored Python source embedded in a checkpoint.
+    """
+    import numpy as np
+
+    inside, odd_slashes = False, False
+    while position < len(text):
+        raw = np.frombuffer(text, dtype=np.uint8,
+            count=min(256 * 1024, len(text) - position), offset=position)
+        quotes = raw == 34
+        slashes = np.flatnonzero(raw == 92)
+        next_odd = False
+        if len(slashes):
+            beginnings = np.r_[0, np.flatnonzero(np.diff(slashes) != 1) + 1]
+            endings = np.r_[beginnings[1:] - 1, len(slashes) - 1]
+            lengths = endings - beginnings + 1
+            if slashes[0] == 0:
+                lengths[0] += odd_slashes
+            escaped = slashes[endings[lengths % 2 == 1]] + 1
+            quotes[escaped[escaped < len(raw)]] = False
+            next_odd = bool(slashes[-1] == len(raw) - 1 and lengths[-1] % 2)
+        if odd_slashes and raw[0] != 92:
+            quotes[0] = False
+        in_string = (np.cumsum(quotes, dtype=np.uint32) % 2).astype(bool)
+        if inside:
+            np.logical_not(in_string, out=in_string)
+        inside, odd_slashes = bool(in_string[-1]), next_odd
+        positions = np.flatnonzero(
+            ((raw == 123) | (raw == 91) | (raw == 125) | (raw == 93)) & ~in_string)
+        depths = np.cumsum(np.where(
+            (raw[positions] == 123) | (raw[positions] == 91), 1, -1)) + depth
+        ends = np.flatnonzero(depths == 0)
+        if len(ends):
+            return position + int(positions[ends[0]]) + 1
+        if len(depths):
+            depth = int(depths[-1])
+        position += len(raw)
+        del raw
+    raise ValueError(f'Unterminated JSON {"string" if inside else "container"} at byte {position}')
+
+
 def _json_value_end(text, start):
     """Locate a retained JSON value without constructing another value tree."""
     if text[start] == 34:
@@ -75,13 +139,15 @@ def _json_value_end(text, start):
     # Skip complete strings and scalar runs in C. In particular a long numeric
     # history has one closing boundary, rather than one Python match per key or
     # quoted value. A bare quote still identifies an unterminated saved string.
-    for token in _JSON_CONTAINER_BOUNDARY.finditer(text, start):
+    for count, token in enumerate(_JSON_CONTAINER_BOUNDARY.finditer(text, start)):
         mark = text[token.end() - 1]
         if mark == 34:
             raise ValueError(f'Unterminated JSON string at byte {token.end() - 1}')
         depth += 1 if mark in (123, 91) else -1
         if not depth:
             return token.end()
+        if count == 255:
+            return _json_container_end(text, token.end(), depth)
     raise ValueError(f'Unterminated JSON container at byte {start}')
 
 
@@ -302,6 +368,13 @@ class _JsonSource:
         self.file = opened.enter_context(path.open('rb'))
         self.text = None
         self.fields = None
+        saved = _checkpoint_layouts.get(path.absolute())
+        if saved is not None:
+            if saved[0] == _published_text_version(path):
+                self.fields = saved[1]
+                _checkpoint_layouts.move_to_end(path.absolute())
+            else:
+                _checkpoint_layouts.pop(path.absolute(), None)
         self.comparison_encoders = ()
         self._member_cache = OrderedDict()
         self._member_cache_entries = 0
@@ -335,10 +408,15 @@ class _JsonSource:
         if kind not in (123, 91):
             return {}
         position, index, result = start + 1, 0, {}
+        scanned = {} if node is None and requested is not None else None
+        cacheable = True
         while True:
             while text[position] in b' \t\r\n':
                 position += 1
             if text[position] in (125, 93):
+                if scanned is not None and cacheable:
+                    self.fields = scanned
+                    _remember_checkpoint_layout(self.path, scanned)
                 break
             if kind == 123:
                 end = _json_value_end(text, position)
@@ -361,6 +439,14 @@ class _JsonSource:
                 value = None
             if requested is None or key in requested:
                 result[key] = (value, first, position)
+            if scanned is not None:
+                retained = value
+                if text[first] not in (123, 91) and key not in requested:
+                    if position - first > _JSON_ENCODE_CHUNK:
+                        cacheable = False
+                    else:
+                        retained = json.loads(text[first:position])
+                scanned[key] = (retained, first, position)
             if requested is not None and len(result) == len(requested):
                 # Questions are at the beginning of real retained checkpoints;
                 # finding them must not scan a gigabyte of later score history.
@@ -372,6 +458,7 @@ class _JsonSource:
                 position += 1
         if node is None and requested is None:
             self.fields = result
+            _remember_checkpoint_layout(self.path, result)
         elif (node is not None and self.comparison_encoders and requested is None
               and node[2] - node[1] >= _JSON_SHARED_MINIMUM
               and len(result) <= _JSON_MEMBER_CACHE_ENTRIES):
@@ -481,6 +568,7 @@ def _write_json_ranges(path, value, sources, *, encoder):
         output, position = None, 0
         output_shared = False
         emitted_evaluations = {}
+        published_fields = {}
 
         def start_output():
             nonlocal output, output_shared
@@ -574,22 +662,19 @@ def _write_json_ranges(path, value, sources, *, encoder):
                         copy_range(output.fileno(), first, end)
                         return
             first = position
-            if comparison_owner(item, field):
-                # New or completely equal history shells still have to visit
-                # their evaluations; otherwise cross-owner sharing is skipped.
-                write_container(item, candidates)
+            for source, node in candidates:
+                if (node[2] - node[1] >= _JSON_SHARED_MINIMUM
+                        and source.value_equal(node, item, encoder.allow_nan)):
+                    # An equal retained history already has a complete shared
+                    # range. Revisit its scores only when something changed.
+                    copy_value(source, node)
+                    break
             else:
-                for source, node in candidates:
-                    if (node[2] - node[1] >= _JSON_SHARED_MINIMUM
-                            and source.value_equal(node, item, encoder.allow_nan)):
-                        copy_value(source, node)
-                        break
+                large = any(node[2] - node[1] >= _JSON_SHARED_MINIMUM for _, node in candidates)
+                if comparison_owner(item, field) or isinstance(item, (dict, list)) and large:
+                    write_container(item, candidates)
                 else:
-                    large = any(node[2] - node[1] >= _JSON_SHARED_MINIMUM for _, node in candidates)
-                    if isinstance(item, (dict, list)) and large:
-                        write_container(item, candidates)
-                    else:
-                        literal(item)
+                    literal(item)
             if comparison and output is not None and position - first >= _JSON_SHARED_MINIMUM:
                 emitted_evaluations.setdefault(len(item), []).append((item, first, position))
 
@@ -656,10 +741,17 @@ def _write_json_ranges(path, value, sources, *, encoder):
                     emit(encoder.item_separator.encode())
                 literal(str(key))
                 emit(encoder.key_separator.encode())
+                first = position
                 write_value(item, [(source, entries[key]) for source, entries in fields if key in entries], field=key)
+                descriptor = output.fileno() if output is not None else original.file.fileno()
+                prefix = os.pread(descriptor, min(4096, position - first), first)
+                first += len(prefix) - len(prefix.lstrip(b' \t\r\n'))
+                published_fields[str(key)] = (
+                    None if isinstance(item, (dict, list, tuple)) else item, first, position)
             emit(b'}\n')
             if output is None:
                 if os.fstat(original.file.fileno()).st_size == position:
+                    _remember_checkpoint_layout(path, published_fields)
                     return
                 start_output()
             if os.fstat(output.fileno()).st_size != position:
@@ -682,6 +774,7 @@ def _write_json_ranges(path, value, sources, *, encoder):
             temporary.unlink(missing_ok=True)
             raise
     temporary.replace(path)
+    _remember_checkpoint_layout(path, published_fields)
 
 
 def write_json_checkpoint(path, value, *, base=None, indent=2, ensure_ascii=True,

@@ -9,10 +9,14 @@ from time import monotonic
 from .code_agent import _copy_model_context, python_model_context
 from .conditional_research import _BIND_RUNNER
 from .conditional_coordinates import conditional_search_allowance
+from .conditional_experiments import assess_frozen_structure_predictions
 from .language import Program
 from .models import SearchBudget
 from .native_condition_research import (
     FINITE_PRIOR, research_native_conditions, update_native_boundary,
+    native_structure_planning_contract, plan_native_structure_experiments,
+    accumulate_matched_pairs, matched_assessment_compute_upper, matched_assessment_shape_upper,
+    retained_structure_refit_quote, _structural_hypotheses,
 )
 from .temporal_operator_agent import export_temporal_program
 from .world_relation_research import research_relation
@@ -574,7 +578,63 @@ def _native_completion_reserve(agent, question, max_exported_models):
     return reserve
 
 
-def _native_compute_continuation(agent, question, result, arguments, reserve):
+def _structure_preparation_quote(agent, question, public_spec, *, source_round_index, control,
+                                 background, matched_pairs=(), future_shape=None,
+                                 witness_count=2):
+    """Price the related old constraints before adding a possible new pair."""
+    source = question['native_condition_research'][source_round_index]
+    scope = {'control': control, 'background': background,
+        'record_indices': list(dict.fromkeys([*source['fit_record_indices'],
+            *(pair[key] for pair in matched_pairs
+              for key in ('reference_record_index', 'record_index'))]))}
+    pairs = accumulate_matched_pairs(public_spec, agent.observations,
+                                    matched_pairs, scope)
+    upper = matched_assessment_compute_upper(public_spec, agent.observations, pairs)
+    matched_rows = sum(pair['matched_rows'] for pair in pairs)
+    future_rows = 0
+    if future_shape is not None:
+        future_rows = future_shape['matched_rows']
+        rows = [row for pair in pairs for row in
+            agent.observations[pair['record_index']]['rows'][:pair['matched_rows']]]
+        history = max((len(row.get('history', [])) for row in rows), default=0)
+        levels = {row['features'][control] for row in rows}
+        level_count = len(levels | set(future_shape['levels']))
+        upper = matched_assessment_shape_upper(matched_rows + future_rows,
+            max(history, future_shape['max_history']), level_count)
+    retained = {Program.from_dict(candidate['program']) for old in
+        question['native_condition_research'] for candidate in old['candidates']}
+    scan = sum(len(record['rows']) for record in agent.observations) + future_rows
+    rescoring = len(agent.rows) * len(retained)
+    checks = 4 * witness_count
+    # Planning has at most two contrasted instances per witness. Before the
+    # actual forecast exists, price the most expensive distinct saved inputs;
+    # this is a structural upper bound, not four new search procedures.
+    sources = []
+    for evidence in source.get('evidence', []):
+        if evidence.get('control') != control or evidence.get('background') != background:
+            continue
+        for item in _structural_hypotheses(source, evidence):
+            index = item['candidate_index']
+            sources.append({**source['candidates'][index], 'source_ref': {
+                'file': 'research_state.json', 'json_path': ['questions',
+                    agent.questions.index(question), 'native_condition_research',
+                    source_round_index, 'candidates', index]}})
+    prices = retained_structure_refit_quote(sources, len(agent.rows))
+    selected_prices = sorted(prices['structures'], key=lambda item: item['compute_upper'],
+                             reverse=True)[:2 * witness_count]
+    refit_upper = sum(item['compute_upper'] for item in selected_prices)
+    return {'compute_cost': scan + rescoring + upper + checks + refit_upper,
+        'matched_assessment_compute_upper': upper, 'archive_scan_compute': scan,
+        'retained_program_scoring_compute': rescoring, 'frozen_readout_compute': checks,
+        'retained_structure_refit_compute_upper': refit_upper,
+        'retained_structure_refit_max_count': len(selected_prices),
+        'related_paid_pairs': len(pairs), 'related_matched_rows': matched_rows,
+        'future_matched_rows': future_rows, 'source_round_index': source_round_index,
+        'scope': 'Input-shape bound for matched preparation; joint search remains a bounded estimate.'}
+
+
+def _native_compute_continuation(agent, question, result, arguments, reserve, *,
+                                 structural_preparation=None, public_spec=None):
     """Publish a whole payable restart, never a smaller unfinished fragment."""
     rows = len(agent.rows)
     old_rows = len(result['fit_evidence'])
@@ -583,6 +643,15 @@ def _native_compute_continuation(agent, question, result, arguments, reserve):
     extended = rows != old_rows
     preparation = ((measured_preparation * rows + old_rows - 1) // old_rows
                    if old_rows else 0) + 2 * rows
+    target = arguments.get('structural_discrimination')
+    if structural_preparation is None and target is not None:
+        structural_preparation = _structure_preparation_quote(agent, question,
+            public_spec if public_spec is not None else agent._method_public_spec,
+            source_round_index=target['source_round_index'], control=target['control'],
+            background=target['background'], matched_pairs=arguments['matched_pairs'],
+            witness_count=len(target['forecast_witnesses']))
+    if structural_preparation is not None:
+        preparation = max(preparation, structural_preparation['compute_cost'])
     estimate = (conditional_search_allowance(len(agent.rows[0].features), rows,
                     max(len(row.history) for row in agent.rows)) if extended
                 else result['search_allowance_estimate']['conditional_joint_attempt'])
@@ -614,20 +683,107 @@ def _native_compute_continuation(agent, question, result, arguments, reserve):
             'and old-program scoring repeat and remain charged; the quoted joint attempt is '
             'an estimate, not a guarantee. The complete pool comparison and finish stay reserved; '
             'no new total compute or execution window is created.'}
+    if structural_preparation is not None:
+        unit['research_unit']['structural_preparation'] = deepcopy(structural_preparation)
+        unit['research_unit']['preparation_basis'] = 'max_of_measured_preparation_and_accumulated_input_shape'
     if payable:
         retry = {key: deepcopy(arguments[key]) for key in (
             'operator', 'record_indices', 'matched_pairs', 'basis', 'programs',
-            'max_candidates') if key in arguments}
+            'max_candidates', 'structural_discrimination', 'structural_question_id') if key in arguments}
         retry.update(question={'id': question['id']}, max_compute=minimum)
         unit['action'] = {'action': 'run', 'arguments': retry}
     return unit
+
+
+def _structure_readout(agent, question, plan, proposal, pairs, budget):
+    """Keep the paid contrast once, before a later fit can be interrupted."""
+    readings = plan.setdefault('readout_results', [])
+    existing = next((entry for entry in readings
+        if entry['matched_pairs'] == pairs and entry['verdict'].get('complete')), None)
+    charged = 0
+    if existing is None:
+        before = agent.costs['compute_cost']
+        verdict = assess_frozen_structure_predictions(agent,
+            proposal['structural_discrimination'], pairs,
+            planned_actions=proposal['query_action']['arguments']['actions'],
+            max_compute=budget.remaining)
+        charged = agent.costs['compute_cost'] - before
+        budget.spend(charged)
+        existing = {'matched_pairs': deepcopy(pairs), 'verdict': verdict}
+        readings.append(existing)
+    verdict = existing['verdict']
+    reference = {'file': 'research_state.json', 'json_path': ['questions',
+        agent.questions.index(question), 'native_structure_planning',
+        question['native_structure_planning'].index(plan), 'readout_results',
+        readings.index(existing), 'verdict']}
+    summary = {key: deepcopy(verdict[key]) for key in (
+        'status', 'complete', 'required_compute', 'reason', 'evidence',
+        'refuted_candidate_refs', 'compatible_candidate_refs',
+        'structure_families_refuted', 'next_research') if key in verdict}
+    summary.update(result_ref=reference, cache_hit=charged == 0 and verdict.get('complete', False))
+    return summary, charged
+
+
+def _frozen_structure_refit_inputs(question, target):
+    """Refit actual forecast witnesses, without expanding the whole old bank."""
+    previous = question['native_condition_research'][target['source_round_index']]
+    result, seen = [], set()
+    for witness in target['forecast_witnesses'].values():
+        for index in witness['hypothesis_indices']:
+            structure = target['structures'][index]
+            key = structure['width'], structure['placement']
+            if key in seen:
+                continue
+            seen.add(key)
+            reference = target['hypothesis_refs'][index]
+            candidate = previous['candidates'][reference['json_path'][-1]]
+            result.append({**candidate, 'source_ref': deepcopy(reference)})
+    return result
 
 
 def execute_native_condition_research(agent, arguments, laboratory, question):
     """Run the existing finite scientific inner loop on this question's paid data."""
     if question is None:
         raise ValueError('native_condition_research requires an authored research question')
+    if 'structure_planning' in arguments:
+        return _execute_native_structure_planning(agent, arguments, laboratory, question)
     rounds = question.setdefault('native_condition_research', [])
+    structure_target = arguments.get('structural_discrimination')
+    structure_plan, structure_proposal, structure_child, accumulate_scope = None, None, None, None
+    research_contract = {key: deepcopy(arguments[key]) for key in
+        ('record_indices', 'basis', 'programs') if key in arguments}
+    research_contract['max_candidates'] = int(arguments.get('max_candidates', 8))
+    if structure_target is not None:
+        research_contract['refit_scope'] = 'retained_coordinates'
+        plans = question.get('native_structure_planning', [])
+        matches = [(plan, proposed) for plan in plans if plan.get('planning_complete')
+            and plan.get('question_meaning_version') == question.get('meaning_version', 1)
+            for proposed in plan.get('proposed_experiments', [])
+            if proposed.get('structural_discrimination') == structure_target]
+        if (not matches or structure_target.get('source_question_ref') != {
+                'question_id': question['id'], 'meaning_version': question.get('meaning_version', 1)}):
+            raise ValueError('structural analysis requires its saved forecast/planning result')
+        structure_plan, structure_proposal = matches[-1]
+        structure_child = next((item for item in agent.questions
+            if item.get('id') == arguments.get('structural_question_id')
+                and item.get('structure_target') == structure_target), None)
+        original = rounds[structure_target['source_round_index']]
+        pairs = arguments.get('matched_pairs', [])
+        accumulate_scope = {'control': structure_target['control'],
+            'background': deepcopy(structure_target['background']),
+            'record_indices': list(dict.fromkeys([*original['fit_record_indices'],
+                *(pair[key] for pair in pairs for key in ('reference_record_index', 'record_index'))]))}
+        completed = next((entry for entry in reversed(rounds)
+            if entry.get('structural_discrimination', {}).get('target') == structure_target
+            and entry['structural_discrimination'].get('matched_pairs') == pairs
+            and entry['structural_discrimination'].get('research_contract') == research_contract
+            and entry.get('observed_record_count') == len(agent.observations)
+            and entry.get('status') in {'candidates_require_evaluation', 'matched_evidence_without_candidate',
+                                       'frozen_predictions_compared'}), None)
+        if completed is not None:
+            return {'operator': 'native_condition_research', 'status': completed['status'],
+                'research_question_id': question['id'], 'cache_hit': True,
+                'native_condition_research': native_condition_summary(completed, agent.questions.index(question))}
     remaining = max(0, agent.config.compute_budget - agent.costs['compute_cost'])
     # As in instrument_action, leave the actual scoring path outside search.
     # An explicit evaluation is followed by each local delivery, parent finish,
@@ -652,11 +808,52 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
                               max(0, int(arguments.get('max_compute', search_allowance)))))
     options = {key: arguments[key] for key in
                ('record_indices', 'matched_pairs', 'basis', 'max_candidates') if key in arguments}
-    started = monotonic()
+    started, readout_charged = monotonic(), 0
+    forecast_verdict = None
     try:
         observation_budget = max(0,
             agent.config.observation_budget - agent.costs['observation_cost'])
-        if 'boundary_update' in arguments:
+        if structure_target is not None:
+            forecast_verdict, readout_charged = _structure_readout(
+                agent, question, structure_plan, structure_proposal, pairs, budget)
+            if structure_child is not None:
+                agent._return_structural_answer(structure_child, {
+                    'operator': 'native_condition_research',
+                    'status': 'answered' if forecast_verdict['complete'] else 'inconclusive',
+                    'answer': {'target': deepcopy(structure_target),
+                        'matched_pairs': deepcopy(pairs), 'forecast_verdict': deepcopy(forecast_verdict)},
+                    'evidence': deepcopy(forecast_verdict.get('evidence', [])),
+                    'scope': 'Frozen fitted-predictor contrast answered before refitting; structural families remain unresolved.'})
+            accumulated = accumulate_matched_pairs(laboratory.public_spec(),
+                agent.observations, pairs, accumulate_scope)
+            options['accumulate_matched_scope'] = accumulate_scope
+            if forecast_verdict['next_research']['kind'] == 'jointly_refit_frozen_structures':
+                options['refit_candidates'] = _frozen_structure_refit_inputs(question, structure_target)
+                options['refit_cache'] = structure_plan.setdefault('refit_results', [])
+        if (forecast_verdict is not None and forecast_verdict['next_research']['kind']
+                != 'jointly_refit_frozen_structures'):
+            selected = options.get('record_indices', list(range(len(agent.observations))))
+            incomplete = not forecast_verdict['complete']
+            unfunded = forecast_verdict.get('reason') == 'complete_frozen_readout_check_unfunded'
+            result = {'status': ('search_incomplete' if unfunded else
+                'frozen_readout_incomplete' if incomplete else 'frozen_predictions_compared'),
+                'finite_prior': FINITE_PRIOR, 'candidates': [], 'proposed_experiments': [],
+                'evidence': [], 'available_pairs': accumulated,
+                'accumulated_matched_scope': {**deepcopy(accumulate_scope), 'matched_pairs': accumulated},
+                'fit_record_indices': selected,
+                'fit_evidence': [row for index in selected for row in agent.observations[index]['row_indices']],
+                'observed_record_count': len(agent.observations), 'searched_candidates': 0,
+                'search_stages': [{'stage': 'frozen_prediction_readout',
+                    'status': 'computation_incomplete' if incomplete else 'attempt_finished',
+                    'compute_cost': readout_charged, 'completed_fits': 0,
+                    **({'blocked_work': {'additional_compute': forecast_verdict['required_compute']}}
+                       if unfunded else {})}],
+                'search_allowance_estimate': {'conditional_joint_attempt': conditional_search_allowance(
+                    len(agent.rows[0].features), rows, max(len(row.history) for row in agent.rows))},
+                'compute_cost': budget.spent,
+                'research_decision': {**deepcopy(forecast_verdict['next_research']),
+                    'computation_incomplete': incomplete, 'frozen_prediction_status': forecast_verdict['status']}}
+        elif 'boundary_update' in arguments:
             selected = arguments['boundary_update']
             previous = rounds[selected['round_index']]
             proposal = previous['proposed_experiments'][selected['proposal_index']]
@@ -669,17 +866,52 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
             result = research_native_conditions(laboratory.public_spec(), agent.observations,
                 budget, programs=arguments.get('programs', []), retained_candidates=retained,
                 observation_budget=observation_budget, **options)
+            if forecast_verdict is not None:
+                result['compute_cost'] += readout_charged
+                result['search_stages'].insert(0, {'stage': 'frozen_prediction_readout',
+                    'status': 'attempt_finished', 'compute_cost': readout_charged,
+                    'completed_fits': 0})
     finally:
-        agent.costs['compute_cost'] += budget.spent
+        agent.costs['compute_cost'] += budget.spent - readout_charged
         agent.costs['python_execution_seconds'] += monotonic() - started
     result['completion_reserve'] = {**reserve,
         'search_allowance': budget.limit,
         'remaining_compute': remaining - budget.spent,
         'completion_funded': remaining - budget.spent >= reserved,
     }
+    if structure_target is not None:
+        result['structural_discrimination'] = {'target': deepcopy(structure_target),
+            'research_contract': research_contract,
+            'matched_pairs': deepcopy(arguments.get('matched_pairs', [])),
+            'forecast_verdict': deepcopy(forecast_verdict),
+            'accumulated_matched_scope': deepcopy(result.get('accumulated_matched_scope')),
+            'measured_evidence': [{key: deepcopy(item[key]) for key in
+                ('control', 'background', 'status', 'width_candidates', 'placement_candidates',
+                 'conditional_loss', 'record_indices', 'record_index', 'response_supported',
+                 'condition_identified', 'competing_structures') if key in item}
+                for item in result.get('evidence', [])
+                if item.get('control') == structure_target['control']
+                    and item.get('background') == structure_target['background']],
+            'scope': 'Measured alternatives after the planned switch; global validity still requires ordinary comparison.'}
+        if forecast_verdict['next_research']['kind'] == 'jointly_refit_frozen_structures':
+            loss = min((candidate['fit_mse'] for candidate in result['candidates']), default=None)
+            result['structural_discrimination']['refit_return'] = {
+                'status': ('computation_incomplete' if result['status'] == 'search_incomplete' else
+                    'candidate_supported_on_paid_rows' if loss is not None and loss <= 1e-10 else
+                    'no_supported_candidate_in_completed_finite_attempt'),
+                'best_fit_mse': loss, 'structure_families_refuted': False,
+                'next_research': ('complete_quoted_research' if result['status'] == 'search_incomplete' else
+                    'compare_full_retained_pool' if loss is not None and loss <= 1e-10 else
+                    'revise_structure_or_representation')}
+            if result['status'] != 'search_incomplete' and (loss is None or loss > 1e-10):
+                result['research_decision'] = {
+                    'kind': 'revise_structure_or_representation',
+                    'reason': 'The frozen-coordinate refits and bounded new response search '
+                              'still fail the paid evidence; a boundary result is not the only research action.',
+                    'boundary_decision': result['research_decision']}
     if result['status'] == 'search_incomplete':
         result['compute_continuation'] = _native_compute_continuation(
-            agent, question, result, arguments, reserve)
+            agent, question, result, arguments, reserve, public_spec=laboratory.public_spec())
         result['research_decision']['compute_continuation'] = deepcopy(result['compute_continuation'])
     if result['status'] == 'research_not_executed':
         retry = {key: deepcopy(value) for key, value in arguments.items()
@@ -761,8 +993,92 @@ def execute_native_condition_research(agent, arguments, laboratory, question):
         'evidence': list(result['fit_evidence']),
         'scope': 'Finite-prior paid search; parent adoption and independent confirmation remain pending.'}
     agent._return_structural_answer(question, answer)
+    if structure_target is not None:
+        if structure_child is not None:
+            agent._return_structural_answer(structure_child, {'operator': 'native_condition_research',
+                'status': 'answered' if forecast_verdict['complete'] else 'inconclusive',
+                'answer': deepcopy(result['structural_discrimination']),
+                'evidence': list(result['fit_evidence']),
+                'scope': 'Return measured structural alternatives to the declared parent revision; no unique world mechanism is asserted.'})
     return {'operator': 'native_condition_research', 'status': result['status'],
             'research_question_id': question['id'],
             'native_theory_registration': registration,
             'native_condition_research': native_condition_summary(result, index),
             'returned_answer': answer}
+
+
+def _execute_native_structure_planning(agent, arguments, laboratory, question):
+    """A bounded design action over a saved bank, without replaying its fits."""
+    requested = arguments['structure_planning']
+    rounds = question.get('native_condition_research', [])
+    index = requested.get('source_round_index')
+    if type(index) is not int or not rounds or index != rounds[-1]['round_index']:
+        raise ValueError('structure planning requires the current native source round')
+    previous = rounds[-1]
+    contract = native_structure_planning_contract(laboratory.public_spec(), agent.observations, previous)
+    if requested != contract:
+        raise ValueError('saved structural alternatives or planning scope changed')
+    plans = question.setdefault('native_structure_planning', [])
+    source = {'file': 'research_state.json', 'json_path': ['questions',
+        agent.questions.index(question), 'native_condition_research', index]}
+    existing = next((item for item in plans if item.get('planning_complete')
+        and item.get('question_meaning_version') == question.get('meaning_version', 1)
+        and item.get('basis') == requested), None)
+    if existing is not None:
+        return {'operator': 'native_condition_research', 'status': 'structure_planning_reused',
+            'research_question_id': question['id'], 'structure_planning': deepcopy(existing),
+            'source_ref': {'file': 'research_state.json', 'json_path': ['questions',
+                agent.questions.index(question), 'native_structure_planning', plans.index(existing)]},
+            'cache_hit': True, 'compute_cost': 0}
+    remaining = max(0, agent.config.compute_budget - agent.costs['compute_cost'])
+    reserve = _native_completion_reserve(agent, question, 0)
+    available = max(0, remaining - reserve['compute_cost'])
+    budget = SearchBudget(min(available, max(0, int(arguments.get('max_compute',
+        requested['proposal_compute'])))))
+    started = monotonic()
+    try:
+        result = plan_native_structure_experiments(laboratory.public_spec(), agent.observations,
+            budget, previous=previous, requested=requested, source_ref=source)
+    finally:
+        agent.costs['compute_cost'] += budget.spent
+        agent.costs['python_execution_seconds'] += monotonic() - started
+    result['planning_index'] = len(plans)
+    result['question_meaning_version'] = question.get('meaning_version', 1)
+    result['completion_reserve'] = reserve
+    for proposed in result['proposed_experiments']:
+        continuation = proposed['research_continuation']
+        continuation.update(research_question={'id': question['id']},
+            max_candidates=int(arguments.get('max_candidates', 8)))
+        for key in ('basis',):
+            if key in arguments:
+                continuation[key] = deepcopy(arguments[key])
+        target = proposed['structural_discrimination']
+        target['source_question_ref'] = {'question_id': question['id'],
+            'meaning_version': question.get('meaning_version', 1)}
+        continuation['structural_discrimination'] = deepcopy(target)
+        child = {'id': f"{question['id']}:history-structure:{index}:{result['planning_index']}",
+            'question': 'Which frozen candidate contrasts match the measured switch, and what '
+                'remains unresolved about history width and condition placement?',
+            'kind': 'structural_discrimination', 'answer_type': 'binding',
+            'parent_id': question['id'], 'parent_question_ref': {'question_id': question['id'],
+                'meaning_version': question.get('meaning_version', 1)},
+            'context_ref': deepcopy(question.get('context_ref')),
+            'subject_refs': deepcopy(target['hypothesis_refs']),
+            'structure_target': deepcopy(target),
+            'answer_resolution_ref': {'kind': 'retained_forecast_contrast', 'atol': 1e-10},
+            'use_sites': [{'kind': 'refit_parent_from_matched_evidence', 'parent_id': question['id'],
+                'parent_model': (agent.evaluated_model or {}).get('model')}],
+            'answer_method': {'operator': 'native_condition_research',
+                'matched_pairs': deepcopy(continuation['matched_pairs'])}}
+        proposed['query_action'].update(research_question={'id': question['id']},
+            structural_discrimination=deepcopy(target))
+        proposed['query_action']['arguments']['question'] = child
+        continuation['structural_question_id'] = child['id']
+        result['research_problem'] = deepcopy(child)
+    plans.append(deepcopy(result))
+    return {'operator': 'native_condition_research', 'status': result['status'],
+        'research_question_id': question['id'], 'structure_planning': result,
+        'source_ref': {'file': 'research_state.json', 'json_path': ['questions',
+            agent.questions.index(question), 'native_structure_planning', result['planning_index']]},
+        'compute_cost': budget.spent,
+        'scope': 'Saved-fit planning only; the proposed query, refitting and full-pool comparison remain unexecuted.'}

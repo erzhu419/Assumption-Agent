@@ -9,6 +9,7 @@ from hegel_machine.cognition.paid_score_history import (
     compact_agent_comparisons, retain_comparison_history,
 )
 from hegel_machine.cognition.research_episodes import load_source_values, resolve_program_sources
+from test_inquiry_revision import action
 from test_python_paid_score_reuse import (
     ChoiceLab, MODELS, choose, no_execution, scene, scoring_costs,
 )
@@ -81,6 +82,57 @@ def test_alias_and_occurrence_decisions_restore_without_replaying_retention(tmp_
     reference = {'file': 'research_state.json',
                  'json_path': ['operator_results', 1, 'evaluations', 1]}
     assert load_source_values([reference], agent.workspace)[0]['value'] == json.loads(json.dumps(evaluation))
+
+
+def test_nested_incumbent_scores_are_referenced_and_restore_the_exact_paid_value(tmp_path):
+    agent, lab = scene(tmp_path)
+    choose(agent, lab)
+    agent._execute('query', {'actions': [action(3.)]}, lab)
+    live = choose(agent, lab)
+    expected = deepcopy(live)
+    agent._prepare_program_state()
+    retained = agent.operator_results[-1]
+    assert any('retained_comparison' in item for item in retained['evaluations'])
+    for index, evaluation in enumerate(retained['evaluations']):
+        incumbent = evaluation.get('retained_comparison')
+        if incumbent is None:
+            continue
+        assert incumbent['score_result_ref'] == incumbent['paid_score_reuse']['assessment_ref']
+        assert 'representation_diagnostic' not in incumbent
+        assert 'examples' not in incumbent['paid_residuals']
+        for suffix, original in (([], expected['evaluations'][index]),
+                (['retained_comparison'], expected['evaluations'][index]['retained_comparison']),
+                (['retained_comparison', 'paid_residuals', 'examples'],
+                 expected['evaluations'][index]['retained_comparison']['paid_residuals']['examples'])):
+            reference = {'file': 'research_state.json', 'json_path': [
+                'operator_results', len(agent.operator_results) - 1, 'evaluations', index, *suffix]}
+            assert load_source_values([reference], agent.workspace)[0]['value'] == json.loads(json.dumps(original))
+    assert live == expected
+
+
+def test_recovery_upgrades_old_nested_payload_once_and_keeps_unpaid_failures(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from hegel_machine.cognition import paid_score_history
+
+    agent, lab = scene(tmp_path)
+    choose(agent, lab)
+    agent._execute('query', {'actions': [action(3.)]}, lab)
+    live = choose(agent, lab)
+    retained = retain_comparison_history(live)
+    for current, original in zip(retained['evaluations'], live['evaluations']):
+        if 'retained_comparison' in original:
+            current['retained_comparison'] = deepcopy(original['retained_comparison'])
+    failure = {'returncode': 1, 'stderr': 'original incomplete comparison',
+               'paid_residuals': {'examples': [{'row_index': 0}]}}
+    retained['evaluations'].append({'retained_comparison': deepcopy(failure)})
+    restored = SimpleNamespace(operator_results=[retained], events=[], method_results=[], questions=[])
+    paid_score_history.restore_comparison_history(restored)
+    assert restored.operator_results[0]['evaluations'][-1]['retained_comparison'] == failure
+    good = next(item['retained_comparison'] for item in restored.operator_results[0]['evaluations']
+                if item.get('retained_comparison', {}).get('paid_score_reuse', {}).get('assessment_ref'))
+    assert good['score_result_ref'] and 'representation_diagnostic' not in good
+    monkeypatch.setattr(paid_score_history, '_compact_retained_comparisons', no_execution)
+    paid_score_history.compact_agent_comparisons(restored)
 
 
 @pytest.mark.parametrize('failure', ['exception', 'truncated', 'unstable_context'])

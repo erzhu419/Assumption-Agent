@@ -66,3 +66,32 @@ def test_unapproved_driver_does_not_construct_or_repeat_work(tmp_path, monkeypat
     with pytest.raises(ValueError, match='authorization'):
         study.run_method_step_study(registered, tmp_path / 'forbidden')
     assert not (tmp_path / 'forbidden').exists()
+
+
+def test_native_stage_activity_cutoff_keeps_fees_and_cannot_become_local_partial_work(
+        tmp_path, monkeypatch):
+    from time import sleep
+    from hegel_machine.cognition.experiment_runtime import PythonExecutionDeadline, python_execution_deadline
+    registered = registration(tmp_path, monkeypatch)
+    registered['native_host_stop_seconds'] = .05
+    ordinary = study.CommonArchiveInquiryAgent._execute
+
+    def delayed_route(agent, action, arguments, laboratory):
+        if action == 'run' and arguments.get('operator') == 'research_route':
+            agent.costs['compute_cost'] += 3
+            try:
+                with python_execution_deadline(.5):
+                    sleep(.2)
+            except PythonExecutionDeadline:
+                pytest.fail('the whole native stage cutoff became a local partial return')
+        return ordinary(agent, action, arguments, laboratory)
+
+    monkeypatch.setattr(study.CommonArchiveInquiryAgent, '_execute', delayed_route)
+    result = study.run_method_step_study(registered, tmp_path / 'interrupted_development')
+    assert result['status'] == 'time_exhausted'
+    assert result['costs']['compute_cost'] == 3
+    assert result['native_host_wall_seconds'] >= .05
+    assert result['exported_candidates'] == []
+    saved = load_source_values([result['route_result_ref']], tmp_path)[0]['value']
+    assert saved['execution_error'].startswith('ActivityExecutionDeadline:')
+    assert (tmp_path / 'interrupted_development/development/research_state.json').is_file()

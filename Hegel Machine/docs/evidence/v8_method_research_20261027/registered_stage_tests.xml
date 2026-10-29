@@ -1,0 +1,1006 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="10" skipped="0" tests="35" time="7.203" timestamp="2026-10-27T22:41:21.387319+08:00" hostname="FATHERSUCKERMSI"><testcase classname="tests.test_registered_method_stage" name="test_real_hooks_reach_distinct_query_callback_and_complete_strong_pool[3.0]" time="0.088"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_real_hooks_reach_distinct0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cdbeaac50&gt;
+control = 3.0
+
+    @pytest.mark.parametrize('control', [3., 4.])
+    def test_real_hooks_reach_distinct_query_callback_and_complete_strong_pool(
+            tmp_path, monkeypatch, control):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        callback_rows = []
+    
+        def native(actual, arguments, laboratory, question):
+            callback_rows.append(len(actual.rows))
+            path = 'native_after.py'
+            actual._save(path, export_temporal_program(Program('const', value=0.), feature_names=('u',)))
+            actual.candidate_paths.append(path)
+            round_ = {'status': 'candidates_require_evaluation', 'candidates': [],
+                'exported_models': [{'model': path}], 'observed_record_count': len(actual.observations),
+                'fit_record_indices': list(range(len(actual.observations)))}
+            question.setdefault('native_condition_research', []).append(round_)
+            return {'native_condition_research': round_}
+        monkeypatch.setattr(common_archive_inquiry, 'execute_native_condition_research', native)
+        source = '''import json
+    from pathlib import Path
+    def select_actions(public_spec, observations, memory):
+        state = json.loads(Path('research_state.json').read_text())
+        paths = list(dict.fromkeys(memory['finite_native_author']['predictor_paths'] + state['exported_candidate_paths']))
+        rows = sum(len(record.get('rows', [])) for record in observations)
+        complete = any(result.get('operator') == 'research_choice'
+            and result.get('paid_rows') == rows and not result.get('truncated')
+            and result.get('models_requested') == result.get('models_completed') == len(paths)
+            and [item['path'] for item in result.get('evaluations', [])] == paths
+            for result in state['operator_results'])
+        if not complete:
+            return {'action':'run', 'arguments':{'operator':'research_choice','models':paths,
+                'research_question':{'id':'source_native'}}}
+        return QUERY
+    '''.replace('QUERY', repr({'action': 'query', 'arguments': {'actions': [action(control)],
+            'research_question': {'id': owner['id']}, 'after_observation': [
+                {'operator': 'native_condition_research', 'research_question': {'id': owner['id']}}]}}))
+        agent._save('registered.py', source)
+&gt;       result = runner.execute_registered_method_unit(agent, lab, 'registered.py',
+            before_step=agent._before_model_turn, after_step=agent._after_model_turn,
+            native_attempt_limit=1, max_steps=6)
+
+tests/test_registered_method_stage.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/run_method_action_pairing.py:259: in execute_registered_method_unit
+    result = execute_procedure(agent, lab, path, max_steps=max_steps,
+src/hegel_machine/cognition/temporal_paired_method.py:400: in execute_procedure
+    opened = before_step(laboratory)
+scripts/run_method_action_pairing.py:226: in before
+    opened = before_step(laboratory) if before_step else None
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cdbeaa7d0&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cdbeaafb0&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_real_hooks_reach_distinct_query_callback_and_complete_strong_pool[4.0]" time="0.087"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_real_hooks_reach_distinct1')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd43275e0&gt;
+control = 4.0
+
+    @pytest.mark.parametrize('control', [3., 4.])
+    def test_real_hooks_reach_distinct_query_callback_and_complete_strong_pool(
+            tmp_path, monkeypatch, control):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        callback_rows = []
+    
+        def native(actual, arguments, laboratory, question):
+            callback_rows.append(len(actual.rows))
+            path = 'native_after.py'
+            actual._save(path, export_temporal_program(Program('const', value=0.), feature_names=('u',)))
+            actual.candidate_paths.append(path)
+            round_ = {'status': 'candidates_require_evaluation', 'candidates': [],
+                'exported_models': [{'model': path}], 'observed_record_count': len(actual.observations),
+                'fit_record_indices': list(range(len(actual.observations)))}
+            question.setdefault('native_condition_research', []).append(round_)
+            return {'native_condition_research': round_}
+        monkeypatch.setattr(common_archive_inquiry, 'execute_native_condition_research', native)
+        source = '''import json
+    from pathlib import Path
+    def select_actions(public_spec, observations, memory):
+        state = json.loads(Path('research_state.json').read_text())
+        paths = list(dict.fromkeys(memory['finite_native_author']['predictor_paths'] + state['exported_candidate_paths']))
+        rows = sum(len(record.get('rows', [])) for record in observations)
+        complete = any(result.get('operator') == 'research_choice'
+            and result.get('paid_rows') == rows and not result.get('truncated')
+            and result.get('models_requested') == result.get('models_completed') == len(paths)
+            and [item['path'] for item in result.get('evaluations', [])] == paths
+            for result in state['operator_results'])
+        if not complete:
+            return {'action':'run', 'arguments':{'operator':'research_choice','models':paths,
+                'research_question':{'id':'source_native'}}}
+        return QUERY
+    '''.replace('QUERY', repr({'action': 'query', 'arguments': {'actions': [action(control)],
+            'research_question': {'id': owner['id']}, 'after_observation': [
+                {'operator': 'native_condition_research', 'research_question': {'id': owner['id']}}]}}))
+        agent._save('registered.py', source)
+&gt;       result = runner.execute_registered_method_unit(agent, lab, 'registered.py',
+            before_step=agent._before_model_turn, after_step=agent._after_model_turn,
+            native_attempt_limit=1, max_steps=6)
+
+tests/test_registered_method_stage.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/run_method_action_pairing.py:259: in execute_registered_method_unit
+    result = execute_procedure(agent, lab, path, max_steps=max_steps,
+src/hegel_machine/cognition/temporal_paired_method.py:400: in execute_procedure
+    opened = before_step(laboratory)
+scripts/run_method_action_pairing.py:226: in before
+    opened = before_step(laboratory) if before_step else None
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd4327820&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd4327700&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_changed_meaning_or_binding_stops_the_old_unit_before_new_science[meaning_version]" time="0.082"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_changed_meaning_or_bindin0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd496fe20&gt;
+field = 'meaning_version'
+
+    @pytest.mark.parametrize('field', ['meaning_version', 'context_ref', 'role_signature', 'output_unit',
+                                      'parent_theory_id'])
+    def test_changed_meaning_or_binding_stops_the_old_unit_before_new_science(tmp_path, monkeypatch, field):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state', 'json_path': ['method_results', 0]})
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd496fb80&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd496f7f0&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_changed_meaning_or_binding_stops_the_old_unit_before_new_science[context_ref]" time="0.078"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_changed_meaning_or_bindin1')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cdb5d8fd0&gt;
+field = 'context_ref'
+
+    @pytest.mark.parametrize('field', ['meaning_version', 'context_ref', 'role_signature', 'output_unit',
+                                      'parent_theory_id'])
+    def test_changed_meaning_or_binding_stops_the_old_unit_before_new_science(tmp_path, monkeypatch, field):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state', 'json_path': ['method_results', 0]})
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cdb5d8ac0&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cdb5d95a0&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_changed_meaning_or_binding_stops_the_old_unit_before_new_science[role_signature]" time="0.077"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_changed_meaning_or_bindin2')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd55cfd60&gt;
+field = 'role_signature'
+
+    @pytest.mark.parametrize('field', ['meaning_version', 'context_ref', 'role_signature', 'output_unit',
+                                      'parent_theory_id'])
+    def test_changed_meaning_or_binding_stops_the_old_unit_before_new_science(tmp_path, monkeypatch, field):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state', 'json_path': ['method_results', 0]})
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd55cff70&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd55ce0e0&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_changed_meaning_or_binding_stops_the_old_unit_before_new_science[output_unit]" time="0.082"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_changed_meaning_or_bindin3')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd55f5840&gt;
+field = 'output_unit'
+
+    @pytest.mark.parametrize('field', ['meaning_version', 'context_ref', 'role_signature', 'output_unit',
+                                      'parent_theory_id'])
+    def test_changed_meaning_or_binding_stops_the_old_unit_before_new_science(tmp_path, monkeypatch, field):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state', 'json_path': ['method_results', 0]})
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd55f5960&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd55f60b0&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_changed_meaning_or_binding_stops_the_old_unit_before_new_science[parent_theory_id]" time="0.077"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_changed_meaning_or_bindin4')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd55a1810&gt;
+field = 'parent_theory_id'
+
+    @pytest.mark.parametrize('field', ['meaning_version', 'context_ref', 'role_signature', 'output_unit',
+                                      'parent_theory_id'])
+    def test_changed_meaning_or_binding_stops_the_old_unit_before_new_science(tmp_path, monkeypatch, field):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state', 'json_path': ['method_results', 0]})
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd55a2410&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd55a1090&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_new_evidence_keeps_the_callback_stage_but_invalidates_old_comparison" time="0.078"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_new_evidence_keeps_the_ca0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd5846b90&gt;
+
+    def test_new_evidence_keeps_the_callback_stage_but_invalidates_old_comparison(tmp_path, monkeypatch):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state', 'json_path': ['method_results', 0]})
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd5844460&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd58444f0&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_public_visit_preserves_planned_research_and_complete_closure_budget" time="0.076"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_public_visit_preserves_pl0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd45ef970&gt;
+
+    def test_public_visit_preserves_planned_research_and_complete_closure_budget(tmp_path, monkeypatch):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        agent.config = replace(agent.config, compute_budget=1000)
+        start = agent.costs['compute_cost']
+        agent._unit_research_compute_ceiling = start + 600
+        unit = agent._begin_registered_method_unit('method.py', {'file': 'state'}, research_compute_reserve=400)
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:164: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd45eeaa0&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd45efe20&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_registered_method_stage" name="test_same_origin_recovery_retains_stage_new_origin_reopens_public_visit" time="0.077"><failure message="TypeError: 'NoneType' object is not subscriptable">tmp_path = PosixPath('/tmp/pytest-of-erzhu419/pytest-177/test_same_origin_recovery_reta0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x779cd4327490&gt;
+
+    def test_same_origin_recovery_retains_stage_new_origin_reopens_public_visit(tmp_path, monkeypatch):
+        agent, lab, owner, calls = controlled_scene(tmp_path, monkeypatch)
+        origin = {'file': 'state', 'json_path': ['method_results', 0]}
+        unit = agent._begin_registered_method_unit('method.py', origin)
+&gt;       agent._before_model_turn(lab)
+
+tests/test_registered_method_stage.py:174: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;scripts.run_anonymous_revision_inquiry.RegisteredOrganizationAgent object at 0x779cd43249a0&gt;
+laboratory = &lt;test_finite_native_author.ChoiceLab object at 0x779cd4327040&gt;
+
+    def _before_model_turn(self, laboratory):
+        opened = super()._before_model_turn(laboratory)
+        if self.organization_group == 'archive' or self.model is not None:
+            return opened
+        state = self._organization_state
+        unit = state.get('registered_method_unit')
+        unit = unit if unit is not None and unit['status'] == 'running' else None
+        if unit is None or unit['phase'] == 'public_preparation':
+            opened = self._consolidate_registered_source(laboratory) or opened
+        active = next((question for question in self.questions
+                       if question['id'] == self._active_question_id), None)
+        origin = (active or {}).get('origin')
+        if (active is None or active.get('queue') == 'theory'
+                or isinstance(origin, dict) and origin.get('kind') == 'multi_episode_commonality'):
+            active = next(question for question in self.questions if question['id'] == 'task')
+        if not (isinstance(origin, dict) and origin.get('kind') == 'unfinished_parent_revision'):
+            self._bind_revision_target(active)
+        scope = self._registered_unit_scope(active) if unit is not None else None
+        if unit is not None and unit['phase'] != 'public_preparation':
+            # Normal parent/child settling and binding above remain live. The
+            # selected operation consumes its own new evidence and callbacks;
+            # unrelated recall/consolidation belongs to the next unit.
+            current_contract = self._registered_unit_contract(scope)
+            prior_contract = self._registered_unit_contract(unit['current_scope'])
+            if 'choice_scope' not in unit:
+                # The first complete public comparison may legitimately adopt
+                # a new parent. Freeze its binding at the actual choice point.
+                current_contract.pop('parent_theory_id')
+                prior_contract.pop('parent_theory_id')
+            if current_contract != prior_contract:
+                unit.update(phase='requires_rebind', required_scope=deepcopy(scope),
+                    deferred_public_work=True)
+                unit['preparation']['completion_valid_for_current_scope'] = False
+                raise ValueError('Registered research unit question or binding contract changed; '
+                                 'a new preparation and quote are required')
+            if scope != unit.get('current_scope'):
+                unit['dependency_updates'].append({'before': unit.get('current_scope'),
+                    'after': deepcopy(scope)})
+                unit['current_scope'] = deepcopy(scope)
+            self._update_registered_unit_comparison(unit)
+            if unit['phase'] == 'choice_ready':
+                unit['choice_scope'] = deepcopy(scope)
+                unit['phase'] = 'research'
+            unit['deferred_public_work'] = True
+            return opened
+        arguments = {'operator': 'research_route', 'research_question': {'id': active['id']},
+            'library_path': state['automatic_library_path'],
+            'mission': {'purpose': 'task', 'mission_id': 'registered_task_organization'}}
+        if state.get('exploration_policy') is not None:
+            arguments['exploration_policy'] = deepcopy(state['exploration_policy'])
+        allocation = self._organization_registration.get('routing_allocation')
+        if allocation is not None:
+            arguments['allocation'] = deepcopy(allocation)
+        from hegel_machine.cognition.finite_native_author import (
+            export_revision_candidates, ordinary_completion_reserve,
+        )
+    
+        reserve = ordinary_completion_reserve(self, active)
+        original_config = self.config
+        if reserve is not None or unit is not None:
+            start = self.costs['compute_cost']
+            route_ceiling = original_config.compute_budget - (reserve['compute_cost'] if reserve else 0)
+            if unit is not None:
+                route_ceiling = min(route_ceiling,
+                    getattr(self, '_unit_research_compute_ceiling', route_ceiling))
+                route_ceiling -= unit['research_compute_reserved']
+            route_ceiling = max(start, route_ceiling)
+            self.config = replace(original_config, compute_budget=route_ceiling)
+            available = max(0, self.config.compute_budget - start)
+            arguments['allocation'] = {
+                **arguments.get('allocation', {}),
+                'compute': min(arguments.get('allocation', {}).get('compute', available), available),
+                'nominal_compute_budget': original_config.compute_budget,
+&gt;               'comparison_rows': reserve['paid_rows']}
+E           TypeError: 'NoneType' object is not subscriptable
+
+scripts/run_anonymous_revision_inquiry.py:479: TypeError</failure></testcase><testcase classname="tests.test_v8_method_action_pairing" name="test_n_or_k_change_invalidates_quote_and_unknown_component_is_not_zero" time="0.003" /><testcase classname="tests.test_v8_method_action_pairing" name="test_all_cells_freeze_before_qeval_and_d1_stays_out_of_baseline_cells" time="0.837" /><testcase classname="tests.test_v8_method_action_pairing" name="test_confirmation_reserve_applies_only_when_confirmation_is_permitted" time="0.020" /><testcase classname="tests.test_v8_method_action_pairing" name="test_old_python_predictor_keeps_its_frozen_execution_dependencies" time="0.004" /><testcase classname="tests.test_v8_method_action_pairing" name="test_full_comparison_is_inside_same_deadline_and_failed_cells_remain_unmeasured[False]" time="0.178" /><testcase classname="tests.test_v8_method_action_pairing" name="test_full_comparison_is_inside_same_deadline_and_failed_cells_remain_unmeasured[True]" time="0.186" /><testcase classname="tests.test_v8_method_action_pairing" name="test_different_component_prices_keep_equal_actual_execution_caps" time="0.422" /><testcase classname="tests.test_v8_method_action_pairing" name="test_unequal_pair_cap_or_time_is_rejected_before_restore[compute_cap]" time="0.002" /><testcase classname="tests.test_v8_method_action_pairing" name="test_unequal_pair_cap_or_time_is_rejected_before_restore[observation_cap]" time="0.001" /><testcase classname="tests.test_v8_method_action_pairing" name="test_unequal_pair_cap_or_time_is_rejected_before_restore[time_limits]" time="0.001" /><testcase classname="tests.test_v8_method_action_pairing" name="test_frozen_evaluation_uses_light_accounts_after_full_agents_are_released" time="0.426" /><testcase classname="tests.test_v8_method_action_pairing" name="test_native_query_callback_ends_one_registered_unit_and_preserves_ordinary_hooks" time="0.020" /><testcase classname="tests.test_v8_method_action_pairing" name="test_common_before_hook_work_is_not_claimed_as_the_method_program_action" time="0.020" /><testcase classname="tests.test_v8_method_action_pairing" name="test_research_primitive_cannot_consume_the_held_complete_comparison_budget" time="0.038" /><testcase classname="tests.test_v8_method_action_pairing" name="test_real_native_budget_holds_full_pool_once_and_keeps_the_quoted_joint_attempt" time="0.027" /><testcase classname="tests.test_v8_method_action_pairing" name="test_command_line_requires_named_inputs_and_refuses_unapproved_science_before_restore" time="0.028" /><testcase classname="tests.test_v8_method_action_pairing" name="test_ordinary_use_execution_caps_cannot_exceed_the_quoted_global_reservation" time="0.002" /><testcase classname="tests.test_v8_method_action_pairing" name="test_failed_unit_preserves_partial_hook_checkpoint_and_rescue_phases_without_new_fees" time="0.128" /><testcase classname="tests.test_registered_state_publication" name="test_before_hook_leaves_publication_to_the_actual_consumer" time="0.086" /><testcase classname="tests.test_registered_finite_policy" name="test_registered_hooks_refit_new_pending_query_evidence_before_any_second_purchase" time="0.834" /><testcase classname="tests.test_registered_finite_policy" name="test_registered_hooks_do_not_repeat_a_native_after_observation_fit[None]" time="0.317" /><testcase classname="tests.test_registered_finite_policy" name="test_registered_hooks_do_not_repeat_a_native_after_observation_fit[record_indices1]" time="0.317" /><testcase classname="tests.test_registered_finite_policy" name="test_registered_hooks_consume_an_existing_choice_after_automatic_routing" time="0.357" /><testcase classname="tests.test_registered_finite_policy" name="test_registered_pending_does_not_starve_current_native_bank_comparison" time="0.328" /><testcase classname="tests.test_registered_finite_policy" name="test_registered_pending_does_not_override_an_old_winners_finish" time="0.452" /></testsuite></testsuites>

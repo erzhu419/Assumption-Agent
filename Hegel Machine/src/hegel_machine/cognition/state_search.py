@@ -6,7 +6,7 @@ coordinate differently in each previous state. Competing reset interpretations,
 state lags, feature choices and threshold directions remain executable ASTs.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 from math import exp
 
@@ -133,14 +133,18 @@ def startup_revision_candidates(programs, observations, *, budget, max_candidate
         return []
     roots = []
     for program in programs:
-        root = program.expanded() if program.op == "call" else program
-        if root.op == "if" and root.children[0].op == "available" and root not in roots:
-            roots.append(root)
+        executable = program.expanded() if program.op == "call" else program
+        replay = executable if executable.op == "state_replay" else None
+        root = replay.children[0] if replay is not None else executable
+        root = root.expanded() if root.op == "call" else root
+        if (root.op == "if" and root.children[0].op == "available"
+                and (root, replay) not in roots):
+            roots.append((root, replay))
     rows = list(observations)
     if not rows or not roots:
         return []
     groups, old_predictions, jobs = {}, {}, []
-    for root in roots:
+    for root, replay in roots:
         guard, mature, startup = root.children
         if guard.lag not in groups:
             if not budget.spend(len(rows)):
@@ -183,7 +187,7 @@ def startup_revision_candidates(programs, observations, *, budget, max_candidate
         collect(mature)
         for name in sorted(names):
             add_coordinate(Program("feature", name=name))
-        jobs.append({"root": root, "initial": initial, "levels": levels,
+        jobs.append({"root": root, "replay": replay, "initial": initial, "levels": levels,
                      "old_errors": old_errors, "coordinates": coordinates, "scored": [], "seen": set()})
 
     fitted = {}
@@ -216,6 +220,8 @@ def startup_revision_candidates(programs, observations, *, budget, max_candidate
             while job["scored"]:
                 errors, _, _, replacement = job["scored"].pop(0)
                 revised = Program("if", children=(guard, mature, replacement))
+                if job["replay"] is not None:
+                    revised = replace(job["replay"], children=(revised,))
                 if revised in emitted:
                     continue
                 if len(results) >= max_candidates or not budget.spend(1):
@@ -225,6 +231,56 @@ def startup_revision_candidates(programs, observations, *, budget, max_candidate
                     f"Retain the mature mechanism and reduce observed startup errors from {job['old_errors']} to {errors}"))
                 break
     return results
+
+
+def closed_startup_claims(programs, observations, *, budget, max_candidates=6):
+    """Repair paid reset errors, then compare entire self-predicted trajectories.
+
+    The historical fitter reads only startup rows and preserves mature branches.
+    Full control-only replay still matters: an incorrect initial state can affect
+    many later outputs. The caller supplies only its declared training material.
+    """
+    from .models import Observation, SearchBudget
+    from .parallel_prediction import predict_rows
+
+    rows = [Observation(dict(row.features), row.target,
+        tuple({name: value for name, value in point.items() if name != '__target__'}
+              for point in row.history)) for row in observations]
+    if not rows or max_candidates < 1:
+        return []
+    count = len(rows)
+    comparison_reserve = max_candidates * count
+    if not budget.can_spend(comparison_reserve + count):
+        return []
+    local = SearchBudget(budget.remaining - comparison_reserve)
+    try:
+        repaired = startup_revision_candidates(programs, rows, budget=local,
+                                               max_candidates=max_candidates)
+    finally:
+        budget.spend(local.spent)
+    claims = []
+    for original in repaired:
+        program = original.program
+        if any(name == '__target__' for name, _ in program.observed_variables()):
+            program = Program('state_replay', children=(program,))
+        if not budget.spend(count):
+            raise RuntimeError('reserved startup candidate comparison was not available')
+        predictions = predict_rows(program, rows)
+        training_loss = sum((value - row.target) ** 2
+                            for value, row in zip(predictions, rows)) / count
+        body = program.children[0] if program.op == 'state_replay' else program
+        diagnostic = {'kind': 'startup_revision', 'fit_rows': count,
+            'startup_fit_rows': sum(len(row.history) < body.children[0].lag for row in rows),
+            'shared_search_compute': local.spent, 'candidate_training_compute': count,
+            'stages': ['repair_startup_only', 'closed_control_history_comparison'],
+            'mature_transition_preserved': True, 'guard_preserved': True,
+            'prediction_history': ('self_generated_responses'
+                                   if program.op == 'state_replay' else 'controls_only'),
+            'status': 'requires_complete_comparison', 'independent_confirmation': False}
+        claims.append({'candidate': Candidate('closed_' + original.candidate_id, program,
+            'closed_startup_revision', original.rationale), 'kind': 'startup_revision',
+            'training_loss': training_loss, 'research_program': None, 'state_research': diagnostic})
+    return claims
 
 
 def _joint_coordinate(rows, groups, names, levels, budget, *, reserve):
@@ -424,3 +480,71 @@ def state_candidates(observations, *, budget, max_history=1, max_candidates=12,
         selected[-1] = memoryless
     return [Candidate(f"state:{index}:{budget.spent}", program, "composition" if stateful else "relation", reason)
             for index, (_, _, program, reason, stateful) in enumerate(selected)]
+
+
+def closed_state_claims(records, *, budget, max_history=1, max_candidates=8,
+                        record_indices=None):
+    """Learn with paid response histories, then score self-generated state.
+
+    Records preserve the actual reset boundaries. Observed past responses are
+    used only to fit the existing transition learner; a returned stateful
+    predictor reconstructs its state from controls and its own earlier output.
+    The caller still compares all claims against retained models on its full
+    declared evidence view.
+    """
+    from .legacy_research_bridge import InquiryResearchLab
+    from .models import Observation, SearchBudget
+    from .parallel_prediction import predict_rows
+
+    records = list(records)
+    indices = list(range(len(records))) if record_indices is None else list(record_indices)
+    if len(indices) != len(records):
+        raise ValueError('state training record indices must identify the supplied records')
+    learned_rows = [row for record in records for row in InquiryResearchLab.measured_rows(record)]
+    if not learned_rows or max_candidates < 1:
+        return []
+    # This is the old learner's applicability test, not an apparatus-family
+    # selection. Memoryless explanations continue to compete inside it.
+    if len({row.target for row in learned_rows}) != 2:
+        return []
+    public_rows = [Observation(dict(row.features), row.target,
+        tuple({name: value for name, value in point.items() if name != '__target__'}
+              for point in row.history)) for row in learned_rows]
+    count = len(public_rows)
+    comparison_reserve = max_candidates * count
+    required = state_search_work(learned_rows, max_history=max_history) + comparison_reserve
+    if not budget.can_spend(required):
+        return []
+    local = SearchBudget(budget.remaining - comparison_reserve)
+    try:
+        learned = state_candidates(learned_rows, budget=local, max_history=max_history,
+                                   max_candidates=max_candidates)
+    finally:
+        budget.spend(local.spent)
+    evidence = [index for record in records for index in record['row_indices']]
+    claims = []
+    for original in learned:
+        recurrent = any(name == '__target__' for name, _ in original.program.observed_variables())
+        program = (Program('state_replay', children=(original.program,))
+                   if recurrent else original.program)
+        # The native budget counts one complete Program prediction per row,
+        # consistently with existing window/accumulate comparisons. Report
+        # replay length separately, not as a different scientific fee unit.
+        if not budget.spend(count):
+            raise RuntimeError('reserved state candidate comparison was not available')
+        values = predict_rows(program, public_rows)
+        training_loss = sum((value - row.target) ** 2
+                            for value, row in zip(values, public_rows)) / count
+        diagnostic = {'kind': 'discrete_state_search', 'learned_body': original.program.to_dict(),
+            'fit_rows': count, 'fit_record_indices': indices, 'fit_evidence': evidence,
+            'shared_search_compute': local.spent, 'candidate_training_compute': count,
+            'replayed_prefix_steps': (sum(len(row.history) + 1 for row in public_rows)
+                                      if recurrent else count),
+            'stages': ['fit_observed_state_transition', 'closed_control_history_comparison'],
+            'fitting_history': 'paid_observed_responses_per_reset',
+            'prediction_history': 'self_generated_responses' if recurrent else 'no_response_history',
+            'status': 'requires_complete_comparison', 'independent_confirmation': False}
+        claims.append({'candidate': Candidate('closed_' + original.candidate_id, program,
+            'closed_state_research', original.rationale), 'kind': 'discrete_state_research',
+            'training_loss': training_loss, 'research_program': None, 'state_research': diagnostic})
+    return claims

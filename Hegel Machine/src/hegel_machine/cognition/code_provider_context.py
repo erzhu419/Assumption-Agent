@@ -7,10 +7,40 @@ from pathlib import Path
 import re
 
 from .executable_evidence import PAID_RELATION_FIELD_MEANINGS
-from .checkpoint_storage import write_text_incrementally
+from .checkpoint_storage import write_text_incrementally, _json_size_bound
 
 
 _PROVIDER_CONTEXT_CHARACTERS = 1_000_000
+
+
+def _fits_inline_json(value, limit=12000):
+    """Match the existing default JSON length cutoff without encoding a bank."""
+    if _json_size_bound(value, limit) <= limit:
+        return True
+
+    def size(item, remaining):
+        if isinstance(item, str):
+            return remaining + 1 if len(item) + 2 > remaining else len(json.dumps(item))
+        if not isinstance(item, (dict, list, tuple)):
+            return len(json.dumps(item))
+        length = 2 + 2 * max(0, len(item) - 1)
+        if isinstance(item, dict):
+            length += 2 * len(item)  # Default ': ' between each key and value.
+        if length > remaining:
+            return remaining + 1
+        children = item.items() if isinstance(item, dict) else ((None, child) for child in item)
+        for key, child in children:
+            if isinstance(item, dict):
+                # Let the existing encoder retain its supported key coercions.
+                if isinstance(key, str) and len(key) + 2 > remaining - length:
+                    return remaining + 1
+                length += len(json.dumps({key: 0})) - 5
+            length += size(child, remaining - length)
+            if length > remaining:
+                return remaining + 1
+        return length
+
+    return size(value, limit) <= limit
 
 
 def _saved_context_reference(value, field_path, full_content_file="research_context.json"):
@@ -22,7 +52,7 @@ def _saved_context_reference(value, field_path, full_content_file="research_cont
                     "research_decision", "remaining_boundary", "boundary_update", "completion_reserve"):
             if key in value:
                 item = value[key]
-                reference[key] = (item if len(json.dumps(item)) <= 12000 else
+                reference[key] = (item if _fits_inline_json(item) else
                     _saved_context_reference(item, [*field_path, key], full_content_file))
         if isinstance(value.get("steps"), list):
             reference["steps"] = [

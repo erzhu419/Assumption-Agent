@@ -1,8 +1,9 @@
 """Expose historical simulator mechanisms through one anonymous inquiry interface.
 
-This is a finite-control development setting, not a new simulator or a claim of
-continuous-domain identification. The existing simulator computes every label;
-this adapter only binds public controls, resets, records and evaluation horizons.
+This is a finite-control development setting, not a claim of continuous-domain
+identification. Historical mechanisms retain their original simulator. The
+factorized hysteresis family varies only its reset rule independently of the
+existing mature transition; the public inquiry interface stays the same.
 """
 
 from copy import deepcopy
@@ -16,6 +17,7 @@ from .models import Observation, Probe
 
 CONTROL_LEVELS = tuple(index / 10 for index in range(-10, 11))
 MAX_PROBE_LENGTH = 24
+MAX_EVALUATION_LENGTH = 48
 
 LAB_INTERFACE = """Investigate an unknown apparatus through its public controls.
 query {actions:[{kind:'trajectory',sequence:[{u:number},...],channels:[]},...]}
@@ -35,12 +37,30 @@ Terminal evaluation also tests longer trajectories, up to 48 steps per reset.
 """
 
 
+class _IndependentStartupEnvironment(TemporalEnvironment):
+    """Factor one reset rule out of the historical hysteresis transition."""
+
+    def __init__(self, *, startup_threshold, **kwargs):
+        super().__init__(**kwargs)
+        self._startup_threshold = startup_threshold
+
+    def _target(self, features, history, rng):
+        if not history:
+            return float(features[self._feature_names[0]] >= self._startup_threshold)
+        return super()._target(features, history, rng)
+
+
 class AnonymousHistoryLab:
     """Use identical public inputs for static, delayed and stateful apparatuses."""
 
     task_interface = LAB_INTERFACE
 
-    def __init__(self, kind="memoryless", seed=113):
+    def __init__(self, kind="memoryless", seed=113, *, startup_seed=None):
+        if kind == "factorized_hysteresis" and startup_seed is None:
+            raise ValueError("factorized hysteresis requires its independent startup seed")
+        if startup_seed is not None and kind != "factorized_hysteresis":
+            raise ValueError("startup_seed belongs to the factorized hysteresis family")
+        self._startup_threshold = None
         rng = Random(seed)
         if kind in {"memoryless", "delay"}:
             mechanism = _Mechanism(
@@ -50,23 +70,35 @@ class AnonymousHistoryLab:
                 lag_weight=rng.uniform(0.5, 1.2) if kind == "delay" else 0.0,
                 history_lag=rng.randint(1, 3) if kind == "delay" else 1,
             )
-        elif kind == "hysteresis":
+        elif kind in {"hysteresis", "factorized_hysteresis"}:
             mechanism = _Mechanism(
                 kind="hysteresis",
                 lower_threshold=rng.uniform(-0.75, -0.15),
                 upper_threshold=rng.uniform(0.15, 0.75),
             )
+            if kind == "factorized_hysteresis":
+                # Reuse the historical upper-threshold draw, so equal factor
+                # seeds reproduce the old apparatus exactly. Independent
+                # seeds change startup without changing the mature mechanism.
+                startup_rng = Random(startup_seed)
+                startup_rng.uniform(-0.75, -0.15)
+                self._startup_threshold = startup_rng.uniform(0.15, 0.75)
         else:
             raise ValueError("unsupported development apparatus kind")
         self._seed, self._mechanism = seed, mechanism
         self._environment = self._new_environment(MAX_PROBE_LENGTH)
         self._costs = {"observation_cost": 0, "measurement_cost": 0, "queries": 0}
+        self._next_row_index = 0
 
     def _new_environment(self, horizon):
-        return TemporalEnvironment(
+        environment = (_IndependentStartupEnvironment
+                       if self._startup_threshold is not None else TemporalEnvironment)
+        startup = ({"startup_threshold": self._startup_threshold}
+                   if self._startup_threshold is not None else {})
+        return environment(
             task_id="apparatus", seed=self._seed, query_seed=self._seed,
             mechanism=self._mechanism, phase="development", feature_limit=1.0,
-            max_probe_length=horizon, query_catalog=((), ()),
+            max_probe_length=horizon, query_catalog=((), ()), **startup,
         )
 
     def public_spec(self):
@@ -77,20 +109,26 @@ class AnonymousHistoryLab:
             "channels": [], "observation_cost_per_row": 1,
             "reset": "Every trajectory starts from the apparatus reset state.",
             "prediction_contract": "Current and preceding controls only; no past targets.",
-            "evaluation_max_trajectory_length": 48,
+            "evaluation_max_trajectory_length": MAX_EVALUATION_LENGTH,
         }
 
     @property
     def costs(self):
         return dict(self._costs)
 
+    def restore_paid_account(self, observations, costs):
+        """Retain paid fees independently of imported development row addresses."""
+        self._costs = {"observation_cost": costs["observation_cost"],
+            "measurement_cost": costs["measurement_cost"], "queries": len(observations)}
+        self._next_row_index = sum(len(record['rows']) for record in observations)
+
     @staticmethod
-    def _sequence(action):
+    def _sequence(action, *, max_length=MAX_PROBE_LENGTH):
         if action.get("kind") != "trajectory":
             raise ValueError("the available action kind is trajectory")
         sequence = action.get("sequence")
-        if not isinstance(sequence, list) or not 1 <= len(sequence) <= MAX_PROBE_LENGTH:
-            raise ValueError("trajectory requires 1 to 24 control steps")
+        if not isinstance(sequence, list) or not 1 <= len(sequence) <= max_length:
+            raise ValueError(f"trajectory requires 1 to {max_length} control steps")
         if action.get("channels", []) != []:
             raise ValueError("the apparatus has no auxiliary channels")
         controls = []
@@ -128,7 +166,8 @@ class AnonymousHistoryLab:
     def execute(self, action):
         sequence = self._sequence(action)
         rows = self._observed_rows(self._environment, sequence, f"query_{self._costs['queries']}")
-        first, count = self._costs["observation_cost"], len(rows)
+        first, count = self._next_row_index, len(rows)
+        self._next_row_index += count
         self._costs["observation_cost"] += count
         self._costs["queries"] += 1
         return {
@@ -163,9 +202,24 @@ class AnonymousHistoryLab:
 
     def evaluation_rows(self, *, length=256, seed=1000003):
         """Evaluate frozen models on independent inputs and longer reset segments."""
-        environment, rng, rows = self._new_environment(48), Random(seed), []
+        environment, rng, rows = self._new_environment(MAX_EVALUATION_LENGTH), Random(seed), []
         while len(rows) < length:
-            count = min(48, length - len(rows))
+            count = min(MAX_EVALUATION_LENGTH, length - len(rows))
             sequence = [{"u": rng.choice(CONTROL_LEVELS)} for _ in range(count)]
             rows.extend(self._observed_rows(environment, sequence, f"evaluation_{len(rows)}"))
+        return rows
+
+    def evaluation_sequences(self, sequences):
+        """Read frozen evaluator-only trajectories on the published control grid.
+
+        Each sequence resets independently, with the same 48-step horizon as
+        ``evaluation_rows``. Ordinary queries retain their 24-step limit and
+        budget; evaluator rows and their costs belong to the caller's ledger.
+        """
+        controls = [self._sequence({'kind': 'trajectory', 'sequence': sequence},
+                                   max_length=MAX_EVALUATION_LENGTH)
+                    for sequence in sequences]
+        environment, rows = self._new_environment(MAX_EVALUATION_LENGTH), []
+        for index, sequence in enumerate(controls):
+            rows.extend(self._observed_rows(environment, sequence, f"evaluation_{index}"))
         return rows

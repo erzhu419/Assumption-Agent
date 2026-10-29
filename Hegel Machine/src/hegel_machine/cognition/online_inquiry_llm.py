@@ -237,7 +237,8 @@ Code/ReAct receives no previous-task knowledge. Task-local tools remain equal.
 INTERFACE = POINT_LAB_INTERFACE + COMMON_INTERFACE
 
 
-_PLAN_RUNNER = """import contextlib,json,runpy,sys
+_PLAN_RUNNER = f"""import contextlib,json,runpy,sys
+sys.path.insert(0, {str(Path(__file__).resolve().parents[2])!r})
 payload=json.load(sys.stdin)
 with contextlib.redirect_stdout(sys.stderr):
     code=runpy.run_path(sys.argv[1])

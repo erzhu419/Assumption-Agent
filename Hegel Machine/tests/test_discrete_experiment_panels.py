@@ -124,6 +124,38 @@ def test_conditional_boundary_uses_only_available_levels_inside_measured_interva
     assert lab.costs["queries"] == 0
 
 
+@pytest.mark.parametrize("length", [8, 12])
+def test_discrete_boundary_retains_a_complete_native_matched_prefix(length):
+    from hegel_machine.cognition.native_condition_research import _pair
+
+    lab, public, spec = public_commands()
+    # This is the public shape of the retained case002 local interval, not an
+    # asserted physical threshold. Prediction rows below have synthetic target0.
+    evidence = {"control": "u", "background": {"u": -.4},
+                "threshold_interval": [0., .5]}
+    before = deepcopy(evidence)
+    probe = propose_conditional_boundary_probe(spec, evidence, length=length,
+        control_levels=public["control_levels"])
+    changed = assert_public_probe(lab, public, probe)
+    assert len(changed) == length
+    assert probe.sequence[0] == {"u": -.4}
+    assert probe.sequence[1]["u"] == 0.
+    assert probe.sequence[-1]["u"] == .5
+    assert {point["u"] for point in probe.sequence[1:]} == {
+        value for value in public["control_levels"]["u"] if 0. <= value <= .5}
+    reference = lab.prediction_rows({"kind": "trajectory", "channels": [],
+        "sequence": [{"u": -.4} for _ in range(12)]})
+    records = [{"rows": [{"features": row.features, "history": list(row.history),
+                          "target": 0.} for row in rows],
+                "row_indices": list(range(len(rows)))} for rows in (reference, changed)]
+    matched = _pair(spec, records, 0, 1)
+    assert matched["matched_rows"] == length
+    assert matched["control"] == "u"
+    assert matched["background"] == {"u": -.4}
+    assert evidence == before
+    assert lab.costs == {"observation_cost": 0, "measurement_cost": 0, "queries": 0}
+
+
 def test_a_missing_discrete_control_contract_is_not_filled_from_bounds():
     _, _, spec = public_commands()
     with pytest.raises(ValueError, match="control_levels.*u"):

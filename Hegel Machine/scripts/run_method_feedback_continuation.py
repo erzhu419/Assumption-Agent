@@ -11,7 +11,9 @@ from pathlib import Path
 from hegel_machine.cognition.checkpoint_storage import read_json_checkpoint, write_json_checkpoint
 from hegel_machine.cognition.common_archive_inquiry import CommonArchiveInquiryAgent
 from hegel_machine.cognition.anonymous_history_lab import AnonymousHistoryLab
-from hegel_machine.cognition.experiment_runtime import ExecutionTiming, python_execution_deadline
+from hegel_machine.cognition.experiment_runtime import (
+    ActivityExecutionDeadline, ExecutionTiming, python_execution_deadline,
+)
 from hegel_machine.cognition.method_feedback import begin_method_feedback, procedure_use_decision
 from hegel_machine.cognition.models import Observation
 from hegel_machine.cognition.online_inquiry_llm import InquiryLLMConfig
@@ -197,7 +199,7 @@ def run_feedback(manifest, output, *, baseline=DEFAULT_BASELINE, stage1=DEFAULT_
         'policy_contrast_body_credit': 'not_inferred', 'next_scientific_action_executed': False}
     agent = None
     try:
-        with python_execution_deadline(NATIVE_HOST_CAP - paid_host):
+        with python_execution_deadline(NATIVE_HOST_CAP - paid_host, activity=True):
             with timing.phase('restore'):
                 agent = CommonArchiveInquiryAgent(None, output / 'learner', arm='hegel', source_task=False,
                     knowledge={'files': {}, 'theory_consolidation': ref(baseline)},
@@ -287,7 +289,9 @@ def run_feedback(manifest, output, *, baseline=DEFAULT_BASELINE, stage1=DEFAULT_
                     new_condition_version=current['version'],
                     learned_library_ref=ref(agent.workspace / 'shared/theory_library.json'))
     except Exception as error:
-        result.update(status='failed_or_budget_interrupted', error={'type': type(error).__name__, 'message': str(error)})
+        result.update(status=('time_exhausted' if isinstance(error, ActivityExecutionDeadline)
+                              else 'failed_or_budget_interrupted'),
+            error={'type': type(error).__name__, 'message': str(error)})
     finally:
         clocks = timing.result()
         result['timing'] = clocks

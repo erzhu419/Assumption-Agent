@@ -26,6 +26,8 @@ def test_T01_changed_objective_preserves_old_answer_and_bank_once(tmp_path):
     assignment = deepcopy(current['assignment'])
     current.update(semantic_answer={'value': 2., 'version': 1, 'status': 'answered'},
                    native_condition_research={'rounds': [{'evidence_records': [0, 1]}]},
+                   native_structure_planning=[{'planning_complete': True,
+                       'question_meaning_version': 1, 'source_round_index': 0}],
                    support_paths=[[{'question_id': 'calibration', 'answer_version': 1}]],
                    pending_query={'actions': [{'kind': 'measure', 'point': {'u': 2.}}]},
                    pending_query_source={'question_id': 'child', 'answer_version': 1},
@@ -39,11 +41,13 @@ def test_T01_changed_objective_preserves_old_answer_and_bank_once(tmp_path):
     old = current['meaning_history'][0]
     assert old['semantic_answer']['value'] == 2.
     assert old['native_condition_research']['rounds'][0]['evidence_records'] == [0, 1]
+    assert old['native_structure_planning'][0]['question_meaning_version'] == 1
     assert old['support_paths'][0][0]['answer_version'] == 1
     assert old['pending_query']['actions'][0]['point'] == {'u': 2.}
     assert old['pending_query_source']['answer_version'] == 1 and len(old['parent_use_history']) == 1
     assert all(key not in current for key in ('pending_query', 'pending_query_source', 'parent_use_history'))
     assert 'native_condition_research' not in current and 'semantic_answer' not in current
+    assert 'native_structure_planning' not in current
     assert 'support_paths' not in current and 'meaning_history' not in old
     open_assigned_question(agent, {'id': current['id'], 'context_ref': {'scene': 'C5', 'output_unit': 'mV'}})
     assert current['meaning_version'] == 3

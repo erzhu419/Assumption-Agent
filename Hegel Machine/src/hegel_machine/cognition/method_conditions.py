@@ -29,26 +29,30 @@ def _representation(program, feature_names):
     names = {name: index for index, name in enumerate(feature_names)}
     operators, accumulators, calls = set(), set(), False
 
-    def walk(node):
+    def walk(node, replaying=False):
         nonlocal calls
         operators.add(node.op)
         if node.op == "call":
             calls = True
-            return walk(node.expanded())
+            return walk(node.expanded(), replaying)
         if node.op == "accumulate":
             accumulators.add(node)
         shape = {"op": node.op}
         if node.op in {"feature", "lag"}:
-            shape["role"] = "observed_target" if node.name == "__target__" else names.get(node.name)
+            if node.name == "__target__":
+                shape["role"] = "predicted_state" if replaying and node.op == "lag" else "observed_target"
+            else:
+                shape["role"] = names.get(node.name)
         if node.lag:
             shape["lag"] = node.lag
         if node.children:
-            shape["children"] = [walk(child) for child in node.children]
+            shape["children"] = [walk(child, replaying or node.op == "state_replay")
+                                 for child in node.children]
         return shape
 
     structure = walk(program)
     families = ["raw"]
-    if operators.intersection({"lag", "available", "window_sum", "event_delta", "accumulate"}):
+    if operators.intersection({"lag", "available", "window_sum", "event_delta", "accumulate", "state_replay"}):
         families.append("history")
     if "accumulate" in operators:
         families.append("continuous")
@@ -109,6 +113,23 @@ def _conditional_coverage(spec, observations):
             for key, rows in sorted(groups.items())]
 
 
+def _semantic_coverage(data):
+    """Key set-valued coverage by meaning; do not reorder temporal sequences."""
+    result = deepcopy(data)
+    if isinstance(result.get('coverage'), list):
+        result['coverage'] = {str(item['role']): {key: value for key, value in item.items() if key != 'role'}
+            for item in result['coverage']}
+    if isinstance(result.get('conditional_coverage'), list):
+        result['conditional_coverage'] = {item['condition']: {
+            str(value['role']): {key: child for key, child in value.items() if key != 'role'}
+            for value in item.get('coverage', [])} for item in result['conditional_coverage']}
+    for values in [result.get('coverage') or {}, *(result.get('conditional_coverage') or {}).values()]:
+        for item in values.values():
+            if isinstance(item.get('bins'), list):
+                item['bins'] = sorted(set(item['bins']))
+    return result
+
+
 def _condition(profile):
     """Keep the finite evidence needed to compare attempts, without nesting traces."""
     representation = profile.get("representation", {})
@@ -116,17 +137,61 @@ def _condition(profile):
     return {"objective": deepcopy(profile.get("objective")),
             "representation": {key: deepcopy(representation.get(key))
                                for key in ("kind", "families", "history_depth", "structure")},
-            "data": {key: deepcopy(data.get(key)) for key in (
+            "data": _semantic_coverage({key: deepcopy(data.get(key)) for key in (
                 "feature_dimensions", "control_dimensions", "coverage", "max_history",
                 "independent_trajectories", "linear_data_support", "object_groups", "object_fields",
-                "response_levels", "conditional_coverage")},
+                "response_levels", "conditional_coverage")}),
             "residual": deepcopy(profile.get("residual", {})),
             "boundary": deepcopy(profile.get("boundary", {})),
             "source_revision": revision_condition(profile)}
 
 
+def paid_transition_evidence(records, rows, predictions, *, guard_depth=None,
+                             squared_error_threshold=1e-10, source_refs=()):
+    """Locate first closed-loop errors in complete paid reset trajectories.
+
+    Later errors do not independently refute a mature transition: its predicted
+    state may already be wrong. Missing records or predictions remain unknown.
+    """
+    from dataclasses import asdict
+
+    rows = json.loads(json.dumps([asdict(row) if hasattr(row, 'features') else row for row in rows]))
+    records = json.loads(json.dumps(records))
+    result = {'status': 'unknown', 'source_refs': deepcopy(list(source_refs))}
+    if not rows or len(predictions) != len(rows):
+        return {**result, 'reason': 'saved_prediction_coverage_unavailable'}
+    indices = [index for record in records for index in record.get('row_indices', [])]
+    if sorted(indices) != list(range(len(rows))):
+        return {**result, 'reason': 'complete_reset_records_unavailable'}
+    for record in records:
+        selected = [rows[index] for index in record['row_indices']]
+        if (record.get('rows') != selected or not selected
+                or any(len(row.get('history', [])) != position for position, row in enumerate(selected))):
+            return {**result, 'reason': 'reset_records_do_not_match_paid_rows'}
+    known_guard = isinstance(guard_depth, int) and guard_depth > 0
+    counts = {'startup_first_divergences': 0 if known_guard else None,
+              'mature_first_divergences': 0 if known_guard else None,
+              'correct_prefix_first_divergences': 0, 'later_errors_unattributed': 0,
+              'error_rows': 0, 'correct_trajectories': 0, 'trajectory_count': len(records)}
+    for record in records:
+        errors = [position for position, index in enumerate(record['row_indices'])
+                  if (predictions[index] - rows[index]['target']) ** 2 > squared_error_threshold]
+        counts['error_rows'] += len(errors)
+        if not errors:
+            counts['correct_trajectories'] += 1
+            continue
+        counts['later_errors_unattributed'] += len(errors) - 1
+        counts['correct_prefix_first_divergences'] += errors[0] > 0
+        if known_guard:
+            key = 'startup_first_divergences' if errors[0] < guard_depth else 'mature_first_divergences'
+            counts[key] += 1
+    return {**result, **counts, 'status': 'observed', 'guard_depth': guard_depth,
+            'squared_error_threshold': squared_error_threshold}
+
+
 def method_profile(spec, observations, incumbent=None, trace=(), *, residual_loss=None,
-                   baseline_loss=None, reference_loss=None, minimum_improvement=.002, boundary_evidence=None):
+                   baseline_loss=None, reference_loss=None, minimum_improvement=.002, boundary_evidence=None,
+                   research_state=None, transition_evidence=None):
     """Summarize public controls, acquired coverage and the current executable model.
 
     The complete program remains reviewable. Its structural shape ignores
@@ -174,6 +239,10 @@ def method_profile(spec, observations, incumbent=None, trace=(), *, residual_los
                  "object_fields": sorted({role for fields in schema["fields"].values() for role in fields})
                                    if schema else []},
         "residual": residual, "recent_actions": []}
+    if transition_evidence is not None and transition_evidence.get('status') == 'observed':
+        residual['transition'] = {key: deepcopy(value) for key, value in transition_evidence.items()
+                                  if key != 'source_refs'}
+        profile['transition_evidence_refs'] = deepcopy(transition_evidence.get('source_refs', []))
     if boundary_evidence:
         profile["boundary"] = {"branches": [
             {"history_depth": row["history_depth"], "previous_state": row.get("previous_state"),
@@ -193,6 +262,8 @@ def method_profile(spec, observations, incumbent=None, trace=(), *, residual_los
     revision = source_revision(profile, [_record(item) for item in trace], getattr(incumbent, "memory_id", None))
     if revision:
         profile["source_revision"] = revision
+    if research_state is not None:
+        profile['research'] = deepcopy(research_state)
     return profile
 
 
@@ -245,7 +316,7 @@ def method_applicability(source_profile, target_profile, next_action):
 
     if not target_profile:
         return result("explore", "target_evidence_not_profiled")
-    data = target_profile.get("data", {})
+    data = _semantic_coverage(target_profile.get("data", {}))
     objective = target_profile.get("objective", {})
     residual = target_profile.get("residual", {})
     revision = revision_condition(target_profile)
@@ -287,7 +358,7 @@ def method_applicability(source_profile, target_profile, next_action):
         return result("explore", "objective_differs_from_source_evidence")
     old_representation = source_profile.get("representation", {})
     representation = target_profile.get("representation", {})
-    source_data = source_profile.get("data", {})
+    source_data = _semantic_coverage(source_profile.get("data", {}))
     if old_representation.get("families") != representation.get("families"):
         # Representation research is intended to leave the current family. A
         # source that already used lags does not require the target to have
@@ -381,6 +452,23 @@ def _method_observables(profile):
         "residual": profile.get("residual", {}), "boundary": profile.get("boundary", {}),
         "source_revision": revision_condition(profile),
         "observation_count": profile.get("observation_count")}
+    # Coverage lists are sets of named scientific conditions/roles. Other
+    # lists (in particular ordered histories) retain their order.
+    selected['data'] = _semantic_coverage(selected['data'])
+    research = profile.get('research') or {}
+    selected['research'] = {'stage': research.get('stage')}
+    for key, names in {
+        'last_unfinished_request': ('operator', 'status', 'stage'),
+        'evidence': ('unconsumed_answer', 'new_distinction', 'distinguishing_experiment_available'),
+        'budget': ('complete_unit_payable', 'minimum_compute', 'remaining_compute', 'remaining_seconds'),
+        'comparison': ('stale', 'paid_rows', 'models_requested', 'models_completed'),
+        'candidate_pool': ('status', 'models_requested', 'known_executions',
+            'unknown_prediction_models', 'guarded_executions', 'unknown_guard_executions',
+            'min_mature_first_divergences', 'startup_only_first_error_executions',
+            'correct_executions'),
+    }.items():
+        value = research.get(key) or {}
+        selected['research'][key] = {name: deepcopy(value[name]) for name in names if name in value}
     coordinates = {}
 
     def walk(value, path):
@@ -401,9 +489,9 @@ def _method_coordinates(views):
     coordinates = []
     for path in sorted(set().union(*(set(view) for view in views)), key=str):
         values = [view[path] for view in views if path in view]
-        if all(type(value) in (int, float, bool) for value in values):
+        if all(type(value) in (int, float, bool) for value in values) and len(values) == len(views):
             coordinates.append({"path": list(path), "kind": "number"})
-        else:
+        elif len(values) == len(views) and not all(type(value) in (int, float, bool) for value in values):
             for value in sorted(set(values), key=str):
                 coordinates.append({"path": list(path), "kind": "equals", "value": value})
         if len(values) != len(views):
@@ -418,13 +506,39 @@ def _method_features(view, coordinates):
         value = view.get(path)
         kind = coordinate["kind"]
         features[f"public_{index}"] = (float(path in view) if kind == "available" else
-            float(value == coordinate["value"]) if kind == "equals" else
-            float(value) if type(value) in (int, float, bool) and isfinite(value) else 0.)
+            (float(value == coordinate["value"]) if path in view else None) if kind == "equals" else
+            float(value) if type(value) in (int, float, bool) and isfinite(value) else None)
     return features
 
 
+def method_condition_features(profile, coordinate_paths):
+    """Project a learned guard's public coordinates; missing numbers are None.
+
+    The ordinary consumer must fall back to its original policy when any
+    required numeric coordinate is unavailable, instead of treating it as 0.
+    Availability coordinates themselves remain known booleans encoded as 0/1.
+    """
+    return _method_features(_method_observables(profile), coordinate_paths)
+
+
+def method_condition_support(profile, research):
+    """Check the existing public measured range, never infer a world domain."""
+    view = _method_observables(profile)
+    features = _method_features(view, research.get('coordinate_paths', []))
+    outside = [name for name, (low, high) in research.get('measured_coverage', {}).items()
+        if features.get(name) is None or not low <= features[name] <= high]
+    outside.extend(str(item['path']) for item in research.get('public_value_coverage', [])
+        if view.get(tuple(item['path'])) not in item['values'])
+    outside.extend(str(item['path']) for item in research.get('public_presence_coverage', [])
+        if (tuple(item['path']) in view) not in item['values'])
+    return {'can_apply': bool(research.get('measured_coverage')) and not outside,
+        'outside_coverage': outside}
+
+
 def _method_conflict_basis(method_ref, measured, unresolved, public_experiments):
-    return {"method_ref": deepcopy(method_ref), "returns": [
+    return {"method_ref": deepcopy(method_ref),
+        "condition_search": "complete_public_coordinate_and_affine_pass",
+        "returns": [
         {**{key: deepcopy(item[key]) for key in (
             "feedback_ref", "status", "return_basis", "before_loss", "after_loss", "process_return")},
          "public_profile": [{"path": list(path), "value": value}
@@ -434,7 +548,8 @@ def _method_conflict_basis(method_ref, measured, unresolved, public_experiments)
 
 
 def research_method_conflict(method_ref, outcomes, budget, *, target_profile=None,
-                             public_experiments=(), previous=None):
+                             public_experiments=(), previous=None, paired_returns=None,
+                             max_conditions=None):
     """Execute finite diagnoses and learn use conditions from method-level returns.
 
     A sample is a completed invocation, not a prediction row. The existing
@@ -446,7 +561,8 @@ def research_method_conflict(method_ref, outcomes, budget, *, target_profile=Non
     from .condition_learning import learn_condition
     from .models import Observation
 
-    measured, unresolved = _completed_method_returns(method_ref, outcomes)
+    measured, unresolved = (_completed_method_returns(method_ref, outcomes)
+        if paired_returns is None else paired_returns)
     basis = _method_conflict_basis(method_ref, measured, unresolved, public_experiments)
     if previous and previous.get("basis") == basis and not previous.get("budget_incomplete"):
         return {**deepcopy(previous), "compute_cost": 0, "reused": True}
@@ -488,7 +604,10 @@ def research_method_conflict(method_ref, outcomes, budget, *, target_profile=Non
         "witnesses": collisions, "rows": len(rows)})
     # Existing finite coordinate and affine synthesis; no target return is read.
     if len(support) >= 2 and counterexamples:
-        for name in [*names, None] if len(names) > 1 else names:
+        proposals = [*names, None] if len(names) > 1 else names
+        # The bound limits executable conditions, not failed coordinate tests.
+        # The complete coordinate and affine pass is already reserved above.
+        for name in proposals:
             selected = names if name is None else [name]
             positive = [Observation({key: row.features[key] for key in selected}, 1.) for row in support]
             negative = [Observation({key: row.features[key] for key in selected}, 0.) for row in counterexamples]
@@ -505,6 +624,8 @@ def research_method_conflict(method_ref, outcomes, budget, *, target_profile=Non
                         "helpful": bool(row.target)} for item, row in zip(measured, rows)],
                     "prediction": "The method has local utility only on the true branch of this public-state condition.",
                     "scope": "fits_supplied_development_returns"})
+            if max_conditions is not None and len(result['candidates']) >= max_conditions:
+                break
     if result["candidates"]:
         result["condition"] = deepcopy(result["candidates"][0]["condition"])
         result["status"] = "development_conditions_found"
@@ -554,6 +675,8 @@ def _conflict_predictions(research, profile):
 
     view = _method_observables(profile)
     features = _method_features(view, research.get("coordinate_paths", []))
+    if any(value is None for value in features.values()):
+        return []
     return [{"candidate": index, "helpful": bool(Program.from_dict(item["condition"]).predict(
         Observation(features, 0.)))} for index, item in enumerate(research.get("candidates", []))]
 
@@ -566,14 +689,7 @@ def _conflict_use_decision(research, method_ref, profile, measured, unresolved):
     if expected != research.get("basis"):
         return {"status": "stale_conflict_diagnosis", "reason": "method_feedback_changed_requires_new_diagnosis"}
     predictions = _conflict_predictions(research, profile)
-    view = _method_observables(profile)
-    features = _method_features(view, research.get("coordinate_paths", []))
-    outside = [name for name, (low, high) in research.get("measured_coverage", {}).items()
-        if not low <= features[name] <= high]
-    outside.extend(str(item["path"]) for item in research.get("public_value_coverage", [])
-        if view.get(tuple(item["path"])) not in item["values"])
-    outside.extend(str(item["path"]) for item in research.get("public_presence_coverage", [])
-        if (tuple(item["path"]) in view) not in item["values"])
+    outside = method_condition_support(profile, research)['outside_coverage']
     if outside or not predictions or len({item["helpful"] for item in predictions}) != 1:
         return {"status": "unresolved_method_use", "candidate_predictions": predictions,
             "reason": "outside_measured_public_coverage" if outside else
@@ -668,4 +784,225 @@ def method_use_decision(method_ref, profile, outcomes, *, evidence_basis=None,
         result["question"]["diagnostic_plan"] = deepcopy(learned.get("next_diagnostic"))
         result["question"]["candidate_predictions"] = deepcopy(learned.get("candidate_predictions", []))
         result["reason"] = learned["reason"]
+    return result
+
+
+def method_delivery_outcome(outcome):
+    """Separate method delivery reliability from world evidence and censorship."""
+    status = outcome.get('status')
+    if outcome.get('administrative_censoring') or outcome.get('censored') or status in {
+            'administrative_pause', 'missing_source', 'administratively_censored'}:
+        return 'administratively_censored'
+    if status in {'resource_exhausted', 'budget_exhausted', 'time_exhausted',
+            'window_exhausted_paid_work_preserved', 'compute_budget_exhausted',
+            'python_execution_budget_exhausted', 'insufficient_complete_step_budget',
+            'method_step_limit', 'observation_budget_exhausted', 'confirmation_budget_exhausted'}:
+        return 'resource_non_delivery'
+    if outcome.get('execution_error') or status in {'execution_error', 'inexecutable', 'action_failed', 'method_error'}:
+        return 'execution_failure'
+    return 'delivered' if outcome.get('execution_complete') is True else 'unresolved'
+
+
+def paired_method_identification(pair):
+    """State what this actual pair can identify, before deriving a label.
+
+    The common ``data`` basis is the input at the decision point. Experiments
+    chosen inside a method are part of that strategy, not a fixed data factor.
+    A single pair cannot identify a separate data effect or an interaction.
+    """
+    def queries(content):
+        entries = content if isinstance(content, list) else [content]
+        return [deepcopy(item.get('arguments', {}).get('actions', []))
+                for item in entries if isinstance(item, dict) and item.get('action') == 'query']
+
+    contents = [pair.get(f'{side}_action_content') for side in ('baseline', 'challenger')]
+    acquisitions = [queries(content) for content in contents]
+    sides = [pair.get(side) or {} for side in ('baseline', 'challenger')]
+    observation_deltas = [side.get('costs', {}).get('observation_cost') for side in sides]
+    # A query can consume an already paid answer with no new material. Conversely
+    # internal acquisition can add rows without a top-level query in this view.
+    fixed_material = all(type(delta) in (int, float) and delta == 0 for delta in observation_deltas)
+    effect = 'fixed_data_method_effect' if fixed_material else 'research_strategy_effect'
+    evaluation_use = ('exposed_paid_working_comparison'
+        if pair.get('evaluation_role') == 'paid_working_comparison'
+        else 'exposed_development_label_after_outputs_freeze')
+    return {'identified_effect': effect, 'acquisition_actions_differ': acquisitions[0] != acquisitions[1],
+        'new_observation_costs': observation_deltas,
+        'final_data_refs': [deepcopy(side.get('continuation_data_ref')) for side in sides],
+        'data_and_method_separately_identified': False,
+        'separate_data_effect_requires': 'fixed_D1_crossed_methods_with_matching_complete_cells',
+        'evaluation_use': evaluation_use,
+        'independent_confirmation': False}
+
+
+def paired_method_preference(pair):
+    """Compare actually executed alternatives at the same declared start.
+
+    ``basis`` contains the resolved start/data/split/quality/resource/evaluation
+    contracts. A caller's same_start boolean cannot supply those contracts.
+    """
+    sides = [pair.get(name) or {} for name in ('baseline', 'challenger')]
+    result = {'preference': 'UNKNOWN', 'reason': 'matched_executed_pair_required',
+        'feedback_ref': deepcopy(pair.get('feedback_ref')),
+        'deliveries': [method_delivery_outcome(side) for side in sides],
+        'world_support_updated': False, **paired_method_identification(pair)}
+    if pair.get('comparison_kind') == 'additional_research_vs_retained_parent':
+        return {**result, 'reason': 'retained_parent_contrast_is_not_a_method_preference',
+            'identified_effect': 'local_incremental_research_value'}
+    # Fixed-model supplement receipts explicitly retain the failed original
+    # pair. They cannot become method labels by adding a loss to that record.
+    if any(side.get('original_pair_completed') is False for side in sides):
+        return {**result, 'reason': 'fixed_model_readout_is_not_an_executed_method_pair'}
+    keys = ('start_state', 'data', 'split', 'quality_contract', 'resource_contract', 'evaluation')
+    basis = [side.get('basis', {}) for side in sides]
+    if any(key not in item or item[key] is None for key in keys for item in basis):
+        return {**result, 'reason': 'complete_matching_basis_required'}
+    if any(basis[0][key] != basis[1][key] for key in keys):
+        return {**result, 'reason': 'start_data_or_evaluation_contract_differs'}
+    for side in sides:
+        limits = side.get('registered_time_limits', side.get('basis', {}).get(
+            'resource_contract', {}).get('time_limits', {}))
+        cap = limits.get('active_wall_seconds')
+        if type(cap) in (int, float):
+            elapsed = side.get('timing', {}).get('activity_wall_seconds')
+            if type(elapsed) not in (int, float):
+                return {**result, 'reason': 'actual_activity_duration_required'}
+            if elapsed > cap:
+                return {**result, 'reason': 'registered_activity_limit_exceeded'}
+    lifecycle = pair.get('evaluation_lifecycle')
+    if lifecycle is not None and (lifecycle.get('all_outputs_frozen_before_labels') is not True
+            or lifecycle.get('labels_revealed') is not True
+            or lifecycle.get('role') != 'development_after_freeze'):
+        return {**result, 'reason': 'evaluation_labels_require_all_outputs_frozen_first'}
+    target = pair.get('identification_target')
+    if target in {'data_effect', 'method_data_interaction'}:
+        return {**result, 'reason': 'fixed_D1_crossed_complete_cells_required'}
+    if target == 'fixed_data_method_effect' and result['identified_effect'] != target:
+        return {**result, 'reason': 'own_acquisition_identifies_research_strategy_only'}
+    if _method_observables(sides[0].get('profile', {})) != _method_observables(sides[1].get('profile', {})):
+        return {**result, 'reason': 'public_pre_use_profiles_differ'}
+    if any(delivery != 'delivered' for delivery in result['deliveries']):
+        return {**result, 'reason': 'non_delivery_or_censoring_is_not_a_prediction_label'}
+    quality = [side.get('quality') or {'loss': side.get('loss'),
+        'threshold': (side.get('basis', {}).get('quality_contract') or {}).get('threshold')}
+        for side in sides]
+    numeric = lambda value: type(value) in (int, float) and isfinite(value) and value >= 0
+    if (any(not numeric(q.get('loss')) or not numeric(q.get('threshold')) for q in quality)
+            or quality[0]['threshold'] != quality[1]['threshold']
+            or any(type(side.get('completed')) is not bool or type(side.get('coverage')) is not int
+                   or side['coverage'] <= 0 for side in sides)):
+        return {**result, 'reason': 'actual_completion_quality_and_coverage_required'}
+    passed = [q['loss'] <= q['threshold'] for q in quality]
+    dimensions = [[int(side['completed']), int(passed[i]), side['coverage']]
+        for i, side in enumerate(sides)]
+    if not all(passed):
+        for row, q in zip(dimensions, quality):
+            row.append(-q['loss'])
+    changes = [b - a for a, b in zip(*dimensions)]
+    if any(change > 0 for change in changes) and any(change < 0 for change in changes):
+        return {**result, 'preference': 'incomparable', 'reason': 'quality_coverage_tradeoff'}
+    if any(changes):
+        return {**result, 'preference': 'challenger' if any(c > 0 for c in changes) else 'baseline',
+            'reason': 'quality_or_coverage_dominance', 'losses': [q['loss'] for q in quality]}
+    resources = set().union(*(side.get(field, {}) for side in sides
+        for field in ('costs', 'cost_intervals')))
+
+    def interval(side, key):
+        if key in side.get('cost_intervals', {}):
+            bounds = side['cost_intervals'][key]
+            return bounds if (isinstance(bounds, (list, tuple)) and len(bounds) == 2
+                and all(numeric(value) for value in bounds) and bounds[0] <= bounds[1]) else None
+        value = side.get('costs', {}).get(key)
+        return [value, value] if numeric(value) else None
+
+    bounds = [(interval(sides[0], key), interval(sides[1], key)) for key in sorted(resources)]
+    if not {'observation_cost', 'compute_cost'} <= resources or any(a is None or b is None for a, b in bounds):
+        return {**result, 'reason': 'complete_resource_vector_required'}
+    deltas = [[b[0] - a[1], b[1] - a[0]] for a, b in bounds]
+    preference = ('challenger' if all(high <= 0 for low, high in deltas)
+            and any(high < 0 for low, high in deltas)
+        else 'baseline' if all(low >= 0 for low, high in deltas) and any(low > 0 for low, high in deltas)
+        else 'tie' if all(delta == [0, 0] for delta in deltas)
+        else 'incomparable' if any(low > 0 for low, high in deltas) and any(high < 0 for low, high in deltas)
+        else 'UNKNOWN')
+    return {**result, 'preference': preference, 'reason': 'resource_tradeoff_without_weights'
+        if preference == 'incomparable' else 'resource_order_not_identified' if preference == 'UNKNOWN'
+        else 'equal_quality_resource_order',
+        'losses': [q['loss'] for q in quality]}
+
+
+def research_paired_method_conditions(method_ref, pairs, budget, *, max_conditions=8,
+                                      target_profile=None):
+    """Learn only from matched action contrasts; retain untested/negative work."""
+    if not 1 <= max_conditions <= 8:
+        raise ValueError('paired method research permits one to eight conditions')
+    unique = []
+    for pair in pairs:
+        origin = pair.get('origin_ref', pair.get('feedback_ref'))
+        previous = next((i for i, value in enumerate(unique)
+            if value.get('origin_ref', value.get('feedback_ref')) == origin), None)
+        if previous is None:
+            unique.append(pair)
+        else:
+            unique[previous] = pair
+    preferences, measured, validation, unresolved = [], [], [], []
+    for pair in unique:
+        preference = paired_method_preference(pair)
+        preferences.append(preference)
+        if preference['preference'] not in {'baseline', 'challenger'}:
+            unresolved.append(deepcopy(pair.get('feedback_ref')))
+            continue
+        side = pair['baseline']
+        item = {'feedback_ref': deepcopy(pair['feedback_ref']),
+            'status': 'local_improvement' if preference['preference'] == 'challenger' else 'complete_unhelpful',
+            'return_basis': {'kind': 'matched_action_pair', 'pair_ref': deepcopy(pair['feedback_ref']),
+                             'identified_effect': preference['identified_effect']},
+            'before_loss': preference['losses'][0], 'after_loss': preference['losses'][1],
+            'process_return': preference, 'profile': deepcopy(side['profile']),
+            'physical_source_ref': deepcopy(pair.get('physical_source_ref'))}
+        (validation if pair.get('data_role') == 'condition_validation' else measured).append(item)
+    local = [pair['feedback_ref'] for pair, preference in zip(unique, preferences)
+        if pair.get('data_role') == 'development' and preference['preference'] == 'challenger'
+        and pair.get('baseline_action_content') is not None
+        and pair.get('challenger_action_content') is not None
+        and pair['baseline_action_content'] != pair['challenger_action_content']]
+    result = {'status': 'insufficient_paired_preferences', 'preferences': preferences,
+        'condition': None, 'candidates': [], 'coordinate_paths': [], 'new_version_supported': False,
+        'local_program_supported': bool(local), 'local_support_refs': deepcopy(local),
+        'general_guard_supported': False,
+        'compute_cost': 0, 'world_support_updated': False, 'scope': 'exposed_development',
+        'unresolved_feedback_refs': unresolved, 'paired_invocations': len(unique),
+        'identified_effects': sorted({preference['identified_effect'] for preference in preferences
+            if preference['preference'] in {'baseline', 'challenger'}}),
+        'evaluation_use': 'exposed_development_labels_only', 'independent_confirmation': False}
+    if (len(measured) < 3 or {item['status'] for item in measured} != {
+            'local_improvement', 'complete_unhelpful'}):
+        return result
+    # Static grouping is performed by the producer; without actual ordinary
+    # action witnesses no guard is published, even when losses happen to differ.
+    if not any(pair.get('baseline_action_content') is not None and
+            pair.get('challenger_action_content') is not None and
+            pair['baseline_action_content'] != pair['challenger_action_content']
+            for pair in unique if pair.get('data_role') == 'development'):
+        return {**result, 'status': 'no_distinct_executable_action'}
+    learned = research_method_conflict(method_ref, [], budget,
+        paired_returns=(measured, unresolved), max_conditions=max_conditions, target_profile=target_profile)
+    result.update(learned, preferences=preferences, paired_invocations=len(unique),
+        new_version_supported=False, local_program_supported=bool(local),
+        local_support_refs=deepcopy(local), general_guard_supported=False)
+    if learned.get('status') != 'development_conditions_found':
+        return result
+    groups = [item['physical_source_ref'] for item in measured]
+    checked = [item for item in validation if item['physical_source_ref'] is not None
+        and item['physical_source_ref'] not in groups]
+    accepted = [candidate for candidate in learned['candidates'] if checked and all(
+        (prediction := _conflict_predictions({**learned, 'candidates': [candidate]}, item['profile']))
+        and prediction[0]['helpful'] == (item['status'] == 'local_improvement') for item in checked)]
+    result['group_validation_refs'] = [item['feedback_ref'] for item in checked]
+    if not accepted:
+        result.update(status='development_condition_without_group_support', condition=None)
+        return result
+    result.update(candidates=accepted, condition=deepcopy(accepted[0]['condition']),
+        new_version_supported=True, general_guard_supported=True,
+        status='paired_condition_supported_on_declared_groups')
     return result

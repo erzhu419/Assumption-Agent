@@ -5,6 +5,8 @@ Hegel additionally keeps its public research root and executable source manifest
 """
 
 from copy import deepcopy
+from contextlib import contextmanager
+from dataclasses import replace
 import json
 from math import isfinite
 import os
@@ -12,6 +14,7 @@ from pathlib import Path
 from random import Random
 import re
 import shutil
+from time import monotonic
 
 from .online_inquiry_llm import COMMON_INTERFACE, open_assigned_question
 from .checkpoint_storage import (
@@ -21,6 +24,7 @@ from .question_continuation import QUESTION_INTERFACE, step_question, pending_qu
 from .question_routing import ROUTING_INTERFACE, route_research, continue_conditional_plan
 from .method_feedback import (
     begin_method_feedback, finish_method_feedback, record_method_execution_error,
+    record_python_method_feedback, finalize_python_method_feedback,
 )
 from .theory_consolidation import (
     CONSOLIDATION_INTERFACE, LIBRARY_PATH, consolidate_research, transfer_theory,
@@ -53,7 +57,7 @@ from .code_agent import (
 from .paid_score_history import (
     restore_score_history_value, retain_event_history, restore_comparison_history,
 )
-from .code_provider_context import _saved_context_reference, load_code_context
+from .code_provider_context import _saved_context_reference, _fits_inline_json, load_code_context
 from .temporal_operator_agent import OPERATOR_INTERFACE
 from .inquiry_revision import (
     analyze_revision, analyze_paid_evidence, compare_experiments, revision_evidence_scope,
@@ -1405,7 +1409,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
     def _prepare_research_model(self, model):
         return before_candidate(self, model)
 
-    def _query(self, arguments, laboratory):
+    def _query_with_evidence(self, arguments, laboratory):
         reviewed = {q["id"]: deepcopy(q.get("child_answers", [])) for q in self.questions}
         result = super()._query(arguments, laboratory)
         returned = result.get("question")
@@ -1451,6 +1455,51 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         return result
 
     def _execute(self, action, arguments, laboratory):
+        from .proposers import _EXECUTION_TIMING
+
+        meter = _EXECUTION_TIMING.get()
+        native = (arguments.get('operator') == 'native_condition_research'
+            or arguments.get('operator') == 'research_route'
+            and isinstance(arguments.get('native_representation_plan'), dict))
+        if meter is None or action != 'run' or not native:
+            return self._execute_budgeted_action(action, arguments, laboratory)
+        started = monotonic()
+        external_before = meter.get('direct_external_python_seconds', 0.)
+        try:
+            return self._execute_budgeted_action(action, arguments, laboratory)
+        finally:
+            elapsed = monotonic() - started
+            external = meter.get('direct_external_python_seconds', 0.) - external_before
+            meter['native_dispatch_seconds'] = meter.get('native_dispatch_seconds', 0.) + elapsed
+            meter['native_host_seconds'] = meter.get('native_host_seconds', 0.) + max(0., elapsed - external)
+            meter['native_calls'] = meter.get('native_calls', 0) + 1
+
+    def _execute_budgeted_action(self, action, arguments, laboratory):
+        ceiling = getattr(self, '_unit_research_compute_ceiling', None)
+        if (ceiling is not None and action == 'run'
+                and arguments.get('operator') not in {'procedure', 'research_choice', 'method_action_feedback'}):
+            # Selection and quotes see the complete funded unit. The actual
+            # research primitive cannot spend its held comparison/return funds.
+            original = self.config
+            if arguments.get('operator') == 'native_condition_research':
+                # Native already holds its complete comparison/parent reserve.
+                # Bound only its research allowance; subtracting from config
+                # as well would hold the same closing funds a second time.
+                arguments = {**arguments, 'max_compute': min(arguments.get('max_compute',
+                    max(0, ceiling - self.costs['compute_cost'])),
+                    max(0, ceiling - self.costs['compute_cost']),
+                    max(0, original.compute_budget - self.costs['compute_cost']))}
+                self.config = replace(original, compute_budget=getattr(
+                    self, '_unit_full_compute_budget', original.compute_budget))
+            else:
+                self.config = replace(original, compute_budget=min(original.compute_budget, ceiling))
+            try:
+                return self._execute_action(action, arguments, laboratory)
+            finally:
+                self.config = original
+        return self._execute_action(action, arguments, laboratory)
+
+    def _execute_action(self, action, arguments, laboratory):
         arguments = deepcopy(arguments)
         pending_parent = arguments.pop('pending_question', None) if action == 'query' else None
         if pending_parent is not None:
@@ -1498,6 +1547,8 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 arguments.setdefault("question", {key: question[key]
                     for key in ("id", "question", "parent_id", "depends_on")})
         method_feedback = begin_method_feedback(self, laboratory)
+        if laboratory is not None:
+            self._method_public_spec = laboratory.public_spec()
         self._method_use_profile = method_feedback['profile'] if method_feedback else None
         self._active_method_use = None
         self._method_execution_writes = []
@@ -1527,7 +1578,65 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 except ValueError as error:
                     return {"error": str(error), "status": "dependency_unresolved",
                             "research_repairs": research_repairs(self)}
-        if action == 'run' and arguments.get('operator') == 'theory_consolidation':
+        python_method = (self._python_research_method(arguments.get('path'))
+            if action == 'run' and arguments.get('operator') == 'procedure' else None)
+        if python_method is not None:
+            arguments['max_steps'] = min(arguments.get('max_steps', python_method['execution']['max_steps']),
+                                         python_method['execution']['max_steps'])
+            start = len(self.method_results)
+            with self._python_method_call(arguments['path'], laboratory) as call:
+                result = super()._execute(action, arguments, laboratory)
+            if len(self.method_results) > start:
+                binding = call['binding']
+                result['method_experience'] = record_python_method_feedback(self, python_method, binding,
+                    {**result, 'origin_ref': call['origin_ref'],
+                     'costs': {key: self.costs[key] - value for key, value in call['costs_before'].items()},
+                     'cost_refs': [call['origin_ref']]}, call['context'])
+        elif action == 'run' and arguments.get('operator') == 'method_action_feedback':
+            from .method_action_research import read_method_reference
+            candidate = self.theory_consolidation['candidates'][arguments['candidate_id']]
+            if candidate['kind'] != 'python_research_method':
+                raise ValueError('ordinary Python method feedback requires its explicit carrier')
+            binding = arguments['binding']
+            references = self.theory_consolidation.get('method_feedback', {}).get(
+                candidate['id'], {}).get('outcome_refs', [])
+            calls = [read_method_reference(reference, self.workspace) for reference in references]
+            original = next(record for record in calls if record['origin_ref'] == binding['origin_ref'])
+            context = {'profile': read_method_reference(original['profile_ref'], self.workspace),
+                'question_ref': original.get('parent_question_ref', {}),
+                'theory_target': original.get('theory_target', {})}
+            result = finalize_python_method_feedback(self, candidate, binding, context,
+                result_ref=arguments['result_ref'], comparison_ref=arguments.get('comparison_ref'),
+                frozen_prediction_refs=arguments.get('frozen_prediction_refs', []))
+            from .question_routing import consume_method_return_agenda
+            result['method_research'] = consume_method_return_agenda(self, result, laboratory,
+                compute_limit=arguments.get('allocation', {}).get('compute'))
+        elif action == 'run' and arguments.get('operator') == 'partial_role_experiment':
+            from types import SimpleNamespace
+            from .method_action_research import read_method_reference
+            from .object_dependency_methods import propose_partial_role_experiment
+            def read_input(name, default):
+                reference = arguments.get(name + '_ref')
+                return read_method_reference(reference, self.workspace) if reference else default
+            public = read_input('spec', self._method_public_spec if laboratory is not None else {})
+            if arguments.get('records') == 'common':
+                from .common_object_lab import object_records_from_common
+                paid_records = object_records_from_common(self.observations)
+            else:
+                paid_records = read_input('records', [])
+            allowance = min(arguments.get('allocation', {}).get('compute', 0),
+                max(0, self.config.compute_budget - self.costs['compute_cost']))
+            result = propose_partial_role_experiment(
+                SimpleNamespace(feature_bounds=public.get('feature_bounds', {}),
+                    max_probe_length=public.get('max_probe_length')),
+                read_input('model', {}), paid_records,
+                selected_values=read_input('selected_values', {}),
+                sources=read_input('sources', []), compute_limit=allowance,
+                previous=read_input('previous', None),
+                remaining_rows=max(0, self.config.observation_budget - self.costs['observation_cost']))
+            self.costs['compute_cost'] += result['compute_cost']
+            result['operator'] = 'partial_role_experiment'
+        elif action == 'run' and arguments.get('operator') == 'theory_consolidation':
             result = {'operator': 'theory_consolidation', **consolidate_research(self, arguments, laboratory, question)}
             self._prepare_program_state()
         elif action == 'run' and arguments.get('operator') == 'theory_transfer':
@@ -1607,6 +1716,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             result = {"operator": "bind_research", **materialize(
                 self, arguments.get("model", "model.py"), arguments.get("inputs"))}
         else:
+            operator_start = len(self.operator_results)
             result = super()._execute(action, arguments, laboratory)
         result = {**written, **result}
         structural_trial = trial_structural_proposal(self, action, arguments, laboratory)
@@ -1639,6 +1749,13 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
             result["research_question_id"] = question["id"]
             result['question_meaning_version'] = question.get('meaning_version', 1)
             if action == 'run' and arguments.get('operator') == 'research_choice':
+                # The shared operator stored its owned history before Common
+                # attached this question. Direct closing comparisons have no
+                # procedure result to supply that association on recovery.
+                if (len(self.operator_results) > operator_start
+                        and self.operator_results[operator_start].get('operator') == 'research_choice'):
+                    self.operator_results[operator_start]['research_question_id'] = question['id']
+                    self.operator_results[operator_start]['question_meaning_version'] = question.get('meaning_version', 1)
                 from .research_episodes import _question_versions
                 evaluated_paths = {item.get('path') for item in result.get('evaluations', [])}
                 owners = [owner for owner, _ in _question_versions(self).values()
@@ -2149,6 +2266,88 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         return [{**deepcopy(registered.get(entry.get("path"), {})), **entry}
                 for entry in manifest.get("research_programs", [])]
 
+    def _python_research_method(self, path):
+        return next((item for item in self.theory_consolidation.get('candidates', {}).values()
+            if item.get('kind') == 'python_research_method'
+            and item['execution']['path'] == path), None)
+
+    @contextmanager
+    def _python_method_call(self, path, laboratory):
+        """Share one actual invocation boundary with registered unit execution."""
+        candidate = self._python_research_method(path)
+        if candidate is None:
+            yield None
+            return
+        previous = getattr(self, '_python_method_invocation', None)
+        call = {'candidate_id': candidate['id'], 'path': path,
+            'origin_ref': {'file': str(self.workspace / 'research_state.json'),
+                           'json_path': ['method_results', len(self.method_results)]},
+            'context': begin_method_feedback(self, laboratory, candidate=candidate),
+            'costs_before': dict(self.costs), 'paid_cutoff': self._program_evidence()}
+        call['binding'] = {'library_path': LIBRARY_PATH, 'candidate_id': candidate['id'],
+            'candidate_version': candidate['version'], 'origin_ref': deepcopy(call['origin_ref']),
+            'paid_cutoff': deepcopy(call['paid_cutoff']),
+            'context_ref': deepcopy((call['context'] or {}).get('theory_target', {}).get('context_ref')),
+            'source_refs': deepcopy(candidate.get('source_evidence_refs', []))}
+        self._python_method_invocation = call
+        try:
+            yield call
+        finally:
+            self._python_method_invocation = previous
+
+    def _program_memory(self, path, arguments):
+        memory = super()._program_memory(path, arguments)
+        candidate = self._python_research_method(path)
+        if candidate is not None:
+            from .method_conditions import method_condition_features, method_condition_support
+            plan = candidate['selection_plan']
+            memory['ordinary_method_path'] = plan['ordinary_method_path']
+            memory['research_selection_plan'] = deepcopy(plan)
+            memory['method_condition_features'] = method_condition_features(
+                self._method_use_profile or {}, plan.get('condition_feature_paths', []))
+            memory['method_candidate_pool'] = deepcopy(
+                (self._method_use_profile or {}).get('research', {}).get('candidate_pool'))
+            if plan.get('condition') is not None:
+                from .method_action_research import read_method_reference
+                selection = read_method_reference(candidate['selection_ref'], self.workspace)
+                memory['method_condition_support'] = method_condition_support(
+                    self._method_use_profile or {}, selection)
+        return memory
+
+    def _query(self, arguments, laboratory):
+        candidate = self._python_research_method(arguments.get('path'))
+        call = getattr(self, '_python_method_invocation', None)
+        call = call if candidate is not None and call and call['candidate_id'] == candidate['id'] else None
+        selection_context = (begin_method_feedback(self, laboratory, candidate=candidate)
+                             if candidate is not None else None)
+        context = call['context'] if call else selection_context
+        before = call['costs_before'] if call else dict(self.costs)
+        paid_cutoff = call['paid_cutoff'] if call else self._program_evidence()
+        previous_profile = getattr(self, '_method_use_profile', None)
+        if selection_context is not None:
+            self._method_use_profile = selection_context['profile']
+        try:
+            result = self._query_with_evidence(arguments, laboratory)
+        finally:
+            self._method_use_profile = previous_profile
+        if candidate is not None:
+            origin = (call['origin_ref'] if call else
+                {'file': str(self.workspace / 'research_state.json'),
+                 'json_path': ['method_results', len(self.method_results) - 1]})
+            binding = (call['binding'] if call else {'candidate_id': candidate['id'],
+                'candidate_version': candidate['version'], 'origin_ref': origin, 'paid_cutoff': paid_cutoff})
+            recorded = {**result, 'origin_ref': origin,
+                'costs': {key: self.costs[key] - value for key, value in before.items()},
+                'cost_refs': [origin]}
+            if result.get('error') or result.get('returncode', 0) != 0:
+                recorded['execution_error'] = result.get('error') or result.get('stderr')
+                recorded['execution_complete'] = False
+            elif self.model is not None:
+                recorded['execution_complete'] = True
+            result['method_experience'] = record_python_method_feedback(
+                self, candidate, binding, recorded, context)
+        return result
+
     def _method_continuation(self, entry):
         if self.model is not None or not entry["current_executions"]:
             return None
@@ -2251,17 +2450,17 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 for key, value in outcome.items():
                     location = ["method_results", index, key]
                     if key == 'feedback' and isinstance(value, dict):
-                        view[key] = {field: (deepcopy(item) if len(json.dumps(item)) <= 12000 else
+                        view[key] = {field: (deepcopy(item) if _fits_inline_json(item) else
                             _saved_context_reference(item, [*location, field], 'research_state.json'))
                             for field, item in value.items()}
                     else:
-                        view[key] = (deepcopy(value) if len(json.dumps(value)) <= 12000 else
+                        view[key] = (deepcopy(value) if _fits_inline_json(value) else
                             _saved_context_reference(value, location, 'research_state.json'))
                 entry["current_executions"].append(view)
             methods.append(entry)
-        native = native_condition_method(self)
+        from .finite_native_author import publish_research_options
         self._save("method_decision.json", json.dumps({
-            "research_options": [native] if native is not None else [],
+            "research_options": publish_research_options(self, getattr(self, '_method_public_spec', None)),
             "methods": methods}, indent=2))
 
     def _base_result_files(self):

@@ -51,13 +51,14 @@ def prepared_scene(tmp_path, *, include_reference=True):
 
 
 def test_registered_arms_share_exact_paid_refs_and_reapply_current_retention(tmp_path, monkeypatch):
-    source, _, index, fresh = prepared_scene(tmp_path)
+    source, plan, index, fresh = prepared_scene(tmp_path)
     originals = [(source.workspace / INDEX).read_bytes(), deepcopy(source.evaluated_model),
                  deepcopy(source.costs)]
     monkeypatch.setattr('hegel_machine.cognition.online_inquiry_llm.evaluate_python_model', no_execution)
     for arm in ('archive', 'fixed_pr2', 'pr3'):
         agent, lab = fresh(arm=arm)
-        assert json.loads((agent.workspace / INDEX).read_text()) == index
+        assert json.loads((agent.workspace / INDEX).read_text()) == {
+            **index, 'historical_score_index_ref': plan['paid_score_index_refs_by_case']['case_000']}
         first = choose(agent, lab)
         assert first['reused_score_count'] == 2 and first['new_scored_count'] == 0
         assert first['evaluations'][1]['retention_decision']['status'] == 'candidate_retained'

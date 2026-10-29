@@ -116,8 +116,18 @@ def test_revised_program_survives_json_and_binds_new_task_roles():
                             name_seed=7103, wiring_seed=821) as lab:
         focused, _, focused_actions, _ = research(lab, restored.object_models)
     assert focused["complete"]
-    assert not any(a["action"] == "test_retained_dependency_method" for a in focused_actions)
-    assert all(m["matched_prefix_rows"] == 0 for m in focused["dependency_methods"])
+    # Public measured scope, not the evaluator's readout label, controls reuse.
+    # Depending on the observed initial controls, focus can have silent resets.
+    focused_retained = [a for a in focused_actions if a["action"] == "test_retained_dependency_method"]
+    for action in focused_retained:
+        assert action['source_object_model_id'] == 'event_source'
+        assert any(method['status'] == 'discriminating'
+            and all(action[key] == method[key] for key in
+                    ('scope', 'excitation_role', 'matched_prefix_rows'))
+            for method in source['dependency_methods'])
+    recipes = ObjectDependencyMethods([source])
+    assert not any(source_id for _, source_id in recipes._recipes(
+        {'silent_resets_with_history_signal': False}))
 
 
 def test_retained_method_is_revised_when_same_scope_no_longer_distinguishes():
@@ -227,3 +237,46 @@ def test_current_effective_recipe_falls_back_when_remaining_members_have_flat_co
     assert observed in methods.snapshot()
     assert any(item["status"] == "uninformative_pilot" and item["quantity_candidate"] in ("qb", "qc")
                for item in methods.snapshot())
+
+
+def _paid_selector_contrasts():
+    records, pairs = [], []
+    for selector, effect in enumerate((2., 2., .5)):
+        baseline = {'selector': float(selector), 'qa': 1.}
+        changed = {**baseline, 'qa': 2.}
+        pair = ([baseline, baseline], [baseline, changed])
+        pairs.append(pair)
+        for side, sequence in enumerate(pair):
+            records.append({'controls': sequence[-1], 'history': sequence[:-1],
+                'position': 1, 'before': {'qa': 1.}, 'after': {'qa': 1. + side},
+                'target': 1. + side * effect, 'probe_id': f'selector:{selector}:{side}'})
+    return records, pairs
+
+
+def test_same_quantity_new_selector_pair_keeps_old_failure_and_changes_recipe_priority():
+    records, pairs = _paid_selector_contrasts()
+    methods = ObjectDependencyMethods(budget=SearchBudget(1000))
+    methods.observe(records)
+    scope = methods._scope(records)
+    old = methods._assessment(('quantity', 1), 'qa', pairs[:2], scope)
+    assert old['status'] == 'uninformative_pilot'
+    assert methods._recipes(scope)[0][0] == ('drive', 0)
+    current = methods._assessment(('quantity', 1), 'qa', pairs[1:], scope)
+    assert current['status'] == 'discriminating'
+    assert methods.snapshot() == [old, current]
+    assert old['paired_probe_ids'] != current['paired_probe_ids']
+    assert methods._recipes(scope)[0][0] == ('quantity', 1)
+
+
+def test_reconsuming_same_paid_pair_does_not_duplicate_evidence_or_indexing_cost():
+    records, pairs = _paid_selector_contrasts()
+    methods = ObjectDependencyMethods(budget=SearchBudget(1000))
+    methods.pending = ('quantity', 1), 'qa', pairs[1:], methods._scope(records)
+    methods.observe(records)
+    paid = methods.budget.spent
+    first = methods.snapshot()
+    methods.observe(records)
+    assert methods.snapshot() == first and len(first) == 1
+    assert methods.budget.spent == paid
+    assert len([entry for entry in methods.actions
+                if entry['action'] == 'assess_object_dependency_method']) == 1

@@ -20,6 +20,31 @@ def save(path, value):
     return driver.ref(path)
 
 
+def test_feedback_host_window_escapes_nested_python_catch_and_retains_the_prior_account(
+        tmp_path, monkeypatch):
+    from time import sleep
+    from hegel_machine.cognition.experiment_runtime import PythonExecutionDeadline, python_execution_deadline
+    prior = save(tmp_path / 'old_stage.json', {'costs': {'compute_cost': 23,
+        'python_execution_seconds': 0}, 'native_host_wall_seconds': 0.})
+    monkeypatch.setattr(driver, 'NATIVE_HOST_CAP', .05)
+
+    def delayed_restore(*args, **kwargs):
+        try:
+            with python_execution_deadline(.5):
+                sleep(.2)
+        except PythonExecutionDeadline:
+            pytest.fail('the whole feedback host cutoff became a local Python return')
+
+    monkeypatch.setattr(driver, 'CommonArchiveInquiryAgent', delayed_restore)
+    manifest = {'selected_actual_use_refs': [{'file': 'retained_paid_use.json', 'json_path': []}]}
+    result = driver.run_feedback(manifest, tmp_path / 'interrupted_feedback', stage1=prior['file'])
+    assert result['status'] == 'time_exhausted'
+    assert result['error']['type'] == 'ActivityExecutionDeadline'
+    assert result['cumulative_stage1_costs']['compute_cost'] == 23
+    assert result['new_costs']['compute_cost'] == 0
+    assert result['new_world_fits'] == result['new_world_predictions'] == result['new_world_observations'] == 0
+
+
 ROLES = {'role_0': {'role': 'public_control', 'unit': '1', 'time': 'current'}}
 FIT_CONTRACT = {'operation': 'retained_fixture_only'}
 
