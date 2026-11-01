@@ -78,9 +78,17 @@ def test_paid_prefix_counterexample_refutes_old_threshold_without_relearning(tmp
         lambda *a, **kw: (_ for _ in ()).throw(AssertionError('Do not synthesize another threshold')))
     result = revise_staged_method_conditions(agent, owner, groups, 1000)
     assert result['status'] == 'staged_conditions_revised'
-    assert result['refuted_indices'] == [0] and result['survivor_indices'] == [1, 2]
+    assert result['refuted_indices'] == [0]
     assert not result['general_guard_supported'] and not result['condition_resynthesis']
     revision = read_method_reference(result['revision_ref'], agent.workspace)
+    # The finite learner also retains equivalent zero-residual/state guards.
+    # Check every frozen guard on all five paid decisions, not its pool index.
+    verdicts = revision['condition_verdicts']
+    assert verdicts[0]['condition']['children'][1]['value'] == .1
+    assert [item['predicted_append'] for item in verdicts[0]['predictions']] == [True, True, False, False, False]
+    assert result['survivor_indices'] == list(range(1, len(verdicts)))
+    assert all([item['predicted_append'] for item in verdict['predictions']]
+               == [True, True, False, False, True] for verdict in verdicts[1:])
     assert result['original_development_sources'] == 3 and result['new_paid_sources'] == 2
     evidence = [item for item in revision['paid_stage_evidence']
                 if not item.get('original_development_support')]
@@ -91,7 +99,7 @@ def test_paid_prefix_counterexample_refutes_old_threshold_without_relearning(tmp
     revised = revision['research_program']['staged_research']
     source = read_method_reference(proposal['proposal_ref'], agent.workspace)
     assert revised['conditions'] == [source['proposal']['candidates'][i]['research_program'][
-        'staged_research']['condition'] for i in (1, 2)]
+        'staged_research']['condition'] for i in result['survivor_indices']]
     assert revised['baseline'] == body['staged_research']['baseline']
     assert revised['continuation'] == body['staged_research']['continuation']
     assert Path(proposal['proposal_ref']['file']).read_bytes() == frozen

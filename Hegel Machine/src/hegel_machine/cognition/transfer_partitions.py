@@ -400,14 +400,63 @@ def _geometry_frames(rows, terms, relations):
     return list(frames.values())
 
 
+def _quote_parent_bound_continuation(baseline, continuation, rows, feedback, max_attempts):
+    """Cover every legal first-stage structure before its coefficients exist."""
+    saved = _saved_binding(baseline)
+    contract = continuation.get('transfer_partition', {})
+    if not saved or contract.get('kind') != 'Pi1':
+        return {'status': 'parent_parameter_dependency_unavailable', 'required_compute': None}
+    values = {item['symbol']: Program('const', value=item['radius']) for item in saved['parameters']}
+    local = baseline['transfer_partition']
+    alternatives = local['alternatives'][:min(max_attempts, local['max_attempts'], 4)]
+    quotes = []
+    for index, alternative in enumerate(alternatives):
+        declared = [Program.from_dict(term) for term in alternative['fit_terms']]
+        symbolic = [Program.from_dict(term) for term in alternative.get('parameter_terms', ())]
+        if len(symbolic) != len(declared) or any(
+                _bind(term, values).expanded().simplified() != actual.expanded().simplified()
+                for term, actual in zip(symbolic, declared)):
+            return {'status': 'parent_column_binding_unavailable', 'required_compute': None,
+                    'alternative_index': index}
+        groups = [item['symbol'] for item in saved['parameters']
+                  if any(_occurrences(term, item['symbol']) for term in symbolic)]
+        if len(groups) != 1:
+            return {'status': 'one_explicit_parent_group_required', 'required_compute': None,
+                    'alternative_index': index}
+        relations = list(dict.fromkeys(node for term in symbolic
+                                      for node in parameter_relations(term, groups[0])))
+        frames = _geometry_frames(rows, symbolic, relations)
+        geometry = len(frames) * sum(3 * len(relation_objects(node)) for node in relations)
+        # Either actual fitted sum has at most one intercept, one multiply and
+        # one addition per column. This covers coefficients not yet fitted;
+        # source coefficients or a single source output are not an upper bound.
+        initialization = 2 * (1 + sum(term.expanded().size + 3 for term in declared))
+        attempts = min(max_attempts, contract['max_attempts'], 48)
+        second = contract.get('second_stage')
+        followup = int(second.get('compute_limit', 15000)) if second and feedback else 0
+        quotes.append({'alternative_index': index, 'fit_columns': len(declared),
+            'required_compute': initialization + geometry + attempts * (len(declared) + 2) * len(rows)
+                + followup + (len(feedback) if followup else 0),
+            'initialization_compute': initialization, 'geometry_compute': geometry,
+            'followup_compute_upper': followup})
+    if not quotes:
+        return {'status': 'parent_alternatives_unavailable', 'required_compute': None}
+    return {'status': 'quoted', 'required_compute': max(item['required_compute'] for item in quotes),
+            'parent_alternatives': quotes,
+            'quote_scope': 'largest_bound_continuation_over_legal_first_stage_alternatives'}
+
+
 def quote_transfer_partition(payload, training, *, max_attempts=48, feedback_rows=()):
     """Upper bound without predictions; column caches can reduce actual costs."""
     if payload.get('staged_research'):
         staged = payload['staged_research']
         rows, feedback = list(training), list(feedback_rows)
-        quotes = {name: quote_transfer_partition(staged[name], rows,
-            max_attempts=max_attempts, feedback_rows=feedback if name == 'continuation' else ())
-            for name in ('baseline', 'continuation')}
+        quotes = {'baseline': quote_transfer_partition(staged['baseline'], rows, max_attempts=max_attempts)}
+        quotes['continuation'] = (_quote_parent_bound_continuation(
+            staged['baseline'], staged['continuation'], rows, feedback, max_attempts)
+            if staged['operation'] == 'revise_then_reidentify' else
+            quote_transfer_partition(staged['continuation'], rows,
+                max_attempts=max_attempts, feedback_rows=feedback))
         if any(item.get('required_compute') is None for item in quotes.values()):
             return {'status': 'unquoted_staged_dependency', 'required_compute': None, 'stages': quotes}
         guard_compute = len(staged.get('conditions', [staged['condition']]))
@@ -421,6 +470,7 @@ def quote_transfer_partition(payload, training, *, max_attempts=48, feedback_row
     contract = payload['transfer_partition']
     attempts = min(max_attempts, contract['max_attempts'], 48)
     initialization = geometry = 0
+    fit_compute = None
     if contract['kind'] == 'Pi1':
         view = transfer_partition_view(payload)
         if view['status'] != 'ready':
@@ -435,12 +485,16 @@ def quote_transfer_partition(payload, training, *, max_attempts=48, feedback_row
         geometry = len(frames) * sum(3 * len(relation_objects(relation)) for relation in relations)
     elif contract['kind'] in {'Pi2', 'Pi3'}:
         attempts = min(attempts, len(contract['alternatives']), 4)
+        fit_compute = sum((len(item['fit_terms']) + 2) * len(rows)
+                          for item in contract['alternatives'][:attempts])
     else:
         attempts = 1
     followup = payload['transfer_partition'].get('second_stage')
     feedback = list(feedback_rows)
     followup_upper = int(followup.get('compute_limit', 15000)) if followup and feedback else 0
-    return {'status': 'quoted', 'required_compute': initialization + geometry + attempts * (len(fit['fit_terms']) + 2) * len(rows)
+    if fit_compute is None:
+        fit_compute = attempts * (len(fit['fit_terms']) + 2) * len(rows)
+    return {'status': 'quoted', 'required_compute': initialization + geometry + fit_compute
                 + followup_upper + (len(feedback) if followup_upper else 0),
             'initialization_compute': initialization, 'geometry_compute': geometry,
             'attempt_limit': attempts, 'fit_rows': len(rows), 'validation_compute': 0,
@@ -452,7 +506,7 @@ def quote_transfer_partition(payload, training, *, max_attempts=48, feedback_row
 def replay_staged_partition(payload, training, budget, *, risk_quantile=.5,
                             feature_mapping=None, feedback_rows=(), tolerance=1e-7,
                             paid_stages=None):
-    """Run a cheap complete refit before deciding whether to reidentify a group.
+    """Run a complete first research before deciding whether to reidentify a group.
 
     Cached stage results must describe this exact executable and paid view.
     The learned guard sees only the completed first stage, never its successor.
@@ -466,11 +520,13 @@ def replay_staged_partition(payload, training, budget, *, risk_quantile=.5,
     if feature_mapping:
         payload = _rebind_step(payload, feature_mapping)
     contract = payload['staged_research']
-    if (contract['operation'] != 'refit_then_reidentify'
-            or contract['baseline'].get('transfer_partition', {}).get('kind') != 'Pi0'
+    parent_bound = contract['operation'] == 'revise_then_reidentify'
+    baseline_kind = contract['baseline'].get('transfer_partition', {}).get('kind')
+    if ((parent_bound and baseline_kind not in {'Pi2', 'Pi3'})
+            or (not parent_bound and (contract['operation'] != 'refit_then_reidentify' or baseline_kind != 'Pi0'))
             or contract['continuation'].get('transfer_partition', {}).get('kind') != 'Pi1'
             or any(contract[key].get('staged_research') for key in ('baseline', 'continuation'))):
-        raise ValueError('Staged replay requires one Pi0 refit followed by one Pi1 research body')
+        raise ValueError('Staged replay requires a Pi0 refit or Pi2/Pi3 revision followed by Pi1')
     rows, feedback = list(training), list(feedback_rows)
     started = budget.spent
     result = {'status': 'baseline_pending', 'execution_complete': False,
@@ -478,10 +534,13 @@ def replay_staged_partition(payload, training, budget, *, risk_quantile=.5,
         'independent_support': False, 'data_role': 'exposed_adaptive_development',
         'selected_stage': 'baseline', 'guard': {'status': 'not_evaluated'},
         'training_rows': len(rows), 'feedback_rows': len(feedback)}
+    if parent_bound:
+        result.update(operation=contract['operation'], risk_quantile=risk_quantile, tolerance=tolerance,
+                      input_scope='same_training_and_feedback_for_both_stages')
     fallback = initial_prediction(rows, risk_quantile)
 
-    def stage(name):
-        body = contract[name]
+    def stage(name, body=None, paid_initial=None):
+        body = contract[name] if body is None else body
         paid = (paid_stages or {}).get(name, {})
         reused = bool(paid.get('execution_complete') and paid.get('entry') is not None
             and paid.get('replay_inputs') == research_program_replay_inputs(body)
@@ -490,9 +549,14 @@ def replay_staged_partition(payload, training, budget, *, risk_quantile=.5,
         before, denied = budget.spent, budget.denied_requests
         entry = (deepcopy(paid['entry']) if reused else replay_transfer_partition(body, rows, budget,
             risk_quantile=risk_quantile, feedback_rows=feedback if name == 'continuation' else (),
-            tolerance=tolerance))
+            tolerance=tolerance, **({'paid_initial': paid_initial} if paid_initial is not None else {})))
         detail = {'reused': reused, 'execution_complete': False, 'compute_cost': 0,
                   'budget_incomplete': False}
+        if parent_bound:
+            detail['replay_inputs'] = research_program_replay_inputs(body)
+            if name == 'continuation':
+                detail.update(parent_stage='baseline',
+                    parent_parameter_revision=deepcopy(body['parent_parameter_revision']))
         if reused:
             detail.update(original_cost_ref=deepcopy(paid.get('cost_ref')),
                           feedback_loss_refs=deepcopy(paid.get('feedback_loss_refs', [])))
@@ -575,7 +639,19 @@ def replay_staged_partition(payload, training, budget, *, risk_quantile=.5,
         return finish(baseline, 'baseline_supported', True)
     if not proceed:
         return finish(baseline, 'continuation_declined', True)
-    continuation = stage('continuation')
+    if parent_bound:
+        prepared = prepare_parent_parameter_revision(baseline, contract['continuation'])
+        result['parent_binding'] = {key: deepcopy(value) for key, value in prepared.items()
+                                    if key != 'research_program'}
+        if prepared['status'] != 'ready':
+            return finish(baseline, 'continuation_dependency_unresolved')
+        paid_initial = {'entry': baseline, 'training': rows, 'risk_quantile': risk_quantile,
+            'cost_ref': deepcopy(first.get('original_cost_ref')) or {
+                'operation': contract['operation'], 'stage': 'baseline',
+                'compute_cost': first['compute_cost'], 'training_rows': len(rows)}}
+        continuation = stage('continuation', prepared['research_program'], paid_initial)
+    else:
+        continuation = stage('continuation')
     if continuation is None or not result['continuation']['execution_complete']:
         return finish(baseline, 'continuation_incomplete')
     later = result['continuation']

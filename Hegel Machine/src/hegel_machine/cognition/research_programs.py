@@ -280,7 +280,7 @@ def research_program_replay_inputs(payload, *, feature_mapping=None):
                                for key in payload['term_nodes']]}
     if payload.get('staged_research'):
         contract = payload['staged_research']
-        value.update(operation='refit_then_reidentify', staged_research={
+        value.update(operation=contract['operation'], staged_research={
             'operation': contract['operation'], 'condition': deepcopy(contract['condition']),
             **({'conditions': deepcopy(contract['conditions'])} if 'conditions' in contract else {}),
             'coordinate_paths': deepcopy(contract['coordinate_paths']),

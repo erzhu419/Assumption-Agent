@@ -58,7 +58,8 @@ def allocation(remaining, pool_size, baseline, *, training_rows=96, working_rows
 
 def freeze_entry(output, source):
     freeze_runtime(output, source)
-    for name in ('validate_partition_successor.py', 'return_partition_pair.py', 'stage_partition_method.py'):
+    for name in ('validate_partition_successor.py', 'return_partition_pair.py',
+                 'stage_partition_method.py', 'review_paid_object_pool.py'):
         relative = Path('scripts') / name
         base = source / 'runtime' / relative
         write_text_incrementally(output / 'runtime' / relative, (ROOT / relative).read_text(),
@@ -234,40 +235,89 @@ def register_complete_method_successor(request, output):
         raise ValueError('The declared successor is already in the retained source cohort')
     task = {**source_task, 'seed': seed, 'apparatus_seed': seed,
         'relation_radius': task_settings(seed)['relation_radius']}
-    method_ref = actual['executed_method_ref']
-    if method_ref != old['research_method_ref']:
-        raise ValueError('Freeze the complete method that actually executed on the source')
+    practice_ref = supplied.get('composition_practice_ref')
+    practice = None
+    if practice_ref:
+        practice = read_method_reference(practice_ref, request.parent)
+        practice_root = Path(practice_ref['file']).parent
+        practice_cfg = load(practice_root / 'registration.json')
+        if (practice.get('status') != 'paid_stage_paths_completed'
+                or not practice.get('sources')
+                or any(not item.get('execution_complete') or not item.get('full_comparison')
+                       for item in practice['sources'])):
+            raise ValueError('Complete the generated composition through the paid ordinary entry first')
+        method_ref = practice_cfg['method_ref']
+        # The exposed path check supports compilation, not independent benefit.
+        # Its physical sources also belong to the already seen cohort.
+        for item in practice_cfg['sources']:
+            location = item['source_task_ref']
+            if location not in seen_refs:
+                seen_refs.append(location)
+                seen_seeds.append(read_method_reference(location, practice_root)['seed'])
+        if seed in seen_seeds:
+            raise ValueError('The declared successor is already in the retained source cohort')
+    else:
+        method_ref = actual['executed_method_ref']
+        if method_ref != old['research_method_ref']:
+            raise ValueError('Freeze the complete method that actually executed on the source')
     methods = {'P0': read_method_reference(supplied['baseline_method_ref'], source),
                'Pi1': read_method_reference(method_ref, source)}
-    if (methods['P0'].get('transfer_partition', {}).get('kind') != 'Pi3'
-            or methods['Pi1'].get('transfer_partition', {}).get('kind') != 'Pi1'
-            or methods['Pi1']['transfer_partition'].get('second_stage', {}).get('operation')
-                != 'resolve_relation_intervals'):
+    staged = methods['Pi1'].get('staged_research')
+    if practice_ref:
+        if (not staged or staged['operation'] != 'revise_then_reidentify'
+                or staged['baseline'] != methods['P0']
+                or methods['P0'].get('transfer_partition', {}).get('kind') not in {'Pi2', 'Pi3'}
+                or staged['continuation'].get('transfer_partition', {}).get('kind') != 'Pi1'
+                or not practice_cfg.get('proposal_ref')):
+            raise ValueError('Compare the generated composition with its own actual first-stage method')
+    elif (methods['P0'].get('transfer_partition', {}).get('kind') != 'Pi3'
+          or methods['Pi1'].get('transfer_partition', {}).get('kind') != 'Pi1'
+          or methods['Pi1']['transfer_partition'].get('second_stage', {}).get('operation')
+              != 'resolve_relation_intervals'):
         raise ValueError('Keep the old local-structure method and the complete bound parameter method')
     baseline_artifact = read_method_reference(supplied['baseline_artifact_ref'], source)
     if read_method_reference(baseline_artifact['execution']['research_program_ref'], source) != methods['P0']:
         raise ValueError('The baseline identity must retain its actual frozen method body')
 
     training_rows, working_rows, confirmation_rows = 96, 24, 48
-    if (old['training_rows'] != training_rows or len(rows) != training_rows + working_rows
-            or [probe['rows'] for probe in probes] != [24, 24, 24, 24, 24]):
-        raise ValueError('Keep the source full-prefix 96/24 protocol before the new 48-row confirmation')
+    if (old['training_rows'] != training_rows or len(rows) < training_rows + working_rows
+            or [probe['rows'] for probe in probes[:5]] != [24, 24, 24, 24, 24]
+            or sum(probe['rows'] for probe in probes) != len(rows)):
+        raise ValueError('Keep the source complete prefixes and the new 96/24 protocol')
     quotes = {arm: quote_transfer_partition(body, rows[:training_rows],
-        feedback_rows=rows[training_rows:]) for arm, body in methods.items()}
+        feedback_rows=rows[training_rows:training_rows + working_rows]) for arm, body in methods.items()}
     if any(q.get('status') != 'quoted' for q in quotes.values()):
         raise ValueError('Both complete methods need executable resource bounds')
     # The new data are not acquired here. Every historical frame in four
     # complete reset trajectories is one of their 96 measured frames, so the
     # saved syntax gives a geometry ceiling independent of target values.
-    view = transfer_partition_view(methods['Pi1'])
-    symbol = methods['Pi1']['transfer_partition']['released_groups'][0]
-    terms = [Program.from_dict(term) for term in view['parameter_terms']]
-    relations = list(dict.fromkeys(node for term in terms for node in parameter_relations(term, symbol)))
-    geometry_upper = training_rows * sum(3 * len(relation_objects(node)) for node in relations)
     q = quotes['Pi1']
-    q['required_compute'] += geometry_upper - q['geometry_compute']
-    q.update(geometry_compute=geometry_upper,
-        quote_scope='saved_syntax_and_complete_reset_frame_count_not_target_measurements')
+    if staged:
+        from hegel_machine.cognition.transfer_partitions import _saved_binding
+        saved = _saved_binding(staged['baseline'])
+        continuation_quote = q['stages']['continuation']
+        before = continuation_quote['required_compute']
+        for quoted in continuation_quote['parent_alternatives']:
+            alternative = staged['baseline']['transfer_partition']['alternatives'][quoted['alternative_index']]
+            terms = [Program.from_dict(term) for term in alternative['parameter_terms']]
+            relations = list(dict.fromkeys(node for term in terms for parameter in saved['parameters']
+                for node in parameter_relations(term, parameter['symbol'])))
+            upper = training_rows * sum(3 * len(relation_objects(node)) for node in relations)
+            quoted['required_compute'] += upper - quoted['geometry_compute']
+            quoted['geometry_compute'] = upper
+        continuation_quote['required_compute'] = max(item['required_compute']
+            for item in continuation_quote['parent_alternatives'])
+        q['required_compute'] += continuation_quote['required_compute'] - before
+        q['quote_scope'] = 'all_legal_parent_structures_and_complete_reset_frame_count'
+    else:
+        view = transfer_partition_view(methods['Pi1'])
+        symbol = methods['Pi1']['transfer_partition']['released_groups'][0]
+        terms = [Program.from_dict(term) for term in view['parameter_terms']]
+        relations = list(dict.fromkeys(node for term in terms for node in parameter_relations(term, symbol)))
+        geometry_upper = training_rows * sum(3 * len(relation_objects(node)) for node in relations)
+        q['required_compute'] += geometry_upper - q['geometry_compute']
+        q.update(geometry_compute=geometry_upper,
+            quote_scope='saved_syntax_and_complete_reset_frame_count_not_target_measurements')
     common = len({entry['candidate'].program for entry in entries}) * (training_rows + working_rows)
     comparison, review, terminal = 4 * (training_rows + working_rows), 3000, 2 * confirmation_rows
     required = common + sum(q['required_compute'] for q in quotes.values()) + 2 * comparison + review + terminal
@@ -298,10 +348,12 @@ def register_complete_method_successor(request, output):
         'operations': {arm: 'program_replay' for arm in methods},
         'evaluation_arm_names': {'baseline': 'P0', 'challenger': 'Pi1'},
         'native_method_artifact_refs': {'P0': supplied['baseline_artifact_ref'], 'Pi1': challenger_ref},
-        'method_labels': {'P0': 'original_frozen_Pi3', 'Pi1': 'learned_structure_with_parameter_and_interval_research'},
+        'method_labels': ({'P0': 'original_frozen_first_stage', 'Pi1': 'generated_parent_bound_composition'}
+            if staged else {'P0': 'original_frozen_Pi3', 'Pi1': 'learned_structure_with_parameter_and_interval_research'}),
         'source_pool_ref': ref(output / 'source_pool.json'), 'source_pool_size': len(entries),
         'source_model_ref': supplied['source_model_ref'], 'source_confirmation_ref': supplied['confirmation_ref'],
-        'source_cost_refs': [supplied['source_costs_ref'], supplied['confirmation_ref'], supplied['allocation_ref']],
+        'source_cost_refs': [supplied['source_costs_ref'], supplied['confirmation_ref'], supplied['allocation_ref'],
+            *([practice_ref, practice_cfg['proposal_ref']] if practice_ref else [])],
         'prior_method_review': supplied['prior_method_review'], 'retained_method_pair_ref': None,
         'previous_compute': 0, 'remaining_compute': allocation['maximum_compute'],
         'total_compute_limit': allocation['maximum_compute'], 'total_new_compute_upper': required,
@@ -322,7 +374,11 @@ def register_complete_method_successor(request, output):
         'factor_scope': {'P': 'new apparatus/readout and relation radius from historical recipe',
             'S': 'source learned structure retained', 'M': 'same measurements, names, wiring and curvature'},
         'unexposed_check': {'declared_prior_source_refs': seen_refs, 'declared_prior_seeds': seen_seeds},
-        'scope': 'frozen_complete_method_content_not_autonomous_structure_then_parameter_controller',
+        'scope': ('frozen_generated_composition_vs_its_first_stage' if staged else
+            'frozen_complete_method_content_not_autonomous_structure_then_parameter_controller'),
+        **({'composition_practice_ref': practice_ref,
+            'composition_proposal_ref': practice_cfg['proposal_ref'],
+            'practice_scope': 'paid_path_verification_not_independent_support'} if practice_ref else {}),
         'stop_rule': 'One new source; stop if complete old pool solves or a method is incomplete; no seed replacement or body edits',
         'model_calls': 0, 'request_ref': ref(request)}
     save(output / 'registration.json', cfg)
@@ -1299,6 +1355,7 @@ def run_paid_pair(output):
             with timing.phase(arm), python_execution_deadline(cfg['active_wall_seconds'], activity=True):
                 local, entries, executions = SearchBudget(cfg['equal_method_compute_limit']), [], []
                 has_followup = bool(methods[arm].get('transfer_partition', {}).get('second_stage'))
+                has_staged = bool(methods[arm].get('staged_research'))
                 paid_inputs = cfg.get('paid_fit_inputs', {}).get(arm, {})
 
                 def paid_fit(item):
@@ -1311,10 +1368,11 @@ def run_paid_pair(output):
                 try:
                     for mapping in cfg['feature_mappings']:
                         entry = replay_research_program(methods[arm], training, local, feature_mapping=mapping,
-                            feedback_rows=feedback if has_followup else (), tolerance=cfg['quality_threshold'],
+                            feedback_rows=feedback if has_followup or has_staged else (), tolerance=cfg['quality_threshold'],
                             risk_quantile=spec.risk_quantile, paid_initial=initial, paid_fits=fits)
                         search, followup = ((entry or {}).get('transfer_partition_search', {}),
                             (entry or {}).get('transfer_partition_followup', {}))
+                        staged = (entry or {}).get('staged_research_result')
                         # A conditional fixed-readout stage has no obligation
                         # to run before its training-support prerequisite. A
                         # completed search can deliver an inadequate answer;
@@ -1322,14 +1380,16 @@ def run_paid_pair(output):
                         prerequisite_unmet = bool(entry is not None and
                             followup.get('status') == 'first_stage_training_unexplained' and
                             entry.get('training_loss', float('inf')) > cfg['quality_threshold'])
+                        complete = (bool(staged.get('execution_complete')) if staged is not None else
+                            bool(entry is not None and search.get('completed') and (not has_followup or
+                                 followup.get('execution_complete') or prerequisite_unmet)))
                         executions.append({'feature_mapping': mapping, 'search': search, 'followup': followup,
                             'followup_declared': has_followup, 'followup_prerequisite_unmet': prerequisite_unmet,
-                            'execution_complete': bool(entry is not None and search.get('completed')
-                                and not local.denied_requests and (not has_followup or
-                                    followup.get('execution_complete') or prerequisite_unmet))})
+                            'execution_complete': complete and not local.denied_requests,
+                            **({'staged_research_result': staged} if staged is not None else {})})
                         if entry is not None:
                             entry['method_source_ids'] = [arm]
-                            if has_followup:
+                            if has_followup or has_staged:
                                 entry['development_feedback_rows'] = len(feedback)
                             entries.append(entry)
                 finally:
@@ -1352,6 +1412,8 @@ def run_paid_pair(output):
                     'method_compute_cost': local.spent, 'comparison_compute_cost': compare_budget.spent,
                     'executions': executions, 'budget_denied': bool(local.denied_requests),
                     'same_available_method_cap': local.limit, 'development_rows': len(comparison), 'independent_support': False}
+                if len(executions) == 1 and 'staged_research_result' in executions[0]:
+                    outcome['staged_research_result'] = executions[0]['staged_research_result']
                 save(output / arm / 'outcome.json', outcome)
                 save(output / arm / 'comparison.json', {'full_comparison': result['full_comparison'],
                     'old_comparison_ref': ref(output / 'common_comparison.json'), 'new_scores': [

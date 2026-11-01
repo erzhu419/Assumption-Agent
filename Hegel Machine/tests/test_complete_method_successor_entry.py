@@ -19,7 +19,8 @@ def prepared(tmp_path, monkeypatch):
         'operation': 'resolve_relation_intervals', 'compute_limit': 15000}
     baseline = deepcopy(body)
     baseline['transfer_partition'] = {'kind': 'Pi3', 'max_attempts': 48,
-        'alternatives': [{}, {}]}
+        'alternatives': [{'fit_terms': [body['graph']['nodes'][key]['answer']
+            for key in body['term_nodes']]} for _ in range(2)]}
     save(source / 'methods.json', {'Pi3': baseline, 'complete': body})
     save(source / 'baseline.json', {'id': 'actual:oldPi3', 'execution': {
         'research_program_ref': runner.ref(source / 'methods.json', 'Pi3')}})

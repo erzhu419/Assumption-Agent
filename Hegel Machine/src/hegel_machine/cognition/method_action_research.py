@@ -772,8 +772,19 @@ def review_native_method_returns(agent, question, *, compute_limit):
     elif excluded:
         result['reason'] = 'native_pair_body_identity_unresolved'
     _propose_native_transfer_partitions(agent, question, records, result, compute_limit)
-    from .staged_method_research import research_staged_method_conditions, revise_staged_method_conditions
-    result['staged_method_proposals'] = []
+    from .staged_method_research import (research_staged_method_conditions,
+        revise_staged_method_conditions, propose_native_method_compositions,
+        research_parent_bound_method_conditions)
+    result['staged_method_proposals'] = propose_native_method_compositions(agent, question,
+        result.get('existing_method_executions', []), groups,
+        max(0, compute_limit - result['new_compute_cost']))
+    result['new_compute_cost'] += sum(item['new_compute_cost'] for item in result['staged_method_proposals'])
+    pending_compositions = [item['proposal_ref'] for item in result['staged_method_proposals']
+        if item['status'] == 'staged_program_proposed' and item.get('candidate_count')]
+    verified_compositions = [item for item in result['staged_method_proposals']
+        if item['status'] == 'staged_method_path_verified']
+    if any(item.get('budget_incomplete') for item in result['staged_method_proposals']):
+        result.update(status='scoped_unknown', reason='native_composition_analysis_not_funded')
     for group in groups:
         staged = research_staged_method_conditions(agent, question, group,
             max(0, compute_limit - result['new_compute_cost']))
@@ -788,7 +799,8 @@ def review_native_method_returns(agent, question, *, compute_limit):
         result.update(status='method_content_proposed_pending_validation',
             reason='paid_baseline_returns_produced_unmeasured_staged_method',
             required_work='execute_staged_method_from_same_start_then_freeze_before_new_source_validation')
-    elif any(item['status'] == 'incomplete_not_negative' for item in result['staged_method_proposals']):
+    elif any(item['status'] in {'incomplete_not_negative', 'staged_method_path_incomplete'}
+             for item in result['staged_method_proposals']):
         result.update(status='scoped_unknown', reason='staged_method_development_incomplete',
             required_work='resolve_retained_incomplete_staged_study')
     if result['status'] != 'scoped_unknown':
@@ -799,9 +811,13 @@ def review_native_method_returns(agent, question, *, compute_limit):
         if revision.get('budget_incomplete'):
             result.update(status='scoped_unknown', reason='staged_condition_revision_not_funded')
         elif revision.get('revision_ref'):
-            result.update(status='method_condition_revision_pending_validation',
-                reason=revision['status'], required_work=revision['required_work'])
-    if result['status'] != 'scoped_unknown' and any(
+            revised = read_method_reference(revision['revision_ref'], agent.workspace)
+            pending_compositions = [reference for reference in pending_compositions
+                if reference != revised['basis']['proposal_ref']]
+            if not pending_compositions:
+                result.update(status='method_condition_revision_pending_validation',
+                    reason=revision['status'], required_work=revision['required_work'])
+    if result['status'] != 'scoped_unknown' and not pending_compositions and any(
             item.get('revision_ref') for item in result['native_condition_revisions']):
         candidates = any(item.get('research', {}).get('candidates')
             for item in result['native_condition_revisions'])
@@ -810,6 +826,32 @@ def review_native_method_returns(agent, question, *, compute_limit):
             reason='completed_frozen_validation_returned_to_new_condition_development',
             required_work=('freeze_revised_condition_before_new_physical_source_validation' if candidates
                            else 'diagnose_public_evidence_and_condition_language_on_paid_sources'))
+    if result['status'] != 'scoped_unknown' and verified_compositions and not pending_compositions:
+        result.update(status='method_path_verified_pending_independent_validation',
+            reason='native_composition_paid_path_returned',
+            required_work='assess_new_source_validation_for_verified_composition')
+    if result['status'] != 'scoped_unknown':
+        # A returned successor is evidence for the next method question. Do not
+        # let the old paid-path receipt ask for that same successor again.
+        learned = research_parent_bound_method_conditions(agent, question, groups,
+            max(0, compute_limit - result['new_compute_cost']))
+        result['native_composition_condition_research'] = learned
+        result['new_compute_cost'] += sum(item['new_compute_cost'] for item in learned)
+        for item in learned:
+            if item.get('budget_incomplete'):
+                result.update(status='scoped_unknown', reason='parent_bound_condition_analysis_not_funded')
+                break
+            if not item.get('usable_origins'):
+                continue
+            pending_compositions = [ref for ref in pending_compositions
+                if ref != item['source_proposal_ref']]
+            if pending_compositions:
+                continue
+            result.update(status=('method_condition_revision_pending_validation'
+                if item.get('candidate_count') else 'method_condition_evidence_insufficient'
+                if item['research_status'] == 'insufficient_paired_preferences' else
+                'method_condition_revision_without_separating_condition'),
+                reason=item['status'], required_work=item['required_work'])
     return result
 
 
