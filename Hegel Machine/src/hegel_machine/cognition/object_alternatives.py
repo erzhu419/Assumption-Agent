@@ -10,13 +10,15 @@ separately.
 from copy import deepcopy
 
 
-def enumerate_object_schemas(model, budget=None, *, max_schemas=16):
+def enumerate_object_schemas(model, budget=None, *, max_schemas=16, preferred_schemas=()):
     """Enumerate complete schemas allowed by the current membership evidence.
 
 Quantity and drive bindings must already be identified.  Position and focus
 memberships range only over the inducer's candidates, respecting established
 assignments. ``exhaustive`` refers to this evidence-permitted finite set, not to
-every possible ontology. A truncated set cannot authorize an equivalence claim.
+    every possible ontology. A truncated set cannot authorize an equivalence claim.
+    Saved schemas receive the first slots only when their bindings remain allowed
+    by the current evidence; they do not identify the current object model.
 """
     if max_schemas < 1:
         raise ValueError("max_schemas must be positive")
@@ -52,11 +54,63 @@ every possible ontology. A truncated set cannot authorize an equivalence claim.
             if role == "x":
                 controls[field] = candidate["control"]
 
+    exhausted_budget = False
+
+    def schema_from_assignment(assigned):
+        fields = {group["object_id"]: {"q": group["q"], "u": group["u"],
+            "x": assigned["x", group["q"]], "f": assigned["f", group["q"]]}
+            for group in groups}
+        return {"objects": [group["object_id"] for group in groups], "fields": fields,
+            "members": {group["object_id"]: [group["object_id"]] for group in groups},
+            "controls": {group["object_id"]: {"q": group["controls"]["q"],
+                "u": group["controls"]["u"], "x": controls[fields[group["object_id"]]["x"]]}
+                for group in groups}, "focus_control": model["focus_control"]}
+
+    seen_preferred = []
+    for schema in preferred_schemas:
+        if schema in seen_preferred:
+            continue
+        seen_preferred.append(schema)
+        # One current-role membership check per object, including rejected
+        # proposals. This is not a fitted response or a new role confirmation.
+        if budget is not None and not budget.spend(len(groups)):
+            exhausted_budget = True
+            break
+        fields, prior_controls = schema.get("fields", {}), schema.get("controls", {})
+        by_quantity = {item.get("q"): (obj, item) for obj, item in fields.items()}
+        if (schema.get("focus_control") != model["focus_control"]
+                or len(fields) != len(groups) or set(by_quantity) != quantities):
+            continue
+        assigned, valid = {}, True
+        for group in groups:
+            obj, prior = by_quantity[group["q"]]
+            prior_control = prior_controls.get(obj, {})
+            if (prior.get("u") != group["u"]
+                    or any(prior_control.get(role) != group["controls"][role] for role in ("q", "u"))):
+                valid = False
+                break
+            for role in ("x", "f"):
+                field = prior.get(role)
+                if group["q"] not in domains.get((role, field), ()):
+                    valid = False
+                    break
+                assigned[role, group["q"]] = field
+            if not valid or prior_control.get("x") != controls.get(prior.get("x")):
+                valid = False
+                break
+        if not valid or any(len({field for (kind, _), field in assigned.items() if kind == role})
+                            != len(groups) for role in ("x", "f")):
+            continue
+        candidate = schema_from_assignment(assigned)
+        if candidate not in result["schemas"]:
+            result["schemas"].append(candidate)
+        if len(result["schemas"]) == max_schemas:
+            break
+
     # Branch on the most constrained field. Every completed assignment is a
     # bijection for each role, so a field cannot be copied into multiple objects.
     ordered = sorted(domains, key=lambda key: (len(domains[key]), key))
     assignment, used = {}, {"x": set(), "f": set()}
-    exhausted_budget = False
 
     def assignments(index):
         nonlocal exhausted_budget
@@ -77,20 +131,14 @@ every possible ontology. A truncated set cannot authorize an equivalence claim.
                 return
 
     truncated = False
-    for assigned in assignments(0):
+    for assigned in (() if exhausted_budget else assignments(0)):
+        candidate = schema_from_assignment(assigned)
+        if candidate in result["schemas"]:
+            continue
         if len(result["schemas"]) == max_schemas:
             truncated = True
             break
-        fields = {group["object_id"]: {"q": group["q"], "u": group["u"],
-            "x": assigned["x", group["q"]], "f": assigned["f", group["q"]]}
-            for group in groups}
-        result["schemas"].append({"objects": [group["object_id"] for group in groups],
-            "fields": fields,
-            "members": {group["object_id"]: [group["object_id"]] for group in groups},
-            "controls": {group["object_id"]: {"q": group["controls"]["q"],
-                "u": group["controls"]["u"], "x": controls[fields[group["object_id"]]["x"]]}
-                for group in groups},
-            "focus_control": model["focus_control"]})
+        result["schemas"].append(candidate)
     result["exhaustive"] = not (truncated or exhausted_budget)
     result["status"] = ("enumerated" if result["schemas"] else
                         "search_exhausted" if exhausted_budget else "inconsistent")

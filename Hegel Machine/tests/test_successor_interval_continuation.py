@@ -123,6 +123,67 @@ def test_old_supported_parameter_inherits_new_interval_without_refitting(monkeyp
     assert research.intervals[0]['radius_interval'] == [.6, .8]
 
 
+def test_retained_pool_parameter_keeps_original_eight_column_fit_and_reusable_partition(monkeypatch):
+    from hegel_machine.cognition import research_programs
+    from hegel_machine.cognition.structural_research_program import research_program_fit_contract
+    from test_interval_candidate_finalization import evaluated_interval_candidates
+
+    original, research, paid, _, candidates, _ = evaluated_interval_candidates()
+    symbol = research.parameters[0]['symbol']
+    # A successful old pool value need not be one of this pass's three samples.
+    old = research._entry({symbol: .765}, [.7, .8], 0, 1e-10, 96, 0)
+    old_body = old['research_program']
+    old_body['evaluation_rows'] = 168
+    for key in ('readout_fit_source', 'transfer_partition', 'transfer_partition_search'):
+        old_body[key] = deepcopy(original['research_program'][key])
+    fit = research_program_fit_contract(old_body)
+    assert len(fit['fit_terms']) == 8 and fit['coefficients'][3] == 0.
+    assert all(item['candidate'].program != old['candidate'].program for item in candidates)
+    assert old['candidate'].program not in research.last_candidate_errors
+    snapshot = deepcopy(old)
+    # Actual compare_pool semantics overwrite training_loss with all-paid MSE.
+    selected = study.compare_pool(selector(), [old], {old['candidate'].program: 4e-10}, 0.)
+    assert selected['training_loss'] == selected['validation_loss'] == 4e-10
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('Retaining a paid parameter must not repeat fitting or predictions')
+
+    monkeypatch.setattr(Program, 'predict', forbidden)
+    monkeypatch.setattr(research_programs._Fitter, 'fit', forbidden)
+    retained = study.retain_interval_evidence(research, selected, candidates, len(paid), 1e-7)
+    assert retained['candidate'].program == old['candidate'].program
+    assert retained['parameter_values'] == {symbol: .765}
+    assert retained['training_loss'] == 1e-10
+    assert retained['validation_loss'] == retained['all_paid_loss'] == 4e-10
+    assert retained['evaluation_rows'] == len(paid) == 174
+    body = retained['research_program']
+    assert (body['fit_rows'], body['evaluation_rows'], body['evaluation_loss']) == (96, 174, 4e-10)
+    retained_fit = research_program_fit_contract(body)
+    assert retained_fit['fit_terms'] == fit['fit_terms']
+    assert retained_fit['coefficients'] == fit['coefficients'] and retained_fit['loss'] == 1e-10
+    assert body['readout_fit_source'] == old_body['readout_fit_source']
+    assert body['transfer_partition_search'] == old_body['transfer_partition_search']
+    assert body['transfer_partition']['released_groups'] == [symbol]
+    assert 'paid_row_squared_errors' not in retained and 'feedback_trajectory_losses' not in retained
+    restored = RelationIntervalResearch(retained['candidate'].program, [], SearchBudget(10000),
+        research_program=body)
+    assert restored.reuse_paid_partition(paid, retained)
+    assert restored.reuse_statistics['partition_rows_bound'] == 174
+    assert old == snapshot
+
+
+@pytest.mark.parametrize('radius,loss', ((.81, 0.), (.765, 1e-3)))
+def test_retained_parameter_requires_current_domain_and_paid_support(monkeypatch, radius, loss):
+    from test_interval_candidate_finalization import evaluated_interval_candidates
+
+    _, research, paid, _, candidates, _ = evaluated_interval_candidates()
+    symbol = research.parameters[0]['symbol']
+    selected = research._entry({symbol: radius}, [.6, 1.], 0, loss, 96, 0)
+    monkeypatch.setattr(Program, 'predict',
+        lambda *args: pytest.fail('Rejected scope must not perform another prediction'))
+    assert study.retain_interval_evidence(research, selected, candidates, len(paid), 1e-7) is None
+
+
 def test_complete_pool_can_retain_better_noninterval_explanation():
     original, new = entry(Program('const', value=1.)), entry(law(.7), 'interval')
     selected = study.compare_pool(selector(), [original, new],

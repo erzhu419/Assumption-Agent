@@ -413,6 +413,11 @@ def confirm_pair(output, registration):
         frozen[arm] = {'program': entry['candidate']['program'],
             'fallback': load(output / 'prepared_state.json')['fallback'],
             'selected_ref': outcome['selected_ref']}
+    diagnostic = (read_method_reference(registration['diagnostic_predictors_ref'], output)
+        if registration.get('diagnostic_predictors_ref') else {})
+    if set(diagnostic) & set(frozen):
+        raise ValueError('An extra frozen readout must retain its own identity')
+    frozen.update(diagnostic)
     save(directory / 'frozen_predictors.json', frozen)
     rows_count, compute = registration['confirmation_rows'], 0
     scored = {}
@@ -436,7 +441,8 @@ def confirm_pair(output, registration):
                 **laboratory.costs, 'compute_cost': compute}, 'partial_scores': scored})
             raise
         result = {'status': 'frozen_pair_readout_completed', 'rows': rows_count, 'arms': scored,
-            'all_passed': all(item['passed'] for item in scored.values()),
+            'all_passed': all(scored[arm]['passed'] for arm in registration['operations']),
+            'diagnostic_arms': list(diagnostic),
             'shared_actual_costs': {**laboratory.costs, 'compute_cost': compute},
             'new_fits': 0, 'model_calls': 0, 'used_for_selection_or_condition_learning': False}
     save(directory / 'receipt.json', result)

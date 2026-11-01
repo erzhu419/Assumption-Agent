@@ -38,8 +38,8 @@ def abstract_research_inputs(payload, measured_spec, library):
         dependencies.extend(converted["source_dependencies"])
         return converted["program"]
 
-    try:
-        for node in result["graph"]["nodes"].values():
+    def convert_body(body):
+        for node in body["graph"]["nodes"].values():
             for name in ("expression", "answer", "residual_base"):
                 node[name] = convert(node.get(name), node["depends_on"] if name == "expression" else ())
             node["alternatives"] = [convert(program) for program in node["alternatives"]]
@@ -47,7 +47,7 @@ def abstract_research_inputs(payload, measured_spec, library):
                         if node.get(name) is not None]
             node["required_measurements"] = sorted({name for program in programs
                 for name, _ in program.observed_variables() if name != "__target__"})
-        for step in result["selection_steps"]:
+        for step in body["selection_steps"]:
             original = Program.from_dict(step["program"])
             step["program"] = convert(step["program"])
             if step["operation"] == "resolve_relation_intervals":
@@ -86,6 +86,14 @@ def abstract_research_inputs(payload, measured_spec, library):
                 step["parameter_template"] = convert_parameter(step["parameter_template"])
                 if "parameter_terms" in step:
                     step["parameter_terms"] = [convert_parameter(term) for term in step["parameter_terms"]]
+        if body.get('staged_research'):
+            for name in ('baseline', 'continuation'):
+                convert_body(body['staged_research'][name])
+            # The condition is expressed in public method-state coordinates;
+            # it is not another sensor computation to recover or rename.
+
+    try:
+        convert_body(result)
     except ValueError:
         return None
     if source_schema is None:

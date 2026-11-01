@@ -77,3 +77,51 @@ def test_saved_readout_reaches_common_without_science_or_repeat_charge(tmp_path)
     assert result['new_predictions'] == result['new_fits'] == result['new_observations'] == 0
     repeated = consume_frozen_pair(output, source, compute_limit=100)
     assert repeated['reused'] and repeated['new_compute_cost'] == 0
+
+
+def test_explicit_native_arm_names_reach_common_without_rewriting_paid_scores(tmp_path):
+    agent, _, pair, source = retained_pair(tmp_path)
+    scores_path, frozen_path = source / 'confirmation/receipt.json', source / 'confirmation/frozen_predictors.json'
+    scores, frozen = json.loads(scores_path.read_text()), json.loads(frozen_path.read_text())
+    scores['arms'] = {'Pi1': scores['arms']['challenger'], 'P0': scores['arms']['baseline']}
+    frozen = {'Pi1': frozen['challenger'], 'P0': frozen['baseline']}
+    # The named scientific result is frozen before its condition-learning use.
+    scores['arms']['Pi1']['mse'] = 1e-20
+    save(scores_path, scores)
+    save(frozen_path, frozen)
+    paid_bytes = scores_path.read_bytes(), frozen_path.read_bytes()
+    pair.update(paired_future_ref={'file': str(scores_path)},
+        frozen_predictors_ref={'file': str(frozen_path)},
+        evaluation_arm_names={'baseline': 'P0', 'challenger': 'Pi1'})
+    actual = json.loads((source / 'receipt.json').read_text())
+    actual['method_pair_ref'] = save(source / 'named_pair.json', pair)
+    record_native_parent_research_return(agent, source_task_ref=pair['physical_source_ref'],
+        result_ref=save(source / 'named_return.json', actual))
+    group = route(agent)['method_action_research']['paired_condition_research'][0]
+    assert group['paired_invocations'] == 1
+    assert group['preferences'][0]['preference'] == 'challenger'
+    assert group['preferences'][0]['losses'] == [.1, 1e-20]
+    assert group['local_program_supported'] and not group['general_guard_supported']
+    assert group['status'] == 'insufficient_paired_preferences'
+    assert (scores_path.read_bytes(), frozen_path.read_bytes()) == paid_bytes
+    previous_cost = agent.costs['compute_cost']
+    assert route(agent)['cache_hit']
+    assert agent.costs['compute_cost'] == previous_cost
+
+
+def test_named_pair_keeps_actual_predictor_attribution(tmp_path):
+    agent, _, pair, source = retained_pair(tmp_path)
+    scores_path, frozen_path = source / 'confirmation/receipt.json', source / 'confirmation/frozen_predictors.json'
+    scores, frozen = json.loads(scores_path.read_text()), json.loads(frozen_path.read_text())
+    scores['arms'] = {'Pi1': scores['arms']['challenger'], 'P0': scores['arms']['baseline']}
+    frozen = {'Pi1': frozen['challenger'], 'P0': frozen['baseline']}
+    frozen['Pi1']['selected_ref'] = {'file': 'later_unconfirmed_predictor.json'}
+    save(scores_path, scores)
+    save(frozen_path, frozen)
+    pair.update(paired_future_ref={'file': str(scores_path)},
+        frozen_predictors_ref={'file': str(frozen_path)},
+        evaluation_arm_names={'baseline': 'P0', 'challenger': 'Pi1'})
+    from hegel_machine.cognition.method_feedback import research_paired_method_conditions
+    with pytest.raises(ValueError, match='actual returned predictor'):
+        research_paired_method_conditions(agent, {'id': 'native:structural_research', 'version': 1},
+            [save(source / 'named_pair.json', pair)], 100)

@@ -159,6 +159,11 @@ def _rebind_step(value, mapping):
     if isinstance(value, dict):
         if "op" in value:
             return bind_measurement_arguments(Program.from_dict(value), mapping).to_dict()
+        if value.get('operation') == 'refit_then_reidentify' and 'baseline' in value and 'continuation' in value:
+            # The guard addresses method-state coordinates, not instrument
+            # features. Only its executable scientific stages are rebound.
+            return {key: _rebind_step(item, mapping) if key in ('baseline', 'continuation')
+                    else deepcopy(item) for key, item in value.items()}
         return {key: ([mapping.get(name, name) for name in item] if key == "gate_names"
                       else _rebind_step(item, mapping)) for key, item in value.items()}
     if isinstance(value, list):

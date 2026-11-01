@@ -278,6 +278,15 @@ def research_program_replay_inputs(payload, *, feature_mapping=None):
 
     value = {'retained_terms': [mapped(payload['graph']['nodes'][key]['answer'])
                                for key in payload['term_nodes']]}
+    if payload.get('staged_research'):
+        contract = payload['staged_research']
+        value.update(operation='refit_then_reidentify', staged_research={
+            'operation': contract['operation'], 'condition': deepcopy(contract['condition']),
+            **({'conditions': deepcopy(contract['conditions'])} if 'conditions' in contract else {}),
+            'coordinate_paths': deepcopy(contract['coordinate_paths']),
+            **{key: research_program_replay_inputs(contract[key], feature_mapping=feature_mapping)
+               for key in ('baseline', 'continuation')}})
+        return value
     saved = next((step for step in reversed(payload.get('selection_steps', []))
                   if step['operation'] == 'discover_conditional_coordinates'), None)
     if saved:
@@ -286,6 +295,22 @@ def research_program_replay_inputs(payload, *, feature_mapping=None):
             branch_basis=[mapped(term) for term in saved['branch_basis']])
     else:
         value['operation'] = 'refit_selected_terms'
+    if payload.get('transfer_partition'):
+        from .research_drafts import _rebind_step
+        contract = payload['transfer_partition']
+        value.update(operation='identify_transfer_partition',
+            transfer_partition={key: deepcopy(contract[key]) for key in
+                ('kind', 'released_groups', 'max_attempts', 'max_candidates', 'search_domain', 'second_stage')
+                if key in contract})
+        if contract.get('alternatives'):
+            value['transfer_partition']['alternatives'] = _rebind_step(
+                contract['alternatives'], feature_mapping or {})
+        binding = next((step for step in reversed(payload.get('selection_steps', []))
+                        if step['operation'] == 'resolve_relation_intervals'), None)
+        if binding:
+            value['relation_binding'] = _rebind_step({key: deepcopy(binding[key]) for key in
+                ('parameter_template', 'parameter_terms', 'parameters') if key in binding},
+                feature_mapping or {})
     return value
 
 
@@ -739,7 +764,7 @@ def select_actions(public_spec, observations, memory):
 
 def propose_research_step_revisions(payload, training=(), *, feature_names=(),
                                     feature_mapping=None, source_ref=None,
-                                    max_candidates=8, max_history=None):
+                                    max_candidates=8, max_history=None, revision_evidence=None):
     """Change one input that the saved replayer really consumes.
 
     Selection steps usually describe historical work, rather than instructions
@@ -754,6 +779,19 @@ def propose_research_step_revisions(payload, training=(), *, feature_names=(),
     rows = list(training)
     bound = _rebind_step(payload, feature_mapping or {})
     original = research_program_replay_inputs(bound)
+    if revision_evidence is not None:
+        from .transfer_partitions import propose_transfer_partitions
+        evidence = revision_evidence
+        proposal = propose_transfer_partitions(bound,
+            _rebind_step(evidence['after'], feature_mapping or {}),
+            source_ref=source_ref, before_ref=evidence.get('before_ref'),
+            after_ref=evidence.get('after_ref'))
+        proposal['candidates'] = proposal['candidates'][:max_candidates]
+        proposal['baseline_replay_inputs'] = research_program_replay_inputs(
+            proposal['baseline_research_program'])
+        for candidate in proposal['candidates']:
+            candidate['replay_inputs'] = research_program_replay_inputs(candidate['research_program'])
+        return proposal
     unsupported = {"discover_decoded_conditional_coordinates", "discover_composed_conditions",
                    "resolve_relation_intervals"}
     if any(step["operation"] in unsupported for step in bound.get("selection_steps", [])):
@@ -857,7 +895,8 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
                                      feature_mapping=None, feature_names=(), source_refs=(),
                                      source_ref=None, max_candidates=8, max_history=None,
                                      previous=None, minimum_improvement=1e-10,
-                                     paid_baseline=None, on_progress=None):
+                                     paid_baseline=None, on_progress=None, revision_evidence=None,
+                                     prepared_proposal=None, tolerance=1e-7):
     """Pair the old method and one-step interventions on the same paid split.
 
     Every method receives the same fit-plus-assessment ceiling. Only completed
@@ -873,9 +912,9 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
     from .research_methods import common_method_process_return
 
     training, validation = list(training), list(validation)
-    proposal = propose_research_step_revisions(payload, training,
+    proposal = deepcopy(prepared_proposal) if prepared_proposal is not None else propose_research_step_revisions(payload, training,
         feature_names=feature_names, feature_mapping=feature_mapping, source_ref=source_ref,
-        max_candidates=max_candidates, max_history=max_history)
+        max_candidates=max_candidates, max_history=max_history, revision_evidence=revision_evidence)
     programs = [proposal.get("baseline_research_program", payload),
         *[item["research_program"] for item in proposal["candidates"]]]
     inputs = [research_program_replay_inputs(item) for item in programs]
@@ -883,6 +922,9 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
         "training_rows": len(training), "validation_rows": len(validation),
         "risk_quantile": risk_quantile, "per_method_compute": per_method_compute,
         "minimum_improvement": minimum_improvement}
+    if any(program.get('staged_research') or program.get("transfer_partition", {}).get("second_stage")
+           for program in programs):
+        basis["followup_tolerance"] = tolerance
     reusable = (previous and source_refs and previous.get("basis") == basis)
     paid = deepcopy(previous.get("methods", [])) if reusable else []
     reused = {item["index"]: item for item in paid if item.get("execution_complete")}
@@ -935,7 +977,7 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
         on_progress(deepcopy({**result, "status": "incomplete_step_comparison",
             "methods": completed_prefix, "compute_cost": new_cost,
             "paid_compute_cost": result["previous_compute_cost"] + new_cost,
-            "budget_incomplete": any(item.get("denied_request") for item in completed_prefix),
+            "budget_incomplete": any(item.get("denied_request") or item.get("budget_incomplete") for item in completed_prefix),
             "unexecuted_method_indices": [index for index in range(len(programs))
                 if index not in {item["index"] for item in completed_prefix}]}))
 
@@ -977,16 +1019,28 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
         local = SearchBudget(per_method_compute, reserve=len(validation))
         claim, measured, error = None, None, None
         try:
-            claim = replay_research_program(program, training, local, risk_quantile=risk_quantile)
+            adaptive_return = bool(program.get('staged_research')
+                                   or program.get("transfer_partition", {}).get("second_stage"))
+            claim = replay_research_program(program, training, local, risk_quantile=risk_quantile,
+                **({"feedback_rows": validation, "tolerance": tolerance}
+                   if adaptive_return else {}))
             if claim is not None:
                 local.release_reserve()
-                local.spend(len(validation))
-                measured = loss(claim["candidate"].program, validation, fallback, risk_quantile)
+                followup = claim.get('staged_research_result', claim.get("transfer_partition_followup", {}))
+                if adaptive_return and followup.get("feedback_loss") is not None:
+                    measured = followup["feedback_loss"]
+                elif local.spend(len(validation)):
+                    measured = loss(claim["candidate"].program, validation, fallback, risk_quantile)
         except (ValueError, MissingHistory, KeyError) as exc:
             error = {"type": type(exc).__name__, "message": str(exc)}
             if isinstance(exc, PythonExecutionDeadline):
                 result["time_incomplete"] = True
         complete = claim is not None and measured is not None and error is None and local.last_denied_request is None
+        if claim is not None:
+            complete = complete and claim.get("transfer_partition_search", {}).get("completed", True)
+            if adaptive_return:
+                complete = complete and claim.get('staged_research_result',
+                    claim.get("transfer_partition_followup", {})).get("execution_complete", False)
         budget.spend(local.spent)
         methods.append({"index": index, "execution_complete": complete,
             "new_compute_cost": local.spent, "paid_compute_cost": local.spent,
@@ -994,6 +1048,9 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
             "validation_loss": measured, "program": claim["candidate"].program.to_dict() if claim else None,
             "research_program": claim["research_program"] if claim else None,
             "execution_error": error,
+            "assessment_role": "adaptive_development" if adaptive_return else "held_out_development",
+            "budget_incomplete": bool(claim and claim.get('staged_research_result',
+                claim.get("transfer_partition_followup", {})).get("budget_incomplete")),
             "denied_request": deepcopy(local.last_denied_request), "reused": False})
         persist_progress()
         if result["time_incomplete"]:
@@ -1017,7 +1074,8 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
         if complete:
             def side(method):
                 return {"execution_complete": True, "completed": True,
-                    "quality": {"loss": method["validation_loss"], "threshold": minimum_improvement},
+                    "quality": {"loss": method["validation_loss"],
+                        "threshold": basis.get("followup_tolerance", minimum_improvement)},
                     "coverage": len(validation), "costs": {"observation_cost": 0,
                         "compute_cost": method["paid_compute_cost"]}}
             process = common_method_process_return({"same_task": True,
@@ -1035,7 +1093,7 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
     all_complete = len(methods) == len(programs) and all(item["execution_complete"] for item in methods)
     if useful and all_complete and not result["time_incomplete"]:
         chosen = min(useful, key=lambda pair: (
-            0. if methods[pair["method_index"]]["validation_loss"] <= minimum_improvement else
+            0. if methods[pair["method_index"]]["validation_loss"] <= basis.get("followup_tolerance", minimum_improvement) else
                 methods[pair["method_index"]]["validation_loss"],
             methods[pair["method_index"]]["paid_compute_cost"]))
         result["selected_revision"] = deepcopy(proposal["candidates"][chosen["method_index"] - 1])
@@ -1047,13 +1105,13 @@ def evaluate_research_step_revisions(payload, training, validation, budget, *,
         result["status"] = "complete_no_step_improvement" if all_complete else "incomplete_step_comparison"
     result["compute_cost"] = budget.spent - start
     result["paid_compute_cost"] = result["previous_compute_cost"] + result["compute_cost"]
-    result["budget_incomplete"] = any(item.get("denied_request") for item in methods)
+    result["budget_incomplete"] = any(item.get("denied_request") or item.get("budget_incomplete") for item in methods)
     return result
 
 
 def quote_research_step_revisions(payload, training, validation, *, feature_mapping=None,
                                   feature_names=(), source_ref=None, max_candidates=8,
-                                  max_history=None):
+                                  max_history=None, revision_evidence=None, prepared_proposal=None):
     """Bound a complete finite replay/assessment pass without fitting a model.
 
     Conditional replay can visit only a finite measured gate bracket, integer
@@ -1067,9 +1125,9 @@ def quote_research_step_revisions(payload, training, validation, *, feature_mapp
     from .models import TaskSpec
 
     training, validation = list(training), list(validation)
-    proposal = propose_research_step_revisions(payload, training, feature_names=feature_names,
+    proposal = deepcopy(prepared_proposal) if prepared_proposal is not None else propose_research_step_revisions(payload, training, feature_names=feature_names,
         feature_mapping=feature_mapping, source_ref=source_ref, max_candidates=max_candidates,
-        max_history=max_history)
+        max_history=max_history, revision_evidence=revision_evidence)
     result = {"status": "UNKNOWN", "proposal": proposal, "methods": [],
         "per_method_compute_upper": None, "complete_pass_compute_upper": None,
         "coordinate_readout_compute": 0, "new_fits": 0, "new_world_predictions": 0,
@@ -1085,6 +1143,15 @@ def quote_research_step_revisions(payload, training, validation, *, feature_mapp
         retained_fit = count * (len(retained) + 2)
         method = {"index": index, "retained_fit_upper": retained_fit,
             "assessment_upper": len(validation), "replay_inputs": replay}
+        if replay['operation'] in {'identify_transfer_partition', 'refit_then_reidentify'}:
+            from .transfer_partitions import quote_transfer_partition
+            quoted = quote_transfer_partition(program, training, feedback_rows=validation)
+            if quoted.get('required_compute') is None:
+                return {**result, 'reason': quoted['status'], 'unquoted_method_index': index}
+            method.update(transfer_partition_quote=quoted,
+                compute_upper=quoted['required_compute'] + len(validation))
+            result['methods'].append(method)
+            continue
         if replay["operation"] == "refit_selected_terms":
             method["compute_upper"] = retained_fit + len(validation)
             result["methods"].append(method)
@@ -1753,7 +1820,9 @@ def propose_research_programs(spec, training, budget, calls, *, max_candidates=1
 
 
 def replay_research_program(payload, training, budget, *, risk_quantile=.5,
-                            feature_mapping=None, execution_scope='procedure'):
+                            feature_mapping=None, execution_scope='procedure',
+                            feedback_rows=(), feedback_loss=None, tolerance=1e-7,
+                            paid_stages=None, paid_initial=None, paid_fits=()):
     """Execute a saved operator plan and refit its answer on newly supplied rows.
 
     This reuses the research procedure's selected coordinates, not its old
@@ -1798,6 +1867,17 @@ def replay_research_program(payload, training, budget, *, risk_quantile=.5,
         return result
     if execution_scope != 'procedure':
         raise ValueError('research replay scope must be procedure or retained_coordinates')
+    if payload.get('staged_research'):
+        from .transfer_partitions import replay_staged_partition
+        return replay_staged_partition(payload, rows, budget,
+            risk_quantile=risk_quantile, feature_mapping=feature_mapping,
+            feedback_rows=feedback_rows, tolerance=tolerance, paid_stages=paid_stages)
+    if payload.get('transfer_partition'):
+        from .transfer_partitions import replay_transfer_partition
+        return replay_transfer_partition(payload, rows, budget,
+            risk_quantile=risk_quantile, feature_mapping=feature_mapping,
+            feedback_rows=feedback_rows, feedback_loss=feedback_loss, tolerance=tolerance,
+            paid_initial=paid_initial, paid_fits=paid_fits)
     if any(step["operation"] == "discover_decoded_conditional_coordinates"
            for step in payload.get("selection_steps", [])):
         from .decoded_conditional_coordinates import replay_decoded_conditional_coordinates

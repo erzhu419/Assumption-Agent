@@ -86,6 +86,100 @@ def test_budget_truncation_cannot_be_mistaken_for_exhaustive_equivalence():
     assert result["compute_cost"] == budget.spent == 3
 
 
+def test_saved_assignment_outside_the_old_prefix_gets_an_existing_slot():
+    model = _model(4)
+    old = deepcopy(model)
+    all_schemas = enumerate_object_schemas(model, max_schemas=24)["schemas"]
+    preferred = all_schemas[-1]
+    assert preferred not in enumerate_object_schemas(model)["schemas"]
+    result = enumerate_object_schemas(model, SearchBudget(100), max_schemas=2,
+                                      preferred_schemas=[preferred, preferred])
+    assert result["schemas"] == [preferred, all_schemas[0]]
+    assert not result["exhaustive"]
+    assert model == old and model["schema"] is None and not model["complete"]
+
+
+def test_old_role_candidates_are_checked_against_current_anchors_and_controls():
+    model = _model()
+    ordinary = enumerate_object_schemas(model)["schemas"]
+    preferred = ordinary[-1]
+    variants = []
+    for section, key, value in [("fields", "q", "quantity_1"),
+                                ("fields", "u", "drive_1"),
+                                ("fields", "f", "indicator_1"),
+                                ("controls", "q", "amount_1"),
+                                ("controls", "u", "actuator_1"),
+                                ("controls", "x", "placement_0")]:
+        altered = deepcopy(preferred)
+        altered[section]["object_0"][key] = value
+        variants.append(altered)
+    altered = deepcopy(preferred)
+    altered["focus_control"] = "other_selector"
+    variants.append(altered)
+    before = deepcopy(model)
+    for schema in variants:
+        result = enumerate_object_schemas(model, SearchBudget(100), max_schemas=1,
+                                          preferred_schemas=[schema])
+        assert result["schemas"] == ordinary[:1]
+    assert model == before
+
+    # A newly observed membership rules out the formerly permitted proposal.
+    model["position_candidates"]["location_1"]["quantities"] = ["quantity_1"]
+    result = enumerate_object_schemas(model, preferred_schemas=[preferred])
+    assert preferred not in result["schemas"] and result["exhaustive"]
+    assert model["schema"] is None and not model["complete"]
+
+
+def test_preferred_assignment_checks_are_charged_and_do_not_claim_exhaustion():
+    model = _model(4)
+    preferred = enumerate_object_schemas(model, max_schemas=24)["schemas"][-1]
+    budget = SearchBudget(4)
+    result = enumerate_object_schemas(model, budget, max_schemas=2,
+                                      preferred_schemas=[preferred])
+    assert result["schemas"] == [preferred]
+    assert result["compute_cost"] == budget.spent == 4
+    assert not result["exhaustive"]
+
+
+def test_ordinary_object_research_passes_saved_schemas_with_original_candidate_limit(monkeypatch):
+    from hegel_machine.cognition import competing_object_programs, equivalent_object_programs
+    from hegel_machine.cognition.models import ResearchConfig, TaskSpec
+    from hegel_machine.cognition.unified_research import UnifiedResearchAgent
+
+    model = _model(4)
+    schemas = enumerate_object_schemas(model, max_schemas=24)["schemas"]
+    fields = tuple(name for group in schemas[0]["fields"].values() for name in group.values())
+    bounds = {name: (-1., 1.) for group in schemas[0]["controls"].values() for name in group.values()}
+    bounds["select"] = (0., 3.)
+    spec = TaskSpec("paid_roles", "saved role candidates", fields, (), (),
+                    feature_bounds=bounds, context={"object_model": model})
+    agent = UnifiedResearchAgent(ResearchConfig(max_candidates=4))
+    source = {"schema": schemas[-1], "raw_sensor_features": list(fields),
+              "raw_control_features": list(bounds), "status": "identified"}
+    agent.library.object_models.extend([source, {**source, "schema": schemas[-2],
+                                                 "status": "counterexample"}])
+    calls = []
+
+    def shared(*args, **kwargs):
+        calls.append(("shared", kwargs))
+        return []
+
+    def competing(*args, **kwargs):
+        calls.append(("competing", kwargs))
+        return {"entries": [], "competition": {"status": "no_supported_program",
+                    "hypotheses": [], "compute_cost": 0}}
+
+    monkeypatch.setattr(equivalent_object_programs, "propose_equivalent_object_programs", shared)
+    monkeypatch.setattr(competing_object_programs, "research_competing_object_programs", competing)
+    old = deepcopy(model)
+    parent = {"structure": {"schema": schemas[-3]}}
+    agent._object_explanations(spec, [], SearchBudget(100), actions=[], parent=parent)
+    assert [call[1]["max_candidates"] for call in calls] == [4, 4]
+    assert calls[-1][1]["preferred_schemas"] == [schemas[-3], schemas[-1]]
+    assert calls[-1][1]["response_parent"] is parent
+    assert model == old and model["schema"] is None
+
+
 def test_real_anonymous_two_object_evidence_retains_the_actual_assignment_among_alternatives():
     lab = AnonymousObjectLab(objects=2, readout="focus", apparatus_seed=9013,
                              name_seed=2917, wiring_seed=317)

@@ -1151,7 +1151,47 @@ class UnifiedResearchAgent:
                 knowledge.append(description)
         return knowledge
 
-    def _replay_program_claims(self, spec, training, budget, calls, *, prepared=None):
+    def _replay_search_allowance(self, plans, training, comparison, remaining):
+        """Fund declared parameter research without applying the old readout cap."""
+        conditional = any(any(step["operation"] in (
+            "discover_conditional_coordinates", "discover_composed_conditions")
+            for step in payload.get("selection_steps", []))
+            for _, payload, _, _ in plans)
+        legacy = min(64000 if conditional else 4000, remaining // 2)
+        if not any(payload.get("transfer_partition") or payload.get('staged_research')
+                   for _, payload, _, _ in plans):
+            return legacy
+        from .research_drafts import _rebind_step
+        from .transfer_partitions import quote_transfer_partition
+        queues = [(payload, template, iter(mappings))
+                  for _, payload, template, mappings in plans]
+        required, count = 0, 0
+        maximum = min(4, self.config.max_candidates)
+        while queues and count < maximum:
+            following = []
+            for payload, template, mappings in queues:
+                mapping = next(mappings, None)
+                if mapping is None:
+                    continue
+                following.append((payload, template, mappings))
+                if payload.get("transfer_partition") or payload.get('staged_research'):
+                    features = {original: mapping[role]
+                                for role, original in zip(template.roles, template.source_features)}
+                    bound = _rebind_step(payload, features)
+                    feedback = comparison if (bound.get('staged_research')
+                        or bound.get("transfer_partition", {}).get("second_stage")) else ()
+                    quote = quote_transfer_partition(bound, training, feedback_rows=feedback)
+                    required += quote.get("required_compute") or 0
+                else:
+                    required += legacy
+                count += 1
+                if count == maximum:
+                    break
+            queues = following
+        return min(required, max(0, remaining - maximum * len(comparison)))
+
+    def _replay_program_claims(self, spec, training, budget, calls, *, prepared=None,
+                              feedback_rows=()):
         """Refit recalled procedures without starting a different grammar search."""
         from .research_programs import replay_research_program
         plans = self._replay_program_queue(spec, calls) if prepared is None else prepared
@@ -1170,9 +1210,15 @@ class UnifiedResearchAgent:
                 remaining.append((source, payload, template, mappings))
                 features = {original: mapping[role]
                             for role, original in zip(template.roles, template.source_features)}
+                feedback = {}
+                if payload.get('staged_research') or payload.get("transfer_partition", {}).get("second_stage"):
+                    feedback = {"feedback_rows": feedback_rows,
+                                "tolerance": self.config.minimum_improvement}
                 replayed = replay_research_program(payload, training, budget,
-                    risk_quantile=spec.risk_quantile, feature_mapping=features)
+                    risk_quantile=spec.risk_quantile, feature_mapping=features, **feedback)
                 if replayed is not None:
+                    if feedback_rows and feedback:
+                        replayed["development_feedback_rows"] = len(feedback_rows)
                     replayed["method_source_ids"] = [source]
                     replayed["candidate"] = replace(replayed["candidate"], parents=tuple(dict.fromkeys(
                         (*replayed["candidate"].parents, source))))
@@ -1657,14 +1703,19 @@ class UnifiedResearchAgent:
 
     def _revise_paid_structure(self, spec, parent, paid_rows, budget, actions,
                                *, finalists=(), transitions=(), paid_scores=None,
-                               research_action="structural_research"):
+                               research_action="structural_research", fit_rows=None,
+                               research_method=None, feedback_rows=(), paid_initial=None):
         """Execute a declared existing research segment on the complete paid pool."""
         from .unified_structure import propose_structures, propose_response_revisions
+        from .relation_revisions import propose_parent_relation_revisions
+        from .transfer_partitions import propose_parent_parameter_revisions
         from .evaluation import point_loss
         from statistics import mean
         proposals_by_action = {
             "structural_research": (propose_structures, 90000, 16),
             "response_basis_revision": (propose_response_revisions, 32000, 8),
+            "relation_form_revision": (propose_parent_relation_revisions, 65000, 4),
+            "relation_parameter_revision": (propose_parent_parameter_revisions, 65000, 4),
         }
         if research_action not in proposals_by_action:
             raise ValueError(f"Unsupported paid structure research action: {research_action}")
@@ -1693,7 +1744,9 @@ class UnifiedResearchAgent:
             actions.append(event)
             return result
 
-        if parent is None or not paid_rows or not _object_schema(spec):
+        if parent is None or not paid_rows:
+            return finish("unavailable")
+        if research_action not in {"relation_form_revision", "relation_parameter_revision"} and not _object_schema(spec):
             return finish("unavailable")
         if not parent.get("structure"):
             # Ordinary program replay keeps the fitted graph and executable
@@ -1760,8 +1813,20 @@ class UnifiedResearchAgent:
             result["full_comparison"] = False
             return finish("compute_unresolved")
         local = SearchBudget(local_limit)
-        proposals = proposer(spec, paid_rows, local, parent=parent,
-            tolerance=self.config.minimum_improvement, transitions=transitions)
+        training = paid_rows if fit_rows is None else fit_rows
+        if research_action in {"relation_form_revision", "relation_parameter_revision"}:
+            options = ({"method": research_method, "feedback_rows": feedback_rows,
+                        "paid_initial": paid_initial, "tolerance": self.config.minimum_improvement}
+                       if research_action == "relation_parameter_revision" else {})
+            returned = proposer(spec, training, local, parent=parent,
+                                max_candidates=maximum_new, **options)
+            proposals = returned["entries"]
+            result["research"] = event["research"] = returned["research"]
+            result["execution_complete"] = event["search_complete"] = bool(
+                returned["research"].get("execution_complete", False))
+        else:
+            proposals = proposer(spec, training, local, parent=parent,
+                tolerance=self.config.minimum_improvement, transitions=transitions)
         budget.spend(local.spent)
         result["new_claims"] = proposals
         event.update(search_compute=local.spent, new_candidates=len(proposals))
@@ -1769,6 +1834,8 @@ class UnifiedResearchAgent:
                                          if item["candidate"].program not in scores))
         if not budget.can_spend(len(new_programs) * len(paid_rows)):
             result.update(claims=[*result["claims"], *proposals], full_comparison=False)
+            if research_action in {"relation_form_revision", "relation_parameter_revision"}:
+                result["execution_complete"] = False
             return finish("compute_unresolved")
         for program in new_programs:
             score(program)
@@ -2042,9 +2109,22 @@ class UnifiedResearchAgent:
         from .equivalent_object_programs import propose_equivalent_object_programs
         from .competing_object_programs import research_competing_object_programs
         previous = parent.get("object_competition") if parent else None
+        candidate_limit = min(8, self.config.max_candidates)
+        preferred_schemas = []
+        parent_schema = ((parent or {}).get("structure") or {}).get("schema")
+        if parent_schema:
+            preferred_schemas.append(parent_schema)
+        if self.config.use_memory:
+            for model in reversed(self.library.object_models):
+                if (model.get("status") != "counterexample" and model.get("schema")
+                        and set(model.get("raw_sensor_features", ())) == set(spec.feature_names)
+                        and set(model.get("raw_control_features", ())) == set(spec.feature_bounds)
+                        and model["schema"] not in preferred_schemas):
+                    preferred_schemas.append(model["schema"])
         if previous is None:
             shared = propose_equivalent_object_programs(spec, rows, budget,
-                parent=parent, transitions=transitions, tolerance=tolerance)
+                parent=parent, transitions=transitions, tolerance=tolerance,
+                max_candidates=candidate_limit)
             supported = []
             for item in shared:
                 if item["training_loss"] > tolerance:
@@ -2058,7 +2138,8 @@ class UnifiedResearchAgent:
             if supported:
                 return supported
         result = research_competing_object_programs(spec, rows, budget, previous=previous,
-            new_observations=new_observations, transitions=transitions, tolerance=tolerance)
+            new_observations=new_observations, transitions=transitions, tolerance=tolerance,
+            max_candidates=candidate_limit, preferred_schemas=preferred_schemas, response_parent=parent)
         if parent is not None and previous is not None and not result["entries"]:
             parent["object_competition"] = result["competition"]
         self._object_competitions[tuple(spec.feature_names)] = result["competition"]
@@ -2359,7 +2440,8 @@ class UnifiedResearchAgent:
         local = SearchBudget(search_limit)
         if research_action == "program_replay":
             claims = self._replay_program_claims(spec, training, local, prepared["calls"],
-                prepared=prepared["replay_plans"])[:self.config.max_candidates]
+                prepared=prepared["replay_plans"],
+                feedback_rows=prepared["comparison"])[:self.config.max_candidates]
         elif research_action == "structural_research":
             pool = prepared["assessed"] if assessed is None else assessed
             response_parent = self._select_structure_response_parent(spec, prepared["parent"], pool,
@@ -2408,11 +2490,8 @@ class UnifiedResearchAgent:
         exports = min(4, self.config.max_candidates) if research_action == "program_replay" else 16
         reserve = exports * len(comparison)
         if research_action == "program_replay":
-            conditional = any(any(step["operation"] in (
-                "discover_conditional_coordinates", "discover_composed_conditions")
-                for step in payload.get("selection_steps", []))
-                for _, payload, _, _ in prepared["replay_plans"])
-            native_limit = min(64000 if conditional else 4000, budget.remaining // 2)
+            native_limit = self._replay_search_allowance(prepared["replay_plans"],
+                prepared["training"], comparison, budget.remaining)
         else:
             native_limit = min(90000, budget.remaining // 2)
             if spec.context.get("object_model") and not _object_schema(spec):
@@ -2485,7 +2564,8 @@ class UnifiedResearchAgent:
                     return result
                 scores[program] = loss(program, comparison, prepared["fallback"], spec.risk_quantile)
             checked.append({**item, "validation_loss": scores[program],
-                "selection_basis": "unfitted_validation" if prepared["independent_validation"]
+                "selection_basis": "development_feedback" if item.get("development_feedback_rows")
+                    else "unfitted_validation" if prepared["independent_validation"]
                     else "all_acquired_evidence"})
         pool.extend(checked)
         selected = self._best(pool)
@@ -2554,6 +2634,9 @@ class UnifiedResearchAgent:
             if fitted_comparison or not independent_validation:
                 for claim in checked:
                     claim["selection_basis"] = "all_acquired_evidence"
+            for claim in checked:
+                if claim.get("development_feedback_rows"):
+                    claim["selection_basis"] = "development_feedback"
             return checked
 
         leading, explained_families, response_parent_for_revision = None, set(), None
@@ -2561,9 +2644,6 @@ class UnifiedResearchAgent:
         while directions:
             from .research_programs import coordinate_search_allowance
             from .conditional_coordinates import conditional_search_allowance
-            conditional_replay = any(any(step["operation"] in ("discover_conditional_coordinates", "discover_composed_conditions")
-                for step in payload.get("selection_steps", []))
-                for _, payload, _, _ in replay_plans)
             entry_cost = len(training) * (len(spec.feature_names) + 2) + len(comparison)
             callable_fit_cost = len(training) * (len(spec.feature_names) + 4)
             search_remaining = max(0, budget.remaining - experiment_compute)
@@ -2577,7 +2657,8 @@ class UnifiedResearchAgent:
                 "conditional_reconstruction": min(64000, budget.remaining // 2,
                     conditional_search_allowance(len(spec.feature_names), len(training),
                         max((len(row.history) for row in training), default=0))),
-                "program_replay": min(64000 if conditional_replay else 4000, budget.remaining // 2),
+                "program_replay": self._replay_search_allowance(replay_plans,
+                    training, comparison, budget.remaining),
                 "mechanism_revision": min(16000, budget.remaining // 2),
                 "program_revision": min(32000, budget.remaining // 2),
             }
@@ -2799,12 +2880,15 @@ class UnifiedResearchAgent:
             if learn_policy and alternative is not None:
                 paid_compute = budget.spent - action_start
                 before_loss = alternative["validation_loss"]
-                fitted_reference = alternative.get("selection_basis") == "all_acquired_evidence"
+                fitted_reference = alternative.get("selection_basis") in {
+                    "all_acquired_evidence", "development_feedback"}
+                method_feedback = any(item.get("development_feedback_rows")
+                                      for item in directional_claims)
                 action_context = policy.action_context(direction)
                 origin = {"context": action_context, "action": direction, "trial": None,
                     "baseline_program": alternative["candidate"].program.to_dict(),
                     "fallback": fallback, "risk_quantile": spec.risk_quantile}
-                if (independent_validation and not fitted_reference
+                if (independent_validation and not fitted_reference and not method_feedback
                         and not (direction in {"dependent_residual_revision", "mechanism_revision"}
                                  and parent_fitted_comparison)):
                     # Reward the fraction of the remaining error repaired,
@@ -2824,7 +2908,8 @@ class UnifiedResearchAgent:
                         pending_costs={"observation_cost": 0, "measurement_cost": 0, "compute_cost": paid_compute})
                     actions.append({"action": "research_action_pending", "research_action": direction,
                         "context": action_context, "pending_id": origin["pending_id"], "trial": None,
-                        "evidence_basis": "reference_fitted_comparison" if fitted_reference else
+                        "evidence_basis": "current_method_development_feedback" if method_feedback else
+                            "reference_fitted_comparison" if fitted_reference else
                             "parent_fitted_comparison" if parent_fitted_comparison and
                             direction in {"dependent_residual_revision", "mechanism_revision"}
                             else "no_independent_validation",
@@ -2838,7 +2923,7 @@ class UnifiedResearchAgent:
             # another search language. This only pauses candidate generation;
             # adoption still requires a separate frozen-program confirmation.
             if (test_response_noise is not None and independent_validation and best is proposed
-                    and best.get("selection_basis") != "all_acquired_evidence"
+                    and best.get("selection_basis") not in {"all_acquired_evidence", "development_feedback"}
                     and alternative is not None and best["validation_loss"]
                         + self.config.minimum_improvement < alternative["validation_loss"]):
                 repeat_start = len(actions)

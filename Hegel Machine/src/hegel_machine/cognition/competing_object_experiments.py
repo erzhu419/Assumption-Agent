@@ -17,7 +17,8 @@ from .scale_bindings import bind_measurement_arguments, control_history_depth
 
 
 def review_paid_program_competition(command_spec, hypotheses, paid_records, budget, *,
-        score_scope_ref, score_rows, control_levels, tolerance=1e-7, serial=0, length=4):
+        score_scope_ref, score_rows, control_levels, tolerance=1e-7, serial=0, length=4,
+        binding=None):
     """Reconsider a pending experiment using completed frozen-model readouts.
 
     The caller binds each score to its frozen program and this same paid scope.
@@ -55,7 +56,7 @@ def review_paid_program_competition(command_spec, hypotheses, paid_records, budg
         return result
     programs = [Program.from_dict(item['program']) for item in survivors]
     proposals = propose_program_disagreement_probes(command_spec, programs, budget,
-        serial=serial, length=length, control_levels=control_levels)
+        serial=serial, length=length, control_levels=control_levels, binding=binding)
     known = [tuple(row['features'] for row in record.get('rows', [])) for record in paid_records]
     eligible = []
     for proposal in proposals:
@@ -86,6 +87,15 @@ def review_paid_program_competition(command_spec, hypotheses, paid_records, budg
     if eligible:
         result['plan'] = max(eligible, key=lambda plan: (
             plan['predicted_separation'] / plan['probe'].cost, -plan['probe'].cost))
+        # Preserve the instrument-vs-response distinction when this paid review
+        # operates on measured programs through an already supported binding.
+        for name, program in (binding or {}).items():
+            if not budget.spend(result['plan']['probe'].cost):
+                break
+            result['plan']['predicted_fields'][name] = _forecast(
+                program, result['plan']['probe'].sequence)
+        result['compute_cost'] = budget.spent - start
+        result['plan']['compute_cost'] = result['compute_cost']
     return result
 
 
@@ -124,13 +134,16 @@ def _probe_pool(spec, serial, length):
 
 def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
                                 serial=0, length=4, tolerance=1e-7, methods=None,
-                                task_id=None, questions=()):
+                                task_id=None, questions=(), generation_budget=None):
     """Return a probe and frozen alternative predictions, without observing it.
 
     ``binding`` maps measured fields to already learned command programs. When
     it cannot forecast every hypothesis, request paired measurements without
     claiming a simulated separation. The result's ``probe`` is a normal Probe;
     all other fields are JSON data suitable for the research action record.
+    An explicit ``generation_budget`` gives full-response method recall and
+    synthesis one shared allowance, within the parent and the 6000-unit cap.
+    It reserves the existing forecast and prefix-comparison work before recall.
     """
     start = budget.spent
     hypotheses = [{"hypothesis_id": entry.get("hypothesis_id", entry["candidate"].candidate_id),
@@ -170,7 +183,8 @@ def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
         # A local revision already identifies its unresolved predicates. Solve
         # those questions once, then require actual complete response separation.
         from .condition_questions import plan_condition_questions
-        generation = SearchBudget(min(6000, budget.remaining // 8))
+        generation = generation_budget if generation_budget is not None else SearchBudget(
+            min(6000, budget.remaining // 8))
         pending, skipped, method_cost, recall = list(questions), [], 0, methods
         while pending:
             plan = plan_condition_questions(command_spec, pending, budget, binding=binding,
@@ -222,16 +236,26 @@ def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
                      max(length, *(control_history_depth(program) + 2 for program in executable)))
         generic_pool = list(_probe_pool(command_spec, serial, length))
     from .program_disagreement_probes import propose_program_disagreement_probes
-    generation = SearchBudget(min(6000, budget.remaining // 8))
+    # A completed research return can allocate its remaining planning segment
+    # explicitly. Do not fragment that allocation again before method recall.
+    # Keep the ordinary pool forecasts, instrument forecasts, and subsequent
+    # prefix comparison affordable inside the same parent budget.
+    tail_quote = (sum(map(len, generic_pool)) * len(executable) +
+        length * (len(binding) + len(executable) * (len(executable) - 1) // 2))
+    generation = SearchBudget(min(6000, budget.remaining // 8) if generation_budget is None else
+        min(max(0, 6000 - generation_budget.spent), generation_budget.remaining,
+            max(0, budget.remaining - tail_quote)))
     learned = (methods.propose(command_spec, programs, generation, binding=binding,
         serial=serial, length=length, tolerance=tolerance, task_id=task_id)
         if methods is not None else [])
     learned = [item for item in learned if item["predicted_separation"] > tolerance]
+    budget.spend(generation.spent)
+    if generation_budget is not None:
+        generation_budget.spend(generation.spent)
     result.update(method_candidates=len(learned), method_search_cost=generation.spent,
                   fresh_synthesis_skipped=bool(learned))
     method_scope = methods.last_proposal if methods is not None else {}
     if method_scope.get("status") == "blocked_calibration":
-        budget.spend(generation.spent)
         result.update(probe=Probe(f"competing_object_recalibration:{serial}", generic_pool[-12 + serial % 12]),
                       forecast_status="requires_paired_measurements", proposal_source="calibration",
                       reason="previous_measurements_refuted_current_calibration",
@@ -240,10 +264,19 @@ def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
         return result
     if method_scope.get("blocked_scopes"):
         result["method_scope"] = method_scope
+    # An unsuccessful recall can exhaust its own allowance while the parent
+    # still has resources. Give synthesis a bounded share of that actual
+    # remainder, rather than only recall's unusable tail.
+    synthesis = SearchBudget(min(6000 - generation.spent, budget.remaining // 8)
+        if generation_budget is None else min(max(0, 6000 - generation_budget.spent),
+            generation_budget.remaining, max(0, budget.remaining - tail_quote)))
     directed = ([] if learned else propose_program_disagreement_probes(
-        command_spec, programs, generation, binding=binding, serial=serial, length=length))
-    budget.spend(generation.spent)
-    result.update(directed_candidates=len(directed), generation_cost=generation.spent)
+        command_spec, programs, synthesis, binding=binding, serial=serial, length=length))
+    budget.spend(synthesis.spent)
+    if generation_budget is not None:
+        generation_budget.spend(synthesis.spent)
+    result.update(directed_candidates=len(directed),
+                  generation_cost=generation.spent + synthesis.spent)
     pool = [(item["probe"].sequence, item["predictions"], source,
              {key: value for key, value in item.items() if key not in ("probe", "predictions")})
             for source, proposals in (("learned_method", learned), ("program_disagreement", directed))

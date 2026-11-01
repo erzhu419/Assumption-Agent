@@ -457,11 +457,14 @@ def _method_observables(profile):
     selected['data'] = _semantic_coverage(selected['data'])
     research = profile.get('research') or {}
     selected['research'] = {'stage': research.get('stage')}
+    if 'execution_complete' in research:
+        selected['research']['execution_complete'] = research['execution_complete']
     for key, names in {
         'last_unfinished_request': ('operator', 'status', 'stage'),
         'evidence': ('unconsumed_answer', 'new_distinction', 'distinguishing_experiment_available'),
         'budget': ('complete_unit_payable', 'minimum_compute', 'remaining_compute', 'remaining_seconds'),
         'comparison': ('stale', 'paid_rows', 'models_requested', 'models_completed'),
+        'parameter_groups': ('status', 'count', 'fit_columns', 'bound_occurrences', 'groups'),
         'candidate_pool': ('status', 'models_requested', 'known_executions',
             'unknown_prediction_models', 'guarded_executions', 'unknown_guard_executions',
             'min_mature_first_divergences', 'startup_only_first_error_executions',
@@ -496,7 +499,41 @@ def _method_coordinates(views):
                 coordinates.append({"path": list(path), "kind": "equals", "value": value})
         if len(values) != len(views):
             coordinates.append({"path": list(path), "kind": "available"})
-    return coordinates
+    # The saved parameter summary emits these fields together. Their
+    # availability is one fact, even when their numeric values differ. This
+    # uses the producer's contract, never equality of development labels.
+    root = ('research', 'parameter_groups')
+    by_path = {tuple(item['path']): item for item in coordinates if item['kind'] == 'available'}
+    aliases = {}
+    for path, item in by_path.items():
+        if path[:2] != root:
+            continue
+        tail, canonical = path[2:], path
+        if tail in {('bound_occurrences',), ('fit_columns',)}:
+            canonical = (*root, 'count')
+        elif len(tail) >= 3 and tail[0] == 'groups':
+            group, field = tail[1:3]
+            if field in {'parameter_index', 'source_interval_count'} and len(tail) == 3:
+                canonical = (*root, 'count') if group == 0 else (*root, 'groups', group, 'parameter_index')
+            elif field in {'term_indices', 'occurrence_depths'} and len(tail) == 4:
+                occurrence = tail[3]
+                if occurrence == 0:
+                    canonical = (*root, 'count') if group == 0 else (*root, 'groups', group, 'parameter_index')
+                else:
+                    canonical = (*root, 'groups', group, 'term_indices', occurrence)
+        # Partial public summaries are supported too; no alias is inferred
+        # unless both saved coordinates obey the declared availability.
+        if canonical != path and canonical in by_path:
+            if all((path in view) == (canonical in view) for view in views):
+                aliases[path] = canonical
+    kept = []
+    for item in coordinates:
+        path = tuple(item['path'])
+        if item['kind'] == 'available' and path in aliases:
+            continue
+        members = [by_path[alias] for alias, canonical in aliases.items() if canonical == path]
+        kept.append({**item, 'aliases': members} if members else item)
+    return kept
 
 
 def _method_features(view, coordinates):
@@ -535,9 +572,102 @@ def method_condition_support(profile, research):
         'outside_coverage': outside}
 
 
-def _method_conflict_basis(method_ref, measured, unresolved, public_experiments):
+def _method_coverage(views, coordinates):
+    features = [_method_features(view, coordinates) for view in views]
+    paths = sorted(set().union(*(set(view) for view in views)), key=str) if views else []
+    return {'measured_coverage': {name: [min(row[name] for row in features),
+            max(row[name] for row in features)] for name in features[0]} if features else {},
+        'public_value_coverage': [{'path': list(path),
+            'values': list(dict.fromkeys(view.get(path) for view in views))}
+            for path in paths if any(isinstance(view.get(path), str) for view in views)],
+        'public_presence_coverage': [{'path': list(path),
+            'values': sorted({path in view for view in views})} for path in paths]}
+
+
+def native_condition_bindings(groups, workspace):
+    """Bind returned condition evidence to the two actual executable bodies."""
+    from .method_action_research import read_method_reference
+
+    bindings = []
+    for group in groups:
+        bodies = {}
+        for side, field in (('baseline', 'baseline_method_artifact_ref'),
+                            ('challenger', 'method_artifact_ref')):
+            artifact = read_method_reference(group[field], workspace)
+            execution = artifact['execution']
+            if execution['entry'] != 'replay_research_program':
+                raise ValueError('Native condition evidence must identify its actual replay entry')
+            bodies[side + '_program'] = read_method_reference(
+                execution['research_program_ref'], workspace)
+        bindings.append({**bodies, 'research': group,
+            'condition_ref': {'method_ref': group['method_ref'],
+                'feedback_refs': group.get('feedback_refs', []),
+                'group_validation_refs': group.get('group_validation_refs', [])}})
+    return bindings
+
+
+def select_native_method_programs(records, profile, conditions):
+    """Choose whole native methods using the existing paired-condition learner.
+
+    The caller retains every program in its archive. Only this invocation's
+    replay queue changes, and only after validation, measured coverage and
+    agreement of the surviving conditions. Missing evidence keeps its ordinary
+    queue, including any local branch already present in either complete body.
+    """
+    programs, decisions, spent = list(records), [], 0
+    latest = []
+    for binding in conditions:
+        pair = (binding['baseline_program'], binding['challenger_program'])
+        latest = [old for old in latest if
+            (old['baseline_program'], old['challenger_program']) != pair]
+        latest.append(binding)
+    for binding in latest:
+        baseline, challenger = binding['baseline_program'], binding['challenger_program']
+        research = binding['research']
+        decision = {'condition_ref': deepcopy(binding.get('condition_ref')),
+            'selected': None, 'queue_changed': False, 'compute_cost': 0}
+        if not research.get('general_guard_supported') or research.get('budget_incomplete'):
+            decision['reason'] = 'paired_condition_not_validated'
+        elif not profile:
+            decision['reason'] = 'pre_call_public_profile_unavailable'
+        elif not method_condition_support(profile, research)['can_apply']:
+            decision['reason'] = 'outside_measured_public_coverage'
+        elif baseline == challenger or not all(any(item['research_program'] == body
+                for item in programs) for body in (baseline, challenger)):
+            decision['reason'] = 'both_bound_complete_methods_required'
+        else:
+            predictions = _conflict_predictions(research, profile)
+            decision['candidate_predictions'] = predictions
+            decision['compute_cost'] = len(predictions)
+            spent += len(predictions)
+            if not predictions or len({item['helpful'] for item in predictions}) != 1:
+                decision['reason'] = 'competing_conditions_unresolved'
+            else:
+                helpful = predictions[0]['helpful']
+                selected, excluded = (challenger, baseline) if helpful else (baseline, challenger)
+                # Keep unrelated methods and all their relative order. The
+                # selected complete body occupies the pair's first position.
+                chosen = [item for item in programs if item['research_program'] == selected]
+                rest, inserted = [], False
+                for item in programs:
+                    if item['research_program'] in (selected, excluded):
+                        if not inserted:
+                            rest.extend(chosen)
+                            inserted = True
+                    else:
+                        rest.append(item)
+                decision.update(selected='challenger' if helpful else 'baseline',
+                    queue_changed=rest != programs,
+                    reason='validated_condition_selected_complete_method')
+                programs = rest
+        decisions.append(decision)
+    return {'programs': programs, 'decisions': decisions, 'compute_cost': spent}
+
+
+def _method_conflict_basis(method_ref, measured, unresolved, public_experiments, max_conditions=None):
     return {"method_ref": deepcopy(method_ref),
-        "condition_search": "complete_public_coordinate_and_affine_pass",
+        "condition_search": "schema_aliases_complete_coordinates_and_explicit_affine",
+        "candidate_output_limit": max_conditions,
         "returns": [
         {**{key: deepcopy(item[key]) for key in (
             "feedback_ref", "status", "return_basis", "before_loss", "after_loss", "process_return")},
@@ -545,6 +675,20 @@ def _method_conflict_basis(method_ref, measured, unresolved, public_experiments)
              for path, value in _method_observables(item["profile"]).items()]}
         for item in measured], "unresolved_feedback_refs": deepcopy(unresolved),
         "public_experiments": deepcopy(list(public_experiments))}
+
+
+def _select_conflict_candidates(pool, maximum):
+    families = {}
+    for candidate in pool:
+        path = candidate['coordinates'][0]['path']
+        family = ('affine',) if candidate['synthesis'] == 'affine' else tuple(path[:2] if len(path) > 2 else path[:1])
+        families.setdefault(family, []).append(candidate)
+    ordered = []
+    while any(families.values()):
+        for members in families.values():
+            if members:
+                ordered.append(members.pop(0))
+    return ordered if maximum is None else ordered[:maximum]
 
 
 def research_method_conflict(method_ref, outcomes, budget, *, target_profile=None,
@@ -558,12 +702,12 @@ def research_method_conflict(method_ref, outcomes, budget, *, target_profile=Non
     name is passed to a world-prediction experiment selector. All support here
     is exposed development evidence, including successful separation.
     """
-    from .condition_learning import learn_condition
+    from .condition_learning import learn_condition, learn_affine_condition
     from .models import Observation
 
     measured, unresolved = (_completed_method_returns(method_ref, outcomes)
         if paired_returns is None else paired_returns)
-    basis = _method_conflict_basis(method_ref, measured, unresolved, public_experiments)
+    basis = _method_conflict_basis(method_ref, measured, unresolved, public_experiments, max_conditions)
     if previous and previous.get("basis") == basis and not previous.get("budget_incomplete"):
         return {**deepcopy(previous), "compute_cost": 0, "reused": True}
     views = [_method_observables(item["profile"]) for item in measured]
@@ -575,11 +719,13 @@ def research_method_conflict(method_ref, outcomes, budget, *, target_profile=Non
     support = [row for row in rows if row.target]
     counterexamples = [row for row in rows if not row.target]
     # Reserve the complete finite pass before its first diagnostic. Each
-    # coordinate is scanned once; the existing affine learner has k+2 scans.
+    # coordinate is scanned once; the explicit affine fit has two more scans.
     required = len(outcomes) + len(rows) * (len(coordinates) + 1)
-    required += len(rows) * (2 * len(names) + 2) if len(support) >= 2 and counterexamples else 0
+    required += len(rows) * (len(names) + (2 if len(names) > 1 else 0)) \
+        if len(support) >= 2 and counterexamples else 0
     result = {"method_ref": deepcopy(method_ref), "basis": basis,
-        "status": "unresolved", "condition": None, "candidates": [], "diagnostics": [],
+        "status": "unresolved", "condition": None, "candidates": [], "candidate_pool": [],
+        "search_complete": False, "diagnostics": [],
         "coordinate_paths": coordinates, "feedback_refs": [item["feedback_ref"] for item in measured],
         "unresolved_feedback_refs": unresolved, "compute_cost": 0, "required_compute": required,
         "budget_incomplete": False, "scope": "exposed_development",
@@ -611,35 +757,35 @@ def research_method_conflict(method_ref, outcomes, budget, *, target_profile=Non
             selected = names if name is None else [name]
             positive = [Observation({key: row.features[key] for key in selected}, 1.) for row in support]
             negative = [Observation({key: row.features[key] for key in selected}, 0.) for row in counterexamples]
-            learned = learn_condition(positive, negative, budget, scope_purpose="relative_utility", max_history=0)
+            synthesis = 'affine' if name is None else 'coordinate'
+            learner = learn_affine_condition if name is None else learn_condition
+            learned = learner(positive, negative, budget, scope_purpose="relative_utility", max_history=0)
             relevant = [coordinates[int(key.removeprefix("public_"))] for key in selected]
             result["diagnostics"].append({"kind": "observable_condition_test", "coordinates": relevant,
+                "synthesis": synthesis, "compute_cost": learned['compute_cost'],
+                "affine_fit_executed": learned.get('affine_fit_executed', False),
                 "status": learned["status"], "positive_uses": len(support),
                 "negative_uses": len(counterexamples), "feedback_refs": result["feedback_refs"]})
             condition = learned.get("condition")
-            if condition and all(item["condition"] != condition for item in result["candidates"]):
-                result["candidates"].append({"kind": "omitted_public_use_condition",
+            if condition and all(item["condition"] != condition for item in result["candidate_pool"]):
+                result["candidate_pool"].append({"kind": "omitted_public_use_condition",
+                    "synthesis": synthesis,
                     "condition": condition, "coordinates": relevant,
                     "predicted_returns": [{"feedback_ref": item["feedback_ref"],
                         "helpful": bool(row.target)} for item, row in zip(measured, rows)],
                     "prediction": "The method has local utility only on the true branch of this public-state condition.",
                     "scope": "fits_supplied_development_returns"})
-            if max_conditions is not None and len(result['candidates']) >= max_conditions:
-                break
+    # As in the retained template search, give distinct structures a turn.
+    # The output bound never stops a paid finite diagnostic or discards its
+    # result; unselected candidates remain in the pool for later comparison.
+    result['candidates'] = _select_conflict_candidates(result['candidate_pool'], max_conditions)
+    result['search_complete'] = True
     if result["candidates"]:
         result["condition"] = deepcopy(result["candidates"][0]["condition"])
         result["status"] = "development_conditions_found"
     else:
         result["status"] = "conflicting_public_view" if collisions else "insufficient_distinguishing_returns"
-    result["measured_coverage"] = {name: [min(row.features[name] for row in rows),
-        max(row.features[name] for row in rows)] for name in features[0]} if features else {}
-    result["public_value_coverage"] = [{"path": list(path),
-        "values": list(dict.fromkeys(view.get(path) for view in views))}
-        for path in sorted(set().union(*(set(view) for view in views)), key=str)
-        if any(isinstance(view.get(path), str) for view in views)] if views else []
-    result["public_presence_coverage"] = [{"path": list(path),
-        "values": sorted({path in view for view in views})}
-        for path in sorted(set().union(*(set(view) for view in views)), key=str)] if views else []
+    result.update(_method_coverage(views, coordinates))
     result["development_witnesses"] = [{"feedback_ref": item["feedback_ref"],
         "helpful": item["status"] == "local_improvement", "return_basis": item["return_basis"]}
         for item in measured]
@@ -685,7 +831,8 @@ def _conflict_use_decision(research, method_ref, profile, measured, unresolved):
     if not research or research.get("method_ref") != method_ref or research.get("budget_incomplete"):
         return None
     expected = _method_conflict_basis(method_ref, measured, unresolved,
-        research.get("basis", {}).get("public_experiments", []))
+        research.get("basis", {}).get("public_experiments", []),
+        research.get("basis", {}).get("candidate_output_limit"))
     if expected != research.get("basis"):
         return {"status": "stale_conflict_diagnosis", "reason": "method_feedback_changed_requires_new_diagnosis"}
     predictions = _conflict_predictions(research, profile)
@@ -931,20 +1078,73 @@ def paired_method_preference(pair):
         'losses': [q['loss'] for q in quality]}
 
 
+def _frozen_paired_conditions(method_ref, pairs):
+    """Recover the conditions and predictions recorded before validation calls."""
+    validation = [pair for pair in pairs if pair.get('data_role') == 'condition_validation']
+    if not any(pair.get('frozen_conditions_ref') or pair.get('condition_prediction_ref')
+               for pair in validation):
+        return None
+    frozen, votes, condition_refs, prediction_refs = None, [], [], []
+
+    def unresolved(reason):
+        return {'status': 'frozen_condition_validation_unresolved', 'reason': reason,
+            'condition': None, 'candidates': [], 'compute_cost': 0,
+            'required_compute': 0, 'budget_incomplete': False}
+
+    for pair in validation:
+        groups = pair.get('frozen_conditions') or []
+        prediction = pair.get('condition_prediction') or {}
+        if not pair.get('frozen_conditions_ref') or not pair.get('condition_prediction_ref'):
+            return unresolved('validation_condition_not_bound_to_frozen_prediction')
+        matches = [(index, group) for index, group in enumerate(groups)
+            if group.get('method_ref') == method_ref and group.get('baseline_method_ref')
+                == pair['baseline'].get('method_ref')]
+        if len(matches) != 1:
+            return unresolved('frozen_condition_method_pair_differs')
+        index, group = matches[0]
+        if not group.get('candidates') or group.get('budget_incomplete'):
+            return unresolved('frozen_condition_candidate_unavailable')
+        if frozen is not None and (group.get('coordinate_paths') != frozen.get('coordinate_paths')
+                or [item['condition'] for item in group['candidates']]
+                    != [item['condition'] for item in frozen['candidates']]):
+            return unresolved('validation_sources_used_different_frozen_conditions')
+        if (prediction.get('before_method_execution') is not True
+                or prediction.get('frozen_conditions_ref') != pair['frozen_conditions_ref']):
+            return unresolved('condition_prediction_not_bound_before_method_call')
+        if _method_observables(prediction.get('profile', {})) != _method_observables(
+                pair['baseline'].get('profile', {})):
+            return unresolved('frozen_condition_prediction_profile_differs')
+        predictions = prediction.get('predictions', [])
+        saved = predictions[index].get('candidate_predictions', []) if index < len(predictions) else []
+        if ([item.get('candidate') for item in saved] != list(range(len(group['candidates'])))
+                or any(type(item.get('helpful')) is not bool for item in saved)):
+            return unresolved('frozen_condition_predictions_unavailable')
+        frozen = deepcopy(group)
+        votes.append({'feedback_ref': deepcopy(pair['feedback_ref']),
+            'helpful': [item['helpful'] for item in saved]})
+        condition_refs.append(deepcopy(pair['frozen_conditions_ref']))
+        prediction_refs.append(deepcopy(pair['condition_prediction_ref']))
+    return {**frozen, 'status': 'development_conditions_found', 'compute_cost': 0,
+        'required_compute': 0, 'budget_incomplete': False,
+        'condition_validation_mode': 'frozen_before_method_call',
+        'frozen_condition_refs': condition_refs, 'frozen_condition_prediction_refs': prediction_refs,
+        'frozen_validation_predictions': votes}
+
+
 def research_paired_method_conditions(method_ref, pairs, budget, *, max_conditions=8,
-                                      target_profile=None):
+                                      target_profile=None, previous=None):
     """Learn only from matched action contrasts; retain untested/negative work."""
     if not 1 <= max_conditions <= 8:
         raise ValueError('paired method research permits one to eight conditions')
     unique = []
     for pair in pairs:
         origin = pair.get('origin_ref', pair.get('feedback_ref'))
-        previous = next((i for i, value in enumerate(unique)
+        position = next((i for i, value in enumerate(unique)
             if value.get('origin_ref', value.get('feedback_ref')) == origin), None)
-        if previous is None:
+        if position is None:
             unique.append(pair)
         else:
-            unique[previous] = pair
+            unique[position] = pair
     preferences, measured, validation, unresolved = [], [], [], []
     for pair in unique:
         preference = paired_method_preference(pair)
@@ -985,8 +1185,23 @@ def research_paired_method_conditions(method_ref, pairs, budget, *, max_conditio
             pair['baseline_action_content'] != pair['challenger_action_content']
             for pair in unique if pair.get('data_role') == 'development'):
         return {**result, 'status': 'no_distinct_executable_action'}
-    learned = research_method_conflict(method_ref, [], budget,
-        paired_returns=(measured, unresolved), max_conditions=max_conditions, target_profile=target_profile)
+    learned = _frozen_paired_conditions(method_ref, unique)
+    if learned is None:
+        prior_search = deepcopy(previous) if previous else None
+        if prior_search and prior_search.get('status') in {
+                'development_condition_without_group_support', 'awaiting_registered_condition_validation',
+                'paired_condition_supported_on_declared_groups'}:
+            # Pair validation may have narrowed candidates or changed status.
+            # Recover the saved finite search, then evaluate today's validation
+            # below; its acceptance is never inherited from a cached result.
+            prior_search['candidates'] = _select_conflict_candidates(
+                prior_search.get('candidate_pool', []), max_conditions)
+            prior_search['condition'] = (deepcopy(prior_search['candidates'][0]['condition'])
+                                         if prior_search['candidates'] else None)
+            prior_search['status'] = 'development_conditions_found'
+        learned = research_method_conflict(method_ref, [], budget,
+            paired_returns=(measured, unresolved), max_conditions=max_conditions,
+            target_profile=target_profile, previous=prior_search)
     result.update(learned, preferences=preferences, paired_invocations=len(unique),
         new_version_supported=False, local_program_supported=bool(local),
         local_support_refs=deepcopy(local), general_guard_supported=False)
@@ -995,9 +1210,33 @@ def research_paired_method_conditions(method_ref, pairs, budget, *, max_conditio
     groups = [item['physical_source_ref'] for item in measured]
     checked = [item for item in validation if item['physical_source_ref'] is not None
         and item['physical_source_ref'] not in groups]
-    accepted = [candidate for candidate in learned['candidates'] if checked and all(
-        (prediction := _conflict_predictions({**learned, 'candidates': [candidate]}, item['profile']))
-        and prediction[0]['helpful'] == (item['status'] == 'local_improvement') for item in checked)]
+    required_sources = []
+    for pair in unique:
+        for source in pair.get('condition_validation_cohort_refs', []):
+            if source not in required_sources:
+                required_sources.append(deepcopy(source))
+    missing_sources = [source for source in required_sources
+                       if source not in [item['physical_source_ref'] for item in checked]]
+    result['condition_validation_cohort_refs'] = required_sources
+    result['missing_condition_validation_source_refs'] = missing_sources
+    if missing_sources:
+        result.update(status='awaiting_registered_condition_validation', condition=None,
+            group_validation_refs=[item['feedback_ref'] for item in checked])
+        return result
+    def agrees(index, candidate, item):
+        if learned.get('condition_validation_mode') == 'frozen_before_method_call':
+            prediction = next(value for value in learned['frozen_validation_predictions']
+                if value['feedback_ref'] == item['feedback_ref'])
+            helpful = prediction['helpful'][index]
+        else:
+            predictions = _conflict_predictions({**learned, 'candidates': [candidate]}, item['profile'])
+            if not predictions:
+                return False
+            helpful = predictions[0]['helpful']
+        return helpful == (item['status'] == 'local_improvement')
+
+    accepted = [candidate for index, candidate in enumerate(learned['candidates'])
+        if checked and all(agrees(index, candidate, item) for item in checked)]
     result['group_validation_refs'] = [item['feedback_ref'] for item in checked]
     if not accepted:
         result.update(status='development_condition_without_group_support', condition=None)
@@ -1005,4 +1244,9 @@ def research_paired_method_conditions(method_ref, pairs, budget, *, max_conditio
     result.update(candidates=accepted, condition=deepcopy(accepted[0]['condition']),
         new_version_supported=True, general_guard_supported=True,
         status='paired_condition_supported_on_declared_groups')
+    # These new physical sources actually tested the frozen conditions. Keep
+    # their measured public range available to the ordinary consumer; retaining
+    # only the development range would reject even the just-validated call.
+    result.update(_method_coverage([_method_observables(item['profile'])
+        for item in [*measured, *checked]], learned['coordinate_paths']))
     return result

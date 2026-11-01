@@ -94,7 +94,28 @@ def retain_interval_evidence(research, selected, candidates, row_count, toleranc
     symbol = research.parameters[index]['symbol']
     interval = next(domain for domain in research.parameters[index]['radius_intervals']
                     if domain[0] <= values[symbol] <= domain[1])
-    return research._entry(values, interval, index, selected['validation_loss'], row_count, 0)
+    retained = research._entry(values, interval, index, selected['validation_loss'], row_count, 0)
+    # Pool comparison assigns the current all-paid score to training_loss too.
+    # The original readout graph, not that working score, owns the fit scope.
+    original = selected['research_program']
+    fit_source = original.get('readout_fit_source', {})
+    fit_rows = fit_source.get('fit_rows', original['fit_rows'])
+    fit_loss = original['graph']['nodes'][original['output_node']]['loss']
+    retained.update(training_loss=fit_loss, all_paid_loss=selected['validation_loss'],
+                    evaluation_rows=row_count)
+    body = retained['research_program']
+    body.update(fit_rows=fit_rows, evaluation_rows=row_count,
+                evaluation_loss=selected['validation_loss'])
+    body['graph']['nodes'][body['output_node']]['loss'] = fit_loss
+    for name in ('readout_fit_source', 'source_fit_ref', 'transfer_partition',
+                 'transfer_partition_search'):
+        if name in original:
+            body[name] = deepcopy(original[name])
+    if 'transfer_partition' in body:
+        body['transfer_partition']['released_groups'] = [symbol]
+    # This parameter was scored by the retained pool. Do not manufacture the
+    # per-row/per-trajectory errors that alternatives only holds for its drafts.
+    return retained
 
 
 def extend_scores(scores, old_count, rows, budget, fallback):

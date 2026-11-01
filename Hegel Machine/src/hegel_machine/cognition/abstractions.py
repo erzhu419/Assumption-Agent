@@ -160,6 +160,12 @@ class AbstractTemplate:
             indices = sorted({index for index, _ in self.object_roles.values()})
             for objects in permutations(object_schema["objects"], len(indices)):
                 assignment = dict(zip(indices, objects))
+                # Partial induction deliberately publishes only established
+                # roles. An unresolved role is not a failed executable, nor
+                # permission to bind an unrelated sensor with the same type.
+                if any(role not in object_schema["fields"][assignment[index]]
+                       for index, role in self.object_roles.values()):
+                    continue
                 mapping = {name: object_schema["fields"][assignment[index]][role]
                            for name, (index, role) in self.object_roles.items()}
                 if mapping not in emitted:

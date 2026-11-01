@@ -18,6 +18,7 @@ from random import Random
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
 
 from hegel_machine.cognition.anonymous_object_lab import AnonymousObjectLab
@@ -53,10 +54,160 @@ def tasks():
     return result
 
 
-def config(seed):
+def config(seed, registered=None):
+    if registered is not None:
+        return ResearchConfig(**{**registered, 'seed': seed})
     return ResearchConfig(seed=seed, observation_budget=LIMITS['observation_cost'],
         compute_budget=LIMITS['compute_cost'], minimum_improvement=1e-7,
         max_rounds=6, max_history=4, active_probes=True)
+
+
+def program_successor_protocol(source_task):
+    """Four declared single-factor physical sources; never selected by scores."""
+    factors = ('000', '100', '010', '001')
+    cases = []
+    for index, factor in enumerate(factors):
+        seed = 106030201 + index
+        task = {**deepcopy(source_task), 'seed': seed, 'apparatus_seed': seed}
+        if factor == '100':
+            task['relation_radius'] = source_task['relation_radius'] * 1.25
+        if factor == '010':
+            task['relation_direction'] = ('left' if source_task.get('relation_direction', 'symmetric') == 'right'
+                                          else 'right')
+        if factor == '001':
+            task.update(name_seed=seed + 63857, wiring_seed=seed + 3709,
+                        actuator_curvature=source_task['actuator_curvature'] + .05)
+        cases.append({'factor': factor, 'task': task})
+    # Existing random-plus-control-step terminal. One shared measurement per
+    # actual bank, at most coarse+fine. No additional target feedback is legal.
+    terminal = {'length': 48, 'trajectories': 1, 'random_seed_offset': 1000003,
+        'random_backgrounds': 0, 'background_seed_offset': 2000003,
+        'sweep_fractions': [0., .25, .5, .75, 1.], 'mse_tolerance': 1e-7}
+    controls = 3 * source_task['objects'] + 1
+    terminal_rows = 48 + 10 * controls
+    count = len(cases) * len(ARMS)
+    return {'scope': 'prospective_single_factor_native_ABC_not_LLM_Code',
+        'factor_cases': cases, 'tasks': [item['task'] for item in cases],
+        'limits': LIMITS, 'arms': ARMS, 'activity_seconds': ACTIVITY_SECONDS,
+        'terminal': terminal, 'research_config': {**asdict(config(cases[0]['task']['seed'])),
+                                               'max_candidates': 4},
+        'budget_quote': {'training_compute_upper': count * LIMITS['compute_cost'],
+            'terminal_compute_upper': len(cases) * len(ARMS) * terminal_rows,
+            'total_new_compute_upper': count * LIMITS['compute_cost'] + len(cases) * len(ARMS) * terminal_rows,
+            'training_observation_upper': count * LIMITS['observation_cost'],
+            'shared_terminal_observation_upper': 2 * len(cases) * terminal_rows,
+            'total_new_observation_upper': count * LIMITS['observation_cost'] + 2 * len(cases) * terminal_rows,
+            'total_new_measurement_upper': count * LIMITS['measurement_cost']
+                + len(cases) * terminal_rows * (3 + 3 * source_task['objects']),
+            'training_activity_seconds_upper': count * ACTIVITY_SECONDS,
+            'source_costs': 'existing occurrences separate; not included a second time',
+            'model_calls': 0},
+        'selection_boundary': 'No result-based source replacement; source factors remain laboratory-side',
+        'nuisance_contract': 'Every cell has fresh readout/coupling coefficients. P means the relation radius only; '
+            'S changes relation direction; M jointly changes names, wiring and instrument curvature.',
+        'current_budget_admitted': False}
+
+
+def program_knowledge(root, repair_ref=None):
+    from successor_interval_scene import load_confirmed_knowledge, load_repaired_knowledge
+    if repair_ref:
+        return load_repaired_knowledge(root, repair_ref)[0]
+    return load_confirmed_knowledge(root)
+
+
+def frozen_program_bank(source, method, proposal):
+    """Retain every actually formed source method, including the first stage."""
+    record = {'source_concept_id': source['source_concept_id'],
+              'source_ref': source['source_ref'],
+              **({'source_model_ref': source['source_model_ref']}
+                 if source.get('source_model_ref') else {})}
+    bodies = [method['research_program'],
+              *(item['research_program'] for item in proposal['candidates']),
+              proposal['baseline_research_program']]
+    result = []
+    for body in bodies:
+        if not any(item['research_program'] == body for item in result):
+            result.append({**record, 'research_program': body})
+    return result
+
+
+def register_programs(args):
+    """Prepare an inspectable registration without acquiring or fitting anything."""
+    from hegel_machine.cognition.method_action_research import read_method_reference
+    output = args.output.resolve()
+    if output.exists():
+        raise ValueError('Preserve the existing registration')
+    raw = load(args.program_source)
+    method = load(args.method)
+    task_source = load(args.task_source)
+    source_task = task_source['task']
+    plan = program_successor_protocol(source_task)
+    repair_ref = task_source.get('repaired_entry_ref')
+    if not repair_ref and task_source.get('method_program_revisions', {}).get('challenger'):
+        repair_ref = read_method_reference(task_source['method_program_revisions']['challenger'],
+                                          args.task_source.parent)['repaired_entry_ref']
+    knowledge = plain(program_knowledge(args.knowledge_root, repair_ref).to_dict())
+    if not any(prior['source_concept_id'] == raw['source_concept_id']
+               for prior in knowledge['meta_priors']):
+        raise ValueError('The source program must belong to the retained executable library')
+    pool_ref = {'file': str(args.source_pool.resolve())}
+    pool = read_method_reference(pool_ref, output)['scores']
+    if not pool:
+        raise ValueError('Declare the complete retained candidate pool')
+    base = task_source['historical_knowledge_ref']
+    store = HistoryStore(base['store'], readonly=True)
+    try:
+        matches = {task['seed']: [row[0] for row in store.connection.execute(
+            'SELECT unit FROM entries WHERE unit LIKE ? LIMIT 1', ('%' + str(task['seed']) + '%',))]
+            for task in plan['tasks']}
+    finally:
+        store.close()
+    if any(matches.values()) or source_task['seed'] in matches:
+        raise ValueError('A registered source identity is already exposed')
+    output.mkdir(parents=True)
+    save(output / 'inputs/program_source.json', raw)
+    proposal = read_method_reference(raw['proposal_ref'], args.program_source.parent)['proposal']
+    frozen_methods = frozen_program_bank(raw, method, proposal)
+    for index, record in enumerate(frozen_methods):
+        record['formation_ref'] = ({'file': str(args.method.resolve())}
+                                   if index == 0 else raw['proposal_ref'])
+    save(output / 'inputs/program_method.json', frozen_methods)
+    save(output / 'inputs/source_costs.json', load(args.source_costs))
+    save(output / 'inputs/raw_source.json', load(args.raw_source) if args.raw_source else None)
+    save(output / 'inputs/method.json', {})
+    conditions = load(args.method_conditions) if args.method_conditions else []
+    if isinstance(conditions, dict):
+        conditions = read_method_reference(conditions, args.method_conditions.parent)
+    save(output / 'inputs/method_conditions.json', conditions)
+    from run_learned_structure_successor import freeze_runtime
+    freeze_runtime(output, args.knowledge_root)
+    admitted = False
+    if args.budget_contract:
+        allocation = load(args.budget_contract)['allocations']['abc']
+        if (allocation['compute_cost'] < plan['budget_quote']['total_new_compute_upper']
+                or allocation['observation_cost'] < plan['budget_quote']['total_new_observation_upper']):
+            raise ValueError('The declared ABC allocation cannot fund its frozen full protocol')
+        admitted = True
+    registration = {**plan, 'registered_at': datetime.now(timezone.utc).isoformat(),
+        'method_kind': 'transfer_partition', 'workers': args.workers,
+        'knowledge_root': str(args.knowledge_root.resolve()),
+        'knowledge_repair_ref': deepcopy(repair_ref),
+        'historical_knowledge_ref': base, 'historical_cumulative_costs': None,
+        'source_pool_ref': pool_ref, 'source_pool_size': len(pool),
+        'shared_source_ref': raw['source_ref'], 'source_costs_ref': {'file': 'inputs/source_costs.json'},
+        'unexposed_check': matches,
+        'contrast': {'archive': 'ordinary adaptive author reconstructs from the same real source returns',
+            'fixed_pr2': 'Common organization with the same executable reconstruction and all ordinary solvers',
+            'pr3': 'same organization plus the actually frozen learned program and validated conditions'},
+        'knowledge_contract': 'same full library, paid raw sources and full candidate pool; per-target additions stay local',
+        'evaluation_contract': 'all twelve outcomes freeze before shared target labels are scored',
+        'failure_contract': 'keep all twelve; no retries, replacement, cost-zero failures or post-hoc arm switching',
+        'claim_boundary': 'finite native organization contrast, not complete LLM agent superiority',
+        'model_calls': 0, 'current_budget_admitted': admitted,
+        'budget_contract_ref': {'file': str(args.budget_contract.resolve()), 'json_path': ['allocations', 'abc']}
+            if args.budget_contract else None}
+    save(output / 'registration.json', registration)
+    return registration
 
 
 def historical_knowledge(reference):
@@ -226,19 +377,33 @@ def train_one(job):
     task = next(item for item in state['registration']['tasks'] if item['seed'] == seed)
     with timing.phase('restore'):
         library = KnowledgeLibrary.from_dict(deepcopy(state['knowledge']))
-        agent = CommonObjectResearchAgent(config(seed), measurement_budget=LIMITS['measurement_cost'],
+        extra = {}
+        if state['registration'].get('method_kind') == 'transfer_partition':
+            from hegel_machine.cognition.method_conditions import native_condition_bindings
+            extra = {'program_sources': [state['program_source']],
+                'learned_programs': state['program_method'] if arm == 'pr3' else [],
+                'retained_pool': state['retained_pool'],
+                'condition_sources': state['method_conditions'],
+                'native_method_conditions': native_condition_bindings(state['method_conditions'], state['output'])
+                    if arm == 'pr3' else []}
+        agent = CommonObjectResearchAgent(config(seed, state['registration'].get('research_config')),
+            measurement_budget=state['registration']['limits']['measurement_cost'],
             library=library, workspace=output / 'common', organization=arm,
             source_task_ref={'file': str(state['output'] / 'registration.json'),
                 'json_path': ['tasks', state['registration']['tasks'].index(task)]},
-            raw_sources=[deepcopy(state['raw'])],
-            learned_methods=[deepcopy(state['method'])] if arm == 'pr3' else [])
+            raw_sources=[deepcopy(state['raw'])] if state['raw'] else [],
+            learned_methods=[deepcopy(state['method'])] if arm == 'pr3' and state['method'] else [], **extra)
     with AnonymousObjectLab(**task) as laboratory:
         try:
             with timing.phase('research'), python_execution_deadline(ACTIVITY_SECONDS, activity=True):
                 report = agent.run(laboratory)
         except Exception as error:
+            import traceback
             with timing.phase('save'):
                 save(output / 'failure.json', {'error': repr(error),
+                    'traceback': traceback.format_exc(),
+                    'paid_state_ref': agent.failure_evidence_ref,
+                    'confirmed_compute_lower_bound': agent.failure_compute_lower_bound,
                     'actual_acquisition_costs': laboratory.costs,
                     'new_acquisitions': laboratory.acquisitions,
                     'compute_cost': None, 'compute_upper_bound': LIMITS['compute_cost'],
@@ -247,6 +412,7 @@ def train_one(job):
             summary = {'seed': seed, 'arm': arm, 'status': 'failed',
                 'frozen': True, 'predictor_available': False,
                 'costs': {**laboratory.costs, 'compute_cost': None},
+                'confirmed_compute_lower_bound': agent.failure_compute_lower_bound,
                 'compute_unknown_upper_bound': LIMITS['compute_cost'],
                 'failure_ref': {'file': 'failure.json'}, 'execution_timing': timing.result()}
         else:
@@ -263,7 +429,8 @@ def train_one(job):
                 'frozen': True, 'predictor_available': available,
                 'confirmation_loss': report.get('confirmation_loss'), 'costs': report['costs'],
                 'source_reconstruction_cost': sum(item['compute_cost']
-                    for item in agent.source_reconstruction_receipts),
+                    for item in [*agent.source_reconstruction_receipts, *agent.program_reconstruction_receipts])
+                    + sum(item['new_compute_cost'] for item in agent.condition_reconstruction_receipts),
                 'common_child_compute_cost': sum(item.common.costs['compute_cost']
                     for item in agent.common_object_consumers),
                 'nested_cost_scope': 'included in parent compute, never added again',
@@ -277,6 +444,8 @@ def run(output):
     global _SHARED
     output = Path(output).resolve()
     registration = load(output / 'registration.json')
+    if registration.get('method_kind') == 'transfer_partition' and not registration.get('current_budget_admitted'):
+        raise ValueError('The new twelve-run budget is not admitted; registration does not launch research')
     jobs = [(task['seed'], arm) for task in registration['tasks'] for arm in ARMS]
     missing = []
     for seed, arm in jobs:
@@ -295,10 +464,32 @@ def run(output):
     if missing:
         timing = ExecutionTiming(('restore_once', 'trials', 'save'))
         with timing.phase('restore_once'):
-            knowledge, _, _ = historical_knowledge(registration['historical_knowledge_ref'])
+            if registration.get('knowledge_root'):
+                knowledge = plain(program_knowledge(Path(registration['knowledge_root']),
+                    registration.get('knowledge_repair_ref')).to_dict())
+            else:
+                knowledge, _, _ = historical_knowledge(registration['historical_knowledge_ref'])
             _SHARED = {'output': output, 'registration': registration, 'knowledge': knowledge,
                 'raw': load(output / 'inputs/raw_source.json'),
                 'method': load(output / 'inputs/method.json')}
+            if registration.get('method_kind') == 'transfer_partition':
+                from hegel_machine.cognition.method_action_research import read_method_reference
+                from hegel_machine.cognition.object_continuation import decode_entry
+                from hegel_machine.cognition.language import Program
+                from hegel_machine.cognition.models import Candidate
+                pool = read_method_reference(registration['source_pool_ref'], output)['scores']
+                entries = []
+                for index, row in enumerate(pool):
+                    payload = read_method_reference(row['candidate_ref'], output)
+                    entries.append(decode_entry(payload) if 'candidate' in payload else {
+                        'candidate': Candidate(f'retained:{index}', Program.from_dict(payload['program']), 'research_program'),
+                        'kind': 'research_program', 'family_id': 'T03',
+                        'research_program': payload['research_program'],
+                        'training_loss': payload['training_loss'], 'validation_loss': payload['validation_loss']})
+                    entries[-1]['retained_candidate_ref'] = row['candidate_ref']
+                _SHARED.update(program_source=load(output / 'inputs/program_source.json'),
+                    program_method=load(output / 'inputs/program_method.json'), retained_pool=entries,
+                    method_conditions=load(output / 'inputs/method_conditions.json'))
         try:
             with timing.phase('trials'):
                 run_process_trials(train_one, missing, registration['workers'])
@@ -362,8 +553,49 @@ def evaluate(output):
         'source_and_unknown_costs_kept_separate': True,
         'full_lifecycle_net_benefit': 'not inferred automatically; reconcile source and unknown ledger',
         'claim_boundary': registration['claim_boundary'], 'model_calls': 0}
+    summary['lifecycle_costs'] = lifecycle_readout(output, registration, all_summaries, results)
     save(output / 'summary.json', summary)
     return summary
+
+
+def lifecycle_readout(output, registration, training, terminal):
+    from hegel_machine.cognition.research_lifecycle_costs import summarize_research_lifecycle
+    ledger = load(output / registration['source_costs_ref']['file'])
+    occurrences = deepcopy(ledger.get('occurrences', []))
+    if not occurrences:
+        # The old free-form bill remains addressed. Its unallocated source
+        # costs cannot cancel between A/B/C or become an apparent zero.
+        occurrences = [{'occurrence_ref': {**registration['source_costs_ref'], 'unresolved_arm': arm},
+            'scope': 'incremental_execution', 'phase': 'source', 'charged_to': [arm],
+            'costs': {}, 'reason': 'source_increment_and_attribution_not_resolved'} for arm in ARMS]
+    outcomes = []
+    for (seed, arm), row in training.items():
+        costs = {**row['costs'], 'model_calls': 0, 'reported_tokens': 0}
+        interval = {}
+        if costs.get('compute_cost') is None:
+            interval['compute_cost'] = [row.get('confirmed_compute_lower_bound', 0), row.get('compute_unknown_upper_bound',
+                row.get('unknown_upper_bounds', {}).get('compute_cost'))]
+        occurrences.append({'occurrence_ref': {'file': str(output / 'runs' / str(seed) / arm / 'summary.json')},
+            'scope': 'incremental_execution', 'phase': 'successor', 'charged_to': [arm],
+            'failed': row['status'] != 'completed', 'costs': costs, 'cost_intervals': interval})
+        evaluated = next(item for item in terminal if item['seed'] == seed)['arms'][arm]
+        outcomes.append({'arm': arm, 'seed': seed, 'predictor_available': row['predictor_available'],
+            'prediction_pass': evaluated['prediction_pass'],
+            'prediction_measured': evaluated.get('prediction_measured', row['predictor_available'])})
+    for row in terminal:
+        shared = {**row['shared_actual_costs'], 'model_calls': 0, 'reported_tokens': 0}
+        prediction_compute = shared.pop('compute_cost')
+        shared['compute_cost'] = 0
+        occurrences.append({'occurrence_ref': {'file': str(output / 'terminal' / str(row['seed']) / 'summary.json')},
+            'scope': 'incremental_execution', 'phase': 'terminal', 'charged_to': list(ARMS),
+            'costs': shared})
+        predicted = [arm for arm in ARMS if training[row['seed'], arm]['predictor_available']]
+        for arm in predicted:
+            occurrences.append({'occurrence_ref': {'file': str(output / 'terminal' / str(row['seed']) / 'summary.json'),
+                'json_path': ['arms', arm]}, 'scope': 'incremental_execution', 'phase': 'terminal',
+                'charged_to': [arm], 'costs': {'compute_cost': prediction_compute / len(predicted),
+                    'observation_cost': 0, 'measurement_cost': 0, 'model_calls': 0, 'reported_tokens': 0}})
+    return summarize_research_lifecycle(occurrences, arms=ARMS, outcomes=outcomes)
 
 
 def freeze_terminal_reader(output, terminal_script):
@@ -404,13 +636,21 @@ def freeze_terminal_reader(output, terminal_script):
 
 def main():
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument('mode', choices=('register', 'run', 'evaluate'))
+    parser.add_argument('mode', choices=('register', 'register-programs', 'run', 'evaluate'))
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-parent-root', type=Path)
     parser.add_argument('--repair-receipt', type=Path)
     parser.add_argument('--raw-source', type=Path)
     parser.add_argument('--method', type=Path)
     parser.add_argument('--source-costs', type=Path)
+    parser.add_argument('--program-source', type=Path)
+    parser.add_argument('--source-pool', type=Path)
+    parser.add_argument('--knowledge-root', type=Path)
+    parser.add_argument('--task-source', type=Path)
+    parser.add_argument('--method-conditions', type=Path,
+        help='Actual paired_condition_research list or its retained file/json_path reference')
+    parser.add_argument('--budget-contract', type=Path,
+        help='Authorized separate total protocol with an allocations.abc computation and observation allowance')
     parser.add_argument('--history-store', type=Path,
         default=Path('/mnt/d/Hegel-History-Archive-20261012/effective_history.sqlite3'))
     parser.add_argument('--workers', type=int, default=8)
@@ -422,13 +662,15 @@ def main():
             parser.error('--terminal-script applies only to the frozen terminal stage')
         launcher = freeze_terminal_reader(args.output, args.terminal_script)
         os.execv(sys.executable, [sys.executable, str(launcher)])
-    if args.mode == 'register':
-        required = ('source_parent_root', 'repair_receipt', 'raw_source', 'method', 'source_costs')
+    if args.mode in {'register', 'register-programs'}:
+        required = (('source_parent_root', 'repair_receipt', 'raw_source', 'method', 'source_costs')
+            if args.mode == 'register' else
+            ('program_source', 'source_pool', 'knowledge_root', 'task_source', 'method', 'source_costs'))
         if any(getattr(args, name) is None for name in required):
             parser.error('register requires explicit source, repair, raw material, method and cost receipts')
         if not 1 <= args.workers <= 8:
             parser.error('use one to eight physical workers')
-        register(args)
+        (register if args.mode == 'register' else register_programs)(args)
     else:
         frozen = args.output.resolve() / 'runtime/scripts' / Path(__file__).name
         if Path(__file__).resolve() != frozen:

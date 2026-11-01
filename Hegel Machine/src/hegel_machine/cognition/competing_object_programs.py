@@ -141,7 +141,8 @@ def _radius_alternatives(hypotheses, rows, fresh, budget, tolerance, quantile, l
 
 def research_competing_object_programs(spec, training, budget, *, previous=None,
                                       new_observations=(), transitions=(),
-                                      tolerance=1e-7, max_candidates=8):
+                                      tolerance=1e-7, max_candidates=8, preferred_schemas=(),
+                                      response_parent=None):
     """Fit and revise finite competing assignments within the supplied budget.
 
     ``training`` contains all paid observations for this task, including any
@@ -166,7 +167,8 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
     if not model or not rows or max_candidates < 1:
         return {"entries": [], "competition": state}
     model = json.loads(model) if isinstance(model, str) else model
-    enumeration = enumerate_object_schemas(model, budget, max_schemas=max_candidates)
+    enumeration = enumerate_object_schemas(model, budget, max_schemas=max_candidates,
+                                           preferred_schemas=preferred_schemas)
     state.update({key: enumeration[key] for key in (
         "schemas", "source_model_id", "exhaustive", "unresolved")})
     schemas = enumeration["schemas"]
@@ -268,17 +270,35 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 fit["new_observation_loss"] = loss(fit["candidate"].program, fresh, 0., spec.risk_quantile)
             return fit.get("new_observation_loss", 0.) <= tolerance
 
-        fits = []
+        fits, fit_attempts = [], []
+
+        def record_attempt(stage, attempted, work, spent_before=0):
+            # Keep references until the existing admission loop has attached
+            # any paid fresh-data score. Only scalar diagnostics are persisted.
+            fit_attempts.append({"stage": stage, "fits": attempted,
+                "compute_limit": work.limit, "compute_available_at_start": work.limit - spent_before,
+                "compute_cost": work.spent - spent_before,
+                "compute_remaining": work.remaining,
+                "last_denied_request": deepcopy(work.last_denied_request)})
+
         if parent:
             # A refuted radius or family must not use the whole assignment's
             # allowance before alternative families get a chance to explain it.
             parent_budget = SearchBudget(search_budget.remaining // 3)
             fits = propose_structures(local_spec, rows, parent_budget,
                 parent=parent, tolerance=tolerance, transitions=transitions)
+            record_attempt("parent_revision", fits, parent_budget)
             search_budget.spend(parent_budget.spent)
         if not any(supports_current_evidence(fit) for fit in fits):
+            before_search = search_budget.spent
+            # A new role assignment must test the retained response, not lose
+            # its fitted columns and restart from unrelated default responses.
+            # An existing same-schema hypothesis retains its original path.
+            retained_response = response_parent if not prior else None
             fits = propose_structures(local_spec, rows, search_budget,
-                tolerance=tolerance, transitions=transitions)
+                parent=retained_response, tolerance=tolerance, transitions=transitions)
+            record_attempt("parent_response" if retained_response else "structural_search",
+                           fits, search_budget, before_search)
         local_budget.spend(search_budget.spent)
         accepted, seen = [], set()
         for fit in fits:
@@ -307,9 +327,27 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
         accepted = _radius_alternatives(accepted, rows, fresh, local_budget,
             tolerance, spec.risk_quantile, per_schema)
         budget.spend(local_budget.spent)
+        for attempt in fit_attempts:
+            diagnostics = []
+            for fit in attempt["fits"]:
+                support = ("training_loss_above_tolerance" if fit["training_loss"] > tolerance else
+                    "fresh_loss_not_evaluated" if fresh and "new_observation_loss" not in fit else
+                    "new_observation_loss_above_tolerance" if fit.get("new_observation_loss", 0.) > tolerance else
+                    "supported_on_evaluated_rows")
+                diagnostics.append({"candidate_id": fit["candidate"].candidate_id,
+                    "family_id": fit["family_id"], "family": fit["structure"]["fits"][0]["family"],
+                    "training_loss": fit["training_loss"],
+                    "new_observation_loss": fit.get("new_observation_loss"),
+                    "search_complete": fit["structure"].get("search_complete", False),
+                    "structure_search": fit["structure_search"], "support_status": support})
+            attempt["fits"] = diagnostics
         state["searches"].append({"schema_index": index, "compute_cost": local_budget.spent,
             "candidate_count": len(fits), "search_complete": bool(fits) and all(
-                item["structure"].get("search_complete", False) for item in fits)})
+                item["structure"].get("search_complete", False) for item in fits),
+            "fit_attempts": fit_attempts,
+            "fresh_validation_budget": {"compute_limit": validation_budget.limit,
+                "compute_cost": validation_budget.spent,
+                "last_denied_request": deepcopy(validation_budget.last_denied_request)}})
         choices.append(accepted)
 
     # Round-robin retention avoids erasing an assignment just because another

@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+import pytest
 
 from hegel_machine.cognition.evaluation import loss
 from hegel_machine.cognition.language import Program
@@ -73,3 +74,49 @@ def test_unrelated_program_is_not_implicitly_admitted_to_structure_research(monk
     result = UnifiedResearchAgent()._revise_paid_structure(spec, parent, rows, budget, [])
     assert result['status'] == 'unavailable'
     assert not result['new_claims'] and budget.spent == 0
+
+
+@pytest.mark.parametrize('action', ['relation_form_revision', 'relation_parameter_revision'])
+def test_relation_form_segment_keeps_paid_pool_and_separates_fit_from_comparison(monkeypatch, action):
+    from hegel_machine.cognition import relation_revisions, transfer_partitions
+    from hegel_machine.cognition.continuous_state import _sum_terms
+    from hegel_machine.cognition.models import Candidate
+    from test_relation_fitted_columns import coordinates, measured_rows
+
+    parent = interval_answer(fitted_entry(), .7)
+    target = _sum_terms(coordinates(.7), [-.3, .1, .8, -.5, .9, -.2, .4, 1.7], -.6)
+    rows = measured_rows(target)
+    training = rows[:72]
+    spec = TaskSpec('paid_form_revision', '', tuple(rows[0].features), (), ())
+    prior_loss = loss(parent['candidate'].program, rows, 0., .5)
+    proposal = {**parent, 'candidate': Candidate('revised', target, 'representation')}
+    original = deepcopy(parent)
+    calls = []
+
+    initial = {'entry': parent, 'training': training, 'risk_quantile': .5, 'cost_ref': 'paid_fit'}
+    method = {'actual_current_parent_body': True}
+
+    def proposed(spec, observations, budget, *, parent, max_candidates, **options):
+        assert options == ({'method': method, 'feedback_rows': rows[72:],
+            'paid_initial': initial, 'tolerance': 1e-10} if action == 'relation_parameter_revision' else {})
+        calls.append((list(observations), parent, max_candidates, budget.limit))
+        budget.spend(7)
+        return {'entries': [proposal], 'research': {'execution_complete': True}}
+
+    monkeypatch.setattr(transfer_partitions if action == 'relation_parameter_revision' else relation_revisions,
+        'propose_parent_parameter_revisions' if action == 'relation_parameter_revision'
+        else 'propose_parent_relation_revisions', proposed)
+    budget = SearchBudget(10000)
+    result = UnifiedResearchAgent(ResearchConfig(minimum_improvement=1e-10))._revise_paid_structure(
+        spec, parent, rows, budget, [], finalists=[parent],
+        paid_scores={parent['candidate'].program: prior_loss},
+        research_action=action, fit_rows=training, research_method=method,
+        feedback_rows=rows[72:], paid_initial=initial)
+    assert calls == [(training, parent, 4, 10000 - 4 * len(rows))]
+    assert result['status'] == 'improved' and result['execution_complete']
+    assert result['selected']['candidate'].program == target
+    assert result['selected']['validation_loss'] == 0.
+    assert len(result['compared_claims']) == 2
+    assert result['action']['old_scoring_compute'] == 0
+    assert budget.spent == 7 + len(rows)
+    assert parent == original

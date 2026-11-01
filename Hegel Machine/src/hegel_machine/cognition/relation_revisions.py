@@ -1,5 +1,6 @@
 """Revise a relation inside retained compositions without replacing their calls."""
 
+from copy import deepcopy
 from dataclasses import replace
 from itertools import combinations
 
@@ -9,6 +10,172 @@ from .relation_language import EDGE_ARGUMENTS, instantiate_predicate, relation_o
 
 
 ZERO = Program("const", value=0.)
+
+
+def _parent_relation_plan(parent, max_candidates):
+    """Locate actual saved parameter groups; equal numbers do not imply sharing."""
+    from .structural_research_program import research_program_fit_contract
+    from .transfer_partitions import _saved_binding, transfer_partition_view
+
+    payload = parent['research_program']
+    fit = research_program_fit_contract(payload)
+    if fit['program'] != parent['candidate'].program:
+        raise ValueError('Parent research output does not match its retained candidate')
+    view = transfer_partition_view(payload)
+    if view['status'] != 'ready':
+        return {'status': view['status'], 'variants': []}
+    saved = _saved_binding(payload)
+    symbolic = tuple(Program.from_dict(term) for term in saved['parameter_terms'])
+    symbols = {item['symbol'] for item in saved['parameters']}
+    groups = {}
+
+    def visit(node):
+        if (node.op in {'neighbor_sum', 'relation_sum'}
+                and node.children[0].op == 'arg' and node.children[0].name in symbols):
+            key = (node.children[0].name, _geometry(node))
+            group = groups.setdefault(key, [])
+            if node not in group:
+                group.append(node)
+        for child in node.children:
+            visit(child)
+
+    for term in symbolic:
+        visit(term)
+    variants = []
+    for (symbol, geometry), contexts in groups.items():
+        for direction in ('symmetric', 'right', 'left'):
+            if direction != geometry[2]:
+                variants.append({'symbol': symbol, 'before_direction': geometry[2],
+                    'direction': direction, 'contexts': contexts,
+                    'name': f'{symbol}:{geometry[2]}->{direction}:{len(variants)}'})
+    total = len(variants)
+    variants = variants[:max(0, max_candidates)]
+    # Charged graph work: read parent/columns, check their parameter binding,
+    # and traverse the complete symbolic basis for each shared replacement.
+    preparation = (fit['program'].size + 3 * sum(term.size for term in fit['fit_terms'])
+        + (2 + 3 * len(variants)) * sum(term.size for term in symbolic)
+        + len(saved['parameters']))
+    return {'status': 'ready' if variants else 'no_local_alternatives',
+        'fit': fit, 'saved': saved, 'symbolic': symbolic, 'variants': variants,
+        'available_variants': total, 'preparation_compute': preparation}
+
+
+def quote_parent_relation_revisions(parent, training_rows, *, max_candidates=4,
+                                     comparison_rows=0):
+    """Quote a fixed-radius local form question, not a complete family search."""
+    plan = _parent_relation_plan(parent, max_candidates)
+    count = len(plan['variants'])
+    columns = len(plan['fit']['fit_terms']) if 'fit' in plan else 0
+    fitting = count * (columns + 2) * training_rows
+    preparation = plan.get('preparation_compute', 0)
+    return {'status': plan['status'], 'planned_attempts': count,
+        'variant_names': [item['name'] for item in plan['variants']],
+        'fit_columns': columns, 'preparation_compute': preparation,
+        'fit_compute_upper': fitting, 'comparison_compute': count * comparison_rows,
+        'required_compute': preparation + fitting,
+        'search_domain': 'saved_relation_direction_at_current_radius'}
+
+
+def propose_parent_relation_revisions(spec, training, budget, parent, *, max_candidates=4):
+    """Refit every saved column for the other existing relation directions.
+
+    This finite local question keeps the current radii fixed. It neither searches
+    a complete relation family nor chooses a direction from task configuration.
+    The paid parent is retained by the caller and is never fitted here.
+    """
+    from .continuous_state import _sum_terms
+    from .mechanism_revision import _replace_shared
+    from .relation_uncertainty import _bind
+    from .research_programs import _Fitter, _entry
+    from .transfer_partitions import _complete_fit
+
+    start, denied, fits = budget.spent, budget.denied_requests, budget.completed_fits
+    plan = _parent_relation_plan(parent, max_candidates)
+    result = {'entries': [], 'research': {'status': plan['status'], 'attempts': [],
+        'planned_attempts': len(plan['variants']), 'execution_complete': False,
+        'search_domain': 'saved_relation_direction_at_current_radius',
+        'independent_support': False, 'parent_refitted': False, 'new_observations': 0}}
+    report = result['research']
+
+    def finish(status):
+        report.update(status=status, compute_cost=budget.spent - start,
+            new_fits=budget.completed_fits - fits,
+            budget_incomplete=budget.denied_requests != denied)
+        return result
+
+    if plan['status'] != 'ready':
+        return finish(plan['status'])
+    if len(training) < 6:
+        return finish('insufficient_training_rows')
+    if not budget.spend(plan['preparation_compute']):
+        return finish('compute_unresolved')
+    report.update(preparation_compute=plan['preparation_compute'],
+        available_variants=plan['available_variants'], fit_columns=len(plan['symbolic']),
+        variant_names=[item['name'] for item in plan['variants']])
+    values = {item['symbol']: Program('const', value=item['radius'])
+              for item in plan['saved']['parameters']}
+    fitter = _Fitter(training, budget, spec.risk_quantile)
+    for index, variant in enumerate(plan['variants']):
+        symbolic = list(plan['symbolic'])
+        for context in variant['contexts']:
+            replacement = replace(context,
+                name=None if variant['direction'] == 'symmetric' else variant['direction'])
+            symbolic = [_replace_shared(term, context, replacement)[0] for term in symbolic]
+        terms = [_bind(term, values) for term in symbolic]
+        attempt = {key: variant[key] for key in ('name', 'symbol', 'before_direction', 'direction')}
+        before = budget.spent
+        try:
+            fit = fitter.fit(terms)
+        except (ArithmeticError, ValueError) as error:
+            fit = None
+            attempt['failure'] = f'{type(error).__name__}: {error}'
+        attempt.update(status=('compute_unresolved' if budget.denied_requests != denied
+            else 'fitted' if fit is not None else 'fit_unavailable'),
+            compute_cost=budget.spent - before, fit_complete=fit is not None,
+            training_loss=fit['loss'] if fit is not None else None)
+        report['attempts'].append(attempt)
+        if budget.denied_requests != denied:
+            break
+        if fit is None:
+            continue
+        fit = _complete_fit(fit, terms)
+        parameters = deepcopy(plan['saved']['parameters'])
+        for parameter in parameters:
+            if parameter['symbol'] == variant['symbol']:
+                prior = parameter.setdefault('prior_radius_intervals', [])
+                for interval in parameter.get('radius_intervals', []):
+                    if interval not in prior:
+                        prior.append(interval)
+                parameter['radius_intervals'] = []
+                parameter['relation'] = variant['direction']
+        binding = {'operation': 'resolve_relation_intervals',
+            'question': 'Retain parameter bindings after changing the relation direction',
+            'program': fit['program'], 'loss': fit['loss'],
+            'parameter_template': _sum_terms(symbolic, fit['coefficients'][1:],
+                fit['coefficients'][0]).to_dict(),
+            'parameter_terms': [term.to_dict() for term in symbolic],
+            'parameters': parameters, 'evidence_contexts': [],
+            'prior_binding': {'parent_candidate_id': parent['candidate'].candidate_id,
+                'selection_step_index': parent['research_program']['selection_steps'].index(plan['saved'])},
+            'binding_scope': 'new_direction_same_symbol_current_radius_initialization'}
+        step = {'operation': 'refit_parent_relation_form',
+            'question': 'Fit all saved response columns for this competing relation direction',
+            'program': fit['program'], 'loss': fit['loss'],
+            **{key: variant[key] for key in ('symbol', 'before_direction', 'direction')}}
+        entry = _entry(fit, [binding, step], len(training), budget.spent - start, index)
+        for name in ('input_template', 'source_schema', 'input_features', 'input_source_ids'):
+            if name in parent['research_program']:
+                entry['research_program'][name] = deepcopy(parent['research_program'][name])
+        entry['parent_relation_revision'] = deepcopy(attempt)
+        result['entries'].append(entry)
+    report['attempts_complete'] = (len(report['attempts']) == len(plan['variants'])
+                                   and budget.denied_requests == denied)
+    report['execution_complete'] = (report['attempts_complete']
+                                    and all(item['fit_complete'] for item in report['attempts']))
+    report['finite_domain_exhausted'] = (report['execution_complete']
+                                        and len(plan['variants']) == plan['available_variants'])
+    return finish('completed_local_question' if report['execution_complete'] else
+        'compute_unresolved' if budget.denied_requests != denied else 'fit_unresolved')
 
 
 def _has_relation(program, budget, definitions):

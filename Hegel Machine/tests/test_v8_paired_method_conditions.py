@@ -152,6 +152,25 @@ def test_condition_validation_cannot_select_a_local_body_or_supply_its_action_wi
     assert not result['local_program_supported'] and not result['general_guard_supported']
 
 
+def test_registered_validation_cohort_cannot_admit_a_favorable_branch_alone():
+    development = [pair(0), pair(1), pair(2, stage='complete', challenger_cost=200)]
+    favorable = pair(3, role='condition_validation')
+    # This second source has the same public features but measured extra cost:
+    # it refutes the guards that looked correct in the first validation source.
+    counterexample = pair(4, challenger_cost=200, role='condition_validation')
+    required = [favorable['physical_source_ref'], counterexample['physical_source_ref']]
+    favorable['condition_validation_cohort_refs'] = required
+    partial = learn([*development, favorable])
+    assert partial['status'] == 'awaiting_registered_condition_validation'
+    assert partial['missing_condition_validation_source_refs'] == required[1:]
+    assert not partial['general_guard_supported'] and partial['condition'] is None
+    completed = learn([*development, favorable, counterexample])
+    assert completed['missing_condition_validation_source_refs'] == []
+    assert len(completed['group_validation_refs']) == 2
+    assert completed['status'] == 'development_condition_without_group_support'
+    assert not completed['general_guard_supported'] and completed['condition'] is None
+
+
 @pytest.mark.parametrize('status,extra,denominator', [
     ('time_exhausted', {}, 1), ('execution_error', {'execution_error': 'bad contract'}, 1),
     ('administrative_pause', {'administrative_censoring': True}, 0)])

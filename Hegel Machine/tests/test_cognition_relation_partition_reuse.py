@@ -107,6 +107,17 @@ def test_ordinary_consecutive_passes_retain_the_partition_after_adopting_a_new_r
     assert ordinary.program == original
 
 
+def test_fixed_readout_partition_reuses_evaluated_rows_without_claiming_a_refit():
+    paid, selected = saved_partition()
+    selected['research_program'].update(fit_rows=5, evaluation_rows=len(paid),
+        readout_fit_source={'fit_rows': 5, 'fixed_readout': True, 'new_fits': 0})
+    restored = restore(selected)
+    assert restored.reuse_paid_partition(paid, selected)
+    assert restored.reuse_statistics['partition_rows_bound'] == len(paid)
+    assert selected['research_program']['fit_rows'] == 5
+    assert not restored.reuse_paid_partition(paid[:5], selected)
+
+
 @pytest.mark.parametrize('change', ('program', 'template', 'source', 'count'))
 def test_restore_rejects_a_different_completed_contract(change):
     paid, selected = saved_partition()
@@ -204,3 +215,110 @@ def test_sparse_new_response_keeps_preparation_geometry_from_its_complete_histor
     candidates = restored.alternatives([*paid, *new], SearchBudget(10000), experiments=[new])
     assert candidates and all(item['radius_interval'] == [.7, 1.] for item in restored.intervals)
     assert all(abs(item['candidate'].program.predict(new[0]) - new[0].target) < 1e-7 for item in candidates)
+
+
+def directional_partition():
+    from hegel_machine.cognition.transfer_partitions import finalize_interval_candidates
+
+    base = law(.8)
+    neighbor = replace(base.children[0].children[0], name='left')
+    current = replace(base, children=(replace(base.children[0], children=(neighbor,)),))
+    paid = rows(current, (.1, 1.2) * 88 + (.1,))
+    research = RelationIntervalResearch(current, [], SearchBudget(10000), research_program={
+        'selection_steps': [{'operation': 'revise_relation_type', 'relation': 'left',
+            'radius': .8, 'radius_interval': [.4, 1.]}]})
+    entries = research.alternatives(paid, SearchBudget(10000), experiments=[paid])
+    selected = next(entry for entry in entries if entry['candidate'].program == current)
+    finalize_interval_candidates(selected, entries, research, paid[:96], paid[96:],
+                                 feedback_experiments=[paid[96:]])
+    source = next(entry for entry in entries if entry['candidate'].program != current)
+    return paid, selected, source
+
+
+def test_paid_cell_scores_complete_177_plus_three_without_repredicting_the_prefix(monkeypatch):
+    paid, selected, source = directional_partition()
+    acquired = rows(selected['candidate'].program, (.7, .7, 1.2))
+    current = [*paid, *acquired]
+    baseline, resumed = restore(selected), restore(selected)
+    assert baseline.reuse_paid_partition(paid, selected)
+    assert resumed.reuse_paid_partition(paid, selected)
+    assert resumed.reuse_paid_cell_scores(paid, source)
+    full_budget, limited_budget = SearchBudget(10000), SearchBudget(234)
+    expected = baseline.alternatives(current, full_budget, experiments=[paid, acquired])
+    original = Program.predict
+    paid_ids = {id(row) for row in paid}
+
+    def predict(program, row, *args, **kwargs):
+        assert id(row) not in paid_ids, 'repeated an already paid prefix prediction'
+        return original(program, row, *args, **kwargs)
+
+    monkeypatch.setattr(Program, 'predict', predict)
+    actual = resumed.alternatives(current, limited_budget, experiments=[paid, acquired])
+    assert actual and scientific_values(actual) == scientific_values(expected)
+    assert resumed.reuse_statistics['cell_score_rows_bound'] == 177
+    assert full_budget.spent - limited_budget.spent == resumed.reuse_statistics['cell_predictions_reused']
+    assert resumed.reuse_statistics['cell_predictions_reused'] >= 177 * 6
+    for entry in actual:
+        program = entry['candidate'].program
+        assert resumed.last_candidate_errors[program] == baseline.last_candidate_errors[program]
+
+
+@pytest.mark.parametrize('change', ['target', 'history', 'template', 'source_endpoint',
+                                  'parameters', 'missing_errors', 'symmetric'])
+def test_cell_score_binding_rejects_incompatible_evidence(change):
+    paid, selected, source = directional_partition()
+    resumed = restore(selected)
+    assert resumed.reuse_paid_partition(paid, selected)
+    source = deepcopy(source)
+    if change == 'target':
+        paid[0] = replace(paid[0], target=paid[0].target + 1.)
+    elif change == 'history':
+        paid[-1].history[0]['x1'] += .2
+    elif change == 'template':
+        source['research_program']['selection_steps'][-1]['parameter_template'] = law(.8).to_dict()
+    elif change == 'source_endpoint':
+        source['parameter_values'][resumed.parameters[0]['symbol']] = .4
+    elif change == 'parameters':
+        source['research_program']['selection_steps'][-1]['parameters'][0]['source_concept_id'] = 'other'
+    elif change == 'missing_errors':
+        source.pop('paid_row_squared_errors')
+    else:
+        paid, selected = saved_partition()
+        resumed = restore(selected)
+        assert resumed.reuse_paid_partition(paid, selected)
+        source = deepcopy(selected)
+        source['paid_row_squared_errors'] = [0.] * len(paid)
+    assert not resumed.reuse_paid_cell_scores(paid, source)
+
+
+def test_candidate_at_cell_endpoint_uses_actual_predictions():
+    paid, selected, source = directional_partition()
+    resumed = restore(selected)
+    assert resumed.reuse_paid_partition(paid, selected)
+    assert resumed.reuse_paid_cell_scores(paid, source)
+    values = {**resumed.values, resumed.parameters[0]['symbol']: .4}
+    program, _ = resumed._program(values)
+    budget = SearchBudget(10000)
+    actual = resumed._response_errors(program, values, paid, budget)
+    assert budget.spent == len(paid)
+    assert actual == {id(row): (program.predict(row) - row.target) ** 2 for row in paid}
+
+
+def test_sparse_full_history_replay_cannot_claim_finite_cell_score_equivalence():
+    neighbor = replace(law(.8).children[0].children[0], name='left')
+    current = Program('accumulate', value=.5, children=(neighbor, Program('const', value=0.)))
+    paid = rows(current, (.6, 1.2, 1.2, 1.2))[-1:]
+    research = RelationIntervalResearch(current, [], SearchBudget(10000), research_program={
+        'selection_steps': [{'operation': 'revise_relation_type', 'relation': 'left',
+            'radius': .8, 'radius_interval': [.4, 1.]}]})
+    entries = research.alternatives(paid, SearchBudget(10000))
+    selected = next(entry for entry in entries if entry['candidate'].program == current)
+    selected['paid_row_squared_errors'] = [research.last_candidate_errors[current][id(row)] for row in paid]
+    resumed = restore(selected)
+    assert resumed.reuse_paid_partition(paid, selected)
+    assert not resumed.reuse_paid_cell_scores(paid, selected)
+    values = {**resumed.values, resumed.parameters[0]['symbol']: .55}
+    changed, _ = resumed._program(values)
+    budget = SearchBudget(10)
+    actual = resumed._response_errors(changed, values, paid, budget)
+    assert budget.spent == 1 and actual[id(paid[0])] > 0.

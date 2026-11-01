@@ -9,7 +9,7 @@ from statistics import mean
 
 from scripts.run_learned_structure_successor import freeze_runtime, load_successor_scene
 from scripts.run_native_decision_pair import load_prepared, ref
-from scripts.run_partial_role_parent import load, save
+from scripts.run_partial_role_parent import load, save, plain
 from hegel_machine.cognition.anonymous_object_lab import AnonymousObjectLab
 from hegel_machine.cognition.checkpoint_storage import write_text_incrementally
 from hegel_machine.cognition.evaluation import loss
@@ -87,6 +87,424 @@ def paid_pool_scores(scene, budget):
         scores[program] = (nt * entry['training_loss'] + nv * scene['working'][program]
                           + ne * exposed[program]) / (nt + nv + ne)
     return scores, exposed, budget.spent - before
+
+
+def register_paid_confirmation(source, output, *, compute_limit=1000):
+    """Freeze one new readout of an already completed paid joint revision."""
+    source, output = Path(source), Path(output)
+    completed = load(source / 'receipt.json')
+    previous = load(source / 'registration.json')
+    original = Path(previous['source'])
+    original_cfg = load(original / 'registration.json')
+    original_costs = load(original / 'receipt.json')['cumulative_costs']
+    if (not completed['full_comparison'] or not completed['all_paid_passed']
+            or completed['fresh_confirmation'] is not None):
+        raise ValueError('A completed paid revision without a new confirmation is required')
+    rows = original_cfg['confirmation_rows']
+    seed = original_cfg['confirmation_seed'] + 17017
+    cost_limit = previous['registered_original_total'] - completed['cumulative_current_successor_compute']
+    prior_review = source.parent / 'post_freeze'
+    owner = next(q for q in load(prior_review / 'common/questions.json')
+                 if q['id'] == 'task:method_choice')
+    review_limit = 2 + len(owner['method_use_plan']['native_return_refs'])
+    unit_limit = min(compute_limit, cost_limit)
+    if 2 * rows + review_limit > unit_limit:
+        raise ValueError('The existing balance does not cover the complete confirmation and return')
+    if (original_costs['observation_cost'] + rows > original_cfg['observation_limit']
+            or original_costs['measurement_cost'] + 12 * rows > original_cfg['measurement_limit']):
+        raise ValueError('The unchanged observation or measurement allowance cannot cover confirmation')
+    output.mkdir(parents=True, exist_ok=False)
+    cfg = dict(source=str(source), original_source=str(original),
+        source_task_ref=original_cfg['source_task_ref'], prior_method_review=str(prior_review),
+        threshold=completed['threshold'], confirmation_rows=rows, confirmation_seed=seed,
+        previous_compute=completed['cumulative_current_successor_compute'],
+        previous_observation_cost=original_costs['observation_cost'],
+        previous_measurement_cost=original_costs['measurement_cost'],
+        total_compute_limit=previous['registered_original_total'], remaining_compute=cost_limit,
+        unit_compute_limit=unit_limit,
+        method_review_compute_limit=review_limit, active_wall_seconds=1800,
+        observation_limit=original_cfg['observation_limit'], measurement_limit=original_cfg['measurement_limit'],
+        source_cost_refs=[ref(source / 'receipt.json'), ref(original / 'receipt.json'),
+                          *previous['source_cost_refs']],
+        source_selected_ref=ref(source / 'selected_entry.json'),
+        complete_pool=completed['compared_candidates'],
+        confirmation_comparator_ref=load(original / 'challenger/outcome.json')['selected_ref'],
+        comparison_kind='additional_research_vs_retained_parent',
+        scope='one frozen original-contract confirmation, knowledge retention and native return',
+        stop_rule='one shared fresh readout; preserve failure; no refits, retries or successor launch',
+        model_calls=0)
+    save(output / 'registration.json', cfg)
+    freeze_runtime(output, source)
+    return cfg
+
+
+def load_paid_confirmation_knowledge(output):
+    """Resolve the new knowledge against its retained source and paid rows."""
+    from scripts.run_partial_role_successors import apply_knowledge_changes
+    from hegel_machine.cognition.memory import KnowledgeLibrary
+
+    output = Path(output)
+    saved = load(output / 'knowledge_delta.json')
+    scene = restore(saved['original_source'])
+    result = apply_knowledge_changes(plain(scene['agent'].library.to_dict()), saved['changes'])
+    for binding in saved['support_example_refs']:
+        result['concepts'][binding['concept_index']]['scopes'][binding['scope_index']][
+            'support_examples'] = plain([asdict(scene['paid'][i]) for i in binding['paid_row_indices']])
+    return KnowledgeLibrary.from_dict(result)
+
+
+def confirm_paid_revision(output):
+    """Confirm the saved selected model without repeating selection or research."""
+    from scripts.retain_confirmed_structure import paid_support_mask, reference_scope_examples
+    from scripts.run_partial_role_successors import knowledge_changes
+    from hegel_machine.cognition.common_object_research import (
+        CommonObjectDependencyMethods, record_native_parent_research_return,
+    )
+    from hegel_machine.cognition.method_feedback import ensure_python_method_topic
+    from hegel_machine.cognition.question_routing import consume_method_return_agenda
+
+    output = Path(output)
+    if ROOT != (output / 'runtime').resolve():
+        raise ValueError('Execute the freshly frozen current confirmation entry')
+    if (output / 'started.json').exists():
+        raise ValueError('Retain the performed readout; do not repeat confirmation')
+    cfg = load(output / 'registration.json')
+    source = Path(cfg['source'])
+    budget = SearchBudget(cfg['unit_compute_limit'])
+    timing = ExecutionTiming(('restore', 'confirmation', 'knowledge', 'method_return'))
+    observation_cost, measurement_cost, stage = 0, 0, 'restore'
+    save(output / 'started.json', {'source': cfg['source'], 'status': 'started'})
+    try:
+        with timing.phase('restore'):
+            scene = restore(cfg['original_source'])
+            selected = decode_entry(read_method_reference(cfg['source_selected_ref'], output))
+            incumbent = decode_entry(read_method_reference(cfg['confirmation_comparator_ref'], output))
+            comparison = load(source / 'comparison.json')
+            if not comparison['full_comparison'] or len(comparison['squared_errors']) != len(scene['paid']):
+                raise ValueError('The saved complete comparison must cover all current paid rows')
+            with AnonymousObjectLab(**scene['registration']['task']) as lab:
+                probe = lab.random_probe(cfg['confirmation_seed'], length=cfg['confirmation_rows'],
+                                         name='paid_joint_revision_confirmation')
+            paid_batches = [*scene['scene']['references']['training'],
+                *scene['scene']['references']['validation'],
+                ref(Path(cfg['original_source']) / 'confirmation/observations.json')]
+            for location in paid_batches:
+                document = read_method_reference(location, output)
+                batch = document.get('batch', document)
+                previous_probe = batch.get('probe') or document['probe']
+                if list(probe.sequence) == previous_probe['sequence']:
+                    raise ValueError('The proposed confirmation repeats an already observed trajectory')
+            save(output / 'confirmation_plan.json', {'seed': cfg['confirmation_seed'],
+                'probe': asdict(probe), 'paid_probe_refs': paid_batches,
+                'new_sequence': True, 'responses_obtained': False})
+            # Both immutable programs are saved before any new response is obtained.
+            frozen = {name: {'program': entry['candidate'].program.to_dict(), 'selected_ref': reference}
+                      for name, entry, reference in (
+                          ('selected', selected, cfg['source_selected_ref']),
+                          ('incumbent', incumbent, cfg['confirmation_comparator_ref']))}
+            save(output / 'frozen_predictors.json', frozen)
+        stage = 'confirmation'
+        with python_execution_deadline(cfg['active_wall_seconds'], activity=True):
+            with timing.phase('confirmation'), AnonymousObjectLab(**scene['registration']['task']) as lab:
+                rows = cfg['confirmation_rows']
+                if not budget.spend(2 * rows):
+                    raise RuntimeError('Confirmation prediction allowance was exhausted')
+                batch = lab.acquire(probe, ('fine',))
+                observation_cost, measurement_cost = lab.observation_cost, lab.measurement_cost
+                save(output / 'confirmation_observations.json', {'probe': asdict(probe), 'batch': asdict(batch)})
+                confirmation = {'rows': rows, 'threshold': cfg['threshold'], 'seed': cfg['confirmation_seed']}
+                for name, entry in [('selected', selected), ('incumbent', incumbent)]:
+                    values = predict_rows(entry['candidate'].program, batch.observations)
+                    mse = mean((value - row.target) ** 2 for value, row in zip(values, batch.observations))
+                    confirmation[name] = {'predictions': values, 'mse': mse, 'passed': mse <= cfg['threshold']}
+                save(output / 'confirmation.json', confirmation)
+            recorded = {'stored': False, 'reason': 'confirmation_not_passed'}
+            stage = 'knowledge'
+            if confirmation['selected']['passed']:
+                with timing.phase('knowledge'):
+                    agent, paid = scene['agent'], scene['paid']
+                    before = plain(agent.library.to_dict())
+                    mask = paid_support_mask(selected['candidate'].program, paid, comparison['squared_errors'])
+                    batch_refs = [*scene['scene']['references']['training'],
+                        *scene['scene']['references']['validation'],
+                        ref(Path(cfg['original_source']) / 'confirmation/observations.json')]
+                    batches = []
+                    for location in batch_refs:
+                        document = read_method_reference(location, output)
+                        retained = document.get('batch', document)
+                        batches.append({'probe': retained.get('probe') or document['probe'],
+                                        'channels': retained['channels']})
+                    recorded = agent.remember_confirmed_selection(selected,
+                        agent._knowledge_spec(scene['scene']['spec']), paid, [],
+                        confirmed=True, confirmation_loss=confirmation['selected']['mse'],
+                        confirmation_rows=rows, selected_channels=('fine',), batches=batches,
+                        confirmation_ref=ref(output / 'confirmation.json'), paid_support_matches=mask)
+                    after = plain(agent.library.to_dict())
+                    changes = deepcopy(knowledge_changes(before, after))
+                    supports = reference_scope_examples(changes, paid, mask)
+                    save(output / 'knowledge_delta.json', {'original_source': cfg['original_source'],
+                        'changes': changes, 'support_example_refs': supports, 'paid_batch_refs': batch_refs,
+                        'confirmation_ref': ref(output / 'confirmation.json')})
+                    restored = load_paid_confirmation_knowledge(output)
+                    if plain(restored.to_dict()) != after:
+                        raise ValueError('Reference-backed confirmed knowledge did not restore equally')
+                    recorded.update(knowledge_ref=ref(output / 'knowledge_delta.json'),
+                        old_concepts=len(before['concepts']), concepts=len(after['concepts']),
+                        support_examples_saved_by_reference=len(supports), readback_equal=True)
+            stage = 'method_return'
+            save(output / 'research_receipt.json', {
+                'status': 'confirmed' if confirmation['selected']['passed'] else 'confirmation_failed',
+                'execution_complete': True, 'comparison_kind': cfg['comparison_kind'],
+                'source_task_ref': cfg['source_task_ref'], 'selected_ref': cfg['source_selected_ref'],
+                'confirmation_ref': ref(output / 'confirmation.json'),
+                'comparison_ref': ref(source / 'comparison.json'), 'method_pair_ref': None})
+            # This is a revised world answer versus a retained predictor, not a
+            # new same-start method pair. Return it without fabricating a label.
+            with timing.phase('method_return'):
+                owner = next(q for q in load(Path(cfg['prior_method_review']) / 'common/questions.json')
+                             if q['id'] == 'task:method_choice')
+                save(output / 'previous_topic.json', {'question': owner, 'questions': [owner], 'methods': []})
+                common = CommonObjectDependencyMethods(output / 'common', [],
+                    budget=SearchBudget(cfg['method_review_compute_limit']), actions=[],
+                    source_task_ref=cfg['source_task_ref']).common
+                ensure_python_method_topic(common, parent_question_ref={'question_id': 'task'},
+                    topic_ref=ref(output / 'previous_topic.json'))
+                mission = deepcopy(owner['mission'])
+                mission['allocation']['compute'] += cfg['method_review_compute_limit']
+                feedback = record_native_parent_research_return(common,
+                    source_task_ref=cfg['source_task_ref'], result_ref=ref(output / 'research_receipt.json'),
+                    before_ref=ref(source / 'comparison.json'), comparison_ref=ref(source / 'comparison.json'),
+                    confirmation_ref=ref(output / 'confirmation.json'),
+                    cost_refs=[ref(source / 'receipt.json'), ref(output / 'receipt.json')], mission=mission)
+                returned = consume_method_return_agenda(common, feedback, None,
+                    compute_limit=cfg['method_review_compute_limit'])
+                budget.spend(common.costs['compute_cost'])
+            result = {'status': 'confirmed' if confirmation['selected']['passed'] else 'confirmation_failed',
+                'confirmation': confirmation, 'knowledge': recorded, 'method_return': returned,
+                'compute_cost': budget.spent, 'cumulative_compute': cfg['previous_compute'] + budget.spent,
+                'remaining_compute': cfg['remaining_compute'] - budget.spent,
+                'unit_remaining_compute': budget.remaining, 'observation_cost': observation_cost,
+                'measurement_cost': measurement_cost, 'new_fits': 0, 'model_calls': 0,
+                'source_cost_refs': cfg['source_cost_refs'], 'full_comparison_reused': True,
+                'old_candidate_pool': cfg['complete_pool'], 'old_successes_and_failures_preserved': True,
+                'comparison_kind': cfg['comparison_kind'], 'independent_method_gain': None,
+                'execution_timing': timing.result()}
+            save(output / 'receipt.json', result)
+            return result
+    except BaseException as error:
+        save(output / 'failure.json', {'stage': stage, 'error': repr(error),
+            'compute_known': budget.spent, 'observation_cost': observation_cost,
+            'measurement_cost': measurement_cost, 'execution_timing': timing.result()})
+        raise
+
+
+def register_method_research(source, output):
+    """Keep the newly confirmed world answer frozen during paid method research."""
+    source, output = Path(source), Path(output)
+    receipt, previous = load(source / 'receipt.json'), load(source / 'registration.json')
+    if receipt['status'] != 'confirmed':
+        raise ValueError('Complete the registered world confirmation before method research')
+    output.mkdir(parents=True, exist_ok=False)
+    cfg = dict(source=str(source), original_source=previous['original_source'],
+        joint_source=previous['source'], source_task_ref=previous['source_task_ref'],
+        before_entry_ref=previous['confirmation_comparator_ref'],
+        after_entry_ref=previous['source_selected_ref'],
+        previous_compute=receipt['cumulative_compute'], remaining_compute=receipt['remaining_compute'],
+        total_compute_limit=previous['total_compute_limit'], threshold=previous['threshold'],
+        active_wall_seconds=1800, max_attempts=48, max_candidates=1,
+        training_role='original123', assessment_role='old24_plus_exposed48_development',
+        exclude_fresh_confirmation_ref=ref(source / 'confirmation_observations.json'),
+        complete_pool_ref=ref(Path(previous['source']) / 'comparison.json'),
+        source_cost_refs=[ref(source / 'receipt.json'), *previous['source_cost_refs']],
+        scope='actual return to proposed transfer partition; one matched paid development pair',
+        stop_rule='one generated partition, original paid baseline, complete old pool; no acquisition or retry',
+        model_calls=0)
+    save(output / 'registration.json', cfg)
+    freeze_runtime(output, source)
+    return cfg
+
+
+def return_paid_method_study(source, output):
+    """Consume a completed study by reference without repeating its science."""
+    from hegel_machine.cognition.common_object_research import CommonObjectDependencyMethods
+    from hegel_machine.cognition.method_action_research import record_native_partition_study
+    from hegel_machine.cognition.method_feedback import ensure_python_method_topic
+    from hegel_machine.cognition.question_agenda import debit_mission_compute
+    from hegel_machine.cognition.question_routing import consume_method_return_agenda
+
+    source, output = Path(source), Path(output)
+    if (output / 'receipt.json').exists():
+        return {**load(output / 'receipt.json'), 'new_compute_cost': 0, 'reused': True}
+    cfg, receipt = load(source / 'registration.json'), load(source / 'receipt.json')
+    study = load(source / 'study.json')
+    owner = next(q for q in load(source / 'common/questions.json') if q['id'] == 'task:method_choice')
+    metadata_cost = 3 + len(study['methods']) + len(study['pairs'])
+    review_cost = 1 + len(owner['method_use_plan']['native_return_refs'])
+    limit = metadata_cost + review_cost
+    if limit > receipt['remaining_compute']:
+        raise ValueError('Original balance cannot cover the actual method return')
+    output.mkdir(parents=True, exist_ok=True)
+    save(output / 'previous_topic.json', {'question': owner, 'questions': [owner], 'methods': []})
+    common = CommonObjectDependencyMethods(output / 'common', [],
+        budget=SearchBudget(limit), actions=[], source_task_ref=cfg['source_task_ref']).common
+    ensure_python_method_topic(common, parent_question_ref={'question_id': 'task'},
+        topic_ref=ref(output / 'previous_topic.json'))
+    question = next(q for q in common.questions if q['id'] == 'task:method_choice')
+    question['mission']['allocation']['compute'] += limit
+    returned = record_native_partition_study(common, question,
+        proposal_ref=receipt['proposal_ref'], study_ref=ref(source / 'study.json'),
+        comparison_ref=ref(source / 'pool_comparison.json'), cost_refs=[ref(source / 'receipt.json')],
+        compute_limit=metadata_cost)
+    debit_mission_compute(common, question['mission'], 0)
+    reviewed = consume_method_return_agenda(common, {'method_question_refs': [
+        {'question_id': question['id'], 'meaning_version': question.get('meaning_version', 1)}]},
+        None, compute_limit=review_cost)
+    result = dict(status=reviewed['status'], study_return=returned, agenda_return=reviewed,
+        compute_cost=common.costs['compute_cost'], new_compute_cost=common.costs['compute_cost'],
+        cumulative_compute=receipt['cumulative_compute'] + common.costs['compute_cost'],
+        remaining_compute=receipt['remaining_compute'] - common.costs['compute_cost'],
+        source_cost_refs=[ref(source / 'receipt.json')], new_fits=0, new_predictions=0,
+        new_observations=0, model_calls=0, independent_method_support=False)
+    save(output / 'receipt.json', result)
+    return result
+
+
+def research_paid_method(output):
+    """Consume actual revision evidence through Common, then test its proposal."""
+    from hegel_machine.cognition.common_object_research import (
+        CommonObjectDependencyMethods, record_native_parent_research_return)
+    from hegel_machine.cognition.method_action_research import quote_native_partition_analysis
+    from hegel_machine.cognition.method_feedback import ensure_python_method_topic
+    from hegel_machine.cognition.question_routing import consume_method_return_agenda
+    from hegel_machine.cognition.research_programs import (
+        evaluate_research_step_revisions, quote_research_step_revisions,
+        research_program_replay_inputs)
+    from hegel_machine.cognition.structural_research_program import research_program_fit_contract
+
+    output = Path(output)
+    if ROOT != (output / 'runtime').resolve() or (output / 'started.json').exists():
+        raise ValueError('Run the freshly frozen method unit once; reuse its saved return afterwards')
+    cfg = load(output / 'registration.json')
+    source, joint = Path(cfg['source']), Path(cfg['joint_source'])
+    budget = SearchBudget(cfg['remaining_compute'])
+    timing = ExecutionTiming(('restore', 'proposal', 'paired_research', 'comparison'))
+    save(output / 'started.json', {'source': cfg['source']})
+    try:
+        with python_execution_deadline(cfg['active_wall_seconds'], activity=True):
+            with timing.phase('restore'):
+                scene = restore(cfg['original_source'])
+                before = decode_entry(read_method_reference(cfg['before_entry_ref'], output))
+                after = decode_entry(read_method_reference(cfg['after_entry_ref'], output))
+                training = scene['scene']['training']
+                validation = [*scene['scene']['validation'], *scene['exposed']]
+                payload = before['research_program']
+                # The existing baseline really used these complete columns and
+                # this original training set. Do not run the paid fit again.
+                if (payload['fit_rows'] != len(training)
+                        or research_program_fit_contract(payload)['program'] != before['candidate'].program):
+                    raise ValueError('The paid baseline is not this complete fixed-coordinate fit')
+                old_mse = (len(scene['scene']['validation']) * scene['working'][before['candidate'].program]
+                    + len(scene['exposed']) * scene['exposed_scores'][before['candidate'].program]) / len(validation)
+                owner = next(q for q in load(source / 'common/questions.json') if q['id'] == 'task:method_choice')
+                analysis_limit = quote_native_partition_analysis(payload, after['research_program'])
+                review_limit = analysis_limit + 2 + len(owner['method_use_plan']['native_return_refs'])
+                if not budget.can_spend(review_limit):
+                    raise ValueError('Original balance cannot cover the complete proposal analysis')
+            with timing.phase('proposal'):
+                save(output / 'revision_evidence.json', {
+                    'source_task_ref': cfg['source_task_ref'], 'before_entry_ref': cfg['before_entry_ref'],
+                    'after_entry_ref': cfg['after_entry_ref'], 'comparison_ref': cfg['complete_pool_ref'],
+                    'cost_refs': cfg['source_cost_refs'], 'data_role': 'exposed_development',
+                    'source_operation': 'developer_selected_joint_structure_search'})
+                save(output / 'previous_topic.json', {'question': owner, 'questions': [owner], 'methods': []})
+                common = CommonObjectDependencyMethods(output / 'common', [],
+                    budget=SearchBudget(review_limit), actions=[], source_task_ref=cfg['source_task_ref']).common
+                ensure_python_method_topic(common, parent_question_ref={'question_id': 'task'},
+                    topic_ref=ref(output / 'previous_topic.json'))
+                mission = deepcopy(owner['mission'])
+                mission['allocation']['compute'] += review_limit
+                returned = record_native_parent_research_return(common,
+                    source_task_ref=cfg['source_task_ref'], result_ref=ref(source / 'research_receipt.json'),
+                    revision_evidence_ref=ref(output / 'revision_evidence.json'), mission=mission)
+                reviewed = consume_method_return_agenda(common, returned, None, compute_limit=review_limit)
+                budget.spend(common.costs['compute_cost'])
+                save(output / 'proposal_return.json', reviewed)
+                records = reviewed.get('research_result', {}).get(
+                    'method_action_research', {}).get('transfer_partition_proposals', [])
+                if not records:
+                    # Keep the complete normal-route return, including a real
+                    # negative or unresolved proposal, instead of forcing Pi1.
+                    result = {'status': 'no_method_proposal', 'method_return_ref': ref(output / 'proposal_return.json')}
+                else:
+                    bundle = read_method_reference(records[-1]['proposal_ref'], common.workspace)
+                    proposal = bundle['proposal']
+                    result = {'status': 'proposed', 'proposal_ref': records[-1]['proposal_ref']}
+            if result['status'] == 'proposed':
+                with timing.phase('paired_research'):
+                    if len(proposal['candidates']) > cfg['max_candidates']:
+                        raise ValueError('The registered unit covers one genuinely observed group revision')
+                    budget.reserve = (5 + 2 * len(proposal['candidates'])
+                        + len(owner['method_use_plan']['native_return_refs']))
+                    quote = quote_research_step_revisions(payload, training, validation,
+                        prepared_proposal=proposal)
+                    save(output / 'quote.json', quote)
+                    if quote['status'] != 'quoted':
+                        raise ValueError('The generated method has no complete execution quote')
+                    refs = [cfg['before_entry_ref'],
+                        ref(Path(cfg['original_source']) / 'prepared_state.json'),
+                        ref(Path(cfg['original_source']) / 'confirmation/observations.json')]
+                    baseline = {'execution_complete': True, 'program': before['candidate'].program.to_dict(),
+                        'research_program': payload, 'training_loss': before['training_loss'],
+                        'validation_loss': old_mse, 'fit_compute_cost': payload['search_compute'],
+                        'paid_compute_cost': payload['search_compute'] + len(validation),
+                        'cost_ref': cfg['before_entry_ref'], 'basis': {
+                            'replay_inputs': research_program_replay_inputs(proposal['baseline_research_program']),
+                            'source_refs': refs, 'training_rows': len(training),
+                            'validation_rows': len(validation), 'risk_quantile': .5}}
+                    study = evaluate_research_step_revisions(payload, training, validation, budget,
+                        per_method_compute=quote['per_method_compute_upper'], source_refs=refs,
+                        prepared_proposal=proposal, paid_baseline=baseline,
+                        minimum_improvement=cfg['threshold'],
+                        on_progress=lambda value: save(output / 'study_progress.json', value))
+                    save(output / 'study.json', study)
+                    result.update(status=study['status'], study_ref=ref(output / 'study.json'),
+                        methods=[{key: row.get(key) for key in ('index', 'execution_complete', 'training_loss',
+                            'validation_loss', 'new_compute_cost', 'reused')} for row in study['methods']])
+                with timing.phase('comparison'):
+                    previous = load(joint / 'comparison.json')
+                    scores = list(previous['candidate_scores'])
+                    for row in study['methods'][1:]:
+                        if row['execution_complete']:
+                            scores.append({'candidate_ref': ref(output / 'study.json', 'methods', row['index']),
+                                'loss': (len(training) * row['training_loss']
+                                    + len(validation) * row['validation_loss']) / (len(training) + len(validation))})
+                    retained = load(joint / 'receipt.json')['selected_mse']
+                    changed = min(row['loss'] for row in scores) + cfg['threshold'] < retained
+                    save(output / 'pool_comparison.json', {'scores': scores,
+                        'full_comparison': previous['full_comparison'] and all(
+                            row['execution_complete'] for row in study['methods'])
+                            and len(study['methods']) == len(proposal['candidates']) + 1,
+                        'paid_rows': len(training) + len(validation), 'old_scores_reused': len(previous['candidate_scores']),
+                        'parent_changed': changed, 'confirmed_parent_ref': cfg['after_entry_ref'],
+                        'selected_ref': min(scores, key=lambda row: row['loss'])['candidate_ref'] if changed else cfg['after_entry_ref']})
+                    result.update(old_scores_reused=len(previous['candidate_scores']),
+                        compared_candidates=len(scores), parent_changed=changed)
+            budget.release_reserve()
+            result.update(compute_cost=budget.spent, cumulative_compute=cfg['previous_compute'] + budget.spent,
+                remaining_compute=budget.remaining, source_cost_refs=cfg['source_cost_refs'],
+                new_observations=0, model_calls=0, fresh_confirmation_used=False,
+                independent_method_support=False, data_role='exposed_development',
+                execution_timing=timing.result())
+            save(output / 'receipt.json', result)
+            if result.get('study_ref'):
+                # The paid study belongs back to its original question. Keep
+                # the scientific receipt and append this small return ledger.
+                result = {**result, 'method_return': return_paid_method_study(output, output / 'method_return')}
+            return result
+    except BaseException as error:
+        save(output / 'failure.json', {'error': repr(error), 'compute_known': budget.spent,
+            'source_cost_refs': cfg['source_cost_refs'], 'execution_timing': timing.result()})
+        raise
 
 
 def register(source, output):
@@ -229,8 +647,16 @@ def run(output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('prepare', 'run'))
+    parser.add_argument('mode', choices=('prepare', 'run', 'prepare-confirm', 'confirm-paid',
+                                        'prepare-method', 'research-method', 'return-method'))
     parser.add_argument('--source', type=Path)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--compute-limit', type=int, default=1000)
     args = parser.parse_args()
-    print(register(args.source, args.output) if args.mode == 'prepare' else run(args.output.resolve()))
+    print(return_paid_method_study(args.source, args.output) if args.mode == 'return-method'
+          else register_method_research(args.source, args.output) if args.mode == 'prepare-method'
+          else research_paid_method(args.output.resolve()) if args.mode == 'research-method'
+          else register_paid_confirmation(args.source, args.output, compute_limit=args.compute_limit)
+          if args.mode == 'prepare-confirm'
+          else confirm_paid_revision(args.output.resolve()) if args.mode == 'confirm-paid'
+          else register(args.source, args.output) if args.mode == 'prepare' else run(args.output.resolve()))

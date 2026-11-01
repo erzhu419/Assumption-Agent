@@ -22,7 +22,9 @@ def test_late_coordinate_after_eight_unseparable_columns_can_supply_a_condition(
     assert result['status'] == 'development_conditions_found'
     assert len(result['candidates']) == 1
     assert result['candidates'][0]['coordinates'] == [{'path': ['boundary', 'z09'], 'kind': 'number'}]
-    assert len(result['diagnostics']) == 10
+    assert len(result['diagnostics']) == 11
+    assert result['diagnostics'][-1]['synthesis'] == 'affine'
+    assert result['diagnostics'][-1]['affine_fit_executed']
     assert result['compute_cost'] == budget.spent <= result['required_compute']
 
 

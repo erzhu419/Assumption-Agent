@@ -32,6 +32,9 @@ def aggregate_measurement_binding(source_schema, current_schema):
     members = [member for group in current["objects"] for member in current["members"][group]]
     if not members or len(members) != len(set(members)) or set(members) != set(current["controls"]):
         return None
+    if any(role not in current["fields"][group]
+           for role in source["fields"][source_group] for group in current["objects"]):
+        return None
     binding = {}
     for role, name in source["fields"][source_group].items():
         fields = tuple(Program("feature", name=current["fields"][group][role])
@@ -50,11 +53,20 @@ def aggregate_role_binding(template, source_schema, current_schema):
             index != 0 or role not in {"q", "x", "u", "f"}
             for index, role in template.object_roles.values()):
         return None
-    measurements = aggregate_measurement_binding(source_schema, current_schema)
+    source = source_schema.to_dict() if isinstance(source_schema, ObjectSchema) else source_schema
+    if source is None or len(source["objects"]) != 1:
+        return None
+    fields = source["fields"][source["objects"][0]]
+    required = {role for _, role in template.object_roles.values()}
+    if not required <= fields.keys():
+        return None
+    # A quantity-only method remains usable when focal membership is unknown.
+    # Bind its actual inputs, not every role mentioned by the source apparatus.
+    requested = {**source, "fields": {source["objects"][0]: {
+        role: name for role, name in fields.items() if role in required}}}
+    measurements = aggregate_measurement_binding(requested, current_schema)
     if measurements is None:
         return None
-    source = source_schema.to_dict() if isinstance(source_schema, ObjectSchema) else source_schema
-    fields = source["fields"][source["objects"][0]]
     return {name: measurements[fields[role]] for name, (_, role) in template.object_roles.items()}
 
 

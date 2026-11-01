@@ -41,6 +41,56 @@ def _condition_coordinates(rows, max_history):
     return terms
 
 
+def _separating_condition(coordinate, support, counterexamples):
+    positive = [coordinate.predict(row) for row in support]
+    negative = [coordinate.predict(row) for row in counterexamples]
+    if min(positive) > max(negative):
+        return Program("ge", children=(coordinate, Program("const", value=(min(positive) + max(negative)) / 2)))
+    if max(positive) < min(negative):
+        return Program("lt", children=(coordinate, Program("const", value=(max(positive) + min(negative)) / 2)))
+    return None
+
+
+def learn_affine_condition(support: list[Observation], counterexamples: list[Observation],
+                           budget: SearchBudget, *, scope_purpose="relative_utility", max_history=0) -> dict:
+    """Execute a joint fit even when one coordinate already separates the returns."""
+    if scope_purpose not in {"application", "relative_utility", "measured_coverage"}:
+        raise ValueError("scope_purpose must name application, relative_utility or measured_coverage")
+    rows = support + counterexamples
+    result = {"condition": None, "support_rows": len(support),
+        "counterexample_rows": len(counterexamples), "status": "not_separable",
+        "scope_purpose": scope_purpose, "scope_status": "unknown",
+        "measured_coverage": _measured_coverage(rows), "compute_cost": 0,
+        "required_compute": 0, "affine_fit_executed": False,
+        "execution_complete": False, "budget_incomplete": False}
+    if scope_purpose == "measured_coverage":
+        return {**result, "status": "measured_only"}
+    if len(support) < 2 or not counterexamples:
+        return {**result, "status": "insufficient_support"}
+    terms = _condition_coordinates(rows, max_history)
+    result["condition_grammar"] = {"kind": "observable_affine_halfspace",
+        "max_history": max_history, "guarded_history": True,
+        "coordinate_count": len(terms)}
+    if len(terms) < 2:
+        return {**result, "status": "insufficient_joint_observables"}
+    # The existing solver charges one row pass for fitting and one for the
+    # separating test. Fund both before producing an otherwise unusable fit.
+    required = 2 * len(rows)
+    result["required_compute"] = required
+    if not budget.spend(required):
+        return {**result, "status": "insufficient_budget", "budget_incomplete": True,
+            "denied_request": dict(budget.last_denied_request)}
+    validity = [Observation(row.features, float(index < len(support)), row.history)
+        for index, row in enumerate(rows)]
+    direction = _fit_linear(terms, validity)
+    condition = _separating_condition(direction, support, counterexamples)
+    result.update(compute_cost=required, affine_fit_executed=True, execution_complete=True)
+    if condition is not None:
+        result.update(condition=condition.to_dict(), status="separated",
+            scope_status="supported_on_supplied_rows")
+    return result
+
+
 def learn_condition(support: list[Observation], counterexamples: list[Observation],
                     budget: SearchBudget, *, scope_purpose="application", max_history=4) -> dict:
     """Find a simple separating half-space; interior conflicts remain unresolved.
@@ -73,13 +123,7 @@ def learn_condition(support: list[Observation], counterexamples: list[Observatio
     def separator(coordinate):
         if not budget.spend(len(rows)):
             return None
-        positive = [coordinate.predict(row) for row in support]
-        negative = [coordinate.predict(row) for row in counterexamples]
-        if min(positive) > max(negative):
-            return Program("ge", children=(coordinate, Program("const", value=(min(positive) + max(negative)) / 2)))
-        if max(positive) < min(negative):
-            return Program("lt", children=(coordinate, Program("const", value=(max(positive) + min(negative)) / 2)))
-        return None
+        return _separating_condition(coordinate, support, counterexamples)
 
     for term in terms:
         condition = separator(term)

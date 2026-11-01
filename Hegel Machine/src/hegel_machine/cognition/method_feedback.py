@@ -1083,16 +1083,15 @@ def finalize_python_method_feedback(agent, candidate, binding, context, *, resul
     return record_python_method_feedback(agent, candidate, binding, result, context)
 
 
-def research_paired_method_conditions(agent, method_ref, pair_refs, compute_limit, *,
-                                      max_conditions=8, target_profile=None):
-    """Read exact referenced outcome contracts; never fit or run either arm."""
-    from .method_conditions import research_paired_method_conditions as research
-    from .models import SearchBudget
-
+def load_paired_method_returns(agent, pair_refs):
+    """Resolve original execution and frozen-evaluation contracts once."""
     pairs = []
     for reference in pair_refs:
         pair = _read(agent, reference)
         item = {**deepcopy(pair), 'feedback_ref': deepcopy(reference)}
+        if pair.get('frozen_conditions_ref'):
+            item['frozen_conditions'] = _read(agent, pair['frozen_conditions_ref'])
+            item['condition_prediction'] = _read(agent, pair['condition_prediction_ref'])
         if pair.get('comparison_kind') == 'additional_research_vs_retained_parent':
             # This baseline is a declared predictor, not a completed method
             # invocation with a method-use profile. Keep its actual return;
@@ -1134,10 +1133,15 @@ def research_paired_method_conditions(agent, method_ref, pair_refs, compute_limi
             if evaluated.get('status') != 'frozen_pair_readout_completed':
                 raise ValueError('A completed shared frozen readout is required')
             rows = evaluated['rows']
+            arm_names = pair.get('evaluation_arm_names',
+                {'baseline': 'baseline', 'challenger': 'challenger'})
+            if arm_names['baseline'] == arm_names['challenger']:
+                raise ValueError('A paired readout requires two distinct recorded arms')
             for side in ('baseline', 'challenger'):
-                value, score = item[side], evaluated['arms'][side]
+                arm = arm_names[side]
+                value, score = item[side], evaluated['arms'][arm]
                 if (not value.get('execution_complete') or not value.get('full_comparison')
-                        or frozen[side]['selected_ref'] != value.get('selected_ref')
+                        or frozen[arm]['selected_ref'] != value.get('selected_ref')
                         or len(score['predictions']) != rows):
                     raise ValueError('Frozen evaluation must belong to the actual returned predictor')
                 value['working_quality'] = deepcopy(value['quality'])
@@ -1152,12 +1156,175 @@ def research_paired_method_conditions(agent, method_ref, pair_refs, compute_limi
                 'all_outputs_frozen_before_labels': True, 'labels_revealed': True,
                 'role': 'development_after_freeze'})
         pairs.append(item)
+    return pairs
+
+
+def research_paired_method_conditions(agent, method_ref, pair_refs, compute_limit, *,
+                                      max_conditions=8, target_profile=None, previous_ref=None):
+    """Read exact referenced outcome contracts; never fit or run either arm."""
+    from .method_conditions import research_paired_method_conditions as research
+    from .models import SearchBudget
+
+    pairs = load_paired_method_returns(agent, pair_refs)
     budget = SearchBudget(max(0, compute_limit))
     result = research(method_ref, pairs, budget, max_conditions=max_conditions,
-        target_profile=target_profile)
+        target_profile=target_profile, previous=_read(agent, previous_ref) if previous_ref else None)
     agent.costs['compute_cost'] += budget.spent
     return {**result, 'new_compute_cost': budget.spent, 'pair_refs': deepcopy(pair_refs),
         'independent_support': False, 'support_updated': False}
+
+
+def revise_paired_method_conditions(agent, method_ref, pair_refs, compute_limit, *,
+                                   previous_revision_ref=None, max_conditions=8):
+    """Use a completed failed validation in a separately retained development view.
+
+    The original pairs, their frozen predictions and their invoices stay intact.
+    Only a condition revision is learned: neither method body nor any world
+    predictor is fitted here, and these exposed sources cannot validate it.
+    """
+    from .method_conditions import (_frozen_paired_conditions, _method_observables,
+        paired_method_preference, research_paired_method_conditions as research)
+    from .models import SearchBudget
+
+    pairs = []
+    for pair in load_paired_method_returns(agent, pair_refs):
+        origin = pair.get('origin_ref', pair['feedback_ref'])
+        index = next((i for i, old in enumerate(pairs)
+            if old.get('origin_ref', old['feedback_ref']) == origin), None)
+        if index is None:
+            pairs.append(pair)
+        else:
+            pairs[index] = pair
+    preferences = [paired_method_preference(pair) for pair in pairs]
+    source_refs = [deepcopy(pair['feedback_ref']) for pair in pairs]
+    basis = {'method_ref': deepcopy(method_ref), 'max_conditions': max_conditions,
+        'sources': [{**{key: deepcopy(pair.get(key)) for key in (
+            'feedback_ref', 'origin_ref', 'physical_source_ref', 'data_role',
+            'frozen_conditions_ref', 'condition_prediction_ref', 'condition_validation_cohort_refs')},
+            'methods': [{key: deepcopy(pair[side].get(key)) for key in (
+                'method_ref', 'method_artifact_ref', 'basis', 'costs', 'cost_intervals',
+                'execution_complete', 'registered_time_limits', 'timing')}
+                for side in ('baseline', 'challenger')],
+            'preference': preference, 'public_profile': [
+                {'path': list(path), 'value': value} for path, value in
+                _method_observables(pair['baseline'].get('profile', {})).items()]}
+            for pair, preference in zip(pairs, preferences)]}
+    previous = _read(agent, previous_revision_ref) if previous_revision_ref else None
+    same = previous is not None and previous.get('execution_basis') == basis
+    if same and (not previous.get('budget_incomplete')
+            or compute_limit <= previous.get('available_compute', 0)):
+        return {**deepcopy(previous), 'cache_hit': True, 'new_compute_cost': 0,
+            'revision_ref': deepcopy(previous_revision_ref),
+            'research_ref': {**deepcopy(previous_revision_ref), 'json_path': [
+                *previous_revision_ref.get('json_path', []), 'research']}}
+
+    empty = {'status': 'completed_failed_frozen_validation_required', 'new_compute_cost': 0,
+        'required_compute': 0, 'budget_incomplete': False, 'revision_ref': None,
+        'research_ref': None, 'original_pair_refs': source_refs,
+        'independent_support': False, 'general_guard_supported': False}
+    frozen = _frozen_paired_conditions(method_ref, pairs)
+    if frozen is None:
+        return empty
+    if frozen['status'] != 'development_conditions_found':
+        return {**empty, 'status': frozen['status'], 'reason': frozen.get('reason')}
+    development_sources = [pair.get('physical_source_ref') for pair in pairs
+        if pair.get('data_role') != 'condition_validation']
+    validation = [(pair, preference) for pair, preference in zip(pairs, preferences)
+        if pair.get('data_role') == 'condition_validation'
+        and pair.get('physical_source_ref') is not None
+        and pair['physical_source_ref'] not in development_sources
+        and preference['preference'] in {'baseline', 'challenger'}]
+    required_sources = []
+    for pair in pairs:
+        for source in pair.get('condition_validation_cohort_refs', []):
+            if source not in required_sources:
+                required_sources.append(deepcopy(source))
+    missing = [source for source in required_sources
+        if source not in [pair['physical_source_ref'] for pair, _ in validation]]
+    if missing or not required_sources:
+        return {**empty, 'status': 'awaiting_registered_condition_validation',
+            'missing_condition_validation_source_refs': missing,
+            'condition_validation_cohort_refs': required_sources}
+    verdicts = []
+    for index in range(len(frozen['candidates'])):
+        errors = []
+        for pair, preference in validation:
+            vote = next(item for item in frozen['frozen_validation_predictions']
+                if item['feedback_ref'] == pair['feedback_ref'])['helpful'][index]
+            if vote != (preference['preference'] == 'challenger'):
+                errors.append(deepcopy(pair['feedback_ref']))
+        verdicts.append({'candidate': index, 'counterexample_refs': errors})
+    if any(not item['counterexample_refs'] for item in verdicts):
+        return {**empty, 'status': 'frozen_condition_has_unrefuted_candidate',
+            'frozen_condition_verdicts': verdicts}
+
+    identity = {key: deepcopy(frozen[key]) for key in ('method_ref', 'baseline_method_ref',
+        'baseline_method_artifact_ref', 'method_artifact_ref') if key in frozen}
+    if any(pair['challenger'].get('method_ref') != method_ref
+            or pair['baseline'].get('method_ref') != identity['baseline_method_ref'] for pair in pairs):
+        raise ValueError('A condition revision retains the same two actual method identities')
+    budget = SearchBudget(max(0, compute_limit))
+    projection_reused = same and bool(previous.get('development_pair_refs'))
+    projection_cost = 0 if projection_reused else 1 + len(pairs)
+    files = sorted((agent.workspace / 'method_feedback').glob('paired_condition_revision_*.json'))
+    serial = len(files)
+    development_refs, views = [], []
+    if budget.spend(projection_cost):
+        for index, pair in enumerate(pairs):
+            view = deepcopy(pair)
+            view['data_role'] = 'development'
+            for key in ('condition_validation_cohort_refs', 'frozen_conditions_ref',
+                        'condition_prediction_ref', 'frozen_conditions', 'condition_prediction'):
+                view.pop(key, None)
+            if projection_reused:
+                reference = deepcopy(previous['development_pair_refs'][index])
+            elif (pair.get('data_role') == 'condition_validation' or any(pair.get(key) for key in (
+                    'condition_validation_cohort_refs', 'frozen_conditions_ref', 'condition_prediction_ref'))):
+                record = _read(agent, pair['feedback_ref'])
+                record.update(data_role='development', original_pair_ref=deepcopy(pair['feedback_ref']),
+                    previous_data_role=pair.get('data_role'),
+                    condition_learning_role='exposed_after_completed_frozen_condition_validation')
+                for key in ('condition_validation_cohort_refs', 'frozen_conditions_ref', 'condition_prediction_ref'):
+                    record.pop(key, None)
+                reference = _store(agent,
+                    f'paired_condition_revision_{serial:06d}/pair_{index:03d}.json', record)
+            else:
+                reference = deepcopy(pair['feedback_ref'])
+            view['feedback_ref'] = reference
+            development_refs.append(reference)
+            views.append(view)
+        learned = research(method_ref, views, budget, max_conditions=max_conditions)
+    else:
+        learned = {'status': 'condition_revision_projection_not_funded',
+            'required_compute': 0, 'budget_incomplete': True, 'condition': None, 'candidates': []}
+    agent.costs['compute_cost'] += budget.spent
+    learned.update(identity, pair_refs=deepcopy(development_refs),
+        general_guard_supported=False, new_version_supported=False, independent_support=False,
+        independent_confirmation=False, evaluation_use='exposed_condition_revision_development')
+    result = {**identity, 'status': learned['status'], 'research': learned,
+        'execution_basis': basis, 'available_compute': compute_limit,
+        'version': previous['version'] if same else (previous.get('version', 0) if previous else 0) + 1,
+        'previous_revision_ref': deepcopy(previous_revision_ref),
+        'original_pair_refs': source_refs, 'development_pair_refs': development_refs,
+        'source_roles': [{'pair_ref': deepcopy(pair['feedback_ref']),
+            'origin_ref': deepcopy(pair.get('origin_ref', pair['feedback_ref'])),
+            'previous_data_role': pair.get('data_role'), 'data_role': 'development'} for pair in pairs],
+        'frozen_condition_verdicts': verdicts,
+        'counterexample_refs': [deepcopy(pair['feedback_ref']) for pair in pairs if any(
+            pair['feedback_ref'] in verdict['counterexample_refs'] for verdict in verdicts)],
+        'frozen_condition_refs': deepcopy(frozen['frozen_condition_refs']),
+        'frozen_condition_prediction_refs': deepcopy(frozen['frozen_condition_prediction_refs']),
+        'original_validation_cohort_refs': required_sources,
+        'new_compute_cost': budget.spent,
+        'total_new_compute_cost': (previous.get('total_new_compute_cost', 0) if same else 0) + budget.spent,
+        'required_compute': projection_cost + learned.get('required_compute', 0),
+        'budget_incomplete': learned.get('budget_incomplete', False),
+        'projection_reused': projection_reused, 'cache_hit': False,
+        'general_guard_supported': False, 'independent_support': False,
+        'new_fits': 0, 'new_predictions': 0, 'new_observations': 0}
+    reference = _store(agent, f'paired_condition_revision_{serial:06d}.json', result)
+    return {**result, 'revision_ref': reference,
+        'research_ref': {**reference, 'json_path': ['research']}}
 
 
 def research_method_conditions(agent, candidate_id, compute_limit, *, public_experiments=()):

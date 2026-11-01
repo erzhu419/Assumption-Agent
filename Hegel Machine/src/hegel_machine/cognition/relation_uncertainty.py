@@ -66,10 +66,12 @@ class RelationIntervalResearch:
         self._expanded_domains = {}
         self._local_context = None
         self._paid_partition = None
+        self._paid_cell_scores = None
         self._readout_fit = None
         self._parameter_terms = None
         self.reuse_statistics = {"partition_rows_bound": 0, "geometry_paid_rows_reused": 0,
-                                 "inherited_predictions_reused": 0}
+                                 "inherited_predictions_reused": 0,
+                                 "cell_score_rows_bound": 0, "cell_predictions_reused": 0}
         self.status = "no_relation_interval"
         prior_by_source = {prior["source_concept_id"]: prior for prior in priors
                            if prior.get("status") != "revoked"}
@@ -366,7 +368,8 @@ class RelationIntervalResearch:
         saved = next((step for step in reversed(payload.get("selection_steps", []))
                       if step["operation"] == "resolve_relation_intervals"), None)
         index = completed_entry.get("parameter_index")
-        if (saved is None or payload.get("fit_rows") != len(paid_rows)
+        covered_rows = payload.get("evaluation_rows", payload.get("fit_rows"))
+        if (saved is None or covered_rows != len(paid_rows)
                 or index is None or not 0 <= index < len(self.parameters)
                 or completed_entry["candidate"].program != self.program
                 or saved["parameter_template"] != self.template.to_dict()
@@ -386,12 +389,19 @@ class RelationIntervalResearch:
 
     def _new_geometry_rows(self, paid_rows, parameter):
         saved = self._paid_partition
-        if (saved is None or self.template != saved["template"]
-                or parameter["symbol"] != saved["partitioned_symbol"]):
+        if not self._partition_matches(saved, paid_rows, parameter):
             return paid_rows
         prefix = saved["rows"]
+        self.reuse_statistics["geometry_paid_rows_reused"] += len(prefix)
+        return paid_rows[len(prefix):]
+
+    def _partition_matches(self, saved, paid_rows, parameter):
+        if (saved is None or self.template != saved["template"]
+                or parameter["symbol"] != saved["partitioned_symbol"]):
+            return False
+        prefix = saved["rows"]
         if len(paid_rows) < len(prefix) or any(old != current for old, current in zip(prefix, paid_rows)):
-            return paid_rows
+            return False
         previous = next((item for item in saved["parameters"]
                          if item["symbol"] == parameter["symbol"]), None)
         if (previous is None or parameter.get("source_concept_id") != previous.get("source_concept_id")
@@ -400,9 +410,82 @@ class RelationIntervalResearch:
                 or not all(any(old_low <= low and high <= old_high
                                for old_low, old_high in previous["radius_intervals"])
                            for low, high in parameter["radius_intervals"])):
-            return paid_rows
-        self.reuse_statistics["geometry_paid_rows_reused"] += len(prefix)
-        return paid_rows[len(prefix):]
+            return False
+        return True
+
+    def reuse_paid_cell_scores(self, paid_rows, completed_entry):
+        """Reuse actual row errors inside a completed directional radius cell.
+
+        The geometry pass excluded only edges whose individual contribution is
+        zero. With a radius used solely by directional relations, moving inside
+        the open cell leaves the complete response unchanged. Symmetric
+        predicates and numeric uses of the radius require ordinary evaluation.
+        """
+        self._paid_cell_scores = None
+        self.reuse_statistics["cell_score_rows_bound"] = 0
+        partition = self._paid_partition
+        payload = completed_entry.get("research_program") or {}
+        saved = next((step for step in reversed(payload.get("selection_steps", []))
+                      if step["operation"] == "resolve_relation_intervals"), None)
+        errors = completed_entry.get("paid_row_squared_errors")
+        values = completed_entry.get("parameter_values", {})
+        if (partition is None or saved is None or errors is None
+                or len(errors) != len(paid_rows) or tuple(paid_rows) != partition["rows"]
+                or payload.get("evaluation_rows", payload.get("fit_rows")) != len(paid_rows)
+                or saved["parameter_template"] != self.template.to_dict()
+                or completed_entry.get("selection_basis") != "all_acquired_evidence"
+                or set(values) != set(self.values)):
+            return False
+        symbol = partition["partitioned_symbol"]
+        index = completed_entry.get("parameter_index")
+        if (index is None or not 0 <= index < len(self.parameters)
+                or self.parameters[index]["symbol"] != symbol
+                or [{k: v for k, v in item.items() if k != "radius"} for item in saved["parameters"]]
+                != [{k: v for k, v in item.items() if k != "radius"} for item in partition["parameters"]]
+                or any(values[key] != value for key, value in partition["values"].items() if key != symbol)):
+            return False
+
+        def radius_only(node):
+            # These consumers replay beyond the finite geometry frames above;
+            # their earlier boundaries have not been partitioned by this pass.
+            if node.op in {"accumulate", "state_replay", "call"}:
+                return False
+            if node == Program("arg", name=symbol):
+                return False
+            if (node.op in {"neighbor_sum", "relation_sum"}
+                    and node.children[0] == Program("arg", name=symbol)):
+                return node.name in {"left", "right"} and all(radius_only(child) for child in node.children[1:])
+            return all(radius_only(child) for child in node.children)
+
+        domains = partition["parameters"][index]["radius_intervals"]
+        if (not _parameter_relations(self.template, symbol) or not radius_only(self.template)
+                or not any(low < values[symbol] < high for low, high in domains)):
+            return False
+        expected = _bind(self.template, {key: Program("const", value=value) for key, value in values.items()})
+        if expected.expanded().simplified() != completed_entry["candidate"].program.expanded().simplified():
+            return False
+        self._paid_cell_scores = {"partition": partition, "values": dict(values), "errors": tuple(errors)}
+        self.reuse_statistics["cell_score_rows_bound"] = len(errors)
+        return True
+
+    def _response_errors(self, program, values, rows, budget):
+        cached, count = self._paid_cell_scores, 0
+        if cached is not None:
+            partition = cached["partition"]
+            symbol = partition["partitioned_symbol"]
+            parameter = next((item for item in self.parameters if item["symbol"] == symbol), None)
+            previous = next(item for item in partition["parameters"] if item["symbol"] == symbol)
+            if (parameter is not None and self._partition_matches(partition, rows, parameter)
+                    and all(values[key] == value for key, value in cached["values"].items() if key != symbol)
+                    and any(low < values[symbol] < high and low < cached["values"][symbol] < high
+                            for low, high in previous["radius_intervals"])):
+                count = len(cached["errors"])
+        if not budget.spend(len(rows) - count):
+            return None
+        errors = dict(zip((id(row) for row in rows[:count]), cached["errors"])) if count else {}
+        errors.update((id(row), (program.predict(row) - row.target) ** 2) for row in rows[count:])
+        self.reuse_statistics["cell_predictions_reused"] += count
+        return errors
 
     def _supports_inherited_evidence(self, values, budget, tolerance, *,
                                      evaluated_program=None, evaluated_rows=(), evaluated_errors=None):
@@ -433,13 +516,25 @@ class RelationIntervalResearch:
                     return False
         return True
 
-    def alternatives(self, paid_rows, budget, tolerance=1e-7, *, experiments=()):
+    def _resolved_to_precision(self, interval_precision):
+        return bool(self.parameters) and all(
+            len(item["radius_intervals"]) == 1
+            and 0. <= item["radius_intervals"][0][1] - item["radius_intervals"][0][0] <= interval_precision
+            and item.get("kernel_prior_status") != "pending"
+            for item in self.parameters)
+
+    def alternatives(self, paid_rows, budget, tolerance=1e-7, *, experiments=(),
+                     interval_precision=1e-6, parameter_index=None):
         """Fit pooled observations without diluting completed distinguishing probes.
 
         Experiments retain actual rows, not excluded parameter values. Each
         current complete program therefore reinterprets them after input repair.
         """
         start = budget.spent
+        # A following research stage can aggregate the already paid errors by
+        # its original fit/return split without predicting these rows again.
+        # This cache belongs to this call and is never serialized in a draft.
+        self.last_candidate_errors = {}
         self._retain_experiments(experiments, tolerance)
         evaluated_rows = list(paid_rows)
         identities = {id(row) for row in evaluated_rows}
@@ -453,22 +548,25 @@ class RelationIntervalResearch:
                     identities.add(id(row))
                     evaluated_rows.append(row)
         for index, parameter in enumerate(self.parameters):
+            if parameter_index is not None and index != parameter_index:
+                continue
             domains = parameter["radius_intervals"]
             if not domains:
                 continue
-            if (len(domains) == 1 and domains[0][1] - domains[0][0] <= 1e-6
+            if (len(domains) == 1 and domains[0][1] - domains[0][0] <= interval_precision
                     and parameter.get("kernel_prior_status") != "pending"):
                 if self._inherited_contexts or parameter["symbol"] in self._inherited_domains:
-                    if not budget.spend(len(evaluated_rows)):
+                    program, _ = self._program(self.values)
+                    errors = self._response_errors(program, self.values, evaluated_rows, budget)
+                    if errors is None:
                         self.status = "compute_exhausted"
                         return []
-                    program, _ = self._program(self.values)
-                    errors = {id(row): (program.predict(row) - row.target) ** 2 for row in evaluated_rows}
                     if (sum(errors[id(row)] for row in paid_rows) / len(paid_rows) > tolerance or
                         any(sum(errors[key] for key in trajectory) / len(trajectory) > tolerance
                             for trajectory in trajectory_ids)) and self.reopen(
                                 "current_relation_counterexample", parameter_index=index):
-                        return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
+                        return self.alternatives(paid_rows, budget, tolerance, experiments=experiments,
+                            interval_precision=interval_precision, parameter_index=parameter_index)
                 continue
             relations = _parameter_relations(self.template, parameter["symbol"])
             # Sparse paid rows still carry measured preparation frames used by
@@ -493,12 +591,12 @@ class RelationIntervalResearch:
                 for left, right in zip(cuts, cuts[1:]):
                     fitted = []
                     for fraction in (.5, .25, .75):
-                        if not budget.spend(len(evaluated_rows)):
-                            self.status = "compute_exhausted"
-                            return []
                         values = {**self.values, parameter["symbol"]: left + (right - left) * fraction}
                         program, _ = self._program(values)
-                        errors = {id(row): (program.predict(row) - row.target) ** 2 for row in evaluated_rows}
+                        errors = self._response_errors(program, values, evaluated_rows, budget)
+                        if errors is None:
+                            self.status = "compute_exhausted"
+                            return []
                         error = sum(errors[id(row)] for row in paid_rows) / len(paid_rows)
                         if error <= tolerance and all(sum(errors[key] for key in trajectory) / len(trajectory)
                                                       <= tolerance for trajectory in trajectory_ids):
@@ -509,6 +607,7 @@ class RelationIntervalResearch:
                                 return []
                             if inherited:
                                 fitted.append((values, error))
+                                self.last_candidate_errors[program] = errors
                     if fitted:
                         supported.append([left, right])
                         candidates.extend((values, (left, right), error) for values, error in fitted)
@@ -522,8 +621,9 @@ class RelationIntervalResearch:
                     if interval[0] <= self.original[parameter["symbol"]] <= interval[1]), None)
                 original_in_domains = all(any(low <= self.original[item["symbol"]] <= high
                     for low, high in item["radius_intervals"]) for item in self.parameters)
-                if retained is not None and original_in_domains and budget.spend(len(evaluated_rows)):
-                    errors = {id(row): (self.program.predict(row) - row.target) ** 2 for row in evaluated_rows}
+                errors = (self._response_errors(self.program, self.original, evaluated_rows, budget)
+                          if retained is not None and original_in_domains else None)
+                if errors is not None:
                     error = sum(errors[id(row)] for row in paid_rows) / len(paid_rows)
                     if (error <= tolerance and all(sum(errors[key] for key in trajectory) / len(trajectory)
                             <= tolerance for trajectory in trajectory_ids) and
@@ -532,13 +632,19 @@ class RelationIntervalResearch:
                                 evaluated_errors=errors)):
                         candidates = [item for item in candidates if item[0] != self.original]
                         candidates.insert(0, (dict(self.original), tuple(retained), error))
-                self.status = "unresolved"
+                        self.last_candidate_errors[self.program] = errors
+                # The completed partition may have reached the registered
+                # precision on this very pass. Do not require another call
+                # over the same paid rows just to expose that stopping state.
+                self.status = ("resolved_to_precision" if self._resolved_to_precision(interval_precision)
+                               else "unresolved")
                 entries = [self._entry(values, interval, index, error, len(paid_rows), budget.spent - start)
                            for values, interval, error in candidates]
                 self._remember_completed_partition(paid_rows, index)
                 return entries
             if self.reopen("current_relation_counterexample", parameter_index=index):
-                return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
+                return self.alternatives(paid_rows, budget, tolerance, experiments=experiments,
+                    interval_precision=interval_precision, parameter_index=parameter_index)
             # A source search range is not a physical limit. Once all of its
             # cells fail current measurements, keep the consuming computation
             # and test the range exposed by the current measured geometry.
@@ -552,10 +658,12 @@ class RelationIntervalResearch:
                     self.evidence_updates.append({"reason": "current_geometry_expands_refuted_domain",
                         "parameters": [parameter["symbol"]], "previous_intervals": deepcopy(domains),
                         "reopened_intervals": deepcopy(self.intervals), "evidence_rows": len(paid_rows)})
-                    return self.alternatives(paid_rows, budget, tolerance, experiments=experiments)
+                    return self.alternatives(paid_rows, budget, tolerance, experiments=experiments,
+                        interval_precision=interval_precision, parameter_index=parameter_index)
             self.status = "refuted"
             return []
-        self.status = "resolved_to_precision" if self.parameters else "no_relation_interval"
+        self.status = ("no_relation_interval" if not self.parameters else
+                       "resolved_to_precision" if self._resolved_to_precision(interval_precision) else "unresolved")
         return []
 
     def adopt(self, entry):

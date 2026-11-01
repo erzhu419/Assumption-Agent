@@ -296,7 +296,7 @@ class ProgramExperimentMethods:
         """Learn or revise applicability only after the proposed probe was paid."""
         if not assessment.get("observation_rows"):
             return None
-        proposal = plan.get("proposal", {})
+        proposal = plan.get("proposal", plan.get("design", {}))
         method_id = proposal.get("method_id")
         method = next((item for item in self.records if item["method_id"] == method_id), None)
         probe = plan.get("probe")

@@ -8,7 +8,7 @@ from random import Random
 from hegel_machine.cognition.competing_object_programs import research_competing_object_programs
 from hegel_machine.cognition.evaluation import loss
 from hegel_machine.cognition.language import Program
-from hegel_machine.cognition.models import Observation, SearchBudget, TaskSpec
+from hegel_machine.cognition.models import Candidate, Observation, SearchBudget, TaskSpec
 
 
 def _spec():
@@ -41,6 +41,87 @@ def _rows(seed, count, *, separate=False):
             + 2.1 * point[f"position_{focus}"]
         rows.append(Observation(point, target))
     return rows
+
+
+def test_new_assignment_preserves_complete_parent_response_columns(monkeypatch):
+    from types import SimpleNamespace
+    from hegel_machine.cognition import unified_structure
+    from test_relation_fitted_columns import fitted_entry, interval_answer
+
+    parent = interval_answer(fitted_entry(), .7)
+    before = deepcopy(parent)
+    spec = _spec()
+    names = tuple(dict.fromkeys((*spec.feature_names, *parent['candidate'].program.required_features(),
+                                'z6')))
+    spec = replace(spec, feature_names=names)
+    rows = [Observation(dict.fromkeys(names, 0.), 0.)]
+    seen = []
+
+    def discover(training, schema, *, budget, response_terms, **kwargs):
+        seen.append(list(response_terms))
+        return SimpleNamespace(candidates=[], fits=[])
+
+    monkeypatch.setattr(unified_structure, '_discover_structure', discover)
+    result = research_competing_object_programs(spec, rows, SearchBudget(10000),
+        max_candidates=1, response_parent=parent)
+    assert len(seen) == 1 and Program('feature', name='z6') in seen[0]
+    assert 'z6' not in parent['candidate'].program.required_features()
+    assert result['competition']['searches'][0]['fit_attempts'][0]['stage'] == 'parent_response'
+    assert parent == before and spec.context['object_model']['schema'] is None
+
+
+def test_same_schema_parent_precedes_response_parent_and_failed_fit_scores_survive(monkeypatch):
+    from hegel_machine.cognition import competing_object_programs as competing
+    from hegel_machine.cognition.object_alternatives import enumerate_object_schemas
+
+    spec = _spec()
+    schema = enumerate_object_schemas(spec.context['object_model'])['schemas'][0]
+    previous = {'schemas': [schema], 'hypotheses': [{
+        'hypothesis_id': 'saved_same_schema', 'schema': schema,
+        'program': Program('const', value=0.).to_dict(), 'training_loss': 1.,
+        'status': 'supported', 'counterexamples': [], 'family_id': 'T08',
+        'structure': {'schema': schema, 'fits': [{'family': 'local_exchange'}]},
+        'structure_search': 'retained'}]}
+    response_parent = {'candidate': Candidate('outer_parent', Program('const', value=2.), 'retained')}
+    original = deepcopy((previous, response_parent))
+    rows = [Observation(dict.fromkeys(spec.feature_names, 0.), 10.)]
+    calls, scoring = [], []
+
+    def entry(name, error):
+        return {'candidate': Candidate(name, Program('const', value=0.), 'representation'),
+            'family_id': 'T08', 'training_loss': error, 'structure_search': 'full',
+            'structure': {'schema': schema, 'search_complete': False,
+                          'fits': [{'family': 'local_exchange'}]}}
+
+    def propose(spec, training, budget, *, parent=None, **kwargs):
+        calls.append(parent)
+        assert budget.spend(3)
+        budget.can_spend(budget.remaining + 1)
+        return ([entry('failed_parent', 1.)] if parent else
+                [entry('failed_fresh', 0.), entry('failed_training', 2.)])
+
+    def score(*args):
+        scoring.append(True)
+        return 100.
+
+    monkeypatch.setattr(competing, 'propose_structures', propose)
+    monkeypatch.setattr(competing, 'loss', score)
+    result = competing.research_competing_object_programs(spec, rows, SearchBudget(1000),
+        previous=previous, response_parent=response_parent, new_observations=rows, max_candidates=1)
+    assert calls[0]['hypothesis_id'] == 'saved_same_schema' and calls[1] is None
+    assert len(scoring) == 1 and not result['entries']
+    searches = json.loads(json.dumps(result['competition']))['searches']
+    attempts = searches[0]['fit_attempts']
+    assert [item['stage'] for item in attempts] == ['parent_revision', 'structural_search']
+    fits = [fit for attempt in attempts for fit in attempt['fits']]
+    assert [fit['candidate_id'] for fit in fits] == ['failed_parent', 'failed_fresh', 'failed_training']
+    assert [fit['support_status'] for fit in fits] == [
+        'training_loss_above_tolerance', 'new_observation_loss_above_tolerance',
+        'training_loss_above_tolerance']
+    assert fits[1]['new_observation_loss'] == 100. and fits[0]['new_observation_loss'] is None
+    assert all(not fit['search_complete'] and 'program' not in fit for fit in fits)
+    assert all(item['compute_cost'] == 3 and item['last_denied_request'] for item in attempts)
+    assert (previous, response_parent) == original
 
 
 def test_independent_fits_keep_non_equivalent_laws_that_agree_on_actual_old_rows():

@@ -80,7 +80,20 @@ def test_partial_control_knowledge_calibrates_unassigned_indicators_without_assi
     calibration = fit_instrument_model(lab.spec_for(()), spec, pairs, SearchBudget(24000))
     restored = json.loads(json.dumps(calibration))
     binding = rebind_instrument_model(restored, spec)
-    assert restored["source_schema"] is None and set(binding) == set(spec.feature_names)
+    assert restored["source_schema"] is None
+    assert set(restored["fields"]) == set(spec.feature_names)
+    indicators = set(model["focus_candidates"])
+    assert set(spec.feature_names) - indicators <= set(binding)
+    for name in set(spec.feature_names) - set(binding):
+        assert name in indicators
+        survivors = [item for item in restored["fields"][name]["hypotheses"]
+                     if item["status"] not in {"refuted", "counterexample"}]
+        assert len(survivors) > 1
+        assert all(item["fit_loss"] <= item["tolerance"] for item in survivors)
+    for name in binding:
+        survivors = [item for item in restored["fields"][name]["hypotheses"]
+                     if item["status"] not in {"refuted", "counterexample"}]
+        assert len(survivors) == 1
     assert all("f" not in group for group in restored["source_object_model"]["groups"])
     probe = lab.random_probe(30017, length=32)
     validation = lab.acquire(probe, ("fine",)).observations
@@ -88,8 +101,7 @@ def test_partial_control_knowledge_calibrates_unassigned_indicators_without_assi
         error = sum((program.predict(Observation(point, 0.)) - row.features[name]) ** 2
                     for point, row in zip(probe.sequence, validation)) / len(validation)
         assert error < 1e-7
-    indicators = set(model["focus_candidates"])
-    assert indicators <= set(binding)
+    assert indicators <= set(restored["fields"])
     assert all(restored["fields"][name]["role"] == "f" for name in indicators)
     assert all(restored["fields"][name]["members"] == [] for name in indicators)
     sparse = partial_object_schema(model)
