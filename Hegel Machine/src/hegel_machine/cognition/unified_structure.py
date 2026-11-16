@@ -61,6 +61,12 @@ def propose_structures(spec, training, budget, *, parent=None, tolerance=1e-8,
     schema = ObjectSchema.from_dict(json.loads(payload) if isinstance(payload, str) else payload)
     if not set(schema.feature_names).issubset(spec.feature_names):
         return []
+    if any("x" not in schema.fields[g] for g in schema.objects):
+        from .continuum_field_lab import propose_continuum_structures
+
+        return propose_continuum_structures(
+            spec, training, schema, budget, tolerance=tolerance, transitions=transitions
+        )
     discovery, search, retained = None, "full", []
     previous = (parent or {}).get("structure")
     if previous and ObjectSchema.from_dict(previous["schema"]) == schema:
@@ -120,6 +126,8 @@ def propose_response_revisions(spec, training, budget, *, parent, tolerance=1e-8
         return []
     schema = ObjectSchema.from_dict(json.loads(payload) if isinstance(payload, str) else payload)
     if not set(schema.feature_names).issubset(spec.feature_names):
+        return []
+    if any("x" not in schema.fields[g] for g in schema.objects):
         return []
     previous = parent.get("structure") or {}
     fits = previous.get("fits", [])

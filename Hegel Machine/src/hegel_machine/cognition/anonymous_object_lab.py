@@ -39,23 +39,27 @@ class AnonymousObjectLab:
     def __init__(self, *, seed=71, objects=4, readout="focus", variant="exchange",
                  profile="development", apparatus_seed=None, actuator_curvature=None,
                  name_seed=1729, wiring_seed=0, relation_radius=None, relation_direction="symmetric",
-                 relation_condition="always", condition_threshold=None,
+                 relation_condition="always", condition_threshold=None, condition_curvature=None,
                  latent_mode="none", latent_decay=None, latent_weight=None,
-                 latent_freq=None, latent_coupling=None):
+                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None):
         self.seed = seed
         self._settings = dict(seed=seed, objects=objects, readout=readout, variant=variant,
             profile=profile, apparatus_seed=apparatus_seed, actuator_curvature=actuator_curvature,
             name_seed=name_seed, wiring_seed=wiring_seed, relation_radius=relation_radius,
             relation_direction=relation_direction, relation_condition=relation_condition,
-            condition_threshold=condition_threshold, latent_mode=latent_mode,
+            condition_threshold=condition_threshold, condition_curvature=condition_curvature,
+            latent_mode=latent_mode,
             latent_decay=latent_decay, latent_weight=latent_weight,
-            latent_freq=latent_freq, latent_coupling=latent_coupling)
+            latent_freq=latent_freq, latent_coupling=latent_coupling,
+            latent_nonlinearity=latent_nonlinearity)
         self._lab = UnifiedObjectLab(seed=seed, objects=objects, readout=readout, variant=variant,
             profile=profile, apparatus_seed=apparatus_seed, actuator_curvature=actuator_curvature,
             relation_radius=relation_radius, relation_direction=relation_direction,
             relation_condition=relation_condition, condition_threshold=condition_threshold,
+            condition_curvature=condition_curvature,
             latent_mode=latent_mode, latent_decay=latent_decay, latent_weight=latent_weight,
-            latent_freq=latent_freq, latent_coupling=latent_coupling)
+            latent_freq=latent_freq, latent_coupling=latent_coupling,
+            latent_nonlinearity=latent_nonlinearity)
         bounds = self._lab.spec.feature_bounds
         names, self._control_order = _anonymous_names(bounds, "c", name_seed + 1109)
         groups = {}

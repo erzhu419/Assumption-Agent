@@ -163,6 +163,28 @@ class EvaluationContext:
                        for index, (selector, position, value) in enumerate(objects)
                        for other, (_, other_position, other_value) in enumerate(objects)
                        if index != other and abs(position - other_position) < radius)
+        if program.op == "ring_sum":
+            pairs = [
+                (
+                    self._evaluate(program.children[idx], bindings),
+                    self._evaluate(program.children[idx + 1], bindings),
+                )
+                for idx in range(0, len(program.children), 2)
+            ]
+            m = len(pairs)
+            if program.name == "laplacian":
+                return sum(
+                    pairs[k][0]
+                    * (pairs[(k - 1) % m][1] - 2.0 * pairs[k][1] + pairs[(k + 1) % m][1])
+                    for k in range(m)
+                )
+            if program.name == "grad_back":
+                return sum(
+                    pairs[k][0] * (pairs[k][1] - pairs[(k - 1) % m][1]) for k in range(m)
+                )
+            return sum(
+                pairs[k][0] * (pairs[(k + 1) % m][1] - pairs[k][1]) for k in range(m)
+            )
         if program.op == "relation_sum":
             from .relation_language import edge_bindings, relation_objects
             radius = self._evaluate(program.children[0], bindings)
@@ -216,6 +238,36 @@ class EvaluationContext:
             # Replay only the recorded prefix. Each drive sees that prefix's
             # current features and earlier history, never a later observation.
             from .models import Observation
+            if program.name in {"vdp", "vdp_lag1"}:
+                drive, a2_node, beta_node = program.children
+                a1 = float(program.value)
+                a2 = float(self._evaluate(a2_node, bindings))
+                beta = float(self._evaluate(beta_node, bindings))
+                s_prev2 = 0.0
+                s_prev1 = 0.0
+                for index, features in enumerate(observation.history):
+                    past = Observation(features, 0.0, tuple(observation.history[:index]))
+                    local = EvaluationContext(past)
+                    raw_cur = (
+                        a1 * s_prev1
+                        + a2 * s_prev2
+                        - beta * (s_prev1 ** 3)
+                        + local._evaluate(drive, bindings)
+                    )
+                    s_cur = max(-6.0, min(6.0, raw_cur))
+                    s_prev2, s_prev1 = s_prev1, s_cur
+                    self.primitive_steps += local.primitive_steps
+                    self.call_evaluations += local.call_evaluations
+                    self.cache_hits += local.cache_hits
+                if program.name == "vdp_lag1":
+                    return s_prev1
+                raw_now = (
+                    a1 * s_prev1
+                    + a2 * s_prev2
+                    - beta * (s_prev1 ** 3)
+                    + self._evaluate(drive, bindings)
+                )
+                return max(-6.0, min(6.0, raw_now))
             drive, initial = program.children
             if program.name in {"ar2", "ar2_lag1"}:
                 a1 = float(program.value)
@@ -283,9 +335,11 @@ class Program:
         arities = {
             "const": 0, "feature": 0, "lag": 0, "available": 0, "arg": 0, "abs": 1, "not": 1,
             "add": 2, "sub": 2, "mul": 2, "min": 2, "max": 2,
-            "ge": 2, "lt": 2, "and": 2, "or": 2, "if": 3, "accumulate": 2,
+            "ge": 2, "lt": 2, "and": 2, "or": 2, "if": 3,
+            "accumulate": 3 if self.name in {"vdp", "vdp_lag1"} else 2,
             "window_sum": 1, "event_delta": 1, "state_replay": 1,
             "object_sum": len(self.children),
+            "ring_sum": len(self.children),
             "neighbor_sum": len(self.children), "relation_sum": len(self.children),
         }
         if self.op == "call":
@@ -296,6 +350,10 @@ class Program:
             raise ValueError(f"invalid expression operator or arity: {self.op}")
         if not isinstance(self.children, tuple):
             raise TypeError("program children must be a tuple")
+        if self.op == "ring_sum" and (len(self.children) < 6 or len(self.children) % 2):
+            raise ValueError("a ring reduction needs at least three selector/value pairs")
+        if self.op == "ring_sum" and self.name not in {"laplacian", "grad_back", "grad_fwd"}:
+            raise ValueError("a ring reduction must be laplacian, grad_back, or grad_fwd")
         if self.op == "neighbor_sum" and (len(self.children) < 4 or (len(self.children) - 1) % 3):
             raise ValueError("a neighborhood reduction needs a radius and selector/position/value triples")
         if self.op == "neighbor_sum" and self.name not in {None, "right", "left"}:
@@ -498,6 +556,8 @@ class Program:
             return f"arg({self.name})"
         if self.op == "call":
             return f"{self.name}({', '.join(child.describe() for child in self.children)})"
+        if self.op == "ring_sum":
+            return f"ring_sum[{self.name}]({', '.join(child.describe() for child in self.children)})"
         if self.op == "accumulate":
             if self.name:
                 return f"accumulate[{self.name}]({self.value:.8g}, {', '.join(child.describe() for child in self.children)})"

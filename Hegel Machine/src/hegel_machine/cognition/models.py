@@ -170,6 +170,9 @@ class ResearchConfig:
     active_threshold_probing: bool = True
     latent_state_discovery: bool = True
     higher_order_latent_discovery: bool = True
+    curved_hypersurface_probing: bool = True
+    continuum_field_discovery: bool = True
+    nonlinear_limit_cycle_discovery: bool = True
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:

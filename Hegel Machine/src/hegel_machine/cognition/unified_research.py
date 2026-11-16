@@ -168,6 +168,10 @@ class UnifiedResearchAgent:
                 and not any(_object_schema(laboratory.spec_for(view)) for view in views))
 
     def _object_probe(self, spec, model, records, serial, *, methods=None, remaining_rows=None):
+        if self.config.continuum_field_discovery:
+            from .continuum_field_lab import is_position_free_continuum_candidate, propose_continuum_probe
+            if is_position_free_continuum_candidate(model):
+                return propose_continuum_probe(spec, model, records, serial, remaining_rows=remaining_rows)
         from .object_interventions import propose_object_probe
         return propose_object_probe(spec, model, records, serial, methods=methods, remaining_rows=remaining_rows)
 
@@ -190,6 +194,31 @@ class UnifiedResearchAgent:
         return commitments
 
     def _audit_object_transition_premises(self, model, records, budget, actions, *, commitments=()):
+        if self.config.continuum_field_discovery:
+            from .continuum_field_lab import (
+                apply_verified_continuum_premises,
+                audit_continuum_field_premises,
+                is_position_free_continuum_candidate,
+            )
+            if is_position_free_continuum_candidate(model):
+                c_audit = audit_continuum_field_premises(
+                    model, records, budget, tolerance=self.config.minimum_improvement
+                )
+                updated_c = apply_verified_continuum_premises(model, c_audit)
+                actions.append(
+                    {
+                        "action": "audit_continuum_field_premises",
+                        "status": c_audit["status"],
+                        "topology": c_audit.get("topology"),
+                        "sites": c_audit.get("sites"),
+                        "pde_parameters": deepcopy(c_audit.get("pde_parameters")),
+                        "refuted_premises": deepcopy(c_audit.get("refuted_premises", ())),
+                        "emergent_premises": list(c_audit.get("emergent_premises", ())),
+                        "unresolved_after": deepcopy(updated_c.get("unresolved", [])),
+                        "compute_cost": c_audit["compute_cost"],
+                    }
+                )
+                return updated_c
         if not self.config.transition_premise_audit:
             return model
         from .premise_dependency_audit import apply_verified_transition_premises, audit_transition_premises
@@ -197,7 +226,8 @@ class UnifiedResearchAgent:
             model, records, budget, commitments=commitments, tolerance=self.config.minimum_improvement,
             allow_expanded_revisions=self.config.expanded_premise_revisions,
             allow_latent_state=self.config.latent_state_discovery,
-            allow_higher_order_latent=self.config.higher_order_latent_discovery)
+            allow_higher_order_latent=self.config.higher_order_latent_discovery,
+            allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery)
         if audit["status"] == "awaiting_role_identification":
             return model
         updated = apply_verified_transition_premises(model, audit)
@@ -223,6 +253,55 @@ class UnifiedResearchAgent:
         from .unified_structure import propose_structures
         claims = []
         schema = _object_schema(spec)
+        if (
+            schema is not None
+            and any("x" not in schema.get("fields", {}).get(g, {}) for g in schema.get("objects", ()))
+            and self.config.use_memory
+            and self.config.world_structure_commitments
+            and self.config.continuum_field_discovery
+        ):
+            from .continuum_field_lab import (
+                consolidate_continuum_field_commitments,
+                instantiate_continuum_commitment,
+            )
+            c_before = budget.spent
+            c_comms = consolidate_continuum_field_commitments(
+                self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement
+            )
+            if c_comms:
+                actions.append(
+                    {
+                        "action": "consolidate_continuum_field_commitments",
+                        "commitment_count": len(c_comms),
+                        "commitment_ids": [c["commitment_id"] for c in c_comms],
+                        "compute_cost": budget.spent - c_before,
+                    }
+                )
+                comm_budget = SearchBudget(max(1, budget.remaining * 2 // 3))
+                for c_comm in c_comms:
+                    claims.extend(
+                        instantiate_continuum_commitment(
+                            spec, training, schema, c_comm, comm_budget, tolerance=tolerance
+                        )
+                    )
+                    if any(item["training_loss"] <= tolerance for item in claims):
+                        break
+                budget.spend(comm_budget.spent)
+                actions.append(
+                    {
+                        "action": "apply_continuum_field_commitments",
+                        "compute_cost": comm_budget.spent,
+                        "candidate_count": len(claims),
+                        "supported": any(item["training_loss"] <= tolerance for item in claims),
+                    }
+                )
+            if not any(item["training_loss"] <= tolerance for item in claims):
+                claims.extend(
+                    propose_structures(
+                        spec, training, budget, parent=parent, tolerance=tolerance, transitions=transitions
+                    )
+                )
+            return claims
         if schema is not None and self.config.use_memory and self.config.world_structure_commitments:
             from .world_structure_commitments import (
                 commitment_applicable_triggers,
@@ -243,6 +322,7 @@ class UnifiedResearchAgent:
                         allow_expanded_revisions=self.config.expanded_premise_revisions,
                         allow_latent_state=self.config.latent_state_discovery,
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                        allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
                         observations=training)
                 schema_x_to_q = {
                     group["x"]: group["q"]
@@ -494,6 +574,95 @@ class UnifiedResearchAgent:
                 model = infer_object_model(raw_spec, records(), budget, prior=model)
                 model = self._audit_object_transition_premises(
                     model, records(), budget, actions, commitments=commitments)
+                if (
+                    model.get("complete")
+                    and self.config.curved_hypersurface_probing
+                    and (model.get("premise_audit") or {}).get("verified_hypersurface_polytope")
+                ):
+                    from .continuous_state import _linear_fit
+                    from .curved_hypersurface_probing import plan_coupled_hypersurface_probe
+
+                    sc_cur = model["schema"]
+                    max_hs_probes = min(28, max(0, row_limit - len(records())))
+                    for hs_step in range(max_hs_probes):
+                        recs_cur = records()
+                        q_fns_cur = {}
+                        for grp in sc_cur["objects"]:
+                            qf = sc_cur["fields"][grp].get("q")
+                            qc = sc_cur["controls"][grp].get("q")
+                            if not qf or not qc:
+                                continue
+                            distinct_pts = {}
+                            for r in recs_cur:
+                                if not r.get("history") and qc in r.get("controls", {}) and qf in r.get("before", {}):
+                                    cv = round(float(r["controls"][qc]), 6)
+                                    distinct_pts[cv] = float(r["before"][qf])
+                            if len(distinct_pts) >= 5 and (max(distinct_pts) - min(distinct_pts)) >= 0.45:
+                                c_vals = list(distinct_pts.keys())
+                                y_vals = list(distinct_pts.values())
+                                coeffs_q = _linear_fit(
+                                    [c_vals, [c * c for c in c_vals], [c * c * c for c in c_vals]],
+                                    y_vals,
+                                )
+                                q_fns_cur[grp] = (
+                                    lambda val, _cf=tuple(coeffs_q): float(
+                                        _cf[0] + _cf[1] * val + _cf[2] * (val ** 2) + _cf[3] * (val ** 3)
+                                    )
+                                )
+                        pa_cur = model.get("premise_audit") or {}
+                        poly_cur = pa_cur.get("verified_hypersurface_polytope")
+                        r_iv_cur = pa_cur.get("radius_interval")
+                        v_cond_cur = pa_cur.get("verified_edge_condition")
+                        v_dir_cur = pa_cur.get("verified_direction") or "right"
+                        if (
+                            not poly_cur
+                            or not r_iv_cur
+                            or not isinstance(v_cond_cur, dict)
+                            or (
+                                float(poly_cur.get("diameter", 0.0)) <= 0.024
+                                and (float(r_iv_cur[1]) - float(r_iv_cur[0])) <= 6e-7
+                            )
+                        ):
+                            break
+                        hs_plan = plan_coupled_hypersurface_probe(
+                            Program.from_dict(v_cond_cur),
+                            poly_cur,
+                            r_iv_cur,
+                            v_dir_cur,
+                            sc_cur["controls"],
+                            raw_spec.feature_bounds,
+                            q_forward_fns=q_fns_cur or None,
+                            focus_control=sc_cur.get("focus_control", "focus"),
+                            mode="coupled_diametral",
+                            axis_toggle=hs_step,
+                            probe_id=f"curved_hs_probe_{hs_step}",
+                            allow_fine_radius_polish=True,
+                        )
+                        if hs_plan is None:
+                            break
+                        if (
+                            acquire(
+                                channels,
+                                "probe_curved_hypersurface_boundary",
+                                probe=Probe(hs_plan["probe_id"], (hs_plan["point"],)),
+                            )
+                            is None
+                        ):
+                            break
+                        model = self._audit_object_transition_premises(
+                            model, records(), budget, actions, commitments=commitments
+                        )
+                        actions.append(
+                            {
+                                "action": "curved_hypersurface_boundary_probe",
+                                "probe_id": hs_plan["probe_id"],
+                                "strategy": hs_plan.get("strategy"),
+                                "polytope_diameter_after": (
+                                    (model.get("premise_audit") or {}).get("verified_hypersurface_polytope") or {}
+                                ).get("diameter"),
+                                "radius_interval_after": (model.get("premise_audit") or {}).get("radius_interval"),
+                            }
+                        )
             else:
                 model = {**model, "complete": False, "schema": None, "status": "unresolved"}
         model = deepcopy(model)
@@ -920,7 +1089,9 @@ class UnifiedResearchAgent:
                 if feedback is not None:
                     actions.append(feedback)
             self._record_instrument_assessment(model, assessment, measured_spec, len(measured), actions)
-            if any(name in assessment["field_losses"] for name in assessment["refuted_fields"]):
+            needed_check = set(required_fields) if required_fields is not None else set(measured_spec.feature_names)
+            if (any(name in assessment["field_losses"] for name in assessment["refuted_fields"])
+                    or bool(needed_check - set(model["fields"]))):
                 model = self._fit_instruments(command_spec, measured_spec,
                     paired_for(channels), budget, actions, required_fields=required_fields,
                     previous_model=model)
@@ -994,7 +1165,7 @@ class UnifiedResearchAgent:
                 return old
         missing = [name for name in requested if name not in retained]
         before = budget.spent
-        local = SearchBudget(min(24000, budget.remaining // 2))
+        local = SearchBudget(min(max(24000, len(missing) * len(training) * 12), budget.remaining // 2))
         model = fit_instrument_model(command_spec, measured_spec, training, local,
                                      max_history=self.config.max_history, field_names=missing)
         budget.spend(local.spent)
@@ -2284,6 +2455,7 @@ class UnifiedResearchAgent:
                 allow_expanded_revisions=self.config.expanded_premise_revisions,
                 allow_latent_state=self.config.latent_state_discovery,
                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
                 observations=rows)
         if previous is None:
             equiv_budget = SearchBudget(budget.remaining // 3) if commitments else budget

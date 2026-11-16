@@ -25,7 +25,7 @@ def _current_expression(program):
     if program.op in {"const", "feature", "available"}:
         return True
     if program.op not in {"add", "sub", "mul", "abs", "min", "max", "ge", "lt",
-                          "and", "or", "not", "if", "object_sum", "neighbor_sum"}:
+                          "and", "or", "not", "if", "object_sum", "neighbor_sum", "ring_sum"}:
         return False
     return all(_current_expression(child) for child in program.children)
 
@@ -41,9 +41,10 @@ def simplify(program: Program) -> Program:
         # retain the original callable, and expand explicitly for body analysis.
         return program
     if program.op == "accumulate":
-        drive, initial = children
-        if program.name is None and program.value == 0 and initial.op == "const" and _current_expression(drive):
-            return drive
+        if program.name is None:
+            drive, initial = children
+            if program.value == 0 and initial.op == "const" and _current_expression(drive):
+                return drive
         return program
     if program.op == "if" and children[0].op == "const":
         return children[1 if children[0].value else 2]

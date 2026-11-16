@@ -32,8 +32,9 @@ class UnifiedObjectLab:
                  profile="development", rename_prefix="", apparatus_seed=None,
                  actuator_curvature=None, relation_radius=None, relation_direction="symmetric",
                  relation_condition="always", total_weight=1.0, condition_threshold=None,
+                 condition_curvature=None,
                  latent_mode="none", latent_decay=None, latent_weight=None,
-                 latent_freq=None, latent_coupling=None):
+                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None):
         if profile not in {"development", "confirmation"}:
             raise ValueError("profile must be development or confirmation")
         self.seed = seed
@@ -42,16 +43,21 @@ class UnifiedObjectLab:
                               apparatus_seed=apparatus_seed, actuator_curvature=actuator_curvature,
                               relation_radius=relation_radius, relation_direction=relation_direction,
                               relation_condition=relation_condition, total_weight=total_weight,
-                              condition_threshold=condition_threshold, latent_mode=latent_mode,
+                              condition_threshold=condition_threshold,
+                              condition_curvature=condition_curvature,
+                              latent_mode=latent_mode,
                               latent_decay=latent_decay, latent_weight=latent_weight,
-                              latent_freq=latent_freq, latent_coupling=latent_coupling)
+                              latent_freq=latent_freq, latent_coupling=latent_coupling,
+                              latent_nonlinearity=latent_nonlinearity)
         plant_seed = seed if apparatus_seed is None else apparatus_seed
         self._lab = StructureLab(objects=objects, readout=readout, variant=variant,
                                  seed=plant_seed + (7919 if profile == "confirmation" else 0),
                                  relation_direction=relation_direction, relation_condition=relation_condition,
                                  total_weight=total_weight, condition_threshold=condition_threshold,
+                                 condition_curvature=condition_curvature,
                                  latent_mode=latent_mode, latent_decay=latent_decay, latent_weight=latent_weight,
-                                 latent_freq=latent_freq, latent_coupling=latent_coupling)
+                                 latent_freq=latent_freq, latent_coupling=latent_coupling,
+                                 latent_nonlinearity=latent_nonlinearity)
         if actuator_curvature is not None:
             self._lab._actuator_curvature = float(actuator_curvature)
         if relation_radius is not None:

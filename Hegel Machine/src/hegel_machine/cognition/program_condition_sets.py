@@ -201,6 +201,16 @@ def solve_compound_region(region, point, bounds, spend):
     cost = sum(expression.size for expression in expressions)
     targets = [item["target"] for item in constraints]
 
+    def _residual(item, value, target):
+        lo, hi = item["lower"], item["upper"]
+        if lo is not None and hi is None:
+            goal = lo + max(0.15, abs(lo) * 0.15)
+            return goal - value if value < goal else 0.0
+        if hi is not None and lo is None:
+            goal = hi - max(0.15, abs(hi) * 0.15)
+            return goal - value if value > goal else 0.0
+        return target - value
+
     def evaluate(candidate):
         if not spend(cost):
             return None
@@ -226,7 +236,36 @@ def solve_compound_region(region, point, bounds, spend):
                 "measured_expression": item["measured_expression"].to_dict()} for item in constraints]}
 
     initial = dict(point)
-    for seed in (initial, {**initial, **{name: sum(bounds[name]) / 2 for name in axes}}):
+    midpoint = {**initial, **{name: sum(bounds[name]) / 2 for name in axes}}
+    asymmetric_a = {
+        **initial,
+        **{
+            name: bounds[name][0] + (0.73 if idx % 2 == 0 else 0.31) * (bounds[name][1] - bounds[name][0])
+            for idx, name in enumerate(axes)
+        },
+    }
+    asymmetric_b = {
+        **initial,
+        **{
+            name: bounds[name][0] + (0.27 if idx % 2 == 0 else 0.79) * (bounds[name][1] - bounds[name][0])
+            for idx, name in enumerate(axes)
+        },
+    }
+    extreme_gap_a = {
+        **initial,
+        **{
+            name: bounds[name][0] + (0.93 if idx % 2 == 0 else 0.07) * (bounds[name][1] - bounds[name][0])
+            for idx, name in enumerate(axes)
+        },
+    }
+    extreme_gap_b = {
+        **initial,
+        **{
+            name: bounds[name][0] + (0.07 if idx % 2 == 0 else 0.93) * (bounds[name][1] - bounds[name][0])
+            for idx, name in enumerate(axes)
+        },
+    }
+    for seed in (initial, midpoint, asymmetric_a, asymmetric_b, extreme_gap_a, extreme_gap_b):
         current = seed
         values = evaluate(current)
         if values is None:
@@ -252,10 +291,12 @@ def solve_compound_region(region, point, bounds, spend):
             regularization = max(1., *(gram[index][index] for index in range(count))) * 1e-12
             for index in range(count):
                 gram[index][index] += regularization
-            rhs = [sum(row[index] * (target - value)
-                       for row, target, value in zip(jacobian, targets, values)) for index in range(count)]
+            res_cur = [_residual(item, value, target)
+                       for item, value, target in zip(constraints, values, targets)]
+            rhs = [sum(row[index] * res_v
+                       for row, res_v in zip(jacobian, res_cur)) for index in range(count)]
             direction = _solve(gram, rhs)
-            loss = sum((value - target) ** 2 for value, target in zip(values, targets))
+            loss = sum(res_v * res_v for res_v in res_cur)
             improved = False
             for scale in (1., .5, .25, .125, .0625, .03125):
                 candidate = {**current, **{name: max(bounds[name][0], min(bounds[name][1],
@@ -266,7 +307,8 @@ def solve_compound_region(region, point, bounds, spend):
                     return None, {}
                 if satisfied(updated):
                     return result(candidate, updated)
-                new_loss = sum((value - target) ** 2 for value, target in zip(updated, targets))
+                new_loss = sum(_residual(item, value, target) ** 2
+                               for item, value, target in zip(constraints, updated, targets))
                 if new_loss < loss:
                     current, values, improved = candidate, updated, True
                     break

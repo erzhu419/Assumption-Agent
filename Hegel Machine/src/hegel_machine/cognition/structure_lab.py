@@ -68,8 +68,9 @@ class StructureLab:
 
     def __init__(self, *, objects=4, readout="focus", variant="exchange", seed=71,
                  relation_direction="symmetric", relation_condition="always", total_weight=1.0,
-                 condition_threshold=None, latent_mode="none", latent_decay=None, latent_weight=None,
-                 latent_freq=None, latent_coupling=None):
+                 condition_threshold=None, condition_curvature=None,
+                 latent_mode="none", latent_decay=None, latent_weight=None,
+                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None):
         if objects < 2:
             raise ValueError("the exchange apparatus needs at least two objects")
         if readout not in {"focus", "position_focus", "total", "window", "event", "total_event",
@@ -80,7 +81,14 @@ class StructureLab:
             raise ValueError("unknown apparatus variant")
         if relation_direction not in {"symmetric", "right", "left"}:
             raise ValueError("unknown relation direction")
-        if relation_condition not in {"always", "source_greater", "source_less", "donor_positive_gap"}:
+        if relation_condition not in {
+            "always",
+            "source_greater",
+            "source_less",
+            "donor_positive_gap",
+            "distance_attenuated_gap",
+            "bilinear_product_barrier",
+        }:
             raise ValueError("unknown relation condition")
         if latent_mode not in {
             "none",
@@ -92,6 +100,7 @@ class StructureLab:
             "coupled_transition_memory",
             "quadratic_energy_focal_memory",
             "bilinear_work_transition_memory",
+            "van_der_pol_transition_memory",
         }:
             raise ValueError("unknown latent mode")
         self.object_ids = tuple(f"o{index}" for index in range(objects))
@@ -104,22 +113,32 @@ class StructureLab:
         self._radius = rng.uniform(.7, 1.15)
         self._actuator_curvature = rng.uniform(.08, .16)
         self._condition_threshold = 0.25 if condition_threshold is None else float(condition_threshold)
+        self._condition_curvature = 0.40 if condition_curvature is None else float(condition_curvature)
         self._latent_mode = latent_mode
         if latent_mode == "none":
             self._latent_decay = 0.0
             self._latent_weight = 0.0
             self._latent_freq = 0.0
             self._latent_coupling = 0.0
+            self._latent_nonlinearity = 0.0
+        elif latent_mode == "van_der_pol_transition_memory":
+            self._latent_decay = float(1.02 if latent_decay is None else latent_decay)
+            self._latent_weight = float(rng.uniform(.38, .52) if latent_weight is None else latent_weight)
+            self._latent_freq = float(0.65 if latent_freq is None else latent_freq)
+            self._latent_coupling = 0.0
+            self._latent_nonlinearity = float(0.28 if latent_nonlinearity is None else latent_nonlinearity)
         elif latent_mode in {"focal_memory", "oscillatory_focal_memory", "coupled_focal_memory", "quadratic_energy_focal_memory"}:
             self._latent_decay = float(rng.uniform(.54, .76) if latent_decay is None else latent_decay)
             self._latent_weight = float(rng.uniform(.32, .52) if latent_weight is None else latent_weight)
             self._latent_freq = float(0.75 if latent_freq is None else latent_freq) if "oscillatory" in latent_mode else 0.0
             self._latent_coupling = float(0.24 if latent_coupling is None else latent_coupling) if "coupled" in latent_mode else 0.0
+            self._latent_nonlinearity = 0.0
         else:
             self._latent_decay = float(rng.uniform(.56, .78) if latent_decay is None else latent_decay)
             self._latent_weight = float(rng.uniform(.35, .55) if latent_weight is None else latent_weight)
             self._latent_freq = float(0.75 if latent_freq is None else latent_freq) if "oscillatory" in latent_mode else 0.0
             self._latent_coupling = float(0.22 if latent_coupling is None else latent_coupling) if "coupled" in latent_mode else 0.0
+            self._latent_nonlinearity = 0.0
         self._window = 3
         self.observation_cost = self.measurement_cost = 0
         self.acquisitions = []
@@ -156,6 +175,23 @@ class StructureLab:
         return Probe(name, tuple({key: rng.uniform(*bounds) for key, bounds in self.spec.feature_bounds.items()}
                                  for _ in range(length)))
 
+    def _edge_condition_active(self, q_src, q_dst, x_src, x_dst):
+        cond = self._relation_condition
+        if cond == "always":
+            return True
+        if cond == "source_greater":
+            return q_src > q_dst
+        if cond == "source_less":
+            return q_src < q_dst
+        if cond == "donor_positive_gap":
+            return q_src > 0.0 and (q_src - q_dst) > self._condition_threshold
+        if cond == "distance_attenuated_gap":
+            dx = x_dst - x_src
+            return q_src > 0.0 and (q_src - q_dst - self._condition_curvature * (dx * dx)) > self._condition_threshold
+        if cond == "bilinear_product_barrier":
+            return q_src > q_dst and (q_src * q_src - self._condition_curvature * q_src * q_dst) > self._condition_threshold
+        return True
+
     def _step(self, point, latent_state=None):
         # Quantity controls are actuator commands. Instruments measure the
         # resulting quantities; omitting individual measurements therefore does
@@ -173,12 +209,8 @@ class StructureLab:
             for source, value in enumerate(quantity):
                 for target in range(len(quantity)):
                     if 0. < sign * (position[target] - position[source]) < self._radius:
-                        if self._relation_condition == "source_greater" and value <= quantity[target]:
-                            continue
-                        if self._relation_condition == "source_less" and value >= quantity[target]:
-                            continue
-                        if self._relation_condition == "donor_positive_gap" and not (
-                            value > 0.0 and (value - quantity[target]) > self._condition_threshold
+                        if not self._edge_condition_active(
+                            value, quantity[target], position[source], position[target]
                         ):
                             continue
                         transfer = self._coupling * value
@@ -204,6 +236,7 @@ class StructureLab:
                 "oscillatory_transition_memory",
                 "coupled_transition_memory",
                 "bilinear_work_transition_memory",
+                "van_der_pol_transition_memory",
             } and latent_state is not None:
                 change += self._latent_weight * latent_state[index] + coupled_flux[index]
             after.append(value + drive[index] + change)
@@ -216,12 +249,8 @@ class StructureLab:
             for source, z_val in enumerate(latent_state):
                 for target in range(len(latent_state)):
                     if 0.0 < sign * (position[target] - position[source]) < self._radius:
-                        if self._relation_condition == "source_greater" and quantity[source] <= quantity[target]:
-                            continue
-                        if self._relation_condition == "source_less" and quantity[source] >= quantity[target]:
-                            continue
-                        if self._relation_condition == "donor_positive_gap" and not (
-                            quantity[source] > 0.0 and (quantity[source] - quantity[target]) > self._condition_threshold
+                        if not self._edge_condition_active(
+                            quantity[source], quantity[target], position[source], position[target]
                         ):
                             continue
                         transfer = self._latent_coupling * z_val
@@ -269,6 +298,21 @@ class StructureLab:
             elif self._latent_mode == "oscillatory_transition_memory":
                 z_next = [ar2_a1 * latent_state[idx] + ar2_a2 * latent_prev[idx] + drive[idx]
                           for idx in range(len(quantity))]
+                latent_prev, latent_state = latent_state, z_next
+            elif self._latent_mode == "van_der_pol_transition_memory":
+                z_next = [
+                    max(
+                        -6.0,
+                        min(
+                            6.0,
+                            ar2_a1 * latent_state[idx]
+                            + ar2_a2 * latent_prev[idx]
+                            - self._latent_nonlinearity * (latent_state[idx] ** 3)
+                            + drive[idx],
+                        ),
+                    )
+                    for idx in range(len(quantity))
+                ]
                 latent_prev, latent_state = latent_state, z_next
             elif self._latent_mode == "bilinear_work_transition_memory":
                 latent_state = [self._latent_decay * latent_state[idx] + quantity[idx] * drive[idx]

@@ -419,10 +419,16 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
     latent_poles = _extract_latent_poles_from_role_terms(role_terms)
     ar2_params_list = _extract_ar2_params_from_role_terms(role_terms)
     ar2_params = list(ar2_params_list[0]) if ar2_params_list else None
+    vdp_params_list = _extract_vdp_params_from_role_terms(role_terms)
+    vdp_params = list(vdp_params_list[0]) if vdp_params_list else None
     latent_state_mechanism = (
         app_meta.get("latent_state_mechanism")
         or sci_rev.get("latent_state_mechanism")
-        or ("oscillatory_focal_memory" if ar2_params else ("focal_memory" if latent_poles else None))
+        or (
+            "van_der_pol_transition_memory"
+            if vdp_params
+            else ("oscillatory_focal_memory" if ar2_params else ("focal_memory" if latent_poles else None))
+        )
     )
     generation = int(sci_rev.get("generation") or app_meta.get("generation") or 0)
     revision_lineage = list(
@@ -575,6 +581,7 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
         "latent_state_mechanism": latent_state_mechanism,
         "latent_poles": latent_poles,
         "ar2_params": ar2_params,
+        "vdp_params": vdp_params,
         "generation": generation,
         "revision_lineage": revision_lineage,
         "family": family_name,
@@ -735,16 +742,111 @@ def _rebind_ar2_params_in_role_terms(
     return [_visit(term) for term in role_terms]
 
 
+def _collect_prog_vdp_params(prog_dict: dict) -> list[tuple[float, float, float]]:
+    found = []
+    if (
+        prog_dict.get("op") == "accumulate"
+        and prog_dict.get("name") in {"vdp", "vdp_lag1"}
+        and prog_dict.get("value") is not None
+        and len(prog_dict.get("children", ())) == 3
+        and prog_dict["children"][1].get("op") == "const"
+        and prog_dict["children"][2].get("op") == "const"
+        and prog_dict["children"][1].get("value") is not None
+        and prog_dict["children"][2].get("value") is not None
+    ):
+        found.append(
+            (
+                float(prog_dict["value"]),
+                float(prog_dict["children"][1]["value"]),
+                float(prog_dict["children"][2]["value"]),
+            )
+        )
+    for ch in prog_dict.get("children", ()):
+        found.extend(_collect_prog_vdp_params(ch))
+    return found
+
+
+def _rebind_prog_vdp_params(
+    prog_dict: dict, a1: float | str, a2: float | str, beta: float | str
+) -> dict:
+    updated = deepcopy(prog_dict)
+    if updated.get("op") == "accumulate" and updated.get("name") in {"vdp", "vdp_lag1"}:
+        updated["value"] = a1
+        chs = list(updated.get("children", ()))
+        if len(chs) == 3:
+            chs[1] = {"op": "const", "value": a2, "name": None, "lag": 0, "children": []}
+            chs[2] = {"op": "const", "value": beta, "name": None, "lag": 0, "children": []}
+            updated["children"] = chs
+    if "children" in updated:
+        updated["children"] = [_rebind_prog_vdp_params(ch, a1, a2, beta) for ch in updated["children"]]
+    return updated
+
+
+def _extract_vdp_params_from_role_terms(role_terms: list[dict]) -> list[tuple[float, float, float]]:
+    triples: list[tuple[float, float, float]] = []
+
+    def _visit(node: dict):
+        if node["kind"] == "all_object_sum":
+            for a1, a2, bt in _collect_prog_vdp_params(node["summand"]):
+                if all(
+                    abs(a1 - e1) > 1e-12 or abs(a2 - e2) > 1e-12 or abs(bt - eb) > 1e-12
+                    for e1, e2, eb in triples
+                ):
+                    triples.append((a1, a2, bt))
+        elif node["kind"] in {"all_neighbor_sum", "all_relation_sum"} and "value_summand" in node:
+            for a1, a2, bt in _collect_prog_vdp_params(node["value_summand"]):
+                if all(
+                    abs(a1 - e1) > 1e-12 or abs(a2 - e2) > 1e-12 or abs(bt - eb) > 1e-12
+                    for e1, e2, eb in triples
+                ):
+                    triples.append((a1, a2, bt))
+        elif node["kind"] == "program_op":
+            for child in node.get("children", ()):
+                _visit(child)
+
+    for term in role_terms:
+        _visit(term)
+    return triples
+
+
+def _rebind_vdp_params_in_role_terms(
+    role_terms: list[dict], a1: float | str, a2: float | str, beta: float | str
+) -> list[dict]:
+    def _visit(node: dict) -> dict:
+        if node["kind"] == "all_object_sum":
+            return {
+                **deepcopy(node),
+                "summand": _rebind_prog_vdp_params(node["summand"], a1, a2, beta),
+            }
+        if node["kind"] in {"all_neighbor_sum", "all_relation_sum"} and "value_summand" in node:
+            return {
+                **deepcopy(node),
+                "value_summand": _rebind_prog_vdp_params(node["value_summand"], a1, a2, beta),
+            }
+        if node["kind"] == "program_op":
+            updated = deepcopy(node)
+            updated["children"] = [_visit(ch) for ch in updated.get("children", ())]
+            return updated
+        return deepcopy(node)
+
+    return [_visit(term) for term in role_terms]
+
+
 def _normalize_edge_condition_for_grouping(cond: str | dict) -> str | dict:
     if not isinstance(cond, dict):
         return cond
     prog = Program.from_dict(cond)
+    from .curved_hypersurface_probing import normalize_hypersurface_for_grouping
+
+    hs_norm = normalize_hypersurface_for_grouping(prog)
+    if hs_norm is not None:
+        return hs_norm.to_dict()
     desc = describe_comparator_threshold_parameter(prog)
-    if desc is None:
-        return cond
-    return _replace_node_at_path(
-        prog, tuple(desc["path"]), Program("arg", name="__THRESHOLD__")
-    ).to_dict()
+    if desc is not None:
+        return _replace_node_at_path(
+            prog, tuple(desc["path"]), Program("arg", name="__THRESHOLD__")
+        ).to_dict()
+    return cond
 
 
 def _collect_temporal_ops(node: dict) -> list[str]:
@@ -982,6 +1084,66 @@ def expand_role_terms_for_ar2_latent_transition(
             if tot_changed:
                 _add(tot_comp)
             nb_comp, nb_changed = _replace_neighborhood_in_role_term(term, foc_ar2)
+            if nb_changed:
+                _add(nb_comp)
+    return expanded
+
+
+def _vdp_role_term(
+    role: str, a1: float, a2: float, beta: float, *, mode: str = "vdp_lag1", focused: bool = True
+) -> dict:
+    acc_prog = Program(
+        "accumulate",
+        value=float(a1),
+        name=mode,
+        children=(
+            Program("feature", name=f"object_role:{role}"),
+            Program("const", value=float(a2)),
+            Program("const", value=float(beta)),
+        ),
+    )
+    if focused:
+        summand = Program(
+            "mul",
+            children=(Program("feature", name="object_role:f"), acc_prog),
+        )
+        roles = ["f", role]
+    else:
+        summand = acc_prog
+        roles = [role]
+    return {"kind": "all_object_sum", "summand": summand.to_dict(), "roles": roles}
+
+
+def expand_role_terms_for_vdp_latent_transition(
+    role_terms: list[dict],
+    a1: float,
+    a2: float,
+    beta: float,
+    drive_weights: dict[str, float] | None = None,
+) -> list[dict]:
+    """Expand ``role_terms`` with supercritical Van der Pol ``vdp_lag1`` transition terms."""
+    active_roles = [
+        r for r in ("u", "q") if abs((drive_weights or {}).get(r, 1.0 if r == "u" else 0.0)) > 1e-6
+    ]
+    if not active_roles:
+        active_roles = ["u"]
+    expanded = deepcopy(role_terms)
+    seen = {json.dumps(t, sort_keys=True, separators=(",", ":")) for t in expanded}
+
+    def _add(term_dict: dict):
+        key = json.dumps(term_dict, sort_keys=True, separators=(",", ":"))
+        if key not in seen:
+            seen.add(key)
+            expanded.append(term_dict)
+
+    for r_name in active_roles:
+        tot_vdp = _vdp_role_term(r_name, a1, a2, beta, mode="vdp_lag1", focused=False)
+        foc_vdp = _vdp_role_term(r_name, a1, a2, beta, mode="vdp_lag1", focused=True)
+        for term in role_terms:
+            tot_comp, tot_changed = _replace_total_role_in_role_term(term, "q", tot_vdp)
+            if tot_changed:
+                _add(tot_comp)
+            nb_comp, nb_changed = _replace_neighborhood_in_role_term(term, foc_vdp)
             if nb_changed:
                 _add(nb_comp)
     return expanded
@@ -1391,9 +1553,17 @@ def check_equivalence_reorganization(
         src_role_terms = None
         src_poles = source.get("latent_poles") or []
         src_ar2 = source.get("ar2_params")
+        src_vdp = source.get("vdp_params")
         if len(src_poles) == 1:
             src_role_terms = _rebind_latent_pole_in_role_terms(
                 candidate_commitment["role_terms"], float(src_poles[0])
+            )
+        elif src_vdp and len(src_vdp) == 3:
+            src_role_terms = _rebind_vdp_params_in_role_terms(
+                candidate_commitment["role_terms"],
+                float(src_vdp[0]),
+                float(src_vdp[1]),
+                float(src_vdp[2]),
             )
         elif src_ar2 and len(src_ar2) == 2:
             src_role_terms = _rebind_ar2_params_in_role_terms(
@@ -1527,9 +1697,15 @@ def consolidate_world_structure_commitments(
             _rebind_latent_pole_in_role_terms(item["role_terms"], "__LATENT_POLE__")
             if len(item.get("latent_poles") or ()) == 1
             else (
-                _rebind_ar2_params_in_role_terms(item["role_terms"], "__AR2_A1__", "__AR2_A2__")
-                if item.get("ar2_params")
-                else item["role_terms"]
+                _rebind_vdp_params_in_role_terms(
+                    item["role_terms"], "__VDP_A1__", "__VDP_A2__", "__VDP_BETA__"
+                )
+                if item.get("vdp_params")
+                else (
+                    _rebind_ar2_params_in_role_terms(item["role_terms"], "__AR2_A1__", "__AR2_A2__")
+                    if item.get("ar2_params")
+                    else item["role_terms"]
+                )
             )
         )
         # Also normalize 1D custom threshold inside all_relation_sum role_terms
@@ -1589,6 +1765,11 @@ def consolidate_world_structure_commitments(
             for m in members
             if m.get("ar2_params")
         ]
+        merged_vdp_params = [
+            list(m["vdp_params"])
+            for m in members
+            if m.get("vdp_params")
+        ]
         candidate = {
             "commitment_id": f"world_commitment:{idx:04d}",
             "kind": "world_structure_commitment",
@@ -1607,6 +1788,7 @@ def consolidate_world_structure_commitments(
             "latent_state_mechanism": representative.get("latent_state_mechanism"),
             "source_latent_poles": merged_latent_poles,
             "source_ar2_params": merged_ar2_params,
+            "source_vdp_params": merged_vdp_params,
             "generation": max((int(m.get("generation", 0)) for m in members), default=0),
             "revision_lineage": deepcopy(representative.get("revision_lineage", [])),
         }
@@ -1771,7 +1953,13 @@ def _attach_symbolic_parameter_step(
             and len(threshold_interval) == 2
             and float(threshold_interval[1]) > float(threshold_interval[0])
         ):
-            desc = describe_comparator_threshold_parameter(pred_prog)
+            from .curved_hypersurface_probing import describe_linear_in_params_hypersurface
+
+            desc = (
+                None
+                if describe_linear_in_params_hypersurface(pred_prog) is not None
+                else describe_comparator_threshold_parameter(pred_prog)
+            )
             if desc is not None:
                 c_sym = f"c_{p_idx}"
                 symbolic_pred_prog = _replace_node_at_path(
@@ -2281,6 +2469,16 @@ def instantiate_commitment_on_schema(
         )
         transition_ar2_calibrated = True
     elif (
+        effective_latent_mech == "van_der_pol_transition_memory"
+        and audit_report
+        and (audit_report.get("latent_transition_state") or {}).get("vdp_params")
+    ):
+        vdp_p = audit_report["latent_transition_state"]["vdp_params"]
+        active_role_terms = _rebind_vdp_params_in_role_terms(
+            active_role_terms, float(vdp_p[0]), float(vdp_p[1]), float(vdp_p[2])
+        )
+        transition_ar2_calibrated = True
+    elif (
         effective_latent_mech == "custom_transition_memory"
         and audit_report
         and audit_report.get("status") == "unexplained_latent_transition_state"
@@ -2396,8 +2594,13 @@ def instantiate_commitment_on_schema(
         and transitions
         and effective_direction in {"right", "left"}
     ):
+        from .curved_hypersurface_probing import describe_linear_in_params_hypersurface
+
         custom_prog = edge_condition_predicate(effective_cond)
-        if describe_comparator_threshold_parameter(custom_prog) is not None:
+        if (
+            describe_comparator_threshold_parameter(custom_prog) is not None
+            or describe_linear_in_params_hypersurface(custom_prog) is not None
+        ):
             q_fields = [target.fields[g]["q"] for g in target.objects]
             u_fields = [target.fields[g]["u"] for g in target.objects]
             x_fields = [target.fields[g]["x"] for g in target.objects]
@@ -3100,6 +3303,7 @@ def _build_commitment_entry(
 _TRANSITION_LATENT_MECHANISMS = {
     "transition_memory",
     "oscillatory_transition_memory",
+    "van_der_pol_transition_memory",
     "coupled_transition_memory",
     "custom_transition_memory",
 }
@@ -3442,17 +3646,30 @@ def propose_scientific_premise_revision(
                 continue
             pole = float(trigger["latent_pole"])
             ar2_p = trigger.get("ar2_params")
+            vdp_p = trigger.get("vdp_params")
             drive_weights = trigger.get("latent_drive_weights") or {"u": 1.0, "q": 0.0}
             replacement_dir = trigger["replacement_direction"]
             replacement_cond = trigger["replacement_condition"]
             pred_prog = trigger.get("predicate_program")
             if committed_latent == lat_mech:
-                if lat_mech == "oscillatory_transition_memory" and ar2_p:
+                if lat_mech == "van_der_pol_transition_memory" and vdp_p:
+                    expanded_terms = _rebind_vdp_params_in_role_terms(
+                        commitment["role_terms"], float(vdp_p[0]), float(vdp_p[1]), float(vdp_p[2])
+                    )
+                elif lat_mech == "oscillatory_transition_memory" and ar2_p:
                     expanded_terms = _rebind_ar2_params_in_role_terms(
                         commitment["role_terms"], float(ar2_p[0]), float(ar2_p[1])
                     )
                 else:
                     expanded_terms = _rebind_latent_pole_in_role_terms(commitment["role_terms"], pole)
+            elif lat_mech == "van_der_pol_transition_memory" and vdp_p:
+                expanded_terms = expand_role_terms_for_vdp_latent_transition(
+                    commitment["role_terms"],
+                    float(vdp_p[0]),
+                    float(vdp_p[1]),
+                    float(vdp_p[2]),
+                    drive_weights,
+                )
             elif lat_mech == "oscillatory_transition_memory" and ar2_p:
                 expanded_terms = expand_role_terms_for_ar2_latent_transition(
                     commitment["role_terms"], float(ar2_p[0]), float(ar2_p[1]), drive_weights

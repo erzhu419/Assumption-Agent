@@ -29,6 +29,9 @@ def transfer_structure(spec, training, budget, source_prior, *, tolerance=1e-8,
     family = source["fits"][0]["family"]
     source_id = source_prior["source_concept_id"]
     source_schema = ObjectSchema.from_dict(source["schema"])
+    if (any("x" not in schema.fields[g] for g in schema.objects)
+            or any("x" not in source_schema.fields[g] for g in source_schema.objects)):
+        return []
     if (source["fits"][0].get("response_terms")
             and len(source_schema.objects) != len(schema.objects)):
         return []

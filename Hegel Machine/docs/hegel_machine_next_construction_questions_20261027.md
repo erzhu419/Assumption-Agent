@@ -2465,3 +2465,65 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
 
 1. **无显式角色划分的连续场／多维非线性耦合隐动力学：** 当前二阶谐振、跨对象空间隐耦合及开放语法非线性POMDP均建立在公开观测可分离出对象角色结构（`P_role_partition`）的实验场之上；面向完全无对象传感器角色划分的连续偏微分场或高维非线性自激极限环（如Van der Pol型状态依赖阻尼）的前提图自动构建仍属开放研究问题。
 2. **高维弯曲超曲面阈值的主动干预规划：** 当前主动二分探针针对一维比较阈值与空间半径交替求解；面向多变量非线性不等式超曲面的最优主动探针设计仍待推进。
+
+---
+
+## 123. v10 Phase 4：三参数耦合曲面主动探针、无位置连续介质场PDE子图生长、超临界极限环与独立技术专著（2026-11-16）
+
+针对§122留下的两项核心开放边界（高维弯曲超曲面主动干预规划、无显式离散角色划分的连续偏微分场与超临界自激极限环隐动力学），完成Phase 4A、Phase 4B核心模块研发、受控前瞻实验验证及Phase 4C全谱系独立学术专著撰写（全程零在线LLM调用，`model_calls = 0, total_tokens = 0`；历史COW封账回执零改动）。
+
+- **证据回执**：
+  - `docs/evidence/v10_world_structure_20261116/v10_phase4a_curved_hypersurface_probing_20261116.json`
+  - `docs/evidence/v10_world_structure_20261116/v10_phase4b_continuum_pde_and_vdp_20261116.json`
+- **独立技术专著**：`docs/hegel_v10_technical_report_20261116.md`
+- **回归与单元测试**：`tests/test_v10_phase4_curved_hypersurface_and_continuum_vdp.py`（4/4通过）及全套 `tests/test_v10_*.py` + `tests/test_historical_capabilities.py`（**23/23，100%通过**）。
+
+### 一、架构与算法闭环
+
+1. **Phase 4A：四维边空间三参数耦合曲面超平面 $(r_0, c_0, c_1)$ 标定与直径极值最大杠杆主动设计（`curved_hypersurface_probing.py`、`program_condition_sets.py`）：**
+   - 在`StructureLab`、`UnifiedObjectLab`、`AnonymousObjectLab`新增两类四维状态耦合曲面边门控：`distance_attenuated_gap`（$q_s > 0 \land (q_s - q_d) - c_1(x_d - x_s)^2 > c_0$）与`bilinear_product_barrier`（$q_s > q_d \land q_s^2 - c_1 q_s q_d > c_0$）。
+   - 证明固定背景一维二分在二维曲面上恒残留沿 $(-\psi_1(e_{\text{nom}}), 1)$ 的 $O(1)$ 零空间；实现有向拓扑排序多边（$\ge 3$ 并发边）DAG精确回溯解码、单调认证半径二分搜索及Sutherland-Hodgman二维凸多胞体裁剪＋Chebyshev最大内切中心提取（严格仅用 $\Delta x \le r_{\text{lo}}$ 认证内半径静默边裁剪，确保真值零误裁）。
+   - `plan_coupled_hypersurface_probe`执行先验半径下界扩张（解锁完整杠杆锥 $[0, (r^*)^2]$）、多胞体直径极值顶点最大杠杆中点切片合成及`UnifiedResearchAgent`闭环内的亚微米半径二分收口（宽度 $\le 6\times 10^{-7}$）；`solve_compound_region`引入反号极值种子与单侧不等式铰链残差（消除 $q_s > 0$ 等式拉回与有界激励带 $[0.55, 0.95]$ 的反向拉扯）。
+
+2. **Phase 4B-1：证伪固定 `(q,u,x,f)` 角色划分（`P_role_partition`）与无位置连续介质场PDE子图生长（`continuum_field_lab.py`、`language.py`）：**
+   - 构建零位置传感器／零位置控制器（`x = empty`）的匿名一维周期对流-扩散-反应PDE装置`ContinuumFieldLab`：$q'_k = q_k + u_k + D(q_{k-1} - 2q_k + q_{k+1}) - c_{\text{adv}}(q_k - q_{k-1}) - \lambda q_k$。
+   - 在`Program`新增严格满足 $\mathbb{Z}_N$ 循环平移不变性的差分模板原语`ring_sum`（`laplacian`、`grad_back`、`grad_fwd`）；当`audit_continuum_field_premises`检出无位置坐标而存在跨站点场耦合时自动证伪`P_role_partition`，动态挂载`P_continuum_topology`与`P_pde_stencil_conservation`，经 $O(N^3)$ 线性算子重构提取2-正则哈密顿环并利用迎风不对称性 $D+c_{\text{adv}}>D$ 定向，配合跨桶均匀扫描＋两步保持2-Opt选择器配对将 $7! \times 7! = 25,401,600$ 组合空间压缩至唯一循环规范类，沉淀分辨率参数化`ContinuumFieldCommitment`。
+   - 修复`unified_research.py`中大规模传感器（如 $N=7$ 共21通道）的仪器拟合子预算动态缩放与区分补测后缺失字段重拟合。
+
+3. **Phase 4B-2：原点线性不稳定（$\rho > 1.0$）的超临界Van der Pol自激极限环POMDP（`premise_dependency_audit.py`、`world_structure_commitments.py`）：**
+   - 在`Program("accumulate")`扩展三子项三次饱和自激振荡模`vdp`／`vdp_lag1`：$z_{i,t} = a_1 z_{i,t-1} + a_2 z_{i,t-2} - \beta z_{i,t-1}^3 + u_{i,t-1}$（其中 $\rho > 1 \implies |a_2| = \rho^2 > 1$，线性发散而靠 $-\beta z^3$ 收敛至有限极限环，且 $\sum_i z_i^3 \neq (\sum_i z_i)^3$ 打破宏观齐次递推）。
+   - 利用单控制器扫描探针上的**因果起振定理**（首个 $q_{i,\tau}=0 \land |q_{i,\tau+1}|>10^{-7}$ 步恒有 $q_{i,\tau+1}=u_{i,\tau}$）以 $O(N)$ 零搜索配对驱动角色，结合重置轨迹 $t=0,1$ 步（$z_0=0, z_1=u_0$）精确分离空间交换算子，再经四列三次最小二乘一次性恢复 $(a_1, a_2, \widetilde{\beta}, \eta)$ 并沉淀可跨尺度重标定的VdP世界承诺。
+
+### 二、Phase 4A 受控实验结果：三参数耦合曲面主动设计与 $N=4 \to N=5$ 匿名迁移
+
+#### 1. Stage 4A-1：固定64行预算（48初测＋16步干预）下8题四臂对抗边界对照
+
+| 对照臂 | 对抗边界达标率 (`<=1e-6`) | 二维曲面多胞体均值直径 | 曲面参数 $(c_0, c_1)$ 均值 $L_2$ 误差 | 半径均值绝对误差 | 对抗边界集均值 MSE |
+| --- | --- | --- | --- | --- | --- |
+| `frozen_source_hypersurface` | **0/8 (0.0%)** | `0.239954` | `0.311010` | `0.221250` | `2.260e-03` |
+| `passive_polytope_centroid` | **0/8 (0.0%)** | `0.239954` | `0.042093` | `0.009938` | `1.072e-03` |
+| `axis_aligned_1d_bisection` | **1/8 (12.5%)** | `0.223623` | `0.036403` | `0.010079` | `8.109e-04` |
+| **`v10_phase4a_coupled_hypersurface_probing`** | **7/8 (87.5%)** | **`0.003044` (压缩 `78.8×`)** | **`0.000730` (降 `57.7×`)** | **`0.002575`** | **`3.863e-06`** |
+
+#### 2. Stage 4A-2：匿名传感器 $N=4 \to N=5$ 三参数同时偏移端到端迁移（4题）
+
+| 迁移对照臂 | 4题通过率 (`<=1e-7`) | 纯控制通道达标数 (`selected_channels=[]`) | 新48步均值 MSE | 均值观测 / 均值科学计算 |
+| --- | --- | --- | --- | --- |
+| `flat_unconsolidated_baseline` | **0/4 (0.0%)** | `0/4` | `2.721e-02` | `236.0` 行 / `411,056.5` |
+| **`v10_phase4a_coupled_world_commitment`** | **4/4 (100.0%)** | **4/4 (100%)** | **`1.130e-19`** | **`187.5` 行 (-20.55%) / `166,841.8` (-59.41%)** |
+
+### 三、Phase 4B 受控实验结果：无位置连续介质场PDE（至 $N=7$）与超临界极限环POMDP
+
+| 实验队列与对照臂 | 总体通过率 (`<=1e-7`) | 跨尺度／跨分辨率迁移通过率 | 迁移纯控制通道数 (`[]`) | 新48步均值 MSE | 均值观测 / 均值科学计算 |
+| --- | --- | --- | --- | --- | --- |
+| **Cohort 4B-1 连续场PDE**（$N=4\to 6$ & $N=5\to 7$，8题）：`flat_baseline_no_continuum` | **0/8 (0.0%)** | `0/4` | `0/4` | `1.027e-01` | `247.5` 行 / `417,388.1` |
+| **Cohort 4B-1 连续场PDE**：`fixed_role_partition_v10_phase3` | **0/8 (0.0%)** | `0/4` | `0/4` | `1.027e-01` | `247.5` 行 / `417,388.1` |
+| **Cohort 4B-1 连续场PDE**：**`v10_phase4b_continuum_subgraph_and_commitment`** | **8/8 (100.0%)** | **4/4 (100%)** | **4/4 (100%)** | **`4.314e-20`** | **`222.5` 行 / `120,368.1` (-71.16%)** |
+| **Cohort 4B-2 超临界VdP极限环**（$\rho>1$，4题）：`flat_baseline_continuous_state` | **0/4 (0.0%)** | `0/2` | `0/2` | `1.970e+01` | `217.0` 行 / `411,190.0` |
+| **Cohort 4B-2 超临界VdP极限环**：`linear_ar2_pomdp_v10_phase3a` | **0/4 (0.0%)** | `0/2` | `0/2` | `1.911e+01` | `208.2` 行 / `426,589.2` |
+| **Cohort 4B-2 超临界VdP极限环**：**`v10_phase4b_supercritical_vdp_pomdp`** | **3/4 (75.0%)** | **2/2 (100%)** | **2/2 (100%)** | `5.031e-01`（过3题 `1.95e-12`） | **`161.8` 行 / `150,647.0` (-64.69%，迁移省 `84.45%`)** |
+
+### 四、诚实边界与后续前沿
+
+1. **单题未过案例透明记录：** `Stage 4A-1`中`970405`在固定16步微预算下曲面直径已缩至`0.001105`（曲面$L_2$误差`3.48e-4`），仅因未开启亚微米半径收口留有`0.00337`半径余量（完整智能体`Stage 4A-2`开启收口后`4/4`全过）；`Cohort 4B-2`中`990401`（$\rho=1.02$冷启动）因贴近单位圆且初测脉冲稀疏导致 $|z|\ll 1$ 时 $z^3$ 列条件数偏弱（振幅充分的`990402`及两台 $N=5$ 迁移`990501`、`990502`均一次通过并达`selected_channels=[]`）。
+2. **下一代开放前沿：** 二维／三维流形与非周期网格PDE规范群不变量、强内禀过程噪声（SDE）下的工具变量统计前提审计，以及跨多条世界结构承诺的自动符号代数消元与定理合成。

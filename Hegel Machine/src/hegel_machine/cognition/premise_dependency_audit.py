@@ -151,8 +151,25 @@ def build_premise_dependency_graph(commitment: dict | None = None, model: dict |
             "id": "P_latent_order",
             "layer": "state_sufficiency",
             "depends_on": ["P_markov_state"],
-            "committed_value": 2 if committed_latent and "oscillatory" in str(committed_latent) else 1,
+            "committed_value": (
+                2
+                if committed_latent
+                and any(tag in str(committed_latent) for tag in ("oscillatory", "van_der_pol"))
+                else 1
+            ),
             "observable_test": "first_order_exponential_vs_second_order_ar2_recurrence",
+            "status": "pending",
+        },
+        {
+            "id": "P_latent_nonlinearity",
+            "layer": "state_sufficiency",
+            "depends_on": ["P_markov_state", "P_latent_order"],
+            "committed_value": (
+                "supercritical_cubic_limit_cycle"
+                if committed_latent == "van_der_pol_transition_memory"
+                else "linear"
+            ),
+            "observable_test": "schur_linear_ar2_vs_supercritical_cubic_vdp_limit_cycle",
             "status": "pending",
         },
         {
@@ -1041,9 +1058,40 @@ def screen_custom_edge_predicate_on_transitions(
     def _attach_threshold_meta(
         matched_list: list[dict], cal_prog: Program, *, recenter: bool = False
     ) -> dict:
-        desc = describe_comparator_threshold_parameter(cal_prog)
+        from .curved_hypersurface_probing import (
+            describe_linear_in_params_hypersurface,
+            extract_hypersurface_polytope_2d,
+        )
+
+        hs_desc = describe_linear_in_params_hypersurface(cal_prog)
+        desc = None if hs_desc is not None else describe_comparator_threshold_parameter(cal_prog)
         t_interval = None
-        if desc is not None and matched_list:
+        hs_poly = None
+        if hs_desc is not None and hs_desc["dimension"] == 2 and matched_list and nec_geom and nec_geom.get("decoded_edges"):
+            rep = matched_list[0]
+            q_idx_by_name = {name: i for i, name in enumerate(dynamic)}
+            x_idx_by_name = {name: i for i, name in enumerate(x_fields)}
+            rep_q_to_x = [0] * n
+            for x_f, q_f in rep["mapping"].items():
+                rep_q_to_x[q_idx_by_name[q_f]] = x_idx_by_name[x_f]
+            r_cert = max(0.0, float(rep["radius_interval"][0]) - 1e-8)
+            hs_poly = extract_hypersurface_polytope_2d(
+                cal_prog,
+                q_rows,
+                x_rows,
+                delta_rows,
+                rep["direction"],
+                tuple(rep_q_to_x),
+                decoded_edges=nec_geom["decoded_edges"],
+                certified_in_radius=r_cert,
+                eff_tol=eff_tol,
+            )
+            if hs_poly is not None:
+                t_interval = list(hs_poly["c0_interval"])
+                for m in matched_list:
+                    m["threshold_interval"] = list(t_interval)
+                    m["hypersurface_polytope"] = hs_poly
+        elif desc is not None and matched_list:
             rep = matched_list[0]
             q_idx_by_name = {name: i for i, name in enumerate(dynamic)}
             x_idx_by_name = {name: i for i, name in enumerate(x_fields)}
@@ -1078,7 +1126,35 @@ def screen_custom_edge_predicate_on_transitions(
             "calibrated_predicate": cal_prog,
             "threshold_interval": t_interval,
             "threshold_parameter": desc,
+            "hypersurface_polytope": hs_poly,
+            "hypersurface_descriptor": hs_desc,
         }
+
+    from .curved_hypersurface_probing import (
+        calibrate_hypersurface_on_transitions,
+        describe_linear_in_params_hypersurface,
+    )
+
+    if describe_linear_in_params_hypersurface(predicate) is not None:
+        cal_hs = calibrate_hypersurface_on_transitions(
+            predicate,
+            q_rows,
+            x_rows,
+            delta_rows,
+            dynamic,
+            x_fields,
+            nec_geom,
+            directions,
+            budget=budget,
+            eff_tol=eff_tol,
+        )
+        if cal_hs is not None and cal_hs.get("supported"):
+            cal_matches_hs, _, _ = _run_exact(cal_hs["calibrated_predicate"])
+            return _attach_threshold_meta(
+                cal_matches_hs or cal_hs["matches"],
+                cal_hs["calibrated_predicate"],
+                recenter=False,
+            )
 
     matches, tau0_witness_candidate, exhausted = _run_exact(predicate)
     if exhausted:
@@ -1236,6 +1312,32 @@ def screen_custom_edge_predicate_on_transitions(
                     break
                 if cal_matches:
                     return _attach_threshold_meta(cal_matches, alt_pred, recenter=True)
+    else:
+        from .curved_hypersurface_probing import (
+            calibrate_hypersurface_on_transitions,
+            describe_linear_in_params_hypersurface,
+        )
+
+        if describe_linear_in_params_hypersurface(predicate) is not None:
+            cal_hs = calibrate_hypersurface_on_transitions(
+                predicate,
+                q_rows,
+                x_rows,
+                delta_rows,
+                dynamic,
+                x_fields,
+                nec_geom,
+                directions,
+                budget=budget,
+                eff_tol=eff_tol,
+            )
+            if cal_hs is not None and cal_hs.get("supported"):
+                cal_matches_hs, _, _ = _run_exact(cal_hs["calibrated_predicate"])
+                return _attach_threshold_meta(
+                    cal_matches_hs or cal_hs["matches"],
+                    cal_hs["calibrated_predicate"],
+                    recenter=False,
+                )
 
     # Construct truthful counterexamples using necessary-geometry bijection when available
     counterexamples = []
@@ -1388,6 +1490,7 @@ def _audit_focus_membership_from_trajectories(
     allow_higher_order_latent: bool = True,
     verified_direction: str | None = None,
     radius_interval: list[float] | None = None,
+    vdp_params: list[float] | tuple[float, float, float] | None = None,
     commitments: list[dict] | tuple[dict, ...] = (),
 ) -> dict | None:
     """Audit ``P_focus_membership`` (``f -> q``) on paid multi-step trajectories.
@@ -1973,6 +2076,52 @@ def _audit_focus_membership_from_trajectories(
             if ar2_survivors:
                 surviving_f_to_q = ar2_survivors
 
+        # 2B-VdP. Supercritical Van der Pol nonlinear limit-cycle transition memory
+        if not surviving_f_to_q and vdp_params is not None and len(vdp_params) == 3:
+            va1, va2, vbeta = float(vdp_params[0]), float(vdp_params[1]), float(vdp_params[2])
+            vdp_survivors: list[list[int]] = []
+            for q_to_f in bijections:
+                if not budget.spend(max(1, total_rows * 3)):
+                    break
+                f_to_q = [0] * n
+                for q_idx, f_idx in enumerate(q_to_f):
+                    f_to_q[f_idx] = q_idx
+                alpha_col, evt_col, zvdp_foc_col, zvdp_tot_col = [], [], [], []
+                for tr_idx in range(len(trajectories)):
+                    tr_a = after_q_per_tr[tr_idx]
+                    tr_u = before_u_per_tr[tr_idx]
+                    tr_phi = flow_q_per_tr[tr_idx]
+                    tr_f = active_f_per_tr[tr_idx]
+                    psi_seq = []
+                    zc = [0.0] * n
+                    zp = [0.0] * n
+                    for t in range(len(tr_f)):
+                        q_idx = f_to_q[tr_f[t]]
+                        p_val = tr_phi[t][q_idx]
+                        evt_col.append((p_val - psi_seq[-1]) if t >= 1 else 0.0)
+                        psi_seq.append(p_val)
+                        alpha_col.append(tr_a[t][q_idx])
+                        zvdp_foc_col.append(zc[q_idx])
+                        zvdp_tot_col.append(sum(zc))
+                        for obj_i in range(n):
+                            zn = max(
+                                -6.0,
+                                min(
+                                    6.0,
+                                    va1 * zc[obj_i]
+                                    + va2 * zp[obj_i]
+                                    - vbeta * (zc[obj_i] ** 3)
+                                    + tr_u[t][obj_i],
+                                ),
+                            )
+                            zp[obj_i], zc[obj_i] = zc[obj_i], zn
+                if _fit_mse([flat_tot, alpha_col, evt_col, zvdp_foc_col, zvdp_tot_col]) <= max(
+                    eff_tol * 4.0, 1e-10
+                ):
+                    vdp_survivors.append(f_to_q)
+            if vdp_survivors:
+                surviving_f_to_q = vdp_survivors
+
         # 2C. Consolidated open-grammar / POMDP commitment role-term screening on cross-scale transfer
         if (
             not surviving_f_to_q
@@ -2295,6 +2444,7 @@ def _audit_latent_transition_state(
     *,
     observations: list | tuple = (),
     allow_higher_order_latent: bool = True,
+    allow_nonlinear_limit_cycle: bool = True,
 ) -> dict | None:
     """Audit unobserved per-object latent transition states across order & spatial coupling.
 
@@ -2604,6 +2754,270 @@ def _audit_latent_transition_state(
                                     "matches_by_cond": matches2_by_cond,
                                 }
 
+    # --- Attempt 2B: Supercritical Van der Pol Self-Excited Limit-Cycle Resonator ---
+    # Linear origin may be unstable (rho = sqrt(-a_2) > 1.0), stabilized onto a bounded
+    # self-excited limit cycle by cubic damping -beta * z_{i,t-1}^3:
+    #   z_{i,t} = a_1 * z_{i,t-1} + a_2 * z_{i,t-2} - beta * z_{i,t-1}^3 + u_{i,t-1}
+    # At t = 0: z_{i,0} = 0; at t = 1: z_{i,1} = u_{i,0} (zero cubic term!), so eta is
+    # directly identifiable from sum_i d_{i,1} = eta * sum_i u_{i,0}.
+    if (
+        allow_higher_order_latent
+        and allow_nonlinear_limit_cycle
+        and len(trajectories) >= 1
+        and sum(len(s) for s in trajectories) >= 6
+    ):
+        t1_pairs = []
+        for seq in trajectories:
+            if len(seq) >= 2:
+                _, u0, _, _ = _vecs(seq[0][1])
+                _, _, _, d1 = _vecs(seq[1][1])
+                t1_pairs.append((sum(u0), sum(d1)))
+        s_uu1 = sum(u_s * u_s for u_s, _ in t1_pairs)
+        eta_t1 = (
+            sum(u_s * d_s for u_s, d_s in t1_pairs) / s_uu1
+            if s_uu1 > 1e-12
+            else None
+        )
+        t1_mse = (
+            sum((d_s - eta_t1 * u_s) ** 2 for u_s, d_s in t1_pairs) / len(t1_pairs)
+            if eta_t1 is not None and t1_pairs
+            else float("inf")
+        )
+        pure_q, pure_x, pure_d = [], [], []
+        for _, row in reset_rows:
+            qv, _, xv, dv = _vecs(row)
+            pure_q.append(qv)
+            pure_x.append(xv)
+            pure_d.append(dv)
+        if eta_t1 is not None and abs(eta_t1) > 1e-4 and t1_mse <= eff_tol * n * 8.0:
+            for seq in trajectories:
+                if len(seq) >= 2:
+                    _, u0, _, _ = _vecs(seq[0][1])
+                    qv1, _, xv1, dv1 = _vecs(seq[1][1])
+                    pure_q.append(qv1)
+                    pure_x.append(xv1)
+                    pure_d.append([dv1[i] - eta_t1 * u0[i] for i in range(n)])
+        act_pure_taus = sorted(
+            (
+                tau
+                for tau, dv in enumerate(pure_d)
+                if max(abs(v) for v in dv) > max(1e-7, sqrt(eff_tol))
+            ),
+            key=lambda tau: sum(v * v for v in pure_d[tau]),
+            reverse=True,
+        )
+        pure_by_dir: dict[str, list[dict]] = {}
+        if act_pure_taus:
+            pure_by_dir, _ = _solve_exchange_for_condition(
+                pure_q,
+                pure_x,
+                pure_d,
+                dynamic,
+                x_fields,
+                bijections,
+                ordered_directions,
+                act_pure_taus,
+                eff_tol * 4.0,
+                budget,
+                edge_condition="unconditional",
+            )
+        if pure_by_dir:
+            q_idx_map_v = {q_n: idx_q for idx_q, q_n in enumerate(dynamic)}
+            x_idx_map_v = {x_n: idx_x for idx_x, x_n in enumerate(x_fields)}
+            for cand_dir_v, dir_matches_v in pure_by_dir.items():
+                sign_v = 1.0 if cand_dir_v == "right" else -1.0
+                for m_v in dir_matches_v[:4]:
+                    cand_q_to_x = [0] * n
+                    for xf, qf in m_v["mapping"].items():
+                        cand_q_to_x[q_idx_map_v[qf]] = x_idx_map_v[xf]
+                    r_lo_v, r_hi_v = float(m_v["radius_interval"][0]), float(m_v["radius_interval"][1])
+                    gamma_v = float(m_v["coupling_estimate"])
+
+                    # Collect directional distance midpoints inside [r_lo_v, r_hi_v] across trajectories
+                    in_iv_dists = sorted(
+                        {
+                            round(
+                                sign_v * (xv_t[cand_q_to_x[dst_i]] - xv_t[cand_q_to_x[src_i]])
+                                if cand_dir_v in {"right", "left"}
+                                else abs(xv_t[cand_q_to_x[dst_i]] - xv_t[cand_q_to_x[src_i]]),
+                                8,
+                            )
+                            for seq in trajectories
+                            for _, r_t in seq
+                            for xv_t in (_vecs(r_t)[2],)
+                            for src_i in range(n)
+                            for dst_i in range(n)
+                            if src_i != dst_i
+                            and r_lo_v < (
+                                sign_v * (xv_t[cand_q_to_x[dst_i]] - xv_t[cand_q_to_x[src_i]])
+                                if cand_dir_v in {"right", "left"}
+                                else abs(xv_t[cand_q_to_x[dst_i]] - xv_t[cand_q_to_x[src_i]])
+                            ) < r_hi_v
+                        }
+                    )
+                    pts_v = [r_lo_v, *in_iv_dists, min(r_hi_v, 4.0)]
+                    cell_mids_v = [0.5 * (a + b) for a, b in zip(pts_v, pts_v[1:]) if b - a > 1e-8]
+                    if not cell_mids_v:
+                        cell_mids_v = [0.5 * (r_lo_v + min(r_hi_v, 2.5))]
+                    elif len(cell_mids_v) > 10:
+                        cell_mids_v = [
+                            cell_mids_v[round(k * (len(cell_mids_v) - 1) / 9)] for k in range(10)
+                        ]
+
+                    for r_try_v in cell_mids_v:
+                        if not budget.spend(max(1, sum(len(s) for s in trajectories) * n)):
+                            break
+                        ols_vdp: list[tuple[float, float, float, float, float]] = []
+                        for seq in trajectories:
+                            zt_prev2 = [0.0] * n
+                            zt_prev1 = [0.0] * n
+                            u_prev1 = [0.0] * n
+                            for step_idx, (_, r_t) in enumerate(seq):
+                                qv_t, uv_t, xv_t, dv_t = _vecs(r_t)
+                                ex_t = [0.0] * n
+                                if cand_dir_v in {"right", "left"}:
+                                    for s_i in range(n):
+                                        for t_i in range(n):
+                                            if s_i != t_i and 0.0 < sign_v * (xv_t[cand_q_to_x[t_i]] - xv_t[cand_q_to_x[s_i]]) < r_try_v:
+                                                ex_t[s_i] -= gamma_v * qv_t[s_i]
+                                                ex_t[t_i] += gamma_v * qv_t[s_i]
+                                else:
+                                    for s_i in range(n):
+                                        for t_i in range(n):
+                                            if s_i != t_i and abs(xv_t[cand_q_to_x[t_i]] - xv_t[cand_q_to_x[s_i]]) < r_try_v:
+                                                ex_t[s_i] += gamma_v * (qv_t[t_i] - qv_t[s_i])
+                                zt_cur = [dv_t[i] - ex_t[i] for i in range(n)]
+                                if step_idx >= 1:
+                                    for i in range(n):
+                                        ols_vdp.append(
+                                            (
+                                                zt_prev1[i],
+                                                zt_prev2[i],
+                                                -(zt_prev1[i] ** 3),
+                                                u_prev1[i],
+                                                zt_cur[i],
+                                            )
+                                        )
+                                zt_prev2 = zt_prev1
+                                zt_prev1 = zt_cur
+                                u_prev1 = uv_t
+                        if len(ols_vdp) < 8:
+                            continue
+                        va1, va2, v_tilde_beta, v_eta = _fit_homogeneous(ols_vdp, (0, 1, 2, 3), 4)
+                        if not (
+                            abs(v_eta) > 1e-4
+                            and v_tilde_beta > 1e-4
+                            and abs(va2) > 1e-3
+                            and abs(va1) < 3.5
+                            and abs(va2) < 2.5
+                        ):
+                            continue
+                        v_beta = float(v_tilde_beta * (v_eta * v_eta))
+                        v_rec_mse = sum(
+                            (
+                                row_o[4]
+                                - (
+                                    va1 * row_o[0]
+                                    + va2 * row_o[1]
+                                    + v_tilde_beta * row_o[2]
+                                    + v_eta * row_o[3]
+                                )
+                            )
+                            ** 2
+                            for row_o in ols_vdp
+                        ) / len(ols_vdp)
+                        if v_rec_mse > eff_tol * 16.0:
+                            continue
+
+                        # Forward-replay exact nonlinear VdP recurrence across ALL trajectories
+                        defv_q, defv_x, defv_d = [], [], []
+                        seenv_sigs: set[tuple] = set()
+                        covv_ids: set[int] = set()
+
+                        def _add_defv(qv_p: list[float], xv_p: list[float], tdv_p: list[float]):
+                            sg = (
+                                tuple(round(v, 10) for v in qv_p),
+                                tuple(round(v, 10) for v in xv_p),
+                                tuple(round(v, 10) for v in tdv_p),
+                            )
+                            if sg not in seenv_sigs:
+                                seenv_sigs.add(sg)
+                                defv_q.append(qv_p)
+                                defv_x.append(xv_p)
+                                defv_d.append(tdv_p)
+
+                        for seq in trajectories:
+                            zc_v = [0.0] * n
+                            zp_v = [0.0] * n
+                            for rec_idx, r_t in seq:
+                                covv_ids.add(rec_idx)
+                                qv_t, uv_t, xv_t, dv_t = _vecs(r_t)
+                                tdv_t = [dv_t[i] - v_eta * zc_v[i] for i in range(n)]
+                                _add_defv(qv_t, xv_t, tdv_t)
+                                zn_v = [
+                                    max(
+                                        -6.0,
+                                        min(
+                                            6.0,
+                                            va1 * zc_v[i]
+                                            + va2 * zp_v[i]
+                                            - v_beta * (zc_v[i] ** 3)
+                                            + uv_t[i],
+                                        ),
+                                    )
+                                    for i in range(n)
+                                ]
+                                zp_v, zc_v = zc_v, zn_v
+                        for rec_idx, r_t in reset_rows:
+                            if rec_idx not in covv_ids:
+                                qv_t, _, xv_t, dv_t = _vecs(r_t)
+                                _add_defv(qv_t, xv_t, dv_t)
+
+                        defv_cons_mse = sum(sum(td) ** 2 for td in defv_d) / max(1, len(defv_d))
+                        if defv_cons_mse > eff_tol * n * 8.0:
+                            continue
+                        act_v_taus = sorted(
+                            (
+                                tau
+                                for tau, td in enumerate(defv_d)
+                                if max(abs(v) for v in td) > max(1e-7, sqrt(eff_tol))
+                            ),
+                            key=lambda tau: sum(v * v for v in defv_d[tau]),
+                            reverse=True,
+                        )
+                        if not act_v_taus:
+                            continue
+                        by_dir_vdp, _ = _solve_exchange_for_condition(
+                            defv_q,
+                            defv_x,
+                            defv_d,
+                            dynamic,
+                            x_fields,
+                            bijections,
+                            ordered_directions,
+                            act_v_taus,
+                            eff_tol * 4.0,
+                            budget,
+                            edge_condition="unconditional",
+                        )
+                        if by_dir_vdp:
+                            return {
+                                "mechanism": "van_der_pol_transition_memory",
+                                "latent_order": 2,
+                                "latent_coupling": "independent",
+                                "latent_nonlinearity": "supercritical_cubic_limit_cycle",
+                                "vdp_params": [float(va1), float(va2), float(v_beta)],
+                                "ar2_params": [float(va1), float(va2)],
+                                "linear_origin_modulus": float(sqrt(abs(va2))),
+                                "linear_origin_unstable": bool(abs(va2) > 1.0),
+                                "pole": float(sqrt(abs(va2))),
+                                "drive_weights": {"u": float(v_eta), "q": 0.0},
+                                "recurrence_mse": float(v_rec_mse),
+                                "deflated_conservation_mse": float(defv_cons_mse),
+                                "deflated_unique_transitions": len(defv_q),
+                                "matches_by_cond": {"unconditional": by_dir_vdp},
+                            }
+
     # --- Attempt 3: Certified Unexplained Nonlinear Latent Transition State ---
     # Reset transitions (t == 0) satisfy conservation (max_reset_abs ~ 0), while t >= 1
     # violates conservation AND refutes static/1st-order/coupled/2nd-order linear drives!
@@ -2861,6 +3275,7 @@ def _recover_latent_drive_and_position_roles(
     budget: SearchBudget,
     *,
     allow_higher_order_latent: bool = True,
+    allow_nonlinear_limit_cycle: bool = True,
 ) -> tuple[dict[str, str], dict[str, dict]] | None:
     """Identify ``drive_by_q`` and ``position_candidates`` when latent memory carries across steps.
 
@@ -2912,6 +3327,40 @@ def _recover_latent_drive_and_position_roles(
         y_after = [float(seq[t]["after"][q_name]) for seq, t in q_zero_eval]
         if max(abs(v) for v in y_after) <= 1e-8:
             return None
+        # Causal Onset Theorem on single-control reset sweeps:
+        # In any causal per-object latent recurrence z_{i,t+1} = F(z_{i,t}, z_{i,t-1}, u_{i,t})
+        # with F(0, 0, 0) = 0, before u_i is excited for the first time in a reset sweep,
+        # z_{i,t} == 0 identically (even across earlier q_j / x_j / u_{j!=i} steps).
+        # Thus at the FIRST q == 0 step where |after[q_i]| > 1e-7, z_{i,t} == 0 still holds and
+        # after[q_i] == before[u_i] != 0 uniquely identifies u_i in O(N) without grid search!
+        onset_matches: list[str] = []
+        for seq in probe_trajectories:
+            if len(seq) < 2 * n:
+                continue
+            first_active_step = next(
+                (
+                    r_st
+                    for r_st in seq
+                    if all(abs(float(r_st["before"][qn])) <= 1e-9 for qn in dynamic)
+                    and abs(float(r_st["after"][q_name])) > 1e-7
+                ),
+                None,
+            )
+            if first_active_step is not None:
+                nz_st = [
+                    sn
+                    for sn in stable_fields
+                    if abs(float(first_active_step["before"][sn])) > 1e-7
+                ]
+                if len(nz_st) == 1 and abs(
+                    float(first_active_step["after"][q_name])
+                    - float(first_active_step["before"][nz_st[0]])
+                ) <= 1e-6:
+                    onset_matches.append(nz_st[0])
+        if len(set(onset_matches)) == 1:
+            drive_by_q[q_name] = onset_matches[0]
+            continue
+
         matches_s: list[str] = []
         for s_name in stable_fields:
             s_cur = [float(seq[t]["before"][s_name]) for seq, t in q_zero_eval]
@@ -3057,6 +3506,119 @@ def _recover_latent_drive_and_position_roles(
                         sp_w *= 0.52
                 if berr2 <= 1e-8:
                     matches_s.append(s_name)
+                    continue
+
+                # Supercritical Van der Pol cubic limit-cycle role recovery across full trajectories
+                if allow_nonlinear_limit_cycle:
+                    def _vdp_role_mse(a1_v: float, a2_v: float, beta_v: float) -> float:
+                        zs_by_id_v: dict[int, list[float]] = {}
+                        for seq in probe_trajectories:
+                            zc_r, zp_r = 0.0, 0.0
+                            z_list_r = []
+                            for r_st in seq:
+                                z_list_r.append(zc_r)
+                                zn_r = max(
+                                    -6.0,
+                                    min(
+                                        6.0,
+                                        a1_v * zc_r
+                                        + a2_v * zp_r
+                                        - beta_v * (zc_r ** 3)
+                                        + float(r_st["before"][s_name]),
+                                    ),
+                                )
+                                zp_r, zc_r = zc_r, zn_r
+                            zs_by_id_v[id(seq)] = z_list_r
+                        c_zv = [zs_by_id_v[id(seq)][t] for seq, t in q_zero_eval]
+                        g00_v = sum(v * v for v in c_zv) + 1e-15
+                        b0_v = sum(a * r for a, r in zip(c_zv, residuals))
+                        w0_v = b0_v / g00_v
+                        return (
+                            sum((residuals[i] - w0_v * c_zv[i]) ** 2 for i in range(len(residuals)))
+                            / len(residuals)
+                        )
+
+                    vdp_seeds = [
+                        (rho_c, cw_c, bt_c)
+                        for rho_c in (0.94, 1.01, 1.06)
+                        for cw_c in (0.20, 0.58, 0.82)
+                        for bt_c in (0.18, 0.34)
+                    ]
+                    v_rho, v_cw, v_bt, v_err = min(
+                        (
+                            (
+                                r_c,
+                                w_c,
+                                b_c,
+                                _vdp_role_mse(2.0 * r_c * w_c, -(r_c * r_c), b_c),
+                            )
+                            for r_c, w_c, b_c in vdp_seeds
+                        ),
+                        key=lambda item: item[3],
+                    )
+                    if v_err <= 5e-2:
+                        sp_vr, sp_vw, sp_vb = 0.08, 0.22, 0.18
+                        for _ in range(6):
+                            if v_err <= 1e-14:
+                                break
+                            # 1. Polish rho
+                            lo_x, hi_x = max(0.5, v_rho - sp_vr), min(1.16, v_rho + sp_vr)
+                            c1, c2 = hi_x - gr * (hi_x - lo_x), lo_x + gr * (hi_x - lo_x)
+                            f1 = _vdp_role_mse(2.0 * c1 * v_cw, -(c1 * c1), v_bt)
+                            f2 = _vdp_role_mse(2.0 * c2 * v_cw, -(c2 * c2), v_bt)
+                            for _ in range(10):
+                                if f1 < f2:
+                                    hi_x, c2, f2 = c2, c1, f1
+                                    c1 = hi_x - gr * (hi_x - lo_x)
+                                    f1 = _vdp_role_mse(2.0 * c1 * v_cw, -(c1 * c1), v_bt)
+                                else:
+                                    lo_x, c1, f1 = c1, c2, f2
+                                    c2 = lo_x + gr * (hi_x - lo_x)
+                                    f2 = _vdp_role_mse(2.0 * c2 * v_cw, -(c2 * c2), v_bt)
+                            if min(f1, f2) < v_err:
+                                v_rho, v_err = (c1, f1) if f1 < f2 else (c2, f2)
+
+                            # 2. Polish cos(omega)
+                            a2_cur = -(v_rho * v_rho)
+                            lo_w, hi_w = max(-0.98, v_cw - sp_vw), min(0.98, v_cw + sp_vw)
+                            d1, d2 = hi_w - gr * (hi_w - lo_w), lo_w + gr * (hi_w - lo_w)
+                            g1 = _vdp_role_mse(2.0 * v_rho * d1, a2_cur, v_bt)
+                            g2 = _vdp_role_mse(2.0 * v_rho * d2, a2_cur, v_bt)
+                            for _ in range(10):
+                                if g1 < g2:
+                                    hi_w, d2, g2 = d2, d1, g1
+                                    d1 = hi_w - gr * (hi_w - lo_w)
+                                    g1 = _vdp_role_mse(2.0 * v_rho * d1, a2_cur, v_bt)
+                                else:
+                                    lo_w, d1, g1 = d1, d2, g2
+                                    d2 = lo_w + gr * (hi_w - lo_w)
+                                    g2 = _vdp_role_mse(2.0 * v_rho * d2, a2_cur, v_bt)
+                            if min(g1, g2) < v_err:
+                                v_cw, v_err = (d1, g1) if g1 < g2 else (d2, g2)
+
+                            # 3. Polish beta
+                            a1_cur = 2.0 * v_rho * v_cw
+                            lo_b, hi_b = max(0.0, v_bt - sp_vb), min(0.85, v_bt + sp_vb)
+                            e1, e2 = hi_b - gr * (hi_b - lo_b), lo_b + gr * (hi_b - lo_b)
+                            h1 = _vdp_role_mse(a1_cur, a2_cur, e1)
+                            h2 = _vdp_role_mse(a1_cur, a2_cur, e2)
+                            for _ in range(10):
+                                if h1 < h2:
+                                    hi_b, e2, h2 = e2, e1, h1
+                                    e1 = hi_b - gr * (hi_b - lo_b)
+                                    h1 = _vdp_role_mse(a1_cur, a2_cur, e1)
+                                else:
+                                    lo_b, e1, h1 = e1, e2, h2
+                                    e2 = lo_b + gr * (hi_b - lo_b)
+                                    h2 = _vdp_role_mse(a1_cur, a2_cur, e2)
+                            if min(h1, h2) < v_err:
+                                v_bt, v_err = (e1, h1) if h1 < h2 else (e2, h2)
+
+                            sp_vr *= 0.52
+                            sp_vw *= 0.52
+                            sp_vb *= 0.52
+                    if v_err <= 1e-7:
+                        matches_s.append(s_name)
         if len(matches_s) != 1:
             return None
         drive_by_q[q_name] = matches_s[0]
@@ -3090,6 +3652,7 @@ def audit_transition_premises(
     allow_expanded_revisions: bool = True,
     allow_latent_state: bool = True,
     allow_higher_order_latent: bool = True,
+    allow_nonlinear_limit_cycle: bool = True,
     observations: list | tuple = (),
 ) -> dict:
     """Audit support premises on paid ``before -> after`` state transitions."""
@@ -3127,13 +3690,40 @@ def audit_transition_premises(
 
     n = len(dynamic)
     recovered_roles: tuple[dict[str, str], dict[str, dict]] | None = None
+    role_cands_all = model.get("role_candidates") or {}
     if (
+        n >= 2
+        and len(drive_by_q) == n
+        and len(set(drive_by_q.values())) == n
+        and len(positions) < n
+        and len(role_cands_all) == 2 * n
+    ):
+        used_u = set(drive_by_q.values())
+        completed_pos = {
+            s_name: deepcopy(positions[s_name])
+            if s_name in positions
+            else {
+                "control": role_cands_all[s_name]["control"],
+                "quantities": list(dynamic),
+                "support_pairs": role_cands_all[s_name].get("support_pairs", 0),
+            }
+            for s_name in sorted(role_cands_all)
+            if s_name not in used_u
+        }
+        if len(completed_pos) == n:
+            positions = completed_pos
+            recovered_roles = (dict(drive_by_q), completed_pos)
+    elif (
         allow_latent_state
         and n >= 2
         and (len(drive_by_q) != n or len(set(drive_by_q.values())) != n or len(positions) != n)
     ):
         recovered_roles = _recover_latent_drive_and_position_roles(
-            model, records, budget, allow_higher_order_latent=allow_higher_order_latent
+            model,
+            records,
+            budget,
+            allow_higher_order_latent=allow_higher_order_latent,
+            allow_nonlinear_limit_cycle=allow_nonlinear_limit_cycle,
         )
         if recovered_roles is not None:
             drive_by_q, positions = recovered_roles
@@ -3361,6 +3951,7 @@ def audit_transition_premises(
                     budget,
                     observations=observations,
                     allow_higher_order_latent=allow_higher_order_latent,
+                    allow_nonlinear_limit_cycle=allow_nonlinear_limit_cycle,
                 )
                 if allow_expanded_revisions and allow_latent_state
                 else None
@@ -3459,6 +4050,7 @@ def audit_transition_premises(
                 lat_order = int(latent_res.get("latent_order", 1))
                 lat_coupling = latent_res.get("latent_coupling", "independent")
                 ar2_params_lat = latent_res.get("ar2_params")
+                vdp_params_lat = latent_res.get("vdp_params")
                 lat_coupling_rate = latent_res.get("latent_coupling_rate")
                 flat_lat_matches = [
                     m
@@ -3486,6 +4078,7 @@ def audit_transition_premises(
                     latent_coupling=lat_coupling,
                     pole=latent_res["pole"],
                     ar2_params=ar2_params_lat,
+                    vdp_params=vdp_params_lat,
                     drive_weights=latent_res["drive_weights"],
                     recurrence_mse=latent_res["recurrence_mse"],
                     counterexample=witness,
@@ -3495,6 +4088,14 @@ def audit_transition_premises(
                     "revised_to_order_2" if lat_order == 2 else "supported",
                     verified_order=lat_order,
                     ar2_params=ar2_params_lat,
+                )
+                _set_node(
+                    "P_latent_nonlinearity",
+                    "revised_to_supercritical_vdp_limit_cycle"
+                    if vdp_params_lat is not None
+                    else "supported",
+                    vdp_params=vdp_params_lat,
+                    linear_origin_unstable=bool(latent_res.get("linear_origin_unstable", False)),
                 )
                 _set_node(
                     "P_latent_coupling",
@@ -3512,6 +4113,7 @@ def audit_transition_premises(
                         "latent_coupling": lat_coupling,
                         "pole": latent_res["pole"],
                         "ar2_params": ar2_params_lat,
+                        "vdp_params": vdp_params_lat,
                         "drive_weights": latent_res["drive_weights"],
                         "counterexample": witness,
                     },
@@ -3565,6 +4167,7 @@ def audit_transition_premises(
                     allow_higher_order_latent=allow_higher_order_latent,
                     verified_direction=supported_dirs_lat[0] if len(supported_dirs_lat) == 1 else None,
                     radius_interval=radius_interval_lat,
+                    vdp_params=vdp_params_lat,
                     commitments=commitments,
                 )
                 narrowed_focus_lat = (
@@ -3598,6 +4201,7 @@ def audit_transition_premises(
                                     "latent_coupling": lat_coupling,
                                     "latent_pole": latent_res["pole"],
                                     "ar2_params": deepcopy(ar2_params_lat),
+                                    "vdp_params": deepcopy(vdp_params_lat),
                                     "latent_coupling_rate": lat_coupling_rate,
                                     "latent_drive_weights": deepcopy(latent_res["drive_weights"]),
                                     "replacement_direction": alt_dir,
@@ -3621,6 +4225,8 @@ def audit_transition_premises(
                         "latent_coupling": lat_coupling,
                         "pole": latent_res["pole"],
                         "ar2_params": deepcopy(ar2_params_lat),
+                        "vdp_params": deepcopy(vdp_params_lat),
+                        "linear_origin_unstable": bool(latent_res.get("linear_origin_unstable", False)),
                         "latent_coupling_rate": lat_coupling_rate,
                         "drive_weights": deepcopy(latent_res["drive_weights"]),
                         "recurrence_mse": latent_res["recurrence_mse"],
@@ -3742,6 +4348,7 @@ def audit_transition_premises(
             budget,
             eff_tol=eff_tol,
             max_bijections=max_bijections,
+            drive_by_q_override=drive_by_q,
         )
         narrowed_focus_domains = (
             focus_audit["narrowed_focus_domains"]
@@ -3788,6 +4395,8 @@ def audit_transition_premises(
             "conservation_supported": False,
             "conservation_mse": float(conservation_mse),
             "nonconservation_mechanisms": supported_mechs,
+            "recovered_drive_by_q": dict(drive_by_q) if recovered_roles is not None else None,
+            "recovered_position_candidates": deepcopy(positions) if recovered_roles is not None else None,
             "exhaustive_bijections": exhaustive,
             "tested_transitions": len(valid_rows),
             "unique_transitions": len(q_rows),
@@ -3878,11 +4487,38 @@ def audit_transition_premises(
     verified_cond_label: str | dict = "unconditional"
     verified_threshold_interval: list[float] | None = None
     verified_threshold_parameter: dict | None = None
+    verified_hs_polytope: dict | None = None
     budget_exhausted = False
 
     if custom_committed_preds:
+        from .curved_hypersurface_probing import describe_linear_in_params_hypersurface
+
         for custom_pred_dict in custom_committed_preds:
             custom_prog = Program.from_dict(custom_pred_dict)
+            if describe_linear_in_params_hypersurface(custom_prog) is not None:
+                cal_res = screen_custom_edge_predicate_on_transitions(
+                    q_rows,
+                    x_rows,
+                    delta_rows,
+                    dynamic,
+                    x_fields,
+                    bijections,
+                    custom_prog,
+                    tuple(d for d in ordered_directions if d in {"right", "left"}),
+                    budget=budget,
+                    eff_tol=eff_tol,
+                )
+                if cal_res.get("supported") and cal_res.get("matches"):
+                    by_dir_cal: dict[str, list[dict]] = {}
+                    for m in cal_res["matches"]:
+                        by_dir_cal.setdefault(m["direction"], []).append(m)
+                    supported_by_direction = by_dir_cal
+                    verified_cond_label = cal_res["calibrated_predicate"].to_dict()
+                    verified_threshold_interval = cal_res.get("threshold_interval")
+                    verified_threshold_parameter = cal_res.get("threshold_parameter")
+                    verified_hs_polytope = cal_res.get("hypersurface_polytope")
+                    break
+                continue
             by_dir, budget_exhausted = _solve_exchange_for_condition(
                 q_rows,
                 x_rows,
@@ -3935,13 +4571,14 @@ def audit_transition_premises(
                 eff_tol=eff_tol,
             )
             if cal_res.get("supported") and cal_res.get("matches"):
-                by_dir_cal: dict[str, list[dict]] = {}
+                by_dir_cal = {}
                 for m in cal_res["matches"]:
                     by_dir_cal.setdefault(m["direction"], []).append(m)
                 supported_by_direction = by_dir_cal
                 verified_cond_label = cal_res["calibrated_predicate"].to_dict()
                 verified_threshold_interval = cal_res.get("threshold_interval")
                 verified_threshold_parameter = cal_res.get("threshold_parameter")
+                verified_hs_polytope = cal_res.get("hypersurface_polytope")
                 break
 
     if not supported_by_direction and not budget_exhausted:
@@ -4184,6 +4821,7 @@ def audit_transition_premises(
             budget,
             eff_tol=eff_tol,
             max_bijections=max_bijections,
+            drive_by_q_override=drive_by_q,
         )
         narrowed_focus_domains = (
             focus_audit["narrowed_focus_domains"]
@@ -4205,6 +4843,8 @@ def audit_transition_premises(
             "status": "verified_conditional_exchange",
             "conservation_supported": True,
             "conservation_mse": float(conservation_mse),
+            "recovered_drive_by_q": dict(drive_by_q) if recovered_roles is not None else None,
+            "recovered_position_candidates": deepcopy(positions) if recovered_roles is not None else None,
             "exhaustive_bijections": exhaustive,
             "tested_transitions": len(valid_rows),
             "unique_transitions": len(q_rows),
@@ -4362,6 +5002,7 @@ def audit_transition_premises(
         budget,
         eff_tol=eff_tol,
         max_bijections=max_bijections,
+        drive_by_q_override=drive_by_q,
         allow_higher_order_latent=allow_higher_order_latent,
         verified_direction=verified_direction,
         radius_interval=radius_interval,
@@ -4384,6 +5025,8 @@ def audit_transition_premises(
         "status": "verified_unconditional_exchange",
         "conservation_supported": True,
         "conservation_mse": float(conservation_mse),
+        "recovered_drive_by_q": dict(drive_by_q) if recovered_roles is not None else None,
+        "recovered_position_candidates": deepcopy(positions) if recovered_roles is not None else None,
         "exhaustive_bijections": exhaustive,
         "tested_transitions": len(valid_rows),
         "unique_transitions": len(q_rows),
@@ -4393,6 +5036,7 @@ def audit_transition_premises(
         "verified_edge_condition": verified_cond_label,
         "verified_threshold_interval": verified_threshold_interval,
         "verified_threshold_parameter": verified_threshold_parameter,
+        "verified_hypersurface_polytope": verified_hs_polytope,
         "surviving_bijection_count": len(all_matches),
         "narrowed_position_domains": narrowed_domains,
         "narrowed_focus_domains": narrowed_focus_domains,
