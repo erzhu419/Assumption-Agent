@@ -42,13 +42,34 @@ def _assess(hypothesis, rows, budget, tolerance, quantile, revision):
 
 
 def _entry(hypothesis):
+    parents = tuple(dict.fromkeys(filter(None, (
+        hypothesis.get("parent_hypothesis_id"),
+        *hypothesis.get("method_source_ids", ()),
+    ))))
     candidate = Candidate(hypothesis["hypothesis_id"], Program.from_dict(hypothesis["program"]),
-        "representation", "Execute one evidence-supported object explanation",
-        tuple(filter(None, (hypothesis.get("parent_hypothesis_id"),))))
-    return {"candidate": candidate, "kind": "competing_objects",
+        "representation", "Execute one evidence-supported object explanation", parents)
+    entry = {"candidate": candidate, "kind": "competing_objects",
         "hypothesis_id": hypothesis["hypothesis_id"], "schema": hypothesis["schema"],
         "family_id": hypothesis["family_id"], "training_loss": hypothesis["training_loss"],
         "structure": hypothesis["structure"], "structure_search": hypothesis["structure_search"]}
+    for key in ("research_program", "method_source_ids",
+                "world_commitment_application", "scientific_premise_revision"):
+        if hypothesis.get(key) is not None:
+            entry[key] = deepcopy(hypothesis[key])
+    return entry
+
+
+def working_role_entry(fit, parent, *, schema_index, prefix, training_rows, parent_loss):
+    """Keep the fitted graph under its assumed assignment until the role is resolved."""
+    candidate = fit["candidate"]
+    return {
+        "candidate": replace(candidate, candidate_id=f"{prefix}:{schema_index}:{candidate.candidate_id}"),
+        "kind": "working_role_revision", "family_id": fit["family_id"],
+        "training_loss": fit["training_loss"],
+        "working_role_revision": {"schema_index": schema_index, "structure": fit["structure"],
+            "structure_search": fit["structure_search"], "training_rows": training_rows,
+            "research_program": fit.get("research_program"), "fit_candidate_id": candidate.candidate_id,
+            "parent_candidate_id": parent["candidate"].candidate_id, "parent_training_loss": parent_loss}}
 
 
 def _refresh_radius_interval(hypothesis, rows, budget):
@@ -142,13 +163,16 @@ def _radius_alternatives(hypotheses, rows, fresh, budget, tolerance, quantile, l
 def research_competing_object_programs(spec, training, budget, *, previous=None,
                                       new_observations=(), transitions=(),
                                       tolerance=1e-7, max_candidates=8, preferred_schemas=(),
-                                      response_parent=None):
+                                      response_parent=None, working_parent_loss=None,
+                                      world_commitments=(), premise_audit=None):
     """Fit and revise finite competing assignments within the supplied budget.
 
     ``training`` contains all paid observations for this task, including any
     ``new_observations``. The latter are scored against the frozen previous
     programs before refitting. The JSON-safe ``competition`` is returned even
     if no law survives; ``entries`` contains only currently supported laws.
+    A caller with the partial parent's measured loss on these training rows
+    may also compare its fitted revisions in a separate working pool.
 
     Search allowances are divided across remaining assignments, so the first
     assignment cannot consume all computation. ``exhaustive`` describes the
@@ -171,6 +195,10 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                                            preferred_schemas=preferred_schemas)
     state.update({key: enumeration[key] for key in (
         "schemas", "source_model_id", "exhaustive", "unresolved")})
+    if "position_owner_coverage" in enumeration:
+        state["position_owner_coverage"] = enumeration["position_owner_coverage"]
+    state["enumeration_compute_cost"] = enumeration["compute_cost"]
+    state["reused_schema_count"] = enumeration.get("reused_schema_count", 0)
     schemas = enumeration["schemas"]
     old = []
     fresh = list(new_observations)
@@ -215,7 +243,7 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
     surviving_laws = any(item["status"] == "supported" for item in old)
     earlier_schemas = previous.get("schemas", [])
     earlier_searches = {item["schema_index"]: item for item in previous.get("searches", [])}
-    choices = []
+    choices, working_revisions = [], []
     for index, schema in enumerate(schemas):
         allowance = budget.remaining // (len(schemas) - index)
         local_budget = SearchBudget(allowance)
@@ -289,16 +317,73 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 parent=parent, tolerance=tolerance, transitions=transitions)
             record_attempt("parent_revision", fits, parent_budget)
             search_budget.spend(parent_budget.spent)
+        if world_commitments and not any(supports_current_evidence(fit) for fit in fits):
+            from .world_structure_commitments import (
+                commitment_applicable_triggers,
+                commitment_verified_radius_bounds,
+                instantiate_commitment_on_schema,
+                propose_scientific_premise_revision,
+            )
+            commitment_budget = SearchBudget(max(1, search_budget.remaining * 2 // 3))
+            commitment_fits = []
+            schema_x_to_q = {
+                group["x"]: group["q"]
+                for group in schema.get("fields", {}).values()
+                if "x" in group and "q" in group
+            }
+            for comm in world_commitments:
+                if commitment_budget.remaining <= 0:
+                    break
+                triggers = commitment_applicable_triggers(comm, premise_audit)
+                if triggers:
+                    comm_entries = propose_scientific_premise_revision(
+                        comm, premise_audit, local_spec, rows, schema,
+                        commitment_budget, transitions=transitions, tolerance=tolerance,
+                    )
+                else:
+                    audit_bounds = commitment_verified_radius_bounds(
+                        comm, premise_audit, schema_x_to_q
+                    )
+                    pred_overrides = None
+                    if (
+                        premise_audit is not None
+                        and isinstance(premise_audit.get("verified_edge_condition"), dict)
+                        and comm.get("radius_parameters")
+                    ):
+                        pred_overrides = {
+                            comm["radius_parameters"][0]["symbol"]: premise_audit["verified_edge_condition"]
+                        }
+                    comm_entries = instantiate_commitment_on_schema(
+                        local_spec, rows, schema, comm, commitment_budget,
+                        radius_bounds=audit_bounds,
+                        predicate_overrides=pred_overrides,
+                        audit_report=premise_audit,
+                        transitions=transitions,
+                        tolerance=tolerance,
+                    )
+                    if (not any(supports_current_evidence(item) for item in comm_entries)
+                            and commitment_budget.remaining > 0 and premise_audit is None):
+                        comm_entries.extend(propose_scientific_premise_revision(
+                            comm, None, local_spec, rows, schema,
+                            commitment_budget, transitions=transitions, tolerance=tolerance,
+                        ))
+                commitment_fits.extend(comm_entries)
+                if any(supports_current_evidence(item) for item in commitment_fits):
+                    break
+            record_attempt("world_commitment", commitment_fits, commitment_budget)
+            search_budget.spend(commitment_budget.spent)
+            fits = [*fits, *commitment_fits]
         if not any(supports_current_evidence(fit) for fit in fits):
             before_search = search_budget.spent
             # A new role assignment must test the retained response, not lose
             # its fitted columns and restart from unrelated default responses.
             # An existing same-schema hypothesis retains its original path.
             retained_response = response_parent if not prior else None
-            fits = propose_structures(local_spec, rows, search_budget,
+            structural_fits = propose_structures(local_spec, rows, search_budget,
                 parent=retained_response, tolerance=tolerance, transitions=transitions)
             record_attempt("parent_response" if retained_response else "structural_search",
-                           fits, search_budget, before_search)
+                           structural_fits, search_budget, before_search)
+            fits = [*fits, *structural_fits]
         local_budget.spend(search_budget.spent)
         accepted, seen = [], set()
         for fit in fits:
@@ -320,6 +405,10 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 "family_id": fit["family_id"], "structure": fit["structure"],
                 "structure_search": fit["structure_search"],
                 "parent_hypothesis_id": ancestor["hypothesis_id"] if ancestor else None}
+            for extra_key in ("research_program", "method_source_ids",
+                              "world_commitment_application", "scientific_premise_revision"):
+                if fit.get(extra_key) is not None:
+                    hypothesis[extra_key] = deepcopy(fit[extra_key])
             accepted.append(hypothesis)
             if len(accepted) >= per_schema:
                 break
@@ -327,6 +416,17 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
         accepted = _radius_alternatives(accepted, rows, fresh, local_budget,
             tolerance, spec.risk_quantile, per_schema)
         budget.spend(local_budget.spent)
+        if (working_parent_loss is not None and response_parent
+                and response_parent.get("partial_object_knowledge") and response_parent.get("research_program")):
+            # Only a fit actually initialized from this response can claim
+            # improvement over it. Keep the native executable before the
+            # diagnostic projection below drops its coefficients.
+            improving = [fit for attempt in fit_attempts if attempt["stage"] == "parent_response"
+                         for fit in attempt["fits"] if tolerance < fit["training_loss"] < working_parent_loss]
+            if improving:
+                fit = min(improving, key=lambda item: item["training_loss"])
+                working_revisions.append(working_role_entry(fit, response_parent, schema_index=index,
+                    prefix=f"working_role:{revision}", training_rows=len(rows), parent_loss=working_parent_loss))
         for attempt in fit_attempts:
             diagnostics = []
             for fit in attempt["fits"]:
@@ -365,4 +465,15 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
     entries = [_entry(item) for item in active]
     for entry in entries:
         entry["object_competition"] = state
-    return {"entries": entries, "competition": state}
+    result = {"entries": entries, "competition": state}
+    if working_parent_loss is not None:
+        working = []
+        for revision_entry in sorted(working_revisions, key=lambda item: item["training_loss"]):
+            if len(entries) + len(working) >= min(4, max_candidates):
+                break
+            key = canonical_object_program(revision_entry["candidate"].program)
+            if key not in canonical:
+                canonical.add(key)
+                working.append(revision_entry)
+        result["working_entries"] = working
+    return result

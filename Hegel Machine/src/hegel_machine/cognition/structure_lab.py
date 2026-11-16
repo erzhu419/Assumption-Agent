@@ -66,18 +66,22 @@ class StructureLab:
     """
 
     def __init__(self, *, objects=4, readout="focus", variant="exchange", seed=71,
-                 relation_direction="symmetric", relation_condition="always", total_weight=1.0):
+                 relation_direction="symmetric", relation_condition="always", total_weight=1.0,
+                 condition_threshold=None, latent_mode="none", latent_decay=None, latent_weight=None):
         if objects < 2:
             raise ValueError("the exchange apparatus needs at least two objects")
         if readout not in {"focus", "position_focus", "total", "window", "event", "total_event",
-                           "focus_window", "filtered_total", "window_total_event"}:
+                           "focus_window", "filtered_total", "window_total_event",
+                           "focal_quadratic_total_event"}:
             raise ValueError("unknown structure readout")
         if variant not in {"exchange", "sink", "anchored", "nonlocal"}:
             raise ValueError("unknown apparatus variant")
         if relation_direction not in {"symmetric", "right", "left"}:
             raise ValueError("unknown relation direction")
-        if relation_condition not in {"always", "source_greater", "source_less"}:
+        if relation_condition not in {"always", "source_greater", "source_less", "donor_positive_gap"}:
             raise ValueError("unknown relation condition")
+        if latent_mode not in {"none", "focal_memory", "transition_memory"}:
+            raise ValueError("unknown latent mode")
         self.object_ids = tuple(f"o{index}" for index in range(objects))
         self._readout, self._variant = readout, variant
         self._total_weight = float(total_weight)
@@ -87,6 +91,17 @@ class StructureLab:
         self._coupling = rng.uniform(.18, .28)
         self._radius = rng.uniform(.7, 1.15)
         self._actuator_curvature = rng.uniform(.08, .16)
+        self._condition_threshold = 0.25 if condition_threshold is None else float(condition_threshold)
+        self._latent_mode = latent_mode
+        if latent_mode == "none":
+            self._latent_decay = 0.0
+            self._latent_weight = 0.0
+        elif latent_mode == "focal_memory":
+            self._latent_decay = float(rng.uniform(.54, .76) if latent_decay is None else latent_decay)
+            self._latent_weight = float(rng.uniform(.32, .52) if latent_weight is None else latent_weight)
+        else:
+            self._latent_decay = float(rng.uniform(.56, .78) if latent_decay is None else latent_decay)
+            self._latent_weight = float(rng.uniform(.35, .55) if latent_weight is None else latent_weight)
         self._window = 3
         self.observation_cost = self.measurement_cost = 0
         self.acquisitions = []
@@ -123,7 +138,7 @@ class StructureLab:
         return Probe(name, tuple({key: rng.uniform(*bounds) for key, bounds in self.spec.feature_bounds.items()}
                                  for _ in range(length)))
 
-    def _step(self, point):
+    def _step(self, point, latent_state=None):
         # Quantity controls are actuator commands. Instruments measure the
         # resulting quantities; omitting individual measurements therefore does
         # not secretly leave the same values available as known controls.
@@ -144,6 +159,10 @@ class StructureLab:
                             continue
                         if self._relation_condition == "source_less" and value >= quantity[target]:
                             continue
+                        if self._relation_condition == "donor_positive_gap" and not (
+                            value > 0.0 and (value - quantity[target]) > self._condition_threshold
+                        ):
+                            continue
                         transfer = self._coupling * value
                         directional[source] -= transfer
                         directional[target] += transfer
@@ -158,6 +177,8 @@ class StructureLab:
                 change += .17 * position[index] + .07 * (index + 1) * value
             elif self._variant == "nonlocal":
                 change += .09 * sum(quantity)
+            if self._latent_mode == "transition_memory" and latent_state is not None:
+                change += self._latent_weight * latent_state[index]
             after.append(value + drive[index] + change)
         return quantity, position, drive, focus, after
 
@@ -179,11 +200,18 @@ class StructureLab:
         schema = self.schema_for(objects, scale)
         history, flows, combined_events, rows, transitions = [], [], [], [], []
         filtered_total = 0.0
+        latent_state = [0.0] * len(self.object_ids)
         for point in probe.sequence:
             if set(point) != set(self.spec.feature_bounds) or any(
                     not low <= point[name] <= high for name, (low, high) in self.spec.feature_bounds.items()):
                 raise ValueError("a setup must supply the public controls within their bounds")
-            quantity, position, drive, focus, after = self._step(point)
+            quantity, position, drive, focus, after = self._step(point, latent_state=latent_state)
+            if self._latent_mode == "transition_memory":
+                latent_state = [self._latent_decay * latent_state[idx] + drive[idx]
+                                for idx in range(len(quantity))]
+            elif self._latent_mode == "focal_memory":
+                latent_state = [self._latent_decay * latent_state[idx] + quantity[idx] + 0.5 * drive[idx]
+                                for idx in range(len(quantity))]
             before_features = self._view(schema, quantity, position, drive, focus)
             after_features = self._view(schema, after, position, drive, focus)
             flows.append(after[focus] - quantity[focus] - drive[focus])
@@ -209,8 +237,12 @@ class StructureLab:
             elif self._readout == "window_total_event":
                 combined_events.append(total + .7 * event)
                 target = sum(combined_events[-self._window:])
+            elif self._readout == "focal_quadratic_total_event":
+                target = total + .7 * event + .35 * (quantity[focus] ** 2)
             else:
                 target = after[focus]
+            if self._latent_mode == "focal_memory":
+                target += self._latent_weight * latent_state[focus]
             rows.append(Observation(before_features, target, tuple(history)))
             transitions.append({"before": before_features, "after": after_features})
             history.append({**before_features, "__target__": target})

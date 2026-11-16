@@ -8,6 +8,7 @@ filled from field order.
 """
 
 from collections import Counter
+from copy import deepcopy
 from itertools import combinations
 
 from .continuous_state import _linear_fit
@@ -171,6 +172,140 @@ or an effect on multiple independently driven objects leaves it unresolved.
             "quantities": sorted(selected if supported else quantities), "evidence": evidence}
 
 
+def _mixed_quantity_response(deltas, denominators, quantities):
+    responses = [{name: delta[name] / denominator for name in quantities}
+                 for delta, denominator in zip(deltas, denominators)]
+    return responses, [name for name in quantities if _different(responses[0][name], responses[1][name])]
+
+
+def position_owner_predictions(quantities, excited_quantity, candidate_owners):
+    """Possible cross-quantity effects in the inducer's local pair-interaction family."""
+    foreign = sorted(set(quantities) - {excited_quantity})
+    return {owner: {"allowed_foreign_quantities": foreign if owner == excited_quantity else [owner]}
+            for owner in candidate_owners}
+
+
+def assess_position_experiment(plan, model, records, budget):
+    """Read the registered reset square using measurements alone, before any refit."""
+    start = budget.spent
+    field, excited = plan["field"], plan["excited_quantity"]
+    x, q = plan["position_control"], plan["quantity_control"]
+    p0, pq, px, pxq = plan["corners"]
+    if (x == q or p0[x] == px[x] or p0[q] == pq[q]
+            or pq != {**p0, q: pq[q]} or px != {**p0, x: px[x]} or pxq != {**px, q: pq[q]}
+            or model["position_candidates"][field]["control"] != x or model["quantity_controls"][excited] != q):
+        raise ValueError("Position experiment requires the two registered isolated interventions")
+    quantities = model["dynamic_fields"]
+    owners, predictions = plan["candidate_owners"], plan["owner_predictions"]
+    if predictions != position_owner_predictions(quantities, excited, owners):
+        raise ValueError("Position forecasts differ from the registered local interaction family")
+    result = {"field": field, "source_model_id": model.get("model_id"),
+              "candidate_owners": list(owners), "position_domains_delta": {}}
+
+    def finish(status):
+        return {**result, "status": status, "compute_cost": budget.spent - start}
+
+    if not budget.spend(len(records) * (len(p0) + 1)):
+        return finish("position_experiment_compute_exhausted")
+    controls = list(p0)
+    # Only reset observations realize the declared experiment; later rows
+    # with identical commands can carry a different physical state.
+    fixed = {tuple(p0[c] for c in controls): plan["baseline_ref"]["probe_id"]}
+    for point, ref in zip(plan["corners"], plan.get("paid_corner_refs", ())):
+        if ref is not None:
+            fixed[tuple(point[c] for c in controls)] = ref["probe_id"]
+    by_reset = {}
+    for row in records:
+        if row["position"] != 0 or row.get("history"):
+            continue
+        point = tuple(row["controls"][c] for c in controls)
+        if point in fixed and row["probe_id"] != fixed[point]:
+            continue
+        by_reset.setdefault(point, row)
+    rows = [by_reset.get(tuple(point[c] for c in controls)) for point in plan["corners"]]
+    result["missing_corners"] = [i for i, row in enumerate(rows) if row is None]
+    if result["missing_corners"]:
+        return finish("incomplete_position_experiment")
+    result["corner_refs"] = [{"probe_id": row["probe_id"], "position": row["position"]} for row in rows]
+    fields = model["raw_sensor_features"]
+    if not budget.spend(4 * len(fields) + 3 * len(quantities)):
+        return finish("position_experiment_compute_exhausted")
+    # A nominal change in one command must actually isolate its measured
+    # coordinate in both backgrounds, including the off-axis held inputs.
+    for a, b, expected in ((0, 1, excited), (2, 3, excited), (0, 2, field), (1, 3, field)):
+        changed = [name for name in fields if _different(rows[a]["before"][name], rows[b]["before"][name])]
+        if changed != [expected]:
+            result["unverified_edge"] = {"corners": [a, b], "expected": expected, "changed": changed}
+            return finish("unverified_position_intervention")
+    pairs = ((0, 1), (2, 3))
+    denominators = [rows[b]["before"][excited] - rows[a]["before"][excited] for a, b in pairs]
+    deltas = [{name: rows[b]["after"][name] - rows[a]["after"][name] for name in quantities}
+              for a, b in pairs]
+    responses, affected = _mixed_quantity_response(deltas, denominators, quantities)
+    foreign = set(affected) - {excited}
+    survivors = [owner for owner in owners if foreign <= set(predictions[owner]["allowed_foreign_quantities"])]
+    result.update(comparison={"control": x, "quantity_control": q, "excited_quantity": excited,
+                  "affected_quantities": affected, "responses": responses, "pairs": [list(p) for p in pairs]},
+                  affected_quantities=affected, retained_owners=survivors,
+                  excluded_owners=[owner for owner in owners if owner not in survivors],
+                  surviving_alternatives=[i for i, v in enumerate(plan["alternative_owners"]) if v in survivors],
+                  excluded_alternatives=[i for i, v in enumerate(plan["alternative_owners"]) if v not in survivors])
+    positions = {name: set(item["quantities"]) for name, item in model["position_candidates"].items()}
+    retained = positions[field].intersection(survivors)
+    if not retained:
+        return finish("position_domain_conflict")
+    if retained == positions[field]:
+        return finish("position_domain_unchanged")
+    domains = _propagate({**positions, field: retained}, set(quantities))
+    result["position_domains_delta"] = {name: sorted(values) for name, values in domains.items()
+                                        if values != positions[name]}
+    return finish("position_domain_narrowed")
+
+
+def apply_position_experiment(model, result):
+    """Rebuild a narrowed model from the paid parent and compact measured return."""
+    if result["status"] != "position_domain_narrowed":
+        return model
+    if result["source_model_id"] != model.get("model_id"):
+        raise ValueError("Position measurement belongs to a different role model")
+    delta = result["position_domains_delta"]
+    if all(set(model["position_candidates"][name]["quantities"]) == set(domain) for name, domain in delta.items()):
+        return model
+    if any(not set(domain) <= set(model["position_candidates"][name]["quantities"]) for name, domain in delta.items()):
+        raise ValueError("Restore the measured parent before applying this position result")
+    comparison = dict(result["comparison"])
+    comparison.pop("pairs")  # The four local indices address corner_refs, not the full trajectory store.
+    updated = {**model, "position_candidates": deepcopy(model["position_candidates"]),
+               "groups": deepcopy(model["groups"]), "unresolved": list(model["unresolved"]),
+               "dependencies": [*model.get("dependencies", []),
+                   {**comparison, "corner_refs": result["corner_refs"], "candidate_quantities": result["retained_owners"]}]}
+    updated.pop("schema_alternatives", None)
+    for name, domain in delta.items():
+        updated["position_candidates"][name]["quantities"] = list(domain)
+    # Keep only role coordinates as search starts. The old enumeration
+    # remains attached to its original domain and cannot certify this one.
+    field = result["field"]
+    if len(updated["position_candidates"][field]["quantities"]) == 2:
+        paid = model.get("schema_alternatives", {})
+        anchors = model.get("position_assignment_contrast", {}).get("paid_anchors", [])
+        if paid.get("source_model_id") and paid["source_model_id"] == model.get("model_id"):
+            anchors = [[[item["q"], item["x"], item["f"]] for item in schema["fields"].values()]
+                       for schema in paid["schemas"]]
+        updated["position_assignment_contrast"] = {"field": field, "paid_anchors": anchors}
+    else:
+        updated.pop("position_assignment_contrast", None)
+    measured = updated["position_candidates"][result["field"]]
+    measured["support_pairs"] = measured.get("support_pairs", 0) + 1
+    for group in updated["groups"]:
+        known = [name for name, item in updated["position_candidates"].items()
+                 if item["quantities"] == [group["q"]]]
+        if len(known) == 1:
+            group["x"] = known[0]
+            group["controls"]["x"] = updated["position_candidates"][known[0]]["control"]
+    _finish_object_schema(updated, len(updated["focus_candidates"]))
+    return updated
+
+
 def _background_comparisons(rows, controls, effects, quantity_controls, stable_controls, budget):
     """Compare measured quantity responses across one stable control change."""
     quantities, comparisons = list(quantity_controls), []
@@ -188,10 +323,8 @@ def _background_comparisons(rows, controls, effects, quantity_controls, stable_c
             denominators = left["delta_before"][excited], right["delta_before"][excited]
             if min(abs(value) for value in denominators) < 1e-10 or not budget.spend(len(quantities)):
                 continue
-            responses = [{quantity: pair["delta_after"][quantity] / denominator for quantity in quantities}
-                         for pair, denominator in zip((left, right), denominators)]
-            affected = [quantity for quantity in quantities if _different(
-                        responses[0][quantity], responses[1][quantity])]
+            responses, affected = _mixed_quantity_response(
+                [left["delta_after"], right["delta_after"]], denominators, quantities)
             comparisons.append({"control": changed[0], "quantity_control": quantity_control,
                 "excited_quantity": excited, "affected_quantities": affected,
                 "pairs": [[left["left"], left["right"]], [right["left"], right["right"]]],
@@ -391,7 +524,9 @@ def infer_object_model(spec, records, budget, prior=None):
         others = affected - {excited}
         if not others:
             continue
-        candidates = {excited} if len(others) >= 2 else {excited, *others}
+        forecasts = position_owner_predictions(quantities, excited, quantities)
+        candidates = {owner for owner, claim in forecasts.items()
+                      if others <= set(claim["allowed_foreign_quantities"])}
         field = position_by_control[control]
         positions[field]["quantities"] = sorted(set(positions[field]["quantities"]) & candidates)
         positions[field]["support_pairs"] += 1
@@ -523,7 +658,14 @@ def infer_object_model(spec, records, budget, prior=None):
                 if role == "x":
                     group["controls"][role] = candidates[matched[0]]["control"]
         output["groups"].append(group)
-    complete = (bool(dynamic) and len(binary) == len(dynamic) and output["focus_control"] is not None
+    _finish_object_schema(output, len(binary))
+    output["compute_cost"] = budget.spent - start
+    return output
+
+
+def _finish_object_schema(output, binary_count):
+    dynamic = output["dynamic_fields"]
+    complete = (bool(dynamic) and binary_count == len(dynamic) and output["focus_control"] is not None
                 and all(set(group) >= {"q", "u", "x", "f"} and set(group["controls"]) >= {"q", "u", "x"}
                         for group in output["groups"]))
     if complete:
@@ -533,12 +675,10 @@ def infer_object_model(spec, records, budget, prior=None):
             "members": {group["object_id"]: [group["object_id"]] for group in groups},
             "controls": {group["object_id"]: group["controls"] for group in groups},
             "focus_control": output["focus_control"]}
-        output["status"], output["complete"] = "identified", True
+        output["status"], output["complete"], output["unresolved"] = "identified", True, []
     else:
         output["unresolved"] = [f"{group['object_id']}:{role}" for group in output["groups"]
             for role in ("q_control", "u", "x", "f")
             if ("q" not in group["controls"] if role == "q_control" else role not in group)]
         if output["focus_control"] is None:
             output["unresolved"].append("focus_control")
-    output["compute_cost"] = budget.spent - start
-    return output

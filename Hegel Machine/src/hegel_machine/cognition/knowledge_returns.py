@@ -10,6 +10,24 @@ from .language import Program
 def _solve_linear(matrix, values):
     """Solve a small ridge system used only for a measured response summary."""
     width = len(matrix[0]) if matrix else 0
+    if width == 0:
+        return []
+    try:
+        import numpy as np
+
+        x = np.asarray(matrix, dtype=np.float64)
+        y = np.asarray(values, dtype=np.float64)
+        n_rows = x.shape[0]
+        if n_rows < width:
+            gram_dual = x @ x.T
+            gram_dual.flat[:: n_rows + 1] += 1e-8
+            dual = np.linalg.solve(gram_dual, y)
+            return (x.T @ dual).tolist()
+        gram_np = x.T @ x
+        gram_np.flat[:: width + 1] += 1e-8
+        return np.linalg.solve(gram_np, x.T @ y).tolist()
+    except Exception:
+        pass
     gram = [[0.0] * width for _ in range(width)]
     rhs = [0.0] * width
     for row, value in zip(matrix, values):

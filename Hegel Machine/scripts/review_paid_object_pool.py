@@ -687,7 +687,9 @@ def register_parameter(request, output):
         feedback_rows=len(rows) - split, comparison_rows=len(rows), probes=probes, max_candidates=4,
         quality_threshold=original['quality_threshold'], active_wall_seconds=previous['active_wall_seconds'],
         research_action='relation_parameter_revision', research_method_ref=ref(output / 'method_instance.json', 'research_program'),
-        paid_initializer_cost_ref=result_ref, prior_selected_loss=parent['validation_loss'],
+        paid_initializer_cost_ref=(None if actual.get('parent_fit_scope') ==
+            'scored_existing_program_on_current_data' else result_ref),
+        prior_selected_loss=parent['validation_loss'],
         source_cost_refs=[*cfg.get('source_cost_refs', [ref(source / 'source_costs.json'),
             ref(source / 'method_return/receipt.json')]), *([ref(output / 'paid_residuals.json')] if values_ref else [])],
         scope='sequential_parameter_research_on_current_parent_not_direction_replay_or_old_matched_pair',
@@ -700,6 +702,56 @@ def register_parameter(request, output):
     write_text_incrementally(output / 'runtime' / relative, (ROOT / relative).read_text(),
         base=runtime_source / 'runtime' / relative)
     return cfg
+
+
+def restore_pre_call_parent(source, output):
+    """Expose the saved pre-call winner/pool to the ordinary parent entry.
+
+    No arm output, terminal label or new score is read. Existing programs were
+    scored on these rows, which is not evidence of a fit on these rows.
+    """
+    source, output = Path(source), Path(output)
+    registration, prepared = load(source / 'registration.json'), load(source / 'prepared_state.json')
+    comparison_ref = prepared['comparison_ref']
+    compared = read_method_reference(comparison_ref, source)
+    evidence_ref = compared['pre_call_evidence_ref']
+    evidence = read_method_reference(evidence_ref, source)
+    locations = [*prepared['training_refs'], *prepared['validation_refs']]
+    parent_ref = evidence['model_ref']
+    matched = [item for item in compared['scores'] if item['candidate_ref'] == parent_ref]
+    if (not compared['full_comparison'] or not matched
+            or compared['complete_pool_size'] != len(compared['scores'])
+            or compared['data_refs'] != locations or evidence['data_refs'] != locations
+            or evidence['basis']['full_pool_size'] != len(compared['scores'])
+            or matched[0]['loss'] != evidence['score_loss']
+            or compared['rows'] != prepared['training_rows'] + prepared['working_rows']):
+        raise ValueError('Restore the saved complete pre-call pool and its actual selected score')
+    output.mkdir(parents=True, exist_ok=False)
+    common = output / 'common'
+    cfg = {key: registration[key] for key in
+        ('source_task_ref', 'quality_threshold', 'active_wall_seconds')}
+    cfg.update(evaluation_role='paid_development_preparation', training_rows=prepared['training_rows'],
+        working_rows=prepared['working_rows'], comparison_rows=compared['rows'],
+        source_registration_ref=ref(source / 'registration.json'))
+    save(common / 'registration.json', cfg)
+    save(common / 'public_spec.json', read_method_reference(prepared['public_spec_ref'], source))
+    receipt = {'status': 'paid_pre_call_pool_restored', 'full_comparison': True,
+        'rows': compared['rows'], 'data_refs': locations, 'selected_ref': parent_ref,
+        'selected_loss': evidence['score_loss'], 'source_task_ref': cfg['source_task_ref'],
+        'scores': [{'candidate_refs': [item['candidate_ref']], 'mse': item['loss']}
+                   for item in compared['scores']],
+        'source_comparison_ref': comparison_ref, 'pre_call_evidence_ref': evidence_ref,
+        'parent_fit_scope': 'scored_existing_program_on_current_data',
+        'new_compute_cost': 0, 'new_fits': 0, 'new_predictions': 0, 'new_observations': 0}
+    save(common / 'receipt.json', receipt)
+    save(output / 'registration.json', cfg)
+    save(output / 'receipt.json', {key: value for key, value in receipt.items() if key != 'scores'})
+    save(output / 'retained_frontier.json', {'full_comparison': True,
+        'original_pool_ref': ref(common / 'receipt.json'), 'appended_comparison_refs': [],
+        'complete_current_pool_occurrences': len(compared['scores']),
+        'selected_ref': parent_ref, 'selected_mse': evidence['score_loss'],
+        'pre_call_evidence_ref': evidence_ref})
+    return {key: value for key, value in receipt.items() if key != 'scores'}
 
 
 def register_frozen_method_development(request, output):
@@ -949,9 +1001,10 @@ def run_parent(output):
         parameter_inputs = {}
         if cfg['research_action'] == 'relation_parameter_revision':
             parameter_inputs = {'research_method': read_method_reference(cfg['research_method_ref'], output),
-                'feedback_rows': rows[cfg['training_rows']:],
-                'paid_initial': {'entry': parent, 'training': rows[:cfg['training_rows']],
-                    'risk_quantile': spec.risk_quantile, 'cost_ref': cfg['paid_initializer_cost_ref']}}
+                'feedback_rows': rows[cfg['training_rows']:]}
+            if cfg['paid_initializer_cost_ref']:
+                parameter_inputs['paid_initial'] = {'entry': parent, 'training': rows[:cfg['training_rows']],
+                    'risk_quantile': spec.risk_quantile, 'cost_ref': cfg['paid_initializer_cost_ref']}
         with timing.phase('parent_revision'), python_execution_deadline(cfg['active_wall_seconds'], activity=True):
             result = agent._revise_paid_structure(spec, parent, rows, budget, actions,
                 finalists=entries, paid_scores=scores, fit_rows=rows[:cfg['training_rows']],
@@ -2393,14 +2446,16 @@ if __name__ == '__main__':
         'prepare-instrument-probe', 'run-instrument-probe',
         'prepare-response-plan', 'run-response-plan',
         'prepare-interval-probe-return', 'run-interval-probe-return',
-        'prepare-parent-method-pair', 'prepare-frozen-method-development'))
+        'prepare-parent-method-pair', 'prepare-frozen-method-development', 'restore-pre-call-parent'))
     parser.add_argument('--request', type=Path)
     parser.add_argument('--source', type=Path)
     parser.add_argument('--previous-return', type=Path)
     parser.add_argument('--maximum-compute', type=int, default=3000)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    if args.mode == 'prepare-interval-probe-return':
+    if args.mode == 'restore-pre-call-parent':
+        result = restore_pre_call_parent(args.source, args.output)
+    elif args.mode == 'prepare-interval-probe-return':
         result = register_interval_probe_return(args.source, args.output, request=args.request)
     elif args.mode == 'run-interval-probe-return':
         result = run_interval_probe_return(args.output)

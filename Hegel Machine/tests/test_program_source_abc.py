@@ -302,3 +302,27 @@ def test_archive_reconstructs_conditions_from_actual_paired_records(tmp_path):
         assert agent.native_method_conditions[0]['research']['general_guard_supported'] is True
         assert agent._prepare_program_sources(budget) == 0
     assert spent[0] == spent[1] > 0 and spent[2] == 0
+
+
+@pytest.mark.parametrize(('allowance', 'scored', 'complete'), [(2, 2, True), (1, 1, False)])
+def test_common_joint_assessment_counts_delivered_fits_and_tracks_budget_cutoff(
+        tmp_path, monkeypatch, allowance, scored, complete):
+    from hegel_machine.cognition.language import Program
+    from hegel_machine.cognition.models import Candidate, Observation
+
+    agent = CommonObjectResearchAgent(workspace=tmp_path, organization='pr3')
+    rows = [Observation({}, 3.)]
+    agent._current_native_frame = {'comparison': rows, 'assessed': [], 'comparison_complete': True}
+    ref = {'file': 'invocation.json'}
+    agent._native_applications = [{'invocation_ref': ref, 'comparison_rows': rows}]
+    delivered = {'candidate': Candidate('fit', Program('const', value=3.), 'fit'),
+                 'native_program_application': ref}
+    other = {'candidate': Candidate('other', Program('const', value=4.), 'fit')}
+    saved = []
+    monkeypatch.setattr(agent, '_save_program_comparison', lambda record, **kwargs: saved.append(kwargs))
+    budget = SearchBudget(allowance)
+    assert agent._assess([None, None], rows, budget, 0., .5) == []
+    assert budget.spent == 0 and saved == []
+    checked = agent._assess([None, delivered, None, other], rows, budget, 0., .5)
+    assert len(checked) == scored and budget.spent == scored
+    assert saved == [{'full': complete, 'loss': 0., 'old_pool_size': 0, 'new_count': 2}]

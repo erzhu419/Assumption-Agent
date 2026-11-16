@@ -161,6 +161,14 @@ class ResearchConfig:
     # relative resolution are treated as the same measured opportunity. A
     # confirmed source return may then break the tie without fabricating gain.
     knowledge_tie_tolerance: float = 1e-8
+    # v10 AWM-inspired arity-parametric world-structure consolidation and
+    # explicit transition support-premise dependency auditing. Defaults keep
+    # historical archive/fixed baselines byte-identical unless enabled.
+    world_structure_commitments: bool = False
+    transition_premise_audit: bool = False
+    expanded_premise_revisions: bool = True
+    active_threshold_probing: bool = True
+    latent_state_discovery: bool = True
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:

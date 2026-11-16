@@ -397,7 +397,7 @@ def _existing_parent_parameter_return(evidence, method, execution, parent, after
     parent_ref = evidence.get('research_parent_ref')
     source_ref = binding.get('source_method_ref')
     if (parent is None or not source_ref or not parent_ref
-            or execution.get('action') != 'revise_paid_structure'
+            or execution.get('action') not in {'revise_paid_structure', 'program_replay'}
             or execution.get('research_action') != 'relation_parameter_revision'
             or binding.get('parent_ref') != parent_ref
             or research.get('parent_ref') != parent_ref
@@ -442,7 +442,7 @@ def _existing_method_execution_return(evidence, before, after, workspace):
     if evidence.get('research_parent_ref'):
         parent = read_method_reference(evidence['research_parent_ref'], workspace)
         before = parent['research_program']
-    if method.get('parent_parameter_revision') and execution.get('action') == 'revise_paid_structure':
+    if method.get('parent_parameter_revision') and execution.get('action') in {'revise_paid_structure', 'program_replay'}:
         return _existing_parent_parameter_return(evidence, method, execution, parent, after, workspace)
     contract = method.get('transfer_partition', {})
     if (method != before or not execution.get('fixed_readout_only')

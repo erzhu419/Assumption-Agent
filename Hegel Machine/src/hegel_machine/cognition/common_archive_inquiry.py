@@ -1614,7 +1614,7 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
         elif action == 'run' and arguments.get('operator') == 'partial_role_experiment':
             from types import SimpleNamespace
             from .method_action_research import read_method_reference
-            from .object_dependency_methods import propose_partial_role_experiment
+            from .object_dependency_methods import ObjectDependencyMethods, propose_partial_role_experiment
             def read_input(name, default):
                 reference = arguments.get(name + '_ref')
                 return read_method_reference(reference, self.workspace) if reference else default
@@ -1626,14 +1626,24 @@ class CommonArchiveInquiryAgent(ProcedureConsumerAgent):
                 paid_records = read_input('records', [])
             allowance = min(arguments.get('allocation', {}).get('compute', 0),
                 max(0, self.config.compute_budget - self.costs['compute_cost']))
+            source = ('common' if arguments.get('records') == 'common'
+                      else arguments.get('records_ref'))
+            indexed = getattr(self, '_partial_role_transition_index', None)
+            if (indexed is not None and indexed['source'] == source
+                    and indexed['records'] == paid_records[:len(indexed['records'])]):
+                methods = indexed['methods']
+            else:
+                methods = ObjectDependencyMethods()
             result = propose_partial_role_experiment(
                 SimpleNamespace(feature_bounds=public.get('feature_bounds', {}),
                     max_probe_length=public.get('max_probe_length')),
                 read_input('model', {}), paid_records,
                 selected_values=read_input('selected_values', {}),
                 sources=read_input('sources', []), compute_limit=allowance,
-                previous=read_input('previous', None),
+                previous=read_input('previous', None), methods=methods,
                 remaining_rows=max(0, self.config.observation_budget - self.costs['observation_cost']))
+            self._partial_role_transition_index = {'source': source,
+                'records': paid_records[:methods.indexed_rows], 'methods': methods}
             self.costs['compute_cost'] += result['compute_cost']
             result['operator'] = 'partial_role_experiment'
         elif action == 'run' and arguments.get('operator') == 'theory_consolidation':

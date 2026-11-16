@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .models import Probe
 from .object_induction import infer_object_model
-from .object_dependency_methods import ObjectDependencyMethods
+from .object_dependency_methods import ObjectDependencyMethods, completed_position_relation, new_position_method_decision
 from .object_interventions import _missing_states, _observed_response
 
 
@@ -37,7 +37,7 @@ def _source_probe(sources, model, records, maximum, serial):
             membership = question.get("purpose") == "distinguish_membership_dependency"
             # Current paired responses select and revise membership recipes.
             # Literal donor replay cannot judge their changed response meaning.
-            if membership:
+            if membership or question.get("position_experiment"):
                 continue
             if not question:
                 points = [] if _observed_response(sequence, records) else sequence
@@ -107,7 +107,9 @@ def resume_object_induction(agent, laboratory, channels, acquire, batches, budge
         evidence = records()
         available = allowance - purchased()
         minimum = (len(evidence) + 1) * (len(spec.feature_names) + len(spec.feature_bounds))
-        if available <= 0 or budget.remaining < minimum:
+        if available <= 0 or not budget.remaining:
+            break
+        if budget.remaining < minimum and not hasattr(methods, "consume_position_result"):
             break
         serial = len(batches)
         probe, question = _source_probe(sources, model, evidence,
@@ -118,12 +120,18 @@ def resume_object_induction(agent, laboratory, channels, acquire, batches, budge
             if probe is not None:
                 probe = Probe(f"object_resume:{serial}", probe.sequence)
         if probe is None or probe.cost > available:
+            if question.get("position_experiment"):
+                prior_model = model
+                model = methods.consume_position_result(model)
+                if new_position_method_decision(methods, prior_model, model):
+                    continue
             actions.append({"action": "defer_object_dependency_question", "question": question,
                 "reason": "no_affordable_unmeasured_distinction", "remaining_rows": available})
             break
         minimum = (len(evidence) + probe.cost) * (len(spec.feature_names) + len(spec.feature_bounds))
-        if budget.remaining < minimum or acquire(channels,
-                "distinguish_object_dependencies", probe=probe) is None:
+        if not question.get("position_experiment") and budget.remaining < minimum:
+            break
+        if acquire(channels, "distinguish_object_dependencies", probe=probe) is None:
             break
         before = deepcopy(model.get("unresolved", []))
         interpret = question.get("interpret_dependencies", True)
@@ -132,11 +140,14 @@ def resume_object_induction(agent, laboratory, channels, acquire, batches, budge
             model = refined
         if question.get("research_program"):
             methods.observe(records())
+            if question.get("position_experiment"):
+                model = methods.consume_position_result(model)
+        measured_position = question.get("position_experiment") and completed_position_relation(methods.result)
         actions.append({"action": "test_object_dependency_question", "question": question,
             "probe_id": probe.probe_id, "observation_rows": probe.cost,
             "unresolved_before": before, "unresolved_after": deepcopy(model.get("unresolved", [])),
-            "resumed": True, "inference_funded": refined is not None,
-            "inference_deferred_until_paired_pilot": not interpret})
+            "resumed": True, "inference_funded": refined is not None or bool(measured_position),
+            "inference_deferred_until_paired_pilot": (not interpret and not measured_position)})
         if interpret and refined is None:
             break
 

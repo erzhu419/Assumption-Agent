@@ -16,6 +16,84 @@ from hegel_machine.cognition.anonymous_object_lab import AnonymousObjectLab
 from hegel_machine.cognition.evaluation import initial_prediction
 from hegel_machine.cognition.language import Program
 from hegel_machine.cognition.models import Candidate
+from hegel_machine.cognition.object_continuation import decode_entry, observations
+
+
+def recover_interrupted_structure_scene(state, *, public_spec, state_ref, retained_pool_size=None):
+    """Restore the paid structure decision at an interruption before its first result.
+
+    The failure saver retains the selected executable and the measured partial
+    scores. Other executables need not have been serialized. This returns the
+    saved comparison boundary, without reconstructing a fictitious old pool.
+    """
+    actions = state['actions']
+    choice_index = len(actions) - 2
+    choice, selection = actions[-2:]
+    if (state['status'] != 'interrupted_native_research'
+            or choice.get('action') != 'choose_research_action'
+            or choice.get('eligible_actions') != ['structural_research']
+            or choice.get('selected_action') != 'structural_research'
+            or selection.get('action') != 'select_structure_response_parent'):
+        raise ValueError('Expected an interrupted single structure choice and its selected parent')
+    partial, pool = actions[choice_index - 2:choice_index]
+    if (partial['action'] != 'compare_partial_object_claims'
+            or pool['action'] != 'compare_shared_retained_pool'
+            or not pool['full_bound_pool_comparison'] or pool['full_retained_pool_comparison']
+            or pool['newly_scored_programs'] or len(pool['unbound_candidate_ids']) != pool['retained_entries']
+            or retained_pool_size is not None and retained_pool_size != pool['retained_entries']):
+        raise ValueError('The retained comparison is not a complete account of unbound entries')
+
+    channels = state['selected_channels']
+    prior_actions = actions[:choice_index - 2]
+    cut = next(i for i in range(len(prior_actions) - 1, -1, -1)
+               if prior_actions[i]['action'] == 'reuse_object_evidence_for_response')
+    reuse, last_purchase = actions[cut], prior_actions[-1]
+    if (reuse['channels'] != channels or last_purchase['action'] != 'acquire'
+            or last_purchase.get('purpose') != 'compare_on_new_trajectory'
+            or last_purchase['channels'] != channels):
+        raise ValueError('The original fit and working comparison trajectories cannot be identified')
+    fit_probes = [a['probe_id'] for a in actions[:cut] if a['action'] == 'acquire' and a['channels'] == channels]
+    batches = {b['probe']['probe_id']: (i, b) for i, b in enumerate(state['batches']) if b['channels'] == channels}
+    fit = [batches[p] for p in fit_probes]
+    vi, batch = batches[last_purchase['probe_id']]
+    training = [row for _, b in fit for row in observations(b['observations'])]
+    validation = observations(batch['observations'])
+    if (vi in {i for i, _ in fit} or len(training) != reuse['training_rows']
+            or len(validation) != selection['observation_rows']
+            or len(validation) != last_purchase['observation_cost']):
+        raise ValueError('The saved trajectory lengths differ from the actual selection')
+
+    old = state['object_continuation_state']
+    mi, model = next((i, m['model']) for i, m in enumerate(old['models']) if m['channels'] == channels)
+    if (model['model_id'] != reuse['object_model_id'] or model.get('schema') or model.get('complete')
+            or public_spec.context.get('object_schema')
+            or set(model['raw_sensor_features']) != set(public_spec.feature_names)):
+        raise ValueError('The paid partial role model and public measurement view must match')
+    spec = replace(public_spec, context={**public_spec.context, 'object_model': model})
+    parent = decode_entry(old['selected'])
+    if (parent['candidate'].candidate_id != selection['selected_candidate_id']
+            or parent['kind'] != selection['selected_kind']
+            or parent['validation_loss'] != selection['selected_loss']
+            or selection['prior_candidate_id'] is not None):
+        raise ValueError('The saved candidate does not identify the actual selected structure parent')
+
+    def ref(*path):
+        return {**state_ref, 'json_path': [*state_ref.get('json_path', []), *path]}
+
+    scores = [{'kind': a['kind'], 'validation_loss': a['validation_loss'],
+               'score_ref': ref('actions', choice_index - 2, 'alternatives', i)}
+              for i, a in enumerate(partial['alternatives'])]
+    return {'spec': spec, 'object_model': model, 'training': training, 'validation': validation,
+        'transitions': [t for _, b in fit for t in b['transitions']], 'parent': parent, 'selected': parent,
+        'choice': choice, 'choice_index': choice_index, 'remaining_compute': choice['compute_remaining'],
+        'observation_remaining': choice['observation_remaining'], 'measurement_remaining': choice['measurement_remaining'],
+        'existing_scores': scores, 'retained_scope': {**pool, 'compared_current_candidates': selection['retained_candidates'],
+            'saved_partial_scores': len(scores), 'restored_old_executables': 1},
+        'references': {'report': state_ref, 'choice': ref('actions', choice_index),
+            'selection': ref('actions', choice_index + 1), 'pool': ref('actions', choice_index - 1),
+            'parent': ref('object_continuation_state', 'selected'),
+            'object_model': ref('object_continuation_state', 'models', mi, 'model'),
+            'training': [ref('batches', i) for i, _ in fit], 'validation': ref('batches', vi)}}
 
 
 def recover_native_decision_scene(report, registration, model, *, public_spec,

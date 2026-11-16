@@ -74,3 +74,50 @@ def test_existing_parent_competes_with_paid_history_response(monkeypatch, prior)
     assert event["observation_rows"] == len(validation) and event["compute_cost"] == 0
     assert {"old_parent", "paid_history"} <= {item["candidate"].candidate_id for item in candidates}
     assert parent == original
+
+
+@pytest.mark.parametrize("state", ["paid_response", "competition_in_progress", "ordinary_affine"])
+def test_partial_research_consumes_paid_response_or_existing_competition(monkeypatch, state):
+    from hegel_machine.cognition.partial_object_knowledge import propose_partial_object_claims
+
+    groups = [{"object_id": str(i), "q": f"q{i}", "u": f"u{i}"} for i in range(5)]
+    names = tuple(group[role] for group in groups for role in ("q", "u"))
+    model = {"model_id": "partial", "groups": groups,
+             "unresolved": [f"{i}:{role}" for i in range(5) for role in ("x", "f")]}
+    spec = TaskSpec("partial", "", names, (), (), context={"object_model": model})
+    q_total = Program("object_sum", children=tuple(Program("feature", name=g["q"]) for g in groups))
+    window = Program("window_sum", lag=3, children=(q_total,))
+
+    def trajectory(seed):
+        rng, rows, history = Random(seed), [], []
+        for _ in range(24):
+            features = {name: rng.uniform(-1., 1.) for name in names}
+            row = Observation(features, 0., tuple(history))
+            rows.append(Observation(features, window.predict(row), row.history))
+            history.append(features)
+        return rows
+
+    training, validation = trajectory(29), trajectory(61)
+    agent = UnifiedResearchAgent(ResearchConfig(use_memory=False))
+    fits = propose_partial_object_claims(spec, training, SearchBudget(20000))
+    checked = agent._assess(fits, validation, SearchBudget(1000), 0., .5)
+    winner = agent._best(checked)
+    assert winner["kind"] == "partial_object:window_3_totals"
+    ordinary = {"candidate": Candidate("plain", Program("const", value=0.), "affine"),
+                "kind": "affine", "validation_loss": 1.}
+    parent = ({**ordinary, "object_competition": {"revision": 1, "hypotheses": []}}
+              if state == "competition_in_progress" else None)
+    assessed = [ordinary] if state == "ordinary_affine" else checked
+    prepared = {"spec": spec, "training": training, "comparison": validation, "assessed": assessed,
+                "parent": parent, "usable_parent": parent is not None, "retained_on_current": parent,
+                "transitions": []}
+    received = []
+    def capture(current, *args, parent, **kwargs):
+        assert current is spec and "object_schema" not in current.context
+        received.append(parent)
+        return []
+    monkeypatch.setattr(agent, "_object_explanations", capture)
+    agent._execute_prepared_research_segment(prepared, "structural_research", SearchBudget(10), [],
+                                             search_limit=10)
+    expected = winner if state == "paid_response" else parent
+    assert len(received) == 1 and received[0] is expected

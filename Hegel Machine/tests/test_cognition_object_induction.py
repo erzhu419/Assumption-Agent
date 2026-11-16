@@ -224,3 +224,150 @@ def test_transition_witnesses_preserve_roles_when_only_response_or_nonrelational
     assert len(result["tested_hypotheses"]) == 8
     assert result["compute_cost"] < 3000
     assert validate_object_roles(model, records, SearchBudget(2))["status"] == "insufficient"
+
+
+def _position_square(affected):
+    from hegel_machine.cognition.object_induction import position_owner_predictions
+
+    dynamic, positions = list("abcd"), list("wxyz")
+    controls = {"shift": .2, "stimulus": .3, "background": 1.}
+    corners = [controls, {**controls, "stimulus": 1.}, {**controls, "shift": .9},
+               {**controls, "stimulus": 1., "shift": .9}]
+    model = {"model_id": "measured_parent", "dynamic_fields": dynamic,
+             "raw_sensor_features": dynamic + positions, "quantity_controls": {"a": "stimulus"},
+             "position_candidates": {field: {"quantities": dynamic, "control": "shift" if i == 0 else field}
+                                     for i, field in enumerate(positions)},
+             "groups": [{"object_id": name, "q": name, "controls": {"q": name}} for name in dynamic],
+             "focus_candidates": {}, "focus_control": None, "unresolved": ["focus_control"],
+             "schema_alternatives": {"schemas": ["unmodified historical enumeration"]}}
+    plan = {"field": "w", "excited_quantity": "a", "position_control": "shift",
+            "quantity_control": "stimulus", "candidate_owners": dynamic,
+            "alternative_owners": ["a", "a", "b", "d"], "corners": corners,
+            "baseline_ref": {"probe_id": "p0", "position": 0},
+            "owner_predictions": position_owner_predictions(dynamic, "a", dynamic)}
+    records = []
+    for i, point in enumerate(corners):
+        before = dict(zip(dynamic + positions, [point["stimulus"], 2., 3., 4., point["shift"], -1., 0., 1.]))
+        after = dict(before)
+        for name in affected:
+            after[name] += point["stimulus"] * point["shift"]
+        records.append({"probe_id": f"p{i}", "controls": point, "before": before, "after": after,
+                        "history": [], "position": 0})
+    return plan, model, records
+
+
+@pytest.mark.parametrize(("affected", "retained"), [
+    ("", "abcd"), ("a", "abcd"), ("b", "ab"), ("bc", "a"),
+])
+def test_frozen_position_square_uses_observed_foreign_responses(affected, retained):
+    from hegel_machine.cognition.object_induction import assess_position_experiment, apply_position_experiment
+    plan, model, records = _position_square(affected)
+    quote = len(records) * (len(plan["corners"][0]) + 1) + 4 * len(model["raw_sensor_features"]) + 3 * len(model["dynamic_fields"])
+    work = SearchBudget(quote)
+    result = assess_position_experiment(plan, model, list(reversed(records)), work)
+    assert result["compute_cost"] == quote == work.spent
+    assert result["retained_owners"] == list(retained)
+    assert result["surviving_alternatives"] == [i for i, owner in enumerate(plan["alternative_owners"]) if owner in retained]
+    updated = apply_position_experiment(model, result)
+    assert updated["position_candidates"]["w"]["quantities"] == list(retained)
+    if len(retained) == 4:
+        assert updated is model and result["status"] == "position_domain_unchanged"
+    else:
+        assert result["status"] == "position_domain_narrowed" and "schema_alternatives" not in updated
+        assert model["schema_alternatives"]["schemas"] and len(model["position_candidates"]["w"]["quantities"]) == 4
+        assert updated["dependencies"][-1]["corner_refs"] == result["corner_refs"]
+        assert apply_position_experiment(updated, result) is updated
+        if len(retained) == 1:
+            assert updated["groups"][0]["x"] == "w" and not any("f" in g for g in updated["groups"])
+
+
+def test_position_square_retains_mismatched_or_unrealized_corners_as_unresolved():
+    from hegel_machine.cognition.object_induction import assess_position_experiment, apply_position_experiment
+    plan, model, records = _position_square("bd")
+    later = [{**row, "position": 1, "history": [plan["corners"][0]]} for row in records]
+    result = assess_position_experiment(plan, model, records[:3] + later, SearchBudget(100))
+    assert result["status"] == "incomplete_position_experiment" and result["missing_corners"] == [3]
+    interfered = {**records[3], "before": {**records[3]["before"], "y": 1.}}
+    result = assess_position_experiment(plan, model, records[:3] + [interfered], SearchBudget(100))
+    assert result["status"] == "unverified_position_intervention" and apply_position_experiment(model, result) is model
+
+
+@pytest.mark.parametrize("resumed", [False, True])
+@pytest.mark.parametrize("all_paid", [False, True])
+def test_position_readout_reaches_parent_through_fresh_and_resumed_induction(monkeypatch, resumed, all_paid):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from hegel_machine.cognition import object_induction, object_induction_continuation
+    from hegel_machine.cognition.models import ResearchConfig, TaskSpec
+    from hegel_machine.cognition.unified_research import UnifiedResearchAgent
+
+    plan, parent, square = _position_square("b" if all_paid else "bc")
+    initial_rows = 4 if all_paid else 3
+    decisions = []
+    spec = TaskSpec("roles", "measure positions", tuple(parent["raw_sensor_features"]), (), (),
+                    feature_bounds={key: (-1., 1.) for key in plan["corners"][0]})
+    agent = UnifiedResearchAgent(ResearchConfig(use_memory=False))
+    lab = SimpleNamespace(spec_for=lambda channels: spec, projectable_views=lambda source: [source],
+                          project_transitions=lambda transitions, *args: transitions)
+    parent.update(support_rows=initial_rows, complete=False)
+    batches, actions, inferred = [], [], []
+    work = SearchBudget(300)
+
+    def append(row):
+        batches.append({"probe": {"probe_id": row["probe_id"], "sequence": [row["controls"]]},
+                        "channels": ["fine"], "observations": [{"target": 0., "features": row["before"], "history": []}],
+                        "transitions": [{"before": row["before"], "after": row["after"]}]})
+
+    def acquire(channels, purpose, *, rows_count=None, probe=None):
+        if rows_count:
+            assert not resumed
+            for row in square[:initial_rows]:
+                append(row)
+        else:
+            assert probe.sequence == (square[3]["controls"],)
+            append({**square[3], "probe_id": probe.probe_id})
+        return batches[-1]["observations"]
+
+    def infer_once(spec, rows, *args, **kwargs):
+        assert not resumed and len(rows) == initial_rows and not inferred
+        inferred.append(len(rows))
+        return deepcopy(parent)
+
+    def observe(rows):
+        methods.result = {"position_experiment": plan, "completed_relation": object_induction.assess_position_experiment(plan, parent, rows, work)}
+
+    def propose(spec, model, rows, serial, **kwargs):
+        if all_paid:
+            decisions.append(model.get("position_experiment_ref"))
+            if decisions == [None]:
+                observe(rows)
+                return None, {"position_experiment": True}
+            return None, {}
+        if len(rows) == 4:
+            return None, {}
+        return Probe("p3", (plan["corners"][3],)), {"position_experiment": True,
+            "interpret_dependencies": False, "research_program": {"excitation_role": "quantity"}}
+
+    methods = SimpleNamespace(observe=observe, snapshot=lambda: [],
+        sources=[{"position_method": {"operator": "plan_position_owner_followup", "remaining_owner_count": 2}}],
+        consume_position_result=lambda model: {**object_induction.apply_position_experiment(
+            model, methods.result["completed_relation"]), "position_experiment_ref": {"file": "paid_decision.json"}})
+    monkeypatch.setattr(agent, "_object_probe", propose)
+    monkeypatch.setattr(agent, "_dependency_methods", lambda *args, **kwargs: methods)
+    monkeypatch.setattr(object_induction, "infer_object_model", infer_once)
+    monkeypatch.setattr(object_induction_continuation, "infer_object_model", infer_once)
+    if resumed:
+        for row in square[:initial_rows]:
+            append(row)
+    result = agent._research_objects(lab, ("fine",), acquire, batches, work, actions,
+        previous_model=parent if resumed else None, remaining_rows=100)
+    if all_paid:
+        assert decisions == [None, {"file": "paid_decision.json"}]
+        assert result["position_candidates"]["w"]["quantities"] == ["a", "b"]
+        assert len(batches) == 4 and inferred == ([] if resumed else [4])
+        return
+    assert result["position_candidates"]["w"]["quantities"] == ["a"]
+    assert result["groups"][0]["x"] == "w" and not result["complete"]
+    assert parent["position_candidates"]["w"]["quantities"] == list("abcd")
+    assert not next(a for a in actions if a["action"] == "test_object_dependency_question")["inference_deferred_until_paired_pilot"]
+    assert len(batches) == 4 and inferred == ([] if resumed else [3])

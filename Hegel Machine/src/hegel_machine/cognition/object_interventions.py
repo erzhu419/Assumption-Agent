@@ -30,6 +30,272 @@ def _observed_response(sequence, records):
     return False
 
 
+def _position_square(spec, baseline, moved, excitation):
+    changed = max(spec.feature_bounds[excitation], key=lambda level: abs(level - baseline[excitation]))
+    return [dict(baseline), {**baseline, excitation: changed}, dict(moved), {**moved, excitation: changed}]
+
+
+def _represented_position_owners(schemas, field):
+    return [next(group["q"] for group in schema["fields"].values() if group["x"] == field)
+            for schema in schemas]
+
+
+def plan_paid_position_contrast(spec, model, records, budget, *, schemas=None, remaining_rows=None):
+    """Quote one reset factorial from paid geometry and competing position owners.
+
+    The old measured interaction rule supplies conditional, qualitative predictions.
+    A finite list of response assignments directs effort, never restricts the
+    admissible owners of the measured field.
+    """
+    from .object_induction import _different, position_owner_predictions
+
+    start = budget.spent
+    def result(status, **data):
+        return {"status": status, "purpose": "distinguish_position_dependency",
+                "compute_cost": budget.spent - start, **data}
+
+    positions = model.get("position_candidates", {})
+    quantity_controls = model.get("quantity_controls", {})
+    quantities = model.get("dynamic_fields", ())
+    if len(positions) < 3 or len(quantities) < 3 or not quantity_controls:
+        return result("insufficient_position_distinction")
+    if schemas is None:
+        schemas = model.get("schema_alternatives", {}).get("schemas", [])
+    if not budget.spend(len(records)):
+        return result("position_planning_compute_exhausted")
+    resets = [r for r in records if r["position"] == 0 and not r.get("history")]
+    background = None
+    for row in resets:
+        if not budget.spend(len(positions)):
+            return result("position_planning_compute_exhausted")
+        if all(field in row["before"] for field in positions):
+            values = sorted(row["before"][field] for field in positions)
+            if all(_different(a, b) for a, b in zip(values, values[1:])):
+                background = row
+                break
+    if background is None:
+        return result("no_paid_separated_reset")
+
+    # Minimize the worst number of competing assignments surviving an
+    # informative single-foreign-quantity change. A flat experiment always
+    # retains all owners. Ties keep the measured field / excitation order.
+    best, split = None, None
+    for field, candidate in positions.items():
+        domain = candidate["quantities"]
+        if len(domain) < 2:
+            continue
+        represented = _represented_position_owners(schemas, field)
+        if any(owner not in domain for owner in represented):
+            raise ValueError("A supplied assignment is inconsistent with the current position domain")
+        owners = represented or domain
+        if len(set(owners)) < 2:
+            continue
+        for excited in quantity_controls:
+            if not budget.spend(1 + len(owners) * len(quantities)):
+                return result("position_planning_compute_exhausted")
+            predictions = position_owner_predictions(quantities, excited, domain)
+            survivors = [sum(other in predictions[q]["allowed_foreign_quantities"] for q in owners)
+                         for other in quantities if other != excited]
+            # Zero surviving local rivals is an incompatibility, not a split.
+            if not any(0 < count < len(owners) for count in survivors):
+                continue
+            criterion = (max(survivors), sum(n*n for n in survivors))
+            if split is None or criterion < split:
+                split = criterion
+                best = field, excited, represented, predictions
+    if best is None:
+        return result("no_competing_position_predictions")
+    field, quantity, represented, predictions = best
+    position = positions[field]["control"]
+    excitation = quantity_controls[quantity]
+    base = background["controls"]
+    level = max(spec.feature_bounds[position], key=lambda value: abs(value - base[position]))
+    corners = _position_square(spec, base, {**base, position: level}, excitation)
+    if corners[0] == corners[1] or corners[0] == corners[2]:
+        return result("no_distinct_control_levels")
+    missing = [i for i, corner in enumerate(corners) if not any(row["controls"] == corner for row in resets)]
+    status = ("complete_paid_position_experiment" if not missing else
+              "complete_position_experiment_unfunded" if remaining_rows is not None and len(missing) > remaining_rows
+              else "proposed_position_experiment")
+    return result(status, field=field, position_control=position, excited_quantity=quantity,
+                  quantity_control=excitation, candidate_owners=list(positions[field]["quantities"]),
+                  alternative_owners=represented, owner_predictions=predictions, matched_prefix_rows=0,
+                  baseline_ref={"probe_id": background["probe_id"], "position": 0},
+                  corners=corners, missing_corner_indices=missing, required_rows=len(missing))
+
+
+def plan_position_owner_followup(spec, model, records, budget, *, previous_plan, previous_result,
+                                 schemas, remaining_rows=2):
+    """Choose a remaining-owner test on the original two measured reset backgrounds.
+
+    Each owner must permit a distinct nonempty set of cross-quantity effects.
+    A flat response leaves both alive. Reuse a complete paid square first,
+    then the cheapest missing endpoints, in measured excitation order.
+    """
+    from .object_induction import position_owner_predictions
+
+    start = budget.spent
+    field = previous_plan["field"]
+
+    def result(status, **data):
+        return {"status": status, "purpose": "distinguish_position_dependency",
+                "field": field, "compute_cost": budget.spent - start, **data}
+
+    position = model["position_candidates"][field]
+    owners = list(position["quantities"])
+    if (previous_result["status"] != "position_domain_narrowed"
+            or previous_result["field"] != field or previous_result["source_model_id"] != model.get("model_id")
+            or set(previous_result["retained_owners"]) != set(owners) or len(owners) != 2
+            or position["control"] != previous_plan["position_control"]):
+        return result("no_unresolved_measured_owner_pair")
+    represented = _represented_position_owners(schemas, field)
+    if set(represented) != set(owners):
+        return result("incomplete_position_owner_representation")
+
+    base, _, moved, _ = previous_plan["corners"]
+    ref0, _, refx, _ = previous_result["corner_refs"]
+    if ref0 != previous_plan["baseline_ref"]:
+        return result("unavailable_paid_position_background")
+    if not budget.spend(len(records)):
+        return result("position_planning_compute_exhausted")
+    resets = [row for row in records if row["position"] == 0 and not row.get("history")]
+    if not budget.spend(len(resets) * (len(base) + 1)):
+        return result("position_planning_compute_exhausted")
+    by_id = {row["probe_id"]: row for row in resets}
+    anchors = [by_id.get(ref["probe_id"]) for ref in (ref0, refx)]
+    if (not all(anchors) or [row["controls"] for row in anchors] != [base, moved]):
+        return result("unavailable_paid_position_background")
+
+    def point_key(point):
+        return tuple(point[c] for c in base)
+
+    by_controls = {point_key(row["controls"]): row for row in resets}
+    quantities = model["dynamic_fields"]
+    best = None
+    for excited, control in model["quantity_controls"].items():
+        if not budget.spend(5 + len(owners) * len(quantities)):
+            return result("position_planning_compute_exhausted")
+        forecasts = position_owner_predictions(quantities, excited, owners)
+        left, right = (set(forecasts[q]["allowed_foreign_quantities"]) for q in owners)
+        if not left or not right or left & right:
+            continue
+        corners = _position_square(spec, base, moved, control)
+        if corners[0] == corners[1] or corners == previous_plan["corners"]:
+            continue
+        paid = [anchors[0], by_controls.get(point_key(corners[1])),
+                anchors[1], by_controls.get(point_key(corners[3]))]
+        missing = [i for i, row in enumerate(paid) if row is None]
+        if best is None or len(missing) < len(best["missing_corner_indices"]):
+            best = {"excited_quantity": excited, "quantity_control": control,
+                    "owner_predictions": forecasts, "corners": corners,
+                    "missing_corner_indices": missing, "required_rows": len(missing),
+                    "paid_corner_refs": [None if row is None else {"probe_id": row["probe_id"], "position": 0}
+                                         for row in paid]}
+    if best is None:
+        return result("no_disjoint_position_predictions")
+    needed = best["required_rows"]
+    status = ("complete_paid_position_experiment" if needed == 0 else
+              "complete_position_experiment_unfunded" if needed > remaining_rows else
+              "proposed_position_experiment")
+    return result(status, position_control=position["control"], candidate_owners=owners,
+                  alternative_owners=represented, matched_prefix_rows=0, baseline_ref=ref0,
+                  moved_ref=refx, **best)
+
+
+def plan_generalized_position_followup(spec, model, records, budget, *, previous_plan,
+                                       previous_result, schemas=None, remaining_rows=2):
+    """Generalize position-owner follow-up from ``k == 2`` to any ``2 <= k <= N`` owners.
+
+    When ``len(owners) == 2``, delegates directly to ``plan_position_owner_followup``
+    so historical ``k=2`` receipts remain byte-identical. For ``k >= 3`` surviving
+    owners on the shared reset backgrounds ``(base, moved)``, chooses the untried
+    excitation minimizing worst-case surviving owner count (breaking ties by
+    missing corners and partition entropy) under ``SearchBudget``.
+    """
+    from .object_induction import position_owner_predictions
+
+    field = previous_plan["field"]
+    position = model.get("position_candidates", {}).get(field, {})
+    owners = list(position.get("quantities", ()))
+    if len(owners) == 2 and schemas is not None:
+        return plan_position_owner_followup(
+            spec, model, records, budget,
+            previous_plan=previous_plan, previous_result=previous_result,
+            schemas=schemas, remaining_rows=remaining_rows,
+        )
+
+    start = budget.spent
+
+    def result(status, **data):
+        return {"status": status, "purpose": "distinguish_position_dependency",
+                "field": field, "compute_cost": budget.spent - start, **data}
+
+    if (previous_result.get("status") != "position_domain_narrowed"
+            or previous_result.get("field") != field
+            or previous_result.get("source_model_id") != model.get("model_id")
+            or set(previous_result.get("retained_owners", ())) != set(owners)
+            or len(owners) < 2
+            or position.get("control") != previous_plan.get("position_control")):
+        return result("no_unresolved_measured_owner_set")
+    represented = _represented_position_owners(schemas, field) if schemas else list(owners)
+    if schemas and not set(represented) <= set(owners):
+        return result("incomplete_position_owner_representation")
+
+    base, _, moved, _ = previous_plan["corners"]
+    ref0, _, refx, _ = previous_result["corner_refs"]
+    if ref0 != previous_plan["baseline_ref"]:
+        return result("unavailable_paid_position_background")
+    if not budget.spend(len(records)):
+        return result("position_planning_compute_exhausted")
+    resets = [row for row in records if row["position"] == 0 and not row.get("history")]
+    if not budget.spend(len(resets) * (len(base) + 1)):
+        return result("position_planning_compute_exhausted")
+    by_id = {row["probe_id"]: row for row in resets}
+    anchors = [by_id.get(ref["probe_id"]) for ref in (ref0, refx)]
+    if not all(anchors) or [row["controls"] for row in anchors] != [base, moved]:
+        return result("unavailable_paid_position_background")
+
+    def point_key(point):
+        return tuple(point[c] for c in base)
+
+    by_controls = {point_key(row["controls"]): row for row in resets}
+    quantities = model["dynamic_fields"]
+    best, best_key = None, None
+    for excited, control in model["quantity_controls"].items():
+        if not budget.spend(5 + len(owners) * len(quantities)):
+            return result("position_planning_compute_exhausted")
+        forecasts = position_owner_predictions(quantities, excited, owners)
+        survivors = [
+            sum(other in forecasts[q]["allowed_foreign_quantities"] for q in owners)
+            for other in quantities if other != excited
+        ]
+        if not any(0 < count < len(owners) for count in survivors):
+            continue
+        corners = _position_square(spec, base, moved, control)
+        if corners[0] == corners[1] or corners == previous_plan["corners"]:
+            continue
+        paid = [anchors[0], by_controls.get(point_key(corners[1])),
+                anchors[1], by_controls.get(point_key(corners[3]))]
+        missing = [i for i, row in enumerate(paid) if row is None]
+        criterion = (max(survivors), len(missing), sum(n * n for n in survivors))
+        if best_key is None or criterion < best_key:
+            best_key = criterion
+            best = {"excited_quantity": excited, "quantity_control": control,
+                    "owner_predictions": forecasts, "corners": corners,
+                    "missing_corner_indices": missing, "required_rows": len(missing),
+                    "paid_corner_refs": [None if row is None else {"probe_id": row["probe_id"], "position": 0}
+                                         for row in paid]}
+    if best is None:
+        return result("no_splitting_position_predictions")
+    needed = best["required_rows"]
+    status = ("complete_paid_position_experiment" if needed == 0 else
+              "complete_position_experiment_unfunded" if remaining_rows is not None and needed > remaining_rows
+              else "proposed_position_experiment")
+    return result(status, position_control=position["control"], candidate_owners=owners,
+                  alternative_owners=represented or owners, matched_prefix_rows=0,
+                  baseline_ref=ref0, moved_ref=refx, **best)
+
+
 def propose_object_probe(spec, model, records, serial, *, methods=None, remaining_rows=None):
     """Return the next unfunded distinction as ``(Probe | None, metadata)``.
 

@@ -12,11 +12,12 @@ from itertools import combinations, combinations_with_replacement, islice
 import json
 from math import ceil
 from random import Random
+from statistics import mean
 
 from .action_policy import ActionOption, ResearchActionPolicy
 from .continuous_state import (_linear_fit, _sum_terms, continuous_state_candidates,
                                state_identification_cost)
-from .evaluation import initial_prediction, loss, predict
+from .evaluation import initial_prediction, loss, point_loss, predict
 from .language import Definition, Program
 from .knowledge_returns import return_priority, transfer_condition
 from .memory import KnowledgeLibrary, _object_schema
@@ -174,6 +175,123 @@ class UnifiedResearchAgent:
         from .object_dependency_methods import ObjectDependencyMethods
         return ObjectDependencyMethods(sources, budget=budget, actions=actions)
 
+    def _world_commitments(self, budget, actions=None):
+        if not (self.config.use_memory and self.config.world_structure_commitments and self.library.meta_priors):
+            return []
+        from .world_structure_commitments import consolidate_world_structure_commitments
+        before = budget.spent
+        commitments = consolidate_world_structure_commitments(
+            self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement)
+        if actions is not None and (commitments or budget.spent != before):
+            actions.append({"action": "consolidate_world_structure_commitments",
+                "commitment_count": len(commitments),
+                "commitment_ids": [item["commitment_id"] for item in commitments],
+                "compute_cost": budget.spent - before})
+        return commitments
+
+    def _audit_object_transition_premises(self, model, records, budget, actions, *, commitments=()):
+        if not self.config.transition_premise_audit:
+            return model
+        from .premise_dependency_audit import apply_verified_transition_premises, audit_transition_premises
+        audit = audit_transition_premises(
+            model, records, budget, commitments=commitments, tolerance=self.config.minimum_improvement,
+            allow_expanded_revisions=self.config.expanded_premise_revisions,
+            allow_latent_state=self.config.latent_state_discovery)
+        if audit["status"] == "awaiting_role_identification":
+            return model
+        updated = apply_verified_transition_premises(model, audit)
+        actions.append({"action": "audit_transition_premises",
+            "status": audit["status"],
+            "verified_direction": audit.get("verified_direction"),
+            "verified_edge_condition": deepcopy(audit.get("verified_edge_condition")),
+            "verified_threshold_interval": deepcopy(audit.get("verified_threshold_interval")),
+            "nonconservation_mechanisms": list(audit.get("nonconservation_mechanisms", ())),
+            "latent_transition_state": deepcopy(audit.get("latent_transition_state")),
+            "supported_premises": list(audit.get("supported_premises", ())),
+            "refuted_premises": deepcopy(audit.get("refuted_premises", ())),
+            "scientific_revision_triggers": deepcopy(audit.get("scientific_revision_triggers", ())),
+            "surviving_bijection_count": audit.get("surviving_bijection_count"),
+            "surviving_bijections": audit.get("surviving_bijection_count"),
+            "radius_interval": deepcopy(audit.get("radius_interval")),
+            "unresolved_after": deepcopy(updated.get("unresolved", [])),
+            "compute_cost": audit["compute_cost"]})
+        return updated
+
+    def _propose_schema_structures(self, spec, training, budget, *, actions, parent=None,
+                                   tolerance=1e-8, transitions=()):
+        from .unified_structure import propose_structures
+        claims = []
+        schema = _object_schema(spec)
+        if schema is not None and self.config.use_memory and self.config.world_structure_commitments:
+            from .world_structure_commitments import (
+                commitment_applicable_triggers,
+                commitment_verified_radius_bounds,
+                instantiate_commitment_on_schema,
+                propose_scientific_premise_revision,
+            )
+            commitments = self._world_commitments(budget, actions)
+            if commitments:
+                model = spec.context.get("object_model")
+                model = json.loads(model) if isinstance(model, str) else model
+                audit = (model or {}).get("premise_audit")
+                from .premise_dependency_audit import VERIFIED_EXCHANGE_STATUSES
+                if ((audit is None or (audit.get("status") not in VERIFIED_EXCHANGE_STATUSES
+                        and len(transitions) > int(audit.get("tested_transitions") or 0)))
+                        and self.config.transition_premise_audit and model and transitions):
+                    from .premise_dependency_audit import audit_transition_premises
+                    audit = audit_transition_premises(
+                        model, transitions, budget, commitments=commitments, tolerance=tolerance,
+                        allow_expanded_revisions=self.config.expanded_premise_revisions,
+                        allow_latent_state=self.config.latent_state_discovery,
+                        observations=training)
+                schema_x_to_q = {
+                    group["x"]: group["q"]
+                    for group in schema.get("fields", {}).values()
+                    if "x" in group and "q" in group
+                }
+                comm_budget = SearchBudget(max(1, budget.remaining * 2 // 3))
+                for comm in commitments:
+                    if comm_budget.remaining <= 0:
+                        break
+                    triggers = commitment_applicable_triggers(comm, audit)
+                    if triggers:
+                        entries = propose_scientific_premise_revision(
+                            comm, audit, spec, training, schema, comm_budget,
+                            active_threshold_probing=self.config.active_threshold_probing,
+                            allow_latent_state=self.config.latent_state_discovery,
+                            transitions=transitions,
+                            tolerance=tolerance)
+                    else:
+                        bounds = commitment_verified_radius_bounds(comm, audit, schema_x_to_q)
+                        entries = instantiate_commitment_on_schema(
+                            spec, training, schema, comm, comm_budget,
+                            radius_bounds=bounds,
+                            audit_report=audit,
+                            transitions=transitions,
+                            active_threshold_probing=self.config.active_threshold_probing,
+                            allow_latent_state=self.config.latent_state_discovery,
+                            tolerance=tolerance)
+                        if (not any(item["training_loss"] <= tolerance for item in entries)
+                                and comm_budget.remaining > 0 and audit is None):
+                            entries.extend(propose_scientific_premise_revision(
+                                comm, None, spec, training, schema, comm_budget,
+                                active_threshold_probing=self.config.active_threshold_probing,
+                                allow_latent_state=self.config.latent_state_discovery,
+                                transitions=transitions,
+                                tolerance=tolerance))
+                    claims.extend(entries)
+                    if any(item["training_loss"] <= tolerance for item in claims):
+                        break
+                budget.spend(comm_budget.spent)
+                actions.append({"action": "apply_world_structure_commitments",
+                    "compute_cost": comm_budget.spent,
+                    "candidate_count": len(claims),
+                    "supported": any(item["training_loss"] <= tolerance for item in claims)})
+        if not any(item["training_loss"] <= tolerance for item in claims):
+            claims.extend(propose_structures(spec, training, budget, parent=parent,
+                tolerance=tolerance, transitions=transitions))
+        return claims
+
     def _research_objects(self, laboratory, channels, acquire, batches, budget, actions,
                           *, previous_model=None, remaining_rows=None, source_object_model_ids=()):
         """Discover a usable grouping from paid anonymous state transitions."""
@@ -284,7 +402,8 @@ class UnifiedResearchAgent:
                     actions.append({"action": "refine_partial_object_dependencies", "object_model_id": previous["model_id"],
                         "reason": "current_response_requires_unresolved_roles"})
                     membership_probes = {item["probe_id"] for item in previous.get("dependency_questions", [])
-                        if item.get("question", {}).get("purpose") == "distinguish_membership_dependency"}
+                        if item.get("question", {}).get("purpose") == "distinguish_membership_dependency"
+                        or item.get("question", {}).get("position_experiment")}
                     for probe in previous.get("dependency_probes", []):
                         if probe["probe_id"] in membership_probes:
                             continue
@@ -305,7 +424,11 @@ class UnifiedResearchAgent:
                 actions.append({"action": "reopen_object_dependencies", "object_model_id": previous["model_id"],
                     "reason": "observed_control_to_sensor_mapping_changed", "field_losses": errors})
 
+        commitments = (self._world_commitments(budget, actions)
+                       if self.config.transition_premise_audit and self.config.world_structure_commitments else ())
         model = infer_object_model(raw_spec, records(), budget)
+        model = self._audit_object_transition_premises(model, records(), budget, actions, commitments=commitments)
+        from .object_dependency_methods import completed_position_relation, new_position_method_decision
         tested_partial_roles = set()
         for serial in range(row_limit):
             evidence = records()
@@ -338,6 +461,11 @@ class UnifiedResearchAgent:
             probe, question = self._object_probe(raw_spec, model, evidence, serial, methods=methods,
                 remaining_rows=row_limit - len(evidence))
             if probe is None or len(evidence) + probe.cost > row_limit:
+                if question.get("position_experiment"):
+                    prior_model = model
+                    model = methods.consume_position_result(model)
+                    if new_position_method_decision(methods, prior_model, model):
+                        continue
                 break
             if acquire(channels, "distinguish_object_dependencies", probe=probe) is None:
                 break
@@ -345,17 +473,24 @@ class UnifiedResearchAgent:
             interpret = question.get("interpret_dependencies", True)
             if interpret:
                 model = infer_object_model(raw_spec, records(), budget)
+                model = self._audit_object_transition_premises(
+                    model, records(), budget, actions, commitments=commitments)
             if question.get("research_program"):
                 methods.observe(records())
+                if question.get("position_experiment"):
+                    model = methods.consume_position_result(model)
+            measured_position = question.get("position_experiment") and completed_position_relation(methods.result)
             actions.append({"action": "test_object_dependency_question", "question": question,
                 "probe_id": probe.probe_id, "observation_rows": probe.cost,
-                "inference_deferred_until_paired_pilot": not interpret,
+                "inference_deferred_until_paired_pilot": (not interpret and not measured_position),
                 "unresolved_before": before, "unresolved_after": deepcopy(model.get("unresolved", []))})
         # Discovery data selected the grouping. A separate simultaneous setup
         # can still contradict those field roles before they guide prediction.
         if model.get("complete"):
             if acquire(channels, "confirm_discovered_object_roles", rows_count=12) is not None:
                 model = infer_object_model(raw_spec, records(), budget, prior=model)
+                model = self._audit_object_transition_premises(
+                    model, records(), budget, actions, commitments=commitments)
             else:
                 model = {**model, "complete": False, "schema": None, "status": "unresolved"}
         model = deepcopy(model)
@@ -538,15 +673,17 @@ class UnifiedResearchAgent:
                 for parameter in step["parameters"]:
                     if parameter.get("source_concept_id") is None:
                         parameter["source_concept_id"] = concept_id
+        known_concept_ids = {c.concept_id for c in self.library.concepts}
         for source_id in used_sources:
-            self.library.record_use(source_id, spec.task_id)
+            if source_id in known_concept_ids:
+                self.library.record_use(source_id, spec.task_id)
         for prior in self.library.meta_priors:
             if prior["source_concept_id"] in used_sources:
-                prior["uses"] += 1
+                prior["uses"] = prior.get("uses", 0) + 1
             if prior["source_concept_id"] in selected.get("method_source_ids", []):
                 prior["method_uses"] = prior.get("method_uses", 0) + 1
-            for event in prior["counterexamples"]:
-                if event["task_id"] == spec.task_id and event["replacement_concept_id"] is None:
+            for event in prior.get("counterexamples", ()):
+                if event.get("task_id") == spec.task_id and event.get("replacement_concept_id") is None:
                     event["replacement_concept_id"] = concept_id
         existing_prior = next((prior for prior in self.library.meta_priors
             if prior["source_concept_id"] == concept_id), None)
@@ -565,6 +702,8 @@ class UnifiedResearchAgent:
                 "object_competition": selected.get("object_competition"),
                 "research_program": selected.get("research_program"),
                 "mechanism_revision": deepcopy(selected.get("mechanism_revision")),
+                "world_commitment_application": deepcopy(selected.get("world_commitment_application")),
+                "scientific_premise_revision": deepcopy(selected.get("scientific_premise_revision")),
                 "support_rows": len(selected_training) + len(selected_validation),
                 "validation_loss": confirmation_loss,
                 "probe_ids": [batch["probe"]["probe_id"] for batch in batches
@@ -1214,9 +1353,13 @@ class UnifiedResearchAgent:
                 if payload.get('staged_research') or payload.get("transfer_partition", {}).get("second_stage"):
                     feedback = {"feedback_rows": feedback_rows,
                                 "tolerance": self.config.minimum_improvement}
+                started, denied = budget.spent, budget.denied_requests
                 replayed = replay_research_program(payload, training, budget,
                     risk_quantile=spec.risk_quantile, feature_mapping=features, **feedback)
                 if replayed is not None:
+                    self._record_program_replay(payload, replayed, features,
+                        compute_cost=budget.spent - started,
+                        budget_incomplete=budget.denied_requests != denied)
                     if feedback_rows and feedback:
                         replayed["development_feedback_rows"] = len(feedback_rows)
                     replayed["method_source_ids"] = [source]
@@ -1228,6 +1371,10 @@ class UnifiedResearchAgent:
                     break
             queues = remaining
         return claims
+
+    def _record_program_replay(self, payload, replayed, feature_mapping, **execution):
+        """Optional addressed return; scientific replay and selection are unchanged."""
+        pass
 
     def _coordinate_claims(self, spec, training, budget, actions):
         from .research_programs import propose_coordinate_programs
@@ -2105,7 +2252,8 @@ class UnifiedResearchAgent:
         return best, best_loss
 
     def _object_explanations(self, spec, rows, budget, *, actions, parent=None,
-                             new_observations=(), transitions=(), tolerance=1e-7):
+                             new_observations=(), transitions=(), tolerance=1e-7,
+                             working_parent_loss=None):
         from .equivalent_object_programs import propose_equivalent_object_programs
         from .competing_object_programs import research_competing_object_programs
         previous = parent.get("object_competition") if parent else None
@@ -2121,10 +2269,21 @@ class UnifiedResearchAgent:
                         and set(model.get("raw_control_features", ())) == set(spec.feature_bounds)
                         and model["schema"] not in preferred_schemas):
                     preferred_schemas.append(model["schema"])
+        commitments = self._world_commitments(budget, actions)
+        model_payload = spec.context.get("object_model")
+        model_dict = json.loads(model_payload) if isinstance(model_payload, str) else model_payload
+        premise_audit = (model_dict or {}).get("premise_audit")
+        if premise_audit is None and self.config.transition_premise_audit and model_dict and transitions:
+            from .premise_dependency_audit import audit_transition_premises
+            premise_audit = audit_transition_premises(
+                model_dict, transitions, budget, commitments=commitments, tolerance=tolerance)
         if previous is None:
-            shared = propose_equivalent_object_programs(spec, rows, budget,
+            equiv_budget = SearchBudget(budget.remaining // 3) if commitments else budget
+            shared = propose_equivalent_object_programs(spec, rows, equiv_budget,
                 parent=parent, transitions=transitions, tolerance=tolerance,
                 max_candidates=candidate_limit)
+            if equiv_budget is not budget:
+                budget.spend(equiv_budget.spent)
             supported = []
             for item in shared:
                 if item["training_loss"] > tolerance:
@@ -2139,7 +2298,25 @@ class UnifiedResearchAgent:
                 return supported
         result = research_competing_object_programs(spec, rows, budget, previous=previous,
             new_observations=new_observations, transitions=transitions, tolerance=tolerance,
-            max_candidates=candidate_limit, preferred_schemas=preferred_schemas, response_parent=parent)
+            max_candidates=candidate_limit, preferred_schemas=preferred_schemas, response_parent=parent,
+            working_parent_loss=working_parent_loss, world_commitments=commitments,
+            premise_audit=premise_audit)
+        # A working loss refutes this executable on this episode's paid
+        # evidence. Re-importing a parent's role assignment in another episode
+        # must not import that loss. Resumes restore the live competition.
+        current = self._object_competitions.get(tuple(spec.feature_names), {})
+        failed = [dict(item) for item in current.get("counterexamples", [])
+                  if item.get("scope") == "working_training"]
+        for entry in result.get("working_entries", ()):
+            program = entry["candidate"].program.to_dict()
+            if not any(item["program"] == program for item in failed):
+                failed.append({"scope": "working_training", "status": "refuted",
+                    "program": program, "training_loss": entry["training_loss"],
+                    "training_rows": len(rows)})
+        counterexamples = result["competition"].get("counterexamples", [])
+        if failed or any(item.get("scope") == "working_training" for item in counterexamples):
+            result["competition"]["counterexamples"] = [item for item in counterexamples
+                if item.get("scope") != "working_training"] + failed
         if parent is not None and previous is not None and not result["entries"]:
             parent["object_competition"] = result["competition"]
         self._object_competitions[tuple(spec.feature_names)] = result["competition"]
@@ -2148,16 +2325,17 @@ class UnifiedResearchAgent:
             "hypotheses": len(result["competition"]["hypotheses"]),
             "program_classes": result["competition"].get("program_classes", 0),
             "compute_cost": result["competition"]["compute_cost"]})
-        return result["entries"]
+        return [*result["entries"], *result.get("working_entries", ())]
 
     def _object_program_refuted(self, entry, spec):
-        competition = self._object_competitions.get(tuple(spec.feature_names),
-            entry.get("object_competition") or {})
+        active = self._object_competitions.get(tuple(spec.feature_names))
+        competition = active if active is not None else entry.get("object_competition") or {}
         counterexamples = competition.get("counterexamples", [])
         if not counterexamples:
             return False
         program = entry["candidate"].program.to_dict()
-        return any(item.get("status") == "refuted" and item.get("program") == program
+        return any((item.get("scope") != "working_training" or active is not None)
+                   and item.get("status") == "refuted" and item.get("program") == program
                    for item in counterexamples)
 
     def _charge_action_costs(self, origin, costs, actions, stage):
@@ -2244,23 +2422,29 @@ class UnifiedResearchAgent:
 
     def _select_structure_response_parent(self, spec, parent, assessed,
             retained_on_current, usable_parent, actions, comparison_rows):
+        best_response = self._best(assessed)
+        if not _object_schema(spec):
+            # Continue an existing assignment comparison with its own hypotheses
+            # and counterexamples. On first use, a measured partial-role fit can
+            # supply its response columns without identifying the missing roles.
+            if (not spec.context.get("object_model") or (parent or {}).get("object_competition")
+                    or not best_response or not best_response.get("partial_object_knowledge")
+                    or not best_response.get("research_program")):
+                return parent
         response_parent = parent
-        if _object_schema(spec):
-            best_response = self._best(assessed)
-            if (not usable_parent or (best_response is not None
-                    and retained_on_current is not None
-                    and best_response["validation_loss"] + self.config.minimum_improvement
-                        < retained_on_current["validation_loss"])):
-                response_parent = best_response or parent
-            actions.append({"action": "select_structure_response_parent",
-                "prior_candidate_id": parent["candidate"].candidate_id if parent else None,
-                "selected_candidate_id": response_parent["candidate"].candidate_id if response_parent else None,
-                "selected_kind": response_parent.get("kind") if response_parent else None,
-                "prior_loss": retained_on_current["validation_loss"] if retained_on_current else None,
-                "selected_loss": (best_response["validation_loss"] if response_parent is best_response else
-                    retained_on_current["validation_loss"] if retained_on_current else None),
-                "evidence_basis": "current_working_comparison", "observation_rows": comparison_rows,
-                "retained_candidates": len(assessed), "compute_cost": 0})
+        if (not usable_parent or (best_response is not None and retained_on_current is not None
+                and best_response["validation_loss"] + self.config.minimum_improvement
+                    < retained_on_current["validation_loss"])):
+            response_parent = best_response or parent
+        actions.append({"action": "select_structure_response_parent",
+            "prior_candidate_id": parent["candidate"].candidate_id if parent else None,
+            "selected_candidate_id": response_parent["candidate"].candidate_id if response_parent else None,
+            "selected_kind": response_parent.get("kind") if response_parent else None,
+            "prior_loss": retained_on_current["validation_loss"] if retained_on_current else None,
+            "selected_loss": (best_response["validation_loss"] if best_response and response_parent is best_response
+                              else retained_on_current["validation_loss"] if retained_on_current else None),
+            "evidence_basis": "current_working_comparison", "observation_rows": comparison_rows,
+            "retained_candidates": len(assessed), "compute_cost": 0})
         return response_parent
 
     def _research_pool_explained(self, prepared):
@@ -2434,7 +2618,7 @@ class UnifiedResearchAgent:
         return finish()
 
     def _execute_prepared_research_segment(self, prepared, research_action, budget, actions,
-                                           *, search_limit, assessed=None):
+                                           *, search_limit, assessed=None, working_comparison_pool=()):
         """Invoke an existing native segment; its caller owns the common comparison."""
         spec, training = prepared["spec"], prepared["training"]
         local = SearchBudget(search_limit)
@@ -2450,12 +2634,18 @@ class UnifiedResearchAgent:
             fit_features = [row.features for row in training]
             transitions = [row for row in prepared["transitions"] if row["before"] in fit_features]
             if _object_schema(spec) is not None:
-                from .unified_structure import propose_structures
-                claims = propose_structures(spec, training, local, parent=response_parent,
-                    tolerance=self.config.minimum_improvement, transitions=transitions)
+                claims = self._propose_schema_structures(spec, training, local, actions=actions,
+                    parent=response_parent, tolerance=self.config.minimum_improvement, transitions=transitions)
             else:
+                # These prepared entries were fitted or scored on this exact
+                # training split. A parent's historical loss alone cannot
+                # admit one of its revisions to the working comparison.
+                working_parent_loss = next((item["training_loss"] for item in working_comparison_pool
+                    if response_parent and item["candidate"].program == response_parent["candidate"].program),
+                    None)
                 claims = self._object_explanations(spec, training, local, parent=response_parent,
-                    tolerance=self.config.minimum_improvement, transitions=transitions, actions=actions)
+                    tolerance=self.config.minimum_improvement, transitions=transitions, actions=actions,
+                    working_parent_loss=working_parent_loss)
         else:
             raise ValueError("Only the declared native replay and structure segments are supported")
         budget.spend(local.spent)
@@ -2504,17 +2694,69 @@ class UnifiedResearchAgent:
         if search_limit <= 0:
             return {**result, "status": "complete_segment_unfunded"}
         new, local = self._execute_prepared_research_segment(prepared, research_action,
-            budget, actions, search_limit=search_limit)
+            budget, actions, search_limit=search_limit, working_comparison_pool=pool)
         compared = self.compare_research_decision_return(prepared, research_action, new,
             budget, actions, search_compute_cost=local.spent,
             search_metadata={"search_budget_denied": bool(local.denied_requests),
                 "last_denied_request": deepcopy(local.last_denied_request)})
         return {**compared, "quote": result["quote"]}
 
+    def compare_position_owner_responses(self, prepared, enumeration, pair, budget, actions,
+                                         *, per_assignment_compute, response_parent):
+        """Refit one matched position swap under one frozen parent response and row split."""
+        from .competing_object_programs import working_role_entry
+        from .unified_structure import propose_structures
+
+        coverage = enumeration.get("position_owner_coverage", {})
+        if pair not in coverage.get("pairs", ()) or len(set(pair["owners"])) != 2:
+            raise ValueError("A matched pair from the current position evidence is required")
+        if not prepared["comparison_complete"] or not prepared["comparison"]:
+            raise ValueError("The original pool must be scored on the common comparison rows")
+        quote = 2 * (per_assignment_compute + len(prepared["comparison"]))
+        if per_assignment_compute <= 0 or not budget.can_spend(quote):
+            raise ValueError("The budget must cover both fit allowances and both response readouts")
+        training, spec = prepared["training"], prepared["spec"]
+        training_features = [row.features for row in training]
+        transitions = [step for step in prepared["transitions"] if step["before"] in training_features]
+        parent_loss = next((item.get("training_loss") for item in prepared["assessed"]
+            if item["candidate"].program == response_parent["candidate"].program), None)
+        new, searches = [], []
+        start = budget.spent
+        for index, owner in zip(pair["indices"], pair["owners"], strict=True):
+            schema = enumeration["schemas"][index]
+            local = SearchBudget(per_assignment_compute)
+            try:
+                fits = propose_structures(replace(spec, context={**spec.context, "object_schema": schema}),
+                    training, local, parent=response_parent, tolerance=self.config.minimum_improvement,
+                    transitions=transitions)
+            finally:
+                budget.spend(local.spent)
+            receipt = {"owner": owner, "schema_index": index, "fit_count": len(fits),
+                "compute_limit": per_assignment_compute, "compute_cost": local.spent,
+                "last_denied_request": local.last_denied_request, "candidate_id": None,
+                "prediction_index": None}
+            searches.append(receipt)
+            if fits:
+                best = min(fits, key=lambda item: (item["training_loss"], item["candidate"].program.size))
+                entry = working_role_entry(best, response_parent, schema_index=index,
+                    prefix="position_owner_response", training_rows=len(training), parent_loss=parent_loss)
+                new.append(entry)
+                receipt.update(candidate_id=entry["candidate"].candidate_id, training_loss=entry["training_loss"])
+        result = self.compare_research_decision_return(prepared, "structural_research", new, budget, actions,
+            search_compute_cost=budget.spent - start, capture_predictions=True)
+        for receipt in searches:
+            checked = next((item for item in result["new_claims"]
+                            if receipt["candidate_id"] == item["candidate"].candidate_id), None)
+            if checked:
+                receipt.update(prediction_index=checked["comparison_prediction_index"],
+                    validation_loss=checked["validation_loss"])
+        return {**result, "owner_response_fits": searches, "position_field": coverage["field"],
+            "paired_response_complete": len(new) == 2 and result["full_comparison"]}
+
     def compare_research_decision_return(self, prepared, research_action, new_claims,
                                          budget, actions, *, paid_scores=None,
                                          reused_paid_return=False, search_compute_cost=0,
-                                         search_metadata=None):
+                                         search_metadata=None, capture_predictions=False):
         """Consume a completed native return against the entire prepared pool.
 
         ``paid_scores`` explicitly binds executable Programs to scores on this
@@ -2553,17 +2795,30 @@ class UnifiedResearchAgent:
         for program, measured in (paid_scores or {}).items():
             scores.setdefault(program, measured)
         checked = []
+        prediction_indices = {}
+        if capture_predictions:
+            result["comparison_predictions"] = []
         for item in new:
             program = item["candidate"].program
-            if program not in scores:
+            need_readout = capture_predictions and program not in prediction_indices
+            if program not in scores or need_readout:
                 if not budget.spend(len(comparison)):
                     result.update(claims=[*pool, *new], full_comparison=False,
                         compute_cost=search_compute_cost + budget.spent - start,
                         comparison_compute_cost=budget.spent - start,
                         new_comparison_compute_cost=budget.spent - start)
                     return result
-                scores[program] = loss(program, comparison, prepared["fallback"], spec.risk_quantile)
+                if need_readout:
+                    values = [predict(program, row, prepared["fallback"]) for row in comparison]
+                    prediction_indices[program] = len(result["comparison_predictions"])
+                    result["comparison_predictions"].append(values)
+                    if program not in scores:
+                        scores[program] = mean(point_loss(value, row.target, spec.risk_quantile)
+                                               for value, row in zip(values, comparison))
+                else:
+                    scores[program] = loss(program, comparison, prepared["fallback"], spec.risk_quantile)
             checked.append({**item, "validation_loss": scores[program],
+                **({"comparison_prediction_index": prediction_indices[program]} if capture_predictions else {}),
                 "selection_basis": "development_feedback" if item.get("development_feedback_rows")
                     else "unfitted_validation" if prepared["independent_validation"]
                     else "all_acquired_evidence"})
@@ -2616,7 +2871,8 @@ class UnifiedResearchAgent:
         policy = prepared["policy"]
         if structured:
             if _object_schema(spec) is not None:
-                from .unified_structure import propose_structures, propose_response_revisions
+                from .unified_structure import propose_response_revisions
+                propose_structures = partial(self._propose_schema_structures, actions=actions)
             else:
                 propose_structures = partial(self._object_explanations, actions=actions)
 
@@ -2853,8 +3109,34 @@ class UnifiedResearchAgent:
                     else budget.remaining // 2)
                 structures, local = self._execute_prepared_research_segment(prepared,
                     direction, budget, actions, search_limit=min(90000, structural_allowance),
-                    assessed=assessed)
-                directional_claims = assess(structures)
+                    assessed=assessed, working_comparison_pool=assessed)
+                supported = [item for item in structures if not item.get("working_role_revision")]
+                directional_claims = assess(supported)
+                working = [item for item in structures if item.get("working_role_revision")]
+                if working:
+                    # Keep the result available with its paid counterexample.
+                    # The episode's general finalists also feed role research
+                    # and knowledge installation, so only supported claims
+                    # enter that queue.
+                    frame = {**prepared, "assessed": [*assessed, *directional_claims],
+                        "comparison_complete": prepared["comparison_complete"]
+                            and len(directional_claims) == len(supported)}
+                    comparison_result = self.compare_research_decision_return(
+                        frame, direction, working, budget, actions)
+                    failures = self._object_competitions[tuple(spec.feature_names)]["counterexamples"]
+                    compared_working = comparison_result["new_claims"] if comparison_result["full_comparison"] else []
+                    for item in compared_working:
+                        failed = next(row for row in failures if row.get("scope") == "working_training"
+                                      and row["program"] == item["candidate"].program.to_dict())
+                        failed.update(working_role_revision=item["working_role_revision"],
+                                      validation_loss=item["validation_loss"])
+                    chosen = comparison_result["selected"]
+                    actions.append({"action": "compare_working_role_revisions",
+                        "comparison_complete": comparison_result["full_comparison"],
+                        "compared": len(compared_working),
+                        "selected_candidate_id": chosen["candidate"].candidate_id if chosen else None,
+                        "comparison_rows": len(comparison),
+                        "compute_cost": comparison_result["comparison_compute_cost"]})
                 leading = self._best(directional_claims)
                 explained_families = {item["kind"] for item in directional_claims
                     if item["training_loss"] <= self.config.minimum_improvement}
@@ -3759,8 +4041,28 @@ class UnifiedResearchAgent:
 
         # A newly available experiment competes with response research under
         # the same resources; uncertainty alone does not authorize acquisition.
+        paid_object_bank = bool(object_research and object_research.get("groups")
+            and sum(len(batch) for batch in paired_for(offered)) >= 12)
+        cross_scale_commitment_ready = False
+        if (paid_object_bank and offered and self.config.use_memory
+                and self.config.world_structure_commitments and not object_continuation):
+            target_obj_schema = _object_schema(self._spec(laboratory, offered))
+            if target_obj_schema is not None and self._world_commitments(budget, actions):
+                from .world_structure_commitments import _extract_source_schema
+                target_arity = len(target_obj_schema.get("objects", ()))
+                same_arity_prior = any(
+                    prior.get("status") in {"supported", "conditional"}
+                    and (
+                        _extract_source_schema(prior) is None
+                        or len(_extract_source_schema(prior).objects) == target_arity
+                    )
+                    for prior in self.library.meta_priors
+                )
+                cross_scale_commitment_ready = bool(target_arity) and not same_arity_prior
+
         startup_recovery = None
-        if self._learn_instruments and self.config.use_memory and not object_continuation:
+        if (self._learn_instruments and self.config.use_memory and not object_continuation
+                and not cross_scale_commitment_ready):
             ambiguous = [model for model in self.library.instrument_models
                          if model.get("status") != "counterexample" and _ambiguous_instruments(model)]
             if ambiguous and numeric_observation_research:
@@ -3773,12 +4075,18 @@ class UnifiedResearchAgent:
                     distinguish_instruments(model, offered)
         # Later compositions already use commands and can depend on measured
         # concepts through their function bodies. Keep these complete learned
-        # calls alongside freshly rebound sensor mechanisms.
-        command_calls = (self._recall(self._spec(laboratory, ()))
-                         if self._learn_instruments and self.library.instrument_models else [])
-        calls = command_calls or list(dict.fromkeys(call for names in views_from(offered)
-                                                    for call in self._recall(self._spec(laboratory, names))))
-        calls = calls[:self.config.max_candidates]
+        # calls alongside freshly rebound sensor mechanisms, except when target
+        # object arity differs from all fixed-arity priors and arity-parametric
+        # WorldStructureCommitments are ready on the paid object bank.
+        if cross_scale_commitment_ready:
+            command_calls = []
+            calls = []
+        else:
+            command_calls = (self._recall(self._spec(laboratory, ()))
+                             if self._learn_instruments and self.library.instrument_models else [])
+            calls = command_calls or list(dict.fromkeys(call for names in views_from(offered)
+                                                        for call in self._recall(self._spec(laboratory, names))))
+            calls = calls[:self.config.max_candidates]
         trial_length = min(8, laboratory.spec.max_probe_length)
         recalled_sources = {source for call in calls for source in _sources(call)}
         learned_methods = [prior["research_method"] for prior in self.library.meta_priors
@@ -3797,8 +4105,6 @@ class UnifiedResearchAgent:
         # A failed short trial must leave the ordinary two-view investigation
         # and its independent confirmation funded. Knowledge buys an earlier
         # empirical decision, not permission to spend the recovery budget.
-        paid_object_bank = bool(object_research and object_research.get("groups")
-            and sum(len(batch) for batch in paired_for(offered)) >= 12)
         response_reserve = (2 if paid_object_bank else 7) * length
         measurement_reserve = (2 if paid_object_bank else 4) * length
         trial_funded = (observation_limit - spent_observations >= response_reserve + 3 * trial_length
@@ -4144,7 +4450,7 @@ class UnifiedResearchAgent:
                                 event.update(status="counterexample", confirmation_loss=confirmation_loss)
                                 if risk_actions is not None:
                                     failed_risk_trial = (trial, tuple(channels))
-        if not (startup_recovery or {}).get("handled"):
+        if not (startup_recovery or {}).get("handled") and not cross_scale_commitment_ready:
             try_workflow()
         prefetched_inputs = (startup_recovery or {}).get("pending_inputs")
         observation_recovery = startup_recovery
@@ -4547,14 +4853,19 @@ class UnifiedResearchAgent:
                     view_budget = SearchBudget(max(0, budget.remaining - followup_cost - 24000))
                 else:
                     view_budget = SearchBudget(min(90000, budget.remaining // 2)) if alternative_views else budget
-                claims = self._research_view(spec, train_view, validation_view, view_budget, actions,
-                                             transfer, graph, parent=parent,
-                                             test_response_noise=test_response_noise,
-                                             transitions=transitions_for(names, train_view),
-                                observation_remaining=observation_limit - spent_observations,
-                                measurement_remaining=measurement_limit - spent_measurements)
-                if alternative_views or risk_actions is not None:
-                    budget.spend(view_budget.spent)
+                try:
+                    claims = self._research_view(spec, train_view, validation_view, view_budget, actions,
+                                                 transfer, graph, parent=parent,
+                                                 test_response_noise=test_response_noise,
+                                                 transitions=transitions_for(names, train_view),
+                                    observation_remaining=observation_limit - spent_observations,
+                                    measurement_remaining=measurement_limit - spent_measurements)
+                finally:
+                    # Failed research still consumed its view's paid work.
+                    # Settle before the outer failure snapshot records the
+                    # parent account, exactly once on either return path.
+                    if alternative_views or risk_actions is not None:
+                        budget.spend(view_budget.spent)
                 # A new random trajectory cannot overrule a paid transfer
                 # counterexample. Prefer explanations of both sets of data.
                 compatible = [item for item in claims
@@ -5509,6 +5820,25 @@ class UnifiedResearchAgent:
                 if origin.get("mechanism_revision"):
                     for item in candidates:
                         item["mechanism_revision"] = deepcopy(origin["mechanism_revision"])
+                        sources = list(dict.fromkeys([*item.get("method_source_ids", []),
+                            *origin.get("method_source_ids", [])]))
+                        item["method_source_ids"] = sources
+                        item["candidate"] = replace(item["candidate"], parents=tuple(dict.fromkeys(
+                            [*item["candidate"].parents, *sources])))
+                if origin.get("world_commitment_application") or origin.get("scientific_premise_revision"):
+                    for item in candidates:
+                        if origin.get("world_commitment_application"):
+                            item["world_commitment_application"] = deepcopy(origin["world_commitment_application"])
+                            if item.get("research_program") is not None:
+                                item["research_program"]["world_commitment_application"] = deepcopy(
+                                    origin["world_commitment_application"]
+                                )
+                        if origin.get("scientific_premise_revision"):
+                            item["scientific_premise_revision"] = deepcopy(origin["scientific_premise_revision"])
+                            if item.get("research_program") is not None:
+                                item["research_program"]["scientific_premise_revision"] = deepcopy(
+                                    origin["scientific_premise_revision"]
+                                )
                         sources = list(dict.fromkeys([*item.get("method_source_ids", []),
                             *origin.get("method_source_ids", [])]))
                         item["method_source_ids"] = sources

@@ -108,11 +108,21 @@ def compound_predicate_regions(programs, binding=None, spend=None):
     from .program_disagreement_probes import _steady, predicate_boundary_groups
 
     programs = list(programs)
-    groups = predicate_boundary_groups(programs, binding=binding)
-    thresholds = {item["expression"]: item["thresholds"] for item in groups}
+    bool_bindings = {
+        name: expr
+        for name, expr in (binding or {}).items()
+        if expr.op in {"lt", "ge", "and", "or", "not"}
+    }
+    bound_programs = [
+        bind_measurement_arguments(program.expanded(), bool_bindings).expanded()
+        if bool_bindings
+        else program.expanded()
+        for program in programs
+    ]
+    groups = predicate_boundary_groups(bound_programs, binding=binding)
+    thresholds = {item["expression"]: list(item["thresholds"]) for item in groups}
     regions, seen = [], set()
-    for program in programs:
-        expanded = program.expanded()
+    for expanded in bound_programs:
         if spend is not None and not spend(expanded.size):
             break
         for path in _active_paths(expanded)[0]:
@@ -124,9 +134,11 @@ def compound_predicate_regions(programs, binding=None, spend=None):
                     continue
                 item = constraints.setdefault(expression, {
                     "expression": expression, "measured_expression": measured,
-                    "thresholds": thresholds.get(expression, [threshold]),
+                    "thresholds": list(thresholds.get(expression, [threshold])),
                     "lower": None, "upper": None,
                     "lower_inclusive": False, "upper_inclusive": False})
+                if threshold not in item["thresholds"]:
+                    item["thresholds"] = sorted({*item["thresholds"], threshold})
                 side = "lower" if is_lower else "upper"
                 previous = item[side]
                 if previous is None or (threshold > previous if is_lower else threshold < previous):

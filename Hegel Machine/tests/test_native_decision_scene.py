@@ -6,7 +6,51 @@ import pytest
 
 from hegel_machine.cognition.language import Program
 from hegel_machine.cognition.models import Candidate, TaskSpec
-from scripts.native_decision_scene import recover_native_decision_scene
+from scripts.native_decision_scene import recover_interrupted_structure_scene, recover_native_decision_scene
+
+
+def test_interrupted_partial_decision_preserves_paid_scores_scope_and_split(monkeypatch):
+    report, _, _, args = fixture_scene()
+    batches = [report['batches'][0], report['batches'][2]]
+    model = {'model_id': 'partial', 'groups': [{'q': 'x'}], 'raw_sensor_features': ['x'],
+             'complete': False, 'schema': None}
+    from hegel_machine.cognition.object_continuation import encode_entry
+    winner = encode_entry({'candidate': Candidate('win', Program('feature', name='x'), 'reuse'),
+                           'kind': 'window', 'validation_loss': .125, 'training_loss': .01})
+    for batch in batches:
+        batch.update(channels=['fine'])
+    state = {'status': 'interrupted_native_research', 'selected_channels': ['fine'], 'batches': batches,
+        'object_continuation_state': {'selected': winner, 'models': [{'channels': ['fine'], 'model': model}]},
+        'actions': [
+            {'action': 'acquire', 'channels': ['fine'], 'probe_id': 'fit'},
+            {'action': 'reuse_object_evidence_for_response', 'channels': ['fine'], 'training_rows': 3,
+             'object_model_id': 'partial'},
+            {'action': 'acquire', 'purpose': 'compare_on_new_trajectory', 'channels': ['fine'],
+             'observation_cost': 2, 'probe_id': 'compare'},
+            {'action': 'compare_partial_object_claims', 'alternatives': [{'kind': 'window', 'validation_loss': .125}]},
+            {'action': 'compare_shared_retained_pool', 'full_bound_pool_comparison': True,
+             'full_retained_pool_comparison': False, 'newly_scored_programs': 0,
+             'unbound_candidate_ids': ['unbound'], 'retained_entries': 1},
+            {'action': 'choose_research_action', 'eligible_actions': ['structural_research'],
+             'selected_action': 'structural_research', 'compute_remaining': 100,
+             'observation_remaining': 10, 'measurement_remaining': 20},
+            {'action': 'select_structure_response_parent', 'selected_candidate_id': 'win',
+             'selected_kind': 'window', 'selected_loss': .125, 'retained_candidates': 2,
+             'prior_candidate_id': None, 'observation_rows': 2}]}
+    def forbidden(*args, **kwargs):
+        pytest.fail('Recovering paid inputs must not execute a predictor')
+    monkeypatch.setattr(Program, 'predict', forbidden)
+    kwargs = {'public_spec': args['public_spec'], 'state_ref': {'file': 'failed.json'}}
+    scene = recover_interrupted_structure_scene(state, **kwargs)
+    assert [r.target for r in scene['training']] == [1, 2, 3]
+    assert [r.target for r in scene['validation']] == [6, 7]
+    assert 'object_schema' not in scene['spec'].context
+    assert scene['retained_scope']['restored_old_executables'] == 1
+    assert scene['retained_scope']['unbound_candidate_ids'] == ['unbound']
+    assert scene['existing_scores'][0]['score_ref']['json_path'] == ['actions', 3, 'alternatives', 0]
+    state['object_continuation_state']['selected']['validation_loss'] = .2
+    with pytest.raises(ValueError, match='actual selected'):
+        recover_interrupted_structure_scene(state, **kwargs)
 
 
 def fixture_scene():

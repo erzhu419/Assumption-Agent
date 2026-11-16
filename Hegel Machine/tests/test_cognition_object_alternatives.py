@@ -49,6 +49,43 @@ def test_assignment_cap_is_explicit_and_all_factorial_alternatives_can_be_recove
     assert capped["schemas"] == all_alternatives["schemas"][:16]
 
 
+def test_paid_prefix_reuses_order_without_granting_exhaustiveness():
+    model = _model(5)
+    paid = model["schema_alternatives"] = enumerate_object_schemas(model, SearchBudget(500))
+    assert paid["compute_cost"] > 0 and not paid["exhaustive"]
+    for limit in (4, 16):
+        replay = enumerate_object_schemas(model, SearchBudget(0), max_schemas=limit)
+        assert replay["schemas"] == paid["schemas"][:limit]
+        assert replay["reused_schema_count"] == limit and replay["compute_cost"] == 0
+        assert not replay["exhaustive"]
+    larger = enumerate_object_schemas(model, SearchBudget(500), max_schemas=17)
+    assert len(larger["schemas"]) == 17 and larger["compute_cost"] > 0
+    target = larger["schemas"][-1]
+    preferred = enumerate_object_schemas(model, SearchBudget(500), max_schemas=4, preferred_schemas=[target])
+    assert preferred["schemas"][0] == target and preferred["compute_cost"] > 0
+    model["position_candidates"]["location_0"]["quantities"] = ["quantity_4"]
+    narrowed = enumerate_object_schemas(model, SearchBudget(500), max_schemas=4)
+    assert narrowed["compute_cost"] > 0
+    assert all(schema["fields"]["object_4"]["x"] == "location_0" for schema in narrowed["schemas"])
+
+
+def test_old_paid_prefix_requires_original_parent_and_retention_event():
+    from hegel_machine.cognition.object_alternatives import restore_paid_schema_alternatives
+    model = {**_model(5), "reused": False, "acquisition_rows": 135}
+    paid = model["schema_alternatives"] = enumerate_object_schemas(model, SearchBudget(500))
+    del paid["ordinary_assignment_inputs"]
+    original = deepcopy(model)
+    actions = [{"action": "retain_object_ambiguity", "object_model_id": model["model_id"],
+                "rows": 135, "groups": model["groups"], "unresolved": model["unresolved"]}]
+    assert not restore_paid_schema_alternatives(model, original, [])
+    altered = deepcopy(original)
+    altered["focus_control"] = "changed"
+    assert not restore_paid_schema_alternatives(model, altered, actions)
+    assert restore_paid_schema_alternatives(model, original, actions)
+    assert "ordinary_assignment_inputs" not in original["schema_alternatives"]
+    assert enumerate_object_schemas(model, SearchBudget(0), max_schemas=4)["schemas"] == paid["schemas"][:4]
+
+
 def test_focus_and_position_memberships_are_both_enumerated_and_fixed_assignments_are_kept():
     model = _model()
     for group in model["groups"]:
@@ -256,3 +293,72 @@ def test_local_direct_anchor_resolves_two_positions_and_disappearing_effect_rest
     assert sum(item.get("withdrawn_membership_basis") == "local_direct_effect"
                for item in restored["contradictions"]) == 2
     assert len(enumerate_object_schemas(restored)["schemas"]) == 2
+
+
+def test_measured_owner_contrast_keeps_old_anchor_and_allocates_matched_revisions():
+    from hegel_machine.cognition.object_induction import apply_position_experiment
+
+    model = _model(5)
+    # Match the actual partial problem: both kinds of assignments are open.
+    qs = [g["q"] for g in model["groups"]]
+    for group in model["groups"]:
+        group.pop("f")
+    for item in model["focus_candidates"].values():
+        item["quantities"] = qs
+    model.update(dynamic_fields=qs, dependencies=[], schema=None)
+    old = model["schema_alternatives"] = enumerate_object_schemas(model, SearchBudget(1000))
+    old_schemas = deepcopy(old["schemas"])
+    field = "location_4"
+    old_owners = {_owner(s, field) for s in old_schemas}
+    missing = next(q for q in qs if q not in old_owners)
+    covered = next(q for q in qs if sum(_owner(s, field) == q for s in old_schemas) >= 2)
+    owners = [missing, covered]
+    measured = {"status": "position_domain_narrowed", "source_model_id": model["model_id"],
+                "field": field, "position_domains_delta": {field: owners}, "retained_owners": owners,
+                "corner_refs": [{"probe_id": i, "position": 0} for i in range(4)],
+                "comparison": {"pairs": [], "control": "placement_4"}}
+    revised = apply_position_experiment(model, measured)
+    compatible = [s for s in old_schemas if _owner(s, field) == covered]
+    historic = dict(revised)
+    historic.pop("position_assignment_contrast")
+    recovered = enumerate_object_schemas(historic, SearchBudget(500), max_schemas=2,
+                                        preferred_schemas=compatible[-1:])
+    assert recovered["position_owner_coverage"]["pairs"][0]["indices"] == [0, 1]
+    # Caller-supplied unused paid anchors take precedence over the default
+    # retained order; no new fit is performed to decide this order.
+    for preferred in ((), list(reversed(compatible))):
+        result = enumerate_object_schemas(revised, SearchBudget(500), max_schemas=4, preferred_schemas=preferred)
+        assert not result["exhaustive"] and set(result["position_owner_coverage"]["represented_owners"]) == set(owners)
+        assert result["schemas"][::2] == list(preferred or compatible)[:2]
+        assert [pair["indices"] for pair in result["position_owner_coverage"]["pairs"]] == [[0, 1], [2, 3]]
+        for i in (0, 2):
+            a, b = result["schemas"][i:i+2]
+            assert _owner(b, field) == missing
+            changed = [obj for obj, item in a["fields"].items() if item["x"] != b["fields"][obj]["x"]]
+            assert len(changed) == 2
+            for obj, item in a["fields"].items():
+                assert all(item[key] == b["fields"][obj][key] for key in ("q", "u", "f"))
+                assert b["controls"][obj]["x"] == revised["position_candidates"][b["fields"][obj]["x"]]["control"]
+    # Provenance and exact short replay survive the ordinary 16-slot return.
+    revised["schema_alternatives"] = enumerate_object_schemas(revised, SearchBudget(1000))
+    replay = enumerate_object_schemas(revised, SearchBudget(0), max_schemas=4)
+    assert replay["compute_cost"] == 0
+    assert [p["indices"] for p in replay["position_owner_coverage"]["pairs"]] == [[0, 1], [2, 3]]
+    assert old["schemas"] == old_schemas and not model["complete"] and not revised["complete"]
+
+
+def _owner(schema, field):
+    return next(group["q"] for group in schema["fields"].values() if group["x"] == field)
+
+
+def test_surviving_owner_without_a_valid_single_swap_gets_an_unpaired_slot():
+    model = _model(3)
+    qs = [g["q"] for g in model["groups"]]
+    # Only the identity and a three-cycle are permitted.
+    for i, item in enumerate(model["position_candidates"].values()):
+        item["quantities"] = [qs[i], qs[(i+1) % 3]]
+    model["position_assignment_contrast"] = {"field": "location_0", "paid_anchors": []}
+    result = enumerate_object_schemas(model, SearchBudget(500), max_schemas=2)
+    assert result["exhaustive"] and len(result["schemas"]) == 2
+    assert sorted(result["position_owner_coverage"]["represented_owners"]) == qs[:2]
+    assert result["position_owner_coverage"]["pairs"] == []

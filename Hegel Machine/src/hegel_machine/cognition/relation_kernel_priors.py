@@ -6,9 +6,17 @@ from .language import Program
 from .scale_bindings import bind_measurement_arguments
 
 
+def _contains_arg(program, symbol):
+    if program.op == "arg" and program.name == symbol:
+        return True
+    return any(_contains_arg(child, symbol) for child in program.children)
+
+
 def parameter_relations(program, symbol):
-    own = [program] if (program.op in {"neighbor_sum", "relation_sum"} and
-        program.children[0] == Program("arg", name=symbol)) else []
+    own = [program] if (program.op in {"neighbor_sum", "relation_sum"} and (
+        program.children[0] == Program("arg", name=symbol) or
+        (program.op == "relation_sum" and _contains_arg(program.children[1], symbol))
+    )) else []
     return [*own, *(item for child in program.children
                    for item in parameter_relations(child, symbol))]
 
@@ -65,7 +73,8 @@ def recall_relation_kernels(template, parameters, priors, budget):
     """
     current = {item["symbol"]: {kernel_key(node) for node in
         parameter_relations(template, item["symbol"])} for item in parameters
-        if item.get("source_concept_id") is None and not item.get("kernel_priors")}
+        if item.get("parameter_kind", "radius") == "radius"
+        and item.get("source_concept_id") is None and not item.get("kernel_priors")}
     result = {symbol: [] for symbol in current}
     if not current:
         return result
@@ -81,6 +90,8 @@ def recall_relation_kernels(template, parameters, priors, budget):
         if not budget.spend(source.size):
             break
         for parameter in saved["parameters"]:
+            if parameter.get("parameter_kind", "radius") != "radius":
+                continue
             keys = {kernel_key(node) for node in parameter_relations(source, parameter["symbol"])}
             if not keys or not parameter["radius_intervals"]:
                 continue

@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 import json
 from random import Random
+import pytest
 
 from hegel_machine.cognition.competing_object_programs import research_competing_object_programs
 from hegel_machine.cognition.evaluation import loss
@@ -41,6 +42,62 @@ def _rows(seed, count, *, separate=False):
             + 2.1 * point[f"position_{focus}"]
         rows.append(Observation(point, target))
     return rows
+
+
+@pytest.mark.parametrize("shared_program", [False, True])
+def test_matched_owners_keep_separate_fits_and_share_only_identical_readouts(monkeypatch, shared_program):
+    from hegel_machine.cognition import unified_structure
+    from hegel_machine.cognition.object_alternatives import enumerate_object_schemas
+    from hegel_machine.cognition.unified_research import UnifiedResearchAgent
+
+    spec = _spec()
+    model = {**spec.context["object_model"], "position_assignment_contrast": {"field": "position_a"}}
+    enumeration = enumerate_object_schemas(model)
+    pair = enumeration["position_owner_coverage"]["pairs"][0]
+    training = _rows(12, 5)
+    comparison = [replace(row, target=0.) for row in _rows(13, 4)]
+    parent = {"candidate": Candidate("parent", Program("const", value=0.), "partial"),
+        "training_loss": .2, "validation_loss": 0., "research_program": {"fit_rows": 5}}
+    prepared = {"assessed": [parent], "training": training, "comparison": comparison,
+        "comparison_complete": True, "independent_validation": False, "fallback": 0.,
+        "spec": spec, "transitions": [{"before": training[0].features}, {"before": comparison[0].features}]}
+    allowances = []
+    def propose(local_spec, rows, allowance, *, parent, transitions, **kwargs):
+        assert rows is training and parent is prepared["assessed"][0]
+        assert transitions == prepared["transitions"][:1]
+        idx = len(allowances)
+        allowances.append(allowance.limit)
+        assert local_spec.context["object_schema"] == enumeration["schemas"][pair["indices"][idx]]
+        assert allowance.spend(3 + idx)
+        value = 1. if shared_program else 1. + idx
+        return [{"candidate": Candidate("fit", Program("const", value=v), "structure"),
+            "family_id": "T08", "training_loss": error, "structure_search": "full",
+            "structure": {"schema": local_spec.context["object_schema"]},
+            "research_program": {"fit_parameters": [v]}}
+            for v, error in [(value, .5), (0., .7)]]
+
+    monkeypatch.setattr(unified_structure, "propose_structures", propose)
+    agent = UnifiedResearchAgent()
+    with pytest.raises(ValueError, match="both fit allowances"):
+        agent.compare_position_owner_responses(prepared, enumeration, pair, SearchBudget(31), [],
+            per_assignment_compute=12, response_parent=parent)
+    assert not allowances
+    actions, budget = [], SearchBudget(32)
+    result = agent.compare_position_owner_responses(prepared, enumeration, pair, budget, actions,
+        per_assignment_compute=12, response_parent=parent)
+    assert allowances == [12, 12] and result["paired_response_complete"]
+    assert result["selected"] is parent and not result["independent_confirmation"]
+    assert budget.spent == actions[-1]["compute_cost"] == 7 + (4 if shared_program else 8)
+    assert result["comparison_compute_cost"] == (4 if shared_program else 8)
+    assert len(result["comparison_predictions"]) == (1 if shared_program else 2)
+    assert result["owner_response_fits"][0]["candidate_id"] != result["owner_response_fits"][1]["candidate_id"]
+    for fit, entry, owner in zip(result["owner_response_fits"], result["new_claims"], pair["owners"]):
+        revision = entry["working_role_revision"]
+        values = result["comparison_predictions"][fit["prediction_index"]]
+        assert values == [entry["candidate"].program.value] * 4
+        assert fit["owner"] == owner and fit["validation_loss"] == values[0] ** 2
+        assert revision["research_program"]["fit_parameters"] == [values[0]]
+        assert revision["structure"]["schema"] == enumeration["schemas"][fit["schema_index"]]
 
 
 def test_new_assignment_preserves_complete_parent_response_columns(monkeypatch):
@@ -421,3 +478,114 @@ def test_unresolved_radius_provides_paid_validated_executable_competitors_and_a_
         previous=result["competition"], new_observations=actual.observations)
     assert refuted <= {item["hypothesis_id"] for item in revised["competition"]["counterexamples"]}
     assert revised["entries"] and work.spent <= work.limit
+
+
+def test_working_role_returns_compare_on_paid_rows_without_promoting_the_assignment(monkeypatch):
+    from hegel_machine.cognition import competing_object_programs, equivalent_object_programs
+    from hegel_machine.cognition.models import ResearchConfig
+    from hegel_machine.cognition.unified_research import UnifiedResearchAgent
+
+    spec = _spec()
+    training = [replace(row, target=.8 + .1 * i % .3)
+                for i, row in enumerate(_rows(91, 24))]
+    winner_program = Program('const', value=.8)
+    parent_program = Program('const', value=0.)
+    parent = {'candidate': Candidate('partial', parent_program, 'partial_object'),
+              'kind': 'partial_object:total', 'family_id': 'T03',
+              'partial_object_knowledge': {'unresolved': ['a:x']},
+              'research_program': {'fit_rows': len(training)},
+              'training_loss': loss(parent_program, training, 0., .5)}
+    monkeypatch.setattr(equivalent_object_programs, 'propose_equivalent_object_programs',
+                        lambda *args, **kwargs: [])
+
+    def fitted(current, rows, budget, *, parent, **kwargs):
+        assert rows == training and parent['candidate'].candidate_id == 'partial'
+        assert budget.spend(3)
+        schema = current.context['object_schema']
+        return [{'candidate': Candidate('fit', program, 'structure'),
+                 'family_id': 'T08', 'training_loss': loss(program, rows, 0., .5),
+                 'research_program': {'fit_rows': len(rows), 'coordinate_basis': 'example'},
+                 'structure': {'schema': schema, 'fits': [{'family': 'local_exchange'}]},
+                 'structure_search': 'native'} for program in
+                (Program('const', value=.5), winner_program, parent_program)]
+    monkeypatch.setattr(competing_object_programs, 'propose_structures', fitted)
+    config = ResearchConfig(use_memory=False, max_candidates=4, state_search=False,
+                            minimum_improvement=1e-7, learn_research_policy=False)
+
+    # Both assignments produced the same best executable. Compare it once.
+    for held_target, selected_id in ((.85, 'working_role'), (.05, 'partial')):
+        agent = UnifiedResearchAgent(config)
+        held = [replace(row, target=held_target) for row in _rows(97, 24)]
+        current = {**parent, 'validation_loss': loss(parent_program, held, 0., .5)}
+        prepared = {'spec': spec, 'training': training, 'comparison': held, 'assessed': [current],
+                    'comparison_complete': True, 'independent_validation': True, 'fallback': 0.,
+                    'terminal': False, 'transitions': [], 'parent': None, 'usable_parent': False,
+                    'retained_on_current': None, 'directions': ['structural_research']}
+        result = agent.execute_research_decision(prepared, 'structural_research', SearchBudget(20000), [])
+        assert result['full_comparison'] and result['execution_complete']
+        assert result['comparison_compute_cost'] == len(held) and not result['independent_confirmation']
+        new, = result['new_claims']
+        assert new['candidate'].program == winner_program
+        assert new['working_role_revision']['research_program']['fit_rows'] == len(training)
+        assert new['validation_loss'] == loss(winner_program, held, 0., .5)
+        assert result['selected']['candidate'].candidate_id.startswith(selected_id)
+        assert not {'object_competition', 'hypothesis_id', 'structure', 'research_program'} & new.keys()
+        state = agent._object_competitions[spec.feature_names]
+        assert len(state['schemas']) == 2 and not state['hypotheses'] and not state['program_classes']
+        alias = {'candidate': Candidate('alias', winner_program, 'elsewhere'), 'object_competition': state}
+        assert agent._object_program_refuted(alias, spec)
+        another = UnifiedResearchAgent(config)
+        assert not another._object_program_refuted(alias, spec)
+        assert not agent._object_program_refuted(current, spec)
+        inherited = {**current, 'object_competition': deepcopy(state)}
+        assert not another._object_explanations(spec, training, SearchBudget(20000), actions=[], parent=inherited)
+        assert not another._object_program_refuted(alias, spec)
+        assert len(state['counterexamples']) == 1
+
+    # Exercise the episode research view as well. Its working comparison is
+    # retained for revision, outside role, confirmation and knowledge queues.
+    held = [replace(row, target=.85) for row in _rows(97, 24)]
+    agent = UnifiedResearchAgent(config)
+    frame = agent.prepare_research_decision(spec, training, held, SearchBudget(100000), [])
+    assert not frame['terminal']
+    frame.update(assessed=[{**parent, 'validation_loss': loss(parent_program, held, 0., .5)}],
+                 directions=['structural_research'])
+    monkeypatch.setattr(agent, 'prepare_research_decision', lambda *args, **kwargs: frame)
+    actions = []
+    returned = agent._research_view(spec, training, held, SearchBudget(100000), actions, [], None)
+    event, = [event for event in actions if event['action'] == 'compare_working_role_revisions']
+    assert event['compared'] == 1 and event['selected_candidate_id'].startswith('working_role')
+    assert not any(entry['kind'] == 'working_role_revision' for entry in returned)
+    record, = agent._object_competitions[spec.feature_names]['counterexamples']
+    assert record['validation_loss'] == loss(winner_program, held, 0., .5)
+    assert record['working_role_revision']['research_program']['fit_rows'] == len(training)
+
+
+def test_working_returns_respect_four_slots_and_give_supported_laws_priority(monkeypatch):
+    from hegel_machine.cognition import competing_object_programs as competing
+    schemas = [{'objects': [str(i)], 'fields': {str(i): {'q': 'amount_a'}}} for i in range(5)]
+    monkeypatch.setattr(competing, 'enumerate_object_schemas', lambda *args, **kwargs: {
+        'schemas': schemas, 'source_model_id': 'measured', 'exhaustive': False, 'unresolved': [],
+        'compute_cost': 0})
+    spec = _spec()
+    rows = [replace(row, target=1.) for row in _rows(83, 4)]
+    parent = {'candidate': Candidate('p', Program('const', value=0.), 'partial_object'),
+              'partial_object_knowledge': {'unresolved': ['a:x']}, 'research_program': {'fit_rows': 4}}
+
+    def proposals(current, training, budget, **kwargs):
+        schema = current.context['object_schema']
+        i = int(schema['objects'][0])
+        values = ([1., .95] if i == 4 else [.1 * (i + 1), .05 * (i + 1)])
+        return [{'candidate': Candidate('proposed', Program('const', value=value), 'structure'),
+                 'training_loss': (1. - value) ** 2, 'family_id': 'T08', 'structure_search': 'full',
+                 'structure': {'schema': schema, 'fits': [{'family': 'local_exchange'}]}}
+                for value in values]
+    monkeypatch.setattr(competing, 'propose_structures', proposals)
+    result = competing.research_competing_object_programs(spec, rows, SearchBudget(10000),
+        max_candidates=8, response_parent=parent, working_parent_loss=1.)
+    supported, = result['entries']
+    assert supported['candidate'].program.value == 1.
+    working = result['working_entries']
+    assert len(working) == 3 and len({item['working_role_revision']['schema_index'] for item in working}) == 3
+    assert [item['candidate'].program.value for item in working] == [.95, .4, .1 * 3]
+    assert len(result['competition']['hypotheses']) == result['competition']['program_classes'] == 1

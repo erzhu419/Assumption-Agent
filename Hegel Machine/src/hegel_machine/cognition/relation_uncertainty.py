@@ -53,6 +53,54 @@ def _replace_leaves(program, bindings):
     return replace(program, children=tuple(_replace_leaves(child, bindings) for child in program.children))
 
 
+def _predicate_threshold_cuts(relations, parameter, frames, current_values, budget):
+    from math import isfinite
+    from .language import MissingHistory
+    from .relation_language import instantiate_predicate, relation_objects
+
+    lhs_payload = parameter.get("comparator_lhs")
+    if not lhs_payload or not relations:
+        return []
+    lhs_prog = Program.from_dict(lhs_payload) if isinstance(lhs_payload, dict) else lhs_payload
+    const_bindings = {k: Program("const", value=v) for k, v in current_values.items()}
+    cuts = set()
+    for relation in relations:
+        if relation.op != "relation_sum":
+            continue
+        objects = relation_objects(relation)
+        if not objects:
+            continue
+        rad_prog = _bind(relation.children[0], const_bindings)
+        for frame in frames:
+            if not budget.spend(max(1, len(objects))):
+                return sorted(cuts)
+            try:
+                positions = [float(obj[1].predict(frame)) for obj in objects]
+                rad_val = float(rad_prog.predict(frame))
+            except MissingHistory:
+                continue
+            for idx, source in enumerate(objects):
+                for other, target in enumerate(objects):
+                    if idx == other:
+                        continue
+                    if relation.name in {"right", "left"}:
+                        sign = 1. if relation.name == "right" else -1.
+                        dist = sign * (positions[other] - positions[idx])
+                        if not (0. < dist < rad_val + 1e-6):
+                            continue
+                    else:
+                        if abs(positions[other] - positions[idx]) >= rad_val + 1e-6:
+                            continue
+                    expr = instantiate_predicate(lhs_prog, source, target)
+                    try:
+                        val = float(expr.predict(frame))
+                    except MissingHistory:
+                        continue
+                    if isfinite(val):
+                        cuts.add(val)
+    return sorted(cuts)
+
+
 class RelationIntervalResearch:
     """Keep the original call executable while testing its unresolved parameters."""
 
@@ -172,7 +220,7 @@ class RelationIntervalResearch:
         shared, rename, parameters = {}, {}, []
         for item in self.parameters:
             relations = _parameter_relations(self.template, item["symbol"])
-            key = (item.get("source_concept_id"), item["radius"],
+            key = (item.get("source_concept_id"), item.get("parameter_kind", "radius"), item["radius"],
                    frozenset(kernel_key(node) for node in relations),
                    tuple(map(tuple, item["radius_intervals"])))
             if item.get("source_concept_id") is not None and key in shared:
@@ -247,6 +295,8 @@ class RelationIntervalResearch:
                 marked = term
                 relations = _relations(term.expanded())
                 for item in self.parameters:
+                    if item.get("parameter_kind", "radius") != "radius":
+                        continue
                     related = {node for node in relations
                         if node.children[0] == Program("const", value=item["radius"])
                         and kernel_key(node) in keys[item["symbol"]]}
@@ -458,7 +508,8 @@ class RelationIntervalResearch:
             return all(radius_only(child) for child in node.children)
 
         domains = partition["parameters"][index]["radius_intervals"]
-        if (not _parameter_relations(self.template, symbol) or not radius_only(self.template)
+        if (partition["parameters"][index].get("parameter_kind", "radius") != "radius"
+                or not _parameter_relations(self.template, symbol) or not radius_only(self.template)
                 or not any(low < values[symbol] < high for low, high in domains)):
             return False
         expected = _bind(self.template, {key: Program("const", value=value) for key, value in values.items()})
@@ -524,7 +575,7 @@ class RelationIntervalResearch:
             for item in self.parameters)
 
     def alternatives(self, paid_rows, budget, tolerance=1e-7, *, experiments=(),
-                     interval_precision=1e-6, parameter_index=None):
+                     interval_precision=1e-6, parameter_index=None, allow_domain_expansion=True):
         """Fit pooled observations without diluting completed distinguishing probes.
 
         Experiments retain actual rows, not excluded parameter values. Each
@@ -547,7 +598,19 @@ class RelationIntervalResearch:
                 if id(row) not in identities:
                     identities.add(id(row))
                     evaluated_rows.append(row)
-        for index, parameter in enumerate(self.parameters):
+        has_threshold_param = any(
+            item.get("parameter_kind") == "predicate_threshold" for item in self.parameters
+        )
+        param_order = list(range(len(self.parameters)))
+        if parameter_index is None and has_threshold_param and len(param_order) > 1:
+            param_order.sort(
+                key=lambda idx: (
+                    -sum(high - low for low, high in self.parameters[idx].get("radius_intervals", ())),
+                    idx,
+                )
+            )
+        for index in param_order:
+            parameter = self.parameters[index]
             if parameter_index is not None and index != parameter_index:
                 continue
             domains = parameter["radius_intervals"]
@@ -584,13 +647,16 @@ class RelationIntervalResearch:
                         tuple(tuple(frame.get(name) for name in geometry_fields)
                         for frame in past[-geometry_depth:]) if geometry_depth else ())
                     frames.setdefault(key, Observation(point, 0., past))
-            distances = _distances(relations, frames.values(), budget)
+            is_threshold = parameter.get("parameter_kind", "radius") == "predicate_threshold"
+            distances = (_predicate_threshold_cuts(relations, parameter, frames.values(), self.values, budget)
+                         if is_threshold else _distances(relations, frames.values(), budget))
+            sample_fractions = (.5,) if is_threshold else (.5, .25, .75)
             supported, candidates = [], []
             for low, high in domains:
                 cuts = [low, *(value for value in distances if low < value < high), high]
                 for left, right in zip(cuts, cuts[1:]):
                     fitted = []
-                    for fraction in (.5, .25, .75):
+                    for fraction in sample_fractions:
                         values = {**self.values, parameter["symbol"]: left + (right - left) * fraction}
                         program, _ = self._program(values)
                         errors = self._response_errors(program, values, evaluated_rows, budget)
@@ -611,8 +677,112 @@ class RelationIntervalResearch:
                     if fitted:
                         supported.append([left, right])
                         candidates.extend((values, (left, right), error) for values, error in fitted)
+            if (
+                is_threshold
+                and len(supported) == 1
+                and supported[0][1] - supported[0][0] > interval_precision
+            ):
+                s_left, s_right = supported[0]
+                for fraction in (.25, .75):
+                    values = {
+                        **self.values,
+                        parameter["symbol"]: s_left + (s_right - s_left) * fraction,
+                    }
+                    program, _ = self._program(values)
+                    errors = self._response_errors(program, values, evaluated_rows, budget)
+                    if errors is None:
+                        self.status = "compute_exhausted"
+                        return []
+                    error = sum(errors[id(row)] for row in paid_rows) / len(paid_rows)
+                    if error <= tolerance and all(
+                        sum(errors[key] for key in trajectory) / len(trajectory) <= tolerance
+                        for trajectory in trajectory_ids
+                    ):
+                        candidates.append((values, (s_left, s_right), error))
+                        self.last_candidate_errors[program] = errors
+            cur_val = self.values[parameter["symbol"]]
+            cur_val_supported = any(low <= cur_val <= high for low, high in supported)
+            if (
+                (not candidates or (has_threshold_param and not is_threshold and not cur_val_supported))
+                and parameter_index is None
+                and len(self.parameters) > 1
+            ):
+                # When multiple parameters (e.g. radius r_0 and threshold c_0) are jointly
+                # uncertain, a new probe can refute the sibling parameter's point estimate
+                # while leaving a spurious double-wrong cancellation cell on this parameter.
+                # Check whether updating an unresolved sibling parameter rescues current values.
+                cur_prog, _ = self._program(self.values)
+                cur_errs = self._response_errors(cur_prog, self.values, evaluated_rows, budget)
+                cur_failed = cur_errs is None or (
+                    sum(cur_errs[id(row)] for row in paid_rows) / len(paid_rows) > tolerance
+                    or any(
+                        sum(cur_errs[key] for key in trajectory) / len(trajectory) > tolerance
+                        for trajectory in trajectory_ids
+                    )
+                )
+                if not candidates or cur_failed:
+                    saved_params = deepcopy(self.parameters)
+                    saved_expanded = deepcopy(self._expanded_domains)
+                    parameter["radius_intervals"] = domains
+                    repaired_sibling = False
+                    for other_idx, other_param in enumerate(self.parameters):
+                        if other_idx == index:
+                            continue
+                        other_doms = other_param.get("radius_intervals") or []
+                        if not other_doms or (
+                            len(other_doms) == 1
+                            and other_doms[0][1] - other_doms[0][0] <= interval_precision
+                        ):
+                            continue
+                        old_other_val = self.values[other_param["symbol"]]
+                        sibling_entries = self.alternatives(
+                            paid_rows,
+                            budget,
+                            tolerance,
+                            experiments=experiments,
+                            interval_precision=interval_precision,
+                            parameter_index=other_idx,
+                            allow_domain_expansion=(not candidates),
+                        )
+                        if sibling_entries:
+                            best_sib = next(
+                                (
+                                    e
+                                    for e in sibling_entries
+                                    if abs(e["parameter_values"][other_param["symbol"]] - old_other_val) > 1e-12
+                                ),
+                                sibling_entries[0],
+                            )
+                            if abs(best_sib["parameter_values"][other_param["symbol"]] - old_other_val) > 1e-12 or not candidates:
+                                self.adopt(best_sib)
+                                repaired_sibling = True
+                        else:
+                            self.parameters = deepcopy(saved_params)
+                            self._expanded_domains = deepcopy(saved_expanded)
+                            parameter = self.parameters[index]
+                    if repaired_sibling:
+                        return self.alternatives(
+                            paid_rows,
+                            budget,
+                            tolerance,
+                            experiments=experiments,
+                            interval_precision=interval_precision,
+                            parameter_index=parameter_index,
+                            allow_domain_expansion=allow_domain_expansion,
+                        )
+                    self.parameters = saved_params
+                    self._expanded_domains = saved_expanded
+                    parameter = self.parameters[index]
             parameter["radius_intervals"] = supported
             if candidates:
+                if is_threshold and len(candidates) >= 2 and supported:
+                    mid_span = 0.5 * (supported[0][0] + supported[-1][1])
+                    candidates.sort(
+                        key=lambda item: (
+                            item[2],
+                            abs(item[0][parameter["symbol"]] - mid_span),
+                        )
+                    )
                 # A still-supported existing explanation must not disappear
                 # merely because the sampled representatives are different.
                 # Keep its exact parameter value; only observed counterexamples
@@ -648,11 +818,18 @@ class RelationIntervalResearch:
             # A source search range is not a physical limit. Once all of its
             # cells fail current measurements, keep the consuming computation
             # and test the range exposed by the current measured geometry.
-            if distances:
-                upper = distances[-1] + max(1., abs(distances[-1])) * 1e-6
-                expanded = [0., upper]
-                previous = self._expanded_domains.get(parameter["symbol"])
-                if previous is None or upper > previous[1]:
+            if allow_domain_expansion and distances:
+                if is_threshold:
+                    span = max(1., abs(distances[-1] - distances[0]), abs(distances[0]), abs(distances[-1]))
+                    expanded = [distances[0] - 0.25 * span, distances[-1] + 0.25 * span]
+                    previous = self._expanded_domains.get(parameter["symbol"])
+                    can_expand = previous is None or expanded[0] < previous[0] or expanded[1] > previous[1]
+                else:
+                    upper = distances[-1] + max(1., abs(distances[-1])) * 1e-6
+                    expanded = [0., upper]
+                    previous = self._expanded_domains.get(parameter["symbol"])
+                    can_expand = previous is None or upper > previous[1]
+                if can_expand:
                     self._expanded_domains[parameter["symbol"]] = expanded
                     parameter["radius_intervals"] = [expanded]
                     self.evidence_updates.append({"reason": "current_geometry_expands_refuted_domain",
@@ -682,24 +859,103 @@ class RelationIntervalResearch:
         if low == high:
             return []
         depth = max(entry["candidate"].program.history_depth for entry in entries)
+        other_bindings = {key: Program("const", value=val)
+                          for key, val in self.values.items() if key != parameter["symbol"]}
+        def _ordered_directed_pairs(objs):
+            count = len(objs)
+            if count < 2:
+                return []
+            # Interleave Hamiltonian cycles (i, (i + shift) % N) so the first N questions
+            # cover every object as both donor and recipient regardless of focus wiring.
+            return [
+                (objs[idx], objs[(idx + shift) % count])
+                for shift in range(1, count)
+                for idx in range(count)
+            ]
+
+        from .program_condition_sets import _active_paths
+        from .relation_conditions import TRUE
+
         predicates = []
-        for relation in _parameter_relations(self.template, parameter["symbol"]):
-            objects = relation_objects(relation)
-            pairs = ([(source, target) for index, source in enumerate(objects)
-                      for other, target in enumerate(objects) if index != other]
-                     if relation.op == "relation_sum" else combinations(objects, 2))
-            for source, target in pairs:
-                distance = Program("sub", children=(target[1], source[1]))
-                if relation.op == "relation_sum" and relation.name == "left":
-                    distance = Program("sub", children=(source[1], target[1]))
-                elif relation.op != "relation_sum" or relation.name != "right":
-                    distance = Program("abs", children=(distance,))
-                band = Program("and", children=(
-                    Program("ge", children=(distance, Program("const", value=low))),
-                    Program("lt", children=(distance, Program("const", value=high)))))
-                predicates.append(Program("and", children=(band,
-                    instantiate_predicate(relation.children[1], source, target)))
-                    if relation.op == "relation_sum" else band)
+        if parameter.get("parameter_kind", "radius") == "predicate_threshold":
+            lhs_payload = parameter.get("comparator_lhs")
+            if not lhs_payload:
+                return []
+            lhs_prog = Program.from_dict(lhs_payload) if isinstance(lhs_payload, dict) else lhs_payload
+            decreasing = parameter.get("comparator_monotonicity", "decreasing") == "decreasing"
+            permissive_val = low if decreasing else high
+            for relation in _parameter_relations(self.template, parameter["symbol"]):
+                if relation.op != "relation_sum":
+                    continue
+                objects = relation_objects(relation)
+                rad_prog = _bind(relation.children[0], other_bindings)
+                pred_permissive = _bind(relation.children[1],
+                    {**other_bindings, parameter["symbol"]: Program("const", value=permissive_val)})
+                for source, target in _ordered_directed_pairs(objects):
+                    if relation.name in {"right", "left"}:
+                        dist = Program("sub", children=(target[1], source[1])
+                                       if relation.name == "right" else (source[1], target[1]))
+                        geom = Program("and", children=(
+                            Program("lt", children=(Program("const", value=0.), dist)),
+                            Program("lt", children=(dist, rad_prog))))
+                    else:
+                        dist = Program("abs", children=(Program("sub", children=(target[1], source[1])),))
+                        geom = Program("lt", children=(dist, rad_prog))
+                    lhs_inst = instantiate_predicate(lhs_prog, source, target)
+                    perm_inst = instantiate_predicate(pred_permissive, source, target)
+                    strict_guard = (Program("lt", children=(lhs_inst, Program("const", value=high)))
+                                    if decreasing else
+                                    Program("ge", children=(lhs_inst, Program("const", value=low))))
+                    core_band = Program("and", children=(geom,
+                        Program("and", children=(perm_inst, strict_guard))))
+                    # Ensure macroscopic donor excitation and drop contradictory donor bands.
+                    pos_donor = Program("and", children=(
+                        Program("ge", children=(source[2], Program("const", value=0.45))),
+                        Program("lt", children=(source[2], Program("const", value=0.95)))))
+                    neg_donor = Program("and", children=(
+                        Program("ge", children=(source[2], Program("const", value=-0.95))),
+                        Program("lt", children=(source[2], Program("const", value=-0.45)))))
+                    for donor_band in (pos_donor, neg_donor):
+                        cand_pred = Program("and", children=(donor_band, core_band))
+                        if _active_paths(cand_pred)[0]:
+                            predicates.append(Program("and", children=(source[0], cand_pred)))
+        else:
+            for relation in _parameter_relations(self.template, parameter["symbol"]):
+                objects = relation_objects(relation)
+                bound_pred = (_bind(relation.children[1], other_bindings)
+                              if relation.op == "relation_sum" else None)
+                pairs = (_ordered_directed_pairs(objects)
+                         if relation.op == "relation_sum" else combinations(objects, 2))
+                for source, target in pairs:
+                    distance = Program("sub", children=(target[1], source[1]))
+                    if relation.op == "relation_sum" and relation.name == "left":
+                        distance = Program("sub", children=(source[1], target[1]))
+                    elif relation.op != "relation_sum" or relation.name != "right":
+                        distance = Program("abs", children=(distance,))
+                    band = Program("and", children=(
+                        Program("ge", children=(distance, Program("const", value=low))),
+                        Program("lt", children=(distance, Program("const", value=high)))))
+                    if relation.op == "relation_sum" and bound_pred is not None and bound_pred != TRUE:
+                        inst_pred = instantiate_predicate(bound_pred, source, target)
+                        full_band = Program("and", children=(band, inst_pred))
+                        pos_donor = Program("and", children=(
+                            Program("ge", children=(source[2], Program("const", value=0.55))),
+                            Program("lt", children=(source[2], Program("const", value=0.95)))))
+                        neg_donor = Program("and", children=(
+                            Program("ge", children=(source[2], Program("const", value=-0.95))),
+                            Program("lt", children=(source[2], Program("const", value=-0.55)))))
+                        added_macro = False
+                        for donor_band in (pos_donor, neg_donor):
+                            cand_r = Program("and", children=(donor_band, full_band))
+                            if _active_paths(cand_r)[0]:
+                                predicates.append(Program("and", children=(source[0], cand_r)))
+                                added_macro = True
+                        if not added_macro:
+                            predicates.append(Program("and", children=(source[0], full_band)))
+                    else:
+                        predicates.append(Program("and", children=(band,
+                            instantiate_predicate(bound_pred, source, target)))
+                            if relation.op == "relation_sum" else band)
         return [{"question_id": f"inherited_relation:{parameter['symbol']}:{index}",
             "predicate": predicate,
             "history_depth": depth, "uncovered_phases": ["enter", "maintain", "exit"] if depth else ["active"],

@@ -62,7 +62,7 @@ def config(seed, registered=None):
         max_rounds=6, max_history=4, active_probes=True)
 
 
-def program_successor_protocol(source_task):
+def program_successor_protocol(source_task, declared=None):
     """Four declared single-factor physical sources; never selected by scores."""
     factors = ('000', '100', '010', '001')
     cases = []
@@ -83,29 +83,46 @@ def program_successor_protocol(source_task):
     terminal = {'length': 48, 'trajectories': 1, 'random_seed_offset': 1000003,
         'random_backgrounds': 0, 'background_seed_offset': 2000003,
         'sweep_fractions': [0., .25, .5, .75, 1.], 'mse_tolerance': 1e-7}
-    controls = 3 * source_task['objects'] + 1
-    terminal_rows = 48 + 10 * controls
-    count = len(cases) * len(ARMS)
-    return {'scope': 'prospective_single_factor_native_ABC_not_LLM_Code',
+    plan = {'scope': 'prospective_single_factor_native_ABC_not_LLM_Code',
         'factor_cases': cases, 'tasks': [item['task'] for item in cases],
         'limits': LIMITS, 'arms': ARMS, 'activity_seconds': ACTIVITY_SECONDS,
         'terminal': terminal, 'research_config': {**asdict(config(cases[0]['task']['seed'])),
                                                'max_candidates': 4},
-        'budget_quote': {'training_compute_upper': count * LIMITS['compute_cost'],
-            'terminal_compute_upper': len(cases) * len(ARMS) * terminal_rows,
-            'total_new_compute_upper': count * LIMITS['compute_cost'] + len(cases) * len(ARMS) * terminal_rows,
-            'training_observation_upper': count * LIMITS['observation_cost'],
-            'shared_terminal_observation_upper': 2 * len(cases) * terminal_rows,
-            'total_new_observation_upper': count * LIMITS['observation_cost'] + 2 * len(cases) * terminal_rows,
-            'total_new_measurement_upper': count * LIMITS['measurement_cost']
-                + len(cases) * terminal_rows * (3 + 3 * source_task['objects']),
-            'training_activity_seconds_upper': count * ACTIVITY_SECONDS,
-            'source_costs': 'existing occurrences separate; not included a second time',
-            'model_calls': 0},
         'selection_boundary': 'No result-based source replacement; source factors remain laboratory-side',
         'nuisance_contract': 'Every cell has fresh readout/coupling coefficients. P means the relation radius only; '
             'S changes relation direction; M jointly changes names, wiring and instrument curvature.',
         'current_budget_admitted': False}
+    if declared is not None:
+        required = ('tasks', 'limits', 'activity_seconds', 'terminal', 'research_config')
+        if any(key not in declared for key in required):
+            raise ValueError('Declare the fixed task list, complete limits, terminal and research configuration')
+        plan.update({key: deepcopy(declared[key]) for key in required})
+        plan.update(scope=declared.get('scope', 'prospective_registered_native_ABC_not_LLM_Code'),
+            factor_cases=deepcopy(declared.get('factor_cases', [])),
+            nuisance_contract=declared.get('nuisance_contract', 'Use only the explicitly frozen physical tasks'))
+        registered = plan['research_config']
+        if (not plan['tasks'] or len({task['seed'] for task in plan['tasks']}) != len(plan['tasks'])
+                or tuple(declared.get('arms', ARMS)) != ARMS
+                or registered['compute_budget'] != plan['limits']['compute_cost']
+                or registered['observation_budget'] != plan['limits']['observation_cost']
+                or registered['max_candidates'] != 4 or registered['minimum_improvement'] != 1e-7
+                or plan['terminal']['mse_tolerance'] != 1e-7):
+            raise ValueError('Keep three ordinary arms, distinct fixed sources, matching limits, four drafts and the original threshold')
+    terminal, limits = plan['terminal'], plan['limits']
+    rows = [terminal['length'] * terminal['trajectories'] + (1 + terminal['random_backgrounds'])
+        * (5 + len(terminal['sweep_fractions'])) * (3 * task['objects'] + 1) for task in plan['tasks']]
+    count, terminal_sum = len(plan['tasks']) * len(ARMS), sum(rows)
+    plan['budget_quote'] = {'training_compute_upper': count * limits['compute_cost'],
+        'terminal_compute_upper': len(ARMS) * terminal_sum,
+        'total_new_compute_upper': count * limits['compute_cost'] + len(ARMS) * terminal_sum,
+        'training_observation_upper': count * limits['observation_cost'],
+        'shared_terminal_observation_upper': 2 * terminal_sum,
+        'total_new_observation_upper': count * limits['observation_cost'] + 2 * terminal_sum,
+        'total_new_measurement_upper': count * limits['measurement_cost'] + sum(
+            n * (3 + 3 * task['objects']) for task, n in zip(plan['tasks'], rows)),
+        'training_activity_seconds_upper': count * plan['activity_seconds'],
+        'source_costs': 'existing occurrences separate; not included a second time', 'model_calls': 0}
+    return plan
 
 
 def program_knowledge(root, repair_ref=None):
@@ -115,7 +132,7 @@ def program_knowledge(root, repair_ref=None):
     return load_confirmed_knowledge(root)
 
 
-def frozen_program_bank(source, method, proposal):
+def frozen_program_bank(source, method, proposal, *, workspace=None):
     """Retain every actually formed source method, including the first stage."""
     record = {'source_concept_id': source['source_concept_id'],
               'source_ref': source['source_ref'],
@@ -124,6 +141,22 @@ def frozen_program_bank(source, method, proposal):
     bodies = [method['research_program'],
               *(item['research_program'] for item in proposal['candidates']),
               proposal['baseline_research_program']]
+    if source.get('composition_execution_return_ref') or source.get('composition_baseline_pair_ref'):
+        from hegel_machine.cognition.method_action_research import (
+            partition_followup_body, quote_partition_followup_analysis, read_method_reference)
+        staged = method['research_program'].get('staged_research', {})
+        if (not source.get('composition_execution_return_ref') or not source.get('composition_baseline_pair_ref')
+                or staged.get('operation') != 'revise_then_reidentify' or workspace is None):
+            raise ValueError('Declare the actual sequential source and its frozen composition')
+        earlier = []
+        if source.get('study_ref'):
+            study = read_method_reference(source['study_ref'], workspace)
+            executed = read_method_reference(source['proposal_ref'], workspace)['proposal']
+            for eligible in quote_partition_followup_analysis(executed, study):
+                earlier.insert(0, partition_followup_body(
+                    executed['candidates'][eligible['method_index'] - 1]['research_program']))
+        bodies = [method['research_program'], staged['baseline'], staged['continuation'], *earlier,
+            *(item['research_program'] for item in proposal['candidates']), proposal['baseline_research_program']]
     result = []
     for body in bodies:
         if not any(item['research_program'] == body for item in result):
@@ -141,7 +174,9 @@ def register_programs(args):
     method = load(args.method)
     task_source = load(args.task_source)
     source_task = task_source['task']
-    plan = program_successor_protocol(source_task)
+    protocol_path = getattr(args, 'successor_protocol', None)
+    declared = load(protocol_path) if protocol_path else None
+    plan = program_successor_protocol(source_task, declared)
     repair_ref = task_source.get('repaired_entry_ref')
     if not repair_ref and task_source.get('method_program_revisions', {}).get('challenger'):
         repair_ref = read_method_reference(task_source['method_program_revisions']['challenger'],
@@ -162,12 +197,14 @@ def register_programs(args):
             for task in plan['tasks']}
     finally:
         store.close()
-    if any(matches.values()) or source_task['seed'] in matches:
+    recent_refs = declared.get('prior_source_task_refs', []) if declared else []
+    recent_seeds = [read_method_reference(reference, protocol_path.parent)['seed'] for reference in recent_refs]
+    if any(matches.values()) or source_task['seed'] in matches or any(seed in recent_seeds for seed in matches):
         raise ValueError('A registered source identity is already exposed')
     output.mkdir(parents=True)
     save(output / 'inputs/program_source.json', raw)
     proposal = read_method_reference(raw['proposal_ref'], args.program_source.parent)['proposal']
-    frozen_methods = frozen_program_bank(raw, method, proposal)
+    frozen_methods = frozen_program_bank(raw, method, proposal, workspace=args.program_source.parent)
     for index, record in enumerate(frozen_methods):
         record['formation_ref'] = ({'file': str(args.method.resolve())}
                                    if index == 0 else raw['proposal_ref'])
@@ -195,13 +232,14 @@ def register_programs(args):
         'historical_knowledge_ref': base, 'historical_cumulative_costs': None,
         'source_pool_ref': pool_ref, 'source_pool_size': len(pool),
         'shared_source_ref': raw['source_ref'], 'source_costs_ref': {'file': 'inputs/source_costs.json'},
-        'unexposed_check': matches,
+        'unexposed_check': matches, 'recent_source_task_refs': deepcopy(recent_refs),
+        'successor_protocol_ref': {'file': str(protocol_path.resolve())} if protocol_path else None,
         'contrast': {'archive': 'ordinary adaptive author reconstructs from the same real source returns',
             'fixed_pr2': 'Common organization with the same executable reconstruction and all ordinary solvers',
             'pr3': 'same organization plus the actually frozen learned program and validated conditions'},
         'knowledge_contract': 'same full library, paid raw sources and full candidate pool; per-target additions stay local',
-        'evaluation_contract': 'all twelve outcomes freeze before shared target labels are scored',
-        'failure_contract': 'keep all twelve; no retries, replacement, cost-zero failures or post-hoc arm switching',
+        'evaluation_contract': 'all registered outcomes freeze before shared target labels are scored',
+        'failure_contract': 'keep all registered outcomes; no retries, replacement, cost-zero failures or post-hoc arm switching',
         'claim_boundary': 'finite native organization contrast, not complete LLM agent superiority',
         'model_calls': 0, 'current_budget_admitted': admitted,
         'budget_contract_ref': {'file': str(args.budget_contract.resolve()), 'json_path': ['allocations', 'abc']}
@@ -375,6 +413,7 @@ def train_one(job):
     output.mkdir(parents=True, exist_ok=False)
     timing = ExecutionTiming(('restore', 'research', 'save'))
     task = next(item for item in state['registration']['tasks'] if item['seed'] == seed)
+    limits = state['registration']['limits']
     with timing.phase('restore'):
         library = KnowledgeLibrary.from_dict(deepcopy(state['knowledge']))
         extra = {}
@@ -386,16 +425,22 @@ def train_one(job):
                 'condition_sources': state['method_conditions'],
                 'native_method_conditions': native_condition_bindings(state['method_conditions'], state['output'])
                     if arm == 'pr3' else []}
+        raw_sources = [deepcopy(state['raw'])] if state['raw'] else []
+        learned_methods = [deepcopy(state['method'])] if arm == 'pr3' and state['method'] else []
+        position = state['registration'].get('position_method_source')
+        if position:
+            raw_sources.append(position['raw_source_ref'])
+            if arm == 'pr3':
+                learned_methods.append(load(position['method_ref']['file']))
         agent = CommonObjectResearchAgent(config(seed, state['registration'].get('research_config')),
             measurement_budget=state['registration']['limits']['measurement_cost'],
             library=library, workspace=output / 'common', organization=arm,
             source_task_ref={'file': str(state['output'] / 'registration.json'),
                 'json_path': ['tasks', state['registration']['tasks'].index(task)]},
-            raw_sources=[deepcopy(state['raw'])] if state['raw'] else [],
-            learned_methods=[deepcopy(state['method'])] if arm == 'pr3' and state['method'] else [], **extra)
+            raw_sources=raw_sources, learned_methods=learned_methods, **extra)
     with AnonymousObjectLab(**task) as laboratory:
         try:
-            with timing.phase('research'), python_execution_deadline(ACTIVITY_SECONDS, activity=True):
+            with timing.phase('research'), python_execution_deadline(state['registration']['activity_seconds'], activity=True):
                 report = agent.run(laboratory)
         except Exception as error:
             import traceback
@@ -406,14 +451,14 @@ def train_one(job):
                     'confirmed_compute_lower_bound': agent.failure_compute_lower_bound,
                     'actual_acquisition_costs': laboratory.costs,
                     'new_acquisitions': laboratory.acquisitions,
-                    'compute_cost': None, 'compute_upper_bound': LIMITS['compute_cost'],
+                    'compute_cost': None, 'compute_upper_bound': limits['compute_cost'],
                     'compute_scope': 'native run did not return its account',
                     'execution_timing': timing.result()})
             summary = {'seed': seed, 'arm': arm, 'status': 'failed',
                 'frozen': True, 'predictor_available': False,
                 'costs': {**laboratory.costs, 'compute_cost': None},
                 'confirmed_compute_lower_bound': agent.failure_compute_lower_bound,
-                'compute_unknown_upper_bound': LIMITS['compute_cost'],
+                'compute_unknown_upper_bound': limits['compute_cost'],
                 'failure_ref': {'file': 'failure.json'}, 'execution_timing': timing.result()}
         else:
             with timing.phase('save'):
@@ -445,7 +490,7 @@ def run(output):
     output = Path(output).resolve()
     registration = load(output / 'registration.json')
     if registration.get('method_kind') == 'transfer_partition' and not registration.get('current_budget_admitted'):
-        raise ValueError('The new twelve-run budget is not admitted; registration does not launch research')
+        raise ValueError('The complete registered budget is not admitted; registration does not launch research')
     jobs = [(task['seed'], arm) for task in registration['tasks'] for arm in ARMS]
     missing = []
     for seed, arm in jobs:
@@ -457,7 +502,7 @@ def run(output):
                 'status': 'interrupted_without_final_account', 'frozen': True,
                 'predictor_available': False,
                 'costs': {key: None for key in LIMITS},
-                'unknown_upper_bounds': LIMITS,
+                'unknown_upper_bounds': registration['limits'],
                 'reason': 'Retain interrupted attempt; do not rerun within this cohort'})
         else:
             missing.append((seed, arm))
@@ -647,6 +692,8 @@ def main():
     parser.add_argument('--source-pool', type=Path)
     parser.add_argument('--knowledge-root', type=Path)
     parser.add_argument('--task-source', type=Path)
+    parser.add_argument('--successor-protocol', type=Path,
+        help='Explicit fixed tasks, per-arm limits, terminal and research configuration; default retains the original four cases')
     parser.add_argument('--method-conditions', type=Path,
         help='Actual paired_condition_research list or its retained file/json_path reference')
     parser.add_argument('--budget-contract', type=Path,
