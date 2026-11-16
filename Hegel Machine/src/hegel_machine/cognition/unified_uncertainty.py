@@ -153,10 +153,13 @@ def assess_noisy_adequacy(spec, program, training, validation, budget, *,
     if budget.remaining < reserve + len(training) * 6:
         return finish("insufficient_budget")
     compared = []
+    d_feat = len(spec.feature_names)
+    claims_cap = max(18000, len(training) * (d_feat * (d_feat + 15) + 48))
     if spec.context.get("object_schema"):
         from .unified_structure import propose_structures
 
-        structural_budget = SearchBudget(budget.remaining - reserve)
+        claims_reserve = claims_cap + len(training) * 12
+        structural_budget = SearchBudget(max(0, budget.remaining - reserve - claims_reserve))
         structures = propose_structures(replace(spec, risk_quantile=.5), training, structural_budget)
         budget.spend(structural_budget.spent)
         structure_complete = bool(structures) and structures[0]["structure"]["search_complete"]
@@ -191,7 +194,7 @@ def assess_noisy_adequacy(spec, program, training, validation, budget, *,
     structure_comparisons = len(compared)
     if budget.remaining < reserve + len(training) * 6:
         return finish("insufficient_budget")
-    fitting = SearchBudget(min(18000, budget.remaining - reserve))
+    fitting = SearchBudget(min(claims_cap, budget.remaining - reserve))
     claims = compile_claims(replace(spec, risk_quantile=.5), rows, fitting)
     budget.spend(fitting.spent)
     if not claims:

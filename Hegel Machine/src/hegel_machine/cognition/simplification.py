@@ -25,7 +25,8 @@ def _current_expression(program):
     if program.op in {"const", "feature", "available"}:
         return True
     if program.op not in {"add", "sub", "mul", "abs", "min", "max", "ge", "lt",
-                          "and", "or", "not", "if", "object_sum", "neighbor_sum", "ring_sum"}:
+                          "and", "or", "not", "if", "object_sum", "neighbor_sum",
+                          "ring_sum", "manifold_sum"}:
         return False
     return all(_current_expression(child) for child in program.children)
 

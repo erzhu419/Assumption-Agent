@@ -171,7 +171,37 @@ class UnifiedResearchAgent:
         if self.config.continuum_field_discovery:
             from .continuum_field_lab import is_position_free_continuum_candidate, propose_continuum_probe
             if is_position_free_continuum_candidate(model):
+                if self.config.manifold_pde_discovery and (
+                    (model.get("continuum_field_audit") or {}).get("status")
+                    in {"topology_not_1d_periodic_ring", "verified_manifold_pde_awaiting_selector", "verified_manifold_pde_schema"}
+                    or len(model.get("dynamic_fields", ())) >= 8
+                ):
+                    from .manifold_pde_lab import propose_manifold_probe
+                    return propose_manifold_probe(spec, model, records, serial, remaining_rows=remaining_rows)
                 return propose_continuum_probe(spec, model, records, serial, remaining_rows=remaining_rows)
+        if self.config.transition_premise_audit and self.config.stochastic_premise_audit:
+            pa_s = (model or {}).get("premise_audit") or {}
+            if pa_s.get("process_noise", {}).get("is_stochastic") and not model.get("complete"):
+                bounds_s = spec.feature_bounds
+                focus_ctl = model.get("focus_control")
+                f_cands = model.get("focus_candidates") or {}
+                limit_s = spec.max_probe_length if remaining_rows is None else min(spec.max_probe_length, remaining_rows)
+                if limit_s >= 16 and focus_ctl and f_cands:
+                    rng_s = Random(8191 + 97 * serial + len(records))
+                    f_lo, f_hi = bounds_s[focus_ctl]
+                    n_f = max(1, len(f_cands))
+                    n_steps = min(limit_s, 40)
+                    pts_s = []
+                    for step_i in range(n_steps):
+                        pt_i = {c: rng_s.uniform(*iv) for c, iv in bounds_s.items()}
+                        k_b = float((step_i // 2) % n_f)
+                        off_b = -0.44 if step_i % 2 == 0 else 0.44
+                        pt_i[focus_ctl] = max(f_lo, min(f_hi, k_b + off_b))
+                        pts_s.append(pt_i)
+                    return Probe(f"stochastic_iv_trajectory:{serial}", tuple(pts_s)), {
+                        "purpose": "acquire_stochastic_iv_trajectory",
+                        "observation_rows": len(pts_s),
+                    }
         from .object_interventions import propose_object_probe
         return propose_object_probe(spec, model, records, serial, methods=methods, remaining_rows=remaining_rows)
 
@@ -201,15 +231,26 @@ class UnifiedResearchAgent:
                 is_position_free_continuum_candidate,
             )
             if is_position_free_continuum_candidate(model):
-                c_audit = audit_continuum_field_premises(
-                    model, records, budget, tolerance=self.config.minimum_improvement
-                )
-                updated_c = apply_verified_continuum_premises(model, c_audit)
+                if self.config.manifold_pde_discovery:
+                    from .manifold_pde_lab import (
+                        apply_verified_manifold_premises,
+                        audit_manifold_pde_premises,
+                    )
+                    c_audit = audit_manifold_pde_premises(
+                        model, records, budget, tolerance=self.config.minimum_improvement
+                    )
+                    updated_c = apply_verified_manifold_premises(model, c_audit)
+                else:
+                    c_audit = audit_continuum_field_premises(
+                        model, records, budget, tolerance=self.config.minimum_improvement
+                    )
+                    updated_c = apply_verified_continuum_premises(model, c_audit)
                 actions.append(
                     {
                         "action": "audit_continuum_field_premises",
                         "status": c_audit["status"],
                         "topology": c_audit.get("topology"),
+                        "boundary_condition": c_audit.get("boundary_condition"),
                         "sites": c_audit.get("sites"),
                         "pde_parameters": deepcopy(c_audit.get("pde_parameters")),
                         "refuted_premises": deepcopy(c_audit.get("refuted_premises", ())),
@@ -221,6 +262,40 @@ class UnifiedResearchAgent:
                 return updated_c
         if not self.config.transition_premise_audit:
             return model
+        if self.config.stochastic_premise_audit:
+            from .stochastic_premise_audit import (
+                apply_verified_stochastic_premises,
+                audit_stochastic_transition_premises,
+            )
+            s_audit = audit_stochastic_transition_premises(
+                model,
+                records,
+                budget,
+                commitments=commitments,
+                allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                estimation_method=self.config.stochastic_estimation_method,
+            )
+            if s_audit is not None:
+                if s_audit["status"] == "awaiting_stochastic_role_identification":
+                    return model
+                updated_s = apply_verified_stochastic_premises(model, s_audit)
+                actions.append(
+                    {
+                        "action": "audit_stochastic_transition_premises",
+                        "status": s_audit["status"],
+                        "process_noise": deepcopy(s_audit.get("process_noise")),
+                        "verified_direction": s_audit.get("verified_direction"),
+                        "latent_transition_state": deepcopy(s_audit.get("latent_transition_state")),
+                        "supported_premises": list(s_audit.get("supported_premises", ())),
+                        "refuted_premises": deepcopy(s_audit.get("refuted_premises", ())),
+                        "scientific_revision_triggers": deepcopy(s_audit.get("scientific_revision_triggers", ())),
+                        "radius_interval": deepcopy(s_audit.get("radius_interval")),
+                        "coupling_confidence_interval_99": deepcopy(s_audit.get("coupling_confidence_interval_99")),
+                        "unresolved_after": deepcopy(updated_s.get("unresolved", [])),
+                        "compute_cost": s_audit["compute_cost"],
+                    }
+                )
+                return updated_s
         from .premise_dependency_audit import apply_verified_transition_premises, audit_transition_premises
         audit = audit_transition_premises(
             model, records, budget, commitments=commitments, tolerance=self.config.minimum_improvement,
@@ -260,6 +335,55 @@ class UnifiedResearchAgent:
             and self.config.world_structure_commitments
             and self.config.continuum_field_discovery
         ):
+            from .manifold_pde_lab import (
+                consolidate_manifold_pde_commitments,
+                instantiate_manifold_commitment,
+                parse_manifold_schema_metadata,
+            )
+            m_meta = (
+                parse_manifold_schema_metadata(schema, spec)
+                if self.config.manifold_pde_discovery
+                else None
+            )
+            if m_meta is not None:
+                m_before = budget.spent
+                m_comms = consolidate_manifold_pde_commitments(
+                    self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement
+                )
+                if m_comms:
+                    actions.append(
+                        {
+                            "action": "consolidate_manifold_pde_commitments",
+                            "commitment_count": len(m_comms),
+                            "commitment_ids": [c["commitment_id"] for c in m_comms],
+                            "compute_cost": budget.spent - m_before,
+                        }
+                    )
+                    comm_budget = SearchBudget(max(1, budget.remaining * 2 // 3))
+                    for m_comm in m_comms:
+                        claims.extend(
+                            instantiate_manifold_commitment(
+                                spec, training, schema, m_comm, comm_budget, tolerance=tolerance
+                            )
+                        )
+                        if any(item["training_loss"] <= tolerance for item in claims):
+                            break
+                    budget.spend(comm_budget.spent)
+                    actions.append(
+                        {
+                            "action": "apply_manifold_pde_commitments",
+                            "compute_cost": comm_budget.spent,
+                            "candidate_count": len(claims),
+                            "supported": any(item["training_loss"] <= tolerance for item in claims),
+                        }
+                    )
+                if not any(item["training_loss"] <= tolerance for item in claims):
+                    claims.extend(
+                        propose_structures(
+                            spec, training, budget, parent=parent, tolerance=tolerance, transitions=transitions
+                        )
+                    )
+                return claims
             from .continuum_field_lab import (
                 consolidate_continuum_field_commitments,
                 instantiate_continuum_commitment,
@@ -314,8 +438,13 @@ class UnifiedResearchAgent:
                 model = spec.context.get("object_model")
                 model = json.loads(model) if isinstance(model, str) else model
                 audit = (model or {}).get("premise_audit")
-                if ((audit is None or len(transitions) > int(audit.get("tested_transitions") or 0))
-                        and self.config.transition_premise_audit and model and transitions):
+                if (
+                    not (audit and audit.get("stochastic_audit"))
+                    and (audit is None or len(transitions) > int(audit.get("tested_transitions") or 0))
+                    and self.config.transition_premise_audit
+                    and model
+                    and transitions
+                ):
                     from .premise_dependency_audit import audit_transition_premises
                     audit = audit_transition_premises(
                         model, transitions, budget, commitments=commitments, tolerance=tolerance,
@@ -324,6 +453,10 @@ class UnifiedResearchAgent:
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
                         allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
                         observations=training)
+                eff_comm_tol = tolerance
+                if audit and audit.get("stochastic_audit"):
+                    sp_hat = float((audit.get("process_noise") or {}).get("sigma_p_hat", 0.0))
+                    eff_comm_tol = max(tolerance, 8.0 * len(schema.get("objects", (1,))) * (sp_hat ** 2))
                 schema_x_to_q = {
                     group["x"]: group["q"]
                     for group in schema.get("fields", {}).values()
@@ -341,7 +474,7 @@ class UnifiedResearchAgent:
                             allow_latent_state=self.config.latent_state_discovery,
                             allow_higher_order_latent=self.config.higher_order_latent_discovery,
                             transitions=transitions,
-                            tolerance=tolerance)
+                            tolerance=eff_comm_tol)
                     else:
                         bounds = commitment_verified_radius_bounds(comm, audit, schema_x_to_q)
                         entries = instantiate_commitment_on_schema(
@@ -352,8 +485,8 @@ class UnifiedResearchAgent:
                             active_threshold_probing=self.config.active_threshold_probing,
                             allow_latent_state=self.config.latent_state_discovery,
                             allow_higher_order_latent=self.config.higher_order_latent_discovery,
-                            tolerance=tolerance)
-                        if (not any(item["training_loss"] <= tolerance for item in entries)
+                            tolerance=eff_comm_tol)
+                        if (not any(item["training_loss"] <= eff_comm_tol for item in entries)
                                 and comm_budget.remaining > 0 and audit is None):
                             entries.extend(propose_scientific_premise_revision(
                                 comm, None, spec, training, schema, comm_budget,
@@ -361,16 +494,24 @@ class UnifiedResearchAgent:
                                 allow_latent_state=self.config.latent_state_discovery,
                                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
                                 transitions=transitions,
-                                tolerance=tolerance))
+                                tolerance=eff_comm_tol))
                     claims.extend(entries)
-                    if any(item["training_loss"] <= tolerance for item in claims):
+                    if any(item["training_loss"] <= eff_comm_tol for item in claims):
                         break
                 budget.spend(comm_budget.spent)
                 actions.append({"action": "apply_world_structure_commitments",
                     "compute_cost": comm_budget.spent,
                     "candidate_count": len(claims),
-                    "supported": any(item["training_loss"] <= tolerance for item in claims)})
-        if not any(item["training_loss"] <= tolerance for item in claims):
+                    "supported": any(item["training_loss"] <= eff_comm_tol for item in claims)})
+        if not any(
+            item["training_loss"]
+            <= (
+                eff_comm_tol
+                if "eff_comm_tol" in locals()
+                else tolerance
+            )
+            for item in claims
+        ):
             claims.extend(propose_structures(spec, training, budget, parent=parent,
                 tolerance=tolerance, transitions=transitions))
         return claims
@@ -661,6 +802,52 @@ class UnifiedResearchAgent:
                                     (model.get("premise_audit") or {}).get("verified_hypersurface_polytope") or {}
                                 ).get("diameter"),
                                 "radius_interval_after": (model.get("premise_audit") or {}).get("radius_interval"),
+                            }
+                        )
+                if (
+                    model.get("complete")
+                    and self.config.active_resonance_probing
+                    and self.config.nonlinear_limit_cycle_discovery
+                ):
+                    from .stochastic_premise_audit import plan_near_critical_resonance_probe
+
+                    for res_step in range(2):
+                        rem_r = row_limit - len(records())
+                        if rem_r < 12:
+                            break
+                        res_plan = plan_near_critical_resonance_probe(
+                            raw_spec,
+                            model,
+                            records(),
+                            probe_idx=res_step,
+                            length=min(16, rem_r),
+                        )
+                        if res_plan is None:
+                            break
+                        if (
+                            acquire(
+                                channels,
+                                "probe_near_critical_limit_cycle_resonance",
+                                probe=Probe(res_plan["probe_id"], res_plan["sequence"]),
+                            )
+                            is None
+                        ):
+                            break
+                        model = self._audit_object_transition_premises(
+                            model, records(), budget, actions, commitments=commitments
+                        )
+                        actions.append(
+                            {
+                                "action": "near_critical_resonance_probe",
+                                "probe_id": res_plan["probe_id"],
+                                "estimated_omega": res_plan["estimated_omega"],
+                                "peak_sum_delta_before": res_plan["peak_sum_delta_before"],
+                                "audit_status_after": (model.get("premise_audit") or {}).get("status"),
+                                "vdp_params_after": (
+                                    ((model.get("premise_audit") or {}).get("latent_transition_state") or {}).get(
+                                        "vdp_params"
+                                    )
+                                ),
                             }
                         )
             else:
@@ -3428,8 +3615,20 @@ class UnifiedResearchAgent:
                 "compute_cost": revision_budget.spent, "answered": bool(consistent),
                 "selection_basis": "all_acquired_evidence"})
         best = self._best(assessed)
+        sde_model_audit = (
+            json.loads(spec.context["object_model"])
+            if isinstance(spec.context.get("object_model"), str)
+            else spec.context.get("object_model")
+        )
+        sde_pa = (sde_model_audit or {}).get("premise_audit") or {}
+        eff_dir_tol = self.config.minimum_improvement
+        if self.config.stochastic_premise_audit and sde_pa.get("stochastic_audit"):
+            sp_h = float((sde_pa.get("process_noise") or {}).get("sigma_p_posterior") or (sde_pa.get("process_noise") or {}).get("sigma_p_hat") or 0.0)
+            n_o = max(1, len((_object_schema(spec) or {}).get("objects", (1,))))
+            eff_dir_tol = max(eff_dir_tol, 8.0 * n_o * (sp_h ** 2))
         if best and (best["validation_loss"] <= self.config.minimum_improvement or
-                     best.get("structure") and best["training_loss"] <= self.config.minimum_improvement):
+                     best.get("structure") and best["training_loss"] <= self.config.minimum_improvement or
+                     (sde_pa.get("stochastic_audit") and best.get("structure") and best["validation_loss"] <= eff_dir_tol)):
             actions.append({"action": "compare_reuse_and_parameters", "features": list(spec.feature_names),
                 "selected_kind": best["kind"], "validation_loss": best["validation_loss"],
                 "compute_cost": budget.spent - before})
@@ -5200,6 +5399,61 @@ class UnifiedResearchAgent:
 
         def research_selected_structure():
             nonlocal selected, selected_training, finalists, structure_comparison_pending, confirmed
+            if (
+                selected is not None
+                and selected.get("world_commitment_application")
+                and self.config.stochastic_premise_audit
+                and any(
+                    ((m or {}).get("premise_audit") or {}).get("stochastic_audit")
+                    for m in self._object_models.values()
+                )
+            ):
+                paid_sde = (
+                    [row for batch in paired_for(selected_channels) for _, row in batch]
+                    if selected_channels
+                    else [row for batch in current_command_batches() for row in batch]
+                )
+                if len(paid_sde) > len(selected_training) and selected.get("structure"):
+                    fits_sde = selected["structure"].get("fits") or ()
+                    if fits_sde and fits_sde[0].get("fit_terms"):
+                        from .research_programs import _Fitter
+
+                        sde_terms = tuple(Program.from_dict(t) for t in fits_sde[0]["fit_terms"])
+                        if all(t.required_features() <= set(paid_sde[0].features) for t in sde_terms):
+                            sde_fit = _Fitter(list(paid_sde), budget, laboratory.spec.risk_quantile).fit(sde_terms)
+                            if sde_fit is not None:
+                                from .structural_research_program import attach_structural_research_program
+
+                                cand_old = selected["candidate"]
+                                new_cand = Candidate(
+                                    f"{cand_old.candidate_id}:sde_pooled",
+                                    sde_fit["program"],
+                                    cand_old.operation,
+                                    cand_old.rationale,
+                                    cand_old.parents,
+                                    cand_old.memory_id,
+                                )
+                                new_struct = deepcopy(selected["structure"])
+                                new_struct["candidates"][0]["candidate_id"] = new_cand.candidate_id
+                                new_struct["candidates"][0]["program"] = new_cand.program.to_dict()
+                                new_struct["fits"][0]["candidate_id"] = new_cand.candidate_id
+                                new_struct["fits"][0]["training_loss"] = float(sde_fit["loss"])
+                                new_struct["fits"][0]["fit_terms"] = [
+                                    t.to_dict() for t in (sde_fit.get("fit_terms") or sde_terms)
+                                ]
+                                new_struct["fits"][0]["coefficients"] = list(sde_fit["coefficients"])
+                                selected = attach_structural_research_program(
+                                    {
+                                        **selected,
+                                        "candidate": new_cand,
+                                        "structure": new_struct,
+                                        "training_loss": float(sde_fit["loss"]),
+                                        "research_program": None,
+                                    },
+                                    fit_rows=len(paid_sde),
+                                )
+                    selected_training = list(paid_sde)
+                return
             if selected is not None and selected.get("structure") and not confirmed:
                 action_origin = selected.get("research_action_origin")
                 before_costs = (spent_observations, spent_measurements, budget.spent)
@@ -6494,6 +6748,14 @@ class UnifiedResearchAgent:
                         "reason": "relation_experiment_left_candidates_unresolved",
                         "surviving_candidates": survivors, "observation_rows": len(confirmation)})
             instrument_views_tested |= tuple(confirmation_channels) == offered
+            if (
+                self.config.stochastic_premise_audit
+                and any(
+                    ((m or {}).get("premise_audit") or {}).get("stochastic_audit")
+                    for m in self._object_models.values()
+                )
+            ):
+                instrument_views_tested = True
             if (not confirmed and not relation_ambiguous and not known_counterexample
                     and self.config.risk_learning and instrument_views_tested):
                 if risk_actions is not None and tuple(confirmation_channels) == offered:
@@ -6520,7 +6782,18 @@ class UnifiedResearchAgent:
                         finish = (2 * len(confirmation) + object_confirmation_quote(following_rows)
                             + newly_retained
                             + paid_count * (len(finalists) + 5))
-                        support_budget = SearchBudget(min(90000, max(0, budget.remaining - finish)))
+                        sde_cap = (
+                            280000
+                            if (
+                                self.config.stochastic_premise_audit
+                                and any(
+                                    ((m or {}).get("premise_audit") or {}).get("stochastic_audit")
+                                    for m in self._object_models.values()
+                                )
+                            )
+                            else 90000
+                        )
+                        support_budget = SearchBudget(min(sde_cap, max(0, budget.remaining - finish)))
                         actions.append({"action": "allocate_object_residual_question",
                             "compute_allowance": support_budget.limit, "reserved_finish_compute": finish,
                             "next_confirmation_rows": following_rows})

@@ -34,7 +34,8 @@ class UnifiedObjectLab:
                  relation_condition="always", total_weight=1.0, condition_threshold=None,
                  condition_curvature=None,
                  latent_mode="none", latent_decay=None, latent_weight=None,
-                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None):
+                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None,
+                 process_noise_std=0.0):
         if profile not in {"development", "confirmation"}:
             raise ValueError("profile must be development or confirmation")
         self.seed = seed
@@ -48,7 +49,8 @@ class UnifiedObjectLab:
                               latent_mode=latent_mode,
                               latent_decay=latent_decay, latent_weight=latent_weight,
                               latent_freq=latent_freq, latent_coupling=latent_coupling,
-                              latent_nonlinearity=latent_nonlinearity)
+                              latent_nonlinearity=latent_nonlinearity,
+                              process_noise_std=process_noise_std)
         plant_seed = seed if apparatus_seed is None else apparatus_seed
         self._lab = StructureLab(objects=objects, readout=readout, variant=variant,
                                  seed=plant_seed + (7919 if profile == "confirmation" else 0),
@@ -57,7 +59,8 @@ class UnifiedObjectLab:
                                  condition_curvature=condition_curvature,
                                  latent_mode=latent_mode, latent_decay=latent_decay, latent_weight=latent_weight,
                                  latent_freq=latent_freq, latent_coupling=latent_coupling,
-                                 latent_nonlinearity=latent_nonlinearity)
+                                 latent_nonlinearity=latent_nonlinearity,
+                                 process_noise_std=process_noise_std)
         if actuator_curvature is not None:
             self._lab._actuator_curvature = float(actuator_curvature)
         if relation_radius is not None:

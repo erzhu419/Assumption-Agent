@@ -2859,9 +2859,9 @@ def _audit_latent_transition_state(
                     cell_mids_v = [0.5 * (a + b) for a, b in zip(pts_v, pts_v[1:]) if b - a > 1e-8]
                     if not cell_mids_v:
                         cell_mids_v = [0.5 * (r_lo_v + min(r_hi_v, 2.5))]
-                    elif len(cell_mids_v) > 10:
+                    elif len(cell_mids_v) > 256:
                         cell_mids_v = [
-                            cell_mids_v[round(k * (len(cell_mids_v) - 1) / 9)] for k in range(10)
+                            cell_mids_v[round(k * (len(cell_mids_v) - 1) / 255)] for k in range(256)
                         ]
 
                     for r_try_v in cell_mids_v:

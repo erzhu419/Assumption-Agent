@@ -324,19 +324,46 @@ class ContinuumFieldLab:
 # ---------------------------------------------------------------------------
 
 
-def is_position_free_continuum_candidate(model: dict | None) -> bool:
-    """Detect when ``infer_object_model`` found ``N >= 3`` ``(q, u)`` sites and ZERO ``x`` fields."""
+def extract_continuum_u_links(model: dict | None) -> tuple[dict[str, str], dict[str, str], dict[str, str]] | None:
+    """Return ``(u_by_q, q_ctl_by_q, u_ctl_by_q)`` when ``N >= 3`` sites have 1-to-1 ``(q, u)`` links and zero ``x``."""
     if not model:
-        return False
-    dynamic = model.get("dynamic_fields") or ()
+        return None
+    dynamic = list(model.get("dynamic_fields") or ())
     positions = model.get("position_candidates") or {}
     groups = model.get("groups") or ()
+    q_ctls = model.get("quantity_controls") or {}
+    role_cands = model.get("role_candidates") or {}
     if len(dynamic) < 3 or len(positions) != 0 or len(groups) != len(dynamic):
-        return False
-    return all(
+        return None
+    if all(
         g.get("q") and g.get("u") and g.get("controls", {}).get("q") and g.get("controls", {}).get("u")
         for g in groups
-    )
+    ):
+        return (
+            {g["q"]: g["u"] for g in groups},
+            {g["q"]: g["controls"]["q"] for g in groups},
+            {g["q"]: g["controls"]["u"] for g in groups},
+        )
+    if (
+        set(q_ctls) == set(dynamic)
+        and len(role_cands) == len(dynamic)
+        and all(
+            rc.get("additive_supported")
+            and len(rc.get("quantity_candidates") or ()) == 1
+            and rc.get("control")
+            for rc in role_cands.values()
+        )
+    ):
+        u_by_q = {rc["quantity_candidates"][0]: u_field for u_field, rc in role_cands.items()}
+        u_ctl_by_q = {rc["quantity_candidates"][0]: rc["control"] for rc in role_cands.values()}
+        if set(u_by_q) == set(dynamic):
+            return u_by_q, dict(q_ctls), u_ctl_by_q
+    return None
+
+
+def is_position_free_continuum_candidate(model: dict | None) -> bool:
+    """Detect when ``infer_object_model`` found ``N >= 3`` ``(q, u)`` sites and ZERO ``x`` fields."""
+    return extract_continuum_u_links(model) is not None
 
 
 def _reconstruct_directed_ring_from_operator(
@@ -512,42 +539,73 @@ def _resolve_continuum_focus_mapping(
                 best_m = mse
         return best_m
 
-    # Initial seed assignment via decoupled hold-2-step / instant correlation matrix (O(N^2))
-    # Regress targets_all on tot_all first to isolate focal residual
-    c_tot = _linear_fit([tot_all], targets_all)
-    y_res_all = [targets_all[i] - (c_tot[0] + c_tot[1] * tot_all[i]) for i in range(total_rows)]
-
-    score_mat = [[0.0] * n for _ in range(n)]
-    r_offset = 0
-    for a_mat, phi_mat, f_seq in tr_data:
-        for t_i, fi in enumerate(f_seq):
-            yr = y_res_all[r_offset + t_i]
-            same_prev = t_i >= 1 and f_seq[t_i - 1] == fi
-            for k in range(n):
-                if t_i == 0:
-                    feat = a_mat[0][k] + phi_mat[0][k]
-                    score_mat[fi][k] += abs(yr * feat) * 1.5
-                elif same_prev:
-                    ev_k = phi_mat[t_i][k] - phi_mat[t_i - 1][k]
-                    score_mat[fi][k] += abs(yr * (0.7 * ev_k + 0.4 * a_mat[t_i][k])) * 2.5
-                else:
-                    score_mat[fi][k] += abs(yr * a_mat[t_i][k]) * 0.5
-        r_offset += len(f_seq)
-
-    # Build greedy maximum-weight permutation respecting focus_cands domains
+    # Initial seed assignment via per-family exact squared hold-residual matrices + O(N^3) Hungarian matching.
+    # Evaluating squared prediction error (yr - feat_k)^2 rather than |yr * feat_k| both:
+    #   (a) gives exact 0.0 cost at true_k(fi) even when a site has only 1 hold-2-step row (N=16 4x4 torus), AND
+    #   (b) penalizes high-degree wrong hub vertices on irregular graphs (N=9 branched_wheel / ladder_pendant).
     allowed_k_by_f = [
         {ring_qs.index(qn) for qn in focus_cands[fn].get("quantities", ring_qs) if qn in ring_qs}
         for fn in f_fields
     ]
-    used_k: set[int] = set()
-    init_f_to_k = [-1] * n
-    for fi in sorted(range(n), key=lambda m: len(allowed_k_by_f[m])):
-        opts = [k for k in allowed_k_by_f[fi] if k not in used_k] or [
-            k for k in range(n) if k not in used_k
-        ]
-        best_k = max(opts, key=lambda k: score_mat[fi][k])
-        init_f_to_k[fi] = best_k
-        used_k.add(best_k)
+    err_flux = [[0.0] * n for _ in range(n)]
+    err_event = [[0.0] * n for _ in range(n)]
+    err_win = [[0.0] * n for _ in range(n)]
+
+    r_offset = 0
+    for a_mat, phi_mat, f_seq in tr_data:
+        for t_i, fi in enumerate(f_seq):
+            yt = targets_all[r_offset + t_i]
+            yr = yt - tot_all[r_offset + t_i]
+            same_prev = t_i >= 1 and f_seq[t_i - 1] == fi
+            same_prev2 = same_prev and t_i >= 2 and f_seq[t_i - 2] == fi
+            for k in range(n):
+                af_v = a_mat[t_i][k]
+                err_flux[fi][k] += (yt - af_v) ** 2
+                if t_i == 0:
+                    err_event[fi][k] += (yr - 0.4 * af_v) ** 2
+                    err_win[fi][k] += (yr - 0.6 * phi_mat[0][k]) ** 2
+                elif same_prev:
+                    ev_pred = 0.7 * (phi_mat[t_i][k] - phi_mat[t_i - 1][k]) + 0.4 * af_v
+                    err_event[fi][k] += (yr - ev_pred) ** 2
+                    if t_i == 1:
+                        err_win[fi][k] += (yr - 0.6 * (phi_mat[1][k] + phi_mat[0][k])) ** 2
+                    elif same_prev2:
+                        err_win[fi][k] += (
+                            yr - 0.6 * (phi_mat[t_i][k] + phi_mat[t_i - 1][k] + phi_mat[t_i - 2][k])
+                        ) ** 2
+                    else:
+                        err_win[fi][k] += 0.5 * (
+                            yr - 0.6 * (phi_mat[t_i][k] + phi_mat[t_i - 1][k])
+                        ) ** 2
+        r_offset += len(f_seq)
+
+    for cost_m in (err_flux, err_event, err_win):
+        for fi in range(n):
+            if allowed_k_by_f[fi]:
+                for k in range(n):
+                    if k not in allowed_k_by_f[fi]:
+                        cost_m[fi][k] += 1e6
+
+    def _solve_min_cost_perm(cost_m: list[list[float]]) -> list[int]:
+        try:
+            from scipy.optimize import linear_sum_assignment
+
+            _, col_ind = linear_sum_assignment(cost_m)
+            return [int(col_ind[fi]) for fi in range(n)]
+        except Exception:
+            used_k: set[int] = set()
+            perm_out = [-1] * n
+            for fi in sorted(range(n), key=lambda m: len(allowed_k_by_f[m])):
+                opts = [k for k in allowed_k_by_f[fi] if k not in used_k] or [
+                    k for k in range(n) if k not in used_k
+                ]
+                best_k = min(opts, key=lambda k: cost_m[fi][k])
+                perm_out[fi] = best_k
+                used_k.add(best_k)
+            return perm_out
+
+    seed_perms = [_solve_min_cost_perm(cm) for cm in (err_event, err_win, err_flux)]
+    init_f_to_k = min(seed_perms, key=_eval_perm_mse)
 
     # Coordinate 2-opt & 3-cycle local search to exact zero-MSE global optimum (O(N^2) fits, never N!)
     cur_perm = list(init_f_to_k)
@@ -698,11 +756,11 @@ def audit_continuum_field_premises(
     """Refute ``P_role_partition`` when ``x == empty`` and reconstruct the 1D PDE ring schema."""
     start = budget.spent
     dynamic = list(model.get("dynamic_fields", ()))
-    groups = model.get("groups") or ()
     n = len(dynamic)
-    u_by_q = {g["q"]: g["u"] for g in groups if g.get("q") and g.get("u")}
-    q_ctl_by_q = {g["q"]: g["controls"]["q"] for g in groups if g.get("q") and g.get("controls", {}).get("q")}
-    u_ctl_by_q = {g["q"]: g["controls"]["u"] for g in groups if g.get("q") and g.get("controls", {}).get("u")}
+    links = extract_continuum_u_links(model)
+    if links is None:
+        return {"status": "awaiting_continuum_transitions", "compute_cost": 0}
+    u_by_q, q_ctl_by_q, u_ctl_by_q = links
 
     valid_rows = [
         (idx, r)

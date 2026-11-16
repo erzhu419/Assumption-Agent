@@ -62,9 +62,9 @@ def propose_structures(spec, training, budget, *, parent=None, tolerance=1e-8,
     if not set(schema.feature_names).issubset(spec.feature_names):
         return []
     if any("x" not in schema.fields[g] for g in schema.objects):
-        from .continuum_field_lab import propose_continuum_structures
+        from .manifold_pde_lab import propose_manifold_structures
 
-        return propose_continuum_structures(
+        return propose_manifold_structures(
             spec, training, schema, budget, tolerance=tolerance, transitions=transitions
         )
     discovery, search, retained = None, "full", []

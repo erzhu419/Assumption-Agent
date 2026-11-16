@@ -185,6 +185,87 @@ class EvaluationContext:
             return sum(
                 pairs[k][0] * (pairs[(k + 1) % m][1] - pairs[k][1]) for k in range(m)
             )
+        if program.op == "manifold_sum":
+            tag = str(program.name or "")
+            if tag == "graph_laplacian":
+                total = 0.0
+                for idx in range(0, len(program.children), 5):
+                    w_e = self._evaluate(program.children[idx], bindings)
+                    f_u = self._evaluate(program.children[idx + 1], bindings)
+                    q_u = self._evaluate(program.children[idx + 2], bindings)
+                    f_v = self._evaluate(program.children[idx + 3], bindings)
+                    q_v = self._evaluate(program.children[idx + 4], bindings)
+                    total += w_e * (f_u - f_v) * (q_v - q_u)
+                return total
+            pairs = [
+                (
+                    self._evaluate(program.children[idx], bindings),
+                    self._evaluate(program.children[idx + 1], bindings),
+                )
+                for idx in range(0, len(program.children), 2)
+            ]
+            m = len(pairs)
+            if tag.startswith("torus2d_"):
+                op_kind, dims = tag.split(":", 1)
+                nx_s, ny_s = dims.split("x", 1)
+                nx, ny = int(nx_s), int(ny_s)
+                if op_kind == "torus2d_lap_x":
+                    return sum(
+                        pairs[r * ny + c][0]
+                        * (
+                            pairs[((r - 1) % nx) * ny + c][1]
+                            - 2.0 * pairs[r * ny + c][1]
+                            + pairs[((r + 1) % nx) * ny + c][1]
+                        )
+                        for r in range(nx)
+                        for c in range(ny)
+                    )
+                if op_kind == "torus2d_lap_y":
+                    return sum(
+                        pairs[r * ny + c][0]
+                        * (
+                            pairs[r * ny + ((c - 1) % ny)][1]
+                            - 2.0 * pairs[r * ny + c][1]
+                            + pairs[r * ny + ((c + 1) % ny)][1]
+                        )
+                        for r in range(nx)
+                        for c in range(ny)
+                    )
+                if op_kind == "torus2d_grad_bx":
+                    return sum(
+                        pairs[r * ny + c][0]
+                        * (pairs[r * ny + c][1] - pairs[((r - 1) % nx) * ny + c][1])
+                        for r in range(nx)
+                        for c in range(ny)
+                    )
+                return sum(
+                    pairs[r * ny + c][0]
+                    * (pairs[r * ny + c][1] - pairs[r * ny + ((c - 1) % ny)][1])
+                    for r in range(nx)
+                    for c in range(ny)
+                )
+            if tag == "chain_lap_neumann":
+                total = pairs[0][0] * (pairs[1][1] - pairs[0][1]) + pairs[m - 1][0] * (
+                    pairs[m - 2][1] - pairs[m - 1][1]
+                )
+                for k in range(1, m - 1):
+                    total += pairs[k][0] * (pairs[k - 1][1] - 2.0 * pairs[k][1] + pairs[k + 1][1])
+                return total
+            if tag == "chain_lap_dirichlet":
+                total = pairs[0][0] * (pairs[1][1] - 2.0 * pairs[0][1]) + pairs[m - 1][0] * (
+                    pairs[m - 2][1] - 2.0 * pairs[m - 1][1]
+                )
+                for k in range(1, m - 1):
+                    total += pairs[k][0] * (pairs[k - 1][1] - 2.0 * pairs[k][1] + pairs[k + 1][1])
+                return total
+            if tag == "chain_adv_zeroflux":
+                total = pairs[0][0] * pairs[0][1] - pairs[m - 1][0] * pairs[m - 2][1]
+                for k in range(1, m - 1):
+                    total += pairs[k][0] * (pairs[k][1] - pairs[k - 1][1])
+                return total
+            if tag == "chain_boundary_sum":
+                return pairs[0][1] + pairs[m - 1][1]
+            return pairs[0][0] * pairs[0][1] + pairs[m - 1][0] * pairs[m - 1][1]
         if program.op == "relation_sum":
             from .relation_language import edge_bindings, relation_objects
             radius = self._evaluate(program.children[0], bindings)
@@ -340,6 +421,7 @@ class Program:
             "window_sum": 1, "event_delta": 1, "state_replay": 1,
             "object_sum": len(self.children),
             "ring_sum": len(self.children),
+            "manifold_sum": len(self.children),
             "neighbor_sum": len(self.children), "relation_sum": len(self.children),
         }
         if self.op == "call":
@@ -354,6 +436,31 @@ class Program:
             raise ValueError("a ring reduction needs at least three selector/value pairs")
         if self.op == "ring_sum" and self.name not in {"laplacian", "grad_back", "grad_fwd"}:
             raise ValueError("a ring reduction must be laplacian, grad_back, or grad_fwd")
+        if self.op == "manifold_sum":
+            m_tag = str(self.name or "")
+            if m_tag == "graph_laplacian":
+                if len(self.children) < 5 or len(self.children) % 5:
+                    raise ValueError("graph_laplacian needs (weight, f_u, q_u, f_v, q_v) 5-tuples")
+            elif m_tag.startswith("torus2d_"):
+                if ":" not in m_tag or "x" not in m_tag.split(":", 1)[1]:
+                    raise ValueError("2D torus manifold reduction must encode ':Nx x Ny'")
+                op_k, dims_k = m_tag.split(":", 1)
+                if op_k not in {"torus2d_lap_x", "torus2d_lap_y", "torus2d_grad_bx", "torus2d_grad_by"}:
+                    raise ValueError(f"unknown 2D torus stencil: {op_k}")
+                nx_k, ny_k = (int(v) for v in dims_k.split("x", 1))
+                if nx_k < 3 or ny_k < 3 or len(self.children) != 2 * nx_k * ny_k:
+                    raise ValueError("2D torus manifold reduction children must match 2 * Nx * Ny")
+            elif m_tag in {
+                "chain_lap_neumann",
+                "chain_lap_dirichlet",
+                "chain_adv_zeroflux",
+                "chain_boundary_sum",
+                "chain_focal_boundary",
+            }:
+                if len(self.children) < 6 or len(self.children) % 2:
+                    raise ValueError("a bounded chain manifold reduction needs >= 3 selector/value pairs")
+            else:
+                raise ValueError(f"unknown manifold_sum stencil: {self.name}")
         if self.op == "neighbor_sum" and (len(self.children) < 4 or (len(self.children) - 1) % 3):
             raise ValueError("a neighborhood reduction needs a radius and selector/position/value triples")
         if self.op == "neighbor_sum" and self.name not in {None, "right", "left"}:
@@ -556,8 +663,8 @@ class Program:
             return f"arg({self.name})"
         if self.op == "call":
             return f"{self.name}({', '.join(child.describe() for child in self.children)})"
-        if self.op == "ring_sum":
-            return f"ring_sum[{self.name}]({', '.join(child.describe() for child in self.children)})"
+        if self.op in {"ring_sum", "manifold_sum"}:
+            return f"{self.op}[{self.name}]({', '.join(child.describe() for child in self.children)})"
         if self.op == "accumulate":
             if self.name:
                 return f"accumulate[{self.name}]({self.value:.8g}, {', '.join(child.describe() for child in self.children)})"

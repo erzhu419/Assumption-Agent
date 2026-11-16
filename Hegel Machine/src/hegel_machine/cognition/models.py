@@ -173,6 +173,11 @@ class ResearchConfig:
     curved_hypersurface_probing: bool = True
     continuum_field_discovery: bool = True
     nonlinear_limit_cycle_discovery: bool = True
+    manifold_pde_discovery: bool = True
+    stochastic_premise_audit: bool = True
+    stochastic_estimation_method: str = "2sls_iv"
+    active_resonance_probing: bool = True
+    algebraic_proof_synthesis: bool = True
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:

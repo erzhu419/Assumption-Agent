@@ -70,7 +70,8 @@ class StructureLab:
                  relation_direction="symmetric", relation_condition="always", total_weight=1.0,
                  condition_threshold=None, condition_curvature=None,
                  latent_mode="none", latent_decay=None, latent_weight=None,
-                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None):
+                 latent_freq=None, latent_coupling=None, latent_nonlinearity=None,
+                 process_noise_std=0.0):
         if objects < 2:
             raise ValueError("the exchange apparatus needs at least two objects")
         if readout not in {"focus", "position_focus", "total", "window", "event", "total_event",
@@ -140,6 +141,10 @@ class StructureLab:
             self._latent_coupling = float(0.22 if latent_coupling is None else latent_coupling) if "coupled" in latent_mode else 0.0
             self._latent_nonlinearity = 0.0
         self._window = 3
+        self._process_noise_std = float(process_noise_std)
+        if self._process_noise_std < 0.0:
+            raise ValueError("process_noise_std must be nonnegative")
+        self._noise_rng = Random(seed + 918273)
         self.observation_cost = self.measurement_cost = 0
         self.acquisitions = []
         self.object_schema = self.schema_for()
@@ -292,6 +297,11 @@ class StructureLab:
                     not low <= point[name] <= high for name, (low, high) in self.spec.feature_bounds.items()):
                 raise ValueError("a setup must supply the public controls within their bounds")
             quantity, position, drive, focus, after = self._step(point, latent_state=latent_state)
+            if self._process_noise_std > 0.0:
+                after = [
+                    val + self._noise_rng.gauss(0.0, self._process_noise_std)
+                    for val in after
+                ]
             if self._latent_mode in {"transition_memory", "coupled_transition_memory"}:
                 latent_state = [self._latent_decay * latent_state[idx] + drive[idx]
                                 for idx in range(len(quantity))]

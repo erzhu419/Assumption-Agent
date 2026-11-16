@@ -2527,3 +2527,56 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
 
 1. **单题未过案例透明记录：** `Stage 4A-1`中`970405`在固定16步微预算下曲面直径已缩至`0.001105`（曲面$L_2$误差`3.48e-4`），仅因未开启亚微米半径收口留有`0.00337`半径余量（完整智能体`Stage 4A-2`开启收口后`4/4`全过）；`Cohort 4B-2`中`990401`（$\rho=1.02$冷启动）因贴近单位圆且初测脉冲稀疏导致 $|z|\ll 1$ 时 $z^3$ 列条件数偏弱（振幅充分的`990402`及两台 $N=5$ 迁移`990501`、`990502`均一次通过并达`selected_channels=[]`）。
 2. **下一代开放前沿：** 二维／三维流形与非周期网格PDE规范群不变量、强内禀过程噪声（SDE）下的工具变量统计前提审计，以及跨多条世界结构承诺的自动符号代数消元与定理合成。
+
+
+## 124. v10 Phase 5：高维流形与非周期图PDE、强过程噪声SDE工具变量审计及代数证明证书（AWM全对齐，2026-11-16）
+
+- **前瞻证据回执（零LLM，`model_calls = 0`, `total_tokens = 0`）：**
+  - `docs/evidence/v10_world_structure_20261116/v10_phase5a_manifold_and_graph_pde_20261116.json`
+  - `docs/evidence/v10_world_structure_20261116/v10_phase5b_stochastic_sde_and_resonance_20261116.json`
+  - `docs/evidence/v10_world_structure_20261116/v10_phase5c_algebraic_proofs_and_impossibility_20261116.json`
+- **历史封账保护：** `/mnt/hegel-snapshot-cow` 全部历史封账回执字节与 `mtime_ns` 零改动。
+
+### 一、三大开放前沿的理论与工程闭合
+
+1. **Phase 5A：二维环面 $\mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$、非周期有界域（`Neumann`／`Dirichlet`）与一般不规则图拉普拉斯PDE（`manifold_pde_lab.py`、`continuum_field_lab.py`、`language.py`）：**
+   - **二维环面零分支坐标重构：** 对任意 $N_x, N_y \ge 3$ 的笛卡尔环积 $C_{N_x}\square C_{N_y}$，证明 $|N(r-1,c)\cap N(r,c-1)|=2$（恰为 $\{(r-1,c-1),(r,c)\}$），一旦固定首行与首列迎风轴，全体内部格点完全零分支唯一确定，毫秒级消解 $4\times 4=16$ 格点（$16!\approx 2.09\times 10^{13}$ 排列、48细传感器）。
+   - **非周期边值条件辨识与保守前提修订：** 在 `PremiseDependencyGraph` 新增 `P_boundary_condition`，由端点对角质量平衡区分反射墙 `Neumann`（$\partial_n q=0$，总质量守恒）与吸收墙 `Dirichlet`（$q|_{\partial\Omega}=0$，边界墙汇 $-D(q_0+q_{N-1})$），支持跨分辨率 `Neumann <-> Dirichlet` 仅修订边值模板的保守科学修订；同时支持任意连通非规则加权图拉普拉斯算子 $L=D_{\text{deg}}-W$ 的谱度序规范重构。
+   - **半整数切点夹逼探针与平方残差匈牙利指派：** `propose_manifold_probe` 对每个选择器桶 $k$ 交替施加 $k-0.44$ 与 $k+0.44$，兼顾两步保持与半整数分界 $k+0.5\in[k+0.44, k+0.56]$ 精确校准；`_resolve_continuum_focus_mapping` 升级为三族精确平方保持残差矩阵＋$O(N^3)$ 匈牙利算法（`linear_sum_assignment`），彻底消除不规则图高度数枢纽顶点的幅度偏置。
+
+2. **Phase 5B：强内禀过程噪声（SDE）`2SLS-IV` 统计前提审计与近临界极限环主动共振（`stochastic_premise_audit.py`、`premise_dependency_audit.py`、`unified_uncertainty.py`）：**
+   - **Hurwicz-Nickell 内生性消解（Cohort 5B-1）：** 在状态转移层引入真实高斯过程噪声 $\varepsilon_{i,t}\sim\mathcal{N}(0,\sigma_p^2)$，宏观递推 $S_t = \alpha S_{t-1} + \eta U_{t-1} + (E_t - \alpha E_{t-1})$ 因 $\operatorname{Cov}(S_{t-1}, E_t-\alpha E_{t-1}) = -\alpha N\sigma_p^2 < 0$ 导致朴素OLS产生严重向下偏置。`fit_2sls_iv_latent_transition` 利用严格外生的滞后控制序列 $(U_{t-2}, U_{t-3}, U_{t-4})$ 构造两阶段最小二乘工具变量（2SLS-IV）与无穷滞后外生脉冲投影优化，输出 Hausman 内生性检验、第一阶段 $F$ 统计量及99% Wald置信区间，并利用已实现 `after` 读数包含当期过程噪声的精确恒等式实现零误差焦点配对。
+   - **近临界极限环全区间保留与相位相干共振探针（Cohort 5B-2）：** 修复 `premise_dependency_audit.py` 中多步确认后距离区间子采样跳过真实半径单元的问题（保留上限提至256），并在 `plan_near_critical_resonance_probe` 实现固有频率估计 $\widehat{\omega}$ 下的多步同相共振激励 $u_{i,t}=u_{\max}\cos(\widehat{\omega} t+\phi_i)$，彻底攻克 Phase 4B 唯一遗留题 `990401`（$\rho=1.02$）及超近临界题 `990499`（$\rho=1.008$）。
+
+3. **Phase 5C：零公理有理代数证明内核、跨承诺涌现守恒律、Farkas不可达证书与AWM §4.3差异触发修复（`algebraic_proof_certificates.py`）：**
+   - **精确符号证明内核 `SymbolicProofKernel`：** 基于 `fractions.Fraction` 与 `sympy.Poly(..., domain='QQ')` 独立验证多项式恒等式与非负有理组合（Farkas对偶证书），零浮点容差、零未证公理（`sorry`），并支持导出标准 Lean 4 定理模块。
+   - **跨承诺符号消元与 Stage 03 可解性／不可达性证明：** `synthesize_emergent_invariants` 通过有理通量矩阵左零空间自动消去微观反应／交换通量合成宏观守恒律；`prove_task_solvability` 对有界控制实验室 `BudgetedControlLab` 自动生成实测可执行的控制证人（可达）或闭式有理 Farkas 势函数证书（证明在预算 $B$ 内从 $s_0$ 数学上严格不可达目标集，完全对应 AWM Eq. 3 & Lemma A.3）。
+   - **AWM §4.3 证明-现实差异触发的靶向前提修复：** 当证书预测与实测冲突时，`repair_proof_from_discrepancy` 仅沿证书实际引用的最小前提覆盖集 `SufficientCover`（`used_premise_ids`）合成单参数诊断探针定位失配前提、保守修复世界承诺并重算紧致最小预算 $B^*$。
+
+### 二、Phase 5 三组前瞻受控实验定量结果
+
+#### 1. Phase 5A：二维环面、有界 `Neumann<->Dirichlet` 与不规则图PDE（12题 × 3臂）
+
+| 对照臂 | 12题总通过率 (`<=1e-7`) | 纯控制通道数 (`selected_channels=[]`) | 新48步均值 MSE | 均值观测 / 均值科学计算 |
+| --- | --- | --- | --- | --- |
+| `flat_baseline_no_continuum` | **0/12 (0.0%)** | `0/12` | `1.787e-01` | `280.9` 行 / `711,585.8` |
+| `ring_only_v10_phase4b`（仅一维周期环） | **0/12 (0.0%)** | `0/12` | `1.698e-01` | `298.7` 行 / `705,805.2` |
+| **`v10_phase5a_manifold_pde_and_commitment`** | **12/12 (100.0%)** | **12/12 (100%)** | **`1.076e-19`** | **`220.1` 行 (-21.66%) / `291,148.1` (-59.08%)** |
+
+#### 2. Phase 5B：强过程噪声SDE `2SLS-IV`（Cohort 5B-1）与近临界极限环（Cohort 5B-2）
+
+| 队列与对照臂 | 核心达标指标 | 极点估计均值绝对误差 | 均值评估 MSE（漂移 / 新48步） | 均值科学计算 |
+| --- | --- | --- | --- | --- |
+| **5B-1 SDE**（4题）：`deterministic_v10_no_sde_audit` | 漂移 `<=2e-3`: **0/4**（`completed`: `0/4`） | — | 无噪条件漂移 `8.029e-02` | `481,843.8` |
+| **5B-1 SDE**（4题）：`stochastic_v10_naive_ols` | 漂移 `<=2e-3`: **1/4**（`completed`: `1/4`） | `0.1944`（Hurwicz-Nickell偏置） | 无噪条件漂移 `2.326e-02` | `482,787.0` |
+| **5B-1 SDE**（4题）：**`v10_phase5b_stochastic_2sls_iv`** | **漂移 `<=2e-3`: 4/4 (100%)**（原生复现确认 `2/4`） | **`0.0181` (降 `10.7×`)** | **无噪条件漂移 `3.317e-04` (降 `70.1×` vs OLS / `242.1×` vs Det)** | **`424,956.2` (-12.01%)** |
+| **5B-2 近临界VdP**（含`990401`与$\rho=1.008$，4题）：`flat_baseline` / `linear_ar2` | **0/4** / **0/4** | — | `1.119e+01` / `1.068e+01` | `427,786.0` / `420,305.2` |
+| **5B-2 近临界VdP**（4题）：**`v10_phase5b_active_resonance_vdp`** | **4/4 (100%)，全达 `selected_channels=[]`** | — | **`2.028e-17`** | **`69,074.8` (-83.57%)** |
+
+#### 3. Phase 5C：零公理代数证明内核、可解性／不可达证书与AWM §4.3前提修复
+
+| 子实验队列 | 对照／篡改基线表现 | **v10 `SymbolicProofKernel` 表现** | 核心形式保证与效率收益 |
+| --- | --- | --- | --- |
+| **5C-1 跨承诺涌现守恒律合成**（7项跨元数定理） | 篡改系数证书放行率：**`0/7`（100%拦截）** | **核验通过：`7/7`（100%），覆盖 $N\in\{3..9\}$** | 精确 $\mathbb{Q}[x]$ 恒等消元＋Lean 4 定理导出 |
+| **5C-2 预算控制可解／不可达证明**（8题，AWM Stage 03） | 启发式 Rollout（256条）：认证 **`0/8`**（仅命中 `1/4` 可达） | **精确认证：`8/8`（100%：`4/4` 实测可达证人＋`4/4` Farkas不可达证书）** | 严格区分真物理不可解与搜索策略失灵 |
+| **5C-3 差异触发 `SufficientCover` 前提修复**（4题，AWM §4.3） | 无依赖图全参数盲探：需 `36–40` 步实验 | **修复并实测通过：`4/4`（100%），仅需 `4` 步靶向探针** | 真实最小预算 $B^*$ 最大误差 **`0.0`**，探针减少 **`89.92%`** |
