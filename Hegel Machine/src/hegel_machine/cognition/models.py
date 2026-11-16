@@ -178,6 +178,8 @@ class ResearchConfig:
     stochastic_estimation_method: str = "2sls_iv"
     active_resonance_probing: bool = True
     algebraic_proof_synthesis: bool = True
+    indexed_commitment_store: bool = False
+    sensor_role_calibration_priors: bool = False
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:

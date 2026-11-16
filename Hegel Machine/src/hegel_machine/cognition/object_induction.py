@@ -627,6 +627,24 @@ def infer_object_model(spec, records, budget, prior=None):
                     "role_definition": hypothesis["kind"], "counterexamples": hypothesis["counterexamples"]})
         for group in prior.get("groups", []):
             quantity = group["q"]
+            u_field = group.get("u")
+            if u_field and u_field in roles and quantity not in drive_fields:
+                r_info = roles[u_field]
+                has_foreign_interaction = any(
+                    item.get("affected_quantities") for item in r_info.get("background_comparisons", ())
+                )
+                if (
+                    r_info.get("additive_supported")
+                    and r_info.get("quantity_candidates") == [quantity]
+                    and not has_foreign_interaction
+                ):
+                    drive_fields[quantity] = u_field
+                    if r_info["control"] in drives:
+                        drives[r_info["control"]]["quantity"] = quantity
+                else:
+                    output["contradictions"].append({"field": u_field, "role": "u",
+                        "previous_quantity": quantity,
+                        "candidate_quantities": r_info.get("quantity_candidates", [])})
             for role, candidates in (("x", positions), ("f", focus_candidates)):
                 field = group.get(role)
                 if field not in candidates:

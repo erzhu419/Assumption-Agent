@@ -183,8 +183,9 @@ def plan_competing_object_probe(command_spec, entries, budget, *, binding=None,
         # A local revision already identifies its unresolved predicates. Solve
         # those questions once, then require actual complete response separation.
         from .condition_questions import plan_condition_questions
+        scaled_cap = max(6000, 600 * len(questions)) if len(questions) > 10 else 6000
         generation = generation_budget if generation_budget is not None else SearchBudget(
-            min(6000, budget.remaining // 8))
+            min(scaled_cap, budget.remaining // (6 if scaled_cap > 6000 else 8)))
         pending, skipped, method_cost, recall = list(questions), [], 0, methods
         while pending:
             plan = plan_condition_questions(command_spec, pending, budget, binding=binding,

@@ -220,10 +220,27 @@ class UnifiedResearchAgent:
     def _world_commitments(self, budget, actions=None):
         if not (self.config.use_memory and self.config.world_structure_commitments and self.library.meta_priors):
             return []
-        from .world_structure_commitments import consolidate_world_structure_commitments
         before = budget.spent
+        if self.config.indexed_commitment_store:
+            from .premise_commitment_index import ensure_library_commitment_index
+            commitments, _, _ = ensure_library_commitment_index(
+                self.library, budget=budget, tolerance=self.config.minimum_improvement
+            )
+            if actions is not None and (commitments or budget.spent != before):
+                actions.append({"action": "retrieve_indexed_world_commitments",
+                    "commitment_count": len(commitments),
+                    "commitment_ids": [item["commitment_id"] for item in commitments],
+                    "compute_cost": budget.spent - before})
+            return commitments
+        from .premise_commitment_index import extract_archive_witness_maps
+        from .world_structure_commitments import consolidate_world_structure_commitments
+        sup_map, ce_map = extract_archive_witness_maps(self.library.meta_priors)
         commitments = consolidate_world_structure_commitments(
-            self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement)
+            self.library.meta_priors,
+            budget=budget,
+            support_rows_by_source=sup_map or None,
+            counterexample_rows_by_source=ce_map or None,
+            tolerance=self.config.minimum_improvement)
         if actions is not None and (commitments or budget.spent != before):
             actions.append({"action": "consolidate_world_structure_commitments",
                 "commitment_count": len(commitments),
@@ -305,8 +322,13 @@ class UnifiedResearchAgent:
                 )
                 return updated_s
         from .premise_dependency_audit import apply_verified_transition_premises, audit_transition_premises
+        audit_comms = commitments
+        if self.config.indexed_commitment_store:
+            idx_obj = getattr(self.library, "_premise_commitment_index", None)
+            if idx_obj is not None:
+                audit_comms = idx_obj.deduplicated_audit_commitments(budget)
         audit = audit_transition_premises(
-            model, records, budget, commitments=commitments, tolerance=self.config.minimum_improvement,
+            model, records, budget, commitments=audit_comms, tolerance=self.config.minimum_improvement,
             allow_expanded_revisions=self.config.expanded_premise_revisions,
             allow_latent_state=self.config.latent_state_discovery,
             allow_higher_order_latent=self.config.higher_order_latent_discovery,
@@ -455,8 +477,13 @@ class UnifiedResearchAgent:
                     and transitions
                 ):
                     from .premise_dependency_audit import audit_transition_premises
+                    audit_comms = commitments
+                    if self.config.indexed_commitment_store:
+                        idx_obj = getattr(self.library, "_premise_commitment_index", None)
+                        if idx_obj is not None:
+                            audit_comms = idx_obj.deduplicated_audit_commitments(budget)
                     audit = audit_transition_premises(
-                        model, transitions, budget, commitments=commitments, tolerance=tolerance,
+                        model, transitions, budget, commitments=audit_comms, tolerance=tolerance,
                         allow_expanded_revisions=self.config.expanded_premise_revisions,
                         allow_latent_state=self.config.latent_state_discovery,
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
@@ -475,11 +502,22 @@ class UnifiedResearchAgent:
                 # Pass 1: Scope-gated instantiation ONLY of commitments empirically consistent with current audit!
                 # Ensures returning conditions recover valid older commitments instead of blindly revising latest generation.
                 task_sig = _unique_task_signature(spec)
-                consistent_comms = [
-                    comm
-                    for comm in commitments
-                    if is_commitment_empirically_consistent(comm, audit, task_id=task_sig)
-                ]
+                idx_obj = (
+                    getattr(self.library, "_premise_commitment_index", None)
+                    if self.config.indexed_commitment_store
+                    else None
+                )
+                if idx_obj is not None:
+                    consistent_comms, idx_stats = idx_obj.query_consistent_commitments(
+                        audit, task_id=task_sig, budget=comm_budget
+                    )
+                else:
+                    idx_stats = None
+                    consistent_comms = [
+                        comm
+                        for comm in commitments
+                        if is_commitment_empirically_consistent(comm, audit, task_id=task_sig)
+                    ]
                 for comm in consistent_comms:
                     if comm_budget.remaining <= 0:
                         break
@@ -499,7 +537,12 @@ class UnifiedResearchAgent:
 
                 # Pass 2: Scientific premise revision ONLY if no existing consistent commitment explained the world!
                 if not any(item["training_loss"] <= eff_comm_tol for item in claims):
-                    for comm in commitments:
+                    rev_pool = (
+                        idx_obj.query_revision_parent_commitments(audit, budget=comm_budget)
+                        if idx_obj is not None
+                        else commitments
+                    )
+                    for comm in rev_pool:
                         if comm_budget.remaining <= 0:
                             break
                         triggers = commitment_applicable_triggers(comm, audit)
@@ -516,14 +559,17 @@ class UnifiedResearchAgent:
                                 break
                 budget.spend(comm_budget.spent)
                 consistent_ids = {c["commitment_id"] for c in consistent_comms}
-                actions.append({"action": "apply_world_structure_commitments",
+                apply_payload = {"action": "apply_world_structure_commitments",
                     "compute_cost": comm_budget.spent,
                     "candidate_count": len(claims),
                     "consistent_commitments_matched": [c["commitment_id"] for c in consistent_comms],
                     "rejected_inconsistent_commitment_ids": [
                         c["commitment_id"] for c in commitments if c["commitment_id"] not in consistent_ids
                     ],
-                    "supported": any(item["training_loss"] <= eff_comm_tol for item in claims)})
+                    "supported": any(item["training_loss"] <= eff_comm_tol for item in claims)}
+                if idx_stats is not None:
+                    apply_payload["premise_index_stats"] = idx_stats
+                actions.append(apply_payload)
         if not any(
             item["training_loss"]
             <= (
@@ -672,6 +718,31 @@ class UnifiedResearchAgent:
         commitments = (self._world_commitments(budget, actions)
                        if self.config.transition_premise_audit and self.config.world_structure_commitments else ())
         model = infer_object_model(raw_spec, records(), budget)
+        if (
+            self.config.sensor_role_calibration_priors
+            and self.config.use_memory
+            and not model.get("complete")
+        ):
+            from .sensor_role_calibration import (
+                calibrate_anonymous_roles_with_prior,
+                consolidate_sensor_role_calibration_priors,
+            )
+            cal_priors = consolidate_sensor_role_calibration_priors(
+                self.library, commitments=commitments, budget=budget
+            )
+            if cal_priors:
+                cal_res = calibrate_anonymous_roles_with_prior(
+                    raw_spec,
+                    model,
+                    acquire_fn=acquire,
+                    records_fn=records,
+                    channels=channels,
+                    budget=budget,
+                    actions=actions,
+                    prior=cal_priors[0],
+                    row_limit=row_limit,
+                )
+                model = cal_res["model"]
         model = self._audit_object_transition_premises(model, records(), budget, actions, commitments=commitments)
         from .object_dependency_methods import completed_position_relation, new_position_method_decision
         tested_partial_roles = set()
@@ -1136,6 +1207,16 @@ class UnifiedResearchAgent:
             self._remember_relation_research(prior, selected, offered_spec or spec, actions)
         if confirmation_ref is not None:
             prior.setdefault("confirmation_refs", []).append(deepcopy(confirmation_ref))
+        if self.config.indexed_commitment_store and not prior.get("support_witness_rows"):
+            witness_sample = list(selected_training[:12]) + list(selected_validation[:8])
+            prior["support_witness_rows"] = [
+                {
+                    "features": dict(r.features),
+                    "target": float(r.target),
+                    "history": [dict(h) for h in r.history],
+                }
+                for r in witness_sample
+            ]
         return {**result, "stored": True, "concept_id": concept_id,
                 "concepts_added": concepts_added, "reused": False}
 
@@ -3620,7 +3701,7 @@ class UnifiedResearchAgent:
             # Test the cheaper observation-variation hypothesis before expanding
             # another search language. This only pauses candidate generation;
             # adoption still requires a separate frozen-program confirmation.
-            if (test_response_noise is not None and independent_validation and best is proposed
+            if (test_response_noise is not None and independent_validation and best is not None and best is proposed
                     and best.get("selection_basis") not in {"all_acquired_evidence", "development_feedback"}
                     and alternative is not None and best["validation_loss"]
                         + self.config.minimum_improvement < alternative["validation_loss"]):

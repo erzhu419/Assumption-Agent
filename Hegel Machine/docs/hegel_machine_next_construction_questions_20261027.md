@@ -2612,3 +2612,30 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
   - `cold_full_tools`：Stage 3 `0/4`、Stage 4–5 `0/4`、Stage 6 `0/4`（总计 **`0/12`**，单链冻结后均值算力 `1,488,940.5`）；
   - `archive_full_tools` 与 `structured_lifecycle_v10`：Stage 3 **`3/4`**、Stage 4–5 **`3/4`**（$C_0$ 全部正确降级为 `conditional`）、Stage 6 **`2/4` 恢复 $C_0$ / `1/4` 完成在线确认**（总计 **`7/12 = 58.3%`**，在源形成成功的 3 条链上达 **`7/9 = 77.8%`**；单链冻结后均值算力分别降至 `1,140,655.8` 与 **`1,139,826.8` [-23.45%]**），完整保留 `prospective_chain_2` 源形成未过及 `N=6` 预算耗尽样本。
 - **回归与验收：** `tests/test_v10_2_audit_acceptance.py` 全部 22 项行为验收标准及 `v10` 专项回归共 **`52/52`（100% 通过）**。
+
+
+## 126. v10.3：长程异质知识库规模化索引（M=4..72）与高元数（N=6,7,8）可证伪传感器角色标定先验（2026-11-17）
+
+- **前瞻证据回执（全程 `model_calls = 0, total_tokens = 0`；原 `v10` 13份与 `v10.2` 6份回执字节零改动）：**
+  - `docs/evidence/v10_3_scaling_and_calibration_20261117/library_scaling_curve_20261117.json`
+  - `docs/evidence/v10_3_scaling_and_calibration_20261117/high_arity_sensor_calibration_20261117.json`
+  - 完整专题报告：`docs/hegel_v10_3_scaling_and_sensor_calibration_20261117.md`
+
+### 一、方向 1：异质／冲突知识库规模扩展曲线（`PremiseCommitmentIndex` vs 强 `archive_full_tools`）
+
+- **单因子隔离实现（`premise_commitment_index.py`）：** 固定三臂传感器角色归纳完全一致（`sensor_role_calibration_priors=False`），在源先验上保留真实支持／反例见证轨迹。`structured_indexed_v10` 在写入期增量巩固并建立 `(守恒类, 方向类, 谓词哈希, 隐状态)` 倒排索引与自定义谓词去重；`archive_full_tools` 在目标期从原始先验按需重构。
+- **6 题 $N=5$ 目标在 `ample_380k` 下随库规模 $M \in \{4, 12, 36, 72\}$（覆盖 20 类异质／冲突机制）的实测分化：**
+  - $M = 4$：`archive` `5/6`（均值算力 `284,877.5`） vs `structured_indexed` `5/6`（`279,583.2`，省 `-1.86%`），复现小库近似平手；
+  - $M = 12$：`archive` `5/6`（`294,771.5`） vs `structured_indexed` `5/6`（`281,484.0`，省 `-4.51%`）；
+  - $M = 36$：`archive` `3/6`（`321,261.8`） vs `structured_indexed` `3/6`（`278,989.2`，省 **`-13.16%`**）；
+  - **$M = 72$**：`archive` 跌至 **`2/6`**（按需重构＋运行内重巩固耗费 `58,198.0`／题，均值总算力升至 `339,655.5`），而 `structured_indexed` 目标端检索仅耗 **`3.2` 单位**，均值总算力保持 **$O(1)$ 平坦 `279,010.0`（单题省 `60,645.5` / `-17.86%`，含一次性写入成本 `16,812` 的盈亏平衡题数仅 $K^* = 0.28$ 题）** 并维持 **`3/6`** 通过；同时诚实揭示 $M \ge 36$ 时 13 种开放语法谓词在 12 行稀疏初测上对无条件交互题产生的假阳性碰撞边界。
+
+### 二、方向 2：跨任务可证伪传感器角色标定先验（`SensorRoleCalibrationPrior`，突破 $N=6,7,8$）
+
+- **单因子隔离实现（`sensor_role_calibration.py`）：** 仅从已确认 4 角色源任务提炼（空库或源任务失败时返回 `[]`），零私有属性读取：先做 **2 行等位置零通量＋多驱动可加性可证伪门控**，再做 **$O(N)$ 枢纽二分位置标定**（$\le 2N+1$ 行）与 **$O(N)$ 等状态选择器扫描焦点标定**（$\le 2N$ 行），最后经独立 12 行复核。
+- **Study 2A（$N \in \{6, 7, 8\} \times 3$ 类机制 = 9 题单因子消融，最高 $(8!)^2 = 1.63 \times 10^9$ 匿名排列）：**
+  - `cold_full_tools`：**`0/9`**；
+  - `commitment_only_cold_roles`（仅源承诺，冷角色归纳）：**`2/9`**（`N=6: 2/3, N=7: 0/3, N=8: 0/3`，角色消歧均值算力 `314,533.2`）；
+  - **`commitment_plus_calibration_prior`**：**`9/9`（100%，`N=6,7,8` 全满贯且 `9/9` 全部编译至 `selected_channels=[]`）**，角色消歧均值算力降至 **`35,505.9`（-88.71%）**，总算力降至 **`225,681.8`（-46.67%）**。
+- **Study 2B（3 类违背假设负向控制）：** 在 `anchored`（等位置直接效应）、`ContinuumFieldLab`（无位置连续场 PDE，`7.95e-20` 通过）与 `total`（全局焦点无关读出，`4.48e-21` 通过）上 **零虚假角色绑定**（单元测试另验证 `sink` 精确触发 `refute_sensor_role_calibration_prior`）。
+- **Study 2C（预注册前瞻生命周期链 `711000–714000` 复测至 $N=6$ 与扩展 Stage 7 $N=8$）：** 源形成成功的全部 **3 条前瞻链**在 Stage 3 ($N=5$)、Stage 4–5 ($N=5$ 反例修订)、**Stage 6 ($N=6$ 回归)** 与 **Stage 7 ($N=8$ 回归)** 达成 **`12/12`（100%）全通过**（`prospective_chain_2` 因 Stage 1 未过保持诚实 `0` 先验负样本）。

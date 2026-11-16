@@ -165,6 +165,7 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                                       tolerance=1e-7, max_candidates=8, preferred_schemas=(),
                                       response_parent=None, working_parent_loss=None,
                                       world_commitments=(), premise_audit=None,
+                                      active_threshold_probing=True,
                                       allow_latent_state=True,
                                       allow_higher_order_latent=True):
     """Fit and revise finite competing assignments within the supplied budget.
@@ -324,6 +325,7 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 commitment_applicable_triggers,
                 commitment_verified_radius_bounds,
                 instantiate_commitment_on_schema,
+                is_commitment_empirically_consistent,
                 propose_scientific_premise_revision,
             )
             commitment_budget = SearchBudget(max(1, search_budget.remaining * 2 // 3))
@@ -333,53 +335,60 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 for group in schema.get("fields", {}).values()
                 if "x" in group and "q" in group
             }
-            for comm in world_commitments:
+            ctl_sig = ",".join(sorted(local_spec.feature_bounds)[:4])
+            task_sig = f"{local_spec.task_id}:{ctl_sig}" if ctl_sig else local_spec.task_id
+            consistent_comms = [
+                c
+                for c in world_commitments
+                if is_commitment_empirically_consistent(c, premise_audit, task_id=task_sig)
+            ]
+            for comm in consistent_comms:
                 if commitment_budget.remaining <= 0:
                     break
-                triggers = commitment_applicable_triggers(comm, premise_audit)
-                if triggers:
-                    comm_entries = propose_scientific_premise_revision(
-                        comm, premise_audit, local_spec, rows, schema,
-                        commitment_budget, transitions=transitions,
-                        allow_latent_state=allow_latent_state,
-                        allow_higher_order_latent=allow_higher_order_latent,
-                        tolerance=tolerance,
-                    )
-                else:
-                    audit_bounds = commitment_verified_radius_bounds(
-                        comm, premise_audit, schema_x_to_q
-                    )
-                    pred_overrides = None
-                    if (
-                        premise_audit is not None
-                        and isinstance(premise_audit.get("verified_edge_condition"), dict)
-                        and comm.get("radius_parameters")
-                    ):
-                        pred_overrides = {
-                            comm["radius_parameters"][0]["symbol"]: premise_audit["verified_edge_condition"]
-                        }
-                    comm_entries = instantiate_commitment_on_schema(
-                        local_spec, rows, schema, comm, commitment_budget,
-                        radius_bounds=audit_bounds,
-                        predicate_overrides=pred_overrides,
-                        audit_report=premise_audit,
-                        transitions=transitions,
-                        allow_latent_state=allow_latent_state,
-                        allow_higher_order_latent=allow_higher_order_latent,
-                        tolerance=tolerance,
-                    )
-                    if (not any(supports_current_evidence(item) for item in comm_entries)
-                            and commitment_budget.remaining > 0 and premise_audit is None):
-                        comm_entries.extend(propose_scientific_premise_revision(
-                            comm, None, local_spec, rows, schema,
-                            commitment_budget, transitions=transitions,
-                            allow_latent_state=allow_latent_state,
-                            allow_higher_order_latent=allow_higher_order_latent,
-                            tolerance=tolerance,
-                        ))
+                audit_bounds = commitment_verified_radius_bounds(
+                    comm, premise_audit, schema_x_to_q
+                )
+                pred_overrides = None
+                if (
+                    premise_audit is not None
+                    and isinstance(premise_audit.get("verified_edge_condition"), dict)
+                    and comm.get("radius_parameters")
+                ):
+                    pred_overrides = {
+                        comm["radius_parameters"][0]["symbol"]: premise_audit["verified_edge_condition"]
+                    }
+                comm_entries = instantiate_commitment_on_schema(
+                    local_spec, rows, schema, comm, commitment_budget,
+                    radius_bounds=audit_bounds,
+                    predicate_overrides=pred_overrides,
+                    audit_report=premise_audit,
+                    transitions=transitions,
+                    active_threshold_probing=active_threshold_probing,
+                    allow_latent_state=allow_latent_state,
+                    allow_higher_order_latent=allow_higher_order_latent,
+                    tolerance=tolerance,
+                )
                 commitment_fits.extend(comm_entries)
                 if any(supports_current_evidence(item) for item in commitment_fits):
                     break
+
+            if not any(supports_current_evidence(item) for item in commitment_fits):
+                for comm in world_commitments:
+                    if commitment_budget.remaining <= 0:
+                        break
+                    triggers = commitment_applicable_triggers(comm, premise_audit)
+                    if triggers or premise_audit is None:
+                        comm_entries = propose_scientific_premise_revision(
+                            comm, premise_audit, local_spec, rows, schema,
+                            commitment_budget, transitions=transitions,
+                            active_threshold_probing=active_threshold_probing,
+                            allow_latent_state=allow_latent_state,
+                            allow_higher_order_latent=allow_higher_order_latent,
+                            tolerance=tolerance,
+                        )
+                        commitment_fits.extend(comm_entries)
+                        if any(supports_current_evidence(item) for item in commitment_fits):
+                            break
             record_attempt("world_commitment", commitment_fits, commitment_budget)
             search_budget.spend(commitment_budget.spent)
             fits = [*fits, *commitment_fits]

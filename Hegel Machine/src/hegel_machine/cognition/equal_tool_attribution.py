@@ -953,9 +953,16 @@ def reconstruct_commitments_from_raw_archive(
     tolerance: float = 1e-7,
 ) -> tuple[list[dict], int]:
     """Allow ``archive_full_tools`` to reconstruct equivalent commitments on demand, charging ``budget``!"""
+    from .premise_commitment_index import extract_archive_witness_maps
+
     before = budget.spent
+    sup_map, ce_map = extract_archive_witness_maps(raw_archive_priors)
     reconstructed = consolidate_world_structure_commitments(
-        deepcopy(raw_archive_priors), budget=budget, tolerance=tolerance
+        deepcopy(raw_archive_priors),
+        budget=budget,
+        support_rows_by_source=sup_map or None,
+        counterexample_rows_by_source=ce_map or None,
+        tolerance=tolerance,
     )
     return reconstructed, budget.spent - before
 

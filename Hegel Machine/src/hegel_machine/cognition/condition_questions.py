@@ -141,8 +141,10 @@ def plan_condition_questions(command_spec, questions, budget, *, binding=None,
     start = budget.spent
     questions = _questions(questions)
     response_programs = list(response_programs) if response_programs is not None else None
-    generation = SearchBudget(min(6000, budget.remaining // 8,
-        6000 - generation_budget.spent if generation_budget is not None else 6000,
+    cap = generation_budget.limit if generation_budget is not None else 6000
+    div = 6 if cap > 6000 else 8
+    generation = SearchBudget(min(cap, budget.remaining // div,
+        cap - generation_budget.spent if generation_budget is not None else 6000,
         generation_budget.remaining if generation_budget is not None else 6000))
     response_condition = (_current_condition(response_programs, binding or {},
         command_spec.feature_bounds, task_id) if response_programs is not None else None)
@@ -216,9 +218,16 @@ def plan_condition_questions(command_spec, questions, budget, *, binding=None,
                 missing_fields=sorted(required - set(current_binding)))
             return finish()
         before = generation.spent
-        learned = recall.propose(command_spec, programs, generation, binding=bindings,
+        recall_slice = (
+            SearchBudget(min(1500, generation.remaining // 2))
+            if (recall and len(questions) > 10)
+            else generation
+        )
+        learned = recall.propose(command_spec, programs, recall_slice, binding=bindings,
             serial=serial, length=probe_length, tolerance=tolerance, task_id=task_id,
             contexts=contexts, response_programs=response_programs) if recall else []
+        if recall_slice is not generation:
+            generation.spend(recall_slice.spent)
         result["method_search_cost"] += generation.spent - before
         result["method_candidates"] += len(learned)
         if recall is not None:
