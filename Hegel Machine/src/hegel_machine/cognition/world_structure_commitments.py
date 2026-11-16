@@ -570,6 +570,7 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
     return {
         "source_concept_id": prior["source_concept_id"],
         "source_task_id": prior.get("task_id"),
+        "source_status": prior.get("status", "supported"),
         "source_schema": source,
         "source_arity": len(source.objects),
         "fit_contract": fit,
@@ -1770,6 +1771,18 @@ def consolidate_world_structure_commitments(
             for m in members
             if m.get("vdp_params")
         ]
+        merged_counterexamples = [
+            deepcopy(ce)
+            for m in members
+            for ce in (m.get("counterexamples") or ())
+        ]
+        refuted_task_ids = list(
+            dict.fromkeys(
+                ce.get("task_id")
+                for ce in merged_counterexamples
+                if isinstance(ce, dict) and ce.get("task_id")
+            )
+        )
         candidate = {
             "commitment_id": f"world_commitment:{idx:04d}",
             "kind": "world_structure_commitment",
@@ -1778,12 +1791,18 @@ def consolidate_world_structure_commitments(
             "source_task_ids": list(
                 dict.fromkeys(m["source_task_id"] for m in members if m.get("source_task_id"))
             ),
+            "source_statuses": {
+                m["source_concept_id"]: m.get("source_status", "supported") for m in members
+            },
+            "refuted_task_ids": refuted_task_ids,
+            "counterexamples": merged_counterexamples,
             "source_arities": sorted({m["source_arity"] for m in members}),
             "family": representative["family"],
             "family_id": representative["family_id"],
             "role_terms": deepcopy(representative["role_terms"]),
             "radius_parameters": merged_params,
             "support_premises": deepcopy(representative["support_premises"]),
+            "declared_premises": deepcopy(representative["support_premises"]),
             "nonconservation_mechanism": representative.get("nonconservation_mechanism"),
             "latent_state_mechanism": representative.get("latent_state_mechanism"),
             "source_latent_poles": merged_latent_poles,
@@ -3323,7 +3342,7 @@ def commitment_verified_radius_bounds(
     params = commitment.get("radius_parameters", ())
     committed_dir = params[0]["direction"] if params else None
     committed_cond = (
-        _normalize_edge_condition_for_grouping(describe_edge_condition(params[0].get("edge_condition")))
+        describe_edge_condition(_normalize_edge_condition_for_grouping(params[0].get("edge_condition") or "unconditional"))
         if params
         else "unconditional"
     )
@@ -3347,7 +3366,7 @@ def commitment_verified_radius_bounds(
                 continue
             if (
                 "edge_condition" in m
-                and _normalize_edge_condition_for_grouping(describe_edge_condition(m["edge_condition"]))
+                and describe_edge_condition(_normalize_edge_condition_for_grouping(m["edge_condition"] or "unconditional"))
                 != committed_cond
             ):
                 continue
@@ -3369,31 +3388,39 @@ def commitment_applicable_triggers(commitment: dict, audit_report: dict | None) 
         return []
     primary = params[0]
     committed_dir = primary["direction"]
-    committed_cond = describe_edge_condition(primary.get("edge_condition"))
-    norm_committed_cond = _normalize_edge_condition_for_grouping(committed_cond)
+    raw_committed_cond = primary.get("edge_condition") or "unconditional"
+    norm_committed_cond = describe_edge_condition(_normalize_edge_condition_for_grouping(raw_committed_cond))
     committed_noncons = commitment.get("nonconservation_mechanism") or "conserved"
     committed_latent = commitment.get("latent_state_mechanism")
+
+    def _norm_c_str(val: object) -> str:
+        return describe_edge_condition(_normalize_edge_condition_for_grouping(val or "unconditional"))  # type: ignore[arg-type]
 
     applicable = []
     for trigger in audit_report.get("scientific_revision_triggers", ()):
         kind = trigger.get("kind")
         if kind == "interaction_direction_revision":
+            trig_cond_ok = (
+                "edge_condition" not in trigger
+                or _norm_c_str(trigger.get("edge_condition")) == norm_committed_cond
+            )
             if (
                 committed_noncons == "conserved"
                 and committed_latent not in _TRANSITION_LATENT_MECHANISMS
+                and trig_cond_ok
                 and trigger.get("retracted_direction") == committed_dir
                 and trigger.get("replacement_direction") != committed_dir
             ):
                 applicable.append(trigger)
         elif kind == "exchange_condition_revision":
-            retracted_cond = describe_edge_condition(trigger.get("retracted_condition"))
-            replacement_cond = describe_edge_condition(trigger.get("replacement_condition"))
+            retracted_raw = trigger.get("retracted_condition_raw", trigger.get("retracted_condition"))
+            replacement_raw = trigger.get("replacement_condition")
             if (
                 committed_noncons == "conserved"
                 and committed_latent not in _TRANSITION_LATENT_MECHANISMS
-                and _normalize_edge_condition_for_grouping(retracted_cond) == norm_committed_cond
+                and _norm_c_str(retracted_raw) == norm_committed_cond
                 and (
-                    _normalize_edge_condition_for_grouping(replacement_cond) != norm_committed_cond
+                    _norm_c_str(replacement_raw) != norm_committed_cond
                     or trigger.get("replacement_direction") != committed_dir
                 )
             ):
@@ -3401,24 +3428,92 @@ def commitment_applicable_triggers(commitment: dict, audit_report: dict | None) 
         elif kind == "nonconservation_mechanism_revision":
             replacement_mech = trigger.get("replacement_mechanism")
             replacement_dir = trigger.get("replacement_direction")
-            replacement_cond = describe_edge_condition(trigger.get("replacement_condition"))
+            replacement_raw = trigger.get("replacement_condition")
             if (
                 committed_noncons != replacement_mech
                 or committed_dir != replacement_dir
-                or _normalize_edge_condition_for_grouping(replacement_cond) != norm_committed_cond
+                or _norm_c_str(replacement_raw) != norm_committed_cond
             ):
                 applicable.append(trigger)
         elif kind == "latent_transition_state_revision":
             trigger_mech = trigger.get("latent_mechanism", "transition_memory")
             replacement_dir = trigger.get("replacement_direction")
-            replacement_cond = describe_edge_condition(trigger.get("replacement_condition"))
+            replacement_raw = trigger.get("replacement_condition")
             if (
                 committed_latent != trigger_mech
                 or committed_dir != replacement_dir
-                or _normalize_edge_condition_for_grouping(replacement_cond) != norm_committed_cond
+                or _norm_c_str(replacement_raw) != norm_committed_cond
             ):
                 applicable.append(trigger)
     return applicable
+
+
+def is_commitment_empirically_consistent(
+    commitment: dict,
+    audit_report: dict | None,
+    *,
+    task_id: str | None = None,
+) -> bool:
+    """Return True iff ``commitment`` has no invalidated support on ``task_id`` and matches ``audit_report``.
+
+    Prevents both:
+    - Reusing a refuted commitment unconditionally on a task that refuted it (Acceptance #10), and
+    - Allowing a newer-generation ``source_status='supported'`` commitment (e.g. ``left`` or ``sink``)
+      to bypass empirical premise checks when an older condition (e.g. ``right`` or ``conserved``) returns
+      (Acceptance #18 & C2).
+    """
+    if task_id is not None and task_id in set(commitment.get("refuted_task_ids") or ()):
+        return False
+    if not audit_report:
+        return True
+    if commitment_applicable_triggers(commitment, audit_report):
+        return False
+
+    committed_noncons = commitment.get("nonconservation_mechanism")
+    committed_latent = commitment.get("latent_state_mechanism")
+    cons_sup = audit_report.get("conservation_supported")
+    audit_lat = (audit_report.get("latent_transition_state") or {}).get("mechanism")
+
+    if cons_sup is True and committed_noncons not in (None, "conserved"):
+        return False
+    if (
+        cons_sup is False
+        and audit_lat is None
+        and audit_report.get("status") != "unexplained_latent_transition_state"
+        and committed_noncons in (None, "conserved")
+    ):
+        return False
+
+    if committed_latent in _TRANSITION_LATENT_MECHANISMS:
+        if committed_latent == "custom_transition_memory":
+            if audit_report.get("status") != "unexplained_latent_transition_state":
+                return False
+        elif audit_lat != committed_latent:
+            return False
+    elif audit_lat in _TRANSITION_LATENT_MECHANISMS:
+        return False
+
+    params = commitment.get("radius_parameters") or ()
+    if params:
+        primary = params[0]
+        v_dir = audit_report.get("verified_direction")
+        s_dirs = audit_report.get("supported_directions")
+        if v_dir is not None and primary["direction"] != v_dir:
+            return False
+        if s_dirs and primary["direction"] not in s_dirs:
+            return False
+        v_cond = audit_report.get("verified_edge_condition")
+        if v_cond is not None:
+            norm_comm = describe_edge_condition(
+                _normalize_edge_condition_for_grouping(primary.get("edge_condition") or "unconditional")
+            )
+            norm_ver = describe_edge_condition(
+                _normalize_edge_condition_for_grouping(v_cond or "unconditional")
+            )
+            if norm_comm != norm_ver:
+                return False
+
+    return True
 
 
 def propose_scientific_premise_revision(
@@ -3470,15 +3565,16 @@ def propose_scientific_premise_revision(
         if kind == "interaction_direction_revision":
             replacement = trigger["replacement_direction"]
             retracted_ids = {f"interaction_direction:{sym}"}
+            dir_pred = trigger.get("predicate_program")
             candidate_revisions.append(
                 (
                     replacement,
-                    no_pred_override,
+                    dir_pred if dir_pred is not None else no_pred_override,
                     None,
                     commitment.get("nonconservation_mechanism"),
                     committed_latent,
                     bounds_tuple,
-                    None,
+                    list(t_iv) if t_iv else None,
                     {
                         "trigger_source": "transition_premise_dependency_audit",
                         "revision_kind": "interaction_direction_revision",

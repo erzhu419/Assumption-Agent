@@ -513,9 +513,17 @@ def _run_three_arm_pomdp_discovery_and_n5_transfer(
                     bundle["training"],
                     bundle["validation"],
                     confirmed=True,
-                    confirmation_loss=gated_best["validation_loss"],
-                    confirmation_rows=len(bundle["validation"]),
+                    confirmation_loss=float(gated_mse),
+                    confirmation_rows=48,
                     selected_channels=("fine",),
+                    confirmation_ref={
+                        "kind": "heldout_fresh48_trajectory",
+                        "mechanism_id": mechanism_id,
+                        "source_seed": seed,
+                        "eval_seed": eval_seed,
+                        "confirmation_rows": 48,
+                        "selection_role": "first_passing_source_gate",
+                    },
                 )
                 if saved.get("stored"):
                     consolidated_og_library = deepcopy(consolidator.library)

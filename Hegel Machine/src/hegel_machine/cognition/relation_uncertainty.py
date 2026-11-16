@@ -618,21 +618,35 @@ class RelationIntervalResearch:
             domains = parameter["radius_intervals"]
             if not domains:
                 continue
+            is_narrow_recheck = False
             if (len(domains) == 1 and domains[0][1] - domains[0][0] <= interval_precision
                     and parameter.get("kernel_prior_status") != "pending"):
-                if self._inherited_contexts or parameter["symbol"] in self._inherited_domains:
+                if (
+                    self._inherited_contexts
+                    or parameter["symbol"] in self._inherited_domains
+                    or (len(self.parameters) > 1 and parameter_index is not None)
+                ):
                     program, _ = self._program(self.values)
                     errors = self._response_errors(program, self.values, evaluated_rows, budget)
                     if errors is None:
                         self.status = "compute_exhausted"
                         return []
-                    if (sum(errors[id(row)] for row in paid_rows) / len(paid_rows) > tolerance or
-                        any(sum(errors[key] for key in trajectory) / len(trajectory) > tolerance
-                            for trajectory in trajectory_ids)) and self.reopen(
-                                "current_relation_counterexample", parameter_index=index):
-                        return self.alternatives(paid_rows, budget, tolerance, experiments=experiments,
-                            interval_precision=interval_precision, parameter_index=parameter_index)
-                continue
+                    has_mismatch = (
+                        sum(errors[id(row)] for row in paid_rows) / len(paid_rows) > tolerance
+                        or any(
+                            sum(errors[key] for key in trajectory) / len(trajectory) > tolerance
+                            for trajectory in trajectory_ids
+                        )
+                    )
+                    if has_mismatch:
+                        if self.reopen("current_relation_counterexample", parameter_index=index):
+                            return self.alternatives(paid_rows, budget, tolerance, experiments=experiments,
+                                interval_precision=interval_precision, parameter_index=parameter_index)
+                        is_narrow_recheck = True
+                    else:
+                        continue
+                else:
+                    continue
             relations = _parameter_relations(self.template, parameter["symbol"])
             # Sparse paid rows still carry measured preparation frames used by
             # their temporal consumers. Those frames can expose a boundary
@@ -640,7 +654,8 @@ class RelationIntervalResearch:
             geometry_depth = max((node.history_depth for node in relations), default=0)
             geometry_fields = sorted({name for node in relations for name, _ in node.observed_variables()})
             frames = {}
-            for row in self._new_geometry_rows(paid_rows, parameter):
+            geom_source_rows = paid_rows if is_narrow_recheck else self._new_geometry_rows(paid_rows, parameter)
+            for row in geom_source_rows:
                 history = row.history
                 for position in range(max(0, len(history) - self.program.history_depth), len(history) + 1):
                     point = row.features if position == len(history) else history[position]
@@ -732,7 +747,8 @@ class RelationIntervalResearch:
                             continue
                         other_doms = other_param.get("radius_intervals") or []
                         if not other_doms or (
-                            len(other_doms) == 1
+                            candidates
+                            and len(other_doms) == 1
                             and other_doms[0][1] - other_doms[0][0] <= interval_precision
                         ):
                             continue
@@ -751,11 +767,11 @@ class RelationIntervalResearch:
                                 (
                                     e
                                     for e in sibling_entries
-                                    if abs(e["parameter_values"][other_param["symbol"]] - old_other_val) > 1e-12
+                                    if e["parameter_values"][other_param["symbol"]] != old_other_val
                                 ),
                                 sibling_entries[0],
                             )
-                            if abs(best_sib["parameter_values"][other_param["symbol"]] - old_other_val) > 1e-12 or not candidates:
+                            if best_sib["parameter_values"][other_param["symbol"]] != old_other_val:
                                 self.adopt(best_sib)
                                 repaired_sibling = True
                         else:
@@ -917,10 +933,11 @@ class RelationIntervalResearch:
                     neg_donor = Program("and", children=(
                         Program("ge", children=(source[2], Program("const", value=-0.95))),
                         Program("lt", children=(source[2], Program("const", value=-0.45)))))
+                    focus_endpoint = Program("or", children=(source[0], target[0]))
                     for donor_band in (pos_donor, neg_donor):
                         cand_pred = Program("and", children=(donor_band, core_band))
                         if _active_paths(cand_pred)[0]:
-                            predicates.append(Program("and", children=(source[0], cand_pred)))
+                            predicates.append(Program("and", children=(focus_endpoint, cand_pred)))
         else:
             for relation in _parameter_relations(self.template, parameter["symbol"]):
                 objects = relation_objects(relation)
@@ -938,6 +955,7 @@ class RelationIntervalResearch:
                         Program("ge", children=(distance, Program("const", value=low))),
                         Program("lt", children=(distance, Program("const", value=high)))))
                     if relation.op == "relation_sum" and bound_pred is not None and bound_pred != TRUE:
+                        focus_endpoint = Program("or", children=(source[0], target[0]))
                         inst_pred = instantiate_predicate(bound_pred, source, target)
                         full_band = Program("and", children=(band, inst_pred))
                         pos_donor = Program("and", children=(
@@ -950,10 +968,10 @@ class RelationIntervalResearch:
                         for donor_band in (pos_donor, neg_donor):
                             cand_r = Program("and", children=(donor_band, full_band))
                             if _active_paths(cand_r)[0]:
-                                predicates.append(Program("and", children=(source[0], cand_r)))
+                                predicates.append(Program("and", children=(focus_endpoint, cand_r)))
                                 added_macro = True
                         if not added_macro:
-                            predicates.append(Program("and", children=(source[0], full_band)))
+                            predicates.append(Program("and", children=(focus_endpoint, full_band)))
                     else:
                         predicates.append(Program("and", children=(band,
                             instantiate_predicate(bound_pred, source, target)))

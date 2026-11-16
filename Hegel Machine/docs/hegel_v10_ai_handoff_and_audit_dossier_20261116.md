@@ -1,5 +1,11 @@
 # Hegel Machine v10 — 面向外部 AI 审阅与交接的全量工程台账、机制原理与验证审计档案（AI-to-AI Handoff & Audit Dossier）
 
+> **【2026-11-16 `v10.2` 独立外部审计勘误与闭环声明（Audit Errata & Closure Banner）】**
+> 本文档初版针对锚点提交 `a66cd82b` 撰写。经外部独立代码与回执审计（见 `markdown/hegel_v10.2/GPT_diagnosis_v10.2.md` 及 `F01–F20`），仓库已完成 `v10.2` 全量修复、单因子等工具归因与冻结生命周期重验（完整闭合报告见 [hegel_v10_2_errata_and_audit_closure_20261116.md](file://wsl.localhost/Ubuntu-22.04/home/erzhu419/mine_code/Asumption%20Agent/Hegel%20Machine/docs/hegel_v10_2_errata_and_audit_closure_20261116.md)，SHA256 只读完整性与逐项勘误台账见 [errata_and_sha256_ledger_20261116.json](file://wsl.localhost/Ubuntu-22.04/home/erzhu419/mine_code/Asumption%20Agent/Hegel%20Machine/docs/evidence/v10_2_audit_remediation_20261116/errata_and_sha256_ledger_20261116.json)）。阅读本文档历史章节时须以如下严格口径为准：
+> 1. **证明域一致性与可信基（`F01, F02, F10, F11, F12, F14`）**：`a66cd82b` 中 `PotentialLowerBoundCertificate` 与 `ReachabilityWitnessCertificate`／`BudgetedControlLab` 曾存在 `state_bounds` 域不一致漏洞（已在 `v10.2` 通过 `validate_control_task_semantics` 与 `verify_reachable_box_enclosure` 彻底闭合，`both_opposite_certificates_accepted = False`，并全链路接入 `SearchBudget` 与 `learned_model -> certificate` 桥接）。可信验证内核为 Python `Fraction` + `sympy.Poly(..., domain='QQ')`；导出的 Lean 4 文本为 **`draft_only`（`lean_compiled = False`，非已编译无 `sorry` Lean 定理）**；守恒律在有限元数集合上逐个核验（`all_arity_proved = False`）。
+> 2. **实验角色分层与基线公平性（`F03, F04, F05, F06, F07, F13, F16, F17`）**：原 13 份 `v10` 回执（保持字节级只读未改）涵盖只读普查、求解器／模型类能力消融（Phase 2C-2/3A/4B/5A）、多因子结构化工作流对照（Phase 2B/3B Stage A）与供给模型证明检验（Phase 5C），**不可混同于等工具持久知识归因**。普通档案基线低成本重构等价方法属合法强基线与真实打平／负结果（非“同构病灶”）。等工具三臂归因、严格单因子前提定位消融、实测四机制差异修复（真实减少 `58.42%` 探针，替代原 `5C-3` 单一端口增益机制 4 参数实例与 `89.92%` 名义公式）及冻结 6 阶段 `v4` 生命周期均单列于 `docs/evidence/v10_2_audit_remediation_20261116/`。
+> 3. **SDE 指标、元数据与离散算子口径（`F08, F09, F15, F18`）**：Phase 5B-1 原生在线 `completed = 2/4`，原 `3.32e-4` 为无噪孪生迁移 MSE（真实带噪历史条件漂移 MSE 已在 `v10.2` 独立重测）；Phase 2B/3B 原脚本保存的 `confirmation_loss` 元数据引用了 `36` 行开发验证集（独立 `48` 行确认本身已执行，元数据已在 `v10.2` 修复）；流形／环算子作用在有限离散格点与离散平移子群 $\mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$ 上，不主张连续极限 $h\to 0$ 或完整 $\operatorname{Aut}(\mathbb{T}^2)$。**Phase 6 能力扩张已按合同冻结。**
+
 > **目标读者（Target Reader）**：外部审阅／协作／接手开发的 AI 智能体（如 GPT-6、Codex、Claude、Gemini 等自主科研与代码审计模型）。
 > **文档定位**：在 `docs/hegel_v10_technical_report_20261116.md`（学术专著）与路线合成报告的基础上，以**零模糊、代码与回执逐项可核验（code-exact & receipt-verifiable）**的标准，完整记录自接手本项目（承接 `v9 §118` 及 `106110602 -> 106110603` 三臂 `0/3` 未交付预测器瓶颈）以来：
 > 1. **具体做了什么**（新增／修改的全部模块、AST 原语、JSON 承诺契约、`ResearchConfig` 开关、主循环钩子与 Git 提交链）；
@@ -44,8 +50,8 @@
 在动手写任何 `v10` 代码前，我们先将 `markdown/initial thought/`（`黑格尔机.md`、`Hegel_assumption.md`、`黑格尔机和泛函分析.md`、`广义对位关系.md`）、`markdown/Meta prior.md`、`docs/hegel_machine_next_construction_questions_20261027.md`（`§§1–118`）、`markdown/hegel_v10/`（AWM 论文 PDF、`GPT_diagnosis_v10.md`、`复核范围与v9最小修订建议.md`）与 `src/hegel_machine/cognition/` 源码及 `v9` 实验回执做了全量交叉审计，定位出导致 `501 / 601 / 602 / 603` 停滞的 **4 个精确到代码行的根因**：
 
 ### 1.1 四个代码与账本级病灶
-1. **病灶 1（`601` 与 `603` 三臂同构假象）**：
-   - 在 `composed_abc_20261101.json`（`601`）与 `position_method_successor_20261107.json`（`603`）中，`archive`（A 臂）和 `fixed_pr2`（B 臂）被传入了与 `pr3`（C 臂）完全相同的 `raw_sources / program_sources`，并在任务入口调用廉价确定性重建函数（如 `reconstruct_partial_role_source` 在 `603` 上仅耗 **15 单位计算**，在 `601` 上耗 `4,831` 计算）。结果进入真正决策点时，A/B/C 三臂持有逐字节一致的方法池，C 臂反而因 Common 序列化多花 `+26,462` 计算。
+1. **诊断 1（`601` 与 `603` 共享原始源下的廉价重构打平——强基线负结果，非基线缺陷，`F17`）**：
+   - 在 `composed_abc_20261101.json`（`601`）与 `position_method_successor_20261107.json`（`603`）中，`archive`（A 臂）和 `fixed_pr2`（B 臂）持有与 `pr3`（C 臂）相同的历史 `raw_sources / program_sources`，并可在任务入口用极低预算确定性重构出等价结构（如 `reconstruct_partial_role_source` 在 `603` 上仅耗 **15 单位计算**，在 `601` 上耗 `4,831` 计算）。这并非基线“病灶”，而是诚实的**强普通档案基线打平／负结果**：当目标侧按需重构成本低于巩固管理与序列化开销（`+26,462` 计算）时，预巩固知识对象不产生净目标省算优势（`v10.2` 在 `archive_full_tools` 中完整保留了这一按需重构能力并计入 `SearchBudget`）。
 2. **病灶 2（无世界结构内容的动作拼接宏被直接父稿 `Pi1` 吸收，且表面可用性条件组外泛化失败）**：
    - 在 `501`（$N=4$）上，虽然组合程序 `revise_then_reidentify`（`Pi3 -> Pi1`）赢了单独的固定 `Pi3`（`1.13e-20` vs `0.00795`），但在 `common_object_research.py:338-381` 中，把普通 `Pi1` 直接绑到 333 池最优保留父稿 `selected_before` 上，产出了**完全相同的终测程序且少花 `1,109` 计算**（`20,368` vs `21,477`）；
    - 在 `method_conditions.py`（`§§85–99`）中，调用前切换条件退化为检查某个语法绑定字段是否存在，未曝光源组外选对率仅 `1/2`。
@@ -94,14 +100,14 @@
 1. **`relation_sum`（跨元数开放边谓词与有向／对称交互算子，Phase 2A/2B/3A/4A）**：
    - 结构：`Program("relation_sum", name=direction, children=(radius_node, predicate_ast, transfer_ast, *per_object_tuples))`
    - 语义：对满足距离方向 `direction in {"right", "left", "symmetric"}`（$< r_0$）且边谓词 `predicate_ast(edge_q_src, edge_q_dst, edge_x_src, edge_x_dst)` 为真的有序对象对累加 `transfer_ast`（有向模式下源减目标加，严格反对称守恒；支持耦合隐状态槽位 `edge_z_src`, `edge_z_dst`）。
-2. **`accumulate`（层次化因果隐状态水库算子，Phase 2C/3A/4B-2）**：
-   - `name=None`：一阶指数递推 $z_t = p z_{t-1} + d_t$（`value = p`）；
-   - `name="ar2"` / `"ar2_lag1"`：`children=(const(a1), const(a2), drive)`，计算二阶阻尼谐振 $z_t = a_1 z_{t-1} + a_2 z_{t-2} + d_{t \text{ or } t-1}$（$a_1 = 2\rho\cos\omega,\, a_2 = -\rho^2$）；
+2. **`accumulate`（层次化因果隐状态水库算子，Phase 2C/3A/4B-2，`F15` 代码精确契约）**：
+   - `name=None`：一阶指数递推 $z_t = p z_{t-1} + d_t$（`value = float(p)`，`children=(drive, const(0.0))`）；
+   - `name="ar2"` / `"ar2_lag1"`：**`value = float(a1)`，`children=(drive, Program("const", value=float(a2)))`**，计算二阶阻尼谐振 $z_t = a_1 z_{t-1} + a_2 z_{t-2} + d_{t \text{ or } t-1}$（$a_1 = 2\rho\cos\omega,\, a_2 = -\rho^2$；详见 `world_structure_commitments.py:_ar2_role_term` 与 `language.py`）；
    - `name="vdp"` / `"vdp_lag1"`：`children=(const(a1), const(a2), const(beta), drive)`，计算超临界三次饱和极限环 $\operatorname{clip}_{[-6,6]}(a_1 z_{t-1} + a_2 z_{t-2} - \beta z_{t-1}^3 + u_{t \text{ or } t-1})$。
-3. **`ring_sum`（一维 $\mathbb{Z}_N$ 循环规范不变 PDE 差分算子，Phase 4B-1）**：
-   - `name in {"laplacian", "grad_back", "grad_fwd"}`，`children=(f_0, q_0, ..., f_{N-1}, q_{N-1})`（任意 $N \ge 3$）。
-4. **`manifold_sum`（高维环面、非周期边值与一般图拉普拉斯算子，Phase 5A）**：
-   - 二维环面：`name="torus2d_{lap_x|lap_y|grad_bx|grad_by}:{Nx}x{Ny}"`，满足 $\operatorname{Aut}(\mathbb{T}^2) = \mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$ 平移规范不变；
+3. **`ring_sum`（一维有限格点 $\mathbb{Z}_N$ 循环平移不变离散差分算子，Phase 4B-1）**：
+   - `name in {"laplacian", "grad_back", "grad_fwd"}`，`children=(f_0, q_0, ..., f_{N-1}, q_{N-1})`（有限元数 $N \ge 3$）。
+4. **`manifold_sum`（二维有限周期格点、一维非周期边值链与有限图拉普拉斯算子，Phase 5A，`F18`）**：
+   - 二维周期格点环面：`name="torus2d_{lap_x|lap_y|grad_bx|grad_by}:{Nx}x{Ny}"`，满足离散平移子群 $\mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$ 不变性（非完整自同构群 $\operatorname{Aut}(\mathbb{T}^2)$，亦不主张连续 PDE 网格收敛极限）；
    - 一维非周期有界链：`chain_lap_neumann`（端点零通量反射 $q_1-q_0, q_{N-2}-q_{N-1}$）、`chain_lap_dirichlet`（端点零值吸收 $q_1-2q_0, q_{N-2}-2q_{N-1}$）、`chain_adv_zeroflux`、`chain_boundary_sum`（Dirichlet 全局墙汇通量 $q_0 + q_{N-1}$）、`chain_focal_boundary`；
    - 一般不规则加权图：`name="graph_laplacian"`，`children` 为每条规范边 `(const(w_uv), f_u, q_u, f_v, q_v)` 五元组序列，计算 $\sum_{(u,v)\in E} w_{uv}(f_u - f_v)(q_v - q_u)$。
 
@@ -155,7 +161,7 @@
 ### 3.3 Phase 2A、2B、2C：条件边与非守恒修订、在线 `gpt-5.6-sol` 开放语法门控、主动阈值二分与一阶 POMDP（`§§120–121`）
 - **做了什么**：
   - **Phase 2A**：扩展 `P_exchange_form`（`source_greater` / `source_less`）与 `P_conservation`（分离局部比例耗散 `sink` $\kappa q_i$ 与全局非局域耦合 `nonlocal` $\frac{\kappa}{N}\sum_j q_j$）及 $N=3\to 4\to 5\to 6$ 四代连续演化（`scripts/run_v10_phase2a_scientific_revisions.py`）；
-  - **Phase 2B**：构建 `open_grammar_author.py`（`POST /v1/responses` SSE 流式解析、AST 沙箱校验、零密钥落盘），在超出全部内置符号表的 `donor_positive_gap`（$q_s > 0 \land q_s - q_d > 0.25$）与 `focal_quadratic_total_event`（含 $0.35 q_{\text{focus}}^2$）上运行严格单因子对照（平铺 LLM vs. v10 前提门控 LLM），随后在 Stage B 未曝光 $N=5$ 装置上**强制 `0` 次 LLM 调用**验证跨尺度巩固（`scripts/run_v10_phase2b_open_grammar_llm.py`）；
+  - **Phase 2B**：构建 `open_grammar_author.py`（`POST /v1/responses` SSE 流式解析、AST 沙箱校验、零密钥落盘），在超出内置符号表的 `donor_positive_gap`（$q_s > 0 \land q_s - q_d > 0.25$）与 `focal_quadratic_total_event`（含 $0.35 q_{\text{focus}}^2$）上进行**多因子结构化修订工作流对照**（平铺匿名 LLM 全树生成 vs. 给定父承诺＋已解角色＋前提定位＋局部补丁语法的结构化门控 LLM；严格单因子前提定位消融另见 `v10.2` Study B2），随后在 Stage B 未曝光 $N=5$ 装置上**强制 `0` 次 LLM 调用**验证跨尺度重标定（`scripts/run_v10_phase2b_open_grammar_llm.py`；注：原 `a66cd82b` 脚本在独立 `fresh48` 确认通过后向 `remember_confirmed_selection` 误传了 36 行开发验证集损失，已在 `v10.2` 修复为显式分离记录 `fit_rows / selection_rows / confirmation_rows=48`，见 `F09`）；
   - **Phase 2C**：将开放语法比较常数 `c_0`（`predicate_threshold`）与半径 `r_0` 统一接入 `RelationIntervalResearch` 坐标交替主动二分，并在 `PremiseDependencyGraph` 新增 `P_markov_state` 一阶隐状态（`transition_memory` 与 `focal_memory`）发现、水库消去与极点重标定（`scripts/run_v10_phase2c_active_threshold_and_pomdp.py`）。
 - **开发途中暴露并修复的底层 Bug**：
   - 在 Phase 2C-1 中，当 `event_delta` 连续两步同时因错误阈值漏检时，差分相消偶发产生零误差假象；我们在 `relation_uncertainty.py` 增加了非破坏性兄弟区间救回（sibling rescue）并在 `program_condition_sets.py:solve_compound_region` 实现了焦点布尔选择器展开，使复合区域求解器能精确命中激发边界。
@@ -221,22 +227,22 @@ Phase 5 将 Phase 4 报告末尾列出的全部三项开放科学边界逐一闭
   3. **强过程噪声下的机器精度零误差焦点配对**：在 `530402` 调试中发现，当 `focus_t != focus_{t-1}` 时，旧单列逐对象差分 `fl_cur[qi] - fl_prev[qi]` 减错了上一时刻对象导致 3-轮换错配；改为对完整候选排列 `perm` 计算 `fl_cur[perm[fi_t]] - fl_prev[perm[fi_{t-1}]]` 后，因公开 `after[q]` **已经包含了当期真实实现的过程噪声 $\varepsilon_{i,t}$**，真排列 `perm*` 在任意强度的 SDE 噪声下均满足 `1e-30` 机器精度恒等匹配！
   4. **查明并彻底攻克 Phase 4B 遗留题 `990401`（$\rho = 1.02$）**：逐行追踪发现 `990401` 在 39 行时已解出 `4.65e-24` VdP 递推，但追加 12 行角色确认后（51 行）`premise_dependency_audit.py:2862` 的旧 10 单元子采样恰好跳过了包含 $r_0^* = 0.96$ 的距离区间 `(0.9002, 0.9828)`！将距离等价类保留上限提至 `256` 并增设相位相干主动共振探针 `plan_near_critical_resonance_probe`；同时修复 `unified_uncertainty.py:157` 中 16 维多对象特征下 `claims_cap = 18000` 过小导致 `insufficient_budget` 早退的问题。
 - **定量结果（`v10_phase5b_stochastic_sde_and_resonance_20261116.json`，`0` LLM）**：
-  - **Cohort 5B-1（4 台强过程噪声 SDE 装置，$\sigma_p \in [0.025, 0.035]$，含 $N=4\to 5$ 与二阶谐振 SDE）**：
-    * `deterministic_v10_no_sde_audit`：无噪条件漂移达标（$\le 2\times 10^{-3}$）**`0/4`**（均值漂移 MSE `8.03e-2`，`completed = 0/4`）；
-    * `stochastic_v10_naive_ols`：条件漂移达标 **`1/4`**（均值漂移 MSE `2.33e-2`，极点绝对误差均值 `0.1944`，`completed = 1/4`；在 `530402` 上因 OLS 偏置留有可复现偏差被原生 `assess_noise_replication` 实测拒绝！）；
-    * **`v10_phase5b_stochastic_2sls_iv`**：**条件漂移达标 `4/4`（100%，均值无噪条件漂移 MSE `3.32e-4` —— 较朴素 OLS 降低 `70.1x`、较确定性 v10 降低 `242.1x`；极点绝对误差均值 `0.0181` 降低 `10.7x`）**，且在未放宽任何确认规则下于 `530501`（$N=5$）与 `530402`（$\alpha^*=0.80$）直接通过独立重复轨迹噪声挑战达成原生 `completed`（均值计算 `424,956.2` 省 `12.01%`）。
-  - **Cohort 5B-2（4 台近临界超临界 VdP 极限环 $\rho \in \{1.008, 1.015, 1.02, 1.04\}$，含原 `990401`）**：
+  - **Cohort 5B-1（4 台强过程噪声 SDE 装置，$\sigma_p \in [0.025, 0.035]$，估计方法消融对照，`F08` 指标勘误）**：
+    * **原生在线确认达标率（`native_completed`）**：确定性 v10 **`0/4`**，朴素 OLS **`1/4`**，**`v10_phase5b_stochastic_2sls_iv` 原生在线 `completed = 2/4`**（`530501` 与 `530402` 通过；`530401` 与 `530403` 在 `520` 行观测上限内保持 `unresolved`）；
+    * **无噪孪生迁移误差（`noiseless_twin_transfer_mse`，原回执字段 `oracle_zero_noise_drift_mse`）**：确定性 v10 `8.03e-2`（`<=2e-3` 为 `0/4`），朴素 OLS `2.33e-2`（`1/4`，极点绝对误差均值 `0.1944`），**`2SLS-IV` 在无噪孪生装置（`process_noise_std=0`）上 `4/4 <= 2e-3`（均值 `3.32e-4`，极点绝对误差均值 `0.0181` 降低 `10.7x`）**；
+    * **真实带噪历史条件漂移误差（`noisy_history_conditional_drift_mse`，`v10.2` 新增精确解析＋64 次 MC 重测）**：因 `StructureLab` 读出含历史实际流量实现值 $\mathcal{F}_t \sim E_{\text{noisy}}$，无噪孪生不可等同于带噪历史一步条件期望 $\mathbb{E}[Y_{t+1}\mid \mathcal{F}_t]$；`v10.2` 在 `sde_and_proof_remediation_20261116.json` 中独立报告了带噪轨迹 `live_noisy_trajectory_mse`、真实带噪历史 `noisy_history_conditional_drift_mse` 与 `noiseless_twin_transfer_mse` 三组分离指标。
+  - **Cohort 5B-2（4 台近临界超临界 VdP 极限环 $\rho \in \{1.008, 1.015, 1.02, 1.04\}$，求解器／主动探针能力消融）**：
     * `flat_baseline` **`0/4`**（`MSE = 11.19`），`linear_ar2_pomdp` **`0/4`**（`MSE = 10.68`）；
     * **`v10_phase5b_active_resonance_vdp`**：**`4/4`（100.0%），4 题全达 `selected_channels = []`，均值 MSE `2.03e-17`，均值计算 `69,074.8`（省算 `83.57%`）**。
 
-#### （3）Phase 5C：零公理有理代数证明内核、跨承诺涌现守恒律、Farkas 不可达证书与 AWM §4.3 差异触发前提修复（`algebraic_proof_certificates.py`）
-- **做了什么 & 严苛内核拦截实例**：
-  - 构建纯有理数多项式零公理证明内核 `SymbolicProofKernel`（基于 `fractions.Fraction` 与 `sympy.Poly(..., domain='QQ')` 展开正规形判零及有理 Farkas 乘子非负检验，**零浮点容差、零未证 `sorry`**，并内置标准 Lean 4 代码生成器 `emit_lean4_certificate`）；
-  - **内核真实拦截实例**：在 `ctrl_5404`（左向传输 $q'_3 = (1-\gamma)q_3 + u_3$）初测时，若默认状态域取双侧 `[-10, 10]`，当 $q_3 < 0$ 时 $-\gamma q_3 > 0$ 会提供虚假正增量，`SymbolicProofKernel` 拒绝签发无条件仿射上界证明！显式引入物理非负密度域 `state_bounds = [0.0, 10.0]` 并将 `P_nonnegative_state_domain` 记入证书依赖集 `used_premise_ids` 后，8 道控制题实现 100% 精确对偶闭合。
-- **定量结果（`v10_phase5c_algebraic_proofs_and_impossibility_20261116.json`，`0` LLM）**：
-  - **Cohort 5C-1（跨承诺符号通量消元涌现守恒律）**：覆盖对象-水库耦合 POMDP（$Q + \frac{\eta}{1-\alpha}Z$）、双物种化学计量可逆反应运输（$q A_{\text{tot}} + p B_{\text{tot}}$）、Neumann 守恒、Dirichlet Gauss-Green 墙平衡及二维环面守恒共 **7 条定理**，跨元数 $N \in \{3..9\}$ **核验通过 `7/7`（100%）**；对系数施加有理微扰的 7 份篡改证书 **拦截拒绝 `7/7`（100%）**；
-  - **Cohort 5C-2（AWM Stage 03 有界预算可达证人 vs. Farkas 不可达证书，8 题）**：256 条随机／贪心 Rollout 搜索形式化认证 **`0/8`**（启发式仅命中 `1/4` 可达，且永远无法证明不可达）；**v10 `SymbolicProofKernel` 精确认证 `8/8`（100%：`4/4` 可达题给出有理控制序列并在 `BudgetedControlLab` 实测通关；`4/4` 不可达题给出闭式有理 Farkas 势函数证书证明预算缺口 $\Delta_{\text{gap}} \in \mathbb{Q}_{>0}$）**；
-  - **Cohort 5C-3（AWM §4.3 证明-现实差异触发 `SufficientCover` 靶向前提修复，4 题）**：面对隐藏耗散汇、耦合漂移、初始库存亏损与执行器限幅降额 4 类实测冲突，仅沿证书 `used_premise_ids` 合成 4 步靶向探针即 **`4/4`（100%）修复并实测通过**，重算的真实最小预算 $B^*$ 最大绝对误差 **`0.0`**，较无依赖图盲探（均值 `39.7` 步）**减少 `89.92%` 实验步**。
+#### （3）Phase 5C：供给模型精确有理代数证明内核、Farkas 不可达证书与差异触发前提修复（`algebraic_proof_certificates.py`，含 `v10.2` 域一致性修复）
+- **做了什么 & `v10.2` 关键勘误修复（`F01, F02, F05, F06, F07, F10, F11, F12, F14`）**：
+  - 构建基于 Python `fractions.Fraction` 与 `sympy.Poly(..., domain='QQ')` 的有理多项式与 Farkas 线性对偶检验内核 `SymbolicProofKernel`（零浮点容差；导出的 Lean 4 代码标注为 **`lean_status = "draft_only", lean_compiled = False`**，可信检验基为 Python `Fraction + SymPy QQ`）；
+  - **`v10.2` 证明域与执行域一致性闭合（`F01`）**：修复了 `a66cd82b` 中势函数证书使用 `state_bounds` 而可达证人与实验室忽略 `state_bounds` 的漏洞——现统一由 `validate_control_task_semantics` 与 `verify_reachable_box_enclosure` 强制对齐 `physical_legality`、`analysis_region`（未证可达包络时返回 `conditional_impossibility_domain_unverified`）与 `unbounded` 三种语义，全链路计入 `SearchBudget`，为 Rollout 基线共享同一 `SymbolicProofKernel` 证人检验器，并打通从匿名实验数据学得承诺到证书的 `extract_control_model_from_learned_commitment`（`model_origin = "learned_model"`）。
+- **定量结果（供给模型检验 `v10_phase5c_algebraic_proofs_and_impossibility_20261116.json` ＋ `v10.2` 实测重验）**：
+  - **Cohort 5C-1（跨承诺符号通量消元不变量合成）**：7 项供给规格在各自测试的**有限元数集合 $N \in \{3..9\}$ 上逐个核验通过 `7/7`**（`all_arity_proved = False`；有向矩单调性显式绑定非负供体锥与活跃边位移符号义务 `domain_obligations`）；7 份篡改证书 **拦截拒绝 `7/7`**；
+  - **Cohort 5C-2（供给线性模型下有界预算可达证人 vs. Farkas 不可达证书，8 题求解器能力对照）**：`prove_task_solvability` 认证 **`8/8`**（`4/4` 可达有理证人＋`4/4` Farkas 势函数证书；注：原 Rollout `0/8` 未接入证人检验器，`v10.2` 共享同一检验器后对比结果见 `sde_and_proof_remediation_20261116.json`）；
+  - **Cohort 5C-3 与 `v10.2` Study B3（证明-现实差异触发前提修复）**：原 `5C-3` 实为**边界端口增益（`boundary_port_gain`）单一机制的 4 个参数水平（`0.60, 1.00, 1.25, 1.50`）**，且 `89.92%` 对比的是名义全扫描公式 $2(3N+1)+N(N-1)$ 而非实跑智能体。`v10.2` 在 `equal_tool_attribution_20261116.json`（Study B3）中实跑了真正覆盖 **4 类不同物理机制**（`boundary_port_gain`、`bulk_sink_dissipation`、`coupling_shift`、`direction_reversal`，$N\in\{4,5\}$ 共 8 题）的等工具双臂实验：无依赖引导臂与依赖引导臂均 **`8/8` 修复成功**，实测 `BudgetedControlLab` 探针查询从 **`101` 步降至 `42` 步（实测减少 `58.42%`）**。
 - **验证状态**：**已验证**（`test_v10_phase5_manifold_sde_and_proofs.py` 5/5 通过＋3 份回执）。
 
 ---
@@ -268,24 +274,25 @@ Phase 5 将 Phase 4 报告末尾列出的全部三项开放科学边界逐一闭
 3. **Phase 4B Cohort 4B-2 单题 `990401`（原回执保留 `3/4`，已在 Phase 5B-2 查明根因并达成 `4/4`）**：未篡改已发布的 Phase 4B 回执，而是在 Phase 5B-2 中定位到 51 行后距离子采样上限 `10` 的精确缺陷，修复并在相同装置参数下验证 `990401 -> 990501` 双双以 `selected_channels = []` 通过。
 4. **Phase 5B Cohort 5B-1 强噪声在线重复确认配额（Oracle 条件漂移 `4/4`［100%］达标，原生在线 `completed` 为 `2/4`）**：`2SLS-IV` 在全部 4 题上均精确恢复真实条件漂移（无噪漂移 MSE 为 `2.70e-4`、`5.58e-4`、`3.54e-4`、`1.45e-4`），并在 `530501` 与 `530402` 上直接通过 `UnifiedResearchAgent` 原生重复轨迹挑战；`530401` 与二阶振荡 SDE `530403` 因多轮残差挑战耗尽 `520` 行预算上限而诚实保持 `unresolved`（绝不为刷 `completed` 而篡改 `assess_noise_replication` 统计门限）。
 
-### 4.3 与 AWM 论文（arXiv:2610.40503v2）全要素对齐核查矩阵
+### 4.3 与 AWM 论文（arXiv:2610.40503v2）对齐状态与诚实边界核查矩阵（`v10.2` 审定版）
 
-| AWM 论文核心章节与机制 | Hegel Machine v10 对应模块与实现状态 | 对齐度与超越点 |
+| AWM 论文核心章节与机制 | Hegel Machine v10 / v10.2 对应模块 | 真实对齐范围与诚实边界 |
 | :--- | :--- | :--- |
-| **Stage 01 — Exploration**（主动探索环境边界与状态转移） | `object_interventions.py`、`relation_uncertainty.py`、`curved_hypersurface_probing.py`、`manifold_pde_lab.py`、`stochastic_premise_audit.py` | **100% 闭合且超越**：从离散具名接口扩展至匿名打乱传感器、非线性执行器、高维三参数耦合曲面、近临界极限环同相共振与无位置流形切点夹逼 |
-| **Stage 02 — World-Model Consolidation**（将经验巩固为可执行代数世界模型） | `world_structure_commitments.py`、`continuum_field_lab.py`、`manifold_pde_lab.py` | **100% 闭合且超越**：引入四重无损等价门控（零权重列保持＋$\operatorname{Rej}(T)\supseteq\operatorname{Rej}(S)$＋$\operatorname{Aut}(\mathcal{M})$ 规范群不变性），严格分离等价重组与科学修订 |
-| **Appendix C.6 — Premise Support Dependencies**（暴露支撑前提依赖提升冲突定位） | `premise_dependency_audit.py`、`stochastic_premise_audit.py`、`open_grammar_author.py` | **100% 闭合且超越**：16 节点动态生长前提图（涵盖离散对象、一／二阶／耦合／极限环 POMDP、流形边值及随机 SDE `2SLS-IV`），并门控在线 LLM 节省 `78.68%` tokens |
-| **Stage 03 — Proofs & Impossibility Certificates**（Eq. 3 & Lemma A.3 可达证人与势函数不可达证明） | `algebraic_proof_certificates.py`（`SymbolicProofKernel`、`synthesize_emergent_invariants`、`prove_task_solvability`） | **100% 闭合**：零浮点容差 `Fraction + QQ[x]` 内核、跨承诺零空间消元涌现守恒律（`7/7`）、有界预算控制可达证人与闭式 Farkas 对偶不可达证书（`8/8` vs Rollout `0/8`）、导出无 `sorry` Lean 4 |
-| **§4.3 — Discrepancy-Triggered Repair**（证明与现实冲突时沿 `SufficientCover` 靶向修复） | `algebraic_proof_certificates.py:repair_proof_from_discrepancy` | **100% 闭合**：仅沿证书 `used_premise_ids` 合成靶向边界探针，4 类偏移 `4/4` 修复并实测验证，最小预算误差 `0.0`，减少 `89.92%` 探针 |
+| **Stage 01 — Exploration**（主动探索环境边界与状态转移） | `object_interventions.py`、`relation_uncertainty.py`、`curved_hypersurface_probing.py`、`manifold_pde_lab.py`、`stochastic_premise_audit.py` | 适配至匿名传感器、三次执行器畸变、三参数耦合曲面、近临界极限环同相共振与有限无位置格点／图系统（注：属受控合成物理家族内的主动实验设计，非无边界通用理论发明） |
+| **Stage 02 — World-Model Consolidation**（将经验巩固为可执行代数世界模型） | `world_structure_commitments.py`、`continuum_field_lab.py`、`manifold_pde_lab.py` | 四重无损等价门控（含零权重读出列保持、$\operatorname{Rej}(T)\supseteq\operatorname{Rej}(S)$ 与离散循环平移子群 $\mathbb{Z}_N / \mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$ 不变性），以及面向生命周期回归的实证一致性门控 `is_commitment_empirically_consistent` |
+| **Appendix C.6 — Premise Support Dependencies**（暴露支撑前提依赖提升冲突定位） | `premise_dependency_audit.py`、`stochastic_premise_audit.py`、`open_grammar_author.py`、`equal_tool_attribution.py` | 开发者定义前提节点本体与求解器族，运行时动态审计／重标定／组合局部 AST；在 `v10.2` Study B2 中完成同承诺、同角色、同 4 槽位补丁语法下的严格单因子定位隔离 |
+| **Stage 03 — Proofs & Impossibility Certificates**（Eq. 3 & Lemma A.3 可达证人与势函数不可达证明） | `algebraic_proof_certificates.py`（`SymbolicProofKernel`、`validate_control_task_semantics`、`verify_reachable_box_enclosure`、`prove_task_solvability`） | 针对有理仿射／线性控制子域：Python `Fraction + SymPy QQ` 精确检验（Lean 4 输出为 `draft_only` 未编译草稿）、统一 `state_bounds` 证明／执行域语义、全额计入 `SearchBudget`、有限元数检验（`all_arity_proved=False`），并提供 `learned_model -> certificate` 桥接（同时显式声明环境完备性 `environment_coverage_verified = False`） |
+| **§4.3 — Discrepancy-Triggered Repair**（证明与现实冲突时沿 `SufficientCover` 靶向修复） | `algebraic_proof_certificates.py:repair_proof_from_discrepancy` | 在 `v10.2` Study B3 中以等工具双臂实测覆盖 4 类不同物理机制（端口增益、体相耗散、耦合偏移、方向反转）共 8 题，双臂 `8/8` 修复成功，依赖引导较无引导实测减少 `58.42%` 实验室探针查询（`101 -> 42`） |
 
 ---
 
-## 5. 供审阅／接手 AI 直接执行的自动化验证命令与扩展钩子
+## 5. 供审阅／接手 AI 直接执行的自动化验证命令与治理约束
 
-### 5.1 一键运行全套 28 项回归与单元／端到端测试（`28/28` 100% 通过，零网络调用）
+### 5.1 运行聚焦 `v10 + v10.2` 验收套件与全仓回归测试（严格区分测试口径，`F16`）
 ```bash
 cd "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine"
 
+# A. 聚焦 v10 (Phases 1-5) + v10.2 (22 项行为验收契约) + 历史能力路由套件（35 项测试，零网络调用）
 PYTHONPATH=src:. python3 -m pytest \
   tests/test_v10_world_structure_and_premises.py \
   tests/test_v10_phase2_revisions_and_open_author.py \
@@ -293,7 +300,14 @@ PYTHONPATH=src:. python3 -m pytest \
   tests/test_v10_phase3_higher_order_and_open_pomdp.py \
   tests/test_v10_phase4_curved_hypersurface_and_continuum_vdp.py \
   tests/test_v10_phase5_manifold_sde_and_proofs.py \
+  tests/test_v10_2_audit_acceptance.py \
   tests/test_historical_capabilities.py -v
+
+# B. 独立复核 GPT-6 证明域反例探针（验证 both_opposite_certificates_accepted == False）
+python3 markdown/hegel_v10.2/probe_certificate_domain.py --repo .
+
+# C. 全仓库完整 pytest 测试套件（单独统计，不与聚焦套件混报）
+PYTHONPATH=src:. python3 -m pytest tests/ -q
 ```
 
 ### 5.2 反作弊静态审计命令（验证零私有状态偷看、零密钥落盘、默认向后兼容）
@@ -325,8 +339,5 @@ print('PASS: All 13 JSON receipts parsed cleanly')
 "
 ```
 
-### 5.3 后续接手 AI 的标准扩展接口（Extension Hooks）
-若后续 AI 继续在 `v10` 基线上推进新研究，建议直接挂载以下现成协议入口而无需改动主控骨架：
-1. **接入外部真实物理仿真器／SciML 基准**：只需实现四方法实验室协议 `spec_for(channels)`、`acquire(probe, channels)`、`random_probe(seed, length, name)`、`evaluation_rows(channels, seed, length, trajectories)`（参考 `manifold_pde_lab.py:ManifoldPDELab`），即可直接交由 `UnifiedResearchAgent(cfg, library=lib).run(lab)` 全自动运行；
-2. **扩展时变动网格或三维流形算子**：在 `language.py:predict_program` 的 `op == "manifold_sum"` 分支追加新网格差分核，并在 `manifold_pde_lab.py:audit_manifold_pde_premises` 增加对应算子谱／邻接识别器；
-3. **从线性／仿射 Farkas 证书扩展至多项式平方和（SOS / Positivstellensatz）非凸证明**：在 `algebraic_proof_certificates.py:SymbolicProofKernel` 中保留现有 `Fraction` + `sympy.Poly(..., domain='QQ')` 底座，新增有理 Cholesky 分解验证器 $\sum_m c_m g_m(\mathbf{x})^2$（$c_m \in \mathbb{Q}_{>0}$），即可保持零浮点容差与无 `sorry` Lean 4 导出性质。
+### 5.3 施工范围治理约束（Phase 6 Expansion Freeze）
+遵照 `markdown/hegel_v10.2/02_下一施工合同.md` §1 硬约束：**严禁开启三维／时变动网格 PDE、SOS/Positivstellensatz 求解器、通用自动定理生成器或新增专用物理家族等 Phase 6 宽度扩张**。后续任何工作必须严守：（1）等工具强基线（允许 `archive_full_tools` 按需重构并计费，诚实保留打平／负结果）；（2）证明域、规划域与执行域 100% 数学一致且显式报告可信检验基；（3）源阶段、目标阶段与全序列累计双预算分列核算；（4）历史封账回执只读 SHA256 零篡改。

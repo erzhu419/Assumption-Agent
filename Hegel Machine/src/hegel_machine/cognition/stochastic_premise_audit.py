@@ -1157,3 +1157,7 @@ def plan_near_critical_resonance_probe(
         "peak_sum_delta_before": float(max_abs_sum_d),
         "sequence": tuple(sequence),
     }
+
+
+
+from .sde_conditional_drift_eval import evaluate_sde_conditional_drift_and_twin_metrics  # noqa: F401

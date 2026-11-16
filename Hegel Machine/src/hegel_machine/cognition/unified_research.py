@@ -58,6 +58,14 @@ def _ambiguous_instruments(model):
                    for item in field.get("hypotheses", [])) > 1]
 
 
+def _unique_task_signature(spec) -> str:
+    """Distinguish distinct anonymous apparatuses that all share ``task_id='anonymous_process'``."""
+    if spec.task_id == "anonymous_process" and getattr(spec, "feature_bounds", None):
+        ctrl_sig = ",".join(sorted(spec.feature_bounds)[:4])
+        return f"{spec.task_id}:{ctrl_sig}"
+    return spec.task_id
+
+
 def _fit(terms, rows, budget, kind, *, family="T02", q=.5):
     terms = list(dict.fromkeys(terms))
     if not rows or not budget.spend(len(rows) * (len(terms) + 2)):
@@ -431,6 +439,7 @@ class UnifiedResearchAgent:
                 commitment_applicable_triggers,
                 commitment_verified_radius_bounds,
                 instantiate_commitment_on_schema,
+                is_commitment_empirically_consistent,
                 propose_scientific_premise_revision,
             )
             commitments = self._world_commitments(budget, actions)
@@ -463,45 +472,57 @@ class UnifiedResearchAgent:
                     if "x" in group and "q" in group
                 }
                 comm_budget = SearchBudget(max(1, budget.remaining * 2 // 3))
-                for comm in commitments:
+                # Pass 1: Scope-gated instantiation ONLY of commitments empirically consistent with current audit!
+                # Ensures returning conditions recover valid older commitments instead of blindly revising latest generation.
+                task_sig = _unique_task_signature(spec)
+                consistent_comms = [
+                    comm
+                    for comm in commitments
+                    if is_commitment_empirically_consistent(comm, audit, task_id=task_sig)
+                ]
+                for comm in consistent_comms:
                     if comm_budget.remaining <= 0:
                         break
-                    triggers = commitment_applicable_triggers(comm, audit)
-                    if triggers:
-                        entries = propose_scientific_premise_revision(
-                            comm, audit, spec, training, schema, comm_budget,
-                            active_threshold_probing=self.config.active_threshold_probing,
-                            allow_latent_state=self.config.latent_state_discovery,
-                            allow_higher_order_latent=self.config.higher_order_latent_discovery,
-                            transitions=transitions,
-                            tolerance=eff_comm_tol)
-                    else:
-                        bounds = commitment_verified_radius_bounds(comm, audit, schema_x_to_q)
-                        entries = instantiate_commitment_on_schema(
-                            spec, training, schema, comm, comm_budget,
-                            radius_bounds=bounds,
-                            audit_report=audit,
-                            transitions=transitions,
-                            active_threshold_probing=self.config.active_threshold_probing,
-                            allow_latent_state=self.config.latent_state_discovery,
-                            allow_higher_order_latent=self.config.higher_order_latent_discovery,
-                            tolerance=eff_comm_tol)
-                        if (not any(item["training_loss"] <= eff_comm_tol for item in entries)
-                                and comm_budget.remaining > 0 and audit is None):
-                            entries.extend(propose_scientific_premise_revision(
-                                comm, None, spec, training, schema, comm_budget,
+                    bounds = commitment_verified_radius_bounds(comm, audit, schema_x_to_q)
+                    entries = instantiate_commitment_on_schema(
+                        spec, training, schema, comm, comm_budget,
+                        radius_bounds=bounds,
+                        audit_report=audit,
+                        transitions=transitions,
+                        active_threshold_probing=self.config.active_threshold_probing,
+                        allow_latent_state=self.config.latent_state_discovery,
+                        allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                        tolerance=eff_comm_tol)
+                    claims.extend(entries)
+                    if any(item["training_loss"] <= eff_comm_tol for item in claims):
+                        break
+
+                # Pass 2: Scientific premise revision ONLY if no existing consistent commitment explained the world!
+                if not any(item["training_loss"] <= eff_comm_tol for item in claims):
+                    for comm in commitments:
+                        if comm_budget.remaining <= 0:
+                            break
+                        triggers = commitment_applicable_triggers(comm, audit)
+                        if triggers or audit is None:
+                            entries = propose_scientific_premise_revision(
+                                comm, audit, spec, training, schema, comm_budget,
                                 active_threshold_probing=self.config.active_threshold_probing,
                                 allow_latent_state=self.config.latent_state_discovery,
                                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
                                 transitions=transitions,
-                                tolerance=eff_comm_tol))
-                    claims.extend(entries)
-                    if any(item["training_loss"] <= eff_comm_tol for item in claims):
-                        break
+                                tolerance=eff_comm_tol)
+                            claims.extend(entries)
+                            if any(item["training_loss"] <= eff_comm_tol for item in claims):
+                                break
                 budget.spend(comm_budget.spent)
+                consistent_ids = {c["commitment_id"] for c in consistent_comms}
                 actions.append({"action": "apply_world_structure_commitments",
                     "compute_cost": comm_budget.spent,
                     "candidate_count": len(claims),
+                    "consistent_commitments_matched": [c["commitment_id"] for c in consistent_comms],
+                    "rejected_inconsistent_commitment_ids": [
+                        c["commitment_id"] for c in commitments if c["commitment_id"] not in consistent_ids
+                    ],
                     "supported": any(item["training_loss"] <= eff_comm_tol for item in claims)})
         if not any(
             item["training_loss"]
@@ -1036,13 +1057,33 @@ class UnifiedResearchAgent:
         for source_id in used_sources:
             if source_id in known_concept_ids:
                 self.library.record_use(source_id, spec.task_id)
+        sci_rev_meta = selected.get("scientific_premise_revision") or {}
+        parent_comm_sources = set(
+            (selected.get("world_commitment_application") or {}).get("source_concept_ids", ())
+            if sci_rev_meta
+            else ()
+        )
         for prior in self.library.meta_priors:
             if prior["source_concept_id"] in used_sources:
                 prior["uses"] = prior.get("uses", 0) + 1
             if prior["source_concept_id"] in selected.get("method_source_ids", []):
                 prior["method_uses"] = prior.get("method_uses", 0) + 1
+            task_sig = _unique_task_signature(spec)
+            if prior["source_concept_id"] in parent_comm_sources and sci_rev_meta.get("retracted_premises"):
+                already_recorded = any(
+                    ev.get("task_id") == task_sig and ev.get("kind") == "scientific_premise_refutation"
+                    for ev in prior.get("counterexamples", ())
+                )
+                if not already_recorded:
+                    prior.setdefault("counterexamples", []).append({
+                        "task_id": task_sig,
+                        "kind": "scientific_premise_refutation",
+                        "retracted_premises": deepcopy(sci_rev_meta["retracted_premises"]),
+                        "replacement_concept_id": concept_id,
+                    })
+                prior["status"] = "conditional"
             for event in prior.get("counterexamples", ()):
-                if event.get("task_id") == spec.task_id and event.get("replacement_concept_id") is None:
+                if event.get("task_id") in {spec.task_id, task_sig} and event.get("replacement_concept_id") is None:
                     event["replacement_concept_id"] = concept_id
         existing_prior = next((prior for prior in self.library.meta_priors
             if prior["source_concept_id"] == concept_id), None)
@@ -1065,13 +1106,19 @@ class UnifiedResearchAgent:
                 "scientific_premise_revision": deepcopy(selected.get("scientific_premise_revision")),
                 "support_rows": len(selected_training) + len(selected_validation),
                 "validation_loss": confirmation_loss,
+                "selection_loss": selected.get("validation_loss"),
+                "confirmation_loss": confirmation_loss,
                 "probe_ids": [batch["probe"]["probe_id"] for batch in batches
                               if set(selected_channels) <= set(batch["channels"])],
                 "counterexamples": [], "uses": 0, "parent_concept_ids": list(dict.fromkeys(
                     [*used_sources, *selected.get("method_source_ids", [])])),
                 "research_method": {"fit_rows": len(selected_training),
+                    "selection_rows": len(selected_validation),
                     "validation_rows": len(selected_validation),
-                    "confirmation_rows": confirmation_rows,
+                    "selection_loss": selected.get("validation_loss"),
+                    "confirmation_rows": int(confirmation_rows),
+                    "confirmation_loss": float(confirmation_loss),
+                    "confirmation_ref": deepcopy(confirmation_ref),
                     "noise_supported": bool(noisy_support and noisy_support["adequate"]),
                     "risk_quantile": spec.risk_quantile},
                 "counter_prediction": {"type": "future_trajectory",
@@ -7387,7 +7434,7 @@ class UnifiedResearchAgent:
                 for prior in self.library.meta_priors:
                     if prior["source_concept_id"] in event["source_ids"]:
                         prior.setdefault("counterexamples", []).append({
-                            "task_id": laboratory.spec.task_id,
+                            "task_id": _unique_task_signature(laboratory.spec),
                             "loss": event.get("confirmation_loss", event["validation_loss"]),
                             "kind": event.get("kind", "failed_role_binding"),
                             "program": event["program"], "replacement_concept_id": None})

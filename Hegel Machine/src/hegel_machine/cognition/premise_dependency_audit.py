@@ -3808,13 +3808,16 @@ def audit_transition_premises(
     )
 
     committed_specs = []
+    committed_raw_specs = []
     for comm in commitments:
         noncons = comm.get("nonconservation_mechanism")
         for param in comm.get("radius_parameters", ()):
-            cond_id = describe_edge_condition(param.get("edge_condition"))
+            raw_ec = param.get("edge_condition")
+            cond_id = describe_edge_condition(raw_ec)
             spec_tuple = (param["direction"], cond_id, noncons)
             if spec_tuple not in committed_specs:
                 committed_specs.append(spec_tuple)
+                committed_raw_specs.append((param["direction"], cond_id, raw_ec, noncons))
 
     committed_directions = []
     for d_val, _, _ in committed_specs:
@@ -4883,10 +4886,38 @@ def audit_transition_premises(
     _set_node("P_exchange_form", "supported", verified_condition=verified_cond_label)
     supported_premises.append("P_exchange_form")
 
+    def _norm_cond_key(cond_val: str | dict | None) -> str:
+        if not isinstance(cond_val, dict):
+            return describe_edge_condition(cond_val)
+        prog_c = Program.from_dict(cond_val)
+        from .curved_hypersurface_probing import normalize_hypersurface_for_grouping
+
+        hs_n = normalize_hypersurface_for_grouping(prog_c)
+        if hs_n is not None:
+            return describe_edge_condition(hs_n.to_dict())
+        desc_c = describe_comparator_threshold_parameter(prog_c)
+        if desc_c is not None:
+            return describe_edge_condition(
+                _replace_node_at_path(
+                    prog_c, tuple(desc_c["path"]), Program("arg", name="__THRESHOLD__")
+                ).to_dict()
+            )
+        return describe_edge_condition(cond_val)
+
     tau0 = active_taus[0]
-    # Check if a commitment expected conditional exchange or nonconservation that was refuted by unconditional conservative data
-    for comm_dir, comm_cond, comm_noncons in committed_specs:
-        if exhaustive and comm_cond != verified_cond_label:
+    norm_verified_cond = _norm_cond_key(verified_cond_label)
+    # Check if a commitment expected conditional exchange or nonconservation that was refuted by conservative data
+    for comm_dir, comm_cond, comm_raw_cond, comm_noncons in committed_raw_specs:
+        if exhaustive and comm_noncons not in (None, "conserved"):
+            refuted_premises.append(
+                {
+                    "premise_id": "P_conservation",
+                    "committed_nonconservation": comm_noncons,
+                    "reason": "committed_nonconservation_refuted_by_conservative_transitions",
+                    "counterexample": {**row_refs[tau0], "conservation_mse": float(conservation_mse)},
+                }
+            )
+        if exhaustive and _norm_cond_key(comm_raw_cond) != norm_verified_cond:
             witness = {
                 **row_refs[tau0],
                 "refuted_condition": comm_cond,
@@ -4907,6 +4938,7 @@ def audit_transition_premises(
                     {
                         "kind": "exchange_condition_revision",
                         "retracted_condition": comm_cond,
+                        "retracted_condition_raw": comm_raw_cond,
                         "replacement_condition": verified_cond_label,
                         "predicate_program": verified_cond_label
                         if isinstance(verified_cond_label, dict)
@@ -4921,8 +4953,8 @@ def audit_transition_premises(
                 )
 
     supported_directions = list(supported_by_direction.keys())
-    for comm_dir, comm_cond, _ in committed_specs:
-        if exhaustive and comm_cond == verified_cond_label and comm_dir not in supported_by_direction:
+    for comm_dir, comm_cond, comm_raw_cond, _ in committed_raw_specs:
+        if exhaustive and _norm_cond_key(comm_raw_cond) == norm_verified_cond and comm_dir not in supported_by_direction:
             witness = {
                 **row_refs[tau0],
                 "refuted_direction": comm_dir,
@@ -4944,6 +4976,12 @@ def audit_transition_premises(
                         "kind": "interaction_direction_revision",
                         "retracted_direction": comm_dir,
                         "replacement_direction": alt_dir,
+                        "edge_condition": verified_cond_label,
+                        "predicate_program": verified_cond_label
+                        if isinstance(verified_cond_label, dict)
+                        else None,
+                        "threshold_interval": verified_threshold_interval,
+                        "threshold_parameter": verified_threshold_parameter,
                         "radius_interval": [float(low), float(high)],
                         "supporting_transitions": len(q_rows),
                         "counterexample": witness,

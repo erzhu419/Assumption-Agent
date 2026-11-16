@@ -2537,6 +2537,12 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
   - `docs/evidence/v10_world_structure_20261116/v10_phase5c_algebraic_proofs_and_impossibility_20261116.json`
 - **历史封账保护：** `/mnt/hegel-snapshot-cow` 全部历史封账回执字节与 `mtime_ns` 零改动。
 
+> [!WARNING]
+> **v10.2 审计勘误与口径收紧（对应 `F01–F18`，完整闭合见下文 `§125`）：**
+> 1. **域合法性统一与 Lean 草稿降级（`F01, F02, F11, F12, F14`）：** 提交 `a66cd82b` 中 `PotentialLowerBoundCertificate` 使用了 `state_bounds` 而 `ReachabilityWitnessCertificate` 与 `BudgetedControlLab` 未强制同一盒约束（已在 `v10.2` 通过 `validate_control_task_semantics` + `verify_reachable_box_enclosure` 修复）；Lean 4 导出实为未编译草稿（`lean_status = "draft_only"`），真正可信计算基为 Python `Fraction` 与 `SymPy QQ`；跨元数守恒律在有限测试元数集上逐一验证（`all_arity_proved = False`）；Phase 5C 原始 8 题使用 `model_origin = "supplied_model"`（`v10.2` 已补齐从在线学习承诺提取的 `learned_model -> certificate` 桥接）。
+> 2. **SDE 评估口径区分（`F08`）：** 下表 5B-1 中“无噪条件漂移 `3.317e-04`”实为关闭过程噪声后的**无噪孪生系统迁移 MSE**（`noiseless_twin_transfer_mse`），原生在线确认通过率为 **`2/4`**；`v10.2` 已在保留历史噪声轨迹 $\mathcal{F}_t$ 分布的前提下补测真正的**含噪历史一步条件漂移风险**（`noisy_history_conditional_drift_mse = 6.124e-04`，`4/4 <= 2e-3`，对比朴素 OLS `6.283e-03` [`1/4`]）。
+> 3. **对照口径与探针缩减重标定（`F03, F05, F06, F07, F18`）：** Phase 5A（`12/12 vs 0/12`）证明的是有限离散格点／图系统（含离散平移子群 $\mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$，非连续极限PDE或全自同构群 $\operatorname{Aut}(\mathbb{T}^2)$）上的求解器与表征能力消融，不等同于同工具持久学习归因（已在 `v10.2` Study B1 & 交付物 C 单独隔离）；5C-3 原始 4 题为同一边界端口增益机制的 4 个参数水平，且 `89.92%` 为名义全扫描公式估计（已在 `v10.2` Study B3 替换为跨 4 类不同物理机制的双臂实测执行代理对比，实测探针由 `101` 降至 `42`，**-58.42%**）。
+
 ### 一、三大开放前沿的理论与工程闭合
 
 1. **Phase 5A：二维环面 $\mathbb{Z}_{N_x}\times\mathbb{Z}_{N_y}$、非周期有界域（`Neumann`／`Dirichlet`）与一般不规则图拉普拉斯PDE（`manifold_pde_lab.py`、`continuum_field_lab.py`、`language.py`）：**
@@ -2580,3 +2586,29 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
 | **5C-1 跨承诺涌现守恒律合成**（7项跨元数定理） | 篡改系数证书放行率：**`0/7`（100%拦截）** | **核验通过：`7/7`（100%），覆盖 $N\in\{3..9\}$** | 精确 $\mathbb{Q}[x]$ 恒等消元＋Lean 4 定理导出 |
 | **5C-2 预算控制可解／不可达证明**（8题，AWM Stage 03） | 启发式 Rollout（256条）：认证 **`0/8`**（仅命中 `1/4` 可达） | **精确认证：`8/8`（100%：`4/4` 实测可达证人＋`4/4` Farkas不可达证书）** | 严格区分真物理不可解与搜索策略失灵 |
 | **5C-3 差异触发 `SufficientCover` 前提修复**（4题，AWM §4.3） | 无依赖图全参数盲探：需 `36–40` 步实验 | **修复并实测通过：`4/4`（100%），仅需 `4` 步靶向探针** | 真实最小预算 $B^*$ 最大误差 **`0.0`**，探针减少 **`89.92%`** |
+
+
+## 125. v10.2 系统审计闭合：证书域合法性统一、SDE条件漂移重测、同工具归因与冻结6阶段生命周期（2026-11-16）
+
+- **审计基准：** `markdown/hegel_v10.2/GPT_diagnosis_v10.2.md` 及 `01–04` 配套施工合同（锚点提交 `a66cd82b22f444044dbda98f43782c96f833a4f0`）。
+- **硬约束执行：** Phase 6 扩张完全冻结；全程 **`model_calls = 0, total_tokens = 0`**；`docs/evidence/v10_world_structure_20261116/` 下全部 13 份历史 JSON 回执保持 **100% 原始字节未改动**（只读 SHA256 账本见 `docs/evidence/v10_2_audit_remediation_20261116/errata_and_sha256_ledger_20261116.json`）；完整闭合报告见 `docs/hegel_v10_2_errata_and_audit_closure_20261116.md`。
+
+### 一、交付物 A：形式证书信任边界、元数据契约与 SDE 条件漂移风险修复（`F01, F02, F07–F15`）
+
+1. **统一控制语义与盒包络核查（`F01`）：** 在 `algebraic_proof_certificates.py` 实现 `validate_control_task_semantics` 与 `verify_reachable_box_enclosure`，消除 `PotentialLowerBoundCertificate` 与 `ReachabilityWitnessCertificate`／`BudgetedControlLab` 的域不一致漏洞。GPT-6 反例脚本 `probe_certificate_domain.py` 实测 `both_opposite_certificates_accepted` 由修复前的 `True` 变为 **`False`**，并完整覆盖 `physical_legality`、`analysis_region`（未证包络返回 `conditional_impossibility_domain_unverified`）与 `unbounded` 三种模式。
+2. **可信计算基诚实降级、预算计费与在线承诺桥接（`F02, F07, F10–F12, F14`）：** Lean 4 导出统一标为 `lean_status = "draft_only"`、`lean_compiled = False`；跨元数守恒律标为 `all_arity_proved = False` 并列出 `verified_on_finite_arities`；单向矩单调性强制核验非负状态锥与有向边位移号（`F12`）；全链路接入 `SearchBudget`（`F10`）；新增 `certify_rollout_baseline` 共享证人核验器（`F07`）；新增 `extract_control_model_from_learned_commitment` 打通从 `AnonymousObjectLab` 在线学习（`model_origin = "learned_model"`）到可达／不可达证书生成的闭环（`F14`）。
+3. **确认集身份去重与 `AR(2)` AST 文档修正（`F09, F15`）：** 修复 `remember_confirmed_selection` 及 Phase 2B/3B 脚本，严格区分 `fit_rows`、`selection_rows`、`confirmation_rows=48` 与 `confirmation_ref`；修正文档中 `AR(2)` AST 描述以精确匹配 `Program("accumulate", value=a1, name="ar2"|"ar2_lag1", children=(drive, const(a2)))`。
+4. **SDE 含噪历史条件漂移风险分离重测（`F08`）：** 在独立评估模块 `sde_conditional_drift_eval.py` 中分离四项指标：`v10_phase5b_stochastic_2sls_iv` 原生在线确认 **`2/4`**、实时含噪轨迹 MSE **`5.421e-03`**、真实含噪历史一步条件漂移 MSE **`6.119e-04`（`4/4 <= 2e-3`，较朴素 OLS `6.276e-03` [`1/4`] 降低 `10.26×`）**、无噪孪生迁移 MSE **`3.317e-04`**。
+
+### 二、交付物 B：同工具知识归因、单因子依赖消融与四机制实测修复（`F03–F06, F17`）
+
+1. **Study B1 三臂同工具知识归因（4题相关偏移目标＋1题不匹配控制）：** `cold_full_tools` 通过 **`0/4`**（目标总算力 `1,487,155`），强基线 `archive_full_tools`（允许按需重构承诺并计费）通过 **`3/4`**（总算力 `975,874`），`structured_full_tools` 通过 **`3/4`**（总算力 **`975,294`**，较 `cold` 降 **`34.42%`**，与强 `archive_full_tools` 呈诚实近似平手，差值 `580` 算力）。
+2. **Study B2 严格单因子 `PremiseDependencyGraph` 依赖线索消融（6题）：** 共享同一父承诺、同一观测包与同一 `43` 候选补丁语法，`16k` 紧预算下两臂均为 `0/6`（`budget_interrupted = 6/6`）；`220k` 充足预算下无依赖线索 **`2/6`**（均值算力 `168,137.3`）对比有依赖线索 **`4/6`**（验证集支持 `6/6`，均值算力 **`54,075.0`，下降 `67.84%`**），并单独报告 `local_patch`（`2/4`）vs `from_scratch`（`0/4`）因子表。
+3. **Study B3 跨 4 类不同物理机制双臂实测修复（8题，$N\in\{4,5\}$）：** 覆盖端口增益、体相漏汇、耦合偏移、方向反转四类机制，双臂均 `8/8` 修复通过，实测 `lab.probe_queries` 由无引导代理的 **`101` 步（均值 `12.625`）**降至依赖引导代理的 **`42` 步（均值 `5.250`，实测节省 `-58.42%`）**。
+
+### 三、交付物 C：冻结全 6 阶段 `v4` 知识生命周期（1 条定标链＋4 条连续零挑选前瞻链）
+
+- 修复匿名仪器共享 `task_id` 污染（`_unique_task_signature`）、双参数联合版本空间亚微米重分割与端点焦点对称谓词（`relation_uncertainty.py`）后，在目标暴露前冻结全部目录与超参运行 `711000–714000` 四条前瞻物理源链（共 12 个冻结后阶段）：
+  - `cold_full_tools`：Stage 3 `0/4`、Stage 4–5 `0/4`、Stage 6 `0/4`（总计 **`0/12`**，单链冻结后均值算力 `1,488,940.5`）；
+  - `archive_full_tools` 与 `structured_lifecycle_v10`：Stage 3 **`3/4`**、Stage 4–5 **`3/4`**（$C_0$ 全部正确降级为 `conditional`）、Stage 6 **`2/4` 恢复 $C_0$ / `1/4` 完成在线确认**（总计 **`7/12 = 58.3%`**，在源形成成功的 3 条链上达 **`7/9 = 77.8%`**；单链冻结后均值算力分别降至 `1,140,655.8` 与 **`1,139,826.8` [-23.45%]**），完整保留 `prospective_chain_2` 源形成未过及 `N=6` 预算耗尽样本。
+- **回归与验收：** `tests/test_v10_2_audit_acceptance.py` 全部 22 项行为验收标准及 `v10` 专项回归共 **`52/52`（100% 通过）**。
