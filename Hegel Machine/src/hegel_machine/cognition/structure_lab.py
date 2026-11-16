@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, dataclass
 import json
+from math import cos
 from random import Random
 
 from .models import Observation, Probe, TaskSpec
@@ -67,7 +68,8 @@ class StructureLab:
 
     def __init__(self, *, objects=4, readout="focus", variant="exchange", seed=71,
                  relation_direction="symmetric", relation_condition="always", total_weight=1.0,
-                 condition_threshold=None, latent_mode="none", latent_decay=None, latent_weight=None):
+                 condition_threshold=None, latent_mode="none", latent_decay=None, latent_weight=None,
+                 latent_freq=None, latent_coupling=None):
         if objects < 2:
             raise ValueError("the exchange apparatus needs at least two objects")
         if readout not in {"focus", "position_focus", "total", "window", "event", "total_event",
@@ -80,7 +82,17 @@ class StructureLab:
             raise ValueError("unknown relation direction")
         if relation_condition not in {"always", "source_greater", "source_less", "donor_positive_gap"}:
             raise ValueError("unknown relation condition")
-        if latent_mode not in {"none", "focal_memory", "transition_memory"}:
+        if latent_mode not in {
+            "none",
+            "focal_memory",
+            "transition_memory",
+            "oscillatory_focal_memory",
+            "oscillatory_transition_memory",
+            "coupled_focal_memory",
+            "coupled_transition_memory",
+            "quadratic_energy_focal_memory",
+            "bilinear_work_transition_memory",
+        }:
             raise ValueError("unknown latent mode")
         self.object_ids = tuple(f"o{index}" for index in range(objects))
         self._readout, self._variant = readout, variant
@@ -96,12 +108,18 @@ class StructureLab:
         if latent_mode == "none":
             self._latent_decay = 0.0
             self._latent_weight = 0.0
-        elif latent_mode == "focal_memory":
+            self._latent_freq = 0.0
+            self._latent_coupling = 0.0
+        elif latent_mode in {"focal_memory", "oscillatory_focal_memory", "coupled_focal_memory", "quadratic_energy_focal_memory"}:
             self._latent_decay = float(rng.uniform(.54, .76) if latent_decay is None else latent_decay)
             self._latent_weight = float(rng.uniform(.32, .52) if latent_weight is None else latent_weight)
+            self._latent_freq = float(0.75 if latent_freq is None else latent_freq) if "oscillatory" in latent_mode else 0.0
+            self._latent_coupling = float(0.24 if latent_coupling is None else latent_coupling) if "coupled" in latent_mode else 0.0
         else:
             self._latent_decay = float(rng.uniform(.56, .78) if latent_decay is None else latent_decay)
             self._latent_weight = float(rng.uniform(.35, .55) if latent_weight is None else latent_weight)
+            self._latent_freq = float(0.75 if latent_freq is None else latent_freq) if "oscillatory" in latent_mode else 0.0
+            self._latent_coupling = float(0.22 if latent_coupling is None else latent_coupling) if "coupled" in latent_mode else 0.0
         self._window = 3
         self.observation_cost = self.measurement_cost = 0
         self.acquisitions = []
@@ -166,6 +184,10 @@ class StructureLab:
                         transfer = self._coupling * value
                         directional[source] -= transfer
                         directional[target] += transfer
+        if self._latent_mode == "coupled_transition_memory" and latent_state is not None:
+            coupled_flux = self._spatial_latent_flux(position, quantity, latent_state)
+        else:
+            coupled_flux = [0.0] * len(quantity)
         after = []
         for index, value in enumerate(quantity):
             change = (self._coupling * sum(other - value for other_index, other in enumerate(quantity)
@@ -177,10 +199,42 @@ class StructureLab:
                 change += .17 * position[index] + .07 * (index + 1) * value
             elif self._variant == "nonlocal":
                 change += .09 * sum(quantity)
-            if self._latent_mode == "transition_memory" and latent_state is not None:
-                change += self._latent_weight * latent_state[index]
+            if self._latent_mode in {
+                "transition_memory",
+                "oscillatory_transition_memory",
+                "coupled_transition_memory",
+                "bilinear_work_transition_memory",
+            } and latent_state is not None:
+                change += self._latent_weight * latent_state[index] + coupled_flux[index]
             after.append(value + drive[index] + change)
         return quantity, position, drive, focus, after
+
+    def _spatial_latent_flux(self, position, quantity, latent_state):
+        flux = [0.0] * len(latent_state)
+        if self._relation_direction != "symmetric":
+            sign = 1.0 if self._relation_direction == "right" else -1.0
+            for source, z_val in enumerate(latent_state):
+                for target in range(len(latent_state)):
+                    if 0.0 < sign * (position[target] - position[source]) < self._radius:
+                        if self._relation_condition == "source_greater" and quantity[source] <= quantity[target]:
+                            continue
+                        if self._relation_condition == "source_less" and quantity[source] >= quantity[target]:
+                            continue
+                        if self._relation_condition == "donor_positive_gap" and not (
+                            quantity[source] > 0.0 and (quantity[source] - quantity[target]) > self._condition_threshold
+                        ):
+                            continue
+                        transfer = self._latent_coupling * z_val
+                        flux[source] -= transfer
+                        flux[target] += transfer
+        else:
+            for index, z_val in enumerate(latent_state):
+                flux[index] = self._latent_coupling * sum(
+                    other_z - z_val
+                    for other_idx, other_z in enumerate(latent_state)
+                    if other_idx != index and abs(position[index] - position[other_idx]) < self._radius
+                )
+        return flux
 
     def _view(self, schema, quantity, position, drive, focus):
         indices = {item: index for index, item in enumerate(self.object_ids)}
@@ -201,16 +255,33 @@ class StructureLab:
         history, flows, combined_events, rows, transitions = [], [], [], [], []
         filtered_total = 0.0
         latent_state = [0.0] * len(self.object_ids)
+        latent_prev = [0.0] * len(self.object_ids)
+        ar2_a1 = 2.0 * self._latent_decay * cos(self._latent_freq)
+        ar2_a2 = -(self._latent_decay ** 2)
         for point in probe.sequence:
             if set(point) != set(self.spec.feature_bounds) or any(
                     not low <= point[name] <= high for name, (low, high) in self.spec.feature_bounds.items()):
                 raise ValueError("a setup must supply the public controls within their bounds")
             quantity, position, drive, focus, after = self._step(point, latent_state=latent_state)
-            if self._latent_mode == "transition_memory":
+            if self._latent_mode in {"transition_memory", "coupled_transition_memory"}:
                 latent_state = [self._latent_decay * latent_state[idx] + drive[idx]
                                 for idx in range(len(quantity))]
-            elif self._latent_mode == "focal_memory":
+            elif self._latent_mode == "oscillatory_transition_memory":
+                z_next = [ar2_a1 * latent_state[idx] + ar2_a2 * latent_prev[idx] + drive[idx]
+                          for idx in range(len(quantity))]
+                latent_prev, latent_state = latent_state, z_next
+            elif self._latent_mode == "bilinear_work_transition_memory":
+                latent_state = [self._latent_decay * latent_state[idx] + quantity[idx] * drive[idx]
+                                for idx in range(len(quantity))]
+            elif self._latent_mode in {"focal_memory", "coupled_focal_memory"}:
                 latent_state = [self._latent_decay * latent_state[idx] + quantity[idx] + 0.5 * drive[idx]
+                                for idx in range(len(quantity))]
+            elif self._latent_mode == "oscillatory_focal_memory":
+                z_next = [ar2_a1 * latent_state[idx] + ar2_a2 * latent_prev[idx] + quantity[idx] + 0.5 * drive[idx]
+                          for idx in range(len(quantity))]
+                latent_prev, latent_state = latent_state, z_next
+            elif self._latent_mode == "quadratic_energy_focal_memory":
+                latent_state = [self._latent_decay * latent_state[idx] + (quantity[idx] ** 2)
                                 for idx in range(len(quantity))]
             before_features = self._view(schema, quantity, position, drive, focus)
             after_features = self._view(schema, after, position, drive, focus)
@@ -241,8 +312,11 @@ class StructureLab:
                 target = total + .7 * event + .35 * (quantity[focus] ** 2)
             else:
                 target = after[focus]
-            if self._latent_mode == "focal_memory":
+            if self._latent_mode in {"focal_memory", "oscillatory_focal_memory", "quadratic_energy_focal_memory"}:
                 target += self._latent_weight * latent_state[focus]
+            elif self._latent_mode == "coupled_focal_memory":
+                focal_flux = self._spatial_latent_flux(position, quantity, latent_state)
+                target += self._latent_weight * latent_state[focus] + focal_flux[focus]
             rows.append(Observation(before_features, target, tuple(history)))
             transitions.append({"before": before_features, "after": after_features})
             history.append({**before_features, "__target__": target})

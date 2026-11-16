@@ -2403,3 +2403,65 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
 
 1. 当前POMDP隐状态生长覆盖每对象一阶线性指数水库 $z_{i,t} = \alpha z_{i,t-1} + (1-\alpha) u_{i,t-1}$ 及其与非线性驱动／有向空间耦合的组合；面向多维耦合非线性隐状态（如二阶阻尼振子隐变量或跨对象直接隐态耦合）的自动状态阶数辨识仍待扩展。
 2. 主动复合区域二分探针目前针对边谓词中的一维连续比较常数与空间交互半径交替求解；面向高维联合非线性超曲面阈值的耦合主动实验设计仍属后续研究方向。
+
+## 122. v10 Phase 3：二阶阻尼谐振与跨对象空间耦合POMDP辨识及开放语法非线性隐状态受控合成（2026-11-16）
+
+承接§121第四节第1条明确指出的“二阶阻尼振子隐变量／跨对象隐态耦合辨识”以及开放语法与部分可观测隐状态（POMDP）的交叉空白，本轮在不触碰任何已封账COW账本的前提下，完成 **Phase 3A（零LLM，二阶复共轭谐振AR(2)与跨对象空间耦合POMDP辨识及跨尺度迁移）** 与 **Phase 3B（在线`gpt-5.6-sol`单因子对照，开放语法门控＋POMDP非线性隐状态方程发现及零额外调用 $N=4 \to N=5$ 迁移）** 的完整主干实现与受控实验验证。
+- Phase 3A回执：[v10_phase3a_higher_order_and_coupled_pomdp_20261116.json](evidence/v10_world_structure_20261116/v10_phase3a_higher_order_and_coupled_pomdp_20261116.json)
+- Phase 3B回执：[v10_phase3b_open_grammar_pomdp_llm_20261116.json](evidence/v10_world_structure_20261116/v10_phase3b_open_grammar_pomdp_llm_20261116.json)
+
+### 一、架构与数学机理扩展
+
+1. **向后兼容的二阶因果谐振算子与`value_summand`空间邻域提升（`language.py`、`simplification.py`、`world_structure_commitments.py`）：**
+   - 在不新增脆弱顶层AST算子的前提下，为`Program("accumulate", value=a_1, name="ar2"|"ar2_lag1", children=(drive, const(a_2)))`扩展因果二阶递推 $z_t = a_1 z_{t-1} + a_2 z_{t-2} + d_t$（其中复共轭阻尼谐振极点 $a_1 = 2\rho\cos\omega,\ a_2 = -\rho^2$），`ar2`输出当步 $z_t$，`ar2_lag1`输出一步滞后 $z_{t-1}$；`simplification.py`仅对`program.name is None`应用一阶零极点退化规则。
+   - 利用精确恒等式 $z_{i,t-1} \equiv \frac{1}{\alpha}(\operatorname{accumulate}(\alpha, d_i, 0)_t - d_{i,t})$，将`neighbor_sum`／`relation_sum`的归约提升扩展至任意角色均匀`value_summand`（`lift_neighborhood`与`instantiate_commitment_terms`支持`value_summand`＋`value_roles`），使跨对象空间隐通量 $\kappa \sum_{j \in \mathcal{N}_{r_0}(i)} z_{j,t-1}$ 与非线性转移记忆保留同一个符号半径`r_0`及精确等价重组门控 $\operatorname{Rej}(T) \supseteq \operatorname{Rej}(S)$。
+
+2. **前提依赖图扩展：`P_latent_order`、`P_latent_coupling`、`P_latent_transition_drive`与$S_{N-1}$对称破缺焦点辨识（`premise_dependency_audit.py`、`world_structure_commitments.py`）：**
+   - **无函数形式假设的 $S_{N-1}$ 选择器对称破缺对比：** 在单对象受激且 $x=0$ 的已购探针上，$N-1$ 个非归属焦点状态给出全同背景读出 $y_{\text{bg}}$，唯一真实归属 $f^*(q_k)$ 给出偏离响应 $y_{\text{active}} \neq y_{\text{bg}}$，无需预设任何线性或特定非线性水库形式即可将焦点排列从 $N!$ 压缩至 `1`。
+   - **转移层层级审计与消去：** 当一阶独立水库通过总量递推 $R_t = \alpha R_{t-1} + c_u U_{t-1} + c_q Q_{t-1}$ 但单对象残差消去后违背纯 $q$ 空间交换时，`_solve_coupled_latent_exchange` 证伪 `P_latent_coupling` 并联合恢复跨对象空间隐耦合；当一阶总量递推本身被振荡残差证伪时，闭式四列齐次最小二乘 $R_t = a_1 R_{t-1} + a_2 R_{t-2} + c_u U_{t-1} + c_q Q_{t-1}$ 证伪 `P_latent_order`、恢复 $(a_1, a_2)$ 并执行二阶隐状态消去（辅以极坐标 $(\rho, \cos\omega)$ 黄金分割角色恢复）；当重置步 $t=0$ 严格守恒而 $t \ge 1$ 同时证伪一阶、空间耦合与二阶线性驱动时，精确定位证伪 `P_latent_transition_drive` 并输出重置空间几何与逐对象实测隐注入轨迹。
+   - **读出层 Frisch-Waugh-Lovell（FWL）正交投影快速极点求解：** 预先对基列 $[\mathbf{1}, X_{\text{base}}]$ 执行一次修正 Gram-Schmidt 正交化并投影目标残差 $P_\perp y$，在极坐标 $(\rho, \cos\omega)$ 下仅沿单焦点对象标量序列更新 $2 \times 2$ 正规方程，将二阶焦点谐振每次评估从全AST拟合压缩超百倍。
+
+3. **开放语法＋POMDP联合门控与零LLM调用跨尺度重标定（`open_grammar_author.py`、`relation_uncertainty.py`）：**
+   - 对称向无门控平铺对照臂`llm_without_premise_gate`开放`accumulate`算子，确保单因子公平性；
+   - 在`propose_premise_gated_commitment_revisions`新增`P_latent_transition_drive`分支（`screen_custom_latent_transition_drive`检验非线性每对象驱动AST能否在恢复极点 $\hat{\alpha}$ 与消去后令全部跨步转移重归精确守恒有向交换）及`P_temporal_readout`水库分支（提供连续`trajectory_step`残差序列、同构多极点`accumulate`去重与 $t=0$ 重置步对比诊断）；
+   - 沉淀为`custom_transition_memory`／`custom_focal_memory`世界结构承诺后，在 $N=5$ 装置上自动重标定偏移极点 $\alpha_{\text{target}}$ 与偏移空间半径 $r_{\text{target}}$，全程零LLM调用。
+
+### 二、Phase 3A 受控实验结果：二阶阻尼谐振与跨对象空间耦合POMDP（`model_calls = 0`）
+
+在8台未曝光匿名传感器POMDP装置（覆盖`oscillatory_transition_memory`、`oscillatory_focal_memory`、`coupled_transition_memory`、`coupled_focal_memory`四类机制；Stage 3A-1含4台 $N=4$ 发现装置，Stage 3A-2含4台阻尼 $\rho$、频率 $\omega$、隐耦合 $\kappa$ 与半径 $r_0$ 全部偏移的 $N=5$ 跨尺度后继装置）上对比三臂原生`UnifiedResearchAgent`：
+
+| 对照臂 | Stage 3A-1: $N=4$ 发现 (4题) | Stage 3A-2: $N=4 \to N=5$ 跨尺度后继 (4题) | 8题总通过率 (`<=1e-7`) | 8题新48步均值 MSE | 均值观测 / 均值科学计算 | $N=5$ 后继均值科学计算 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `flat_baseline_continuous_state`（含内置一／二阶标量`continuous_state`） | `0/4` | `0/4` | **0/8 (0.0%)** | `3.400e-01` | `196.38` 行 / `394,611.0` | `467,653.5` |
+| `first_order_pomdp_v10_phase2c`（Phase 2C一阶独立POMDP） | `0/4` | `0/4` | **0/8 (0.0%)** | `7.607e-02` | `198.38` 行 / `404,355.9` | `477,488.3` |
+| **`v10_phase3a_higher_order_and_coupled_pomdp`（Phase 3A完整臂）** | **4/4 (100%)** | **4/4 (100%)** | **8/8 (100.0%)** | **`1.621e-13`** | `187.88` 行 / **`122,937.5` (-69.60%)** | **`159,405.0` (-66.62%)** |
+
+- **参数恢复与纯控制收敛细节：** 二阶谐振极点 $(a_1, a_2) = (2\rho\cos\omega, -\rho^2)$ 在 $N=4$（真值 `[0.791089, -0.462400]`）与偏移后的 $N=5$（真值 `[0.634744, -0.577600]`）上均恢复至 $10^{-6}$ 量级以内；空间耦合隐极点在 $N=4$（`0.65`）与 $N=5$（`0.74`）上同样精确恢复；**全部4台 $N=5$ 跨尺度装置（`910501`、`920501`、`930501`、`940501`）均自动升级为零在线测量的纯控制预测器（`selected_channels = []`）**。
+
+### 三、Phase 3B 受控实验结果：在线 `gpt-5.6-sol` 开放语法＋POMDP联合发现与零调用 $N=5$ 迁移
+
+在完全超出全部符号算子库（含Phase 3A）的两类非线性POMDP机制——**机制1 `bilinear_work_transition_memory`**（$z_{i,t} = \alpha z_{i,t-1} + q_{i,t} u_{i,t}$ 耦合进状态转移，`P_latent_transition_drive`证伪）与 **机制2 `quadratic_energy_focal_memory`**（$z_{i,t} = \alpha z_{i,t-1} + q_{i,t}^2$ 耦合进切换焦点读出，`P_temporal_readout`证伪）——上执行双阶段严格单因子对照（`max_llm_calls = 2`，符号计算与LLM账本严格分列，API密钥零落盘）：
+
+#### Stage A：$N=4$ 匿名装置发现三臂单因子对照（每机制2随机种子 = 4题，共享完全相同的已购观测与转移集）
+
+| 单因子对照臂 | 双线性做功转移记忆 (`950401/402`) | 二次能量焦点记忆 (`960401/402`) | 4题总通过率 (`<=1e-7`) | 新48步均值 MSE | 总 LLM 调用次数 | 总消耗 Token (`in + out`) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `symbolic_pomdp_v10_only`（含Phase 3A全套符号POMDP库，零LLM） | `0/2` (`1.49e-02`) | `0/2` (`3.97e-02`) | **0/4 (0.0%)** | `2.728e-02` | `0` | `0` |
+| `llm_without_premise_gate`（平铺`gpt-5.6-sol`，对称开放`accumulate`） | `0/2` (`3.50e-01`) | `0/2` (`3.31e-01`) | **0/4 (0.0%)** | `3.401e-01` | `8` | `121,362` (`103,148 + 18,214`) |
+| **`llm_with_v10_pomdp_premise_gate`（v10 POMDP前提图门控`gpt-5.6-sol`）** | **2/2 (`2.96e-21`)** | **1/2 (`4.13e-17` / `2.20e-02`)** | **3/4 (75.0%)** | **`5.497e-03`**（通过3题均值`1.38e-17`） | **`5` (-37.5%)** | **`29,218` (-75.92%)** |
+
+- **诚实单题归因：** 在`bilinear_work_transition_memory`两题（`950401`、`950402`）及`quadratic_energy_focal_memory`的`960402`上，门控LLM均仅用 **1次调用**（`3,719`～`5,806` token）即精确合成非线性驱动并经符号门控标定极点达 $10^{-21} \sim 10^{-17}$ MSE；在`960401`上，模型在严格的`max_llm_calls = 2`上限内停留在瞬时二次项 $f_i q_i^2$（将MSE从父模型`4.52e-2`压半至`2.20e-2`，未过`1e-7`门槛），真实反映了两步采样上限下的探索方差，且不破坏已验证种子的无损承诺整合。
+
+#### Stage B：$N=4 \to N=5$ 极点与半径同步偏移下的零额外LLM调用跨尺度迁移（4台未曝光 $N=5$ 装置，原生`UnifiedResearchAgent`）
+
+| 迁移对照臂 | 双线性转移 $N=5$ ($\alpha:0.65\to 0.74,\ r_0:0.96\to 1.12$) | 二次能量焦点 $N=5$ ($\alpha:0.66\to 0.75,\ r_0:0.95\to 1.10$) | 4题总通过率 (`<=1e-7`) | 新48步均值 MSE | 均值观测 / 均值科学计算 | 额外 LLM 调用 / Token |
+| --- | --- | --- | --- | --- | --- | --- |
+| `unconsolidated_parent_pomdp_v10`（未整合非线性POMDP算子的父库） | `0/2` (`3.35e-02`) | `0/2` (`2.43e-01`) | **0/4 (0.0%)** | `1.383e-01` | `220.25` 行 / `477,766.8` | `0` / `0` |
+| **`consolidated_phase3b_zero_llm_calls`（固化非线性POMDP承诺后零调用迁移）** | **2/2 (`1.98e-19`)** | **2/2 (`2.17e-17`)** | **4/4 (100.0%)** | **`1.097e-17`** | `210.00` 行 / **`239,999.5` (-49.77%)** | **`0` / `0`** |
+
+- **零传感器纯控制预测器升级：** 全部4台未曝光 $N=5$ 非线性POMDP装置（`950501`、`950502`、`960501`、`960502`）在`0`次LLM调用下自动重标定新衰减极点与新空间半径，并全部升级至 **`selected_channels = []`**（部署期零传感器测量成本）。
+
+### 四、更新后的诚实边界
+
+1. **无显式角色划分的连续场／多维非线性耦合隐动力学：** 当前二阶谐振、跨对象空间隐耦合及开放语法非线性POMDP均建立在公开观测可分离出对象角色结构（`P_role_partition`）的实验场之上；面向完全无对象传感器角色划分的连续偏微分场或高维非线性自激极限环（如Van der Pol型状态依赖阻尼）的前提图自动构建仍属开放研究问题。
+2. **高维弯曲超曲面阈值的主动干预规划：** 当前主动二分探针针对一维比较阈值与空间半径交替求解；面向多变量非线性不等式超曲面的最优主动探针设计仍待推进。

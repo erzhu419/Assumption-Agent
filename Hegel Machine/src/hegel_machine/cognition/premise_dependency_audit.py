@@ -148,6 +148,22 @@ def build_premise_dependency_graph(commitment: dict | None = None, model: dict |
             "status": "pending",
         },
         {
+            "id": "P_latent_order",
+            "layer": "state_sufficiency",
+            "depends_on": ["P_markov_state"],
+            "committed_value": 2 if committed_latent and "oscillatory" in str(committed_latent) else 1,
+            "observable_test": "first_order_exponential_vs_second_order_ar2_recurrence",
+            "status": "pending",
+        },
+        {
+            "id": "P_latent_coupling",
+            "layer": "state_sufficiency",
+            "depends_on": ["P_markov_state"],
+            "committed_value": "coupled" if committed_latent and "coupled" in str(committed_latent) else "independent",
+            "observable_test": "independent_per_object_vs_spatial_neighbor_latent_transport",
+            "status": "pending",
+        },
+        {
             "id": "P_conservation",
             "layer": "state_transitions",
             "depends_on": ["P_role_partition"],
@@ -1369,6 +1385,10 @@ def _audit_focus_membership_from_trajectories(
     max_bijections: int = 720,
     *,
     drive_by_q_override: dict[str, str] | None = None,
+    allow_higher_order_latent: bool = True,
+    verified_direction: str | None = None,
+    radius_interval: list[float] | None = None,
+    commitments: list[dict] | tuple[dict, ...] = (),
 ) -> dict | None:
     """Audit ``P_focus_membership`` (``f -> q``) on paid multi-step trajectories.
 
@@ -1420,6 +1440,91 @@ def _audit_focus_membership_from_trajectories(
         if pos == 0 and row.get("history"):
             continue
         by_probe.setdefault(pid, {}).setdefault(pos, row)
+
+    # Model-agnostic S_{N-1} symmetry-breaking selector contrast on single-object
+    # reset / matched-prefix excitations (zero functional-form assumptions):
+    if n >= 3 and budget.spend(max(1, len(by_probe) * n)):
+        x_all = sorted((model.get("position_candidates") or {}).keys())
+        grouped_excitations: dict[tuple, dict[int, float]] = {}
+        for rows_by_pos in by_probe.values():
+            for step_pos in (0, 1):
+                if step_pos not in rows_by_pos:
+                    continue
+                if step_pos == 1:
+                    if 0 not in rows_by_pos:
+                        continue
+                    b0 = rows_by_pos[0]["before"]
+                    if not all(
+                        abs(float(b0.get(q, 0.0))) <= 1e-9
+                        and abs(float(b0.get(u_by_q[q], 0.0))) <= 1e-9
+                        for q in dynamic
+                    ):
+                        continue
+                r_cur = rows_by_pos[step_pos]
+                bef = r_cur["before"]
+                if not all(
+                    q in bef and u_by_q[q] in bef for q in dynamic
+                ) or not all(f in bef for f in f_fields):
+                    continue
+                if x_all and any(abs(float(bef.get(xf, 0.0))) > 1e-9 for xf in x_all):
+                    continue
+                active_f = [
+                    f_idx for f_idx, f in enumerate(f_fields) if abs(float(bef[f]) - 1.0) <= 1e-6
+                ]
+                if len(active_f) != 1:
+                    continue
+                excited_qs = [
+                    q
+                    for q in dynamic
+                    if abs(float(bef[q])) > 1e-6 or abs(float(bef[u_by_q[q]])) > 1e-6
+                ]
+                if len(excited_qs) != 1:
+                    continue
+                q_exc = excited_qs[0]
+                key = (
+                    step_pos,
+                    q_exc,
+                    round(float(bef[q_exc]), 8),
+                    round(float(bef[u_by_q[q_exc]]), 8),
+                )
+                grouped_excitations.setdefault(key, {})[active_f[0]] = float(r_cur["target"])
+
+        inferred_f_for_q: dict[str, int] = {}
+        for (_, q_exc, _, _), targets_by_f in grouped_excitations.items():
+            if len(targets_by_f) < n or q_exc in inferred_f_for_q:
+                continue
+            items_f = sorted(targets_by_f.items())
+            outliers = []
+            for idx_cand, (f_cand, y_cand) in enumerate(items_f):
+                others = [y_other for j, (_, y_other) in enumerate(items_f) if j != idx_cand]
+                if max(others) - min(others) <= 1e-9 and abs(y_cand - others[0]) > 1e-5:
+                    outliers.append(f_cand)
+            if len(outliers) == 1:
+                inferred_f_for_q[q_exc] = outliers[0]
+
+        if len(inferred_f_for_q) >= n - 1:
+            used_fs = set(inferred_f_for_q.values())
+            if len(used_fs) == len(inferred_f_for_q):
+                if len(inferred_f_for_q) == n - 1:
+                    rem_q = next(q for q in dynamic if q not in inferred_f_for_q)
+                    rem_f = next(fi for fi in range(n) if fi not in used_fs)
+                    inferred_f_for_q[rem_q] = rem_f
+                narrowed_direct = {
+                    f_fields[f_idx]: [q_name]
+                    for q_name, f_idx in inferred_f_for_q.items()
+                }
+                if all(
+                    narrowed_direct[f][0] in focus_cands[f].get("quantities", ())
+                    for f in f_fields
+                ):
+                    return {
+                        "status": "supported",
+                        "exhaustive": True,
+                        "method": "differential_selector_symmetry_contrast",
+                        "trajectory_rows": len(records),
+                        "surviving_count": 1,
+                        "narrowed_focus_domains": narrowed_direct,
+                    }
 
     trajectories: list[list[dict]] = []
     for rows_by_pos in by_probe.values():
@@ -1676,6 +1781,298 @@ def _audit_focus_membership_from_trajectories(
         if best_pole_by_bij:
             surviving_f_to_q = [item[1] for item in best_pole_by_bij]
 
+    # Higher-order AR(2), spatially coupled, and consolidated open-grammar commitment fallbacks:
+    if not surviving_f_to_q and total_rows >= 14 and allow_higher_order_latent:
+        # 2A. Spatially coupled 1st-order focal memory when x -> q and radius are already resolved
+        if pos_q_per_tr is not None and radius_interval is not None:
+            r_mid = 0.5 * (float(radius_interval[0]) + float(radius_interval[1]))
+            dir_eff = verified_direction or "right"
+            sign_eff = 1.0 if dir_eff == "right" else -1.0
+            coupled_survivors: list[list[int]] = []
+            for q_to_f in bijections:
+                if not budget.spend(max(1, total_rows * 4)):
+                    break
+                f_to_q = [0] * n
+                for q_idx, f_idx in enumerate(q_to_f):
+                    f_to_q[f_idx] = q_idx
+                alpha_col, evt_col = [], []
+                for tr_idx in range(len(trajectories)):
+                    tr_a = after_q_per_tr[tr_idx]
+                    tr_phi = flow_q_per_tr[tr_idx]
+                    tr_f = active_f_per_tr[tr_idx]
+                    psi_seq = []
+                    for t in range(len(tr_f)):
+                        q_idx = f_to_q[tr_f[t]]
+                        p_val = tr_phi[t][q_idx]
+                        evt_col.append((p_val - psi_seq[-1]) if t >= 1 else 0.0)
+                        psi_seq.append(p_val)
+                        alpha_col.append(tr_a[t][q_idx])
+
+                def _coupled_mse(pole_val: float) -> float:
+                    zq_col, zu_col, nb_zq_col, nb_zu_col = [], [], [], []
+                    for tr_idx in range(len(trajectories)):
+                        tr_b = before_q_per_tr[tr_idx]
+                        tr_u = before_u_per_tr[tr_idx]
+                        tr_f = active_f_per_tr[tr_idx]
+                        tr_x = pos_q_per_tr[tr_idx]
+                        zq = [0.0] * n
+                        zu = [0.0] * n
+                        for t in range(len(tr_f)):
+                            for obj_i in range(n):
+                                zq[obj_i] = pole_val * zq[obj_i] + tr_b[t][obj_i]
+                                zu[obj_i] = pole_val * zu[obj_i] + tr_u[t][obj_i]
+                            q_idx = f_to_q[tr_f[t]]
+                            zq_col.append(zq[q_idx])
+                            zu_col.append(zu[q_idx])
+                            x_cur = tr_x[t]
+                            if dir_eff in {"right", "left"}:
+                                fq_flux = 0.0
+                                fu_flux = 0.0
+                                for src_i in range(n):
+                                    for dst_i in range(n):
+                                        if src_i != dst_i and 0.0 < sign_eff * (x_cur[dst_i] - x_cur[src_i]) < r_mid:
+                                            if dst_i == q_idx:
+                                                fq_flux += zq[src_i]
+                                                fu_flux += zu[src_i]
+                                            elif src_i == q_idx:
+                                                fq_flux -= zq[src_i]
+                                                fu_flux -= zu[src_i]
+                            else:
+                                fq_flux = sum(
+                                    zq[oth] - zq[q_idx]
+                                    for oth in range(n)
+                                    if oth != q_idx and abs(x_cur[oth] - x_cur[q_idx]) < r_mid
+                                )
+                                fu_flux = sum(
+                                    zu[oth] - zu[q_idx]
+                                    for oth in range(n)
+                                    if oth != q_idx and abs(x_cur[oth] - x_cur[q_idx]) < r_mid
+                                )
+                            nb_zq_col.append(fq_flux)
+                            nb_zu_col.append(fu_flux)
+                    return _fit_mse([flat_tot, alpha_col, evt_col, zq_col, zu_col, nb_zq_col, nb_zu_col])
+
+                coarse_c = [(p, _coupled_mse(p)) for p in (0.5, 0.65, 0.8)]
+                best_pc, best_errc = min(coarse_c, key=lambda item: item[1])
+                if best_errc <= 5e-3:
+                    lo_p, hi_p = max(0.2, best_pc - 0.18), min(0.95, best_pc + 0.18)
+                    gr = (sqrt(5.0) - 1.0) / 2.0
+                    c1 = hi_p - gr * (hi_p - lo_p)
+                    c2 = lo_p + gr * (hi_p - lo_p)
+                    f1, f2 = _coupled_mse(c1), _coupled_mse(c2)
+                    for _ in range(16):
+                        if f1 < f2:
+                            hi_p, c2, f2 = c2, c1, f1
+                            c1 = hi_p - gr * (hi_p - lo_p)
+                            f1 = _coupled_mse(c1)
+                        else:
+                            lo_p, c1, f1 = c1, c2, f2
+                            c2 = lo_p + gr * (hi_p - lo_p)
+                            f2 = _coupled_mse(c2)
+                    best_errc = min(f1, f2)
+                if best_errc <= max(eff_tol * 4.0, 1e-10):
+                    coupled_survivors.append(f_to_q)
+            if coupled_survivors:
+                surviving_f_to_q = coupled_survivors
+
+        # 2B. 2nd-order oscillatory AR(2) focal memory fallback
+        if not surviving_f_to_q and total_rows >= 16:
+            ar2_survivors: list[list[int]] = []
+            gr = (sqrt(5.0) - 1.0) / 2.0
+            for q_to_f in bijections:
+                if not budget.spend(max(1, total_rows * 6)):
+                    break
+                f_to_q = [0] * n
+                for q_idx, f_idx in enumerate(q_to_f):
+                    f_to_q[f_idx] = q_idx
+                alpha_col, evt_col = [], []
+                for tr_idx in range(len(trajectories)):
+                    tr_a = after_q_per_tr[tr_idx]
+                    tr_phi = flow_q_per_tr[tr_idx]
+                    tr_f = active_f_per_tr[tr_idx]
+                    psi_seq = []
+                    for t in range(len(tr_f)):
+                        q_idx = f_to_q[tr_f[t]]
+                        p_val = tr_phi[t][q_idx]
+                        evt_col.append((p_val - psi_seq[-1]) if t >= 1 else 0.0)
+                        psi_seq.append(p_val)
+                        alpha_col.append(tr_a[t][q_idx])
+
+                def _ar2_focal_mse(a1_val: float, a2_val: float) -> float:
+                    zq0_col, zq1_col, zu0_col, zu1_col = [], [], [], []
+                    for tr_idx in range(len(trajectories)):
+                        tr_b = before_q_per_tr[tr_idx]
+                        tr_u = before_u_per_tr[tr_idx]
+                        tr_f = active_f_per_tr[tr_idx]
+                        zq_cur, zq_prev = [0.0] * n, [0.0] * n
+                        zu_cur, zu_prev = [0.0] * n, [0.0] * n
+                        for t in range(len(tr_f)):
+                            q_idx = f_to_q[tr_f[t]]
+                            zq1_col.append(zq_cur[q_idx])
+                            zu1_col.append(zu_cur[q_idx])
+                            for obj_i in range(n):
+                                nq = a1_val * zq_cur[obj_i] + a2_val * zq_prev[obj_i] + tr_b[t][obj_i]
+                                nu = a1_val * zu_cur[obj_i] + a2_val * zu_prev[obj_i] + tr_u[t][obj_i]
+                                zq_prev[obj_i], zq_cur[obj_i] = zq_cur[obj_i], nq
+                                zu_prev[obj_i], zu_cur[obj_i] = zu_cur[obj_i], nu
+                            zq0_col.append(zq_cur[q_idx])
+                            zu0_col.append(zu_cur[q_idx])
+                    return _fit_mse([flat_tot, alpha_col, evt_col, zq0_col, zq1_col, zu0_col, zu1_col])
+
+                seeds_ar2 = [
+                    (2.0 * rho * cw, -(rho * rho))
+                    for rho in (0.58, 0.72, 0.84)
+                    for cw in (0.25, 0.62, 0.85)
+                ]
+                best_a1, best_a2, best_err2 = min(
+                    ((a1, a2, _ar2_focal_mse(a1, a2)) for a1, a2 in seeds_ar2),
+                    key=lambda item: item[2],
+                )
+                if best_err2 <= 2e-2:
+                    span1, span2 = 0.28, 0.20
+                    for _ in range(5):
+                        lo1, hi1 = max(-1.9, best_a1 - span1), min(1.9, best_a1 + span1)
+                        c1 = hi1 - gr * (hi1 - lo1)
+                        c2 = lo1 + gr * (hi1 - lo1)
+                        f1, f2 = _ar2_focal_mse(c1, best_a2), _ar2_focal_mse(c2, best_a2)
+                        for _ in range(10):
+                            if f1 < f2:
+                                hi1, c2, f2 = c2, c1, f1
+                                c1 = hi1 - gr * (hi1 - lo1)
+                                f1 = _ar2_focal_mse(c1, best_a2)
+                            else:
+                                lo1, c1, f1 = c1, c2, f2
+                                c2 = lo1 + gr * (hi1 - lo1)
+                                f2 = _ar2_focal_mse(c2, best_a2)
+                        if f1 < f2 and f1 < best_err2:
+                            best_a1, best_err2 = c1, f1
+                        elif f2 <= f1 and f2 < best_err2:
+                            best_a1, best_err2 = c2, f2
+
+                        lo2, hi2 = max(-0.96, best_a2 - span2), min(-0.02, best_a2 + span2)
+                        d1 = hi2 - gr * (hi2 - lo2)
+                        d2 = lo2 + gr * (hi2 - lo2)
+                        g1, g2 = _ar2_focal_mse(best_a1, d1), _ar2_focal_mse(best_a1, d2)
+                        for _ in range(10):
+                            if g1 < g2:
+                                hi2, d2, g2 = d2, d1, g1
+                                d1 = hi2 - gr * (hi2 - lo2)
+                                g1 = _ar2_focal_mse(best_a1, d1)
+                            else:
+                                lo2, d1, g1 = d1, d2, g2
+                                d2 = lo2 + gr * (hi2 - lo2)
+                                g2 = _ar2_focal_mse(best_a1, d2)
+                        if g1 < g2 and g1 < best_err2:
+                            best_a2, best_err2 = d1, g1
+                        elif g2 <= g1 and g2 < best_err2:
+                            best_a2, best_err2 = d2, g2
+                        span1 *= 0.38
+                        span2 *= 0.38
+                if best_err2 <= max(eff_tol * 8.0, 1e-9):
+                    ar2_survivors.append(f_to_q)
+            if ar2_survivors:
+                surviving_f_to_q = ar2_survivors
+
+        # 2C. Consolidated open-grammar / POMDP commitment role-term screening on cross-scale transfer
+        if (
+            not surviving_f_to_q
+            and commitments
+            and len(unique_x_for_q) == n
+            and radius_interval is not None
+        ):
+            from .structure_lab import ObjectSchema
+            from .world_structure_commitments import (
+                _rebind_latent_pole_in_role_terms,
+                instantiate_commitment_terms,
+            )
+
+            obs_trajs: list[Observation] = []
+            for tr in trajectories:
+                hist_cur: list[dict] = []
+                for r_row, _ in tr:
+                    bef_f = dict(r_row["before"])
+                    tgt_f = float(r_row["target"])
+                    obs_trajs.append(Observation(bef_f, tgt_f, tuple(hist_cur)))
+                    hist_cur.append({**bef_f, "__target__": tgt_f})
+            r_mid_comm = 0.5 * (float(radius_interval[0]) + float(radius_interval[1]))
+            comm0 = commitments[0]
+            r_bindings = {
+                p["symbol"]: r_mid_comm for p in comm0.get("radius_parameters", ())
+            }
+            d_overrides = (
+                {p["symbol"]: verified_direction for p in comm0.get("radius_parameters", ())}
+                if verified_direction
+                else None
+            )
+            has_poles = bool(comm0.get("source_latent_poles"))
+            comm_survivors: list[list[int]] = []
+            gr = (sqrt(5.0) - 1.0) / 2.0
+            for q_to_f in bijections:
+                if not budget.spend(max(1, total_rows * 4)):
+                    break
+                f_by_q = {dynamic[q_idx]: f_fields[f_idx] for q_idx, f_idx in enumerate(q_to_f)}
+                objs_tmp = tuple(f"obj_{i}" for i in range(n))
+                sc_tmp = ObjectSchema(
+                    objs_tmp,
+                    {
+                        f"obj_{i}": {
+                            "q": dynamic[i],
+                            "u": u_by_q[dynamic[i]],
+                            "x": unique_x_for_q[dynamic[i]],
+                            "f": f_by_q[dynamic[i]],
+                        }
+                        for i in range(n)
+                    },
+                    {f"obj_{i}": (f"obj_{i}",) for i in range(n)},
+                    {f"obj_{i}": {"q": dynamic[i], "u": u_by_q[dynamic[i]], "x": unique_x_for_q[dynamic[i]]} for i in range(n)},
+                )
+
+                def _comm_mse(p_val: float | None = None) -> float:
+                    rt_ov = (
+                        _rebind_latent_pole_in_role_terms(comm0["role_terms"], float(p_val))
+                        if p_val is not None
+                        else None
+                    )
+                    built = instantiate_commitment_terms(
+                        comm0,
+                        sc_tmp,
+                        radius_bindings=r_bindings,
+                        direction_overrides=d_overrides,
+                        role_terms_override=rt_ov,
+                    )
+                    if not built:
+                        return float("inf")
+                    cols_b = [[t_p.predict(ob) for ob in obs_trajs] for t_p in built]
+                    return _fit_mse(cols_b)
+
+                if not has_poles:
+                    err_c = _comm_mse(None)
+                else:
+                    coarse_cp = [(pv, _comm_mse(pv)) for pv in (0.5, 0.68, 0.82)]
+                    bp_c, err_c = min(coarse_cp, key=lambda item: item[1])
+                    if err_c <= 1e-2:
+                        lo_p, hi_p = max(0.2, bp_c - 0.18), min(0.95, bp_c + 0.18)
+                        c1 = hi_p - gr * (hi_p - lo_p)
+                        c2 = lo_p + gr * (hi_p - lo_p)
+                        f1, f2 = _comm_mse(c1), _comm_mse(c2)
+                        for _ in range(14):
+                            if f1 < f2:
+                                hi_p, c2, f2 = c2, c1, f1
+                                c1 = hi_p - gr * (hi_p - lo_p)
+                                f1 = _comm_mse(c1)
+                            else:
+                                lo_p, c1, f1 = c1, c2, f2
+                                c2 = lo_p + gr * (hi_p - lo_p)
+                                f2 = _comm_mse(c2)
+                        err_c = min(err_c, f1, f2)
+                if err_c <= max(eff_tol * 4.0, 1e-10):
+                    f_to_q = [0] * n
+                    for q_idx, f_idx in enumerate(q_to_f):
+                        f_to_q[f_idx] = q_idx
+                    comm_survivors.append(f_to_q)
+            if comm_survivors:
+                surviving_f_to_q = comm_survivors
+
     if not surviving_f_to_q or len(surviving_f_to_q) >= len(bijections):
         return {
             "status": "unresolved_focus_membership",
@@ -1698,36 +2095,156 @@ def _audit_focus_membership_from_trajectories(
     }
 
 
-def _audit_latent_transition_state(
-    valid_rows: list[tuple[int, dict]],
+def _solve_coupled_latent_exchange(
+    step_tuples: list[tuple[list[float], list[float], list[float], list[float]]],
+    reset_q_rows: list[list[float]],
+    reset_x_rows: list[list[float]],
+    reset_d_rows: list[list[float]],
     dynamic: list[str],
-    drive_by_q: dict[str, str],
     x_fields: list[str],
     bijections: list[tuple[int, ...]],
     ordered_directions: list[str],
     eff_tol: float,
     budget: SearchBudget,
-    *,
-    observations: list | tuple = (),
-) -> dict | None:
-    """Test whether non-conservative transitions arise from an unobserved 1st-order per-object latent state.
+) -> tuple[dict[str, list[dict]], float | None]:
+    """Identify spatial exchange accompanied by cross-object latent neighbor transport.
 
-    Under ``q'_{i,t} = q_{i,t} + u_{i,t} + exchange_i(q_t, x_t) + z_{i,t-1}`` with
-    ``z_{i,t} = alpha * z_{i,t-1} + c_u * u_{i,t} + c_q * q_{i,t}`` and ``z_{i,-1} = 0``,
-    the global sum ``R_t = sum_i delta_{i,t}`` satisfies ``R_0 = 0`` at probe resets and
-    ``R_t = alpha * R_{t-1} + c_u * U_{t-1} + c_q * Q_{t-1}`` for ``t >= 1``.
+    ``step_tuples`` holds ``(q_v, x_v, z_prev_unit, td_v)`` where ``td_v`` has already
+    been deflated by the local per-object latent term ``z_state[i]``.
     """
     from .synthesis import _solve
 
     n = len(dynamic)
-    if not valid_rows or not bijections:
-        return None
-    if not budget.spend(len(valid_rows) * (n + 4)):
-        return None
+    if not step_tuples or not bijections:
+        return {}, None
 
+    # Use reset rows (where z_prev_unit == 0) to prune (direction, q_to_x) fast if active!
+    reset_active = any(max(abs(v) for v in dv) > max(1e-7, sqrt(eff_tol)) for dv in reset_d_rows)
+    by_dir_out: dict[str, list[dict]] = {}
+    eta_coupled_found: float | None = None
+
+    for direction in ordered_directions:
+        sign = 1.0 if direction == "right" else -1.0
+        dir_matches: list[dict] = []
+        for q_to_x in bijections:
+            if not budget.spend(max(1, len(step_tuples) * 2)):
+                return by_dir_out, eta_coupled_found
+            r_bounds_init = None
+            if reset_active and reset_q_rows:
+                res_solve = _exact_interval_across_transitions(
+                    reset_q_rows,
+                    reset_x_rows,
+                    reset_d_rows,
+                    direction,
+                    q_to_x,
+                    eff_tol * 4.0,
+                    edge_condition="unconditional",
+                )
+                if res_solve is None:
+                    continue
+                r_bounds_init = res_solve["radius_interval"]
+
+            dists_set: set[float] = set()
+            for q_v, x_v, _, _ in step_tuples:
+                for s_i in range(n):
+                    for t_i in range(n):
+                        if s_i == t_i:
+                            continue
+                        dx = (
+                            sign * (x_v[q_to_x[t_i]] - x_v[q_to_x[s_i]])
+                            if direction in {"right", "left"}
+                            else abs(x_v[q_to_x[t_i]] - x_v[q_to_x[s_i]])
+                        )
+                        if dx > 1e-9:
+                            dists_set.add(round(dx, 9))
+            sorted_d = sorted(dists_set)
+            if not sorted_d:
+                continue
+            cuts = [0.0, *sorted_d, sorted_d[-1] + 0.5]
+            valid_cells: list[tuple[float, float, float, float, float]] = []
+            for c_idx in range(len(cuts) - 1):
+                lo_c, hi_c = cuts[c_idx], cuts[c_idx + 1]
+                if hi_c - lo_c <= 1e-9:
+                    continue
+                if r_bounds_init is not None and (hi_c <= r_bounds_init[0] + 1e-9 or lo_c >= r_bounds_init[1] - 1e-9):
+                    continue
+                r_mid = 0.5 * (lo_c + hi_c)
+                if not budget.spend(len(step_tuples)):
+                    break
+                g00 = g01 = g11 = b0 = b1 = 0.0
+                gq_vecs = []
+                gz_vecs = []
+                for q_v, x_v, z_v, td_v in step_tuples:
+                    gq = [0.0] * n
+                    gz = [0.0] * n
+                    if direction in {"right", "left"}:
+                        for s_i in range(n):
+                            for t_i in range(n):
+                                if s_i != t_i and 0.0 < sign * (x_v[q_to_x[t_i]] - x_v[q_to_x[s_i]]) < r_mid:
+                                    gq[s_i] -= q_v[s_i]
+                                    gq[t_i] += q_v[s_i]
+                                    gz[s_i] -= z_v[s_i]
+                                    gz[t_i] += z_v[s_i]
+                    else:
+                        for s_i in range(n):
+                            for t_i in range(n):
+                                if s_i != t_i and abs(x_v[q_to_x[t_i]] - x_v[q_to_x[s_i]]) < r_mid:
+                                    gq[s_i] += q_v[t_i] - q_v[s_i]
+                                    gz[s_i] += z_v[t_i] - z_v[s_i]
+                    gq_vecs.append(gq)
+                    gz_vecs.append(gz)
+                    for i in range(n):
+                        g00 += gq[i] * gq[i]
+                        g01 += gq[i] * gz[i]
+                        g11 += gz[i] * gz[i]
+                        b0 += gq[i] * td_v[i]
+                        b1 += gz[i] * td_v[i]
+                if g00 <= 1e-14 or g11 <= 1e-14:
+                    continue
+                gamma_c, eta_c = _solve([[g00 + 1e-14, g01], [g01, g11 + 1e-14]], [b0, b1])
+                if gamma_c <= 1e-4 or abs(eta_c) <= 1e-5:
+                    continue
+                err = 0.0
+                for (q_v, x_v, z_v, td_v), gq, gz in zip(step_tuples, gq_vecs, gz_vecs):
+                    for i in range(n):
+                        diff = td_v[i] - (gamma_c * gq[i] + eta_c * gz[i])
+                        err += diff * diff
+                mse_cell = err / (len(step_tuples) * n)
+                if mse_cell <= eff_tol * 4.0:
+                    valid_cells.append((lo_c, hi_c, float(gamma_c), float(eta_c), float(mse_cell)))
+
+            if valid_cells:
+                r_lo = valid_cells[0][0]
+                r_hi = valid_cells[-1][1]
+                best_c = min(valid_cells, key=lambda item: item[4])
+                if eta_coupled_found is None:
+                    eta_coupled_found = best_c[3]
+                dir_matches.append(
+                    {
+                        "direction": direction,
+                        "edge_condition": "unconditional",
+                        "mapping": {x_fields[x_idx]: dynamic[q_idx] for q_idx, x_idx in enumerate(q_to_x)},
+                        "radius_interval": [float(r_lo), float(r_hi)],
+                        "coupling_estimate": best_c[2],
+                        "latent_coupling_estimate": best_c[3],
+                        "mse": best_c[4],
+                    }
+                )
+        if dir_matches:
+            by_dir_out[direction] = dir_matches
+    return by_dir_out, eta_coupled_found
+
+
+def _extract_latent_trajectories_and_resets(
+    valid_rows: list[tuple[int, dict]],
+    observations: list | tuple = (),
+    min_len: int = 3,
+) -> tuple[list[list[tuple[int, dict]]], list[tuple[int, dict]]]:
     trajectories: list[list[tuple[int, dict]]] = []
     reset_rows: list[tuple[int, dict]] = []
-    has_probe_meta = any(row.get("probe_id") is not None and row.get("position") is not None for _, row in valid_rows)
+    has_probe_meta = any(
+        row.get("probe_id") is not None and row.get("position") is not None for _, row in valid_rows
+    )
     if has_probe_meta:
         by_probe: dict[str, dict[int, tuple[int, dict]]] = {}
         for rec_idx, row in valid_rows:
@@ -1744,7 +2261,7 @@ def _audit_latent_transition_state(
             while step in rows_by_pos:
                 seq.append(rows_by_pos[step])
                 step += 1
-            if len(seq) >= 3:
+            if len(seq) >= min_len:
                 trajectories.append(seq)
     elif len(observations) == len(valid_rows):
         cur_seq: list[tuple[int, dict]] = []
@@ -1752,18 +2269,57 @@ def _audit_latent_transition_state(
             hlen = len(getattr(obs, "history", ()))
             if hlen == 0:
                 reset_rows.append((rec_idx, row))
-                if len(cur_seq) >= 3:
+                if len(cur_seq) >= min_len:
                     trajectories.append(cur_seq)
                 cur_seq = [(rec_idx, row)]
             elif len(cur_seq) == hlen:
                 cur_seq.append((rec_idx, row))
             else:
-                if len(cur_seq) >= 3:
+                if len(cur_seq) >= min_len:
                     trajectories.append(cur_seq)
                 cur_seq = []
-        if len(cur_seq) >= 3:
+        if len(cur_seq) >= min_len:
             trajectories.append(cur_seq)
+    return trajectories, reset_rows
 
+
+def _audit_latent_transition_state(
+    valid_rows: list[tuple[int, dict]],
+    dynamic: list[str],
+    drive_by_q: dict[str, str],
+    x_fields: list[str],
+    bijections: list[tuple[int, ...]],
+    ordered_directions: list[str],
+    eff_tol: float,
+    budget: SearchBudget,
+    *,
+    observations: list | tuple = (),
+    allow_higher_order_latent: bool = True,
+) -> dict | None:
+    """Audit unobserved per-object latent transition states across order & spatial coupling.
+
+    Tests hierarchically:
+    1. 1st-order independent exponential reservoir:
+       ``z_{i,t} = alpha * z_{i,t-1} + c_u * u_{i,t} + c_q * q_{i,t}``
+    2. 1st-order spatially coupled latent reservoir (``P_latent_coupling``):
+       ``after[i]`` receives both local ``z_{i,t-1}`` and neighbor flux ``Delta_z(t-1)_i``
+    3. 2nd-order oscillatory / AR(2) internal resonator (``P_latent_order``):
+       ``z_{i,t} = a_1 * z_{i,t-1} + a_2 * z_{i,t-2} + c_u * u_{i,t} + c_q * q_{i,t}``
+    4. Certified ``unexplained_latent_transition_state`` (``P_latent_transition_drive``)
+       when probe resets conserve ``sum_i delta_{i,0} = 0`` and satisfy spatial exchange,
+       yet ``t >= 1`` violates conservation and refutes all linear reservoirs.
+    """
+    from .synthesis import _solve
+
+    n = len(dynamic)
+    if not valid_rows or not bijections:
+        return None
+    if not budget.spend(len(valid_rows) * (n + 4)):
+        return None
+
+    trajectories, reset_rows = _extract_latent_trajectories_and_resets(
+        valid_rows, observations=observations, min_len=3
+    )
     if not reset_rows or not trajectories:
         return None
 
@@ -1780,130 +2336,522 @@ def _audit_latent_transition_state(
         return None
 
     eq_rows: list[tuple[float, float, float, float]] = []
+    eq2_rows: list[tuple[float, float, float, float, float]] = []
     for seq in trajectories:
         prev_q, prev_u, _, prev_d = _vecs(seq[0][1])
         prev_r = sum(prev_d)
+        prev2_r = 0.0
         for t in range(1, len(seq)):
             cur_q, cur_u, _, cur_d = _vecs(seq[t][1])
             cur_r = sum(cur_d)
             eq_rows.append((prev_r, sum(prev_u), sum(prev_q), cur_r))
+            eq2_rows.append((prev_r, prev2_r, sum(prev_u), sum(prev_q), cur_r))
+            prev2_r = prev_r
             prev_q, prev_u, prev_r = cur_q, cur_u, cur_r
 
     if len(eq_rows) < 5:
         return None
 
-    def _fit_homogeneous(col_indices: tuple[int, ...]) -> list[float]:
+    def _fit_homogeneous(rows_mat: list[tuple], col_indices: tuple[int, ...], rhs_idx: int) -> list[float]:
         k = len(col_indices)
         gram = [
-            [sum(eq[i] * eq[j] for eq in eq_rows) for j in col_indices]
+            [sum(eq[i] * eq[j] for eq in rows_mat) for j in col_indices]
             for i in col_indices
         ]
         for idx_d in range(k):
             gram[idx_d][idx_d] += 1e-12
-        rhs = [sum(eq[i] * eq[3] for eq in eq_rows) for i in col_indices]
+        rhs = [sum(eq[i] * eq[rhs_idx] for eq in rows_mat) for i in col_indices]
         return _solve(gram, rhs)
 
-    alpha, c_u, c_q = _fit_homogeneous((0, 1, 2))
+    # --- Attempt 1: 1st-Order Global Recurrence (Independent & Spatially Coupled) ---
+    alpha, c_u, c_q = _fit_homogeneous(eq_rows, (0, 1, 2), 3)
     if abs(c_q) < 1e-6 and abs(c_u) >= 1e-6:
-        alpha, c_u = _fit_homogeneous((0, 1))
+        alpha, c_u = _fit_homogeneous(eq_rows, (0, 1), 3)
         c_q = 0.0
     elif abs(c_u) < 1e-6 and abs(c_q) >= 1e-6:
-        alpha, c_q = _fit_homogeneous((0, 2))
+        alpha, c_q = _fit_homogeneous(eq_rows, (0, 2), 3)
         c_u = 0.0
 
-    if not (1e-4 < abs(alpha) < 0.9995) or max(abs(c_u), abs(c_q)) <= 1e-5:
-        return None
+    rec_mse = (
+        sum((eq[3] - (alpha * eq[0] + c_u * eq[1] + c_q * eq[2])) ** 2 for eq in eq_rows)
+        / len(eq_rows)
+        if (1e-4 < abs(alpha) < 0.9995 and max(abs(c_u), abs(c_q)) > 1e-5)
+        else float("inf")
+    )
+    if rec_mse <= eff_tol * n * 8.0:
+        def_q_rows: list[list[float]] = []
+        def_x_rows: list[list[float]] = []
+        def_d_rows: list[list[float]] = []
+        seen_sigs: set[tuple] = set()
+        covered_rec_ids: set[int] = set()
+        step_tuples_for_coupled: list[tuple[list[float], list[float], list[float], list[float]]] = []
+        drive_norm = c_u if abs(c_u) >= abs(c_q) and abs(c_u) > 1e-9 else (c_q if abs(c_q) > 1e-9 else 1.0)
 
-    rec_mse = sum(
-        (eq[3] - (alpha * eq[0] + c_u * eq[1] + c_q * eq[2])) ** 2 for eq in eq_rows
-    ) / len(eq_rows)
-    if rec_mse > eff_tol * n * 8.0:
-        return None
+        def _add_deflated(q_v: list[float], x_v: list[float], td_v: list[float]):
+            sig = (
+                tuple(round(v, 10) for v in q_v),
+                tuple(round(v, 10) for v in x_v),
+                tuple(round(v, 10) for v in td_v),
+            )
+            if sig not in seen_sigs:
+                seen_sigs.add(sig)
+                def_q_rows.append(q_v)
+                def_x_rows.append(x_v)
+                def_d_rows.append(td_v)
 
-    def_q_rows: list[list[float]] = []
-    def_x_rows: list[list[float]] = []
-    def_d_rows: list[list[float]] = []
-    seen_sigs: set[tuple] = set()
-    covered_rec_ids: set[int] = set()
+        for seq in trajectories:
+            z_state = [0.0] * n
+            for rec_idx, row in seq:
+                covered_rec_ids.add(rec_idx)
+                q_v, u_v, x_v, d_v = _vecs(row)
+                td_v = [d_v[i] - z_state[i] for i in range(n)]
+                _add_deflated(q_v, x_v, td_v)
+                step_tuples_for_coupled.append(
+                    (q_v, x_v, [z_state[i] / drive_norm for i in range(n)], td_v)
+                )
+                z_state = [alpha * z_state[i] + c_u * u_v[i] + c_q * q_v[i] for i in range(n)]
 
-    def _add_deflated(q_v: list[float], x_v: list[float], td_v: list[float]):
-        sig = (
-            tuple(round(v, 10) for v in q_v),
-            tuple(round(v, 10) for v in x_v),
-            tuple(round(v, 10) for v in td_v),
+        reset_q_only, reset_x_only, reset_d_only = [], [], []
+        for rec_idx, row in reset_rows:
+            q_v, _, x_v, d_v = _vecs(row)
+            reset_q_only.append(q_v)
+            reset_x_only.append(x_v)
+            reset_d_only.append(d_v)
+            if rec_idx not in covered_rec_ids:
+                _add_deflated(q_v, x_v, d_v)
+
+        if def_q_rows:
+            deflated_cons_mse = sum(sum(td) ** 2 for td in def_d_rows) / len(def_d_rows)
+            if deflated_cons_mse <= eff_tol * n * 8.0:
+                active_threshold = max(1e-7, sqrt(eff_tol))
+                active_taus = sorted(
+                    (
+                        tau
+                        for tau, td in enumerate(def_d_rows)
+                        if max(abs(v) for v in td) > active_threshold
+                    ),
+                    key=lambda tau: sum(v * v for v in def_d_rows[tau]),
+                    reverse=True,
+                )
+                if active_taus:
+                    matches_by_cond: dict[str, dict[str, list[dict]]] = {}
+                    for cond_name in ("unconditional", "source_greater", "source_less"):
+                        by_dir, exhausted = _solve_exchange_for_condition(
+                            def_q_rows,
+                            def_x_rows,
+                            def_d_rows,
+                            dynamic,
+                            x_fields,
+                            bijections,
+                            ordered_directions,
+                            active_taus,
+                            eff_tol * 4.0,
+                            budget,
+                            edge_condition=cond_name,
+                        )
+                        if exhausted:
+                            break
+                        if by_dir:
+                            matches_by_cond[cond_name] = by_dir
+                            if cond_name == "unconditional":
+                                break
+                    if matches_by_cond:
+                        return {
+                            "mechanism": "transition_memory",
+                            "latent_order": 1,
+                            "latent_coupling": "independent",
+                            "pole": float(alpha),
+                            "drive_weights": {"u": float(c_u), "q": float(c_q)},
+                            "recurrence_mse": float(rec_mse),
+                            "deflated_conservation_mse": float(deflated_cons_mse),
+                            "deflated_unique_transitions": len(def_q_rows),
+                            "matches_by_cond": matches_by_cond,
+                        }
+                    if allow_higher_order_latent:
+                        coupled_by_dir, eta_coupled = _solve_coupled_latent_exchange(
+                            step_tuples_for_coupled,
+                            reset_q_only,
+                            reset_x_only,
+                            reset_d_only,
+                            dynamic,
+                            x_fields,
+                            bijections,
+                            ordered_directions,
+                            eff_tol,
+                            budget,
+                        )
+                        if coupled_by_dir:
+                            return {
+                                "mechanism": "coupled_transition_memory",
+                                "latent_order": 1,
+                                "latent_coupling": "spatial_neighbor_coupled",
+                                "pole": float(alpha),
+                                "latent_coupling_rate": float(eta_coupled or 0.0),
+                                "drive_weights": {"u": float(c_u), "q": float(c_q)},
+                                "recurrence_mse": float(rec_mse),
+                                "deflated_conservation_mse": float(deflated_cons_mse),
+                                "deflated_unique_transitions": len(def_q_rows),
+                                "matches_by_cond": {"unconditional": coupled_by_dir},
+                            }
+
+    # --- Attempt 2: 2nd-Order Oscillatory / AR(2) Internal Resonator ---
+    if allow_higher_order_latent and len(eq2_rows) >= 6:
+        a1, a2, c2_u, c2_q = _fit_homogeneous(eq2_rows, (0, 1, 2, 3), 4)
+        if abs(c2_q) < 1e-6 and abs(c2_u) >= 1e-6:
+            a1, a2, c2_u = _fit_homogeneous(eq2_rows, (0, 1, 2), 4)
+            c2_q = 0.0
+        elif abs(c2_u) < 1e-6 and abs(c2_q) >= 1e-6:
+            a1, a2, c2_q = _fit_homogeneous(eq2_rows, (0, 1, 3), 4)
+            c2_u = 0.0
+
+        schur_stable = (
+            abs(a2) < 0.999
+            and abs(a2) > 1e-4
+            and (1.0 - a1 - a2) > 1e-4
+            and (1.0 + a1 - a2) > 1e-4
+            and max(abs(c2_u), abs(c2_q)) > 1e-5
         )
-        if sig not in seen_sigs:
-            seen_sigs.add(sig)
-            def_q_rows.append(q_v)
-            def_x_rows.append(x_v)
-            def_d_rows.append(td_v)
+        if schur_stable:
+            rec2_mse = sum(
+                (eq[4] - (a1 * eq[0] + a2 * eq[1] + c2_u * eq[2] + c2_q * eq[3])) ** 2
+                for eq in eq2_rows
+            ) / len(eq2_rows)
+            if rec2_mse <= eff_tol * n * 12.0:
+                def2_q_rows: list[list[float]] = []
+                def2_x_rows: list[list[float]] = []
+                def2_d_rows: list[list[float]] = []
+                seen2_sigs: set[tuple] = set()
+                covered2_ids: set[int] = set()
 
-    for seq in trajectories:
-        z_state = [0.0] * n
-        for rec_idx, row in seq:
-            covered_rec_ids.add(rec_idx)
-            q_v, u_v, x_v, d_v = _vecs(row)
-            td_v = [d_v[i] - z_state[i] for i in range(n)]
-            _add_deflated(q_v, x_v, td_v)
-            z_state = [alpha * z_state[i] + c_u * u_v[i] + c_q * q_v[i] for i in range(n)]
+                def _add_def2(q_v: list[float], x_v: list[float], td_v: list[float]):
+                    sig = (
+                        tuple(round(v, 10) for v in q_v),
+                        tuple(round(v, 10) for v in x_v),
+                        tuple(round(v, 10) for v in td_v),
+                    )
+                    if sig not in seen2_sigs:
+                        seen2_sigs.add(sig)
+                        def2_q_rows.append(q_v)
+                        def2_x_rows.append(x_v)
+                        def2_d_rows.append(td_v)
 
-    for rec_idx, row in reset_rows:
-        if rec_idx in covered_rec_ids:
-            continue
+                for seq in trajectories:
+                    z_cur = [0.0] * n
+                    z_prev = [0.0] * n
+                    for rec_idx, row in seq:
+                        covered2_ids.add(rec_idx)
+                        q_v, u_v, x_v, d_v = _vecs(row)
+                        td_v = [d_v[i] - z_cur[i] for i in range(n)]
+                        _add_def2(q_v, x_v, td_v)
+                        z_nxt = [
+                            a1 * z_cur[i] + a2 * z_prev[i] + c2_u * u_v[i] + c2_q * q_v[i]
+                            for i in range(n)
+                        ]
+                        z_prev, z_cur = z_cur, z_nxt
+
+                for rec_idx, row in reset_rows:
+                    if rec_idx not in covered2_ids:
+                        q_v, _, x_v, d_v = _vecs(row)
+                        _add_def2(q_v, x_v, d_v)
+
+                if def2_q_rows:
+                    def2_cons_mse = sum(sum(td) ** 2 for td in def2_d_rows) / len(def2_d_rows)
+                    if def2_cons_mse <= eff_tol * n * 8.0:
+                        act_thresh2 = max(1e-7, sqrt(eff_tol))
+                        act_taus2 = sorted(
+                            (
+                                tau
+                                for tau, td in enumerate(def2_d_rows)
+                                if max(abs(v) for v in td) > act_thresh2
+                            ),
+                            key=lambda tau: sum(v * v for v in def2_d_rows[tau]),
+                            reverse=True,
+                        )
+                        if act_taus2:
+                            matches2_by_cond: dict[str, dict[str, list[dict]]] = {}
+                            for cond_name in ("unconditional", "source_greater", "source_less"):
+                                by_dir2, exh2 = _solve_exchange_for_condition(
+                                    def2_q_rows,
+                                    def2_x_rows,
+                                    def2_d_rows,
+                                    dynamic,
+                                    x_fields,
+                                    bijections,
+                                    ordered_directions,
+                                    act_taus2,
+                                    eff_tol * 4.0,
+                                    budget,
+                                    edge_condition=cond_name,
+                                )
+                                if exh2:
+                                    break
+                                if by_dir2:
+                                    matches2_by_cond[cond_name] = by_dir2
+                                    if cond_name == "unconditional":
+                                        break
+                            if matches2_by_cond:
+                                return {
+                                    "mechanism": "oscillatory_transition_memory",
+                                    "latent_order": 2,
+                                    "latent_coupling": "independent",
+                                    "ar2_params": [float(a1), float(a2)],
+                                    "discriminant": float(a1 * a1 + 4.0 * a2),
+                                    "pole": float(sqrt(abs(a2))),
+                                    "drive_weights": {"u": float(c2_u), "q": float(c2_q)},
+                                    "recurrence_mse": float(rec2_mse),
+                                    "deflated_conservation_mse": float(def2_cons_mse),
+                                    "deflated_unique_transitions": len(def2_q_rows),
+                                    "matches_by_cond": matches2_by_cond,
+                                }
+
+    # --- Attempt 3: Certified Unexplained Nonlinear Latent Transition State ---
+    # Reset transitions (t == 0) satisfy conservation (max_reset_abs ~ 0), while t >= 1
+    # violates conservation AND refutes static/1st-order/coupled/2nd-order linear drives!
+    reset_q_r, reset_x_r, reset_d_r = [], [], []
+    for _, row in reset_rows:
         q_v, _, x_v, d_v = _vecs(row)
-        _add_deflated(q_v, x_v, d_v)
-
-    if not def_q_rows:
-        return None
-    deflated_cons_mse = sum(sum(td) ** 2 for td in def_d_rows) / len(def_d_rows)
-    if deflated_cons_mse > eff_tol * n * 8.0:
-        return None
-
-    active_threshold = max(1e-7, sqrt(eff_tol))
-    active_taus = sorted(
+        reset_q_r.append(q_v)
+        reset_x_r.append(x_v)
+        reset_d_r.append(d_v)
+    act_reset_taus = sorted(
         (
             tau
-            for tau, td in enumerate(def_d_rows)
-            if max(abs(v) for v in td) > active_threshold
+            for tau, dv in enumerate(reset_d_r)
+            if max(abs(v) for v in dv) > max(1e-7, sqrt(eff_tol))
         ),
-        key=lambda tau: sum(v * v for v in def_d_rows[tau]),
+        key=lambda tau: sum(v * v for v in reset_d_r[tau]),
         reverse=True,
     )
-    if not active_taus:
-        return None
-
-    matches_by_cond: dict[str, dict[str, list[dict]]] = {}
-    for cond_name in ("unconditional", "source_greater", "source_less"):
-        by_dir, exhausted = _solve_exchange_for_condition(
-            def_q_rows,
-            def_x_rows,
-            def_d_rows,
+    reset_by_dir: dict[str, list[dict]] = {}
+    if act_reset_taus:
+        reset_by_dir, _ = _solve_exchange_for_condition(
+            reset_q_r,
+            reset_x_r,
+            reset_d_r,
             dynamic,
             x_fields,
             bijections,
             ordered_directions,
-            active_taus,
+            act_reset_taus,
             eff_tol * 4.0,
             budget,
-            edge_condition=cond_name,
+            edge_condition="unconditional",
         )
-        if exhausted:
-            break
-        if by_dir:
-            matches_by_cond[cond_name] = by_dir
-            if cond_name == "unconditional":
-                break
+    if reset_by_dir:
+        rep_dir = next(iter(reset_by_dir))
+        rep_match = reset_by_dir[rep_dir][0]
+        q_idx_map = {q_n: idx_q for idx_q, q_n in enumerate(dynamic)}
+        x_idx_map = {x_n: idx_x for idx_x, x_n in enumerate(x_fields)}
+        rep_q_to_x = [0] * n
+        for xf, qf in rep_match["mapping"].items():
+            rep_q_to_x[q_idx_map[qf]] = x_idx_map[xf]
+        r_mid_res = 0.5 * (rep_match["radius_interval"][0] + rep_match["radius_interval"][1])
+        gamma_res = float(rep_match["coupling_estimate"])
+        sign_res = 1.0 if rep_dir == "right" else -1.0
 
-    if not matches_by_cond:
-        return None
+        trace_samples = []
+        for tr_idx, seq in enumerate(trajectories[:3]):
+            steps_info = []
+            for step_t, (_, row) in enumerate(seq[:6]):
+                q_v, u_v, x_v, d_v = _vecs(row)
+                ex_v = [0.0] * n
+                if rep_dir in {"right", "left"}:
+                    for s_i in range(n):
+                        for t_i in range(n):
+                            if s_i != t_i and 0.0 < sign_res * (x_v[rep_q_to_x[t_i]] - x_v[rep_q_to_x[s_i]]) < r_mid_res:
+                                ex_v[s_i] -= gamma_res * q_v[s_i]
+                                ex_v[t_i] += gamma_res * q_v[s_i]
+                else:
+                    for s_i in range(n):
+                        for t_i in range(n):
+                            if s_i != t_i and abs(x_v[rep_q_to_x[t_i]] - x_v[rep_q_to_x[s_i]]) < r_mid_res:
+                                ex_v[s_i] += gamma_res * (q_v[t_i] - q_v[s_i])
+                lat_inj = [round(d_v[i] - ex_v[i], 6) for i in range(n)]
+                steps_info.append(
+                    {
+                        "step": step_t,
+                        "q": [round(v, 5) for v in q_v],
+                        "u": [round(v, 5) for v in u_v],
+                        "x": [round(x_v[rep_q_to_x[i]], 5) for i in range(n)],
+                        "sum_delta_total": round(sum(d_v), 6),
+                        "deflated_latent_injection_per_object": lat_inj,
+                    }
+                )
+            trace_samples.append({"trajectory_index": tr_idx, "steps": steps_info})
+
+        return {
+            "unexplained_nonlinear_latent": True,
+            "reset_exchange_by_direction": reset_by_dir,
+            "representative_direction": rep_dir,
+            "representative_mapping": rep_match["mapping"],
+            "representative_radius_interval": rep_match["radius_interval"],
+            "representative_coupling": gamma_res,
+            "deflated_trajectory_samples": trace_samples,
+        }
+
+    return None
+
+
+def screen_custom_latent_transition_drive(
+    valid_rows: list[tuple[int, dict]],
+    dynamic: list[str],
+    drive_by_q: dict[str, str],
+    x_fields: list[str],
+    bijections: list[tuple[int, ...]],
+    drive_program: Program,
+    ordered_directions: tuple[str, ...] | list[str] = ("right", "left", "symmetric"),
+    *,
+    budget: SearchBudget,
+    eff_tol: float,
+    observations: list | tuple = (),
+) -> dict:
+    """Verify an open-grammar per-object nonlinear latent transition drive AST on paid transitions."""
+    from .synthesis import _solve
+
+    n = len(dynamic)
+    if not valid_rows or not bijections:
+        return {"supported": False, "matches": []}
+    trajectories, reset_rows = _extract_latent_trajectories_and_resets(
+        valid_rows, observations=observations, min_len=3
+    )
+    if not trajectories or not reset_rows:
+        return {"supported": False, "matches": []}
+    if not budget.spend(len(valid_rows) * (n + 4)):
+        return {"supported": False, "matches": [], "reason": "compute_exhausted"}
+
+    def _vecs(row: dict) -> tuple[list[float], list[float], list[float], list[float]]:
+        before, after = row["before"], row["after"]
+        q_v = [float(before[q]) for q in dynamic]
+        u_v = [float(before[drive_by_q[q]]) for q in dynamic]
+        x_v = [float(before[x]) for x in x_fields]
+        d_v = [float(after[q]) - float(before[q]) - float(before[drive_by_q[q]]) for q in dynamic]
+        return q_v, u_v, x_v, d_v
+
+    uses_x = "object_role:x" in drive_program.required_features()
+    bij_candidates = bijections if uses_x else [bijections[0]]
+
+    for q_to_x_seed in bij_candidates:
+        eq_custom: list[tuple[float, float, float]] = []
+        seq_drives: list[list[list[float]]] = []
+        valid_eval = True
+        for seq in trajectories:
+            d_seq: list[list[float]] = []
+            for _, row in seq:
+                q_v, u_v, x_v, _ = _vecs(row)
+                step_d = []
+                for i in range(n):
+                    feat_i = {
+                        "object_role:q": q_v[i],
+                        "object_role:u": u_v[i],
+                        "object_role:x": x_v[q_to_x_seed[i]],
+                    }
+                    val = float(drive_program.predict(Observation(feat_i, 0.0)))
+                    if not isfinite(val):
+                        valid_eval = False
+                        break
+                    step_d.append(val)
+                if not valid_eval:
+                    break
+                d_seq.append(step_d)
+            if not valid_eval:
+                break
+            seq_drives.append(d_seq)
+            prev_r = sum(_vecs(seq[0][1])[3])
+            for t in range(1, len(seq)):
+                cur_r = sum(_vecs(seq[t][1])[3])
+                eq_custom.append((prev_r, sum(d_seq[t - 1]), cur_r))
+                prev_r = cur_r
+        if not valid_eval or len(eq_custom) < 4:
+            continue
+
+        g00 = sum(r[0] * r[0] for r in eq_custom) + 1e-14
+        g01 = sum(r[0] * r[1] for r in eq_custom)
+        g11 = sum(r[1] * r[1] for r in eq_custom) + 1e-14
+        b0 = sum(r[0] * r[2] for r in eq_custom)
+        b1 = sum(r[1] * r[2] for r in eq_custom)
+        alpha_est, eta_est = _solve([[g00, g01], [g01, g11]], [b0, b1])
+        if not (1e-4 < abs(alpha_est) < 0.999) or abs(eta_est) <= 1e-6:
+            continue
+        rec_mse = sum(
+            (r[2] - (alpha_est * r[0] + eta_est * r[1])) ** 2 for r in eq_custom
+        ) / len(eq_custom)
+        if rec_mse > eff_tol * n * 12.0:
+            continue
+
+        def_q, def_x, def_d = [], [], []
+        seen_s: set[tuple] = set()
+        cov_ids: set[int] = set()
+
+        def _push(qv, xv, tdv):
+            sg = (
+                tuple(round(v, 10) for v in qv),
+                tuple(round(v, 10) for v in xv),
+                tuple(round(v, 10) for v in tdv),
+            )
+            if sg not in seen_s:
+                seen_s.add(sg)
+                def_q.append(qv)
+                def_x.append(xv)
+                def_d.append(tdv)
+
+        for seq, d_seq in zip(trajectories, seq_drives):
+            z_st = [0.0] * n
+            for (rec_idx, row), step_d in zip(seq, d_seq):
+                cov_ids.add(rec_idx)
+                qv, _, xv, dv = _vecs(row)
+                tdv = [dv[i] - z_st[i] for i in range(n)]
+                _push(qv, xv, tdv)
+                z_st = [alpha_est * z_st[i] + eta_est * step_d[i] for i in range(n)]
+        for rec_idx, row in reset_rows:
+            if rec_idx not in cov_ids:
+                qv, _, xv, dv = _vecs(row)
+                _push(qv, xv, dv)
+
+        def_cons_mse = sum(sum(td) ** 2 for td in def_d) / max(1, len(def_d))
+        if def_cons_mse > eff_tol * n * 8.0:
+            continue
+
+        act_taus = sorted(
+            (
+                tau
+                for tau, td in enumerate(def_d)
+                if max(abs(v) for v in td) > max(1e-7, sqrt(eff_tol))
+            ),
+            key=lambda tau: sum(v * v for v in def_d[tau]),
+            reverse=True,
+        )
+        if not act_taus:
+            continue
+        test_bijs = [q_to_x_seed] if uses_x else bijections
+        by_dir, _ = _solve_exchange_for_condition(
+            def_q,
+            def_x,
+            def_d,
+            dynamic,
+            x_fields,
+            test_bijs,
+            list(ordered_directions),
+            act_taus,
+            eff_tol * 4.0,
+            budget,
+            edge_condition="unconditional",
+        )
+        if by_dir:
+            flat_m = [m for items in by_dir.values() for m in items]
+            return {
+                "supported": True,
+                "verified_pole": float(alpha_est),
+                "latent_weight_estimate": float(eta_est),
+                "recurrence_mse": float(rec_mse),
+                "deflated_conservation_mse": float(def_cons_mse),
+                "matches": flat_m,
+                "matches_by_direction": by_dir,
+            }
 
     return {
-        "pole": float(alpha),
-        "drive_weights": {"u": float(c_u), "q": float(c_q)},
-        "recurrence_mse": float(rec_mse),
-        "deflated_conservation_mse": float(deflated_cons_mse),
-        "deflated_unique_transitions": len(def_q_rows),
-        "matches_by_cond": matches_by_cond,
+        "supported": False,
+        "matches": [],
+        "reason": "failed_latent_transition_deflation",
     }
 
 
@@ -1911,15 +2859,14 @@ def _recover_latent_drive_and_position_roles(
     model: dict,
     records: list[dict],
     budget: SearchBudget,
+    *,
+    allow_higher_order_latent: bool = True,
 ) -> tuple[dict[str, str], dict[str, dict]] | None:
     """Identify ``drive_by_q`` and ``position_candidates`` when latent memory carries across steps.
 
-    On ``q == 0`` sweeps (acquired by ``isolate_control_effects``), spatial exchange vanishes and
-    ``after[q_k]_t = 1.0 * u_k(t) + alpha * after[q_k]_{t-1} + (beta - alpha) * u_k(t-1)`` holds
-    with zero error for ``u_k`` and fails for all ``x_j`` and ``u_{j != k}``.
+    Supports both 1st-order exponential reservoirs and 2nd-order oscillatory AR(2) resonators
+    on ``q == 0`` sweeps.
     """
-    from .synthesis import _solve
-
     dynamic = list(model.get("dynamic_fields", ()))
     role_cands = model.get("role_candidates", {})
     n = len(dynamic)
@@ -1971,7 +2918,6 @@ def _recover_latent_drive_and_position_roles(
             if max(abs(v) for v in s_cur) <= 1e-8:
                 continue
             residuals = [y_after[idx] - s_cur[idx] for idx in range(len(y_after))]
-            # Quick check if purely Markovian (c_u == 0) already fits:
             if sum(r * r for r in residuals) / len(residuals) <= 1e-12:
                 matches_s.append(s_name)
                 continue
@@ -2032,6 +2978,85 @@ def _recover_latent_drive_and_position_roles(
                 best_err = min(best_err, f1, f2)
             if best_err <= 1e-11:
                 matches_s.append(s_name)
+                continue
+
+            # 2nd-order oscillatory AR(2) role recovery fallback
+            if allow_higher_order_latent:
+                def _ar2_role_mse(a1_v: float, a2_v: float) -> float:
+                    zs_by_id: dict[int, list[float]] = {}
+                    for seq in probe_trajectories:
+                        zs_cur, zs_prev = 0.0, 0.0
+                        zs_list = []
+                        for r_step in seq:
+                            zs_list.append(zs_cur)
+                            zs_nxt = a1_v * zs_cur + a2_v * zs_prev + float(r_step["before"][s_name])
+                            zs_prev, zs_cur = zs_cur, zs_nxt
+                        zs_by_id[id(seq)] = zs_list
+                    c_zs = [zs_by_id[id(seq)][t] for seq, t in q_zero_eval]
+                    g00 = sum(v * v for v in c_zs) + 1e-15
+                    b0 = sum(a * r for a, r in zip(c_zs, residuals))
+                    w0 = b0 / g00
+                    return sum((residuals[i] - w0 * c_zs[i]) ** 2 for i in range(len(residuals))) / len(residuals)
+
+                seeds2_polar = [
+                    (rho, cw)
+                    for rho in (0.50, 0.64, 0.76, 0.87)
+                    for cw in (-0.25, 0.18, 0.56, 0.84)
+                ]
+                brho, bcw, berr2 = min(
+                    (
+                        (r_c, cw_c, _ar2_role_mse(2.0 * r_c * cw_c, -(r_c * r_c)))
+                        for r_c, cw_c in seeds2_polar
+                    ),
+                    key=lambda item: item[2],
+                )
+                if berr2 <= 5e-2:
+                    sp_r, sp_w = 0.16, 0.28
+                    for _ in range(7):
+                        if berr2 <= 1e-16:
+                            break
+                        lo_r, hi_r = max(0.08, brho - sp_r), min(0.985, brho + sp_r)
+                        c1 = hi_r - gr * (hi_r - lo_r)
+                        c2 = lo_r + gr * (hi_r - lo_r)
+                        f1 = _ar2_role_mse(2.0 * c1 * bcw, -(c1 * c1))
+                        f2 = _ar2_role_mse(2.0 * c2 * bcw, -(c2 * c2))
+                        for _ in range(12):
+                            if f1 < f2:
+                                hi_r, c2, f2 = c2, c1, f1
+                                c1 = hi_r - gr * (hi_r - lo_r)
+                                f1 = _ar2_role_mse(2.0 * c1 * bcw, -(c1 * c1))
+                            else:
+                                lo_r, c1, f1 = c1, c2, f2
+                                c2 = lo_r + gr * (hi_r - lo_r)
+                                f2 = _ar2_role_mse(2.0 * c2 * bcw, -(c2 * c2))
+                        if f1 < f2 and f1 < berr2:
+                            brho, berr2 = c1, f1
+                        elif f2 <= f1 and f2 < berr2:
+                            brho, berr2 = c2, f2
+
+                        lo_w, hi_w = max(-0.985, bcw - sp_w), min(0.985, bcw + sp_w)
+                        d1 = hi_w - gr * (hi_w - lo_w)
+                        d2 = lo_w + gr * (hi_w - lo_w)
+                        a2_f = -(brho * brho)
+                        g1 = _ar2_role_mse(2.0 * brho * d1, a2_f)
+                        g2 = _ar2_role_mse(2.0 * brho * d2, a2_f)
+                        for _ in range(12):
+                            if g1 < g2:
+                                hi_w, d2, g2 = d2, d1, g1
+                                d1 = hi_w - gr * (hi_w - lo_w)
+                                g1 = _ar2_role_mse(2.0 * brho * d1, a2_f)
+                            else:
+                                lo_w, d1, g1 = d1, d2, g2
+                                d2 = lo_w + gr * (hi_w - lo_w)
+                                g2 = _ar2_role_mse(2.0 * brho * d2, a2_f)
+                        if g1 < g2 and g1 < berr2:
+                            bcw, berr2 = d1, g1
+                        elif g2 <= g1 and g2 < berr2:
+                            bcw, berr2 = d2, g2
+                        sp_r *= 0.52
+                        sp_w *= 0.52
+                if berr2 <= 1e-8:
+                    matches_s.append(s_name)
         if len(matches_s) != 1:
             return None
         drive_by_q[q_name] = matches_s[0]
@@ -2064,6 +3089,7 @@ def audit_transition_premises(
     max_bijections: int = 720,
     allow_expanded_revisions: bool = True,
     allow_latent_state: bool = True,
+    allow_higher_order_latent: bool = True,
     observations: list | tuple = (),
 ) -> dict:
     """Audit support premises on paid ``before -> after`` state transitions."""
@@ -2106,7 +3132,9 @@ def audit_transition_premises(
         and n >= 2
         and (len(drive_by_q) != n or len(set(drive_by_q.values())) != n or len(positions) != n)
     ):
-        recovered_roles = _recover_latent_drive_and_position_roles(model, records, budget)
+        recovered_roles = _recover_latent_drive_and_position_roles(
+            model, records, budget, allow_higher_order_latent=allow_higher_order_latent
+        )
         if recovered_roles is not None:
             drive_by_q, positions = recovered_roles
     x_fields = sorted(positions.keys())
@@ -2332,11 +3360,106 @@ def audit_transition_premises(
                     eff_tol,
                     budget,
                     observations=observations,
+                    allow_higher_order_latent=allow_higher_order_latent,
                 )
                 if allow_expanded_revisions and allow_latent_state
                 else None
             )
+            if latent_res is not None and latent_res.get("unexplained_nonlinear_latent"):
+                reset_by_dir = latent_res["reset_exchange_by_direction"]
+                flat_reset = [m for items in reset_by_dir.values() for m in items]
+                narrowed_pos_nl = (
+                    {
+                        xf: sorted({m["mapping"][xf] for m in flat_reset})
+                        for xf in x_fields
+                    }
+                    if exhaustive and flat_reset
+                    else None
+                )
+                rep_dir_nl = latent_res["representative_direction"]
+                rep_r_iv = latent_res["representative_radius_interval"]
+                focus_nl = _audit_focus_membership_from_trajectories(
+                    model,
+                    records,
+                    narrowed_pos_nl,
+                    budget,
+                    eff_tol=eff_tol,
+                    max_bijections=max_bijections,
+                    drive_by_q_override=drive_by_q,
+                    allow_higher_order_latent=allow_higher_order_latent,
+                    verified_direction=rep_dir_nl,
+                    radius_interval=rep_r_iv,
+                    commitments=commitments,
+                )
+                narrowed_focus_nl = (
+                    focus_nl["narrowed_focus_domains"]
+                    if focus_nl is not None and focus_nl.get("narrowed_focus_domains")
+                    else None
+                )
+                _set_node(
+                    "P_markov_state",
+                    "refuted",
+                    reason="reset_conserved_but_history_transitions_violate_linear_reservoirs",
+                    counterexample=witness,
+                )
+                _set_node(
+                    "P_latent_order",
+                    "refuted_linear_reservoirs",
+                    reason="nonlinear_per_object_latent_drive_required",
+                )
+                refuted_premises.insert(
+                    0,
+                    {
+                        "premise_id": "P_latent_transition_drive",
+                        "reason": "nonlinear_per_object_latent_transition_drive_required",
+                        "counterexample": witness,
+                    },
+                )
+                refuted_premises.insert(
+                    0,
+                    {
+                        "premise_id": "P_markov_state",
+                        "reason": "unexplained_nonlinear_latent_transition_state",
+                        "counterexample": witness,
+                    },
+                )
+                return {
+                    "status": "unexplained_latent_transition_state",
+                    "conservation_supported": False,
+                    "reset_conservation_supported": True,
+                    "conservation_mse": float(conservation_mse),
+                    "exhaustive_bijections": exhaustive,
+                    "recovered_drive_by_q": dict(drive_by_q) if recovered_roles is not None else None,
+                    "recovered_position_candidates": deepcopy(positions) if recovered_roles is not None else None,
+                    "narrowed_position_domains": narrowed_pos_nl,
+                    "narrowed_focus_domains": narrowed_focus_nl,
+                    "verified_direction": rep_dir_nl,
+                    "radius_interval": rep_r_iv,
+                    "matches_by_direction": reset_by_dir,
+                    "transition_latent_payload": {
+                        "valid_rows": valid_rows,
+                        "dynamic": dynamic,
+                        "drive_by_q": dict(drive_by_q),
+                        "x_fields": x_fields,
+                        "eff_tol": eff_tol,
+                        "representative_direction": rep_dir_nl,
+                        "representative_mapping": latent_res["representative_mapping"],
+                        "representative_radius_interval": rep_r_iv,
+                        "representative_coupling": latent_res["representative_coupling"],
+                        "deflated_trajectory_samples": latent_res["deflated_trajectory_samples"],
+                    },
+                    "dependency_graph": graph,
+                    "supported_premises": supported_premises,
+                    "refuted_premises": refuted_premises,
+                    "scientific_revision_triggers": scientific_triggers,
+                    "compute_cost": budget.spent - start,
+                }
             if latent_res is not None:
+                lat_mech = latent_res.get("mechanism", "transition_memory")
+                lat_order = int(latent_res.get("latent_order", 1))
+                lat_coupling = latent_res.get("latent_coupling", "independent")
+                ar2_params_lat = latent_res.get("ar2_params")
+                lat_coupling_rate = latent_res.get("latent_coupling_rate")
                 flat_lat_matches = [
                     m
                     for by_dir in latent_res["matches_by_cond"].values()
@@ -2358,18 +3481,37 @@ def audit_transition_premises(
                 _set_node(
                     "P_markov_state",
                     "refuted",
-                    latent_mechanism="transition_memory",
+                    latent_mechanism=lat_mech,
+                    latent_order=lat_order,
+                    latent_coupling=lat_coupling,
                     pole=latent_res["pole"],
+                    ar2_params=ar2_params_lat,
                     drive_weights=latent_res["drive_weights"],
                     recurrence_mse=latent_res["recurrence_mse"],
                     counterexample=witness,
+                )
+                _set_node(
+                    "P_latent_order",
+                    "revised_to_order_2" if lat_order == 2 else "supported",
+                    verified_order=lat_order,
+                    ar2_params=ar2_params_lat,
+                )
+                _set_node(
+                    "P_latent_coupling",
+                    "revised_to_spatial_coupled" if lat_coupling != "independent" else "supported",
+                    verified_coupling=lat_coupling,
+                    latent_coupling_rate=lat_coupling_rate,
                 )
                 refuted_premises.insert(
                     0,
                     {
                         "premise_id": "P_markov_state",
                         "reason": "unobserved_per_object_latent_transition_state_detected",
+                        "latent_mechanism": lat_mech,
+                        "latent_order": lat_order,
+                        "latent_coupling": lat_coupling,
                         "pole": latent_res["pole"],
+                        "ar2_params": ar2_params_lat,
                         "drive_weights": latent_res["drive_weights"],
                         "counterexample": witness,
                     },
@@ -2420,6 +3562,10 @@ def audit_transition_premises(
                     eff_tol=eff_tol,
                     max_bijections=max_bijections,
                     drive_by_q_override=drive_by_q,
+                    allow_higher_order_latent=allow_higher_order_latent,
+                    verified_direction=supported_dirs_lat[0] if len(supported_dirs_lat) == 1 else None,
+                    radius_interval=radius_interval_lat,
+                    commitments=commitments,
                 )
                 narrowed_focus_lat = (
                     focus_audit_lat["narrowed_focus_domains"]
@@ -2447,8 +3593,12 @@ def audit_transition_premises(
                                 {
                                     "kind": "latent_transition_state_revision",
                                     "retracted_markov": "markov_sufficient",
-                                    "latent_mechanism": "transition_memory",
+                                    "latent_mechanism": lat_mech,
+                                    "latent_order": lat_order,
+                                    "latent_coupling": lat_coupling,
                                     "latent_pole": latent_res["pole"],
+                                    "ar2_params": deepcopy(ar2_params_lat),
+                                    "latent_coupling_rate": lat_coupling_rate,
                                     "latent_drive_weights": deepcopy(latent_res["drive_weights"]),
                                     "replacement_direction": alt_dir,
                                     "replacement_condition": cond_name,
@@ -2466,8 +3616,12 @@ def audit_transition_premises(
                     "conservation_supported": False,
                     "conservation_mse": float(conservation_mse),
                     "latent_transition_state": {
-                        "mechanism": "transition_memory",
+                        "mechanism": lat_mech,
+                        "latent_order": lat_order,
+                        "latent_coupling": lat_coupling,
                         "pole": latent_res["pole"],
+                        "ar2_params": deepcopy(ar2_params_lat),
+                        "latent_coupling_rate": lat_coupling_rate,
                         "drive_weights": deepcopy(latent_res["drive_weights"]),
                         "recurrence_mse": latent_res["recurrence_mse"],
                         "deflated_conservation_mse": latent_res["deflated_conservation_mse"],
@@ -3197,6 +4351,10 @@ def audit_transition_premises(
     )
     supported_premises.append("P_locality_radius")
 
+    verified_direction = (
+        supported_directions[0] if len(supported_directions) == 1 else None
+    )
+
     focus_audit = _audit_focus_membership_from_trajectories(
         model,
         records,
@@ -3204,6 +4362,10 @@ def audit_transition_premises(
         budget,
         eff_tol=eff_tol,
         max_bijections=max_bijections,
+        allow_higher_order_latent=allow_higher_order_latent,
+        verified_direction=verified_direction,
+        radius_interval=radius_interval,
+        commitments=commitments,
     )
     narrowed_focus_domains = None
     if focus_audit is not None and focus_audit.get("narrowed_focus_domains"):
@@ -3217,10 +4379,6 @@ def audit_transition_premises(
         )
         if unique_focus and "P_focus_membership" not in supported_premises:
             supported_premises.append("P_focus_membership")
-
-    verified_direction = (
-        supported_directions[0] if len(supported_directions) == 1 else None
-    )
 
     return {
         "status": "verified_unconditional_exchange",
@@ -3269,7 +4427,7 @@ def apply_verified_transition_premises(model: dict, audit_result: dict) -> dict:
     updated["premise_dependency_graph"] = deepcopy(audit_result.get("dependency_graph"))
 
     if (
-        audit_result.get("status") not in VERIFIED_EXCHANGE_STATUSES
+        audit_result.get("status") not in (*VERIFIED_EXCHANGE_STATUSES, "unexplained_latent_transition_state")
         or not audit_result.get("exhaustive_bijections")
     ):
         return updated

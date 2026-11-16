@@ -196,7 +196,8 @@ class UnifiedResearchAgent:
         audit = audit_transition_premises(
             model, records, budget, commitments=commitments, tolerance=self.config.minimum_improvement,
             allow_expanded_revisions=self.config.expanded_premise_revisions,
-            allow_latent_state=self.config.latent_state_discovery)
+            allow_latent_state=self.config.latent_state_discovery,
+            allow_higher_order_latent=self.config.higher_order_latent_discovery)
         if audit["status"] == "awaiting_role_identification":
             return model
         updated = apply_verified_transition_premises(model, audit)
@@ -234,15 +235,14 @@ class UnifiedResearchAgent:
                 model = spec.context.get("object_model")
                 model = json.loads(model) if isinstance(model, str) else model
                 audit = (model or {}).get("premise_audit")
-                from .premise_dependency_audit import VERIFIED_EXCHANGE_STATUSES
-                if ((audit is None or (audit.get("status") not in VERIFIED_EXCHANGE_STATUSES
-                        and len(transitions) > int(audit.get("tested_transitions") or 0)))
+                if ((audit is None or len(transitions) > int(audit.get("tested_transitions") or 0))
                         and self.config.transition_premise_audit and model and transitions):
                     from .premise_dependency_audit import audit_transition_premises
                     audit = audit_transition_premises(
                         model, transitions, budget, commitments=commitments, tolerance=tolerance,
                         allow_expanded_revisions=self.config.expanded_premise_revisions,
                         allow_latent_state=self.config.latent_state_discovery,
+                        allow_higher_order_latent=self.config.higher_order_latent_discovery,
                         observations=training)
                 schema_x_to_q = {
                     group["x"]: group["q"]
@@ -259,6 +259,7 @@ class UnifiedResearchAgent:
                             comm, audit, spec, training, schema, comm_budget,
                             active_threshold_probing=self.config.active_threshold_probing,
                             allow_latent_state=self.config.latent_state_discovery,
+                            allow_higher_order_latent=self.config.higher_order_latent_discovery,
                             transitions=transitions,
                             tolerance=tolerance)
                     else:
@@ -270,6 +271,7 @@ class UnifiedResearchAgent:
                             transitions=transitions,
                             active_threshold_probing=self.config.active_threshold_probing,
                             allow_latent_state=self.config.latent_state_discovery,
+                            allow_higher_order_latent=self.config.higher_order_latent_discovery,
                             tolerance=tolerance)
                         if (not any(item["training_loss"] <= tolerance for item in entries)
                                 and comm_budget.remaining > 0 and audit is None):
@@ -277,6 +279,7 @@ class UnifiedResearchAgent:
                                 comm, None, spec, training, schema, comm_budget,
                                 active_threshold_probing=self.config.active_threshold_probing,
                                 allow_latent_state=self.config.latent_state_discovery,
+                                allow_higher_order_latent=self.config.higher_order_latent_discovery,
                                 transitions=transitions,
                                 tolerance=tolerance))
                     claims.extend(entries)
@@ -2273,10 +2276,15 @@ class UnifiedResearchAgent:
         model_payload = spec.context.get("object_model")
         model_dict = json.loads(model_payload) if isinstance(model_payload, str) else model_payload
         premise_audit = (model_dict or {}).get("premise_audit")
-        if premise_audit is None and self.config.transition_premise_audit and model_dict and transitions:
+        if ((premise_audit is None or len(transitions) > int(premise_audit.get("tested_transitions") or 0))
+                and self.config.transition_premise_audit and model_dict and transitions):
             from .premise_dependency_audit import audit_transition_premises
             premise_audit = audit_transition_premises(
-                model_dict, transitions, budget, commitments=commitments, tolerance=tolerance)
+                model_dict, transitions, budget, commitments=commitments, tolerance=tolerance,
+                allow_expanded_revisions=self.config.expanded_premise_revisions,
+                allow_latent_state=self.config.latent_state_discovery,
+                allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                observations=rows)
         if previous is None:
             equiv_budget = SearchBudget(budget.remaining // 3) if commitments else budget
             shared = propose_equivalent_object_programs(spec, rows, equiv_budget,
@@ -2300,7 +2308,9 @@ class UnifiedResearchAgent:
             new_observations=new_observations, transitions=transitions, tolerance=tolerance,
             max_candidates=candidate_limit, preferred_schemas=preferred_schemas, response_parent=parent,
             working_parent_loss=working_parent_loss, world_commitments=commitments,
-            premise_audit=premise_audit)
+            premise_audit=premise_audit,
+            allow_latent_state=self.config.latent_state_discovery,
+            allow_higher_order_latent=self.config.higher_order_latent_discovery)
         # A working loss refutes this executable on this episode's paid
         # evidence. Re-importing a parent's role assignment in another episode
         # must not import that loss. Resumes restore the live competition.

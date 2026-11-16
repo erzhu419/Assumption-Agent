@@ -45,12 +45,16 @@ from .premise_dependency_audit import (
     audit_transition_premises,
     extract_necessary_active_transfer_geometry,
     screen_custom_edge_predicate_on_transitions,
+    screen_custom_latent_transition_drive,
 )
 from .relation_language import EDGE_ARGUMENTS
 from .research_programs import _Fitter
 from .structure_lab import ObjectSchema
 from .world_structure_commitments import (
     _as_schema,
+    _extract_latent_poles_from_role_terms,
+    _rebind_latent_pole_in_role_terms,
+    expand_role_terms_for_custom_latent_transition,
     instantiate_commitment_on_schema,
     instantiate_commitment_terms,
 )
@@ -76,6 +80,26 @@ ALLOWED_EDGE_PREDICATE_OPS = frozenset(
 )
 
 ALLOWED_ROLE_SUMMAND_OPS = frozenset(
+    {
+        "const",
+        "feature",
+        "accumulate",
+        "abs",
+        "not",
+        "add",
+        "sub",
+        "mul",
+        "min",
+        "max",
+        "ge",
+        "lt",
+        "and",
+        "or",
+        "if",
+    }
+)
+
+ALLOWED_OBJECT_DRIVE_OPS = frozenset(
     {
         "const",
         "feature",
@@ -450,8 +474,36 @@ def validate_edge_predicate_ast(payload: dict) -> Program | None:
     return prog
 
 
+def validate_object_drive_ast(payload: dict) -> Program | None:
+    """Validate an instantaneous per-object drive AST over ``object_role:{q, u, x}``."""
+    try:
+        prog = Program.from_dict(_normalize_program_dict(payload))
+    except (ValueError, TypeError, KeyError):
+        return None
+    allowed_drive_feats = {"object_role:q", "object_role:u", "object_role:x"}
+
+    def _ok(node: Program) -> bool:
+        if node.op not in ALLOWED_OBJECT_DRIVE_OPS:
+            return False
+        if node.op == "feature" and node.name not in allowed_drive_feats:
+            return False
+        return all(_ok(child) for child in node.children)
+
+    if not _ok(prog) or not prog.required_features():
+        return None
+    try:
+        val = prog.predict(
+            Observation({"object_role:q": 0.4, "object_role:u": -0.2, "object_role:x": 0.3}, 0.0)
+        )
+    except Exception:
+        return None
+    if not isinstance(val, (int, float)):
+        return None
+    return prog
+
+
 def validate_role_term_spec(role_term: dict, probe_schema: ObjectSchema) -> dict | None:
-    """Validate an open-grammar role-uniform basis term (``all_object_sum`` + temporal ops)."""
+    """Validate an open-grammar role-uniform basis term (``all_object_sum`` + temporal/accumulate ops)."""
     if not isinstance(role_term, dict):
         return None
 
@@ -460,6 +512,16 @@ def validate_role_term_spec(role_term: dict, probe_schema: ObjectSchema) -> dict
             return False
         if node.op == "feature" and node.name not in ALLOWED_OBJECT_ROLE_FEATURES:
             return False
+        if node.op == "accumulate":
+            if (
+                node.name is not None
+                or node.value is None
+                or not (-0.995 <= float(node.value) <= 0.995)
+                or len(node.children) != 2
+                or node.children[1].op != "const"
+            ):
+                return False
+            return _check_summand(node.children[0])
         return all(_check_summand(child) for child in node.children)
 
     def _normalize(node: dict) -> dict | None:
@@ -549,12 +611,38 @@ Program JSON node format:
 Valid ops:
 - Leaves: {"op": "const", "value": 0.25, "name": null, "lag": 0, "children": []}, {"op": "feature", "value": null, "name": "m1_00", "lag": 0, "children": []}
 - Unary: "abs", "not" (lag=0, 1 child); temporal: "window_sum" (lag>=1, 1 child), "event_delta" (lag>=1, 1 child)
+- Recurrent latent accumulator: {"op": "accumulate", "value": 0.65, "name": null, "lag": 0, "children": [<drive_AST>, {"op": "const", "value": 0.0, "name": null, "lag": 0, "children": []}]}
 - Binary (lag=0, 2 children): "add", "sub", "mul", "min", "max", "ge" (left>=right), "lt" (left<right), "and", "or"
 - Ternary: "if" (3 children: cond, then, else)
 - Variadic: "object_sum" (children=[...])
 
 Return ONLY valid JSON matching:
 {"hypotheses": [{"rationale": "...", "basis_terms": [<Program_AST>, ...]}]}"""
+
+
+_LATENT_TRANSITION_DRIVE_INSTRUCTIONS = """You are the open-grammar POMDP hypothesis author inside Hegel Machine v10, gated by PremiseDependencyGraph.
+Premise P_role_partition (sensor roles q, u, x, f) and probe-reset spatial exchange (t == 0) are EMPIRICALLY VERIFIED!
+However, on history steps (t >= 1), P_markov_state and P_latent_order (all linear reservoirs in q and u) are REFUTED:
+each object i carries an unobserved internal reservoir state z_{i,t} = alpha * z_{i,t-1} + drive(q_{i,t}, u_{i,t}, x_{i,t}) (with z_{i,-1} = 0 at probe reset t=0), and `after[q_i]` receives `eta * z_{i,t-1}` at step t!
+Notice in `deflated_trajectory_samples`:
+- At step 0: `deflated_latent_injection_per_object` is `[0, 0, ...]` because `z_{i,-1} = 0`.
+- At step 1: `deflated_latent_injection_per_object[i]` equals `eta * drive(q_{i,0}, u_{i,0}, x_{i,0})`!
+- At step 2: `deflated_latent_injection_per_object[i]` equals `eta * (alpha * drive_0 + drive_1)`!
+Inspect step 0 `(q, u, x)` vs step 1 `deflated_latent_injection_per_object` across objects to deduce the exact nonlinear algebraic `drive` AST!
+
+Program JSON node format for `latent_drive_ast` (features restricted to `"object_role:q"`, `"object_role:u"`, `"object_role:x"`):
+{"op": <op>, "value": <float|null>, "name": <str|null>, "lag": 0, "children": [...]}
+- Feature leaves:
+  * {"op": "feature", "value": null, "name": "object_role:q", "lag": 0, "children": []}
+  * {"op": "feature", "value": null, "name": "object_role:u", "lag": 0, "children": []}
+  * {"op": "feature", "value": null, "name": "object_role:x", "lag": 0, "children": []}
+- Constant leaf: {"op": "const", "value": 0.1, "name": null, "lag": 0, "children": []}
+- Ops: unary `"abs"`, `"not"`; binary `"add"`, `"sub"`, `"mul"`, `"min"`, `"max"`, `"lt"`, `"ge"`, `"and"`, `"or"`; ternary `"if"`.
+Neutral syntax example (`abs(u_i)`):
+{"op": "abs", "value": null, "name": null, "lag": 0, "children": [{"op": "feature", "value": null, "name": "object_role:u", "lag": 0, "children": []}]}
+
+Return ONLY valid JSON matching (propose up to 4 candidates):
+{"candidates": [{"rationale": "...", "latent_drive_ast": <Program_AST>}]}"""
 
 
 _EDGE_PREDICATE_INSTRUCTIONS = """You are the open-grammar hypothesis author inside Hegel Machine v10, gated by PremiseDependencyGraph.
@@ -582,16 +670,21 @@ Return ONLY valid JSON matching (propose up to 4 candidate predicates):
 
 _READOUT_BASIS_INSTRUCTIONS = """You are the open-grammar hypothesis author inside Hegel Machine v10, gated by PremiseDependencyGraph.
 All state-transition and spatial premises (P_role_partition, P_conservation, P_exchange_form, P_interaction_direction, P_position_ownership, P_locality_radius, P_focus_membership) are EMPIRICALLY VERIFIED!
-Only leaf readout premise P_temporal_readout (the readout functional basis mapping object roles to `target`) is REFUTED: the parent commitment's linear readout basis leaves a structured residual (`parent_training_loss > 0.01`).
+Leaf readout / state-sufficiency premise P_temporal_readout is REFUTED: both the Markovian linear basis AND linear reservoirs in `(q, u)` leave a structured residual (`parent_training_loss > 0.01`).
 
 Important:
-- The missing readout basis term may be an INSTANTANEOUS nonlinear role-uniform state/focus polynomial or interaction (`all_object_sum` over products/powers of `object_role:q`, `object_role:u`, `object_role:x`, `object_role:f`) OR a lagged temporal wrapper (`window_sum`, `event_delta`). Always test instantaneous nonlinear role-uniform terms (including focal `object_role:f` * polynomial in `q`/`u`/`x` and global nonlinear sums) alongside any temporal hypotheses!
-- Note that `parent_ols_pred` was refitted by OLS on `target`, so if `target` contains an omitted positive nonlinear term `c * h(q, u, x, f)`, OLS shifts the intercept and linear slopes so `ols_residual = target - parent_ols_pred` is mean-zero (`c * h` minus its linear projection onto existing basis terms). Check how `ols_residual` varies with the magnitude/squares/products of `focused_q`, `focused_u`, `focused_x`, `total_q`, `total_u`!
+- Inspect `trajectory_step` (`0` = fresh reset, `1, 2, ...` = consecutive history steps along a probe) in `role_projected_residual_table`:
+  1. If `ols_residual` depends purely on current step `(focused_q, focused_u, focused_x)` regardless of `trajectory_step`, propose an INSTANTANEOUS nonlinear role-uniform term (e.g., `f_i * poly(q_i, u_i, x_i)`).
+  2. If `ols_residual` builds up across `trajectory_step = 0, 1, 2, ...` with exponential memory (a POMDP hidden reservoir per object `z_{i,t} = alpha * z_{i,t-1} + drive(q_{i,t}, u_{i,t}, x_{i,t})` read out at the focused object `f_i * z_{i,t}` or summed globally), wrap the nonlinear per-object `drive` inside `accumulate`! (Note: the symbolic gate automatically optimizes the continuous decay pole `value` via 1D golden-section search, so an approximate initial pole like `0.65` is sufficient!)
+- Always hedge across your 4 candidates in a single call by including BOTH instantaneous nonlinear terms AND per-object `accumulate(0.65, <nonlinear_drive>, 0.0)` reservoir versions when `trajectory_step >= 1` rows are present! Also check `candidate_reset_step0_only_mse` vs `candidate_training_loss` in `previous_gate_feedback`: if `candidate_reset_step0_only_mse` is ~0 while `candidate_training_loss > 1e-4`, your instantaneous drive is exact at `t=0` and MUST be wrapped inside `accumulate(0.65, <drive>, 0.0)`!
+- Note that `parent_ols_pred` was refitted by OLS on `target`, so `ols_residual = target - parent_ols_pred` is mean-zero (`c * h` minus its linear projection). Compare `trajectory_step == 0` rows vs `trajectory_step >= 1` rows!
 
 Each role_term is either:
 1. {"kind": "all_object_sum", "summand": <Program_AST over features "object_role:q", "object_role:u", "object_role:x", "object_role:f">}
-   Syntax example for sum_i (u_i * x_i):
-   {"kind": "all_object_sum", "summand": {"op": "mul", "value": null, "name": null, "lag": 0, "children": [{"op": "feature", "value": null, "name": "object_role:u", "lag": 0, "children": []}, {"op": "feature", "value": null, "name": "object_role:x", "lag": 0, "children": []}]}}
+   - Instantaneous neutral syntax example `sum_i (u_i * x_i)`:
+     {"kind": "all_object_sum", "summand": {"op": "mul", "value": null, "name": null, "lag": 0, "children": [{"op": "feature", "value": null, "name": "object_role:u", "lag": 0, "children": []}, {"op": "feature", "value": null, "name": "object_role:x", "lag": 0, "children": []}]}}
+   - Recurrent per-object reservoir neutral syntax example `sum_i (f_i * accumulate(0.65, abs(u_i), 0.0))`:
+     {"kind": "all_object_sum", "summand": {"op": "mul", "value": null, "name": null, "lag": 0, "children": [{"op": "feature", "value": null, "name": "object_role:f", "lag": 0, "children": []}, {"op": "accumulate", "value": 0.65, "name": null, "lag": 0, "children": [{"op": "abs", "value": null, "name": null, "lag": 0, "children": [{"op": "feature", "value": null, "name": "object_role:u", "lag": 0, "children": []}]}, {"op": "const", "value": 0.0, "name": null, "lag": 0, "children": []}]}]}}
 2. A temporal wrapper around (1):
    {"kind": "program_op", "op": "window_sum" | "event_delta", "lag": <int 1..4>, "children": [<role_term>]}
 
@@ -736,7 +829,7 @@ def propose_premise_gated_commitment_revisions(
     start = budget.spent
     ledger = empty_llm_ledger(model=model_name, backend="responses_http")
     audit = audit_report or audit_transition_premises(
-        model, records, budget, commitments=[commitment], tolerance=tolerance
+        model, records, budget, commitments=[commitment], observations=training, tolerance=tolerance
     )
     refuted_ids = [item.get("premise_id") for item in audit.get("refuted_premises", ())]
     fallback = initial_prediction(training, spec.risk_quantile)
@@ -980,6 +1073,200 @@ def propose_premise_gated_commitment_revisions(
             "llm_ledger": ledger,
         }
 
+    # Branch 1B: P_latent_transition_drive refuted on transitions (nonlinear POMDP transition reservoir)!
+    if "P_latent_transition_drive" in refuted_ids and audit.get("transition_latent_payload"):
+        lat_payload = audit["transition_latent_payload"]
+        valid_rows_l = lat_payload["valid_rows"]
+        dynamic_l = lat_payload["dynamic"]
+        drive_by_q_l = lat_payload["drive_by_q"]
+        x_fields_l = lat_payload["x_fields"]
+        eff_tol_l = float(lat_payload.get("eff_tol", max(1e-12, tolerance)))
+        updated_model = apply_verified_transition_premises(model, audit)
+        bijections_l, _ = _enumerate_position_bijections(
+            dynamic_l, x_fields_l, updated_model.get("position_candidates") or model["position_candidates"]
+        )
+        schema_dict_l = updated_model.get("schema")
+        if not schema_dict_l:
+            from .object_alternatives import enumerate_object_schemas
+
+            enum_l = enumerate_object_schemas(updated_model, budget, max_schemas=6)
+            cand_schemas_l = enum_l["schemas"]
+        else:
+            cand_schemas_l = [schema_dict_l]
+
+        feedback_l: list[dict] = []
+        verified_entries_l: list[dict] = []
+        best_entry_l: dict | None = None
+        sym_l = commitment["radius_parameters"][0]["symbol"]
+
+        for call_idx in range(max_llm_calls):
+            prompt_payload_l = {
+                "attempt": call_idx + 1,
+                "isolated_violated_premise": "P_latent_transition_drive",
+                "verified_upstream_premises": [
+                    "P_role_partition",
+                    "P_reset_conservation",
+                    "P_interaction_direction",
+                    "P_position_ownership",
+                ],
+                "already_refuted_reservoirs": [
+                    "markov_sufficient",
+                    "static_sink_and_nonlocal",
+                    "first_order_linear_reservoir(u, q)",
+                    "spatially_coupled_linear_reservoir(u, q)",
+                    "second_order_ar2_linear_reservoir(u, q)",
+                ],
+                "object_count": len(dynamic_l),
+                "verified_direction": lat_payload.get("representative_direction"),
+                "deflated_trajectory_samples": lat_payload.get("deflated_trajectory_samples", []),
+                "previous_gate_feedback": feedback_l,
+            }
+            parsed_l, usage_l = transport(
+                _LATENT_TRANSITION_DRIVE_INSTRUCTIONS,
+                prompt_payload_l,
+                purpose=f"premise_gated_latent_transition_drive_{call_idx + 1}",
+            )
+            _record_usage(ledger, usage_l)
+            if not parsed_l:
+                feedback_l.append({"attempt": call_idx + 1, "rejected": usage_l.get("error", "invalid_json")})
+                continue
+
+            raw_cands_l = parsed_l.get("candidates") or (
+                [parsed_l] if ("latent_drive_ast" in parsed_l or "latent_drive" in parsed_l) else ()
+            )
+            for cand_spec_l in raw_cands_l[:4]:
+                raw_drive = cand_spec_l.get("latent_drive_ast") or cand_spec_l.get("latent_drive")
+                if not isinstance(raw_drive, dict):
+                    continue
+                drive_prog = validate_object_drive_ast(raw_drive)
+                if drive_prog is None:
+                    feedback_l.append({"attempt": call_idx + 1, "rejected": "invalid_latent_drive_ast"})
+                    continue
+                scr_res = screen_custom_latent_transition_drive(
+                    valid_rows_l,
+                    dynamic_l,
+                    drive_by_q_l,
+                    x_fields_l,
+                    bijections_l,
+                    drive_prog,
+                    (lat_payload.get("representative_direction") or "right",),
+                    budget=budget,
+                    eff_tol=eff_tol_l,
+                    observations=training,
+                )
+                if not scr_res.get("supported"):
+                    feedback_l.append(
+                        {
+                            "attempt": call_idx + 1,
+                            "drive_ast": drive_prog.describe(),
+                            "rejected": scr_res.get("reason", "failed_transition_deflation"),
+                        }
+                    )
+                    continue
+
+                v_pole = float(scr_res["verified_pole"])
+                matches_by_dir_l = scr_res["matches_by_direction"]
+                exp_role_terms = expand_role_terms_for_custom_latent_transition(
+                    commitment["role_terms"], drive_prog, v_pole
+                )
+                for sc_l in cand_schemas_l:
+                    sc_obj_l = _as_schema(sc_l)
+                    if sc_obj_l is None:
+                        continue
+                    sc_x_q = {
+                        sc_obj_l.fields[g]["x"]: sc_obj_l.fields[g]["q"] for g in sc_obj_l.objects
+                    }
+                    for v_dir_l, d_matches_l in matches_by_dir_l.items():
+                        compat_l = [m for m in d_matches_l if m["mapping"] == sc_x_q]
+                        if not compat_l:
+                            continue
+                        r_bounds_l = (
+                            min(m["radius_interval"][0] for m in compat_l),
+                            max(m["radius_interval"][1] for m in compat_l),
+                        )
+                        rev_meta_l = {
+                            "trigger_source": "premise_gated_open_grammar_author",
+                            "revision_kind": "open_grammar_latent_transition_drive_revision",
+                            "parent_commitment_id": commitment["commitment_id"],
+                            "author_model": model_name,
+                            "latent_state_mechanism": "custom_transition_memory",
+                            "latent_pole": v_pole,
+                            "retracted_premises": [
+                                {
+                                    "premise_id": "markov_state_sufficiency",
+                                    "expected": "supported",
+                                },
+                                {
+                                    "premise_id": "P_latent_transition_drive",
+                                    "expected": "linear_u_q",
+                                },
+                            ],
+                            "replacement_premises": [
+                                {
+                                    "premise_id": "markov_state_sufficiency",
+                                    "latent_state_mechanism": "custom_transition_memory",
+                                    "latent_pole": v_pole,
+                                    "custom_drive": drive_prog.to_dict(),
+                                }
+                            ],
+                            "retained_premises": [
+                                p["premise_id"]
+                                for p in commitment.get("support_premises", ())
+                                if p["premise_id"] != "markov_state_sufficiency"
+                            ],
+                        }
+                        cand_r_intervals = [r_bounds_l]
+                        if r_bounds_l[1] - r_bounds_l[0] > 1e-5:
+                            r_mid_l = 0.5 * (r_bounds_l[0] + r_bounds_l[1])
+                            cand_r_intervals.extend(
+                                [(r_bounds_l[0], r_mid_l), (r_mid_l, r_bounds_l[1])]
+                            )
+                        for sub_rb_l in cand_r_intervals:
+                            entries_l = instantiate_commitment_on_schema(
+                                spec,
+                                training,
+                                sc_obj_l,
+                                commitment,
+                                budget,
+                                radius_bounds=sub_rb_l,
+                                direction_overrides={sym_l: v_dir_l},
+                                role_terms_override=exp_role_terms,
+                                latent_state_mechanism="custom_transition_memory",
+                                reorganization_type="scientific_premise_revision",
+                                scientific_revision=rev_meta_l,
+                                tolerance=tolerance,
+                            )
+                            hit_tol_l = False
+                            for entry_l in entries_l:
+                                val_loss_l = (
+                                    loss(entry_l["candidate"].program, validation, fallback, spec.risk_quantile)
+                                    if validation and budget.spend(len(validation))
+                                    else entry_l["training_loss"]
+                                )
+                                entry_l["validation_loss"] = float(val_loss_l)
+                                entry_l["resolved_schema"] = sc_obj_l.to_dict()
+                                verified_entries_l.append(entry_l)
+                                if best_entry_l is None or val_loss_l < best_entry_l["validation_loss"]:
+                                    best_entry_l = entry_l
+                                if val_loss_l <= tolerance:
+                                    hit_tol_l = True
+                            if hit_tol_l:
+                                break
+
+            if best_entry_l is not None and best_entry_l["validation_loss"] <= tolerance:
+                break
+
+        return {
+            "mode": "llm_with_v10_premise_gate",
+            "isolated_violated_premise": "P_latent_transition_drive",
+            "supported": bool(best_entry_l and best_entry_l["validation_loss"] <= tolerance),
+            "best_entry": best_entry_l,
+            "updated_model": updated_model,
+            "verified_candidate_count": len(verified_entries_l),
+            "compute_cost": budget.spent - start,
+            "llm_ledger": ledger,
+        }
+
     # Branch 2: Upstream transition & geometry premises verified -> P_temporal_readout refuted!
     updated_model = apply_verified_transition_premises(model, audit)
     schema_dict = updated_model.get("schema")
@@ -1046,8 +1333,34 @@ def propose_premise_gated_commitment_revisions(
         json.dumps(rt, sort_keys=True)[:220] for rt in commitment.get("role_terms", ())
     ]
 
+    # Prefer a contiguous multi-step trajectory slice (history_len = 0, 1, 2, ...) so the
+    # author can distinguish instantaneous nonlinearities from POMDP reservoir memory!
+    selected_rows: list[Observation] = []
+    best_contig: list[Observation] = []
+    cur_contig: list[Observation] = []
+    for r_obs in training:
+        hlen = len(r_obs.history)
+        if hlen == 0:
+            if len(cur_contig) > len(best_contig):
+                best_contig = cur_contig
+            cur_contig = [r_obs]
+        elif len(cur_contig) == hlen:
+            cur_contig.append(r_obs)
+        else:
+            if len(cur_contig) > len(best_contig):
+                best_contig = cur_contig
+            cur_contig = []
+    if len(cur_contig) > len(best_contig):
+        best_contig = cur_contig
+    if len(best_contig) >= 6:
+        selected_rows.extend(best_contig[:16])
+        reset_extras = [r_obs for r_obs in training if len(r_obs.history) == 0 and r_obs not in selected_rows]
+        selected_rows.extend(reset_extras[:6])
+    else:
+        selected_rows = list(training[:20])
+
     residual_samples = []
-    for idx, row in enumerate(training[:20]):
+    for idx, row in enumerate(selected_rows):
         pred = parent_prog.predict(row)
         res_val = float(row.target - pred)
         fq = sum(
@@ -1064,9 +1377,27 @@ def propose_premise_gated_commitment_revisions(
         )
         tq = sum(row.features[primary_schema.fields[g]["q"]] for g in primary_schema.objects)
         tu = sum(row.features[primary_schema.fields[g]["u"]] for g in primary_schema.objects)
+        active_obj = next(
+            (
+                o_idx
+                for o_idx, g in enumerate(primary_schema.objects)
+                if abs(row.features[primary_schema.fields[g]["f"]] - 1.0) <= 1e-6
+            ),
+            None,
+        )
         residual_samples.append(
             {
-                "step": idx,
+                "row_index": idx,
+                "trajectory_step": len(row.history),
+                "active_focus_object": active_obj,
+                "per_object_q": [
+                    round(float(row.features[primary_schema.fields[g]["q"]]), 4)
+                    for g in primary_schema.objects
+                ],
+                "per_object_u": [
+                    round(float(row.features[primary_schema.fields[g]["u"]]), 4)
+                    for g in primary_schema.objects
+                ],
                 "focused_q": round(float(fq), 5),
                 "focused_u": round(float(fu), 5),
                 "focused_x": round(float(fx), 5),
@@ -1114,7 +1445,20 @@ def propose_premise_gated_commitment_revisions(
                 feedback.append({"attempt": call_idx + 1, "rejected": "invalid_or_non_role_uniform_terms"})
                 continue
 
-            combined_role_terms = [*deepcopy(commitment["role_terms"]), *valid_extras]
+            dedup_combined = []
+            seen_pole_norm = set()
+            for rt_c in [*deepcopy(commitment["role_terms"]), *valid_extras]:
+                norm_key = json.dumps(
+                    _rebind_latent_pole_in_role_terms([rt_c], "__LATENT_POLE__")[0],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if norm_key not in seen_pole_norm:
+                    seen_pole_norm.add(norm_key)
+                    dedup_combined.append(rt_c)
+            combined_role_terms = dedup_combined
+            extra_poles = _extract_latent_poles_from_role_terms(valid_extras)
+            eff_lat_mech = "custom_focal_memory" if extra_poles else commitment.get("latent_state_mechanism")
             cand_best_train = None
             cand_best_val = None
             for sc in candidate_schemas:
@@ -1126,6 +1470,7 @@ def propose_premise_gated_commitment_revisions(
                     "revision_kind": "open_grammar_temporal_readout_revision",
                     "parent_commitment_id": commitment["commitment_id"],
                     "author_model": model_name,
+                    "latent_state_mechanism": eff_lat_mech,
                     "retracted_premises": [
                         {
                             "premise_id": "temporal_readout_basis",
@@ -1144,38 +1489,81 @@ def propose_premise_gated_commitment_revisions(
                         if p["premise_id"] != "temporal_readout_basis"
                     ],
                 }
-                entries = instantiate_commitment_on_schema(
-                    spec,
-                    training,
-                    sc_obj,
+                cand_r_b2 = [r_bounds]
+                if r_bounds is not None and r_bounds[1] - r_bounds[0] > 1e-5:
+                    rm2 = 0.5 * (float(r_bounds[0]) + float(r_bounds[1]))
+                    cand_r_b2.extend([(float(r_bounds[0]), rm2), (rm2, float(r_bounds[1]))])
+                for sub_rb2 in cand_r_b2:
+                    entries = instantiate_commitment_on_schema(
+                        spec,
+                        training,
+                        sc_obj,
+                        commitment,
+                        budget,
+                        radius_bounds=sub_rb2,
+                        direction_overrides=dir_overrides,
+                        role_terms_override=combined_role_terms,
+                        latent_state_mechanism=eff_lat_mech,
+                        reorganization_type="scientific_premise_revision",
+                        scientific_revision=rev_meta,
+                        tolerance=tolerance,
+                    )
+                    hit_tol2 = False
+                    for entry in entries:
+                        val_loss = (
+                            loss(entry["candidate"].program, validation, fallback, spec.risk_quantile)
+                            if validation and budget.spend(len(validation))
+                            else entry["training_loss"]
+                        )
+                        entry["validation_loss"] = float(val_loss)
+                        entry["resolved_schema"] = sc_obj.to_dict()
+                        verified_entries.append(entry)
+                        if cand_best_val is None or val_loss < cand_best_val:
+                            cand_best_val = float(val_loss)
+                            cand_best_train = float(entry["training_loss"])
+                        if best_entry is None or val_loss < best_entry["validation_loss"]:
+                            best_entry = entry
+                        if val_loss <= tolerance:
+                            hit_tol2 = True
+                    if hit_tol2:
+                        break
+
+            step0_mse = None
+            step0_rows = [
+                Observation(dict(r_rec["before"]), float(r_rec["target"]), ())
+                for r_rec in records
+                if int(r_rec.get("position", 0)) == 0
+                and not r_rec.get("history")
+                and "before" in r_rec
+                and "target" in r_rec
+                and set(primary_schema.feature_names) <= set(r_rec["before"])
+            ]
+            if len(step0_rows) >= 8:
+                r_s0 = (
+                    0.5 * (float(r_bounds[0]) + float(r_bounds[1]))
+                    if r_bounds is not None
+                    else float(commitment["radius_parameters"][0]["source_values"][-1])
+                    if commitment.get("radius_parameters")
+                    else 1.0
+                )
+                s0_terms = instantiate_commitment_terms(
                     commitment,
-                    budget,
-                    radius_bounds=r_bounds,
+                    primary_schema,
+                    radius_bindings={sym: r_s0} if sym else None,
                     direction_overrides=dir_overrides,
                     role_terms_override=combined_role_terms,
-                    reorganization_type="scientific_premise_revision",
-                    scientific_revision=rev_meta,
-                    tolerance=tolerance,
                 )
-                for entry in entries:
-                    val_loss = (
-                        loss(entry["candidate"].program, validation, fallback, spec.risk_quantile)
-                        if validation and budget.spend(len(validation))
-                        else entry["training_loss"]
-                    )
-                    entry["validation_loss"] = float(val_loss)
-                    entry["resolved_schema"] = sc_obj.to_dict()
-                    verified_entries.append(entry)
-                    if cand_best_val is None or val_loss < cand_best_val:
-                        cand_best_val = float(val_loss)
-                        cand_best_train = float(entry["training_loss"])
-                    if best_entry is None or val_loss < best_entry["validation_loss"]:
-                        best_entry = entry
+                if s0_terms is not None:
+                    s0_fitter = _Fitter(step0_rows, budget, spec.risk_quantile)
+                    s0_fit = s0_fitter.fit(s0_terms)
+                    if s0_fit is not None:
+                        step0_mse = float(s0_fit["loss"])
 
             feedback.append(
                 {
                     "attempt": call_idx + 1,
                     "tested_extra_role_terms": valid_extras,
+                    "candidate_reset_step0_only_mse": step0_mse,
                     "candidate_training_loss": cand_best_train,
                     "candidate_validation_loss": cand_best_val,
                 }

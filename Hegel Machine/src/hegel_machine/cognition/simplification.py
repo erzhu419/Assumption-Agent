@@ -42,7 +42,7 @@ def simplify(program: Program) -> Program:
         return program
     if program.op == "accumulate":
         drive, initial = children
-        if program.value == 0 and initial.op == "const" and _current_expression(drive):
+        if program.name is None and program.value == 0 and initial.op == "const" and _current_expression(drive):
             return drive
         return program
     if program.op == "if" and children[0].op == "const":

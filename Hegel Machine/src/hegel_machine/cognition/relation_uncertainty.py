@@ -284,6 +284,8 @@ class RelationIntervalResearch:
         if fit["program"].expanded().simplified() != self.program.expanded().simplified():
             raise ValueError("Interval readout belongs to a different response")
         terms = fit["fit_terms"]
+        if self._parameter_terms is not None and len(self._parameter_terms) != len(terms):
+            self._parameter_terms = None
         if self._parameter_terms is None:
             # Match the actual relation computation, including its measured
             # roles and predicate. Equal numerical radii alone do not bind it.

@@ -282,8 +282,38 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
             tuple(Program("feature", name=source.fields[group][role]) for role in ("f", "x", "q"))
             for group in source.objects
         ]
-        if len(triples) != len(expected) or set(triples) != set(expected):
+        value_summand_dict = None
+        value_roles = None
+        if len(triples) != len(expected):
             return None
+        if set(triples) != set(expected):
+            matched_groups = []
+            val_patterns = []
+            for sel_n, pos_n, val_n in triples:
+                if sel_n.op != "feature" or pos_n.op != "feature":
+                    return None
+                own_s = owners.get(sel_n.name)
+                own_p = owners.get(pos_n.name)
+                if not own_s or not own_p or own_s[1] != "f" or own_p[1] != "x" or own_s[0] != own_p[0]:
+                    return None
+                grp = own_s[0]
+                req_f = val_n.required_features()
+                if not req_f or not req_f <= set(source.fields[grp].values()):
+                    return None
+                matched_groups.append(grp)
+                val_patterns.append(
+                    val_n.remap_features(
+                        {name: f"object_role:{role}" for role, name in source.fields[grp].items()}
+                    )
+                )
+            if set(matched_groups) != set(source.objects) or any(
+                vp != val_patterns[0] for vp in val_patterns[1:]
+            ):
+                return None
+            value_summand_dict = val_patterns[0].to_dict()
+            value_roles = sorted(
+                name.removeprefix("object_role:") for name in val_patterns[0].required_features()
+            )
         sym = allocate_symbol(node.children[0], actual_node.children[0])
         if sym is None:
             return None
@@ -298,12 +328,16 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
                 "predicate": predicate,
             }
         )
-        return {
+        out_nb = {
             "kind": f"all_{node.op}",
             "direction": direction,
             "symbol": sym,
             "predicate": predicate,
         }
+        if value_summand_dict is not None:
+            out_nb["value_summand"] = value_summand_dict
+            out_nb["value_roles"] = value_roles
+        return out_nb
 
     def lift(node: Program, actual_node: Program, path: tuple) -> dict | None:
         if node.op == "object_sum":
@@ -383,10 +417,12 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
         or sci_rev.get("nonconservation_mechanism")
     )
     latent_poles = _extract_latent_poles_from_role_terms(role_terms)
+    ar2_params_list = _extract_ar2_params_from_role_terms(role_terms)
+    ar2_params = list(ar2_params_list[0]) if ar2_params_list else None
     latent_state_mechanism = (
         app_meta.get("latent_state_mechanism")
         or sci_rev.get("latent_state_mechanism")
-        or ("focal_memory" if latent_poles else None)
+        or ("oscillatory_focal_memory" if ar2_params else ("focal_memory" if latent_poles else None))
     )
     generation = int(sci_rev.get("generation") or app_meta.get("generation") or 0)
     revision_lineage = list(
@@ -538,6 +574,7 @@ def extract_parametric_role_pattern(prior: dict) -> dict | None:
         "nonconservation_mechanism": nonconservation_mechanism,
         "latent_state_mechanism": latent_state_mechanism,
         "latent_poles": latent_poles,
+        "ar2_params": ar2_params,
         "generation": generation,
         "revision_lineage": revision_lineage,
         "family": family_name,
@@ -557,7 +594,11 @@ def _contains_total_role(node: dict, role: str) -> bool:
 
 def _collect_prog_accumulates(prog_dict: dict) -> list[float]:
     poles = []
-    if prog_dict.get("op") == "accumulate" and prog_dict.get("value") is not None:
+    if (
+        prog_dict.get("op") == "accumulate"
+        and prog_dict.get("name") is None
+        and prog_dict.get("value") is not None
+    ):
         poles.append(float(prog_dict["value"]))
     for ch in prog_dict.get("children", ()):
         poles.extend(_collect_prog_accumulates(ch))
@@ -566,10 +607,39 @@ def _collect_prog_accumulates(prog_dict: dict) -> list[float]:
 
 def _rebind_prog_accumulates(prog_dict: dict, new_pole: float | str) -> dict:
     updated = deepcopy(prog_dict)
-    if updated.get("op") == "accumulate":
+    if updated.get("op") == "accumulate" and updated.get("name") is None:
         updated["value"] = new_pole
     if "children" in updated:
         updated["children"] = [_rebind_prog_accumulates(ch, new_pole) for ch in updated["children"]]
+    return updated
+
+
+def _collect_prog_ar2_params(prog_dict: dict) -> list[tuple[float, float]]:
+    found = []
+    if (
+        prog_dict.get("op") == "accumulate"
+        and prog_dict.get("name") in {"ar2", "ar2_lag1"}
+        and prog_dict.get("value") is not None
+        and len(prog_dict.get("children", ())) == 2
+        and prog_dict["children"][1].get("op") == "const"
+        and prog_dict["children"][1].get("value") is not None
+    ):
+        found.append((float(prog_dict["value"]), float(prog_dict["children"][1]["value"])))
+    for ch in prog_dict.get("children", ()):
+        found.extend(_collect_prog_ar2_params(ch))
+    return found
+
+
+def _rebind_prog_ar2_params(prog_dict: dict, a1: float | str, a2: float | str) -> dict:
+    updated = deepcopy(prog_dict)
+    if updated.get("op") == "accumulate" and updated.get("name") in {"ar2", "ar2_lag1"}:
+        updated["value"] = a1
+        chs = list(updated.get("children", ()))
+        if len(chs) == 2:
+            chs[1] = {"op": "const", "value": a2, "name": None, "lag": 0, "children": []}
+            updated["children"] = chs
+    if "children" in updated:
+        updated["children"] = [_rebind_prog_ar2_params(ch, a1, a2) for ch in updated["children"]]
     return updated
 
 
@@ -581,8 +651,12 @@ def _extract_latent_poles_from_role_terms(role_terms: list[dict]) -> list[float]
             for p in _collect_prog_accumulates(node["summand"]):
                 if all(abs(p - existing) > 1e-12 for existing in poles):
                     poles.append(p)
+        elif node["kind"] in {"all_neighbor_sum", "all_relation_sum"} and "value_summand" in node:
+            for p in _collect_prog_accumulates(node["value_summand"]):
+                if all(abs(p - existing) > 1e-12 for existing in poles):
+                    poles.append(p)
         elif node["kind"] == "program_op":
-            if node["op"] == "accumulate" and node.get("value") is not None:
+            if node["op"] == "accumulate" and node.get("name") is None and node.get("value") is not None:
                 p = float(node["value"])
                 if all(abs(p - existing) > 1e-12 for existing in poles):
                     poles.append(p)
@@ -601,10 +675,59 @@ def _rebind_latent_pole_in_role_terms(role_terms: list[dict], new_pole: float | 
                 **deepcopy(node),
                 "summand": _rebind_prog_accumulates(node["summand"], new_pole),
             }
+        if node["kind"] in {"all_neighbor_sum", "all_relation_sum"} and "value_summand" in node:
+            return {
+                **deepcopy(node),
+                "value_summand": _rebind_prog_accumulates(node["value_summand"], new_pole),
+            }
         if node["kind"] == "program_op":
             updated = deepcopy(node)
-            if updated["op"] == "accumulate":
+            if updated["op"] == "accumulate" and updated.get("name") is None:
                 updated["value"] = new_pole
+            updated["children"] = [_visit(ch) for ch in updated.get("children", ())]
+            return updated
+        return deepcopy(node)
+
+    return [_visit(term) for term in role_terms]
+
+
+def _extract_ar2_params_from_role_terms(role_terms: list[dict]) -> list[tuple[float, float]]:
+    pairs: list[tuple[float, float]] = []
+
+    def _visit(node: dict):
+        if node["kind"] == "all_object_sum":
+            for a1, a2 in _collect_prog_ar2_params(node["summand"]):
+                if all(abs(a1 - ex1) > 1e-12 or abs(a2 - ex2) > 1e-12 for ex1, ex2 in pairs):
+                    pairs.append((a1, a2))
+        elif node["kind"] in {"all_neighbor_sum", "all_relation_sum"} and "value_summand" in node:
+            for a1, a2 in _collect_prog_ar2_params(node["value_summand"]):
+                if all(abs(a1 - ex1) > 1e-12 or abs(a2 - ex2) > 1e-12 for ex1, ex2 in pairs):
+                    pairs.append((a1, a2))
+        elif node["kind"] == "program_op":
+            for child in node.get("children", ()):
+                _visit(child)
+
+    for term in role_terms:
+        _visit(term)
+    return pairs
+
+
+def _rebind_ar2_params_in_role_terms(
+    role_terms: list[dict], a1: float | str, a2: float | str
+) -> list[dict]:
+    def _visit(node: dict) -> dict:
+        if node["kind"] == "all_object_sum":
+            return {
+                **deepcopy(node),
+                "summand": _rebind_prog_ar2_params(node["summand"], a1, a2),
+            }
+        if node["kind"] in {"all_neighbor_sum", "all_relation_sum"} and "value_summand" in node:
+            return {
+                **deepcopy(node),
+                "value_summand": _rebind_prog_ar2_params(node["value_summand"], a1, a2),
+            }
+        if node["kind"] == "program_op":
+            updated = deepcopy(node)
             updated["children"] = [_visit(ch) for ch in updated.get("children", ())]
             return updated
         return deepcopy(node)
@@ -808,6 +931,216 @@ def expand_role_terms_for_latent_focal_readout(
     return expanded
 
 
+def _ar2_role_term(role: str, a1: float, a2: float, *, mode: str = "ar2", focused: bool = True) -> dict:
+    acc_prog = Program(
+        "accumulate",
+        value=float(a1),
+        name=mode,
+        children=(
+            Program("feature", name=f"object_role:{role}"),
+            Program("const", value=float(a2)),
+        ),
+    )
+    if focused:
+        summand = Program(
+            "mul",
+            children=(Program("feature", name="object_role:f"), acc_prog),
+        )
+        roles = ["f", role]
+    else:
+        summand = acc_prog
+        roles = [role]
+    return {"kind": "all_object_sum", "summand": summand.to_dict(), "roles": roles}
+
+
+def expand_role_terms_for_ar2_latent_transition(
+    role_terms: list[dict],
+    a1: float,
+    a2: float,
+    drive_weights: dict[str, float] | None = None,
+) -> list[dict]:
+    """Expand ``role_terms`` with 2nd-order oscillatory AR(2) ``ar2_lag1`` transition terms."""
+    active_roles = [
+        r for r in ("u", "q") if abs((drive_weights or {}).get(r, 1.0 if r == "u" else 0.0)) > 1e-6
+    ]
+    if not active_roles:
+        active_roles = ["u"]
+    expanded = deepcopy(role_terms)
+    seen = {json.dumps(t, sort_keys=True, separators=(",", ":")) for t in expanded}
+
+    def _add(term_dict: dict):
+        key = json.dumps(term_dict, sort_keys=True, separators=(",", ":"))
+        if key not in seen:
+            seen.add(key)
+            expanded.append(term_dict)
+
+    for r_name in active_roles:
+        tot_ar2 = _ar2_role_term(r_name, a1, a2, mode="ar2_lag1", focused=False)
+        foc_ar2 = _ar2_role_term(r_name, a1, a2, mode="ar2_lag1", focused=True)
+        for term in role_terms:
+            tot_comp, tot_changed = _replace_total_role_in_role_term(term, "q", tot_ar2)
+            if tot_changed:
+                _add(tot_comp)
+            nb_comp, nb_changed = _replace_neighborhood_in_role_term(term, foc_ar2)
+            if nb_changed:
+                _add(nb_comp)
+    return expanded
+
+
+def expand_role_terms_for_ar2_focal_readout(
+    role_terms: list[dict], a1: float, a2: float
+) -> list[dict]:
+    """Expand ``role_terms`` with 2nd-order oscillatory AR(2) focal reservoir terms."""
+    expanded = deepcopy(role_terms)
+    seen = {json.dumps(t, sort_keys=True, separators=(",", ":")) for t in expanded}
+    for r_name in ("q", "u"):
+        cand = _ar2_role_term(r_name, a1, a2, mode="ar2", focused=True)
+        key = json.dumps(cand, sort_keys=True, separators=(",", ":"))
+        if key not in seen:
+            seen.add(key)
+            expanded.append(cand)
+    return expanded
+
+
+def expand_role_terms_for_coupled_latent_transition(
+    role_terms: list[dict],
+    pole: float,
+    symbol: str,
+    direction: str,
+    drive_weights: dict[str, float] | None = None,
+) -> list[dict]:
+    """Expand ``role_terms`` with both local and spatially coupled neighbor latent transport."""
+    expanded = expand_role_terms_for_latent_transition(role_terms, pole, drive_weights)
+    seen = {json.dumps(t, sort_keys=True, separators=(",", ":")) for t in expanded}
+
+    def _add(term_dict: dict):
+        key = json.dumps(term_dict, sort_keys=True, separators=(",", ":"))
+        if key not in seen:
+            seen.add(key)
+            expanded.append(term_dict)
+
+    active_roles = [
+        r for r in ("u", "q") if abs((drive_weights or {}).get(r, 1.0 if r == "u" else 0.0)) > 1e-6
+    ] or ["u"]
+    for r_name in active_roles:
+        nb_acc_leaf = {
+            "kind": "all_neighbor_sum",
+            "direction": direction,
+            "symbol": symbol,
+            "predicate": None,
+            "value_summand": Program(
+                "accumulate",
+                value=float(pole),
+                children=(
+                    Program("feature", name=f"object_role:{r_name}"),
+                    Program("const", value=0.0),
+                ),
+            ).to_dict(),
+            "value_roles": [r_name],
+        }
+        nb_inst_leaf = {
+            "kind": "all_neighbor_sum",
+            "direction": direction,
+            "symbol": symbol,
+            "predicate": None,
+            "value_summand": Program("feature", name=f"object_role:{r_name}").to_dict(),
+            "value_roles": [r_name],
+        }
+        for term in role_terms:
+            comp_acc, ch1 = _replace_neighborhood_in_role_term(term, nb_acc_leaf)
+            if ch1:
+                _add(comp_acc)
+                comp_inst, _ = _replace_neighborhood_in_role_term(term, nb_inst_leaf)
+                _add(comp_inst)
+    return expanded
+
+
+def expand_role_terms_for_coupled_focal_readout(
+    role_terms: list[dict],
+    pole: float,
+    symbol: str,
+    direction: str,
+) -> list[dict]:
+    """Expand ``role_terms`` with local + spatially coupled neighbor focal reservoir terms."""
+    expanded = expand_role_terms_for_latent_focal_readout(role_terms, pole)
+    seen = {json.dumps(t, sort_keys=True, separators=(",", ":")) for t in expanded}
+    for r_name in ("q", "u"):
+        nb_term = {
+            "kind": "all_neighbor_sum",
+            "direction": direction,
+            "symbol": symbol,
+            "predicate": None,
+            "value_summand": Program(
+                "accumulate",
+                value=float(pole),
+                children=(
+                    Program("feature", name=f"object_role:{r_name}"),
+                    Program("const", value=0.0),
+                ),
+            ).to_dict(),
+            "value_roles": [r_name],
+        }
+        key = json.dumps(nb_term, sort_keys=True, separators=(",", ":"))
+        if key not in seen:
+            seen.add(key)
+            expanded.append(nb_term)
+    return expanded
+
+
+def expand_role_terms_for_custom_latent_transition(
+    role_terms: list[dict],
+    drive_program: Program,
+    pole: float,
+) -> list[dict]:
+    """Expand ``role_terms`` for an open-grammar per-object latent transition drive ``drive_program``."""
+    d_roles = sorted(
+        name.removeprefix("object_role:") for name in drive_program.required_features()
+    )
+    acc_prog = Program(
+        "accumulate",
+        value=float(pole),
+        children=(drive_program, Program("const", value=0.0)),
+    )
+    tot_acc = {"kind": "all_object_sum", "summand": acc_prog.to_dict(), "roles": d_roles}
+    tot_inst = {"kind": "all_object_sum", "summand": drive_program.to_dict(), "roles": d_roles}
+    foc_roles = sorted({"f", *d_roles})
+    foc_acc = {
+        "kind": "all_object_sum",
+        "summand": Program(
+            "mul", children=(Program("feature", name="object_role:f"), acc_prog)
+        ).to_dict(),
+        "roles": foc_roles,
+    }
+    foc_inst = {
+        "kind": "all_object_sum",
+        "summand": Program(
+            "mul", children=(Program("feature", name="object_role:f"), drive_program)
+        ).to_dict(),
+        "roles": foc_roles,
+    }
+    expanded = deepcopy(role_terms)
+    seen = {json.dumps(t, sort_keys=True, separators=(",", ":")) for t in expanded}
+
+    def _add(term_dict: dict):
+        key = json.dumps(term_dict, sort_keys=True, separators=(",", ":"))
+        if key not in seen:
+            seen.add(key)
+            expanded.append(term_dict)
+
+    for term in role_terms:
+        tc_acc, ch_t = _replace_total_role_in_role_term(term, "q", tot_acc)
+        if ch_t:
+            _add(tc_acc)
+            tc_inst, _ = _replace_total_role_in_role_term(term, "q", tot_inst)
+            _add(tc_inst)
+        nb_acc, ch_n = _replace_neighborhood_in_role_term(term, foc_acc)
+        if ch_n:
+            _add(nb_acc)
+            nb_inst, _ = _replace_neighborhood_in_role_term(term, foc_inst)
+            _add(nb_inst)
+    return expanded
+
+
 def instantiate_commitment_terms(
     commitment: dict,
     target_schema: ObjectSchema | dict | str,
@@ -862,11 +1195,28 @@ def instantiate_commitment_terms(
             )
             direction = overrides.get(sym, node["direction"])
             op_name = _direction_name(direction)
-            triples = tuple(
-                Program("feature", name=target.fields[group][role])
-                for group in target.objects
-                for role in ("f", "x", "q")
-            )
+            if "value_summand" in node:
+                val_pat = Program.from_dict(node["value_summand"])
+                val_roles = node.get("value_roles") or []
+                if any(not set(val_roles) <= set(target.fields[group]) for group in target.objects):
+                    return None
+                triples = tuple(
+                    part
+                    for group in target.objects
+                    for part in (
+                        Program("feature", name=target.fields[group]["f"]),
+                        Program("feature", name=target.fields[group]["x"]),
+                        val_pat.remap_features(
+                            {f"object_role:{r}": target.fields[group][r] for r in val_roles}
+                        ),
+                    )
+                )
+            else:
+                triples = tuple(
+                    Program("feature", name=target.fields[group][role])
+                    for group in target.objects
+                    for role in ("f", "x", "q")
+                )
             if sym in pred_overrides:
                 override_val = pred_overrides[sym]
                 if override_val is None or override_val == "unconditional":
@@ -1040,9 +1390,14 @@ def check_equivalence_reorganization(
         }
         src_role_terms = None
         src_poles = source.get("latent_poles") or []
+        src_ar2 = source.get("ar2_params")
         if len(src_poles) == 1:
             src_role_terms = _rebind_latent_pole_in_role_terms(
                 candidate_commitment["role_terms"], float(src_poles[0])
+            )
+        elif src_ar2 and len(src_ar2) == 2:
+            src_role_terms = _rebind_ar2_params_in_role_terms(
+                candidate_commitment["role_terms"], float(src_ar2[0]), float(src_ar2[1])
             )
         instantiated = instantiate_commitment_terms(
             candidate_commitment,
@@ -1171,7 +1526,11 @@ def consolidate_world_structure_commitments(
         norm_role_terms = (
             _rebind_latent_pole_in_role_terms(item["role_terms"], "__LATENT_POLE__")
             if len(item.get("latent_poles") or ()) == 1
-            else item["role_terms"]
+            else (
+                _rebind_ar2_params_in_role_terms(item["role_terms"], "__AR2_A1__", "__AR2_A2__")
+                if item.get("ar2_params")
+                else item["role_terms"]
+            )
         )
         # Also normalize 1D custom threshold inside all_relation_sum role_terms
         norm_role_terms_clean = deepcopy(norm_role_terms)
@@ -1225,6 +1584,11 @@ def consolidate_world_structure_commitments(
             for m in members
             for pole in (m.get("latent_poles") or ())
         ]
+        merged_ar2_params = [
+            list(m["ar2_params"])
+            for m in members
+            if m.get("ar2_params")
+        ]
         candidate = {
             "commitment_id": f"world_commitment:{idx:04d}",
             "kind": "world_structure_commitment",
@@ -1242,6 +1606,7 @@ def consolidate_world_structure_commitments(
             "nonconservation_mechanism": representative.get("nonconservation_mechanism"),
             "latent_state_mechanism": representative.get("latent_state_mechanism"),
             "source_latent_poles": merged_latent_poles,
+            "source_ar2_params": merged_ar2_params,
             "generation": max((int(m.get("generation", 0)) for m in members), default=0),
             "revision_lineage": deepcopy(representative.get("revision_lineage", [])),
         }
@@ -1352,15 +1717,16 @@ def _candidate_radii_from_distances(
         if radius_bounds is None or (radius_bounds[0] - 1e-9 <= value <= radius_bounds[1] + 1e-9):
             add(float(value))
 
-    if boundaries:
-        samples = min(16, len(boundaries))
-        for idx in range(samples):
-            pos = round(idx * (len(boundaries) - 1) / max(1, samples - 1))
-            add(boundaries[pos])
-    if distances:
-        add(distances[-1] + 1e-6)
-        if distances[0] > 1e-6:
-            add(distances[0] * 0.5)
+    if radius_bounds is None:
+        if boundaries:
+            samples = min(16, len(boundaries))
+            for idx in range(samples):
+                pos = round(idx * (len(boundaries) - 1) / max(1, samples - 1))
+                add(boundaries[pos])
+        if distances:
+            add(distances[-1] + 1e-6)
+            if distances[0] > 1e-6:
+                add(distances[0] * 0.5)
     return ordered
 
 
@@ -1511,6 +1877,8 @@ def _optimize_1d_latent_pole(
     for _ in range(36):
         if best_res[0] <= min(1e-16, tolerance * 1e-7) or hi - lo < 1e-10:
             break
+        if hi - lo < 0.025 and best_res[0] > 5e-3:
+            break
         if r1[0] < r2[0]:
             hi, c2, r2 = c2, c1, r1
             c1 = hi - gr * (hi - lo)
@@ -1530,6 +1898,318 @@ def _optimize_1d_latent_pole(
             if r2[0] < best_res[0]:
                 best_p, best_res = c2, r2
     return best_p, best_res
+
+
+def _optimize_2d_ar2_latent_poles(
+    eval_ar2_fn,
+    *,
+    seed_pairs: tuple[tuple[float, float], ...] | list[list[float]] = (),
+    tolerance: float = 1e-8,
+):
+    """Search 2nd-order AR(2) parameters ``(a1, a2)`` in decoupled ``(rho, cos_w)`` + Cartesian coordinates."""
+    gr = (5.0 ** 0.5 - 1.0) / 2.0
+    coarse_polar = [
+        (rho, cw)
+        for rho in (0.50, 0.64, 0.76, 0.87)
+        for cw in (-0.30, 0.15, 0.52, 0.82)
+    ]
+    best_a1, best_a2, best_res = None, None, None
+    best_rho, best_cw = 0.68, 0.55
+
+    for rho_c, cw_c in coarse_polar:
+        a1_c, a2_c = 2.0 * rho_c * cw_c, -(rho_c * rho_c)
+        res_c = eval_ar2_fn(a1_c, a2_c)
+        if res_c is None:
+            return ((best_a1, best_a2), best_res) if best_res is not None else None
+        if best_res is None or res_c[0] < best_res[0]:
+            best_a1, best_a2, best_res = a1_c, a2_c, res_c
+            best_rho, best_cw = rho_c, cw_c
+            if best_res[0] <= min(1e-18, tolerance * 1e-8):
+                return (best_a1, best_a2), best_res
+
+    for pair in seed_pairs:
+        if len(pair) == 2:
+            a1_s, a2_s = float(pair[0]), float(pair[1])
+            res_s = eval_ar2_fn(a1_s, a2_s)
+            if res_s is None:
+                break
+            if best_res is None or res_s[0] < best_res[0]:
+                best_a1, best_a2, best_res = a1_s, a2_s, res_s
+                if a2_s < -1e-6:
+                    best_rho = min(0.985, max(0.05, (-a2_s) ** 0.5))
+                    best_cw = max(-0.98, min(0.98, a1_s / (2.0 * best_rho)))
+
+    if best_res is None:
+        return None
+
+    sp_rho, sp_cw = 0.16, 0.28
+    for rnd in range(8):
+        if best_res[0] <= min(1e-18, tolerance * 1e-8):
+            break
+        if rnd == 2 and best_res[0] > 5e-2:
+            break
+        lo_r, hi_r = max(0.08, best_rho - sp_rho), min(0.985, best_rho + sp_rho)
+        c1 = hi_r - gr * (hi_r - lo_r)
+        c2 = lo_r + gr * (hi_r - lo_r)
+        r1 = eval_ar2_fn(2.0 * c1 * best_cw, -(c1 * c1))
+        r2 = eval_ar2_fn(2.0 * c2 * best_cw, -(c2 * c2))
+        if r1 is None or r2 is None:
+            break
+        if r1[0] < best_res[0]:
+            best_rho, best_a1, best_a2, best_res = c1, 2.0 * c1 * best_cw, -(c1 * c1), r1
+        if r2[0] < best_res[0]:
+            best_rho, best_a1, best_a2, best_res = c2, 2.0 * c2 * best_cw, -(c2 * c2), r2
+        for _ in range(12):
+            if hi_r - lo_r < 1e-10:
+                break
+            if r1[0] < r2[0]:
+                hi_r, c2, r2 = c2, c1, r1
+                c1 = hi_r - gr * (hi_r - lo_r)
+                rn = eval_ar2_fn(2.0 * c1 * best_cw, -(c1 * c1))
+                if rn is None:
+                    break
+                r1 = rn
+                if r1[0] < best_res[0]:
+                    best_rho, best_a1, best_a2, best_res = c1, 2.0 * c1 * best_cw, -(c1 * c1), r1
+            else:
+                lo_r, c1, r1 = c1, c2, r2
+                c2 = lo_r + gr * (hi_r - lo_r)
+                rn = eval_ar2_fn(2.0 * c2 * best_cw, -(c2 * c2))
+                if rn is None:
+                    break
+                r2 = rn
+                if r2[0] < best_res[0]:
+                    best_rho, best_a1, best_a2, best_res = c2, 2.0 * c2 * best_cw, -(c2 * c2), r2
+
+        lo_w, hi_w = max(-0.985, best_cw - sp_cw), min(0.985, best_cw + sp_cw)
+        d1 = hi_w - gr * (hi_w - lo_w)
+        d2 = lo_w + gr * (hi_w - lo_w)
+        a2_fix = -(best_rho * best_rho)
+        s1 = eval_ar2_fn(2.0 * best_rho * d1, a2_fix)
+        s2 = eval_ar2_fn(2.0 * best_rho * d2, a2_fix)
+        if s1 is None or s2 is None:
+            break
+        if s1[0] < best_res[0]:
+            best_cw, best_a1, best_a2, best_res = d1, 2.0 * best_rho * d1, a2_fix, s1
+        if s2[0] < best_res[0]:
+            best_cw, best_a1, best_a2, best_res = d2, 2.0 * best_rho * d2, a2_fix, s2
+        for _ in range(12):
+            if hi_w - lo_w < 1e-10:
+                break
+            if s1[0] < s2[0]:
+                hi_w, d2, s2 = d2, d1, s1
+                d1 = hi_w - gr * (hi_w - lo_w)
+                sn = eval_ar2_fn(2.0 * best_rho * d1, a2_fix)
+                if sn is None:
+                    break
+                s1 = sn
+                if s1[0] < best_res[0]:
+                    best_cw, best_a1, best_a2, best_res = d1, 2.0 * best_rho * d1, a2_fix, s1
+            else:
+                lo_w, d1, s1 = d1, d2, s2
+                d2 = lo_w + gr * (hi_w - lo_w)
+                sn = eval_ar2_fn(2.0 * best_rho * d2, a2_fix)
+                if sn is None:
+                    break
+                s2 = sn
+                if s2[0] < best_res[0]:
+                    best_cw, best_a1, best_a2, best_res = d2, 2.0 * best_rho * d2, a2_fix, s2
+        sp_rho *= 0.52
+        sp_cw *= 0.52
+
+    return (best_a1, best_a2), best_res
+
+
+def _fast_solve_1d_focal_pole(
+    rows: list[Observation],
+    target: ObjectSchema,
+    base_terms: tuple[Program, ...],
+    budget: SearchBudget,
+    *,
+    seed_poles: tuple[float, ...] = (),
+    tolerance: float = 1e-8,
+) -> tuple[float, float] | None:
+    """Fast Frisch-Waugh-Lovell projected 1D solver for per-object 1st-order focal readout."""
+    m_count = len(rows)
+    if m_count < 5 or not budget.spend(m_count * (len(base_terms) + 2)):
+        return None
+    base_cols = [[1.0] * m_count] + [[float(bt.predict(r)) for r in rows] for bt in base_terms]
+    orth_vecs: list[list[float]] = []
+    for col in base_cols:
+        v = list(col)
+        for qv in orth_vecs:
+            dot = sum(a * b for a, b in zip(v, qv))
+            v = [vi - dot * qvi for vi, qvi in zip(v, qv)]
+        norm_sq = sum(vi * vi for vi in v)
+        if norm_sq > 1e-24:
+            inv_n = 1.0 / (norm_sq ** 0.5)
+            orth_vecs.append([vi * inv_n for vi in v])
+
+    y_perp = [float(r.target) for r in rows]
+    for qv in orth_vecs:
+        dot = sum(a * b for a, b in zip(y_perp, qv))
+        y_perp = [yi - dot * qvi for yi, qvi in zip(y_perp, qv)]
+
+    row_seqs: list[tuple[tuple[float, ...], tuple[float, ...]] | None] = []
+    for r in rows:
+        foc_g = next(
+            (
+                g
+                for g in target.objects
+                if abs(float(r.features.get(target.fields[g]["f"], 0.0)) - 1.0) <= 1e-6
+            ),
+            None,
+        )
+        if foc_g is None:
+            row_seqs.append(None)
+            continue
+        qf = target.fields[foc_g]["q"]
+        uf = target.fields[foc_g]["u"]
+        qs = tuple(float(h.get(qf, 0.0)) for h in r.history) + (float(r.features[qf]),)
+        us = tuple(float(h.get(uf, 0.0)) for h in r.history) + (float(r.features[uf]),)
+        row_seqs.append((qs, us))
+
+    def _eval_fast_1d(p_val: float):
+        if not budget.spend(1):
+            return None
+        zq_col = []
+        zu_col = []
+        for item in row_seqs:
+            if item is None:
+                zq_col.append(0.0)
+                zu_col.append(0.0)
+            else:
+                qs, us = item
+                zc_q = 0.0
+                for dv in qs:
+                    zc_q = p_val * zc_q + dv
+                zc_u = 0.0
+                for dv in us:
+                    zc_u = p_val * zc_u + dv
+                zq_col.append(zc_q)
+                zu_col.append(zc_u)
+        for qv in orth_vecs:
+            dq = sum(a * b for a, b in zip(zq_col, qv))
+            du = sum(a * b for a, b in zip(zu_col, qv))
+            zq_col = [zqi - dq * qvi for zqi, qvi in zip(zq_col, qv)]
+            zu_col = [zui - du * qvi for zui, qvi in zip(zu_col, qv)]
+        g00 = sum(v * v for v in zq_col) + 1e-18
+        g01 = sum(a * b for a, b in zip(zq_col, zu_col))
+        g11 = sum(v * v for v in zu_col) + 1e-18
+        b0 = sum(a * y for a, y in zip(zq_col, y_perp))
+        b1 = sum(a * y for a, y in zip(zu_col, y_perp))
+        det = g00 * g11 - g01 * g01
+        if abs(det) <= 1e-28:
+            wq, wu = b0 / g00, 0.0
+        else:
+            wq = (g11 * b0 - g01 * b1) / det
+            wu = (g00 * b1 - g01 * b0) / det
+        mse = sum((y_perp[i] - wq * zq_col[i] - wu * zu_col[i]) ** 2 for i in range(m_count)) / m_count
+        return (mse, None, None)
+
+    solved = _optimize_1d_latent_pole(_eval_fast_1d, seed_poles=seed_poles, tolerance=tolerance)
+    if solved is None:
+        return None
+    fpole, (fmse, _, _) = solved
+    return float(fpole), float(fmse)
+
+
+def _fast_solve_ar2_focal_poles(
+    rows: list[Observation],
+    target: ObjectSchema,
+    base_terms: tuple[Program, ...],
+    budget: SearchBudget,
+    *,
+    seed_pairs: tuple[tuple[float, float], ...] | list[list[float]] = (),
+    tolerance: float = 1e-8,
+) -> tuple[float, float, float] | None:
+    """Fast Frisch-Waugh-Lovell projected 2D solver for per-object AR(2) focal readout."""
+    m_count = len(rows)
+    if m_count < 6 or not budget.spend(m_count * (len(base_terms) + 2)):
+        return None
+    base_cols = [[1.0] * m_count] + [[float(bt.predict(r)) for r in rows] for bt in base_terms]
+    orth_vecs: list[list[float]] = []
+    for col in base_cols:
+        v = list(col)
+        for qv in orth_vecs:
+            dot = sum(a * b for a, b in zip(v, qv))
+            v = [vi - dot * qvi for vi, qvi in zip(v, qv)]
+        norm_sq = sum(vi * vi for vi in v)
+        if norm_sq > 1e-24:
+            inv_n = 1.0 / (norm_sq ** 0.5)
+            orth_vecs.append([vi * inv_n for vi in v])
+
+    y_perp = [float(r.target) for r in rows]
+    for qv in orth_vecs:
+        dot = sum(a * b for a, b in zip(y_perp, qv))
+        y_perp = [yi - dot * qvi for yi, qvi in zip(y_perp, qv)]
+
+    row_seqs: list[tuple[tuple[float, ...], tuple[float, ...]] | None] = []
+    for r in rows:
+        foc_g = next(
+            (
+                g
+                for g in target.objects
+                if abs(float(r.features.get(target.fields[g]["f"], 0.0)) - 1.0) <= 1e-6
+            ),
+            None,
+        )
+        if foc_g is None:
+            row_seqs.append(None)
+            continue
+        qf = target.fields[foc_g]["q"]
+        uf = target.fields[foc_g]["u"]
+        qs = tuple(float(h.get(qf, 0.0)) for h in r.history) + (float(r.features[qf]),)
+        us = tuple(float(h.get(uf, 0.0)) for h in r.history) + (float(r.features[uf]),)
+        row_seqs.append((qs, us))
+
+    def _eval_fast(a1_v: float, a2_v: float):
+        if not budget.spend(2):
+            return None
+        zq_col = []
+        zu_col = []
+        for item in row_seqs:
+            if item is None:
+                zq_col.append(0.0)
+                zu_col.append(0.0)
+            else:
+                qs, us = item
+                zc_q, zp_q = 0.0, 0.0
+                for dv in qs:
+                    zn_q = a1_v * zc_q + a2_v * zp_q + dv
+                    zp_q, zc_q = zc_q, zn_q
+                zc_u, zp_u = 0.0, 0.0
+                for dv in us:
+                    zn_u = a1_v * zc_u + a2_v * zp_u + dv
+                    zp_u, zc_u = zc_u, zn_u
+                zq_col.append(zc_q)
+                zu_col.append(zc_u)
+        for qv in orth_vecs:
+            dq = sum(a * b for a, b in zip(zq_col, qv))
+            du = sum(a * b for a, b in zip(zu_col, qv))
+            zq_col = [zqi - dq * qvi for zqi, qvi in zip(zq_col, qv)]
+            zu_col = [zui - du * qvi for zui, qvi in zip(zu_col, qv)]
+        g00 = sum(v * v for v in zq_col) + 1e-18
+        g01 = sum(a * b for a, b in zip(zq_col, zu_col))
+        g11 = sum(v * v for v in zu_col) + 1e-18
+        b0 = sum(a * y for a, y in zip(zq_col, y_perp))
+        b1 = sum(a * y for a, y in zip(zu_col, y_perp))
+        det = g00 * g11 - g01 * g01
+        if abs(det) <= 1e-28:
+            wq, wu = b0 / g00, 0.0
+        else:
+            wq = (g11 * b0 - g01 * b1) / det
+            wu = (g00 * b1 - g01 * b0) / det
+        mse = sum((y_perp[i] - wq * zq_col[i] - wu * zu_col[i]) ** 2 for i in range(m_count)) / m_count
+        return (mse,)
+
+    solved = _optimize_2d_ar2_latent_poles(
+        _eval_fast, seed_pairs=seed_pairs, tolerance=tolerance
+    )
+    if solved is None:
+        return None
+    (fa1, fa2), (fmse,) = solved
+    return float(fa1), float(fa2), float(fmse)
 
 
 def instantiate_commitment_on_schema(
@@ -1552,6 +2232,7 @@ def instantiate_commitment_on_schema(
     transitions: list[dict] | tuple[dict, ...] = (),
     active_threshold_probing: bool = True,
     allow_latent_state: bool = True,
+    allow_higher_order_latent: bool = True,
     tolerance: float = 1e-8,
 ) -> list[dict]:
     """Instantiate and fit ``commitment`` onto ``schema`` under ``SearchBudget``."""
@@ -1579,13 +2260,77 @@ def instantiate_commitment_on_schema(
         if role_terms_override is not None
         else deepcopy(commitment.get("role_terms", ()))
     )
+    transition_pole_calibrated = False
+    transition_ar2_calibrated = False
     if (
-        effective_latent_mech == "transition_memory"
+        effective_latent_mech in {"transition_memory", "coupled_transition_memory"}
         and audit_report
         and audit_report.get("latent_transition_state")
     ):
         audit_pole = float(audit_report["latent_transition_state"]["pole"])
         active_role_terms = _rebind_latent_pole_in_role_terms(active_role_terms, audit_pole)
+        transition_pole_calibrated = True
+    elif (
+        effective_latent_mech == "oscillatory_transition_memory"
+        and audit_report
+        and (audit_report.get("latent_transition_state") or {}).get("ar2_params")
+    ):
+        ar2_p = audit_report["latent_transition_state"]["ar2_params"]
+        active_role_terms = _rebind_ar2_params_in_role_terms(
+            active_role_terms, float(ar2_p[0]), float(ar2_p[1])
+        )
+        transition_ar2_calibrated = True
+    elif (
+        effective_latent_mech == "custom_transition_memory"
+        and audit_report
+        and audit_report.get("status") == "unexplained_latent_transition_state"
+    ):
+        # Cross-scale transfer of an open-grammar custom transition-memory commitment:
+        # extract the custom drive AST inside accumulate and recalibrate pole + deflated radius_bounds!
+        from .premise_dependency_audit import screen_custom_latent_transition_drive
+
+        custom_drive_prog = None
+        for rt_item in active_role_terms:
+            if rt_item.get("kind") == "all_object_sum":
+                s_dict = rt_item.get("summand") or {}
+                if s_dict.get("op") == "accumulate" and s_dict.get("name") is None:
+                    custom_drive_prog = Program.from_dict(s_dict["children"][0])
+                    break
+        lat_pay = audit_report.get("transition_latent_payload") or {}
+        if custom_drive_prog is not None and lat_pay.get("valid_rows"):
+            sc_x_to_q = {target.fields[g]["x"]: target.fields[g]["q"] for g in target.objects}
+            dyn_l = lat_pay["dynamic"]
+            xf_l = lat_pay["x_fields"]
+            x_i_map = {xn: idx_x for idx_x, xn in enumerate(xf_l)}
+            if set(sc_x_to_q.values()) == set(dyn_l) and set(sc_x_to_q.keys()) == set(xf_l):
+                bij_target = tuple(
+                    x_i_map[next(xf for xf, qf in sc_x_to_q.items() if qf == qn)] for qn in dyn_l
+                )
+                scr_c = screen_custom_latent_transition_drive(
+                    lat_pay["valid_rows"],
+                    dyn_l,
+                    lat_pay["drive_by_q"],
+                    xf_l,
+                    [bij_target],
+                    custom_drive_prog,
+                    (lat_pay.get("representative_direction") or "right",),
+                    budget=budget,
+                    eff_tol=float(lat_pay.get("eff_tol", max(1e-12, tolerance))),
+                    observations=rows,
+                )
+                if scr_c.get("supported") and scr_c.get("verified_pole") is not None:
+                    active_role_terms = _rebind_latent_pole_in_role_terms(
+                        active_role_terms, float(scr_c["verified_pole"])
+                    )
+                    transition_pole_calibrated = True
+                    compat_m = [
+                        m for m in scr_c.get("matches", ()) if m.get("mapping") == sc_x_to_q
+                    ]
+                    if compat_m:
+                        radius_bounds = [
+                            float(min(m["radius_interval"][0] for m in compat_m)),
+                            float(max(m["radius_interval"][1] for m in compat_m)),
+                        ]
 
     eff_threshold_interval = list(threshold_interval) if threshold_interval else None
     if audit_report and eff_threshold_interval is None and audit_report.get("verified_threshold_interval"):
@@ -1727,14 +2472,16 @@ def instantiate_commitment_on_schema(
         fitted = fitter.fit(terms)
         if fitted is None:
             return None
-        record = (r_val, terms, fitted)
+        record = (r_val, terms, fitted, deepcopy(use_rt))
         if terms_override is None:
             evaluated.append(record)
         return record
 
     existing_poles = _extract_latent_poles_from_role_terms(active_role_terms)
+    existing_ar2_params = _extract_ar2_params_from_role_terms(active_role_terms)
     max_hist = max((len(r.history) for r in rows), default=0)
-    recalibrated_existing_poles = False
+    recalibrated_existing_poles = transition_pole_calibrated
+    recalibrated_existing_ar2 = transition_ar2_calibrated
     best_record = None
     for idx, radius in enumerate(candidates):
         rec = try_radius(radius)
@@ -1744,7 +2491,7 @@ def instantiate_commitment_on_schema(
         if rec is not None and (best_record is None or rec[2]["loss"] < best_record[2]["loss"]):
             best_record = rec
         # When radius_bounds is already verified from transitions and active_role_terms carries
-        # an uncalibrated source decay pole, recalibrate the 1D pole at r_mid BEFORE scanning outer radii.
+        # an uncalibrated source decay pole or AR(2) pair, recalibrate at r_mid BEFORE scanning outer radii.
         if (
             idx == 0
             and radius_bounds is not None
@@ -1771,6 +2518,63 @@ def instantiate_commitment_on_schema(
                 _, (_, best_rt_early, rec_opt_early) = opt_early
                 active_role_terms = best_rt_early
                 best_record = rec_opt_early
+        elif (
+            idx == 0
+            and radius_bounds is not None
+            and existing_ar2_params
+            and not recalibrated_existing_ar2
+            and best_record is not None
+            and best_record[2]["loss"] > tolerance
+            and max_hist >= 2
+        ):
+            recalibrated_existing_ar2 = True
+            seed_ar2 = tuple(tuple(p) for p in (commitment.get("source_ar2_params") or existing_ar2_params))
+            if effective_latent_mech == "oscillatory_focal_memory":
+                non_ar2_rt = [
+                    rt_i
+                    for rt_i in active_role_terms
+                    if not (
+                        rt_i.get("kind") == "all_object_sum"
+                        and _collect_prog_ar2_params(rt_i.get("summand") or {})
+                    )
+                ]
+                base_t_early = instantiate_commitment_terms(
+                    commitment,
+                    target,
+                    radius_bindings={
+                        p["symbol"]: (radius if p["symbol"] == primary_sym else float(p["source_values"][-1]))
+                        for p in params
+                    },
+                    direction_overrides=overrides,
+                    predicate_overrides=pred_overrides,
+                    role_terms_override=non_ar2_rt,
+                )
+                if base_t_early is not None:
+                    fast_res = _fast_solve_ar2_focal_poles(
+                        rows, target, base_t_early, budget, seed_pairs=seed_ar2, tolerance=tolerance
+                    )
+                    if fast_res is not None:
+                        fa1_e, fa2_e, _ = fast_res
+                        cand_rt_e = _rebind_ar2_params_in_role_terms(active_role_terms, fa1_e, fa2_e)
+                        rec_p_e = try_radius(radius, terms_override=cand_rt_e)
+                        if rec_p_e is not None and rec_p_e[2]["loss"] < best_record[2]["loss"]:
+                            active_role_terms = cand_rt_e
+                            best_record = rec_p_e
+            else:
+                def _eval_early_ar2(a1_v: float, a2_v: float, _r=radius):
+                    cand_rt = _rebind_ar2_params_in_role_terms(active_role_terms, a1_v, a2_v)
+                    rec_p = try_radius(_r, terms_override=cand_rt)
+                    if rec_p is None:
+                        return None
+                    return rec_p[2]["loss"], cand_rt, rec_p
+
+                opt_ar2_early = _optimize_2d_ar2_latent_poles(
+                    _eval_early_ar2, seed_pairs=seed_ar2, tolerance=tolerance
+                )
+                if opt_ar2_early is not None and opt_ar2_early[1][0] < best_record[2]["loss"]:
+                    _, (_, best_rt_ar2, rec_opt_ar2) = opt_ar2_early
+                    active_role_terms = best_rt_ar2
+                    best_record = rec_opt_ar2
         # If radius_bounds came from verified transitions and already hit tolerance,
         # avoid wasting compute scanning unverified outer cells!
         if (
@@ -1781,14 +2585,14 @@ def instantiate_commitment_on_schema(
         ):
             break
 
-    # Local bisection refinement inside untested distance cells if needed.
-    if best_record is not None and best_record[2]["loss"] > tolerance and boundaries:
+    # Local bisection refinement inside untested distance cells if needed (only when radius_bounds is unverified).
+    if best_record is not None and best_record[2]["loss"] > tolerance and boundaries and radius_bounds is None:
         for _ in range(16):
             if best_record[2]["loss"] <= tolerance:
                 break
             ordered_eval = sorted(evaluated, key=lambda item: item[2]["loss"])
             cell = None
-            for center, _, _ in ordered_eval:
+            for center, _, _, _ in ordered_eval:
                 low = max((val for val in tested_radii if val < center), default=0.0)
                 high = min(
                     (val for val in tested_radii if val > center),
@@ -1813,7 +2617,7 @@ def instantiate_commitment_on_schema(
     if best_record is None:
         return []
 
-    best_radius, best_terms, best_fit = best_record
+    best_radius, best_terms, best_fit, active_role_terms = best_record
 
     # POMDP Track 2A: If active_role_terms ALREADY contains per-object accumulate poles
     # (e.g. consolidated focal_memory commitment transferring across scale to a new decay pole),
@@ -1841,16 +2645,40 @@ def instantiate_commitment_on_schema(
         opt = _optimize_1d_latent_pole(_eval_rebind_pole, seed_poles=seed_poles, tolerance=tolerance)
         if opt is not None and opt[1][0] < best_fit["loss"]:
             _, (_, best_rt, rec_opt) = opt
-            active_role_terms = best_rt
-            best_radius, best_terms, best_fit = rec_opt
+            best_radius, best_terms, best_fit, active_role_terms = rec_opt
+    elif (
+        best_fit["loss"] > tolerance
+        and existing_ar2_params
+        and not recalibrated_existing_ar2
+        and max_hist >= 2
+    ):
+        seed_ar2 = tuple(tuple(p) for p in (commitment.get("source_ar2_params") or existing_ar2_params))
+        rebind_radius = (
+            0.5 * (float(radius_bounds[0]) + float(radius_bounds[1]))
+            if radius_bounds is not None
+            else best_radius
+        )
+
+        def _eval_rebind_ar2(a1_v: float, a2_v: float):
+            cand_rt = _rebind_ar2_params_in_role_terms(active_role_terms, a1_v, a2_v)
+            rec_p = try_radius(rebind_radius, terms_override=cand_rt)
+            if rec_p is None:
+                return None
+            return rec_p[2]["loss"], cand_rt, rec_p
+
+        opt2 = _optimize_2d_ar2_latent_poles(_eval_rebind_ar2, seed_pairs=seed_ar2, tolerance=tolerance)
+        if opt2 is not None and opt2[1][0] < best_fit["loss"]:
+            _, (_, best_rt2, rec_opt2) = opt2
+            best_radius, best_terms, best_fit, active_role_terms = rec_opt2
 
     # POMDP Track 2B: If commitment is Markovian (no existing latent poles), transitions are
     # Markov-consistent, yet trajectory response fails tolerance with history_depth >= 2,
-    # audit P_markov_state on readout and grow per-object focal reservoir state if supported!
+    # audit P_markov_state -> P_latent_coupling -> P_latent_order hierarchically!
     if (
         allow_latent_state
         and best_fit["loss"] > tolerance
         and not existing_poles
+        and not existing_ar2_params
         and effective_latent_mech is None
         and max((len(r.history) for r in rows), default=0) >= 2
     ):
@@ -1860,18 +2688,38 @@ def instantiate_commitment_on_schema(
             else best_radius
         )
 
-        def _eval_new_focal_pole(p_val: float):
-            cand_rt = expand_role_terms_for_latent_focal_readout(active_role_terms, p_val)
-            rec_p = try_radius(probe_radius, terms_override=cand_rt)
-            if rec_p is None:
-                return None
-            return rec_p[2]["loss"], cand_rt, rec_p
+        probe_radii_foc = [probe_radius]
+        if radius_bounds is not None:
+            lo_b, hi_b = float(radius_bounds[0]), float(radius_bounds[1])
+            for bd in boundaries:
+                if lo_b <= bd <= hi_b and all(abs(bd - pr) > 1e-12 for pr in probe_radii_foc):
+                    probe_radii_foc.append(bd)
+                    if len(probe_radii_foc) >= 4:
+                        break
 
-        opt_new = _optimize_1d_latent_pole(_eval_new_focal_pole, tolerance=tolerance)
-        if opt_new is not None and opt_new[1][0] <= tolerance:
-            found_pole, (_, expanded_rt, rec_new) = opt_new
-            active_role_terms = expanded_rt
-            best_radius, best_terms, best_fit = rec_new
+        opt_1d_hit = None
+        for pr_foc in probe_radii_foc:
+            base_foc_rec = (
+                best_record
+                if abs(pr_foc - best_radius) <= 1e-12
+                else try_radius(pr_foc, terms_override=active_role_terms)
+            )
+            if base_foc_rec is None:
+                continue
+            fast_1d = _fast_solve_1d_focal_pole(
+                rows, target, base_foc_rec[1], budget, tolerance=tolerance
+            )
+            if fast_1d is not None and fast_1d[1] <= tolerance * 4.0:
+                fp_cand, _ = fast_1d
+                cand_rt_1d = expand_role_terms_for_latent_focal_readout(active_role_terms, fp_cand)
+                rec_1d_cand = try_radius(pr_foc, terms_override=cand_rt_1d)
+                if rec_1d_cand is not None and rec_1d_cand[2]["loss"] <= tolerance:
+                    opt_1d_hit = (fp_cand, cand_rt_1d, rec_1d_cand)
+                    break
+
+        if opt_1d_hit is not None:
+            found_pole, expanded_rt, rec_new = opt_1d_hit
+            best_radius, best_terms, best_fit, active_role_terms = rec_new
             effective_latent_mech = "focal_memory"
             reorganization_type = "scientific_premise_revision"
             retracted_list = list((scientific_revision or {}).get("retracted_premises", ()))
@@ -1908,6 +2756,136 @@ def instantiate_commitment_on_schema(
                     if p["premise_id"] not in retracted_ids
                 ],
             }
+        elif allow_higher_order_latent:
+            # Test 2nd-order oscillatory AR(2) focal memory (P_latent_order) first via ultra-cheap FWL projection (~800 compute)
+            opt_ar2_hit = None
+            for pr_ar2 in probe_radii_foc:
+                base_probe_rec = (
+                    best_record
+                    if abs(pr_ar2 - best_radius) <= 1e-12
+                    else try_radius(pr_ar2, terms_override=active_role_terms)
+                )
+                if base_probe_rec is None:
+                    continue
+                fast_ar2 = _fast_solve_ar2_focal_poles(
+                    rows, target, base_probe_rec[1], budget, tolerance=tolerance
+                )
+                if fast_ar2 is not None and fast_ar2[2] <= tolerance * 4.0:
+                    fa1_cand, fa2_cand, _ = fast_ar2
+                    cand_rt_ar2 = expand_role_terms_for_ar2_focal_readout(
+                        active_role_terms, fa1_cand, fa2_cand
+                    )
+                    rec_ar2_cand = try_radius(pr_ar2, terms_override=cand_rt_ar2)
+                    if rec_ar2_cand is not None and rec_ar2_cand[2]["loss"] <= tolerance:
+                        opt_ar2_hit = (fa1_cand, fa2_cand, cand_rt_ar2, rec_ar2_cand)
+                        break
+
+            if opt_ar2_hit is not None:
+                fa1, fa2, expanded_rt_ar2, rec_ar2 = opt_ar2_hit
+                best_radius, best_terms, best_fit, active_role_terms = rec_ar2
+                effective_latent_mech = "oscillatory_focal_memory"
+                reorganization_type = "scientific_premise_revision"
+                retracted_list = list((scientific_revision or {}).get("retracted_premises", ()))
+                retracted_list.extend(
+                    [
+                        {
+                            "premise_id": "markov_state_sufficiency",
+                            "expected": "supported",
+                            "reason": "trajectory_readout_requires_second_order_oscillatory_reservoir",
+                        },
+                        {
+                            "premise_id": "P_latent_order",
+                            "expected": 1,
+                            "reason": "first_order_exponential_reservoir_refuted_by_oscillation",
+                        },
+                    ]
+                )
+                replacement_list = list((scientific_revision or {}).get("replacement_premises", ()))
+                replacement_list.append(
+                    {
+                        "premise_id": "markov_state_sufficiency",
+                        "latent_state_mechanism": "oscillatory_focal_memory",
+                        "latent_order": 2,
+                        "ar2_params": [float(fa1), float(fa2)],
+                    }
+                )
+                retracted_ids = {p["premise_id"] for p in retracted_list}
+                scientific_revision = {
+                    **(scientific_revision or {}),
+                    "trigger_source": (scientific_revision or {}).get(
+                        "trigger_source", "trajectory_readout_premise_audit"
+                    ),
+                    "revision_kind": "ar2_latent_focal_readout_revision",
+                    "parent_commitment_id": commitment["commitment_id"],
+                    "latent_state_mechanism": "oscillatory_focal_memory",
+                    "ar2_params": [float(fa1), float(fa2)],
+                    "retracted_premises": retracted_list,
+                    "replacement_premises": replacement_list,
+                    "retained_premises": [
+                        p["premise_id"]
+                        for p in commitment.get("support_premises", ())
+                        if p["premise_id"] not in retracted_ids
+                    ],
+                }
+            else:
+                # Test 1st-order spatially coupled focal memory (P_latent_coupling)
+                def _eval_new_coupled_focal_pole(p_val: float):
+                    cand_rt = expand_role_terms_for_coupled_focal_readout(
+                        active_role_terms, p_val, primary_sym, effective_direction
+                    )
+                    rec_p = try_radius(probe_radius, terms_override=cand_rt)
+                    if rec_p is None:
+                        return None
+                    return rec_p[2]["loss"], cand_rt, rec_p
+
+                opt_coup = _optimize_1d_latent_pole(_eval_new_coupled_focal_pole, tolerance=tolerance)
+                if opt_coup is not None and opt_coup[1][0] <= tolerance:
+                    found_pole, (_, expanded_rt_c, rec_coup) = opt_coup
+                    best_radius, best_terms, best_fit, active_role_terms = rec_coup
+                    effective_latent_mech = "coupled_focal_memory"
+                    reorganization_type = "scientific_premise_revision"
+                    retracted_list = list((scientific_revision or {}).get("retracted_premises", ()))
+                    retracted_list.extend(
+                        [
+                            {
+                                "premise_id": "markov_state_sufficiency",
+                                "expected": "supported",
+                                "reason": "trajectory_readout_requires_spatially_coupled_latent_reservoir",
+                            },
+                            {
+                                "premise_id": "P_latent_coupling",
+                                "expected": "independent",
+                                "reason": "independent_per_object_reservoir_refuted_by_neighbor_flux",
+                            },
+                        ]
+                    )
+                    replacement_list = list((scientific_revision or {}).get("replacement_premises", ()))
+                    replacement_list.append(
+                        {
+                            "premise_id": "markov_state_sufficiency",
+                            "latent_state_mechanism": "coupled_focal_memory",
+                            "latent_coupling": "spatial_neighbor_coupled",
+                            "latent_pole": float(found_pole),
+                        }
+                    )
+                    retracted_ids = {p["premise_id"] for p in retracted_list}
+                    scientific_revision = {
+                        **(scientific_revision or {}),
+                        "trigger_source": (scientific_revision or {}).get(
+                            "trigger_source", "trajectory_readout_premise_audit"
+                        ),
+                        "revision_kind": "coupled_latent_focal_readout_revision",
+                        "parent_commitment_id": commitment["commitment_id"],
+                        "latent_state_mechanism": "coupled_focal_memory",
+                        "latent_pole": float(found_pole),
+                        "retracted_premises": retracted_list,
+                        "replacement_premises": replacement_list,
+                        "retained_premises": [
+                            p["premise_id"]
+                            for p in commitment.get("support_premises", ())
+                            if p["premise_id"] not in retracted_ids
+                        ],
+                    }
 
     interval = None
     if best_fit["loss"] <= tolerance:
@@ -1987,7 +2965,21 @@ def _build_commitment_entry(
         "Instantiate verified arity-parametric world commitment on target schema",
         parents=sources,
     )
-    coefficients = list(fit["coefficients"])
+    raw_coeffs = list(fit["coefficients"])
+    fit_active_terms = tuple(fit.get("fit_terms") or terms)
+    if fit_active_terms != tuple(terms):
+        coef_map = dict(zip(fit_active_terms, raw_coeffs[1:]))
+        seen_t: set[Program] = set()
+        aligned = [raw_coeffs[0]]
+        for t_item in terms:
+            if t_item not in seen_t and t_item in coef_map:
+                aligned.append(coef_map[t_item])
+                seen_t.add(t_item)
+            else:
+                aligned.append(0.0)
+        coefficients = aligned
+    else:
+        coefficients = raw_coeffs
     effective_dim = sum(abs(weight) > 1e-7 for weight in coefficients[1:])
     fit_record = {
         "candidate_id": candidate_id,
@@ -2105,13 +3097,24 @@ def _build_commitment_entry(
     return entry
 
 
+_TRANSITION_LATENT_MECHANISMS = {
+    "transition_memory",
+    "oscillatory_transition_memory",
+    "coupled_transition_memory",
+    "custom_transition_memory",
+}
+
+
 def commitment_verified_radius_bounds(
     commitment: dict,
     audit_report: dict | None,
     schema_x_to_q: dict[str, str],
 ) -> list[float] | None:
     """Return verified radius bounds from ``audit_report`` matching ``commitment``."""
-    if not audit_report or audit_report.get("status") not in VERIFIED_EXCHANGE_STATUSES:
+    if not audit_report or audit_report.get("status") not in (
+        *VERIFIED_EXCHANGE_STATUSES,
+        "unexplained_latent_transition_state",
+    ):
         return None
     params = commitment.get("radius_parameters", ())
     committed_dir = params[0]["direction"] if params else None
@@ -2122,11 +3125,15 @@ def commitment_verified_radius_bounds(
     )
     committed_noncons = commitment.get("nonconservation_mechanism")
     committed_latent = commitment.get("latent_state_mechanism")
-    audit_latent = (audit_report.get("latent_transition_state") or {}).get("mechanism")
-    if committed_latent == "transition_memory" and audit_latent != "transition_memory":
-        return None
-    if committed_latent != "transition_memory" and audit_latent == "transition_memory":
-        return None
+    if audit_report.get("status") == "unexplained_latent_transition_state":
+        if committed_latent != "custom_transition_memory":
+            return None
+    else:
+        audit_latent = (audit_report.get("latent_transition_state") or {}).get("mechanism")
+        if committed_latent in _TRANSITION_LATENT_MECHANISMS and audit_latent != committed_latent:
+            return None
+        if committed_latent not in _TRANSITION_LATENT_MECHANISMS and audit_latent in _TRANSITION_LATENT_MECHANISMS:
+            return None
     matches = []
     for d_name, items in audit_report.get("matches_by_direction", {}).items():
         if committed_dir is not None and d_name != committed_dir:
@@ -2169,7 +3176,7 @@ def commitment_applicable_triggers(commitment: dict, audit_report: dict | None) 
         if kind == "interaction_direction_revision":
             if (
                 committed_noncons == "conserved"
-                and committed_latent != "transition_memory"
+                and committed_latent not in _TRANSITION_LATENT_MECHANISMS
                 and trigger.get("retracted_direction") == committed_dir
                 and trigger.get("replacement_direction") != committed_dir
             ):
@@ -2179,7 +3186,7 @@ def commitment_applicable_triggers(commitment: dict, audit_report: dict | None) 
             replacement_cond = describe_edge_condition(trigger.get("replacement_condition"))
             if (
                 committed_noncons == "conserved"
-                and committed_latent != "transition_memory"
+                and committed_latent not in _TRANSITION_LATENT_MECHANISMS
                 and _normalize_edge_condition_for_grouping(retracted_cond) == norm_committed_cond
                 and (
                     _normalize_edge_condition_for_grouping(replacement_cond) != norm_committed_cond
@@ -2198,10 +3205,11 @@ def commitment_applicable_triggers(commitment: dict, audit_report: dict | None) 
             ):
                 applicable.append(trigger)
         elif kind == "latent_transition_state_revision":
+            trigger_mech = trigger.get("latent_mechanism", "transition_memory")
             replacement_dir = trigger.get("replacement_direction")
             replacement_cond = describe_edge_condition(trigger.get("replacement_condition"))
             if (
-                committed_latent != "transition_memory"
+                committed_latent != trigger_mech
                 or committed_dir != replacement_dir
                 or _normalize_edge_condition_for_grouping(replacement_cond) != norm_committed_cond
             ):
@@ -2219,6 +3227,7 @@ def propose_scientific_premise_revision(
     *,
     active_threshold_probing: bool = True,
     allow_latent_state: bool = True,
+    allow_higher_order_latent: bool = True,
     transitions: list[dict] | tuple[dict, ...] = (),
     tolerance: float = 1e-8,
 ) -> list[dict]:
@@ -2428,13 +3437,30 @@ def propose_scientific_premise_revision(
                 )
             )
         elif kind == "latent_transition_state_revision" and allow_latent_state:
+            lat_mech = trigger.get("latent_mechanism", "transition_memory")
+            if lat_mech != "transition_memory" and not allow_higher_order_latent:
+                continue
             pole = float(trigger["latent_pole"])
+            ar2_p = trigger.get("ar2_params")
             drive_weights = trigger.get("latent_drive_weights") or {"u": 1.0, "q": 0.0}
             replacement_dir = trigger["replacement_direction"]
             replacement_cond = trigger["replacement_condition"]
             pred_prog = trigger.get("predicate_program")
-            if committed_latent == "transition_memory":
-                expanded_terms = _rebind_latent_pole_in_role_terms(commitment["role_terms"], pole)
+            if committed_latent == lat_mech:
+                if lat_mech == "oscillatory_transition_memory" and ar2_p:
+                    expanded_terms = _rebind_ar2_params_in_role_terms(
+                        commitment["role_terms"], float(ar2_p[0]), float(ar2_p[1])
+                    )
+                else:
+                    expanded_terms = _rebind_latent_pole_in_role_terms(commitment["role_terms"], pole)
+            elif lat_mech == "oscillatory_transition_memory" and ar2_p:
+                expanded_terms = expand_role_terms_for_ar2_latent_transition(
+                    commitment["role_terms"], float(ar2_p[0]), float(ar2_p[1]), drive_weights
+                )
+            elif lat_mech == "coupled_transition_memory":
+                expanded_terms = expand_role_terms_for_coupled_latent_transition(
+                    commitment["role_terms"], pole, sym, replacement_dir, drive_weights
+                )
             else:
                 expanded_terms = expand_role_terms_for_latent_transition(
                     commitment["role_terms"], pole, drive_weights
@@ -2442,19 +3468,20 @@ def propose_scientific_premise_revision(
             retracted = []
             replacements = []
             retracted_ids = set()
-            if committed_latent != "transition_memory":
+            if committed_latent != lat_mech:
                 retracted.append(
                     {
                         "premise_id": "markov_state_sufficiency",
-                        "expected": "supported",
+                        "expected": committed_latent or "supported",
                         "counterexample": deepcopy(trigger.get("counterexample")),
                     }
                 )
                 replacements.append(
                     {
                         "premise_id": "markov_state_sufficiency",
-                        "latent_state_mechanism": "transition_memory",
+                        "latent_state_mechanism": lat_mech,
                         "latent_pole": pole,
+                        "ar2_params": deepcopy(ar2_p),
                         "latent_drive_weights": deepcopy(drive_weights),
                         "supporting_transitions": trigger.get("supporting_transitions"),
                     }
@@ -2494,15 +3521,16 @@ def propose_scientific_premise_revision(
                     pred_prog,
                     expanded_terms,
                     None,
-                    "transition_memory",
+                    lat_mech,
                     bounds_tuple,
                     None,
                     {
                         "trigger_source": "transition_premise_dependency_audit",
                         "revision_kind": "latent_transition_state_revision",
                         "parent_commitment_id": commitment["commitment_id"],
-                        "latent_state_mechanism": "transition_memory",
+                        "latent_state_mechanism": lat_mech,
                         "latent_pole": pole,
+                        "ar2_params": deepcopy(ar2_p),
                         "retracted_premises": retracted,
                         "replacement_premises": replacements,
                         "retained_premises": [
@@ -2587,6 +3615,7 @@ def propose_scientific_premise_revision(
             transitions=transitions,
             active_threshold_probing=active_threshold_probing,
             allow_latent_state=allow_latent_state,
+            allow_higher_order_latent=allow_higher_order_latent,
             tolerance=tolerance,
         )
         budget.spend(local.spent)

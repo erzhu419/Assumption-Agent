@@ -164,7 +164,9 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                                       new_observations=(), transitions=(),
                                       tolerance=1e-7, max_candidates=8, preferred_schemas=(),
                                       response_parent=None, working_parent_loss=None,
-                                      world_commitments=(), premise_audit=None):
+                                      world_commitments=(), premise_audit=None,
+                                      allow_latent_state=True,
+                                      allow_higher_order_latent=True):
     """Fit and revise finite competing assignments within the supplied budget.
 
     ``training`` contains all paid observations for this task, including any
@@ -338,7 +340,10 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 if triggers:
                     comm_entries = propose_scientific_premise_revision(
                         comm, premise_audit, local_spec, rows, schema,
-                        commitment_budget, transitions=transitions, tolerance=tolerance,
+                        commitment_budget, transitions=transitions,
+                        allow_latent_state=allow_latent_state,
+                        allow_higher_order_latent=allow_higher_order_latent,
+                        tolerance=tolerance,
                     )
                 else:
                     audit_bounds = commitment_verified_radius_bounds(
@@ -359,13 +364,18 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                         predicate_overrides=pred_overrides,
                         audit_report=premise_audit,
                         transitions=transitions,
+                        allow_latent_state=allow_latent_state,
+                        allow_higher_order_latent=allow_higher_order_latent,
                         tolerance=tolerance,
                     )
                     if (not any(supports_current_evidence(item) for item in comm_entries)
                             and commitment_budget.remaining > 0 and premise_audit is None):
                         comm_entries.extend(propose_scientific_premise_revision(
                             comm, None, local_spec, rows, schema,
-                            commitment_budget, transitions=transitions, tolerance=tolerance,
+                            commitment_budget, transitions=transitions,
+                            allow_latent_state=allow_latent_state,
+                            allow_higher_order_latent=allow_higher_order_latent,
+                            tolerance=tolerance,
                         ))
                 commitment_fits.extend(comm_entries)
                 if any(supports_current_evidence(item) for item in commitment_fits):

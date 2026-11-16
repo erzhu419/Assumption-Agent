@@ -169,6 +169,7 @@ class ResearchConfig:
     expanded_premise_revisions: bool = True
     active_threshold_probing: bool = True
     latent_state_discovery: bool = True
+    higher_order_latent_discovery: bool = True
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:

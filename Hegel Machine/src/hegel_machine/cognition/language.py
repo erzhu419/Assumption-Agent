@@ -217,6 +217,22 @@ class EvaluationContext:
             # current features and earlier history, never a later observation.
             from .models import Observation
             drive, initial = program.children
+            if program.name in {"ar2", "ar2_lag1"}:
+                a1 = float(program.value)
+                a2 = float(self._evaluate(initial, bindings))
+                s_prev2 = 0.0
+                s_prev1 = 0.0
+                for index, features in enumerate(observation.history):
+                    past = Observation(features, 0.0, tuple(observation.history[:index]))
+                    local = EvaluationContext(past)
+                    s_cur = a1 * s_prev1 + a2 * s_prev2 + local._evaluate(drive, bindings)
+                    s_prev2, s_prev1 = s_prev1, s_cur
+                    self.primitive_steps += local.primitive_steps
+                    self.call_evaluations += local.call_evaluations
+                    self.cache_hits += local.cache_hits
+                if program.name == "ar2_lag1":
+                    return s_prev1
+                return a1 * s_prev1 + a2 * s_prev2 + self._evaluate(drive, bindings)
             state = self._evaluate(initial, bindings)
             for index, features in enumerate(observation.history):
                 past = Observation(features, 0.0, tuple(observation.history[:index]))
@@ -483,6 +499,8 @@ class Program:
         if self.op == "call":
             return f"{self.name}({', '.join(child.describe() for child in self.children)})"
         if self.op == "accumulate":
+            if self.name:
+                return f"accumulate[{self.name}]({self.value:.8g}, {', '.join(child.describe() for child in self.children)})"
             return f"accumulate({self.value:.8g}, {', '.join(child.describe() for child in self.children)})"
         if self.op in {"window_sum", "event_delta"}:
             return f"{self.op}({self.lag}, {self.children[0].describe()})"
