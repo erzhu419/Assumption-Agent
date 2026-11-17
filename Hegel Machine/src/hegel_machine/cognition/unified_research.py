@@ -1025,12 +1025,13 @@ class UnifiedResearchAgent:
                 if model.get("complete") and isinstance(exp_method, dict):
                     from .discriminating_experiment_policy import (
                         build_generic_schema_candidate_hypotheses,
+                        fit_empirical_q_actuator_maps,
                         generate_candidate_probe_menu,
                         select_probe_under_method,
                     )
                     from .world_structure_commitments import instantiate_commitment_terms
 
-                    max_m_rounds = int(exp_method.get("max_probes_per_episode", 2))
+                    max_m_rounds = int(exp_method.get("max_probes_per_episode", 4))
                     m_probe_len = int(exp_method.get("probe_length", 6))
                     used_m_probe_ids: set[str] = set()
                     for m_step in range(max_m_rounds):
@@ -1046,35 +1047,41 @@ class UnifiedResearchAgent:
                             or bool(occam_g.get("boundary_test_needed"))
                             or (
                                 isinstance(pa_m.get("verified_edge_condition"), dict)
-                                and (t_iv is None or (float(t_iv[1]) - float(t_iv[0])) > 0.025)
+                                and (t_iv is None or (float(t_iv[1]) - float(t_iv[0])) > 0.0025)
                             )
-                            or (r_iv is None or (float(r_iv[1]) - float(r_iv[0])) > 0.04)
+                            or (r_iv is None or (float(r_iv[1]) - float(r_iv[0])) > 0.003)
                         )
                         if not needs_disc:
                             break
                         sc_m = model["schema"]
-                        cand_progs = build_generic_schema_candidate_hypotheses(sc_m)
-                        for cm_k in list(commitments)[:6]:
-                            rps_k = cm_k.get("radius_parameters") or ()
-                            rv_k = float((rps_k[0].get("source_values") or [0.85])[-1]) if rps_k else 0.85
-                            sym_k = rps_k[0]["symbol"] if rps_k else "r_0"
-                            ts_k = instantiate_commitment_terms(cm_k, sc_m, radius_bindings={sym_k: rv_k})
-                            if ts_k and len(ts_k) >= 3:
-                                cand_progs.append(
-                                    Program(
-                                        "add",
-                                        children=(
-                                            ts_k[0],
-                                            Program("mul", children=(Program("const", value=0.22), ts_k[-1])),
-                                        ),
+                        q_fwd_m, q_inv_m = fit_empirical_q_actuator_maps(records(), sc_m)
+                        cand_progs = build_generic_schema_candidate_hypotheses(
+                            sc_m, audit_hint=pa_m
+                        )
+                        if not pa_m.get("verified_direction"):
+                            for cm_k in list(commitments)[:6]:
+                                rps_k = cm_k.get("radius_parameters") or ()
+                                rv_k = float((rps_k[0].get("source_values") or [0.85])[-1]) if rps_k else 0.85
+                                sym_k = rps_k[0]["symbol"] if rps_k else "r_0"
+                                ts_k = instantiate_commitment_terms(cm_k, sc_m, radius_bindings={sym_k: rv_k})
+                                if ts_k and len(ts_k) >= 3:
+                                    cand_progs.append(
+                                        Program(
+                                            "add",
+                                            children=(
+                                                ts_k[0],
+                                                Program("mul", children=(Program("const", value=0.22), ts_k[-1])),
+                                            ),
+                                        )
                                     )
-                                )
                         p_menu = generate_candidate_probe_menu(
                             command_spec,
                             sc_m,
                             sc_m["controls"],
                             seed=self.config.seed + 911 * m_step,
                             probe_length=m_probe_len,
+                            audit_hint=pa_m,
+                            q_inverse_fns=q_inv_m,
                         )
                         m_probe, m_meta = select_probe_under_method(
                             exp_method,
@@ -1085,9 +1092,13 @@ class UnifiedResearchAgent:
                             sc_m["controls"],
                             round_index=m_step,
                             exclude_probe_ids=used_m_probe_ids,
+                            q_forward_fns=q_fwd_m,
                             budget=budget,
                         )
-                        used_m_probe_ids.add(m_probe.probe_id)
+                        # Only exclude random IDs across rounds; adaptive interval-bisecting probes
+                        # regenerate fresh coordinates around the updated narrower version-space interval!
+                        if not m_probe.probe_id.startswith("menu_interval_bisect:"):
+                            used_m_probe_ids.add(m_probe.probe_id)
                         if (
                             acquire(
                                 channels,

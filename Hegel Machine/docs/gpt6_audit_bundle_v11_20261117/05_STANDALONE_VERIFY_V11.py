@@ -257,9 +257,14 @@ def check_bundle_integrity_and_v11_receipts(bundle_dir: Path) -> dict[str, Any]:
         bundle_dir,
         "docs/evidence/v11_branch_lifecycle_and_km_20261117/deliverable_c_knowledge_vs_method_2x2_20261117.json",
     )
+    dc11_1_p = _locate_receipt(
+        bundle_dir,
+        "docs/evidence/v11_branch_lifecycle_and_km_20261117/deliverable_c_v11_1_method_remediation_2x2_20261117.json",
+    )
 
     v11_checks: dict[str, Any] = {
         "all_three_v11_receipts_present": bool(da_p and db_p and dc_p),
+        "v11_1_remediation_receipt_present": bool(dc11_1_p),
         "violations": [],
     }
     if da_p:
@@ -303,6 +308,24 @@ def check_bundle_integrity_and_v11_receipts(bundle_dir: Path) -> dict[str, Any]:
         m_ind = dc["method_induction_M0_to_M1"]
         if m_ind["promoted"] and m_ind["promoted_method"]["author_origin"] != "runtime_induced_from_dev_episodes":
             v11_checks["violations"].append("deliverable_c_m1_wrong_author_origin")
+
+    if dc11_1_p:
+        dc11 = json.loads(dc11_1_p.read_text(encoding="utf-8"))
+        if (dc11.get("llm_usage") or {}).get("model_calls", 1) != 0:
+            v11_checks["violations"].append("deliverable_c_v11_1_nonzero_model_calls")
+        ph11 = dc11["partition_hygiene_and_evaluator_immutability"]
+        if (
+            not ph11["zero_internal_seed_overlap_verified"]
+            or not ph11["zero_overlap_with_v11_971000_976000_verified"]
+            or not ph11["evaluator_immutable_verified"]
+        ):
+            v11_checks["violations"].append("deliverable_c_v11_1_partition_or_immutability_violation")
+        m_ind11 = dc11["method_induction_M0_to_M1_v11_1"]
+        if (
+            m_ind11["promoted"]
+            and m_ind11["promoted_method"]["author_origin"] != "runtime_induced_from_dev_episodes"
+        ):
+            v11_checks["violations"].append("deliverable_c_v11_1_m1_wrong_author_origin")
 
     runtime_modules = [
         "src/hegel_machine/cognition/algebraic_proof_certificates.py",
@@ -371,6 +394,7 @@ def main() -> int:
         and not bundle_audit["bundle_sha256_integrity"]["mismatches"]
         and not bundle_audit["historic_v10_13_receipts_untouched"]["mismatches"]
         and bundle_audit["v11_receipt_invariants"]["all_three_v11_receipts_present"]
+        and bundle_audit["v11_receipt_invariants"]["v11_1_remediation_receipt_present"]
         and not bundle_audit["v11_receipt_invariants"]["violations"]
         and not bundle_audit["static_anti_cheat_scan"]["private_lab_attribute_reads"]
         and not bundle_audit["static_anti_cheat_scan"]["persisted_api_keys"]

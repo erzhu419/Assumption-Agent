@@ -1,11 +1,12 @@
-# 来源清单、25 份证据回执分级索引与核查范围（v11）
+# 来源清单、26 份证据回执分级索引与核查范围（v11 + v11.1）
 
 本包完整收录：
 - **历史冻结回执（22 份，100% 原始字节零修改）：** `v10`（13 份）、`v10.2`（6 份）、`v10.3`（2 份）、`v10.4`（1 份）；
-- **`v11` 新增实证回执（3 份）：** `deliverable_a_credibility_and_baselines_20261117.json`、`deliverable_b_branch_lifecycle_20261117.json`、`deliverable_c_knowledge_vs_method_2x2_20261117.json`；
-- **随包完整未截断源码／脚本／测试（23 个文件）：** 含 `unified_research.py` 全文、新增 `branch_reconciliation.py`、`discriminating_experiment_policy.py` 及 `03_fingerprint_probe.py`。
+- **`v11` 实证回执（3 份，原封不动保留）：** `deliverable_a_credibility_and_baselines_20261117.json`、`deliverable_b_branch_lifecycle_20261117.json`、`deliverable_c_knowledge_vs_method_2x2_20261117.json`（含 `971000–976000` 首次未见评估诊断回执）；
+- **`v11.1` 候选生成器专项改进前瞻回执（1 份，全新零重叠种子段 `985000–990000`）：** `deliverable_c_v11_1_method_remediation_2x2_20261117.json`；
+- **随包完整未截断源码／脚本／测试（24 个文件）：** 含 `unified_research.py` 全文、新增 `branch_reconciliation.py`、`discriminating_experiment_policy.py`、`run_v11_1_method_remediation_2x2.py` 及 `03_fingerprint_probe.py`。
 
-## 一、25 份 JSON 证据回执全量索引
+## 一、26 份 JSON 证据回执全量索引
 
 | 阶段 | 回执文件 | 实验角色分类 (`study_role`) | 独立物理源数 | 字节数 | SHA256 前16位 |
 | :--- | :--- | :--- | :---: | ---: | :--- |
@@ -34,16 +35,17 @@
 | `v11_branch_lifecycle_and_km_20261117` | `deliverable_a_credibility_and_baselines_20261117.json` | `v11_deliverable_a_cache_credibility_and_strong_baselines` | `4` | `65,123` | `cc955898d7f18133…` |
 | `v11_branch_lifecycle_and_km_20261117` | `deliverable_b_branch_lifecycle_20261117.json` | `v11_deliverable_b_8_stage_branch_reconciliation_lifecycle` | `20` | `58,705` | `5fa9c4d9c0a887d5…` |
 | `v11_branch_lifecycle_and_km_20261117` | `deliverable_c_knowledge_vs_method_2x2_20261117.json` | `v11_deliverable_c_2x2_world_knowledge_vs_induced_method` | `36` | `51,792` | `1da74922233f761e…` |
+| `v11_branch_lifecycle_and_km_20261117` | `deliverable_c_v11_1_method_remediation_2x2_20261117.json` | `v11_1_prospective_method_candidate_generator_remediation_2x2` | `36` | `56,369` | `ea0ccfebab86cd55…` |
 
-## 二、23 个随包附带核心源码、实验脚本与验收测试清单（`bundled_sources/`）
+## 二、24 个随包附带核心源码、实验脚本与验收测试清单（`bundled_sources/`）
 
 | 仓库相对路径 | 行数 | 字节数 | Git Blob SHA1 前12位 | SHA256 前16位 |
 | :--- | ---: | ---: | :--- | :--- |
 | `src/hegel_machine/cognition/models.py` | `261` | `9,597` | `9a56752e811c` | `c7933a0f788e028c…` |
-| `src/hegel_machine/cognition/unified_research.py` | `7991` | `531,426` | `c66dc6966e31` | `efe7a4f609db9e54…` |
+| `src/hegel_machine/cognition/unified_research.py` | `8002` | `532,210` | `33a006893eab` | `19ed02e3ba2faffd…` |
 | `src/hegel_machine/cognition/premise_commitment_index.py` | `957` | `39,733` | `efa68c57b8e2` | `a84791e7ad7af6d9…` |
 | `src/hegel_machine/cognition/branch_reconciliation.py` | `1604` | `68,047` | `786de7bc14d7` | `0367325a29d91780…` |
-| `src/hegel_machine/cognition/discriminating_experiment_policy.py` | `694` | `27,463` | `3b9bcb7ee84a` | `8bee1bf607356627…` |
+| `src/hegel_machine/cognition/discriminating_experiment_policy.py` | `968` | `39,216` | `8f0b7a0ebf7c` | `14a253a798da7cb5…` |
 | `src/hegel_machine/cognition/premise_dependency_audit.py` | `5661` | `250,652` | `3d5d5fe89ff5` | `6ca9535b4c78c199…` |
 | `src/hegel_machine/cognition/sensor_role_calibration.py` | `776` | `35,852` | `7a14408e533d` | `3d4a2c0f1b65fa7e…` |
 | `src/hegel_machine/cognition/equal_tool_attribution.py` | `1227` | `54,009` | `1db014d235e0` | `46ffcacb217e29ae…` |
@@ -54,6 +56,7 @@
 | `scripts/run_v11_deliverable_a_reaudit.py` | `673` | `30,413` | `73674409536b` | `bd14fb2be1cc58ea…` |
 | `scripts/run_v11_branch_lifecycle_study.py` | `1181` | `50,921` | `43e5c333ffb4` | `0ee33187d6879db2…` |
 | `scripts/run_v11_knowledge_vs_method_2x2.py` | `995` | `41,675` | `59fd8cea145f` | `21bc960adc9d8b93…` |
+| `scripts/run_v11_1_method_remediation_2x2.py` | `832` | `35,111` | `e84793d26af6` | `4ab724f73099ff31…` |
 | `scripts/run_v10_3_library_scaling_study.py` | `758` | `32,009` | `b6ad95814afc` | `b126a9a39e1862c2…` |
 | `scripts/run_v10_4_occam_minimality_study.py` | `477` | `20,001` | `32bfcf1dbc83` | `a207390f0d6a4313…` |
 | `scripts/run_v10_2_frozen_lifecycle_study.py` | `685` | `31,687` | `b0f1e1e2cca9` | `131ecbceb1084b41…` |

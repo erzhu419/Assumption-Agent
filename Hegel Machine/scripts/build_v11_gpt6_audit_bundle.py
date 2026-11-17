@@ -55,6 +55,7 @@ BUNDLED_SOURCE_RELPATHS = [
     "scripts/run_v11_deliverable_a_reaudit.py",
     "scripts/run_v11_branch_lifecycle_study.py",
     "scripts/run_v11_knowledge_vs_method_2x2.py",
+    "scripts/run_v11_1_method_remediation_2x2.py",
     "scripts/run_v10_3_library_scaling_study.py",
     "scripts/run_v10_4_occam_minimality_study.py",
     "scripts/run_v10_2_frozen_lifecycle_study.py",
@@ -124,7 +125,12 @@ EXTRA_RECEIPT_META = {
     "deliverable_c_knowledge_vs_method_2x2_20261117.json": (
         "v11_deliverable_c_2x2_world_knowledge_vs_induced_method",
         36,
-        "v11 Deliverable C: Disjoint dev_formation/dev_selection/unseen_evaluation 2x2 (K0/K1 x M0/M1) + ordinary persistent archive anchor + bounded M1->M2 check.",
+        "v11 Deliverable C (untouched diagnostic generation on 971000..976000): establishes B_K1_M0 > A_K0_M0 & E, and diagnoses u=0 / fixed-scale M1 negative transfer.",
+    ),
+    "deliverable_c_v11_1_method_remediation_2x2_20261117.json": (
+        "v11_1_prospective_method_candidate_generator_remediation_2x2",
+        36,
+        "v11.1 Prospective Remediation on disjoint fresh chains (981xxx/982xxx -> 985000..990000): tests co-located synchronous bystander excitation + public interval-bisecting candidate menu + scale-free disagreement_step_fraction.",
     ),
 }
 
@@ -224,14 +230,15 @@ def _build_manifest_and_scope() -> tuple[dict, str]:
     }
 
     md_lines = [
-        "# 来源清单、25 份证据回执分级索引与核查范围（v11）",
+        f"# 来源清单、{len(receipt_entries)} 份证据回执分级索引与核查范围（v11 + v11.1）",
         "",
         "本包完整收录：",
         "- **历史冻结回执（22 份，100% 原始字节零修改）：** `v10`（13 份）、`v10.2`（6 份）、`v10.3`（2 份）、`v10.4`（1 份）；",
-        "- **`v11` 新增实证回执（3 份）：** `deliverable_a_credibility_and_baselines_20261117.json`、`deliverable_b_branch_lifecycle_20261117.json`、`deliverable_c_knowledge_vs_method_2x2_20261117.json`；",
-        "- **随包完整未截断源码／脚本／测试（23 个文件）：** 含 `unified_research.py` 全文、新增 `branch_reconciliation.py`、`discriminating_experiment_policy.py` 及 `03_fingerprint_probe.py`。",
+        "- **`v11` 实证回执（3 份，原封不动保留）：** `deliverable_a_credibility_and_baselines_20261117.json`、`deliverable_b_branch_lifecycle_20261117.json`、`deliverable_c_knowledge_vs_method_2x2_20261117.json`（含 `971000–976000` 首次未见评估诊断回执）；",
+        "- **`v11.1` 候选生成器专项改进前瞻回执（1 份，全新零重叠种子段 `985000–990000`）：** `deliverable_c_v11_1_method_remediation_2x2_20261117.json`；",
+        f"- **随包完整未截断源码／脚本／测试（{len(source_entries)} 个文件）：** 含 `unified_research.py` 全文、新增 `branch_reconciliation.py`、`discriminating_experiment_policy.py`、`run_v11_1_method_remediation_2x2.py` 及 `03_fingerprint_probe.py`。",
         "",
-        "## 一、25 份 JSON 证据回执全量索引",
+        f"## 一、{len(receipt_entries)} 份 JSON 证据回执全量索引",
         "",
         "| 阶段 | 回执文件 | 实验角色分类 (`study_role`) | 独立物理源数 | 字节数 | SHA256 前16位 |",
         "| :--- | :--- | :--- | :---: | ---: | :--- |",
@@ -244,7 +251,7 @@ def _build_manifest_and_scope() -> tuple[dict, str]:
     md_lines.extend(
         [
             "",
-            "## 二、23 个随包附带核心源码、实验脚本与验收测试清单（`bundled_sources/`）",
+            f"## 二、{len(source_entries)} 个随包附带核心源码、实验脚本与验收测试清单（`bundled_sources/`）",
             "",
             "| 仓库相对路径 | 行数 | 字节数 | Git Blob SHA1 前12位 | SHA256 前16位 |",
             "| :--- | ---: | ---: | :--- | :--- |",
@@ -454,17 +461,78 @@ def _build_main_dossier_markdown() -> str:
             "- **成本分账声明：** 所有开发形成成本、源世界形成成本、缓存／索引维护成本与目标评测成本已在回执 `cost_ledgers_separated` 中完全分列，不以人为加权总分掩盖形成开销。",
         ]
     )
+
+    dc11_1_path = (
+        REPO_ROOT
+        / "docs/evidence/v11_branch_lifecycle_and_km_20261117/deliverable_c_v11_1_method_remediation_2x2_20261117.json"
+    )
+    if dc11_1_path.is_file():
+        dc11 = json.loads(dc11_1_path.read_text(encoding="utf-8"))
+        m11 = dc11["method_induction_M0_to_M1_v11_1"]
+        ph11 = dc11["partition_hygiene_and_evaluator_immutability"]
+        g2_11 = dc11["second_generation_improver_check_M1_to_M2_v11_1"]
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 四、`v11.1` 方法候选生成器专项改进与全新独立种子段（`985000–990000`）前瞻验证",
+                "",
+                "在 100% 冻结保留 `v11` 首次未见评估回执（`971000–976000`）不作任何重跑的前提下，我们针对 §3.4 所定位的两项方法候选生成与尺度表征缺陷实施了专项修复，并在**全新零交集三分区种子段**（`dev_formation: 981001–981006`、`dev_selection: 982001–982004`、`unseen_evaluation: 985000–990000`，`zero_overlap_with_v11_971000_976000_verified = "
+                f"{ph11['zero_overlap_with_v11_971000_976000_verified']}`）上单次运行完成前瞻验证：",
+                "1. **共位同步旁路激励消除仪器标定饥饿：** 双体探针将旁路对象共位驻留于远端边界并同步施加全幅非线性 `q` 与 `u` 扫描（旁路间 $\\Delta x = 0, \\Delta q = 0$ 零串扰，同时使全部 $4N$ 路传感器曲线在 `_fit_instruments` 验证批上获得充分激励）；",
+                "2. **基于公开审计区间的版本空间二分候选菜单与无量纲分歧覆盖率特征：** `M0` 与 `M1` 共享同一候选菜单生成器，用无量纲 `disagreement_step_fraction` 取代旧全局固定 `preferred_displacement_scale = 0.0718` 惩罚；",
+                f"3. **独立开发归纳与选拔：** 在后角色确认真实状态（~68 行）上回归学得特征权重 `{json.dumps(m11['learned_regression_weights'])}`；独立 `dev_selection` 上 `M0` 为 `{m11['baseline_m0_dev_selection']}`，晋升策略 `{m11['promoted_method']['method_id']}`（`author_origin = \"{m11['promoted_method']['author_origin']}\"`）达 `{m11['promoted_dev_selection']}`（`promoted = {m11['promoted']}`）。",
+                "",
+                "### 4.1 `v11.1` 全新未见源链（`985000–990000`，6 链 × 2 题 = 12 题）`2×2` + 强普通归档结果",
+                "",
+                "| 条件臂 (`v11.1` 全新未见段) | 预算内严格确认通过 | 纯控制通道编译通过 | 链级均值通过率 | 改变探针题数 (`M1 != M0`) | 方法 `ConsumptionEvent` | 均值目标观测行数 | 均值目标算力 |",
+                "| :--- | :---: | :---: | :---: | :---: | :---: | ---: | ---: |",
+            ]
+        )
+        for ak in (
+            "A_K0_M0",
+            "B_K1_M0",
+            "C_K0_M1",
+            "D_K1_M1",
+            "E_optimized_ordinary_archive_M0",
+        ):
+            av = dc11["unseen_2x2_arm_summaries"][ak]
+            lines.append(
+                f"| `{ak}` | **`{av['strict_passes']}/{av['total_unseen_target_episodes']}`** | `{av['pure_control_channel_passes']}/{av['total_unseen_target_episodes']}` | **`{av['chain_mean_pass_rate']:.4f}`** | `{av['episodes_where_method_changed_probe_vs_m0']}/{av['total_unseen_target_episodes']}` | `{av['total_method_consumption_events']}` | `{av['mean_target_observations']:.2f}` | `{av['mean_target_compute']:,.1f}` |"
+            )
+
+        lines.extend(
+            [
+                "",
+                "### 4.2 `v11.1` 独立研究链配对差与 95% Bootstrap CI（$n=6$ 链）",
+                "",
+                "| 正交对比项 (`v11.1`) | 通过率配对均值差 `[95% CI]` | 观测行数配对均值差 `[95% CI]` |",
+                "| :--- | :---: | :---: |",
+            ]
+        )
+        for ck, _ in contrast_labels:
+            cv = dc11["paired_chain_contrasts_and_ci95"][ck]
+            pd = cv["pass_rate_paired_diff"]
+            od = cv["observation_cost_paired_diff"]
+            lines.append(
+                f"| `{cv['contrast']}` | **`{pd['mean_diff']:+.4f}`** `[{pd['ci95_low']:+.4f}, {pd['ci95_high']:+.4f}]` | **`{od['mean_diff']:+.2f}`** `[{od['ci95_low']:+.2f}, {od['ci95_high']:+.2f}]` |"
+            )
+        lines.append("")
+        lines.append(
+            f"- **有界二代检验（`v11.1 M1 -> M2`）：** `M2_from_M0` 选拔表现为 `{g2_11['m2_from_m0_dev_selection']}`，`M2_from_M1` 选拔表现为 `{g2_11['m2_from_m1_dev_selection']}`。"
+        )
     return "\n".join(lines) + "\n"
 
 
 def _build_readme_markdown() -> str:
-    return """# Hegel Machine v11 GPT-6 审计交接包
+    return """# Hegel Machine v11 & v11.1 GPT-6 审计交接包
 
 ## 阅读顺序
 
-1. `01_V11_AUDIT_REMEDIATION_AND_LIFECYCLE_DOSSIER.md` —— 对 `v10.4` 过度表述的正式撤回、交付 A（原子版本索引＋强普通持久化缓存平手复核＋暂定奥卡姆）、交付 B（8 阶段可执行分支调和研究链 `B1–B10`）、交付 C（`K0/K1 × M0/M1` 正交 `2×2` 与有界 `M1->M2` 检验）主报告。
+1. `01_V11_AUDIT_REMEDIATION_AND_LIFECYCLE_DOSSIER.md` —— 对 `v10.4` 过度表述的正式撤回、交付 A（原子版本索引＋强普通持久化缓存平手复核＋暂定奥卡姆）、交付 B（8 阶段可执行分支调和研究链 `B1–B10`）、交付 C（`v11` 原样保留诊断回执 + `v11.1` 全新种子段 `985000–990000` 候选生成器专项改进 `2×2` 验证）主报告。
 2. `02_ACCEPTANCE_TRACEABILITY_A_B_C.md` —— `02_下一轮实施与验收.md` 全部验收条款逐条代码／回执／单测映射表。
-3. `03_SOURCE_AND_RECEIPT_SCOPE.md`（配套 `04_SOURCE_AND_RECEIPT_MANIFEST.json`）—— 全部 **25 份完整 JSON 回执**（22 份冻结旧回执 + 3 份 `v11` 新回执）与 **23 个完整源码／脚本／测试文件**清单。
+3. `03_SOURCE_AND_RECEIPT_SCOPE.md`（配套 `04_SOURCE_AND_RECEIPT_MANIFEST.json`）—— 全部 **26 份完整 JSON 回执**（22 份冻结旧回执 + 3 份 `v11` 回执 + 1 份 `v11.1` 前瞻改进回执）与 **24 个完整源码／脚本／测试文件**清单。
 
 ## 一键零依赖沙箱独立核验
 
@@ -474,8 +542,8 @@ python3 05_STANDALONE_VERIFY_V11.py --output verify_report.json
 
 仅使用 Python 标准库即可独立验证：
 - AST 提取 `_prior_state_fingerprint` 通过全部 6 类语义修改测试（`undetected_semantic_mutations == 0`）；
-- 全部 25 份回执与 23 份源码 SHA256 完整一致，且 `v10` 13 份原始回执零字节改动；
-- `v11` 三份回执满足 `model_calls == 0`、单题巩固无双重计费（`<= 1`）、68 条压力夹具隔离、暂定奥卡姆状态、`B1–B10` 全通过、三分区种子零重叠与评估器不可变；
+- 全部 26 份回执与 24 份源码 SHA256 完整一致，且 `v10` 13 份原始回执与 `v11` `971000–976000` 诊断回执零字节改动；
+- `v11` 与 `v11.1` 四份回执满足 `model_calls == 0`、单题巩固无双重计费（`<= 1`）、68 条压力夹具隔离、暂定奥卡姆状态、`B1–B10` 全通过、三分区及跨版本种子零重叠与评估器不可变；
 - 随包全部 9 个运行时认知模块（含完整 `unified_research.py`）对 `lab._...` 私有属性零读取。
 """
 
@@ -485,6 +553,7 @@ def main() -> int:
         "deliverable_a_credibility_and_baselines_20261117.json",
         "deliverable_b_branch_lifecycle_20261117.json",
         "deliverable_c_knowledge_vs_method_2x2_20261117.json",
+        "deliverable_c_v11_1_method_remediation_2x2_20261117.json",
     ):
         rp = REPO_ROOT / "docs/evidence/v11_branch_lifecycle_and_km_20261117" / req
         if not rp.is_file():

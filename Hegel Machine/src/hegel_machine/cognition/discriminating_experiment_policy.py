@@ -35,17 +35,85 @@ from .structure_lab import ObjectSchema
 from .world_structure_commitments import _as_schema
 
 
+def fit_empirical_q_actuator_maps(
+    records: list[dict],
+    schema: ObjectSchema | dict,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Fit public paid-data forward/inverse ``q_cmd <-> q_sensor`` maps per object (zero private access!)."""
+    sc = _as_schema(schema)
+    fwd_fns: dict[str, Any] = {}
+    inv_fns: dict[str, Any] = {}
+    if sc is None or not records:
+        return fwd_fns, inv_fns
+
+    for grp in sc.objects:
+        qf = sc.fields[grp].get("q")
+        qc = (sc.controls.get(grp) or {}).get("q")
+        if not qf or not qc:
+            continue
+        distinct_pts: dict[float, float] = {}
+        for r in records:
+            ctls = r.get("controls") or {}
+            bef = r.get("before") or {}
+            if qc in ctls and qf in bef:
+                distinct_pts[round(float(ctls[qc]), 6)] = float(bef[qf])
+        if len(distinct_pts) >= 5 and (max(distinct_pts) - min(distinct_pts)) >= 0.35:
+            c_vals = list(distinct_pts.keys())
+            y_vals = list(distinct_pts.values())
+            coeffs_q = tuple(
+                float(x)
+                for x in _linear_fit(
+                    [c_vals, [c * c for c in c_vals], [c * c * c for c in c_vals]],
+                    y_vals,
+                )
+            )
+
+            def _fwd(val: float, _cf: tuple[float, ...] = coeffs_q) -> float:
+                v = float(val)
+                return float(_cf[0] + _cf[1] * v + _cf[2] * (v * v) + _cf[3] * (v * v * v))
+
+            def _inv(
+                target_q: float,
+                lo_q: float = -1.0,
+                hi_q: float = 1.0,
+                _f: Any = _fwd,
+            ) -> float:
+                tq = float(target_q)
+                flo, fhi = _f(lo_q), _f(hi_q)
+                if flo <= fhi:
+                    if tq <= flo:
+                        return float(lo_q)
+                    if tq >= fhi:
+                        return float(hi_q)
+                    a, b = float(lo_q), float(hi_q)
+                    for _ in range(28):
+                        m = 0.5 * (a + b)
+                        if _f(m) < tq:
+                            a = m
+                        else:
+                            b = m
+                    return 0.5 * (a + b)
+                return max(float(lo_q), min(float(hi_q), tq))
+
+            fwd_fns[grp] = _fwd
+            inv_fns[grp] = _inv
+    return fwd_fns, inv_fns
+
+
 def _simulate_proxy_trajectory_for_probe(
     probe: Probe,
     spec: TaskSpec,
     schema: ObjectSchema | dict,
     controls_by_object: dict[str, dict[str, str]] | None,
+    *,
+    q_forward_fns: dict[str, Any] | None = None,
 ) -> list[Observation]:
     """Build an observable kinematic state proxy from public control sequence ``probe.sequence``.
 
-    Uses ONLY public ``probe.sequence``, ``spec.feature_bounds``, and discovered ``schema``
-    role bindings (zero private lab access!) so candidate hypotheses ``h in H`` can be
-    evaluated pre-execution to compute observable disagreement features.
+    Uses ONLY public ``probe.sequence``, ``spec.feature_bounds``, discovered ``schema``
+    role bindings, and optional paid-data ``q_forward_fns`` (zero private lab access!) so
+    candidate hypotheses ``h in H`` can be evaluated pre-execution to compute observable
+    disagreement features.
     """
     sc = _as_schema(schema)
     if sc is None or not probe.sequence:
@@ -69,7 +137,12 @@ def _simulate_proxy_trajectory_for_probe(
             for idx_o, g in enumerate(objs):
                 cmap = controls_by_object.get(g) or {}
                 if cmap.get("q") in pt:
-                    q_cur[idx_o] = float(pt[cmap["q"]])
+                    raw_qc = float(pt[cmap["q"]])
+                    q_cur[idx_o] = (
+                        float(q_forward_fns[g](raw_qc))
+                        if (q_forward_fns and g in q_forward_fns)
+                        else raw_qc
+                    )
                 if cmap.get("u") in pt:
                     u_cur[idx_o] = float(pt[cmap["u"]])
                 if cmap.get("x") in pt:
@@ -105,6 +178,8 @@ def compute_observable_probe_features(
     spec: TaskSpec,
     schema: ObjectSchema | dict,
     controls_by_object: dict[str, dict[str, str]] | None = None,
+    *,
+    q_forward_fns: dict[str, Any] | None = None,
 ) -> dict[str, float]:
     """Compute strictly pre-execution observable features of ``probe`` w.r.t. ``candidate_programs``."""
     sc = _as_schema(schema)
@@ -114,6 +189,7 @@ def compute_observable_probe_features(
         return {
             "pairwise_disagreement_margin": 0.0,
             "ensemble_std": 0.0,
+            "disagreement_step_fraction": 0.0,
             "control_sparsity": 0.0,
             "displacement_scale": 1.0,
             "sign_contrast": 0.0,
@@ -137,15 +213,16 @@ def compute_observable_probe_features(
             if rel <= 0.08:
                 neutral_count += 1
             elif rel < 0.98:
-                # Exclude parked boundary rails (rel >= 0.98) when fallback scale is needed
                 rel_scales.append(rel)
             if float(val) - mid > 0.1 * half:
                 pos_drives += 1
             elif float(val) - mid < -0.1 * half:
                 neg_drives += 1
 
-    # Compute normalized pair separation among non-parked objects when object controls are known!
+    # Compute normalized pair separation among non-co-located active objects!
     pair_seps: list[float] = []
+    co_located_bystanders = 0
+    total_obj_steps = 0
     if sc is not None and controls_by_object and len(sc.objects) >= 2:
         for pt in pts:
             non_parked_x: list[float] = []
@@ -157,8 +234,11 @@ def compute_observable_probe_features(
                     lo, hi = bounds[xc]
                     x_half = max(1e-6, 0.5 * (hi - lo))
                     xv = float(pt[xc])
+                    total_obj_steps += 1
                     if abs(xv - 0.5 * (lo + hi)) / x_half < 0.96:
                         non_parked_x.append(xv)
+                    else:
+                        co_located_bystanders += 1
             if len(non_parked_x) >= 2:
                 min_dx = min(
                     abs(non_parked_x[i] - non_parked_x[j])
@@ -167,7 +247,11 @@ def compute_observable_probe_features(
                 )
                 pair_seps.append(min_dx / x_half)
 
-    sparsity = neutral_count / max(1, total_entries)
+    # Sparsity reflects EITHER neutral controls OR cleanly isolated co-located bystander parking!
+    sparsity = max(
+        neutral_count / max(1, total_entries),
+        co_located_bystanders / max(1, total_obj_steps),
+    )
     disp_scale = (
         sum(pair_seps) / len(pair_seps)
         if pair_seps
@@ -179,12 +263,13 @@ def compute_observable_probe_features(
     )
 
     proxy_rows = _simulate_proxy_trajectory_for_probe(
-        probe, spec, schema, controls_by_object
+        probe, spec, schema, controls_by_object, q_forward_fns=q_forward_fns
     )
     if len(candidate_programs) < 2 or not proxy_rows:
         return {
             "pairwise_disagreement_margin": 0.0,
             "ensemble_std": 0.0,
+            "disagreement_step_fraction": 0.0,
             "control_sparsity": float(sparsity),
             "displacement_scale": float(disp_scale),
             "sign_contrast": float(sign_contrast),
@@ -208,16 +293,21 @@ def compute_observable_probe_features(
                 max_pair_diff = mean_d
 
     stds: list[float] = []
+    disagree_steps = 0
     for t in range(l_len):
         col = [preds_by_prog[i][t] for i in range(m)]
+        if (max(col) - min(col)) > 1e-6:
+            disagree_steps += 1
         mu = sum(col) / m
         var = sum((x - mu) ** 2 for x in col) / m
         stds.append(sqrt(max(0.0, var)))
     ens_std = sum(stds) / len(stds) if stds else 0.0
+    disagree_frac = disagree_steps / max(1, l_len)
 
     return {
         "pairwise_disagreement_margin": float(max_pair_diff),
         "ensemble_std": float(ens_std),
+        "disagreement_step_fraction": float(disagree_frac),
         "control_sparsity": float(sparsity),
         "displacement_scale": float(disp_scale),
         "sign_contrast": float(sign_contrast),
@@ -231,6 +321,8 @@ def generate_candidate_probe_menu(
     *,
     seed: int = 11,
     probe_length: int = 6,
+    audit_hint: dict[str, Any] | None = None,
+    q_inverse_fns: dict[str, Any] | None = None,
 ) -> list[Probe]:
     """Generate a diverse menu of legal public control ``Probe``s spanning random & structured styles."""
     sc = _as_schema(schema)
@@ -258,65 +350,184 @@ def generate_candidate_probe_menu(
             pts.append(pt)
         menu.append(Probe(f"menu_random_subbound:{k}", tuple(pts)))
 
-    # 3. Pair-isolated interventions across candidate displacement scales rho in {0.14, 0.24, 0.55, 0.90}
     objs = list(sc.objects) if sc is not None else []
     if controls_by_object and len(objs) >= 2:
+        c0 = controls_by_object.get(objs[0], {})
+        c1 = controls_by_object.get(objs[1], {})
+
+        def _inv_q(obj_name: str, target_q: float) -> float:
+            qc = (controls_by_object.get(obj_name) or {}).get("q")
+            lo_q, hi_q = bounds.get(qc, (-1.0, 1.0)) if qc else (-1.0, 1.0)
+            if q_inverse_fns and obj_name in q_inverse_fns:
+                return float(q_inverse_fns[obj_name](target_q, lo_q, hi_q))
+            return max(float(lo_q), min(float(hi_q), float(target_q)))
+
+        bystander_q_sweep = (-0.88, 0.86, -0.46, 0.48, -0.74, 0.76)
+        impulse_sweep = (-0.21, 0.19, -0.13, 0.16, -0.09, 0.22)
+
+        def _populate_co_located_bystanders_and_impulses(
+            pt: dict[str, float], st: int, sign_dir: float
+        ) -> None:
+            # Co-locate all bystander objects at the opposite far boundary with synchronous
+            # full-range q & u sweeps: dx_byst == 0 and dq_byst == 0 -> zero cross-talk under
+            # right/left/symmetric while exciting all 4N nonlinear actuator & sensor maps!
+            byst_q_s = bystander_q_sweep[st % len(bystander_q_sweep)]
+            for io in range(2, len(objs)):
+                g_b = objs[io]
+                ci = controls_by_object.get(g_b, {})
+                if ci.get("x") in bounds:
+                    lo_x, hi_x = bounds[ci["x"]]
+                    pt[ci["x"]] = hi_x if sign_dir >= 0.0 else lo_x
+                if ci.get("q") in bounds:
+                    pt[ci["q"]] = _inv_q(g_b, byst_q_s)
+                if ci.get("u") in bounds:
+                    lo_u, hi_u = bounds[ci["u"]]
+                    u_v = impulse_sweep[(st + io) % len(impulse_sweep)]
+                    pt[ci["u"]] = max(lo_u, min(hi_u, u_v))
+            for io_a, c_act in ((0, c0), (1, c1)):
+                if c_act.get("u") in bounds:
+                    lo_u, hi_u = bounds[c_act["u"]]
+                    u_v = impulse_sweep[(st + io_a) % len(impulse_sweep)]
+                    pt[c_act["u"]] = max(lo_u, min(hi_u, u_v))
+
+        # 3. Broad uncalibrated pair-isolated probes across fixed scales rho in {0.14, 0.28, 0.55, 0.88}
         bracket_profiles = [
-            # Multi-regime bracket sweeping negative donor, sub-threshold, mid-threshold, high-gap, and reversed!
             ((0.82, 0.0), (-0.65, 0.15), (0.20, 0.05), (0.42, 0.05), (0.05, 0.78), (0.31, 0.0)),
             ((0.55, 0.50), (0.70, 0.10), (-0.45, -0.10), (0.26, 0.0), (0.0, -0.60), (0.48, 0.05)),
-            # Monotone positive-only profile (low sign_contrast — fails to test negative donor!)
             ((0.85, 0.05), (0.75, 0.10), (0.90, 0.0), (0.80, 0.05), (0.70, 0.0), (0.88, 0.10)),
-            # Equal-quantity symmetric profile (zero gap — fails to excite gap thresholds!)
             ((0.50, 0.50), (-0.40, -0.40), (0.30, 0.30), (0.70, 0.70), (-0.20, -0.20), (0.60, 0.60)),
         ]
-        for rho_idx, rho in enumerate((0.14, 0.24, 0.55, 0.90)):
+        for rho_idx, rho in enumerate((0.14, 0.28, 0.55, 0.88)):
             for prof_idx, prof in enumerate(bracket_profiles):
                 pts = []
-                c0 = controls_by_object.get(objs[0], {})
-                c1 = controls_by_object.get(objs[1], {})
                 for st in range(probe_length):
                     pt = {c: 0.5 * (bounds[c][0] + bounds[c][1]) for c in ctl_names}
                     if sc is not None and sc.focus_control in bounds:
                         flo, fhi = bounds[sc.focus_control]
                         pt[sc.focus_control] = max(flo, min(fhi, float(st % 2)))
-                    # Park non-participating objects at alternating far boundaries with q = 0, u = 0
-                    for io in range(2, len(objs)):
-                        ci = controls_by_object.get(objs[io], {})
-                        if ci.get("x") in bounds:
-                            lo_x, hi_x = bounds[ci["x"]]
-                            pt[ci["x"]] = hi_x if (io % 2 == 0) else lo_x
-                        if ci.get("q") in bounds:
-                            pt[ci["q"]] = 0.0
-                        if ci.get("u") in bounds:
-                            pt[ci["u"]] = 0.0
-                    if c0.get("x") in bounds:
-                        lo, hi = bounds[c0["x"]]
-                        pt[c0["x"]] = 0.5 * (lo + hi)
-                    if c1.get("x") in bounds:
-                        lo, hi = bounds[c1["x"]]
-                        mid, half = 0.5 * (lo + hi), 0.5 * (hi - lo)
-                        sign_x = 1.0 if (st < max(1, (2 * probe_length) // 3)) else -1.0
-                        pt[c1["x"]] = max(lo, min(hi, mid + sign_x * rho * half))
-                    q0_cmd, q1_cmd = prof[st % len(prof)]
+                    sign_x = 1.0 if (st < max(1, (2 * probe_length) // 3)) else -1.0
+                    _populate_co_located_bystanders_and_impulses(pt, st, sign_x)
+                    if c0.get("x") in bounds and c1.get("x") in bounds:
+                        lo_x0, hi_x0 = bounds[c0["x"]]
+                        lo_x1, hi_x1 = bounds[c1["x"]]
+                        span_x = hi_x0 - lo_x0
+                        x0_anchor = (
+                            (lo_x0 + 0.12 * span_x)
+                            if sign_x >= 0.0
+                            else (hi_x0 - 0.12 * span_x)
+                        )
+                        pt[c0["x"]] = max(lo_x0, min(hi_x0, x0_anchor))
+                        pt[c1["x"]] = max(
+                            lo_x1,
+                            min(hi_x1, x0_anchor + sign_x * rho * (0.5 * span_x)),
+                        )
+                    q0_s, q1_s = prof[st % len(prof)]
                     if c0.get("q") in bounds:
-                        lo, hi = bounds[c0["q"]]
-                        pt[c0["q"]] = max(lo, min(hi, q0_cmd))
+                        pt[c0["q"]] = _inv_q(objs[0], q0_s)
                     if c1.get("q") in bounds:
-                        lo, hi = bounds[c1["q"]]
-                        pt[c1["q"]] = max(lo, min(hi, q1_cmd))
-                    if c0.get("u") in bounds:
-                        pt[c0["u"]] = 0.0
-                    if c1.get("u") in bounds:
-                        pt[c1["u"]] = 0.0
+                        pt[c1["q"]] = _inv_q(objs[1], q1_s)
                     pts.append(pt)
                 menu.append(Probe(f"menu_pair_scale_{rho_idx}_prof_{prof_idx}", tuple(pts)))
+
+        # 4. Version-space interval-bisecting probes built strictly from public `audit_hint` (if available)
+        if isinstance(audit_hint, dict):
+            v_dir = audit_hint.get("verified_direction")
+            sign_dir = -1.0 if v_dir == "left" else 1.0
+            r_iv = audit_hint.get("radius_interval")
+            r_lo, r_hi = (
+                (max(0.05, float(r_iv[0])), min(1.75, float(r_iv[1])))
+                if (isinstance(r_iv, (list, tuple)) and len(r_iv) == 2)
+                else (0.35, 1.35)
+            )
+            if r_hi <= r_lo + 1e-6:
+                r_hi = r_lo + 0.02
+            t_iv = audit_hint.get("verified_threshold_interval")
+            occam_g = audit_hint.get("occam_minimality_gate") or {}
+            has_t_iv = (
+                isinstance(audit_hint.get("verified_edge_condition"), dict)
+                and isinstance(t_iv, (list, tuple))
+                and len(t_iv) == 2
+                and not bool(occam_g.get("boundary_test_needed"))
+            )
+
+            quantile_sets = (
+                ((0.25, 0.50, 0.75), 0.84),
+                ((0.16, 0.48, 0.82), 0.90),
+                ((0.32, 0.60, 0.88), 0.78),
+            )
+            for b_idx, (q_fracs, q_hi_base) in enumerate(quantile_sets):
+                pts_b = []
+                for st in range(probe_length):
+                    pt = {c: 0.5 * (bounds[c][0] + bounds[c][1]) for c in ctl_names}
+                    if sc is not None and sc.focus_control in bounds:
+                        flo, fhi = bounds[sc.focus_control]
+                        pt[sc.focus_control] = max(flo, min(fhi, float(st % 2)))
+                    _populate_co_located_bystanders_and_impulses(pt, st, sign_dir)
+
+                    lo_x0, hi_x0 = bounds.get(c0.get("x", ""), (-2.0, 2.0))
+                    lo_x1, hi_x1 = bounds.get(c1.get("x", ""), (-2.0, 2.0))
+                    span_x = hi_x0 - lo_x0
+                    x0_anchor = (
+                        (lo_x0 + 0.12 * span_x)
+                        if sign_dir >= 0.0
+                        else (hi_x0 - 0.12 * span_x)
+                    )
+
+                    half_len = max(1, probe_length // 2)
+                    if st < half_len:
+                        # Pure radius-interval bisection: hold gap safely above threshold version space!
+                        frac_r = q_fracs[st % len(q_fracs)]
+                        dx_step = r_lo + frac_r * (r_hi - r_lo)
+                        q0_s = q_hi_base
+                        safe_gap = (
+                            min(1.65, max(0.65, float(t_iv[1]) + 0.22))
+                            if has_t_iv
+                            else 0.85
+                        )
+                        q1_s = max(-0.92, min(0.20, q0_s - safe_gap))
+                    else:
+                        # Pure threshold / Occam-boundary bisection: hold dx safely inside r_lo!
+                        dx_step = max(0.08, r_lo - 0.04)
+                        sub_i = st - half_len
+                        if has_t_iv:
+                            t_lo_f, t_hi_f = float(t_iv[0]), float(t_iv[1])
+                            frac_t = q_fracs[sub_i % len(q_fracs)]
+                            g_target = t_lo_f + frac_t * (t_hi_f - t_lo_f)
+                            q0_s = min(0.94, max(0.35, 0.5 * g_target + 0.32))
+                            q1_s = max(-0.94, min(0.90, q0_s - g_target))
+                        else:
+                            # Occam boundary probe: negative donor + positive-gap sweep
+                            boundary_pairs = (
+                                (-0.22, -0.90),
+                                (0.62, 0.46),
+                                (0.76, 0.40),
+                            )
+                            q0_s, q1_s = boundary_pairs[sub_i % len(boundary_pairs)]
+
+                    if c0.get("x") in bounds:
+                        pt[c0["x"]] = max(lo_x0, min(hi_x0, x0_anchor))
+                    if c1.get("x") in bounds:
+                        pt[c1["x"]] = max(lo_x1, min(hi_x1, x0_anchor + sign_dir * dx_step))
+                    if c0.get("q") in bounds:
+                        pt[c0["q"]] = _inv_q(objs[0], q0_s)
+                    if c1.get("q") in bounds:
+                        pt[c1["q"]] = _inv_q(objs[1], q1_s)
+                    pts_b.append(pt)
+                menu.append(Probe(f"menu_interval_bisect:{b_idx}", tuple(pts_b)))
     return menu
 
 
-def build_generic_schema_candidate_hypotheses(schema: ObjectSchema | dict) -> list[Program]:
-    """Build generic uncalibrated relational response templates on ``schema`` (shared equally by K0 and K1!)."""
-    from .premise_dependency_audit import edge_condition_predicate
+def build_generic_schema_candidate_hypotheses(
+    schema: ObjectSchema | dict,
+    *,
+    audit_hint: dict[str, Any] | None = None,
+) -> list[Program]:
+    """Build relational response templates spanning the surviving version space (shared by K0 and K1!)."""
+    from .premise_dependency_audit import (
+        _replace_const_at_path,
+        describe_comparator_threshold_parameter,
+        edge_condition_predicate,
+    )
     from .world_structure_commitments import instantiate_commitment_terms
 
     sc = _as_schema(schema)
@@ -327,34 +538,99 @@ def build_generic_schema_candidate_hypotheses(schema: ObjectSchema | dict) -> li
     q_dst = Program("arg", name="edge_target_quantity")
     gap = Program("sub", children=(q_src, q_dst))
 
-    specs = [
-        ("right", "unconditional", 0.85),
-        ("left", "unconditional", 0.85),
-        ("right", "source_greater", 0.85),
-        ("left", "source_greater", 0.85),
-        (
-            "right",
-            Program(
-                "and",
-                children=(
-                    Program("lt", children=(Program("const", value=0.0), q_src)),
-                    Program("lt", children=(Program("const", value=0.22), gap)),
-                ),
-            ).to_dict(),
-            0.85,
-        ),
-        (
-            "right",
-            Program(
-                "and",
-                children=(
-                    Program("lt", children=(Program("const", value=0.0), q_src)),
-                    Program("lt", children=(Program("const", value=0.45), gap)),
-                ),
-            ).to_dict(),
-            0.85,
-        ),
-    ]
+    specs: list[tuple[str, str | dict, float]] = []
+    if isinstance(audit_hint, dict) and (
+        audit_hint.get("verified_direction") or audit_hint.get("radius_interval")
+    ):
+        v_dir = audit_hint.get("verified_direction")
+        dirs = [v_dir] if v_dir in {"right", "left"} else ["right", "left"]
+        r_iv = audit_hint.get("radius_interval")
+        r_lo, r_hi = (
+            (max(0.05, float(r_iv[0])), min(1.75, float(r_iv[1])))
+            if (isinstance(r_iv, (list, tuple)) and len(r_iv) == 2)
+            else (0.45, 1.25)
+        )
+        r_mid = 0.5 * (r_lo + r_hi)
+        r_safe = max(0.08, r_lo - 0.04)
+        v_cond = audit_hint.get("verified_edge_condition")
+        t_iv = audit_hint.get("verified_threshold_interval")
+        occam_g = audit_hint.get("occam_minimality_gate") or {}
+
+        if (
+            isinstance(v_cond, dict)
+            and isinstance(t_iv, (list, tuple))
+            and len(t_iv) == 2
+            and not bool(occam_g.get("boundary_test_needed"))
+        ):
+            base_pred = Program.from_dict(v_cond)
+            desc = describe_comparator_threshold_parameter(base_pred)
+            t_lo, t_hi = float(t_iv[0]), float(t_iv[1])
+            d0 = dirs[0]
+            if desc is not None:
+                c_path = tuple(desc["path"])
+                t_mid_pred = _replace_const_at_path(
+                    base_pred, c_path, 0.5 * (t_lo + t_hi)
+                ).to_dict()
+                for rf in (0.15, 0.38, 0.62, 0.85):
+                    specs.append((d0, t_mid_pred, r_lo + rf * (r_hi - r_lo)))
+                for tf in (0.15, 0.38, 0.62, 0.85):
+                    tp_d = _replace_const_at_path(
+                        base_pred, c_path, t_lo + tf * (t_hi - t_lo)
+                    ).to_dict()
+                    specs.append((d0, tp_d, r_safe))
+            else:
+                for rf in (0.20, 0.50, 0.80):
+                    specs.append((d0, v_cond, r_lo + rf * (r_hi - r_lo)))
+        else:
+            for d0 in dirs:
+                specs.append((d0, "unconditional", r_lo + 0.20 * (r_hi - r_lo)))
+                specs.append((d0, "unconditional", r_lo + 0.80 * (r_hi - r_lo)))
+                specs.append((d0, "source_greater", r_mid))
+                for th_c in (0.18, 0.34, 0.50):
+                    specs.append(
+                        (
+                            d0,
+                            Program(
+                                "and",
+                                children=(
+                                    Program("lt", children=(Program("const", value=0.0), q_src)),
+                                    Program("lt", children=(Program("const", value=th_c), gap)),
+                                ),
+                            ).to_dict(),
+                            r_safe,
+                        )
+                    )
+
+    if not specs:
+        specs = [
+            ("right", "unconditional", 0.85),
+            ("left", "unconditional", 0.85),
+            ("right", "source_greater", 0.85),
+            ("left", "source_greater", 0.85),
+            (
+                "right",
+                Program(
+                    "and",
+                    children=(
+                        Program("lt", children=(Program("const", value=0.0), q_src)),
+                        Program("lt", children=(Program("const", value=0.22), gap)),
+                    ),
+                ).to_dict(),
+                0.85,
+            ),
+            (
+                "right",
+                Program(
+                    "and",
+                    children=(
+                        Program("lt", children=(Program("const", value=0.0), q_src)),
+                        Program("lt", children=(Program("const", value=0.45), gap)),
+                    ),
+                ).to_dict(),
+                0.85,
+            ),
+        ]
+
     fq_sum = {
         "kind": "all_object_sum",
         "roles": ["f", "q"],
@@ -429,6 +705,7 @@ def frozen_default_method_m0() -> dict[str, Any]:
         "feature_weights": {
             "pairwise_disagreement_margin": 0.0,
             "ensemble_std": 0.0,
+            "disagreement_step_fraction": 0.0,
             "control_sparsity": 0.0,
             "displacement_scale": 0.0,
             "sign_contrast": 0.0,
@@ -448,6 +725,7 @@ def select_probe_under_method(
     *,
     round_index: int = 0,
     exclude_probe_ids: set[str] | None = None,
+    q_forward_fns: dict[str, Any] | None = None,
     budget: SearchBudget | None = None,
 ) -> tuple[Probe, dict[str, Any]]:
     """Select next ``Probe`` under ``method_spec`` (``M0`` or learned ``M1``) and emit ``ConsumptionEvent``."""
@@ -467,7 +745,7 @@ def select_probe_under_method(
         }
 
     weights = method_spec.get("feature_weights") or {}
-    pref_scale = float(method_spec.get("preferred_displacement_scale", 0.25))
+    pref_scale = float(method_spec.get("preferred_displacement_scale", 0.35))
     best_score = -1e18
     best_probe = default_probe
     best_feats: dict[str, float] = {}
@@ -478,16 +756,23 @@ def select_probe_under_method(
         if budget is not None and not budget.spend(2):
             break
         feats = compute_observable_probe_features(
-            p, candidate_programs, spec, schema, controls_by_object
+            p,
+            candidate_programs,
+            spec,
+            schema,
+            controls_by_object,
+            q_forward_fns=q_forward_fns,
         )
         scale_proximity = -abs(feats["displacement_scale"] - pref_scale)
         score = (
             float(weights.get("pairwise_disagreement_margin", 0.0))
             * feats["pairwise_disagreement_margin"]
             + float(weights.get("ensemble_std", 0.0)) * feats["ensemble_std"]
+            + float(weights.get("disagreement_step_fraction", 0.0))
+            * feats.get("disagreement_step_fraction", 0.0)
             + float(weights.get("control_sparsity", 0.0)) * feats["control_sparsity"]
             + float(weights.get("sign_contrast", 0.0)) * feats["sign_contrast"]
-            + float(weights.get("scale_proximity", 1.0)) * scale_proximity
+            + float(weights.get("scale_proximity", 0.0)) * scale_proximity
         )
         if score > best_score:
             best_score = score
@@ -524,19 +809,7 @@ def induce_discriminating_experiment_method(
     parent_method_id: str = "experiment_policy:M0_default_space_filling",
     budget: SearchBudget | None = None,
 ) -> dict[str, Any]:
-    """Induce an executable probe-selection policy ``M1`` from real dev rollout outcomes (§3.3–3.4).
-
-    ``dev_rollout_records`` contains real executed probes from ``dev_formation`` episodes:
-      - ``episode_id``: str
-      - ``probe_features``: dict of observable pre-execution probe features
-      - ``empirical_elimination_per_row``: measured fraction of competing false hypotheses
-        refuted per observation row on that episode.
-
-    ``dev_selection_evaluator(candidate_method)`` runs ``candidate_method`` on independent
-    ``dev_selection`` episodes (strictly unseen in ``dev_formation`` and strictly disjoint
-    from final ``evaluation``!) and returns ``{"passes": int, "mean_observations": float,
-    "mean_compute": float}``.
-    """
+    """Induce an executable probe-selection policy ``M1`` from real dev rollout outcomes (§3.3–3.4)."""
     t0 = time.perf_counter()
     start = budget.spent if budget is not None else 0
     if not dev_rollout_records:
@@ -556,6 +829,7 @@ def induce_discriminating_experiment_method(
     feat_names = [
         "pairwise_disagreement_margin",
         "ensemble_std",
+        "disagreement_step_fraction",
         "control_sparsity",
         "sign_contrast",
     ]
@@ -567,11 +841,10 @@ def induce_discriminating_experiment_method(
     if budget is not None:
         budget.spend(len(dev_rollout_records) * (len(feat_names) + 2))
 
-    # 1. Fit linear regression from observable probe features -> empirical elimination rate!
+    # 1. Fit linear regression from scale-free observable probe features -> empirical elimination rate!
     fitted_coeffs = _linear_fit(cols, targets)
     reg_weights = {fn: round(float(w), 6) for fn, w in zip(feat_names, fitted_coeffs[1:])}
 
-    # Estimate empirical optimal displacement scale from top-quartile elimination probes
     sorted_by_gain = sorted(
         dev_rollout_records,
         key=lambda r: float(r["empirical_elimination_per_row"]),
@@ -579,14 +852,14 @@ def induce_discriminating_experiment_method(
     )
     top_k = sorted_by_gain[: max(1, len(sorted_by_gain) // 4)]
     learned_scale = round(
-        sum(float(r["probe_features"].get("displacement_scale", 0.25)) for r in top_k)
+        sum(float(r["probe_features"].get("displacement_scale", 0.35)) for r in top_k)
         / len(top_k),
         4,
     )
 
     source_ep_ids = sorted({str(r["episode_id"]) for r in dev_rollout_records})
 
-    # 2. Construct candidate method family (regression-induced rule + single-feature ablations + M0)
+    # 2. Construct candidate method family (regression-induced rule + scale-free coverage rule + ablation + M0)
     m0_base = frozen_default_method_m0()
     candidates_to_screen: list[dict[str, Any]] = [
         m0_base,
@@ -596,21 +869,22 @@ def induce_discriminating_experiment_method(
             "parent_method_id": parent_method_id,
             "source_dev_episode_ids": source_ep_ids,
             "mode": "learned_linear_probe_scorer",
-            "feature_weights": {**reg_weights, "scale_proximity": 0.35},
+            "feature_weights": {**reg_weights, "scale_proximity": 0.0},
             "preferred_displacement_scale": learned_scale,
         },
         {
-            "method_id": f"experiment_policy:{generation_tag}_disagreement_plus_scale",
+            "method_id": f"experiment_policy:{generation_tag}_version_space_coverage_induced",
             "author_origin": "runtime_induced_from_dev_episodes",
             "parent_method_id": parent_method_id,
             "source_dev_episode_ids": source_ep_ids,
             "mode": "learned_linear_probe_scorer",
             "feature_weights": {
-                "pairwise_disagreement_margin": max(0.1, reg_weights["pairwise_disagreement_margin"]),
-                "ensemble_std": max(0.0, reg_weights["ensemble_std"]),
-                "control_sparsity": max(0.0, reg_weights["control_sparsity"]),
+                "pairwise_disagreement_margin": max(0.05, reg_weights["pairwise_disagreement_margin"]),
+                "ensemble_std": max(0.05, reg_weights["ensemble_std"]),
+                "disagreement_step_fraction": max(0.20, reg_weights["disagreement_step_fraction"]),
+                "control_sparsity": max(0.10, reg_weights["control_sparsity"]),
                 "sign_contrast": max(0.0, reg_weights["sign_contrast"]),
-                "scale_proximity": 0.50,
+                "scale_proximity": 0.0,
             },
             "preferred_displacement_scale": learned_scale,
         },
@@ -623,6 +897,7 @@ def induce_discriminating_experiment_method(
             "feature_weights": {
                 "pairwise_disagreement_margin": 0.0,
                 "ensemble_std": 1.0,
+                "disagreement_step_fraction": 0.0,
                 "control_sparsity": 0.0,
                 "sign_contrast": 0.0,
                 "scale_proximity": 0.0,
@@ -667,7 +942,6 @@ def induce_discriminating_experiment_method(
                 best_cand = cand
                 best_eval = ev
 
-    # Strict promotion gate: only promote over M0 if strictly better on dev_selection!
     promoted = bool(
         best_cand["method_id"] != m0_base["method_id"]
         and m0_eval is not None
