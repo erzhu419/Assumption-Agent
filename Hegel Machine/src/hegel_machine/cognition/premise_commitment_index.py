@@ -868,6 +868,19 @@ class OrdinaryPersistentCommitmentCache:
         self._snapshot_fp: dict[str, str] | None = None
         self._snapshot_commitments: list[dict] = []
         self._dedup_audit_comms: list[dict] = []
+        # v13 B3 3-layer memoization for ordinary lazy reconstruction (per-prior, family AU, optional routing/scope)
+        self._per_prior_extraction_memo: dict[tuple[str, str, float, str], dict[str, Any]] = {}
+        self._family_au_memo: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._routing_scope_memo: dict[tuple[Any, ...], dict[str, Any]] = {}
+
+    def active_prior_fingerprints(self, priors: list[dict]) -> tuple[dict[str, str], set[str]]:
+        cur_fp = {
+            p.get("source_concept_id", f"anon_{i}"): _prior_state_fingerprint(p)
+            for i, p in enumerate(priors)
+        }
+        stale_cids = _detect_stale_dependency_ids(priors, cur_fp)
+        active_fp = {k: v for k, v in cur_fp.items() if k not in stale_cids}
+        return active_fp, stale_cids
 
     def get_or_consolidate(
         self,

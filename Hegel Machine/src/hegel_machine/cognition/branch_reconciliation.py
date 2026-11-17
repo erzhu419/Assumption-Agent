@@ -140,6 +140,27 @@ PUBLIC_OBSERVABLE_GUARD_MANIFEST: dict[str, dict[str, Any]] = {
 OBSERVABLE_REGIME_FEATURES = frozenset(PUBLIC_OBSERVABLE_GUARD_MANIFEST.keys())
 
 
+def extract_guard_ast_dependencies(guard: Program | dict | None) -> tuple[list[str], bool]:
+    """Extract all manifest variables and pilot-acquisition dependency from the COMPLETE guard AST (v13 A2 / Check #5)."""
+    if guard is None:
+        return [], False
+    prog = guard if isinstance(guard, Program) else Program.from_dict(guard)
+    seen: list[str] = []
+
+    def _walk(node: Program) -> None:
+        if node.op in {"feature", "arg"} and node.name and node.name not in seen:
+            seen.append(node.name)
+        for ch in node.children:
+            _walk(ch)
+
+    _walk(prog)
+    requires_pilot = any(
+        bool((PUBLIC_OBSERVABLE_GUARD_MANIFEST.get(fn) or {}).get("requires_pilot_acquisition", False))
+        for fn in seen
+    )
+    return seen, requires_pilot
+
+
 def validate_observable_scope_guard(
     guard: Program | dict | None,
     *,
@@ -174,20 +195,40 @@ def validate_observable_scope_guard(
 
 def compute_observable_regime_features(
     transitions: list[dict] | tuple[dict, ...],
-    schema: ObjectSchema | dict,
-) -> dict[str, float]:
-    """Compute strictly observable transition summary features from paid ``before -> after`` records."""
+    schema: ObjectSchema | dict | None,
+    *,
+    protocol_id: str = "paid_episode_transitions",
+    timing: str = "pilot_calibration_summary",
+    source_ref: str | None = None,
+) -> dict[str, Any]:
+    """Compute strictly observable transition summary features with explicit counts & unknown values (v13 A2 / Check #4).
+
+    Never encodes ``0/0`` ratios or ``min(empty)`` as ``0.0``: missing pilot data, zero valid neighbors,
+    or zero negative-donor candidates yield ``None`` (unknown) alongside ``_meta`` counts & protocol identity.
+    """
+    all_feat_keys = (
+        "obs_min_active_donor_q",
+        "obs_max_active_donor_q",
+        "obs_min_active_gap_dq",
+        "obs_signed_direction_flux",
+        "obs_conservation_residual",
+        "obs_mean_abs_q",
+        "obs_unconditional_block_rate",
+        "obs_negative_donor_transfer_rate",
+    )
     sc = _as_schema(schema)
     if sc is None or not transitions:
         return {
-            "obs_min_active_donor_q": 0.0,
-            "obs_max_active_donor_q": 0.0,
-            "obs_min_active_gap_dq": 0.0,
-            "obs_signed_direction_flux": 0.0,
-            "obs_conservation_residual": 0.0,
-            "obs_mean_abs_q": 0.0,
-            "obs_unconditional_block_rate": 0.0,
-            "obs_negative_donor_transfer_rate": 0.0,
+            **{k: None for k in all_feat_keys},
+            "_meta": {
+                "pilot_calibration_available": False,
+                "total_valid_transitions": 0,
+                "protocol_id": protocol_id,
+                "timing": timing,
+                "source_ref": source_ref,
+                "valid_counts": {k: 0 for k in all_feat_keys},
+                "available": {k: False for k in all_feat_keys},
+            },
         }
 
     objs = list(sc.objects)
@@ -237,18 +278,31 @@ def compute_observable_regime_features(
             if abs(dip) > 1e-5:
                 signed_flux_votes.append(dip)
 
+    if not parsed_steps:
+        return {
+            **{k: None for k in all_feat_keys},
+            "_meta": {
+                "pilot_calibration_available": False,
+                "total_valid_transitions": 0,
+                "protocol_id": protocol_id,
+                "timing": timing,
+                "source_ref": source_ref,
+                "valid_counts": {k: 0 for k in all_feat_keys},
+                "available": {k: False for k in all_feat_keys},
+            },
+        }
+
     mean_flux = (
         float(sum(signed_flux_votes) / len(signed_flux_votes))
         if signed_flux_votes
-        else 0.0
+        else None
     )
-    # Measure empirical gating / blocking rate on close directed candidate pairs inside confirmed active range!
     obs_active_r = (
         min(1.15, max(active_pair_dists) * 0.92)
         if active_pair_dists
         else 0.72
     )
-    dir_sign = 1.0 if mean_flux >= 0.0 else -1.0
+    dir_sign = 1.0 if (mean_flux is None or mean_flux >= 0.0) else -1.0
     close_candidates = 0
     blocked_candidates = 0
     neg_donor_candidates = 0
@@ -257,7 +311,6 @@ def compute_observable_regime_features(
         for i in range(n):
             if abs(qs[i]) <= 0.08:
                 continue
-            # Check isolated directed neighbor along observed transport direction
             directed_nbrs = [
                 j
                 for j in range(n)
@@ -277,34 +330,137 @@ def compute_observable_regime_features(
                     if abs(deltas[i]) > 1e-4:
                         neg_donor_active += 1
 
-    block_rate = float(blocked_candidates / close_candidates) if close_candidates > 0 else 0.0
-    neg_rate = float(neg_donor_active / neg_donor_candidates) if neg_donor_candidates > 0 else 0.0
+    block_rate = float(blocked_candidates / close_candidates) if close_candidates > 0 else None
+    neg_rate = float(neg_donor_active / neg_donor_candidates) if neg_donor_candidates > 0 else None
 
-    return {
-        "obs_min_active_donor_q": float(min(active_donors)) if active_donors else 0.0,
-        "obs_max_active_donor_q": float(max(active_donors)) if active_donors else 0.0,
-        "obs_min_active_gap_dq": float(min(active_gaps)) if active_gaps else 0.0,
+    values: dict[str, float | None] = {
+        "obs_min_active_donor_q": float(min(active_donors)) if active_donors else None,
+        "obs_max_active_donor_q": float(max(active_donors)) if active_donors else None,
+        "obs_min_active_gap_dq": float(min(active_gaps)) if active_gaps else None,
         "obs_signed_direction_flux": mean_flux,
-        "obs_conservation_residual": (
-            float(sum(cons_sq) / len(cons_sq)) if cons_sq else 0.0
-        ),
-        "obs_mean_abs_q": float(sum(abs_qs) / len(abs_qs)) if abs_qs else 0.0,
+        "obs_conservation_residual": float(sum(cons_sq) / len(cons_sq)) if cons_sq else None,
+        "obs_mean_abs_q": float(sum(abs_qs) / len(abs_qs)) if abs_qs else None,
         "obs_unconditional_block_rate": block_rate,
         "obs_negative_donor_transfer_rate": neg_rate,
+    }
+    counts: dict[str, int] = {
+        "obs_min_active_donor_q": len(active_donors),
+        "obs_max_active_donor_q": len(active_donors),
+        "obs_min_active_gap_dq": len(active_gaps),
+        "obs_signed_direction_flux": len(signed_flux_votes),
+        "obs_conservation_residual": len(cons_sq),
+        "obs_mean_abs_q": len(abs_qs),
+        "obs_unconditional_block_rate": close_candidates,
+        "obs_negative_donor_transfer_rate": neg_donor_candidates,
+    }
+    return {
+        **values,
+        "_meta": {
+            "pilot_calibration_available": True,
+            "total_valid_transitions": len(parsed_steps),
+            "protocol_id": protocol_id,
+            "timing": timing,
+            "source_ref": source_ref,
+            "valid_counts": counts,
+            "available": {k: (values[k] is not None and counts[k] > 0) for k in all_feat_keys},
+        },
     }
 
 
 def evaluate_scope_guard(
-    guard: Program | dict | None, obs_features: dict[str, float]
-) -> bool:
+    guard: Program | dict | None,
+    obs_features: dict[str, Any] | None,
+    *,
+    expected_protocol: str | None = None,
+) -> str:
+    """Three-valued scope/routing guard evaluator returning ``'accept' | 'reject' | 'unknown'`` (v13 A2 / Check #4)."""
     if guard is None:
-        return True
-    ok, reason = validate_observable_scope_guard(guard)
+        return "accept"
+    feats = obs_features or {}
+    meta = feats.get("_meta") if isinstance(feats, dict) else None
+    pilot_avail = bool(meta.get("pilot_calibration_available", True)) if isinstance(meta, dict) else bool(feats)
+    ok, reason = validate_observable_scope_guard(guard, pilot_calibration_available=pilot_avail)
     if not ok:
+        if reason.startswith("pilot_calibration_required_before_evaluating:"):
+            return "unknown"
         raise ValueError(f"Illegal non-observable scope guard: {reason}")
+    if (
+        expected_protocol is not None
+        and isinstance(meta, dict)
+        and meta.get("protocol_id") is not None
+        and meta.get("protocol_id") != expected_protocol
+    ):
+        return "unknown"
+
     prog = guard if isinstance(guard, Program) else Program.from_dict(guard)
-    row = Observation({k: float(v) for k, v in obs_features.items()}, 0.0, ())
-    return float(prog.predict(row)) >= 0.5
+    valid_counts = meta.get("valid_counts", {}) if isinstance(meta, dict) else {}
+
+    def _eval_kleene_bool(nd: Program) -> bool | None:
+        if nd.op == "and":
+            vals = [_eval_kleene_bool(ch) for ch in nd.children]
+            if any(v is False for v in vals):
+                return False
+            if all(v is True for v in vals):
+                return True
+            return None
+        if nd.op == "or":
+            vals = [_eval_kleene_bool(ch) for ch in nd.children]
+            if any(v is True for v in vals):
+                return True
+            if all(v is False for v in vals):
+                return False
+            return None
+        if nd.op == "not":
+            v0 = _eval_kleene_bool(nd.children[0])
+            return None if v0 is None else (not v0)
+        if nd.op == "lt":
+            a = _eval_num(nd.children[0])
+            b = _eval_num(nd.children[1])
+            if a is None or b is None:
+                return None
+            return bool(a < b)
+        nv = _eval_num(nd)
+        return None if nv is None else bool(nv >= 0.5)
+
+    def _eval_num(nd: Program) -> float | None:
+        if nd.op == "const":
+            return float(nd.value or 0.0)
+        if nd.op in {"feature", "arg"}:
+            nm = str(nd.name or "")
+            if nm not in feats or feats[nm] is None:
+                return None
+            if nm in valid_counts and int(valid_counts[nm]) <= 0:
+                return None
+            val = float(feats[nm])
+            return val if isfinite(val) else None
+        ch_vals = [_eval_num(ch) for ch in nd.children]
+        if any(v is None for v in ch_vals):
+            return None
+        if nd.op == "add":
+            return float(sum(ch_vals))  # type: ignore[arg-type]
+        if nd.op == "sub":
+            return float(ch_vals[0] - ch_vals[1])  # type: ignore[operator]
+        if nd.op == "mul":
+            prod = 1.0
+            for v in ch_vals:
+                prod *= float(v)  # type: ignore[arg-type]
+            return prod
+        if nd.op in {"and", "or", "not", "lt"}:
+            bv = _eval_kleene_bool(nd)
+            return None if bv is None else (1.0 if bv else 0.0)
+        row_clean = Observation(
+            {k: float(v) for k, v in feats.items() if k != "_meta" and isinstance(v, (int, float)) and isfinite(float(v))},
+            0.0,
+            (),
+        )
+        return float(nd.predict(row_clean))
+
+    tri = _eval_kleene_bool(prog)
+    if tri is True:
+        return "accept"
+    if tri is False:
+        return "reject"
+    return "unknown"
 
 
 def _canonical_edge_predicate_ast(raw_cond: Any) -> Program:
@@ -1027,16 +1183,29 @@ def find_feasible_prediction_difference(
     }
 
 
+def _program_semantic_version(prog: Program | dict | None) -> str:
+    if prog is None:
+        return "none"
+    d = prog.to_dict() if isinstance(prog, Program) else prog
+    raw = json.dumps(d, sort_keys=True, separators=(",", ":"))
+    return f"prog_v1:{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
+
+
 def shrink_claim_to_observable_scope(
     refuted_universal_claim: dict,
-    retained_support_regime_features: list[dict[str, float]],
-    refuting_regime_features: dict[str, float] | list[dict[str, float]],
+    retained_support_regime_features: list[dict[str, Any]],
+    refuting_regime_features: dict[str, Any] | list[dict[str, Any]],
+    *,
+    scope_kind: str = "empirical_applicability_scope",
 ) -> dict:
-    """Shrink a refuted universal claim to a verified observable ``Program`` scope guard (Acceptance B5, A2).
+    """Derive a verified observable ``Program`` guard separating retained support from counterexamples (B5, A2, v13 B1/B2).
 
-    If empirical support statistics are missing or no manifest observable separates the retained
-    support domain from the counterexample domain, returns ``status = 'scope_unidentified'`` with
-    ``scope_guard = None`` (NEVER claiming ``scoped_conditional`` with an empty/fabricated guard!).
+    ``scope_kind`` distinguishes:
+      - ``'empirical_applicability_scope'``: counterexamples come from actual prediction failure of this claim;
+        updates ``scope_guard`` and restricts scientific applicability.
+      - ``'routing_scope_candidate'``: negative examples come only from differing structural labels / successful
+        neighbor branches without cross-prediction failure; updates ``routing_guard`` ONLY (guides candidate
+        ordering without revoking scientific eligibility!).
     """
     updated = deepcopy(refuted_universal_claim)
     refuting_list = (
@@ -1046,12 +1215,17 @@ def shrink_claim_to_observable_scope(
     )
 
     if not retained_support_regime_features or not refuting_list:
-        updated["previous_status"] = updated.get("status", "universal")
-        updated["status"] = "scope_unidentified"
-        updated["shrunk"] = False
-        updated["scope_guard"] = None
+        if scope_kind == "empirical_applicability_scope":
+            updated["previous_status"] = updated.get("status", "universal")
+            updated["status"] = "scope_unidentified"
+            updated["shrunk"] = False
+            updated["scope_guard"] = None
+        else:
+            updated["routing_shrunk"] = False
+            updated["routing_guard"] = None
         updated["scope_verification"] = {
             "status": "scope_unidentified",
+            "scope_kind": scope_kind,
             "reason": (
                 "missing_retained_support_regimes"
                 if not retained_support_regime_features
@@ -1063,6 +1237,7 @@ def shrink_claim_to_observable_scope(
         updated.setdefault("scope_revision_history", []).append(
             {
                 "event": "scope_unidentified_insufficient_empirical_separation",
+                "scope_kind": scope_kind,
                 "reason": updated["scope_verification"]["reason"],
                 "refuting_regime_features": deepcopy(refuting_regime_features),
             }
@@ -1078,36 +1253,43 @@ def shrink_claim_to_observable_scope(
         "obs_conservation_residual",
     )
 
-    # Greedily select separating 1D manifest guards until ALL counterexample regimes are excluded
-    # while 100% of retained support regimes remain covered!
     remaining_ce = list(refuting_list)
     chosen_atoms: list[Program] = []
-    chosen_bounds: dict[str, list[float]] = deepcopy(updated.get("observable_bounds") or {})
+    bounds_field = "observable_bounds" if scope_kind == "empirical_applicability_scope" else "routing_bounds"
+    guard_field = "scope_guard" if scope_kind == "empirical_applicability_scope" else "routing_guard"
+    chosen_bounds: dict[str, list[float]] = deepcopy(updated.get(bounds_field) or {})
     chosen_features: list[str] = []
     min_halfwidth = float("inf")
 
-    # Also keep any existing guard atoms if they still cover all retained support regimes
-    existing_guard = updated.get("scope_guard")
+    # Keep existing guard atoms if they cover 100% of retained support regimes (`== 'accept'`)
+    existing_guard = updated.get(guard_field)
     if existing_guard is not None:
         ex_prog = existing_guard if isinstance(existing_guard, Program) else Program.from_dict(existing_guard)
-        if all(evaluate_scope_guard(ex_prog, sup_r) for sup_r in retained_support_regime_features):
+        if all(evaluate_scope_guard(ex_prog, sup_r) == "accept" for sup_r in retained_support_regime_features):
             chosen_atoms.append(ex_prog)
-            remaining_ce = [ce_r for ce_r in remaining_ce if evaluate_scope_guard(ex_prog, ce_r)]
+            remaining_ce = [
+                ce_r for ce_r in remaining_ce if evaluate_scope_guard(ex_prog, ce_r) != "reject"
+            ]
 
     for _step in range(3):
         if not remaining_ce:
             break
         best_choice: tuple[int, float, str, Program, list[float]] | None = None
         for feat_name in candidate_features:
-            if not all(feat_name in r for r in retained_support_regime_features):
+            if not all(
+                feat_name in r and r[feat_name] is not None
+                for r in retained_support_regime_features
+            ):
                 continue
-            if not all(feat_name in ce_r for ce_r in remaining_ce):
+            valid_ces = [
+                ce_r for ce_r in remaining_ce if feat_name in ce_r and ce_r[feat_name] is not None
+            ]
+            if not valid_ces:
                 continue
             sup_vals = [float(r[feat_name]) for r in retained_support_regime_features]
             sup_lo, sup_hi = min(sup_vals), max(sup_vals)
 
-            # Option A: guard `const(mid) < feature(feat_name)` excludes ce with `ce_val < sup_lo`
-            below_ces = [float(ce_r[feat_name]) for ce_r in remaining_ce if float(ce_r[feat_name]) < sup_lo - 1e-5]
+            below_ces = [float(ce_r[feat_name]) for ce_r in valid_ces if float(ce_r[feat_name]) < sup_lo - 1e-5]
             if below_ces:
                 closest_below = max(below_ces)
                 mid = round(0.5 * (closest_below + sup_lo), 6)
@@ -1120,8 +1302,7 @@ def shrink_claim_to_observable_scope(
                 if best_choice is None or (cand_tuple[0], cand_tuple[1]) > (best_choice[0], best_choice[1]):
                     best_choice = cand_tuple
 
-            # Option B: guard `feature(feat_name) < const(mid)` excludes ce with `ce_val > sup_hi`
-            above_ces = [float(ce_r[feat_name]) for ce_r in remaining_ce if float(ce_r[feat_name]) > sup_hi + 1e-5]
+            above_ces = [float(ce_r[feat_name]) for ce_r in valid_ces if float(ce_r[feat_name]) > sup_hi + 1e-5]
             if above_ces:
                 closest_above = min(above_ces)
                 mid = round(0.5 * (sup_hi + closest_above), 6)
@@ -1143,15 +1324,22 @@ def shrink_claim_to_observable_scope(
         prev_lo, prev_hi = chosen_bounds.get(feat_c, [-1e6, 1e6])
         chosen_bounds[feat_c] = [max(float(prev_lo), bnd_c[0]), min(float(prev_hi), bnd_c[1])]
         min_halfwidth = min(min_halfwidth, 0.5 * margin_c)
-        remaining_ce = [ce_r for ce_r in remaining_ce if evaluate_scope_guard(atom_c, ce_r)]
+        remaining_ce = [
+            ce_r for ce_r in remaining_ce if evaluate_scope_guard(atom_c, ce_r) != "reject"
+        ]
 
     if not chosen_atoms or remaining_ce:
-        updated["previous_status"] = updated.get("status", "universal")
-        updated["status"] = "scope_unidentified"
-        updated["shrunk"] = False
-        updated["scope_guard"] = None
+        if scope_kind == "empirical_applicability_scope":
+            updated["previous_status"] = updated.get("status", "universal")
+            updated["status"] = "scope_unidentified"
+            updated["shrunk"] = False
+            updated["scope_guard"] = None
+        else:
+            updated["routing_shrunk"] = False
+            updated["routing_guard"] = None
         updated["scope_verification"] = {
             "status": "scope_unidentified",
+            "scope_kind": scope_kind,
             "reason": "no_manifest_observable_separates_support_and_counterexample",
             "retained_support_count": len(retained_support_regime_features),
             "unexcluded_counterexample_count": len(remaining_ce),
@@ -1159,6 +1347,7 @@ def shrink_claim_to_observable_scope(
         updated.setdefault("scope_revision_history", []).append(
             {
                 "event": "scope_unidentified_no_separating_observable",
+                "scope_kind": scope_kind,
                 "refuting_regime_features": deepcopy(refuting_regime_features),
             }
         )
@@ -1170,37 +1359,80 @@ def shrink_claim_to_observable_scope(
 
     ok, msg = validate_observable_scope_guard(final_guard)
     assert ok, msg
-    retained_hits = sum(1 for r in retained_support_regime_features if evaluate_scope_guard(final_guard, r))
-    excluded_hits = sum(1 for r in refuting_list if not evaluate_scope_guard(final_guard, r))
-    requires_pilot = any(
-        PUBLIC_OBSERVABLE_GUARD_MANIFEST.get(fn, {}).get("requires_pilot_acquisition", False)
-        for fn in chosen_features
+    retained_hits = sum(
+        1 for r in retained_support_regime_features if evaluate_scope_guard(final_guard, r) == "accept"
     )
-
-    updated["previous_status"] = updated.get("status", "universal")
-    updated["status"] = "scoped_conditional"
-    updated["shrunk"] = True
-    updated["scope_guard"] = final_guard.to_dict()
-    updated["observable_bounds"] = chosen_bounds
-    eff_features = chosen_features or list(updated.get("scope_shrink_features") or ())
-    updated["scope_shrink_feature"] = eff_features[0] if eff_features else updated.get("scope_shrink_feature")
-    updated["scope_shrink_features"] = eff_features
-    updated["scope_verification"] = {
-        "status": "candidate_empirical_scope_verified_on_observed_regimes",
-        "epistemic_status": "candidate_scope_hypothesis_not_global_proof",
+    excluded_hits = sum(
+        1 for r in refuting_list if evaluate_scope_guard(final_guard, r) == "reject"
+    )
+    # Check #5: Compute AST dependencies & pilot requirement from the COMPLETE final_guard AST!
+    all_ast_features, requires_pilot = extract_guard_ast_dependencies(final_guard)
+    sup_protocols = sorted(
+        {
+            str((r.get("_meta") or {}).get("protocol_id"))
+            for r in retained_support_regime_features
+            if isinstance(r.get("_meta"), dict) and (r.get("_meta") or {}).get("protocol_id")
+        }
+    )
+    single_episode_only = len(retained_support_regime_features) == 1
+    verif_status = (
+        "single_episode_local_scope_candidate"
+        if single_episode_only
+        else (
+            "candidate_empirical_scope_verified_on_observed_regimes"
+            if scope_kind == "empirical_applicability_scope"
+            else "candidate_routing_preference_verified_on_observed_regimes"
+        )
+    )
+    verif_record = {
+        "status": verif_status,
+        "scope_kind": scope_kind,
+        "epistemic_status": (
+            "single_source_local_basis_not_global_verification"
+            if single_episode_only
+            else "candidate_scope_hypothesis_not_global_proof"
+        ),
+        "single_source_local_support_only": single_episode_only,
+        "protocols_observed": sup_protocols or ["paid_episode_transitions"],
         "retained_support_passed": retained_hits,
         "retained_support_total": len(retained_support_regime_features),
         "excluded_counterexample_passed": excluded_hits,
         "excluded_counterexample_total": len(refuting_list),
         "boundary_uncertainty_halfwidth": round(float(min_halfwidth), 6) if isfinite(min_halfwidth) else None,
         "bounds_consistency": "exact_box_consistent_with_guard",
+        "guard_ast_features": all_ast_features,
         "requires_pilot_calibration": requires_pilot,
     }
+
+    if scope_kind == "empirical_applicability_scope":
+        updated["previous_status"] = updated.get("status", "universal")
+        updated["status"] = "scoped_conditional"
+        updated["shrunk"] = True
+        updated["scope_kind"] = "empirical_applicability_scope"
+        updated["scope_guard"] = final_guard.to_dict()
+        updated["observable_bounds"] = chosen_bounds
+        eff_features = all_ast_features or chosen_features
+        updated["scope_shrink_feature"] = chosen_features[0] if chosen_features else (eff_features[0] if eff_features else None)
+        updated["scope_shrink_features"] = eff_features
+        updated["scope_verification"] = verif_record
+    else:
+        updated["routing_shrunk"] = True
+        updated["routing_scope_kind"] = "routing_scope_candidate"
+        updated["routing_guard"] = final_guard.to_dict()
+        updated["routing_bounds"] = chosen_bounds
+        updated["routing_features"] = all_ast_features or chosen_features
+        updated["routing_verification"] = verif_record
+
     updated.setdefault("scope_revision_history", []).append(
         {
-            "event": "shrunk_universal_scope_after_empirical_counterexample",
-            "separating_features": chosen_features,
-            "scope_verification": deepcopy(updated["scope_verification"]),
+            "event": (
+                "shrunk_universal_scope_after_empirical_counterexample"
+                if scope_kind == "empirical_applicability_scope"
+                else "updated_empirical_routing_candidate_from_neighbor_regimes"
+            ),
+            "scope_kind": scope_kind,
+            "separating_features": all_ast_features or chosen_features,
+            "scope_verification": deepcopy(verif_record),
             "refuting_regime_features": deepcopy(refuting_regime_features),
         }
     )
@@ -1214,30 +1446,53 @@ def adjudicate_branches_on_paid_evidence(
     aligned_old: dict[str, Any],
     paid_observations: list[Observation],
     paid_transitions: list[dict],
-    target_schema: ObjectSchema | dict,
+    target_schema: ObjectSchema | dict | None,
     *,
-    old_support_regime_features: list[dict[str, float]] | None = None,
+    new_paid_observations: list[Observation] | None = None,
+    old_support_regime_features: list[dict[str, Any]] | None = None,
+    evidence_ref: dict[str, Any] | None = None,
     budget: SearchBudget | None = None,
     tolerance: float = 1e-7,
 ) -> dict[str, Any]:
-    """Update ONLY supported/refuted claims from paid discriminating probe results (Acceptance B4, B5, A2)."""
+    """Adjudicate competing claims on real paid evidence with version-bound counterexamples & pending subquestions (v13 A3, B1)."""
     if budget is not None:
         budget.spend(2 * max(1, len(paid_observations)))
 
-    mse_new = float(loss(aligned_new["program"], paid_observations, 0.0, 0.5))
+    obs_for_new = new_paid_observations if new_paid_observations is not None else paid_observations
+    mse_new = float(loss(aligned_new["program"], obs_for_new, 0.0, 0.5))
     mse_old = float(loss(aligned_old["program"], paid_observations, 0.0, 0.5))
-    obs_reg = compute_observable_regime_features(paid_transitions, target_schema)
+    obs_reg = compute_observable_regime_features(
+        paid_transitions,
+        target_schema,
+        protocol_id=str((evidence_ref or {}).get("protocol_id") or "discriminating_probe"),
+        source_ref=str((evidence_ref or {}).get("actual_probe_id") or "paid_evidence"),
+    )
+
+    new_prog_ver = _program_semantic_version(aligned_new.get("program"))
+    old_prog_ver = _program_semantic_version(aligned_old.get("program"))
+    ev_meta = deepcopy(evidence_ref) if evidence_ref is not None else {
+        "status": "direct_paid_observations",
+        "actual_probe_id": None,
+        "observation_count": len(paid_observations),
+    }
 
     new_ok = mse_new <= tolerance
     old_ok = mse_old <= tolerance
 
     if old_ok and not new_ok:
-        # Acceptance B4: Refuted newcomer is rejected WITHOUT overwriting valid old claim!
+        # Check #8: Refuted newcomer instance is rejected WITHOUT overwriting valid old claim
+        # and WITHOUT automatically refuting the entire parametric model family!
         rej_new = deepcopy(new_claim)
         rej_new["status"] = "refuted"
+        rej_new["refutation_scope"] = "specific_parameter_instance_only_not_entire_family"
         rej_new.setdefault("counterexamples", []).append(
             {
                 "evidence_kind": "empirical_episode",
+                "tested_program_version": new_prog_ver,
+                "role_and_parameter_bindings": deepcopy(aligned_new.get("radius_bindings") or {}),
+                "declared_scope_guard": deepcopy(new_claim.get("scope_guard")),
+                "evidence_ref": ev_meta,
+                "instance_only_not_family_refutation": True,
                 "mse_on_discriminating_probe": mse_new,
                 "observable_regime": obs_reg,
             }
@@ -1246,85 +1501,253 @@ def adjudicate_branches_on_paid_evidence(
             "verdict": "new_claim_refuted_old_preserved",
             "mse_new": mse_new,
             "mse_old": mse_old,
+            "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
             "updated_new_claim": rej_new,
             "updated_old_claim": deepcopy(old_claim),
             "old_claim_overwritten": False,
+            "pending_questions": [],
         }
 
     if new_ok and not old_ok:
-        # Acceptance B5 & A2: Old universal claim failed on new domain -> shrink old claim's scope
-        # ONLY if real retained empirical support separates from the refuting regime!
+        # Old claim failed on paid probe -> bind counterexample to exact tested version & shrink old applicability scope!
+        old_with_ce = deepcopy(old_claim)
+        old_with_ce.setdefault("counterexamples", []).append(
+            {
+                "evidence_kind": "empirical_episode",
+                "tested_program_version": old_prog_ver,
+                "role_and_parameter_bindings": deepcopy(aligned_old.get("radius_bindings") or {}),
+                "declared_scope_guard": deepcopy(old_claim.get("scope_guard")),
+                "evidence_ref": ev_meta,
+                "instance_only_not_family_refutation": True,
+                "mse_on_discriminating_probe": mse_old,
+                "observable_regime": obs_reg,
+            }
+        )
         shrunk_old = shrink_claim_to_observable_scope(
-            old_claim,
+            old_with_ce,
             old_support_regime_features or [],
             obs_reg,
+            scope_kind="empirical_applicability_scope",
         )
         if shrunk_old.get("status") == "scope_unidentified":
             pending_new = deepcopy(new_claim)
             pending_new["status"] = "conditional_candidate_scope_pending"
+            rq_scope = ResearchQuestion(
+                question="Empirical probe refuted universal scope of prior claim, but retained support pilot statistics did not separate an observable scope boundary.",
+                evidence={"mse_new": mse_new, "mse_old": mse_old, "refuting_regime": obs_reg},
+                operations=("acquire_pilot_regime_summary", "identify_observable_scope_guard"),
+            )
+            pq_scope = {
+                "question_id": f"scope_subq:{old_claim.get('claim_id')}_vs_{new_claim.get('claim_id')}",
+                "status": "pending",
+                "kind": "scope_boundary_unidentified_after_refutation",
+                "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
+                "role_and_parameter_bindings": {
+                    "new": deepcopy(aligned_new.get("radius_bindings") or {}),
+                    "old": deepcopy(aligned_old.get("radius_bindings") or {}),
+                },
+                "counterexample_evidence_ref": ev_meta,
+                "observable_regime": deepcopy(obs_reg),
+                "unresolved_parent_goal": "separate_applicable_observable_domains",
+                "allowed_return_types": ["pilot_regime_summary", "observable_scope_guard"],
+                "target_parent_mutation": "update_branch_scope_guard_or_experiment",
+                "research_question": {
+                    "question": rq_scope.question,
+                    "evidence": rq_scope.evidence,
+                    "operations": list(rq_scope.operations),
+                },
+            }
             return {
                 "verdict": "old_refuted_on_probe_scope_unidentified_pending_support",
                 "mse_new": mse_new,
                 "mse_old": mse_old,
+                "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
                 "updated_new_claim": pending_new,
                 "updated_old_claim": shrunk_old,
                 "old_claim_overwritten": False,
-                "research_question": ResearchQuestion(
-                    question="Empirical probe refuted universal scope of prior claim, but retained support pilot statistics did not separate an observable scope boundary.",
-                    evidence={"mse_new": mse_new, "mse_old": mse_old, "refuting_regime": obs_reg},
-                    operations=("acquire_pilot_regime_summary", "identify_observable_scope_guard"),
-                ),
+                "research_question": rq_scope,
+                "pending_question": pq_scope,
+                "pending_questions": [pq_scope],
             }
 
+        # Check #12 & B1: Complement of old guard is NEVER auto-confirmed as new_claim's global applicability scope!
+        # Third mechanisms outside `old_guard` remain possible; store complement ONLY as an unconfirmed proposal
+        # and routing candidate, while keeping `new_claim`'s scientific `scope_guard = None` until tested against a CE of its own!
         scoped_new = deepcopy(new_claim)
-        scoped_new["status"] = "scoped_conditional"
+        if scoped_new.get("status") in {None, "universal"}:
+            scoped_new["status"] = "locally_supported_conditional"
         if shrunk_old.get("scope_shrink_feature") and shrunk_old.get("observable_bounds"):
             feat_s = shrunk_old["scope_shrink_feature"]
             b_old = shrunk_old["observable_bounds"][feat_s]
-            # Complement observable interval for new_claim (consistent guard + bounds!)
             if b_old[1] >= 1e5:
                 cut = float(b_old[0])
-                scoped_new["observable_bounds"] = {feat_s: [-1e6, cut - 1e-5]}
-                scoped_new["scope_guard"] = Program(
+                comp_bounds = {feat_s: [-1e6, cut - 1e-5]}
+                comp_prog = Program(
                     "lt",
                     children=(Program("feature", name=feat_s), Program("const", value=cut - 1e-5)),
-                ).to_dict()
+                )
             else:
                 cut = float(b_old[1])
-                scoped_new["observable_bounds"] = {feat_s: [cut + 1e-5, 1e6]}
-                scoped_new["scope_guard"] = Program(
+                comp_bounds = {feat_s: [cut + 1e-5, 1e6]}
+                comp_prog = Program(
                     "lt",
                     children=(Program("const", value=cut + 1e-5), Program("feature", name=feat_s)),
-                ).to_dict()
+                )
+            old_sup_checks = [
+                evaluate_scope_guard(comp_prog, r) for r in (old_support_regime_features or ())
+            ]
+            new_sup_check = evaluate_scope_guard(comp_prog, obs_reg)
+            scoped_new["proposed_complement_scope_candidate"] = {
+                "guard": comp_prog.to_dict(),
+                "bounds": comp_bounds,
+                "confirmed_applicability_scope": False,
+                "allows_third_mechanism": True,
+                "epistemic_status": "unverified_complement_proposal_third_mechanism_possible",
+                "checked_excluded_old_support": all(c == "reject" for c in old_sup_checks) if old_sup_checks else False,
+                "checked_covers_new_support": (new_sup_check == "accept"),
+            }
+            if new_sup_check == "accept":
+                scoped_new["routing_guard"] = comp_prog.to_dict()
+                scoped_new["routing_bounds"] = comp_bounds
+                scoped_new["routing_scope_kind"] = "routing_scope_candidate"
         return {
             "verdict": "old_universal_shrunk_and_conditional_branch_retained",
             "mse_new": mse_new,
             "mse_old": mse_old,
+            "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
             "updated_new_claim": scoped_new,
             "updated_old_claim": shrunk_old,
             "old_claim_overwritten": False,
+            "pending_questions": [],
         }
 
     if not new_ok and not old_ok:
+        # Checks #6, #7 & A3: BOTH claims refuted on real paid evidence!
+        # Restrict BOTH claims' applicability on this regime (preserving valid old source calculations)
+        # AND return a concrete parent-bound pending subquestion!
+        ce_common = {
+            "evidence_kind": "empirical_episode",
+            "evidence_ref": ev_meta,
+            "observable_regime": obs_reg,
+            "instance_only_not_family_refutation": True,
+        }
+        old_ce_claim = deepcopy(old_claim)
+        old_ce_claim.setdefault("counterexamples", []).append(
+            {
+                **ce_common,
+                "tested_program_version": old_prog_ver,
+                "role_and_parameter_bindings": deepcopy(aligned_old.get("radius_bindings") or {}),
+                "declared_scope_guard": deepcopy(old_claim.get("scope_guard")),
+                "mse_on_discriminating_probe": mse_old,
+            }
+        )
+        if old_support_regime_features:
+            upd_old = shrink_claim_to_observable_scope(
+                old_ce_claim,
+                old_support_regime_features,
+                obs_reg,
+                scope_kind="empirical_applicability_scope",
+            )
+            if upd_old.get("status") == "scope_unidentified":
+                upd_old["status"] = "contested_scope_unidentified"
+        else:
+            upd_old = old_ce_claim
+            upd_old["previous_status"] = upd_old.get("status", "universal")
+            upd_old["status"] = "contested_scope_unidentified"
+
+        new_ce_claim = deepcopy(new_claim)
+        new_ce_claim.setdefault("counterexamples", []).append(
+            {
+                **ce_common,
+                "tested_program_version": new_prog_ver,
+                "role_and_parameter_bindings": deepcopy(aligned_new.get("radius_bindings") or {}),
+                "declared_scope_guard": deepcopy(new_claim.get("scope_guard")),
+                "mse_on_discriminating_probe": mse_new,
+            }
+        )
+        new_sup_regs = list(new_claim.get("pilot_regime_features") or ())
+        if new_sup_regs:
+            upd_new = shrink_claim_to_observable_scope(
+                new_ce_claim,
+                new_sup_regs,
+                obs_reg,
+                scope_kind="empirical_applicability_scope",
+            )
+            if upd_new.get("status") == "scope_unidentified":
+                upd_new["status"] = "contested_scope_unidentified"
+        else:
+            upd_new = new_ce_claim
+            upd_new["previous_status"] = upd_new.get("status", "universal")
+            upd_new["status"] = "contested_refuted_on_probe"
+
+        rq = ResearchQuestion(
+            question="Both competing hypotheses failed on paid discriminating probe; investigate missing state, representation, or non-pairwise mechanism.",
+            evidence={
+                "mse_new": mse_new,
+                "mse_old": mse_old,
+                "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
+                "evidence_ref": ev_meta,
+                "observable_regime": obs_reg,
+            },
+            operations=("expand_latent_state", "propose_open_grammar_revision", "audit_nonconservation"),
+        )
+        pending_q = {
+            "question_id": f"reconcile_subq:{new_claim.get('claim_id')}_vs_{old_claim.get('claim_id')}:{ev_meta.get('actual_probe_id') or 'paid'}",
+            "status": "pending",
+            "kind": "both_competing_branches_refuted",
+            "tested_program_versions": {
+                "new_claim_id": new_claim.get("claim_id"),
+                "new_program_version": new_prog_ver,
+                "old_claim_id": old_claim.get("claim_id"),
+                "old_program_version": old_prog_ver,
+            },
+            "role_and_parameter_bindings": {
+                "new": deepcopy(aligned_new.get("radius_bindings") or {}),
+                "old": deepcopy(aligned_old.get("radius_bindings") or {}),
+            },
+            "declared_scopes": {
+                "new_scope_guard": deepcopy(new_claim.get("scope_guard")),
+                "old_scope_guard": deepcopy(old_claim.get("scope_guard")),
+            },
+            "counterexample_evidence_ref": ev_meta,
+            "observable_regime": deepcopy(obs_reg),
+            "mse_new": mse_new,
+            "mse_old": mse_old,
+            "unresolved_parent_goal": "resolve_target_prediction_and_branch_competition",
+            "allowed_return_types": [
+                "revised_edge_predicate",
+                "expanded_latent_state",
+                "nonconservation_mechanism",
+                "recalibrated_parameter_or_binding",
+                "next_discriminating_probe",
+            ],
+            "target_parent_mutation": "replace_parent_candidate_or_schedule_discriminating_probe",
+            "research_question": {
+                "question": rq.question,
+                "evidence": deepcopy(rq.evidence),
+                "operations": list(rq.operations),
+            },
+        }
         return {
             "verdict": "both_claims_refuted_open_missing_mechanism_question",
             "mse_new": mse_new,
             "mse_old": mse_old,
-            "updated_new_claim": deepcopy(new_claim),
-            "updated_old_claim": deepcopy(old_claim),
-            "research_question": ResearchQuestion(
-                question="Both competing hypotheses failed on paid discriminating probe; investigate missing state, representation, or non-pairwise mechanism.",
-                evidence={"mse_new": mse_new, "mse_old": mse_old},
-                operations=("expand_latent_state", "propose_open_grammar_revision"),
-            ),
+            "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
+            "updated_new_claim": upd_new,
+            "updated_old_claim": upd_old,
+            "research_question": rq,
+            "pending_question": pending_q,
+            "pending_questions": [pending_q],
         }
 
     return {
         "verdict": "both_consistent_on_probe_retain_competition",
         "mse_new": mse_new,
         "mse_old": mse_old,
+        "tested_program_versions": {"new": new_prog_ver, "old": old_prog_ver},
         "updated_new_claim": deepcopy(new_claim),
         "updated_old_claim": deepcopy(old_claim),
+        "pending_questions": [],
     }
 
 
@@ -1849,14 +2272,21 @@ def propose_anti_unified_generalization(
         }
 
     confirmed_exact = fresh_confirmation_status == "all_branches_fresh_confirmed"
+    source_pres_status = (
+        "all_sources_preservation_verified"
+        if confirmed_exact
+        else fresh_confirmation_status
+    )
     ep_status = (
-        "confirmed_exact_family"
+        "source_preservation_verified_family"
         if confirmed_exact
         else "source_fit_verified_fresh_unknown"
     )
     generalized_comm["confirmed"] = confirmed_exact
     generalized_comm["epistemic_status"] = ep_status
+    generalized_comm["source_preservation_status"] = source_pres_status
     generalized_comm["fresh_confirmation_status"] = fresh_confirmation_status
+    generalized_comm["independent_out_of_source_confirmations"] = 0
 
     semantic_relations = [
         {
@@ -1871,6 +2301,8 @@ def propose_anti_unified_generalization(
         "accepted": True,
         "confirmed": confirmed_exact,
         "epistemic_status": ep_status,
+        "source_preservation_status": source_pres_status,
+        "independent_out_of_source_confirmations": 0,
         "status": "accepted_parametric_generalization",
         "tolerance_contract": tolerance,
         "generalized_commitment": generalized_comm,
@@ -1892,16 +2324,19 @@ def propagate_premise_retraction_invalidation(
     *,
     retracted_premise_or_claim_ids: set[str] | list[str] = (),
 ) -> list[dict[str, Any]]:
-    """Update dependent claims after premise retraction and reject ungrounded support cycles (B9, A3.6 / F07).
+    """Update dependent claims after premise retraction and reject ungrounded support cycles (B9, A3.6, v13 Check #10).
 
     Rules:
       - A claim is **grounded** iff either:
           (a) it explicitly declares ``independent_empirical_support is True`` (never assumed by
               default on candidate roots!) and is not retracted/revoked, OR
-          (b) it has a non-empty ``depends_on_claim_ids`` where ALL required dependencies are
-              grounded (acyclic foundation reachability!).
+          (b) it has non-empty ``depends_on_claim_ids`` where at least ``min_grounded_dependencies``
+              (default ``len(depends_on_claim_ids)`` for conjunctive claims; ``2`` for multi-branch
+              anti-unified families; ``1`` for multi-source shared commitments) dependencies are
+              grounded — so retracting one source NEVER globally deletes a shared computation or
+              family that retains independent valid support!
       - Candidate roots without ``independent_empirical_support is True`` default to
-        ``support_validity = 'unverified_missing_support'`` (``status = 'pending_empirical_support'``).
+        ``support_validity = 'unverified_missing_support'``.
       - Pure support cycles ``A <-> B`` without an independent empirical foundation receive
         ``support_validity = 'invalid_ungrounded_cycle'``.
     """
@@ -1937,8 +2372,16 @@ def propagate_premise_retraction_invalidation(
             if req_prems & retracted:
                 continue
             deps = list(c.get("depends_on_claim_ids") or ())
-            if deps and all(d in grounded for d in deps):
+            if not deps:
+                continue
+            min_req = int(c.get("min_grounded_dependencies") or len(deps))
+            min_req = max(1, min(min_req, len(deps)))
+            grounded_deps = [d for d in deps if d in grounded]
+            if len(grounded_deps) >= min_req:
                 grounded.add(cid)
+                c["active_grounded_dependencies"] = grounded_deps
+                if len(grounded_deps) < len(deps):
+                    c["retracted_dependencies_pruned"] = [d for d in deps if d not in grounded]
                 changed = True
 
     for cid, c in by_id.items():
@@ -1987,18 +2430,18 @@ def propagate_premise_retraction_invalidation(
 def reconcile_competing_branches(
     new_claim: dict,
     old_claims: list[dict],
-    spec: TaskSpec,
-    target_schema: ObjectSchema | dict,
+    spec: TaskSpec | None,
+    target_schema: ObjectSchema | dict | None,
     *,
     execute_probe_fn: Any = None,
     controls_by_object: dict[str, dict[str, str]] | None = None,
-    old_support_regimes_by_id: dict[str, list[dict[str, float]]] | None = None,
+    old_support_regimes_by_id: dict[str, list[dict[str, Any]]] | None = None,
     new_unit_scales: dict[str, float] | None = None,
     old_unit_scales_by_id: dict[str, dict[str, float]] | None = None,
     budget: SearchBudget | None = None,
     tolerance: float = 1e-7,
 ) -> dict[str, Any]:
-    """Execute the full ``reconcile(new_claim, old_claims, observations, budget)`` specification (§2.1)."""
+    """Execute ``reconcile(new_claim, old_claims, ...)`` with typed probe acquisition & subquestion return (v13 A1, A3)."""
     alignment = align_semantics_roles_units_and_time(
         new_claim,
         old_claims,
@@ -2008,18 +2451,27 @@ def reconcile_competing_branches(
         budget=budget,
     )
     if not alignment["aligned_new"].get("aligned"):
-        return {"status": "new_claim_unaligned", "alignment": alignment}
+        return {
+            "status": "new_claim_unaligned",
+            "alignment": alignment,
+            "pending_questions": [],
+            "paid_probes_executed": [],
+        }
 
     aligned_new = alignment["aligned_new"]
     cur_new = deepcopy(new_claim)
     cur_olds: list[dict] = []
     decisions: list[dict[str, Any]] = []
     paid_probes_executed: list[dict[str, Any]] = []
+    reused_protocol_probes: list[dict[str, Any]] = []
+    historical_reanalyses: list[dict[str, Any]] = []
+    pending_questions: list[dict[str, Any]] = []
+    research_questions: list[Any] = []
 
     for item in alignment["compatible_candidates"]:
         old_raw = item["raw_claim"]
         aligned_old = item["aligned"]
-        oid = str(old_raw.get("claim_id") or aligned_old["claim_id"])
+        oid = str(old_raw.get("claim_id") or aligned_old.get("claim_id") or "old")
 
         overlap = assess_scope_overlap(cur_new, old_raw)
         if overlap["certified_disjoint"]:
@@ -2042,7 +2494,6 @@ def reconcile_competing_branches(
             budget=budget,
         )
         if disagreement.get("proved_absent"):
-            # Certified equivalence consolidation: merge provenance without duplicating nodes!
             merged_old = deepcopy(old_raw)
             merged_sources = list(
                 dict.fromkeys(
@@ -2053,6 +2504,7 @@ def reconcile_competing_branches(
                 )
             )
             merged_old["source_concept_ids"] = merged_sources
+            merged_old["min_grounded_dependencies"] = 1
             decisions.append(
                 {
                     "old_claim_id": oid,
@@ -2065,40 +2517,175 @@ def reconcile_competing_branches(
             continue
 
         if disagreement.get("witness_available") and execute_probe_fn is not None:
-            paid_res = execute_probe_fn(disagreement["probe"])
-            if paid_res is not None:
-                p_obs, p_trans = paid_res
-                adj = adjudicate_branches_on_paid_evidence(
-                    cur_new,
-                    old_raw,
-                    aligned_new,
-                    aligned_old,
-                    p_obs,
-                    p_trans,
-                    target_schema,
-                    old_support_regime_features=(old_support_regimes_by_id or {}).get(oid),
-                    budget=budget,
-                    tolerance=tolerance,
-                )
-                cur_new = adj["updated_new_claim"]
-                cur_olds.append(adj["updated_old_claim"])
-                paid_probes_executed.append(
-                    {
-                        "probe_id": disagreement["probe"].probe_id,
+            req_probe = disagreement["probe"]
+            req_id = getattr(req_probe, "probe_id", "requested_probe")
+            frozen_vers = [
+                _program_semantic_version(aligned_new.get("program")),
+                _program_semantic_version(aligned_old.get("program")),
+            ]
+            try:
+                paid_res = execute_probe_fn(req_probe, frozen_program_versions=frozen_vers)
+            except TypeError:
+                paid_res = execute_probe_fn(req_probe)
+
+            # v13 A1 / Checks #1, #2, #3: ONLY accept typed acquisition contracts!
+            # Raw 2-tuples or `unavailable` statuses are NEVER recorded in `paid_probes_executed`!
+            if isinstance(paid_res, dict) and paid_res.get("status") in {
+                "executed_new",
+                "reused_exact_protocol",
+            }:
+                acq_status = str(paid_res["status"])
+                actual_id = str(paid_res.get("actual_probe_id") or req_id)
+                p_obs = list(paid_res.get("rows") or ())
+                p_trans = list(paid_res.get("transitions") or ())
+                if p_obs:
+                    ev_ref = {
+                        "status": acq_status,
+                        "requested_probe_id": req_id,
+                        "actual_probe_id": actual_id,
+                        "observation_refs": list(paid_res.get("observation_refs") or ()),
+                        "transition_refs": list(paid_res.get("transition_refs") or ()),
+                        "program_versions_frozen_before_result": list(
+                            paid_res.get("program_versions_frozen_before_result") or frozen_vers
+                        ),
+                        "cost_ref": deepcopy(paid_res.get("cost_ref")),
+                        "independent_sample_increment": len(p_obs) if acq_status == "executed_new" else 0,
+                    }
+                    adj = adjudicate_branches_on_paid_evidence(
+                        cur_new,
+                        old_raw,
+                        aligned_new,
+                        aligned_old,
+                        p_obs,
+                        p_trans,
+                        target_schema,
+                        old_support_regime_features=(old_support_regimes_by_id or {}).get(oid),
+                        evidence_ref=ev_ref,
+                        budget=budget,
+                        tolerance=tolerance,
+                    )
+                    cur_new = adj["updated_new_claim"]
+                    cur_olds.append(adj["updated_old_claim"])
+                    for pq in adj.get("pending_questions") or ():
+                        pending_questions.append(pq)
+                    if "research_question" in adj and adj["research_question"] is not None:
+                        research_questions.append(adj["research_question"])
+
+                    probe_entry = {
+                        "probe_id": actual_id,
+                        "requested_probe_id": req_id,
+                        "acquisition_status": acq_status,
+                        "independent_sample_increment": ev_ref["independent_sample_increment"],
                         "max_predicted_disagreement": disagreement["max_abs_disagreement"],
                         "verdict": adj["verdict"],
                         "mse_new": adj["mse_new"],
                         "mse_old": adj["mse_old"],
                     }
+                    if acq_status == "executed_new":
+                        paid_probes_executed.append(probe_entry)
+                    else:
+                        reused_protocol_probes.append(probe_entry)
+                    decisions.append(
+                        {
+                            "old_claim_id": oid,
+                            "action": adj["verdict"],
+                            "acquisition_status": acq_status,
+                            "requested_probe_id": req_id,
+                            "actual_probe_id": actual_id,
+                            "independent_sample_increment": ev_ref["independent_sample_increment"],
+                        }
+                    )
+                    continue
+
+            # Check #2: Optional historical reanalysis ONLY if explicitly supplied under `reanalyzable_existing_evidence`
+            # AND never disguised as executing `req_id`!
+            reanal = (
+                paid_res.get("reanalyzable_existing_evidence")
+                if isinstance(paid_res, dict)
+                else None
+            )
+            if isinstance(reanal, dict) and reanal.get("rows"):
+                h_rows = list(reanal["rows"])
+                h_trans = list(reanal.get("transitions") or ())
+                orig_id = str(reanal.get("original_probe_id") or "historical_paid_batch")
+                max_h_diff = max(
+                    (
+                        abs(float(aligned_new["program"].predict(r)) - float(aligned_old["program"].predict(r)))
+                        for r in h_rows
+                    ),
+                    default=0.0,
                 )
-                decisions.append(
-                    {
-                        "old_claim_id": oid,
-                        "action": adj["verdict"],
-                        "paid_probe_id": disagreement["probe"].probe_id,
+                if max_h_diff > max(1e-4, 10.0 * tolerance):
+                    ev_hist = {
+                        "status": "reanalyze_paid_evidence",
+                        "requested_probe_id": req_id,
+                        "actual_probe_id": orig_id,
+                        "executed_requested_probe": False,
+                        "observation_refs": list(reanal.get("observation_refs") or ()),
+                        "transition_refs": list(reanal.get("transition_refs") or ()),
+                        "program_versions_frozen_before_result": frozen_vers,
+                        "independent_sample_increment": 0,
                     }
-                )
-                continue
+                    adj_h = adjudicate_branches_on_paid_evidence(
+                        cur_new,
+                        old_raw,
+                        aligned_new,
+                        aligned_old,
+                        h_rows,
+                        h_trans,
+                        target_schema,
+                        old_support_regime_features=(old_support_regimes_by_id or {}).get(oid),
+                        evidence_ref=ev_hist,
+                        budget=budget,
+                        tolerance=tolerance,
+                    )
+                    cur_new = adj_h["updated_new_claim"]
+                    cur_olds.append(adj_h["updated_old_claim"])
+                    for pq in adj_h.get("pending_questions") or ():
+                        pending_questions.append(pq)
+                    if "research_question" in adj_h and adj_h["research_question"] is not None:
+                        research_questions.append(adj_h["research_question"])
+                    historical_reanalyses.append(
+                        {
+                            "action": "reanalyze_paid_evidence",
+                            "original_probe_id": orig_id,
+                            "unexecuted_requested_probe_id": req_id,
+                            "executed_requested_probe": False,
+                            "independent_sample_increment": 0,
+                            "verdict": adj_h["verdict"],
+                            "mse_new": adj_h["mse_new"],
+                            "mse_old": adj_h["mse_old"],
+                        }
+                    )
+                    decisions.append(
+                        {
+                            "old_claim_id": oid,
+                            "action": "reanalyze_paid_evidence",
+                            "adjudication_verdict": adj_h["verdict"],
+                            "original_probe_id": orig_id,
+                            "requested_probe_id": req_id,
+                            "executed_requested_probe": False,
+                        }
+                    )
+                    continue
+
+            decisions.append(
+                {
+                    "old_claim_id": oid,
+                    "action": "retain_unresolved_competition",
+                    "probe_acquisition_status": (
+                        paid_res.get("status")
+                        if isinstance(paid_res, dict)
+                        else ("unavailable" if paid_res is None else "rejected_untyped_probe_return")
+                    ),
+                    "requested_probe_id": req_id,
+                    "executed_requested_probe": False,
+                    "overlap": overlap,
+                    "witness_available": True,
+                }
+            )
+            cur_olds.append(deepcopy(old_raw))
+            continue
 
         # Evidence or budget insufficient to discriminate -> retain unresolved competition!
         decisions.append(
@@ -2111,14 +2698,21 @@ def reconcile_competing_branches(
         )
         cur_olds.append(deepcopy(old_raw))
 
-    return {
+    out_rec: dict[str, Any] = {
         "status": "reconciled",
         "updated_new_claim": cur_new,
         "updated_old_claims": cur_olds,
         "decisions": decisions,
         "paid_probes_executed": paid_probes_executed,
+        "reused_protocol_probes": reused_protocol_probes,
+        "historical_reanalyses": historical_reanalyses,
+        "pending_questions": pending_questions,
+        "research_questions": research_questions,
         "incompatible_semantics": alignment["incompatible_semantics"],
     }
+    if research_questions:
+        out_rec["research_question"] = research_questions[0]
+    return out_rec
 
 
 def validate_parametric_family_calibration_support(
@@ -2593,17 +3187,190 @@ def _branch_regime_signature(comm: dict[str, Any]) -> tuple[str, str, str, str]:
     return (direction, noncons, latent, pred_key)
 
 
+def _cross_evaluate_fixed_instance_on_neighbor(
+    branch_claim: dict[str, Any],
+    neighbor_claim: dict[str, Any],
+    *,
+    budget: SearchBudget | None = None,
+    tolerance: float = 1e-7,
+) -> dict[str, Any]:
+    """Evaluate ``branch_claim`` (as a fixed parameter instance) on ``neighbor_claim``'s paid witness rows (v13 B1 / Check #11).
+
+    Explicitly declares ``evaluation_mode = 'fixed_instance_alignment'`` so different structural signatures
+    are NEVER assumed to be mutual scientific counterexamples unless prediction actually fails on paid data!
+    """
+    rows_j_full = _deserialize_obs_rows(neighbor_claim.get("support_rows_serialized") or ())
+    rows_j = [*rows_j_full[:8], *rows_j_full[-16:]] if len(rows_j_full) > 24 else rows_j_full
+    sc_j = neighbor_claim.get("schema")
+    if not rows_j or not sc_j:
+        return {
+            "evaluated": False,
+            "evaluation_mode": "fixed_instance_alignment",
+            "empirically_refuted": False,
+            "reason": "missing_neighbor_witness_rows_or_schema",
+        }
+    al = instantiate_aligned_claim_program(branch_claim, sc_j)
+    if not al.get("aligned"):
+        return {
+            "evaluated": False,
+            "evaluation_mode": "fixed_instance_alignment",
+            "empirically_refuted": False,
+            "reason": al.get("reason", "unaligned"),
+        }
+    terms_j = al["terms"]
+    if budget is not None:
+        budget.spend(len(rows_j) * (len(terms_j) + 1))
+    cols = [[float(t.predict(r)) for r in rows_j] for t in terms_j]
+    coeffs = _linear_fit(cols, [float(r.target) for r in rows_j])
+    prog_j = _sum_terms(list(terms_j), coeffs[1:], coeffs[0])
+    cross_mse = float(loss(prog_j, rows_j, 0.0, 0.5))
+    return {
+        "evaluated": True,
+        "evaluation_mode": "fixed_instance_alignment",
+        "tested_program_version": _program_semantic_version(prog_j),
+        "cross_mse": cross_mse,
+        "empirically_refuted": bool(cross_mse > tolerance),
+    }
+
+
+def _cross_evaluate_refittable_family_on_neighbor(
+    family_comm: dict[str, Any],
+    neighbor_claim: dict[str, Any],
+    *,
+    budget: SearchBudget | None = None,
+    tolerance: float = 1e-7,
+) -> dict[str, Any]:
+    """Evaluate re-fittable parametric family ``family_comm`` (with allowed slot recalibration) on ``neighbor_claim`` (v13 B1).
+
+    Never refutes an entire parametric family merely because one fixed parameter instance failed!
+    """
+    rows_j_full = _deserialize_obs_rows(neighbor_claim.get("support_rows_serialized") or ())
+    rows_j = [*rows_j_full[:4], *rows_j_full[-8:]] if len(rows_j_full) > 12 else rows_j_full
+    sc_j_raw = neighbor_claim.get("schema")
+    sc_j = _as_schema(sc_j_raw)
+    if not rows_j or sc_j is None:
+        return {
+            "evaluated": False,
+            "evaluation_mode": "refittable_parametric_family",
+            "empirically_refuted": False,
+        }
+    dummy_spec = TaskSpec(
+        task_id="family_cross_scope_check",
+        description="Family cross-domain scope evaluation",
+        feature_names=tuple(sc_j.feature_names),
+        initial_probes=(),
+        available_probes=(),
+        feature_bounds={fn: (-2.0, 2.0) for fn in sc_j.feature_names},
+    )
+    nb_comm = neighbor_claim.get("commitment") or {}
+    nb_rp = (nb_comm.get("radius_parameters") or [{}])[0]
+    nb_r = neighbor_claim.get("radius_value") or (nb_rp.get("source_values") or [None])[-1]
+    nb_audit = {"radius_interval": [float(nb_r), float(nb_r)]} if nb_r is not None else None
+    probe_b = budget if budget is not None else SearchBudget(25_000)
+    entries = instantiate_parametric_family_on_target(
+        family_comm,
+        dummy_spec,
+        rows_j,
+        sc_j,
+        probe_b,
+        audit_report=nb_audit,
+        tolerance=tolerance,
+    )
+    if not entries:
+        return {
+            "evaluated": True,
+            "evaluation_mode": "refittable_parametric_family",
+            "cross_mse": float("inf"),
+            "empirically_refuted": True,
+        }
+    best_mse = min(float(e["training_loss"]) for e in entries)
+    return {
+        "evaluated": True,
+        "evaluation_mode": "refittable_parametric_family",
+        "cross_mse": best_mse,
+        "empirically_refuted": bool(best_mse > tolerance),
+    }
+
+
+def _refine_coexisting_branch_scopes_and_routing(
+    active_branches: list[dict[str, Any]],
+    *,
+    budget: SearchBudget | None = None,
+    tolerance: float = 1e-7,
+) -> list[dict[str, Any]]:
+    """Separate ``empirical_applicability_scope`` (actual cross-prediction failure) from ``routing_scope_candidate`` (v13 B1 / Check #11)."""
+    if len(active_branches) < 2:
+        return active_branches
+    refined: list[dict[str, Any]] = []
+    for b_i in active_branches:
+        if b_i.get("status") == "refuted":
+            refined.append(b_i)
+            continue
+        cur_b = deepcopy(b_i)
+        sig_i = _branch_regime_signature(cur_b["commitment"])
+        sup_regs_i = list(cur_b.get("pilot_regime_features") or ())
+        empirical_ce_regs: list[dict[str, Any]] = []
+        routing_neg_regs: list[dict[str, Any]] = []
+
+        for b_j in active_branches:
+            if b_j["claim_id"] == cur_b["claim_id"] or b_j.get("status") == "refuted":
+                continue
+            regs_j = list(b_j.get("pilot_regime_features") or ())
+            if not regs_j:
+                continue
+            cross_check = _cross_evaluate_fixed_instance_on_neighbor(
+                cur_b, b_j, budget=budget, tolerance=tolerance
+            )
+            if cross_check.get("evaluated") and cross_check.get("empirically_refuted"):
+                empirical_ce_regs.extend(regs_j)
+                routing_neg_regs.extend(regs_j)
+            elif _branch_regime_signature(b_j["commitment"]) != sig_i:
+                # Check #11: Different structural signature WITHOUT cross-prediction failure
+                # becomes ONLY a `routing_scope_candidate` negative, NEVER a scientific counterexample!
+                routing_neg_regs.extend(regs_j)
+
+        if sup_regs_i and empirical_ce_regs and any(
+            evaluate_scope_guard(cur_b.get("scope_guard"), ce_r) != "reject"
+            for ce_r in empirical_ce_regs
+        ):
+            cur_b = shrink_claim_to_observable_scope(
+                cur_b,
+                sup_regs_i,
+                empirical_ce_regs,
+                scope_kind="empirical_applicability_scope",
+            )
+        if sup_regs_i and routing_neg_regs and any(
+            evaluate_scope_guard(cur_b.get("routing_guard"), rt_r) != "reject"
+            for rt_r in routing_neg_regs
+        ):
+            cur_b = shrink_claim_to_observable_scope(
+                cur_b,
+                sup_regs_i,
+                routing_neg_regs,
+                scope_kind="routing_scope_candidate",
+            )
+        refined.append(cur_b)
+    return refined
+
+
+RECON_ALGO_VERSION = "v13_ordinary_lazy_recon_1"
+
+
 def reconstruct_parametric_families_from_ordinary_archive(
     library: Any,
     budget: SearchBudget,
     *,
     tolerance: float = 1e-7,
+    reconstruct_routing: bool | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """On-demand family reconstruction from raw ``meta_priors`` + ``OrdinaryPersistentCommitmentCache`` (v12 C1).
+    """3-layer cached on-demand reconstruction from raw ``meta_priors`` + ``OrdinaryPersistentCommitmentCache`` (v13 B3, B4 / Checks #13, #14).
 
-    Gives strong ordinary baseline ``R_ordinary_same_api`` identical access to parametric family
-    reconstruction and Pass-0 ``instantiate_parametric_family_on_target`` within target ``budget``,
-    without pre-reconciled ``scope_guard``s or branch organization.
+    Caches the exact 3 products needed by ordinary lazy study without redundant grouped consolidation:
+      1. Per-prior commitment & witness extraction preserving individual numeric constants;
+      2. Source-set anti-unified parametric families (target bindings excluded from cache key);
+      3. Optional empirical scope / routing candidates computed by the identical algorithm from raw evidence.
+    First computation debits ``budget`` honestly; unchanged subsequent calls reuse in O(1); adding or
+    revising a prior invalidates ONLY the affected prior and its family/routing entry.
     """
     from .premise_commitment_index import (
         OrdinaryPersistentCommitmentCache,
@@ -2612,89 +3379,642 @@ def reconstruct_parametric_families_from_ordinary_archive(
     from .world_structure_commitments import consolidate_world_structure_commitments
 
     start_spent = budget.spent
+    do_routing = (
+        bool(reconstruct_routing)
+        if reconstruct_routing is not None
+        else bool(getattr(library, "_allow_on_demand_routing_reconstruction", False))
+    )
     priors = [
         p
         for p in (getattr(library, "meta_priors", None) or ())
         if p.get("status") not in {"revoked", "stale_dependency_invalidated"}
     ]
-    if len(priors) < 2:
-        return [], {"reconstructed_count": 0, "compute_spent": 0, "cache_hit": None}
+    if not priors:
+        return [], {
+            "reconstructed_count": 0,
+            "reconstructed_branches_count": 0,
+            "compute_spent": 0,
+            "cache_hit": True,
+            "layer1_reused": 0,
+            "layer1_extracted": 0,
+            "layer2_reused": 0,
+            "layer2_built": 0,
+            "layer3_routing_reused": False,
+        }
 
-    ord_cache = getattr(library, "_ordinary_commitment_cache", None)
+    ord_cache = getattr(library, "_ordinary_commitment_cache", None) or getattr(library, "_ordinary_persistent_cache", None)
     if ord_cache is None:
         ord_cache = OrdinaryPersistentCommitmentCache()
-        library._ordinary_commitment_cache = ord_cache
+    library._ordinary_commitment_cache = ord_cache
+    library._ordinary_persistent_cache = ord_cache
 
-    _, cache_stats = ord_cache.get_or_consolidate(priors, budget=budget, tolerance=tolerance)
-    sup_by_src, ce_by_src = extract_archive_witness_maps(priors)
-    prior_by_src = {str(p.get("source_concept_id")): p for p in priors if p.get("source_concept_id")}
+    if budget is not None and not budget.spend(1):
+        return [], {"reconstructed_count": 0, "compute_spent": 0, "cache_hit": False, "interrupted": True}
 
-    # Consolidate each prior individually to preserve distinct numeric thresholds before anti-unification!
-    per_prior_records: list[tuple[tuple[str, str, str, str], dict[str, Any]]] = []
-    for p in priors:
-        cid = str(p.get("source_concept_id") or "")
+    active_fp, stale_cids = ord_cache.active_prior_fingerprints(priors)
+    tol_key = round(float(tolerance), 14)
+
+    layer1_reused = 0
+    layer1_extracted = 0
+    interrupted = False
+    extracted_items: list[dict[str, Any]] = []
+
+    for i, p in enumerate(priors):
+        cid = str(p.get("source_concept_id") or f"anon_{i}")
+        if cid in stale_cids or cid not in active_fp:
+            continue
         p_schema = (
             p.get("object_schema")
             or (p.get("structure") or {}).get("schema")
             or (p.get("research_program") or {}).get("source_schema")
         )
-        if not cid or cid not in sup_by_src or not p_schema:
+        if not p_schema:
             continue
+        l1_key = (cid, active_fp[cid], tol_key, RECON_ALGO_VERSION)
+        if l1_key in ord_cache._per_prior_extraction_memo:
+            extracted_items.append(deepcopy(ord_cache._per_prior_extraction_memo[l1_key]))
+            layer1_reused += 1
+            continue
+
+        sup_map_1, ce_map_1 = extract_archive_witness_maps([p])
+        if cid not in sup_map_1:
+            continue
+        if budget.remaining < 10:
+            interrupted = True
+            break
+        denied0 = budget.denied_requests
         c_list = consolidate_world_structure_commitments([p], budget=budget, tolerance=tolerance)
+        if budget.denied_requests > denied0:
+            interrupted = True
+            break
         if not c_list:
             continue
-        comm_i = c_list[0]
+        comm_i = deepcopy(c_list[0])
+        comm_i["commitment_id"] = f"archive_comm:{cid}"
         rp = (comm_i.get("radius_parameters") or [{}])[0]
         raw_ec = rp.get("edge_condition")
         if raw_ec in (None, "unconditional"):
-            continue
-        pred_ast = _canonical_edge_predicate_ast(raw_ec)
-        op_skel, has_param = _predicate_operator_skeleton_key(pred_ast)
-        if not has_param:
-            continue
+            has_param = False
+            op_skel = "unconditional"
+        else:
+            pred_ast = _canonical_edge_predicate_ast(raw_ec)
+            op_skel, has_param = _predicate_operator_skeleton_key(pred_ast)
         sig = (
             str(rp.get("direction") or "symmetric"),
             str(comm_i.get("nonconservation_mechanism") or "conserved"),
             str(comm_i.get("latent_state_mechanism") or "markov"),
             op_skel,
         )
-        fresh_rows = _deserialize_obs_rows(p.get("fresh_confirmation_witness_rows") or ())
-        per_prior_records.append(
-            (
-                sig,
-                {
-                    "claim_id": f"archive_src:{cid}",
-                    "commitment": comm_i,
-                    "schema": p_schema,
-                    "support_rows": sup_by_src[cid],
-                    "scoped_counterexamples": ce_by_src.get(cid, []),
-                    "fresh_holdout_rows": fresh_rows,
-                },
-            )
-        )
+        rec_entry = {
+            "source_concept_id": cid,
+            "fingerprint": active_fp[cid],
+            "claim_id": f"archive_src:{cid}",
+            "commitment": deepcopy(comm_i),
+            "schema": deepcopy(p_schema),
+            "sig": sig,
+            "has_param": bool(has_param),
+            "pilot_regime_features": deepcopy(list(p.get("pilot_regime_features") or ())),
+            "support_rows_serialized": _serialize_obs_rows(sup_map_1[cid], limit=512),
+            "counterexamples_serialized": _serialize_obs_rows(ce_map_1.get(cid, []), limit=128),
+            "fresh_rows_serialized": deepcopy(list(p.get("fresh_confirmation_witness_rows") or ())),
+        }
+        ord_cache._per_prior_extraction_memo[l1_key] = deepcopy(rec_entry)
+        extracted_items.append(rec_entry)
+        layer1_extracted += 1
 
+    # Layer 2: Source-group anti-unification memoization (target bindings never enter key!)
     by_sig: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
-    for sig, rec in per_prior_records:
-        by_sig.setdefault(sig, []).append(rec)
+    for item in extracted_items:
+        if item.get("has_param"):
+            by_sig.setdefault(item["sig"], []).append(item)
 
+    layer2_reused = 0
+    layer2_built = 0
     families: list[dict[str, Any]] = []
-    for sig, recs in by_sig.items():
-        if len(recs) < 2 or budget.remaining <= 0:
+    for sig, grp in by_sig.items():
+        if len(grp) < 2:
             continue
+        grp_fp_key = tuple(sorted(f"{it['source_concept_id']}:{it['fingerprint']}" for it in grp))
+        l2_key = (sig, grp_fp_key, tol_key, RECON_ALGO_VERSION)
+        if l2_key in ord_cache._family_au_memo:
+            cached_au = ord_cache._family_au_memo[l2_key]
+            layer2_reused += 1
+            if cached_au.get("accepted") and cached_au.get("family_commitment") is not None:
+                families.append(deepcopy(cached_au["family_commitment"]))
+            continue
+
+        if interrupted or budget.remaining < 20:
+            interrupted = True
+            break
+        denied0 = budget.denied_requests
+        au_inputs = [
+            {
+                "claim_id": it["claim_id"],
+                "commitment": deepcopy(it["commitment"]),
+                "schema": deepcopy(it["schema"]),
+                "support_rows": _deserialize_obs_rows(it["support_rows_serialized"]),
+                "scoped_counterexamples": _deserialize_obs_rows(it["counterexamples_serialized"]),
+                "fresh_holdout_rows": _deserialize_obs_rows(it["fresh_rows_serialized"]),
+            }
+            for it in grp
+        ]
         au_res = propose_anti_unified_generalization(
-            recs, budget=budget, tolerance=tolerance, require_fresh_confirmation=False
+            au_inputs, budget=budget, tolerance=tolerance, require_fresh_confirmation=False
         )
+        if budget.denied_requests > denied0:
+            interrupted = True
+            break
+        layer2_built += 1
         if au_res.get("accepted"):
             gf = deepcopy(au_res["generalized_commitment"])
             gf["scope_guard"] = None
+            gf["routing_guard"] = None
             gf["observable_bounds"] = {}
+            gf["min_grounded_dependencies"] = 2
             gf["reconstructed_on_demand_from_ordinary_archive"] = True
+            ord_cache._family_au_memo[l2_key] = {"accepted": True, "family_commitment": deepcopy(gf)}
             families.append(gf)
+        else:
+            ord_cache._family_au_memo[l2_key] = {"accepted": False, "family_commitment": None}
 
+    # Layer 3: Optional on-demand routing & empirical scope reconstruction (same algorithm, cached cleanly!)
+    reconstructed_branches: list[dict[str, Any]] = [
+        {
+            "claim_id": it["claim_id"],
+            "source_concept_id": it["source_concept_id"],
+            "source_concept_ids": [it["source_concept_id"]],
+            "commitment": deepcopy(it["commitment"]),
+            "schema": deepcopy(it["schema"]),
+            "status": "universal",
+            "independent_empirical_support": True,
+            "pilot_regime_features": deepcopy(it["pilot_regime_features"]),
+            "support_rows_serialized": deepcopy(it["support_rows_serialized"]),
+            "fresh_holdout_rows_serialized": deepcopy(it["fresh_rows_serialized"]),
+        }
+        for it in extracted_items
+    ]
+    layer3_reused = False
+    layer3_built = False
+    if do_routing and extracted_items and not interrupted:
+        all_fp_tuple = tuple(sorted(f"{it['source_concept_id']}:{it['fingerprint']}" for it in extracted_items))
+        raw_ev_count = len(getattr(library, "_raw_reconciliation_evidence_archive", ()) or ())
+        l3_key = (all_fp_tuple, raw_ev_count, tol_key, RECON_ALGO_VERSION)
+        if l3_key in ord_cache._routing_scope_memo:
+            cached_l3 = ord_cache._routing_scope_memo[l3_key]
+            reconstructed_branches = deepcopy(cached_l3["branches"])
+            fam_guards = cached_l3.get("family_guards_by_sig") or {}
+            for gf in families:
+                fsig = _branch_regime_signature(gf)
+                if fsig in fam_guards:
+                    gf.update(deepcopy(fam_guards[fsig]))
+            layer3_reused = True
+        elif budget.remaining >= 20:
+            denied0 = budget.denied_requests
+            raw_b_list = deepcopy(reconstructed_branches)
+            reconstructed_branches = _refine_coexisting_branch_scopes_and_routing(
+                raw_b_list, budget=budget, tolerance=tolerance
+            )
+            fam_guards_map: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+            for gf in families:
+                fsig = _branch_regime_signature(gf)
+                in_bs = [b for b in reconstructed_branches if _branch_regime_signature(b["commitment"]) == fsig]
+                out_bs = [b for b in reconstructed_branches if _branch_regime_signature(b["commitment"]) != fsig]
+                fam_sup = [reg for b in in_bs for reg in (b.get("pilot_regime_features") or ())]
+                emp_out_regs: list[dict[str, Any]] = []
+                rot_out_regs: list[dict[str, Any]] = []
+                for ob in out_bs:
+                    regs_o = list(ob.get("pilot_regime_features") or ())
+                    if not regs_o:
+                        continue
+                    f_chk = _cross_evaluate_refittable_family_on_neighbor(gf, ob, budget=budget, tolerance=tolerance)
+                    if f_chk.get("evaluated") and f_chk.get("empirically_refuted"):
+                        emp_out_regs.extend(regs_o)
+                        rot_out_regs.extend(regs_o)
+                    else:
+                        rot_out_regs.extend(regs_o)
+                fg_patch: dict[str, Any] = {}
+                if fam_sup and emp_out_regs:
+                    sc_gf = shrink_claim_to_observable_scope(
+                        gf, fam_sup, emp_out_regs, scope_kind="empirical_applicability_scope"
+                    )
+                    if sc_gf.get("shrunk") and sc_gf.get("scope_guard") is not None:
+                        fg_patch["scope_guard"] = deepcopy(sc_gf["scope_guard"])
+                        fg_patch["observable_bounds"] = deepcopy(sc_gf["observable_bounds"])
+                        fg_patch["scope_verification"] = deepcopy(sc_gf["scope_verification"])
+                if fam_sup and rot_out_regs:
+                    rt_gf = shrink_claim_to_observable_scope(
+                        gf, fam_sup, rot_out_regs, scope_kind="routing_scope_candidate"
+                    )
+                    if rt_gf.get("routing_shrunk") and rt_gf.get("routing_guard") is not None:
+                        fg_patch["routing_guard"] = deepcopy(rt_gf["routing_guard"])
+                        fg_patch["routing_bounds"] = deepcopy(rt_gf["routing_bounds"])
+                        fg_patch["routing_verification"] = deepcopy(rt_gf["routing_verification"])
+                if fg_patch:
+                    gf.update(deepcopy(fg_patch))
+                    fam_guards_map[fsig] = fg_patch
+            if budget.denied_requests == denied0:
+                ord_cache._routing_scope_memo[l3_key] = {
+                    "branches": deepcopy(reconstructed_branches),
+                    "family_guards_by_sig": deepcopy(fam_guards_map),
+                }
+                layer3_built = True
+
+    all_hit = bool(
+        not interrupted
+        and layer1_extracted == 0
+        and layer2_built == 0
+        and (not do_routing or layer3_reused or not extracted_items)
+    )
     return families, {
         "reconstructed_count": len(families),
+        "reconstructed_branches": reconstructed_branches,
+        "reconstructed_branches_count": len(reconstructed_branches),
         "compute_spent": budget.spent - start_spent,
-        "cache_hit": cache_stats.get("cache_hit"),
+        "cache_hit": all_hit,
+        "interrupted": interrupted,
+        "layer1_reused": layer1_reused,
+        "layer1_extracted": layer1_extracted,
+        "layer2_reused": layer2_reused,
+        "layer2_built": layer2_built,
+        "layer3_routing_reused": layer3_reused,
+        "layer3_routing_built": layer3_built,
+    }
+
+
+def dispatch_branches_and_families_for_target(
+    *,
+    library: Any,
+    consistent_comms: list[dict[str, Any]],
+    transitions: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    schema: Any,
+    audit: dict[str, Any] | None,
+    task_sig: str,
+    comm_budget: SearchBudget,
+    tolerance: float = 1e-7,
+) -> dict[str, Any]:
+    """Unified branch, routing & family dispatcher with explicit ``branch -> commitment -> source/version`` mapping (v13 A4, B1, C2).
+
+    Enforces:
+      1. Explicit identity mapping across ``branch:concept_*``, ``world_commitment:*``, and ``source_concept_ids``
+         (Fixes N5 / Check #9);
+      2. Multi-source preservation: a ``world_commitment:*`` or family backed by multiple independent sources is
+         NEVER deleted when only a subset of its sources is invalidated or empirically excluded (Check #10);
+      3. Four distinct telemetry buckets: ``not_scheduled_by_router`` (ordering only, never deletes!),
+         ``scope_not_established`` (``unknown`` pilot/stat, kept in unverified pool!), ``empirically_excluded_on_context``,
+         and ``support_invalidated``;
+      4. Single-factor flags ``_enable_scope_and_routing_guards`` and ``_prioritize_generalized_families``.
+    """
+    from .world_structure_commitments import is_commitment_empirically_consistent
+
+    obs_regime = compute_observable_regime_features(transitions, schema)
+    use_guards = bool(getattr(library, "_enable_scope_and_routing_guards", True))
+    prioritize_hstar = bool(getattr(library, "_prioritize_generalized_families", True))
+    retracted_set = set(getattr(library, "_retracted_premise_or_claim_ids", ()) or ())
+
+    raw_branches = list(getattr(library, "_active_reconciled_branches", ()) or ())
+    gen_families = list(getattr(library, "_generalized_branch_commitments", ()) or ())
+    on_demand_recon_stats = None
+
+    if (not gen_families or (not raw_branches and getattr(library, "_allow_on_demand_routing_reconstruction", False))) and getattr(
+        library, "_allow_on_demand_family_reconstruction", False
+    ):
+        recon_fams, on_demand_recon_stats = reconstruct_parametric_families_from_ordinary_archive(
+            library,
+            comm_budget,
+            tolerance=tolerance,
+            reconstruct_routing=bool(getattr(library, "_allow_on_demand_routing_reconstruction", False)),
+        )
+        if not gen_families:
+            gen_families = recon_fams
+        if not raw_branches and on_demand_recon_stats.get("reconstructed_branches"):
+            raw_branches = list(on_demand_recon_stats["reconstructed_branches"])
+
+    checked_branches = (
+        propagate_premise_retraction_invalidation(
+            raw_branches, retracted_premise_or_claim_ids=retracted_set
+        )
+        if raw_branches
+        else []
+    )
+    branch_by_id = {str(b["claim_id"]): b for b in checked_branches}
+
+    branch_identity_map: list[dict[str, Any]] = []
+    support_invalidated_ids: list[str] = []
+    empirically_excluded_ids: list[str] = []
+    not_scheduled_by_router_ids: list[str] = []
+    scope_not_established_ids: list[str] = []
+
+    invalidated_or_excluded_sources: set[str] = set()
+    invalidated_or_excluded_comm_ids: set[str] = set()
+    deferred_router_sources: set[str] = set()
+
+    matched_branch_comms: list[dict[str, Any]] = []
+    unknown_scope_comms: list[dict[str, Any]] = []
+    deferred_router_comms: list[dict[str, Any]] = []
+
+    for b in checked_branches:
+        bid = str(b["claim_id"])
+        b_comm = deepcopy(b.get("commitment") or b)
+        b_cid = str(b_comm.get("commitment_id") or bid)
+        b_srcs = list(
+            dict.fromkeys(
+                [
+                    *(b.get("source_concept_ids") or ()),
+                    *(b_comm.get("source_concept_ids") or ()),
+                    *([b["source_concept_id"]] if b.get("source_concept_id") else []),
+                ]
+            )
+        )
+        sem_ver = (
+            b.get("semantic_version")
+            or b_comm.get("semantic_group_fingerprint")
+            or b_cid
+        )
+        branch_identity_map.append(
+            {
+                "branch_id": bid,
+                "commitment_id": b_cid,
+                "source_concept_ids": b_srcs,
+                "semantic_version": sem_ver,
+            }
+        )
+
+        if b.get("support_validity") != "valid_grounded" or b.get("status") == "refuted":
+            support_invalidated_ids.append(bid)
+            invalidated_or_excluded_comm_ids.add(b_cid)
+            invalidated_or_excluded_sources.update(b_srcs)
+            continue
+
+        if use_guards:
+            app_res = evaluate_scope_guard(b.get("scope_guard"), obs_regime)
+            if app_res == "reject":
+                empirically_excluded_ids.append(bid)
+                invalidated_or_excluded_comm_ids.add(b_cid)
+                invalidated_or_excluded_sources.update(b_srcs)
+                continue
+            rot_guard = b.get("routing_guard")
+            rot_res = evaluate_scope_guard(rot_guard, obs_regime) if rot_guard is not None else "accept"
+            if rot_res == "reject":
+                # B1 & A4: Empirical routing miss ONLY defers candidate ordering, NEVER deletes knowledge!
+                not_scheduled_by_router_ids.append(bid)
+                deferred_router_sources.update(b_srcs)
+                if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
+                    deferred_router_comms.append(b_comm)
+                continue
+            if app_res == "unknown" or rot_res == "unknown":
+                scope_not_established_ids.append(bid)
+                if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
+                    unknown_scope_comms.append(b_comm)
+                continue
+
+        if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
+            matched_branch_comms.append(b_comm)
+
+    # Map branch exclusions/invalidations onto `consistent_comms` (`world_commitment:*`) while preserving
+    # any multi-source commitment that retains at least one valid non-excluded independent source (Checks #9, #10)!
+    filtered_pool: list[dict[str, Any]] = []
+    deferred_pool_tail: list[dict[str, Any]] = []
+    seen_comm_keys: set[tuple[str, tuple[str, ...]]] = set()
+
+    for m_comm in [*matched_branch_comms, *unknown_scope_comms]:
+        mc_key = (str(m_comm.get("commitment_id")), tuple(m_comm.get("source_concept_ids") or ()))
+        if mc_key not in seen_comm_keys:
+            seen_comm_keys.add(mc_key)
+            filtered_pool.append(m_comm)
+
+    for c in consistent_comms:
+        cid = str(c.get("commitment_id"))
+        c_srcs = list(c.get("source_concept_ids") or ())
+        if c_srcs:
+            valid_remaining_srcs = [
+                s for s in c_srcs if s not in invalidated_or_excluded_sources and s not in retracted_set
+            ]
+            if not valid_remaining_srcs:
+                continue
+            c_copy = deepcopy(c)
+            if len(valid_remaining_srcs) < len(c_srcs):
+                c_copy["source_concept_ids"] = valid_remaining_srcs
+                c_copy["pruned_excluded_source_ids"] = [
+                    s for s in c_srcs if s not in valid_remaining_srcs
+                ]
+        else:
+            if cid in invalidated_or_excluded_comm_ids or cid in retracted_set:
+                continue
+            c_copy = deepcopy(c)
+            valid_remaining_srcs = []
+
+        c_key = (cid, tuple(c_copy.get("source_concept_ids") or ()))
+        if c_key in seen_comm_keys:
+            continue
+        seen_comm_keys.add(c_key)
+        if valid_remaining_srcs and all(s in deferred_router_sources for s in valid_remaining_srcs):
+            deferred_pool_tail.append(c_copy)
+        else:
+            filtered_pool.append(c_copy)
+
+    for d_comm in [*deferred_pool_tail, *deferred_router_comms]:
+        dc_key = (str(d_comm.get("commitment_id")), tuple(d_comm.get("source_concept_ids") or ()))
+        if dc_key not in seen_comm_keys:
+            seen_comm_keys.add(dc_key)
+            filtered_pool.append(d_comm)
+        elif d_comm in deferred_router_comms and d_comm not in filtered_pool:
+            filtered_pool.append(d_comm)
+
+    # Dispatch generalized parametric families (respecting `_prioritize_generalized_families` & multi-branch grounding!)
+    scheduled_families: list[dict[str, Any]] = []
+    deferred_families: list[dict[str, Any]] = []
+    matched_family_ids: list[str] = []
+
+    if prioritize_hstar:
+        for gf in gen_families:
+            gf_id = str(gf.get("commitment_id"))
+            if gf_id in retracted_set:
+                support_invalidated_ids.append(gf_id)
+                continue
+            dep_bids = list(gf.get("depends_on_claim_ids") or gf.get("source_branch_ids") or ())
+            if dep_bids and branch_by_id:
+                grounded_dep_bids = [
+                    db
+                    for db in dep_bids
+                    if db in branch_by_id
+                    and branch_by_id[db].get("support_validity") == "valid_grounded"
+                    and branch_by_id[db].get("status") != "refuted"
+                ]
+                min_req_f = int(gf.get("min_grounded_dependencies") or min(2, len(dep_bids)))
+                if len(grounded_dep_bids) < min_req_f:
+                    support_invalidated_ids.append(gf_id)
+                    continue
+
+            gf_dir = (gf.get("radius_parameters") or [{}])[0].get("direction")
+            if audit and audit.get("verified_direction") and gf_dir and audit["verified_direction"] != gf_dir:
+                empirically_excluded_ids.append(gf_id)
+                continue
+
+            if use_guards:
+                f_app = evaluate_scope_guard(gf.get("scope_guard"), obs_regime)
+                if f_app == "reject":
+                    empirically_excluded_ids.append(gf_id)
+                    continue
+                f_rot_guard = gf.get("routing_guard")
+                f_rot = evaluate_scope_guard(f_rot_guard, obs_regime) if f_rot_guard is not None else "accept"
+                if f_rot == "reject":
+                    not_scheduled_by_router_ids.append(gf_id)
+                    deferred_families.append(gf)
+                    continue
+                if f_app == "unknown" or f_rot == "unknown":
+                    scope_not_established_ids.append(gf_id)
+
+            matched_family_ids.append(gf_id)
+            scheduled_families.append(gf)
+
+    telemetry = {
+        "observable_regime_features": obs_regime,
+        "scope_and_routing_guards_enabled": use_guards,
+        "prioritize_generalized_families": prioritize_hstar,
+        "branch_identity_map": branch_identity_map,
+        "matched_parametric_family_ids": matched_family_ids,
+        "support_invalidated": support_invalidated_ids,
+        "empirically_excluded_on_context": empirically_excluded_ids,
+        "not_scheduled_by_router": not_scheduled_by_router_ids,
+        "scope_not_established": scope_not_established_ids,
+        # Retain v12 alias keys for compatibility
+        "pruned_by_observable_scope_ids": empirically_excluded_ids,
+        "pruned_by_retraction_ids": support_invalidated_ids,
+        "on_demand_archive_family_reconstruction": (
+            {k: v for k, v in on_demand_recon_stats.items() if k != "reconstructed_branches"}
+            if isinstance(on_demand_recon_stats, dict)
+            else None
+        ),
+    }
+    return {
+        "ordered_consistent_comms": filtered_pool,
+        "scheduled_families": scheduled_families,
+        "deferred_router_families": deferred_families,
+        "telemetry": telemetry,
+    }
+
+
+def propose_threshold_interval_boundary_probe(
+    commitment: dict[str, Any],
+    threshold_interval: list[float] | tuple[float, float],
+    spec: TaskSpec,
+    target_schema: ObjectSchema | dict,
+    *,
+    fitted_radius: float = 0.92,
+    controls_by_object: dict[str, dict[str, str]] | None = None,
+    budget: SearchBudget | None = None,
+    min_actionable_width: float = 0.015,
+) -> dict[str, Any]:
+    """Synthesize a legal boundary-discriminating ``Probe`` from a residual compatible threshold interval (v13 C3).
+
+    Uses ONLY the agent's own public ``threshold_interval = [lo, hi]`` (NEVER reading hidden true threshold!),
+    freezes the two interior boundary models BEFORE acquisition, and tags the probe strictly as
+    ``role = 'boundary_refinement_training'`` so a separate unconsumed confirmation batch is required afterwards.
+    """
+    lo, hi = float(threshold_interval[0]), float(threshold_interval[1])
+    width = hi - lo
+    if width <= min_actionable_width:
+        return {"actionable": False, "reason": "interval_already_tight", "interval_width": width}
+
+    rp0 = (commitment.get("radius_parameters") or [{}])[0]
+    r_sym = str(rp0.get("symbol") or "r_0")
+    raw_ec = rp0.get("edge_condition")
+    if raw_ec in (None, "unconditional"):
+        return {"actionable": False, "reason": "unconditional_commitment"}
+
+    pred_ast = _canonical_edge_predicate_ast(raw_ec)
+    # Locate rightmost tunable threshold constant leaf (e.g. `0 < q_src AND th < q_src - q_dst`)
+    const_paths: list[tuple[int, ...]] = []
+
+    def _collect_consts(nd: Program, path: tuple[int, ...]) -> None:
+        if nd.op == "const":
+            const_paths.append(path)
+        for idx, ch in enumerate(nd.children):
+            _collect_consts(ch, (*path, idx))
+
+    _collect_consts(pred_ast, ())
+    if not const_paths:
+        return {"actionable": False, "reason": "no_numeric_threshold_leaf"}
+    target_path = const_paths[-1]
+
+    def _replace_at(nd: Program, path: tuple[int, ...], val: float) -> Program:
+        if not path:
+            return Program("const", value=float(val))
+        idx = path[0]
+        new_ch = tuple(
+            _replace_at(ch, path[1:], val) if i == idx else ch
+            for i, ch in enumerate(nd.children)
+        )
+        return Program(nd.op, value=nd.value, name=nd.name, lag=nd.lag, children=new_ch)
+
+    th_low_model = lo + 0.2 * width
+    th_high_model = hi - 0.2 * width
+    pred_lo = _replace_at(pred_ast, target_path, th_low_model)
+    pred_hi = _replace_at(pred_ast, target_path, th_high_model)
+
+    sc = _as_schema(target_schema)
+    if sc is None:
+        return {"actionable": False, "reason": "invalid_schema"}
+
+    comm_lo = deepcopy(commitment)
+    comm_hi = deepcopy(commitment)
+    if comm_lo.get("radius_parameters"):
+        comm_lo["radius_parameters"][0]["edge_condition"] = pred_lo.to_dict()
+        comm_hi["radius_parameters"][0]["edge_condition"] = pred_hi.to_dict()
+    for rt_d in comm_lo.get("role_terms") or ():
+        def _upd_lo(nd: dict) -> None:
+            if nd.get("kind") == "all_relation_sum":
+                nd["predicate"] = pred_lo.to_dict()
+            for ch_d in nd.get("children") or ():
+                if isinstance(ch_d, dict):
+                    _upd_lo(ch_d)
+        _upd_lo(rt_d)
+    for rt_d in comm_hi.get("role_terms") or ():
+        def _upd_hi(nd: dict) -> None:
+            if nd.get("kind") == "all_relation_sum":
+                nd["predicate"] = pred_hi.to_dict()
+            for ch_d in nd.get("children") or ():
+                if isinstance(ch_d, dict):
+                    _upd_hi(ch_d)
+        _upd_hi(rt_d)
+
+    al_lo = instantiate_aligned_claim_program(
+        {"claim_id": f"boundary_lo_{th_low_model:.4f}", "commitment": comm_lo, "radius_value": fitted_radius},
+        sc,
+    )
+    al_hi = instantiate_aligned_claim_program(
+        {"claim_id": f"boundary_hi_{th_high_model:.4f}", "commitment": comm_hi, "radius_value": fitted_radius},
+        sc,
+    )
+    if not al_lo.get("aligned") or not al_hi.get("aligned"):
+        return {"actionable": False, "reason": "term_instantiation_failed"}
+
+    frozen_lo_ver = _program_semantic_version(al_lo["program"])
+    frozen_hi_ver = _program_semantic_version(al_hi["program"])
+
+    diff = find_feasible_prediction_difference(
+        al_lo,
+        al_hi,
+        spec,
+        sc,
+        controls_by_object=controls_by_object,
+        budget=budget,
+    )
+    if not diff.get("witness_available"):
+        return {
+            "actionable": False,
+            "reason": "no_feasible_boundary_witness_found",
+            "interval": [lo, hi],
+            "frozen_program_versions": [frozen_lo_ver, frozen_hi_ver],
+        }
+    return {
+        "actionable": True,
+        "role": "boundary_refinement_training_requires_fresh_confirmation",
+        "interval": [lo, hi],
+        "tested_boundary_models": {"th_low": th_low_model, "th_high": th_high_model},
+        "frozen_program_versions": [frozen_lo_ver, frozen_hi_ver],
+        "probe": diff["probe"],
+        "max_abs_disagreement": diff["max_abs_disagreement"],
     }
 
 
@@ -2712,28 +4032,31 @@ def autonomous_reconcile_library_episode(
     concept_id: str | None,
     execute_probe_fn: Any,
     budget: SearchBudget,
+    delivered_program: Program | dict | None = None,
+    unconfirmed_candidate_entry: dict[str, Any] | None = None,
+    schema_alternatives: list[dict[str, Any]] | None = None,
+    reconcile_view_rows: list[Observation] | None = None,
     tolerance: float = 1e-7,
     provisional_approximate_tolerance: float = 1.5e-2,
 ) -> dict[str, Any]:
-    """Autonomous post-episode branch reconciliation & incremental family discovery inside ``UnifiedResearchAgent.run()`` (v12 Deliverable B)."""
+    """Autonomous branch reconciliation, failure-driven subquestion generation, & family discovery inside ``UnifiedResearchAgent.run()`` (v13 PR-A/B)."""
     from .premise_commitment_index import compute_semantic_version
     from .world_structure_commitments import consolidate_world_structure_commitments
 
     start_spent = budget.spent
-    if not hasattr(library, "_reconciliation_episode_ledger") or library._reconciliation_episode_ledger is None:
-        library._reconciliation_episode_ledger = []
-    if not hasattr(library, "_provisional_candidate_archive") or library._provisional_candidate_archive is None:
-        library._provisional_candidate_archive = []
-    if not hasattr(library, "_active_reconciled_branches") or library._active_reconciled_branches is None:
-        library._active_reconciled_branches = []
-    if not hasattr(library, "_generalized_branch_commitments") or library._generalized_branch_commitments is None:
-        library._generalized_branch_commitments = []
-    if not hasattr(library, "_rejected_merge_records") or library._rejected_merge_records is None:
-        library._rejected_merge_records = []
-    if not hasattr(library, "_branch_semantic_relations") or library._branch_semantic_relations is None:
-        library._branch_semantic_relations = []
-    if not hasattr(library, "_family_evolution_history") or library._family_evolution_history is None:
-        library._family_evolution_history = []
+    for attr_name, default_val in (
+        ("_reconciliation_episode_ledger", []),
+        ("_provisional_candidate_archive", []),
+        ("_active_reconciled_branches", []),
+        ("_generalized_branch_commitments", []),
+        ("_rejected_merge_records", []),
+        ("_branch_semantic_relations", []),
+        ("_family_evolution_history", []),
+        ("_pending_reconciliation_questions", []),
+        ("_raw_reconciliation_evidence_archive", []),
+    ):
+        if not hasattr(library, attr_name) or getattr(library, attr_name) is None:
+            setattr(library, attr_name, deepcopy(default_val))
     if not hasattr(library, "_retracted_premise_or_claim_ids") or library._retracted_premise_or_claim_ids is None:
         library._retracted_premise_or_claim_ids = set()
 
@@ -2748,6 +4071,123 @@ def autonomous_reconcile_library_episode(
     )
 
     if not exact_confirmed:
+        # v13 A3 / N2 / Check #6: When an episode is NOT confirmed AND active branches exist,
+        # adjudicate the current candidate + compatible historical branches on the paid observations
+        # so mutual failure opens concrete parent-bound `pending_questions` and restricts refuted scopes!
+        pending_qs_fail: list[dict[str, Any]] = []
+        all_paid_pool = list(
+            {
+                id(r): r
+                for r in (*(reconcile_view_rows or ()), *support_rows, *confirmation_rows_list)
+            }.values()
+        )
+        spec_fset = set(spec.feature_names)
+        paid_eval_rows = [r for r in all_paid_pool if spec_fset <= set(r.features.keys())] or list(reconcile_view_rows or ())
+        sensor_fit_rows = [r for r in support_rows if spec_fset <= set(r.features.keys())] or paid_eval_rows
+        if (
+            schema_dict is not None
+            and paid_eval_rows
+            and library._active_reconciled_branches
+            and unconfirmed_candidate_entry is not None
+        ):
+            cand_obj = unconfirmed_candidate_entry.get("candidate")
+            cand_prog = (
+                cand_obj.program
+                if hasattr(cand_obj, "program")
+                else (
+                    Program.from_dict(delivered_program)
+                    if isinstance(delivered_program, dict)
+                    else delivered_program
+                )
+            )
+            if isinstance(cand_prog, Program):
+                cand_req = cand_prog.required_features()
+                cand_eval_rows = [r for r in all_paid_pool if cand_req <= set(r.features.keys())]
+                if not cand_eval_rows:
+                    cand_eval_rows = [r for r in (*support_rows, *confirmation_rows_list) if cand_req <= set(r.features.keys())]
+                new_unconf_claim = {
+                    "claim_id": f"unconfirmed_candidate:{task_id}",
+                    "status": "candidate",
+                    "independent_empirical_support": False,
+                    "schema": deepcopy(schema_dict),
+                }
+                upd_branches_fail: list[dict[str, Any]] = []
+                ev_ref_fail = {
+                    "status": "paid_episode_observations",
+                    "actual_probe_id": f"paid_episode:{task_id}",
+                    "observation_count": len(paid_eval_rows),
+                    "program_versions_frozen_before_result": [_program_semantic_version(cand_prog)],
+                }
+                for ob in library._active_reconciled_branches:
+                    if ob.get("status") == "refuted" or not cand_eval_rows:
+                        upd_branches_fail.append(ob)
+                        continue
+                    al_old = instantiate_aligned_claim_program(ob, schema_dict)
+                    adj_schema = schema_dict
+                    eff_alts = list(schema_alternatives or ())
+                    if not al_old.get("aligned") and not eff_alts and isinstance(schema_dict, dict):
+                        from itertools import permutations
+                        objs_p = list(schema_dict.get("objects") or ())
+                        flds_p = schema_dict.get("fields") or {}
+                        used_s = {fn for gm in flds_p.values() for fn in gm.values()}
+                        rem_s = [
+                            fn
+                            for fn in spec.feature_names
+                            if fn not in used_s
+                            and all(float(r.features.get(fn, 0.0)) in (0.0, 1.0) for r in paid_eval_rows[:24])
+                        ]
+                        if 1 <= len(objs_p) <= 4 and len(rem_s) == len(objs_p) and all("f" not in flds_p.get(g, {}) for g in objs_p):
+                            for perm_f in permutations(rem_s):
+                                cand_sc = deepcopy(schema_dict)
+                                for g_obj, f_sensor in zip(objs_p, perm_f):
+                                    cand_sc["fields"][g_obj]["f"] = f_sensor
+                                eff_alts.append(cand_sc)
+                    if not al_old.get("aligned") and eff_alts:
+                        # Only adjudicate as refuted when EVERY complete role completion in `eff_alts` fails!
+                        alt_trials = []
+                        for alt_sc in eff_alts:
+                            al_alt = instantiate_aligned_claim_program(ob, alt_sc)
+                            if not al_alt.get("aligned"):
+                                continue
+                            t_alt = al_alt["terms"]
+                            if t_alt and sensor_fit_rows:
+                                c_alt = [[float(t.predict(r)) for r in sensor_fit_rows] for t in t_alt]
+                                cf_alt = _linear_fit(c_alt, [float(r.target) for r in sensor_fit_rows])
+                                al_alt = {**al_alt, "program": _sum_terms(list(t_alt), cf_alt[1:], cf_alt[0])}
+                            mse_alt = float(loss(al_alt["program"], paid_eval_rows, 0.0, 0.5))
+                            alt_trials.append((mse_alt, alt_sc, al_alt))
+                        if alt_trials and all(m > tolerance for m, _, _ in alt_trials):
+                            _, adj_schema, al_old = min(alt_trials, key=lambda item: item[0])
+                    elif al_old.get("aligned"):
+                        terms_o = al_old["terms"]
+                        if terms_o and sensor_fit_rows:
+                            cols_o = [[float(t.predict(r)) for r in sensor_fit_rows] for t in terms_o]
+                            cf_o = _linear_fit(cols_o, [float(r.target) for r in sensor_fit_rows])
+                            al_old = {**al_old, "program": _sum_terms(list(terms_o), cf_o[1:], cf_o[0])}
+                    if not al_old.get("aligned"):
+                        upd_branches_fail.append(ob)
+                        continue
+                    adj_f = adjudicate_branches_on_paid_evidence(
+                        new_unconf_claim,
+                        ob,
+                        {"program": cand_prog, "radius_bindings": {}},
+                        al_old,
+                        paid_eval_rows,
+                        episode_transitions,
+                        adj_schema,
+                        new_paid_observations=cand_eval_rows,
+                        old_support_regime_features=list(ob.get("pilot_regime_features") or ()),
+                        evidence_ref=ev_ref_fail,
+                        budget=budget,
+                        tolerance=tolerance,
+                    )
+                    upd_branches_fail.append(adj_f["updated_old_claim"])
+                    for pq in adj_f.get("pending_questions") or ():
+                        pending_qs_fail.append(pq)
+                library._active_reconciled_branches = upd_branches_fail
+                if pending_qs_fail:
+                    library._pending_reconciliation_questions.extend(deepcopy(pending_qs_fail))
+
         if not has_fresh:
             ep_status = "unknown_no_fresh_data"
         elif (
@@ -2766,6 +4206,7 @@ def autonomous_reconcile_library_episode(
             "confirmation_loss": float(confirmation_loss) if confirmation_loss is not None else None,
             "confirmation_rows": len(confirmation_rows_list),
             "independent_empirical_support": False,
+            "pending_questions_count": len(pending_qs_fail),
         }
         library._reconciliation_episode_ledger.append(fail_rec)
         if ep_status == "provisional_approximate_candidate":
@@ -2783,6 +4224,7 @@ def autonomous_reconcile_library_episode(
             "task_id": task_id,
             "episode_confirmed": False,
             "epistemic_status": ep_status,
+            "pending_questions": pending_qs_fail,
             "compute_cost": budget.spent - start_spent,
         }
 
@@ -2797,10 +4239,11 @@ def autonomous_reconcile_library_episode(
             "task_id": task_id,
             "episode_confirmed": False,
             "epistemic_status": "missing_stored_prior",
+            "pending_questions": [],
             "compute_cost": budget.spent - start_spent,
         }
 
-    obs_regime = compute_observable_regime_features(episode_transitions, schema_dict)
+    obs_regime = compute_observable_regime_features(episode_transitions, schema_dict, source_ref=concept_id)
     ser_support = _serialize_obs_rows(support_rows, limit=512)
     ser_fresh = _serialize_obs_rows(confirmation_rows_list, limit=128)
     new_prior["support_witness_rows"] = deepcopy(ser_support)
@@ -2828,10 +4271,12 @@ def autonomous_reconcile_library_episode(
             "task_id": task_id,
             "episode_confirmed": True,
             "epistemic_status": "confirmed_non_parametric_structure",
+            "pending_questions": [],
             "compute_cost": budget.spent - start_spent,
         }
 
-    new_comm = comm_list[0]
+    new_comm = deepcopy(comm_list[0])
+    new_comm["commitment_id"] = f"branch_comm:{concept_id}"
     rp0 = (new_comm.get("radius_parameters") or [{"symbol": "r_0", "source_values": [0.95]}])[0]
     r_sym = str(rp0.get("symbol") or "r_0")
     r_val = float((rp0.get("source_values") or [0.95])[-1])
@@ -2849,8 +4294,13 @@ def autonomous_reconcile_library_episode(
             budget.spend(len(support_rows) * (len(terms_fit) + 1))
         cols = [[float(t.predict(r)) for r in support_rows] for t in terms_fit]
         coeffs = list(_linear_fit(cols, [float(r.target) for r in support_rows]))
+        assembled_prog = _sum_terms(list(terms_fit), coeffs[1:], coeffs[0])
     else:
         coeffs = [0.0, *([1.0] * len(terms_fit or ()))]
+        assembled_prog = None
+
+    assembled_ver = _program_semantic_version(assembled_prog)
+    delivered_ver = _program_semantic_version(delivered_program)
 
     new_claim = {
         "claim_id": f"branch:{concept_id}",
@@ -2859,6 +4309,10 @@ def autonomous_reconcile_library_episode(
         "commitment": deepcopy(new_comm),
         "radius_value": r_val,
         "coefficients": coeffs,
+        "assembled_program_version": assembled_ver,
+        "delivered_program_version": delivered_ver,
+        "assembled_matches_delivered_version": (assembled_ver == delivered_ver),
+        "semantic_version": compute_semantic_version(new_prior),
         "schema": deepcopy(schema_dict),
         "status": "universal",
         "confirmed": True,
@@ -2881,6 +4335,31 @@ def autonomous_reconcile_library_episode(
     old_branches = list(library._active_reconciled_branches)
     decisions: list[dict[str, Any]] = []
     paid_probes_executed: list[dict[str, Any]] = []
+    pending_questions: list[dict[str, Any]] = []
+    delivered_program_refuted_on_probe = False
+
+    def _recording_probe_fn(probe_obj: Any, **kw: Any) -> Any:
+        res_p = execute_probe_fn(probe_obj, **kw) if kw else execute_probe_fn(probe_obj)
+        if isinstance(res_p, dict) and res_p.get("status") == "executed_new" and res_p.get("rows"):
+            # v13 B4: Share reconciliation-acquired observations in raw archive so ordinary baseline has identical raw history!
+            p_ser = _serialize_obs_rows(list(res_p["rows"]), limit=128)
+            library._raw_reconciliation_evidence_archive.append(
+                {
+                    "task_id": task_id,
+                    "source_concept_id": concept_id,
+                    "probe_id": res_p.get("actual_probe_id"),
+                    "rows_serialized": p_ser,
+                    "transitions_count": len(res_p.get("transitions") or ()),
+                }
+            )
+            # Check A3 version guard: if `delivered_program` differs from `assembled_prog`, check `delivered_program` directly!
+            nonlocal delivered_program_refuted_on_probe
+            if delivered_program is not None:
+                dp = delivered_program if isinstance(delivered_program, Program) else Program.from_dict(delivered_program)
+                dp_mse = float(loss(dp, list(res_p["rows"]), 0.0, 0.5))
+                if dp_mse > tolerance:
+                    delivered_program_refuted_on_probe = True
+        return res_p
 
     if old_branches:
         old_regimes_by_id = {
@@ -2892,7 +4371,7 @@ def autonomous_reconcile_library_episode(
             old_branches,
             spec,
             schema_dict,
-            execute_probe_fn=execute_probe_fn,
+            execute_probe_fn=_recording_probe_fn if execute_probe_fn is not None else None,
             controls_by_object=schema_dict.get("controls"),
             old_support_regimes_by_id=old_regimes_by_id,
             budget=budget,
@@ -2900,6 +4379,9 @@ def autonomous_reconcile_library_episode(
         )
         decisions = list(rec_res.get("decisions") or ())
         paid_probes_executed = list(rec_res.get("paid_probes_executed") or ())
+        pending_questions = list(rec_res.get("pending_questions") or ())
+        if pending_questions:
+            library._pending_reconciliation_questions.extend(deepcopy(pending_questions))
         upd_new = rec_res.get("updated_new_claim") or new_claim
         upd_olds = list(rec_res.get("updated_old_claims") or old_branches)
         cons_into = upd_new.get("consolidated_into")
@@ -2911,49 +4393,28 @@ def autonomous_reconcile_library_episode(
                         upd_new.get("empirical_support_refs") or ()
                     )
             active_branches = upd_olds
-        elif upd_new.get("status") == "refuted":
+        elif upd_new.get("status") in {"refuted", "contested_refuted_on_probe"}:
+            # Check A3 version guard: only revoke `new_prior` if `delivered_program` itself failed or matched `assembled_ver`!
+            if delivered_program_refuted_on_probe or assembled_ver == delivered_ver:
+                new_prior["status"] = "contested_counterexample_on_probe"
+                delivered_program_refuted_on_probe = True
             active_branches = upd_olds
         else:
             active_branches = [*upd_olds, upd_new]
     else:
         active_branches = [new_claim]
 
-    # Mutual observable scope guard refinement across distinct coexisting active regimes
-    if len(active_branches) >= 2:
-        refined_branches: list[dict[str, Any]] = []
-        for b_i in active_branches:
-            if b_i.get("status") == "refuted":
-                refined_branches.append(b_i)
-                continue
-            sig_i = _branch_regime_signature(b_i["commitment"])
-            out_of_regime_ces = [
-                reg
-                for b_j in active_branches
-                if b_j["claim_id"] != b_i["claim_id"]
-                and b_j.get("status") != "refuted"
-                and _branch_regime_signature(b_j["commitment"]) != sig_i
-                for reg in (b_j.get("pilot_regime_features") or ())
-            ]
-            if out_of_regime_ces and any(
-                evaluate_scope_guard(b_i.get("scope_guard"), ce_r)
-                for ce_r in out_of_regime_ces
-            ):
-                shrunk_b = shrink_claim_to_observable_scope(
-                    b_i,
-                    list(b_i.get("pilot_regime_features") or ()),
-                    out_of_regime_ces,
-                )
-                refined_branches.append(shrunk_b)
-            else:
-                refined_branches.append(b_i)
-        active_branches = refined_branches
-
+    # v13 B1 / Check #11: Separate empirical applicability counterexamples (verified cross-prediction failure)
+    # from structural routing preferences (`routing_scope_candidate`)!
+    active_branches = _refine_coexisting_branch_scopes_and_routing(
+        active_branches, budget=budget, tolerance=tolerance
+    )
     library._active_reconciled_branches = active_branches
 
     # Autonomous anti-unification & cross-mechanism false-merge screening over grounded parameterized branches
     param_branches: list[tuple[str, tuple[str, str, str, str], dict[str, Any]]] = []
     for b in active_branches:
-        if b.get("status") == "refuted" or b.get("independent_empirical_support") is not True:
+        if b.get("status") in {"refuted", "contested_refuted_on_probe"} or b.get("independent_empirical_support") is not True:
             continue
         rp_b = (b["commitment"].get("radius_parameters") or [{}])[0]
         raw_ec_b = rp_b.get("edge_condition")
@@ -3041,25 +4502,39 @@ def autonomous_reconcile_library_episode(
             gf = deepcopy(au_res["generalized_commitment"])
             gf["independent_empirical_support"] = False
             gf["depends_on_claim_ids"] = list(group_ids)
+            gf["min_grounded_dependencies"] = 2
             gf["per_branch_substitutions"] = deepcopy(au_res.get("per_branch_substitutions") or {})
 
-            # Compute verified observable scope guard separating this family from out-of-family active branches!
+            # v13 B1: Distinguish empirical family applicability failure (even after theta recalibration!)
+            # from routing preference against out-of-family active branches!
             fam_sup_regs = [
                 reg for b in group_bs for reg in (b.get("pilot_regime_features") or ())
             ]
-            out_fam_regs = [
-                reg
-                for b in active_branches
-                if b["claim_id"] not in set(group_ids) and b.get("status") != "refuted"
-                for reg in (b.get("pilot_regime_features") or ())
-            ]
-            if fam_sup_regs and out_fam_regs:
-                scoped_gf = shrink_claim_to_observable_scope(gf, fam_sup_regs, out_fam_regs)
+            emp_out_fam_regs: list[dict[str, Any]] = []
+            rot_out_fam_regs: list[dict[str, Any]] = []
+            for b_out in active_branches:
+                if b_out["claim_id"] in set(group_ids) or b_out.get("status") == "refuted":
+                    continue
+                regs_out = list(b_out.get("pilot_regime_features") or ())
+                if not regs_out:
+                    continue
+                fam_chk = _cross_evaluate_refittable_family_on_neighbor(
+                    gf, b_out, budget=budget, tolerance=tolerance
+                )
+                if fam_chk.get("evaluated") and fam_chk.get("empirically_refuted"):
+                    emp_out_fam_regs.extend(regs_out)
+                    rot_out_fam_regs.extend(regs_out)
+                else:
+                    rot_out_fam_regs.extend(regs_out)
+
+            if fam_sup_regs and emp_out_fam_regs:
+                scoped_gf = shrink_claim_to_observable_scope(
+                    gf, fam_sup_regs, emp_out_fam_regs, scope_kind="empirical_applicability_scope"
+                )
                 if scoped_gf.get("shrunk") and scoped_gf.get("scope_guard") is not None:
                     gf["scope_guard"] = deepcopy(scoped_gf["scope_guard"])
                     gf["observable_bounds"] = deepcopy(scoped_gf["observable_bounds"])
                     gf["scope_verification"] = deepcopy(scoped_gf["scope_verification"])
-                    # Recompute scientific identity so scope_guard is bound into commitment_id!
                     new_cid, pred_sid = compute_family_scientific_identity(
                         gf,
                         Program.from_dict(gf["anti_unified_predicate_skeleton"]),
@@ -3067,6 +4542,14 @@ def autonomous_reconcile_library_episode(
                     )
                     gf["commitment_id"] = new_cid
                     gf["predicate_skeleton_id"] = pred_sid
+            if fam_sup_regs and rot_out_fam_regs:
+                routed_gf = shrink_claim_to_observable_scope(
+                    gf, fam_sup_regs, rot_out_fam_regs, scope_kind="routing_scope_candidate"
+                )
+                if routed_gf.get("routing_shrunk") and routed_gf.get("routing_guard") is not None:
+                    gf["routing_guard"] = deepcopy(routed_gf["routing_guard"])
+                    gf["routing_bounds"] = deepcopy(routed_gf["routing_bounds"])
+                    gf["routing_verification"] = deepcopy(routed_gf["routing_verification"])
 
             updated_families_by_sig[f_sig] = gf
             new_family_ids.append(gf["commitment_id"])
@@ -3080,11 +4563,12 @@ def autonomous_reconcile_library_episode(
                     "per_branch_substitutions": deepcopy(gf.get("per_branch_substitutions") or {}),
                     "per_branch_mse": deepcopy(au_res.get("per_branch_mse") or {}),
                     "per_branch_fresh_mse": deepcopy(au_res.get("per_branch_fresh_mse") or {}),
+                    "source_preservation_status": au_res.get("source_preservation_status"),
                     "fresh_confirmation_status": au_res.get("fresh_confirmation_status"),
                     "scope_guard": deepcopy(gf.get("scope_guard")),
+                    "routing_guard": deepcopy(gf.get("routing_guard")),
                 }
             )
-            # Replace semantic_relations for these child branches with latest family ID
             child_set = set(group_ids)
             library._branch_semantic_relations = [
                 rel
@@ -3104,17 +4588,19 @@ def autonomous_reconcile_library_episode(
                 )
 
     library._generalized_branch_commitments = list(updated_families_by_sig.values())
+    ep_confirmed_final = not delivered_program_refuted_on_probe
     ep_record = {
         "task_id": task_id,
         "concept_id": concept_id,
-        "confirmed": True,
-        "epistemic_status": "confirmed_exact",
+        "confirmed": ep_confirmed_final,
+        "epistemic_status": "confirmed_exact" if ep_confirmed_final else "revoked_after_discriminating_probe_failure",
         "tolerance_contract": tolerance,
         "confirmation_loss": float(confirmation_loss),
         "confirmation_rows": len(confirmation_rows_list),
         "observable_regime_features": obs_regime,
         "reconciliation_decisions": decisions,
         "paid_probes_executed": paid_probes_executed,
+        "pending_questions_count": len(pending_questions),
         "active_branch_count": len(library._active_reconciled_branches),
         "generalized_family_ids": [g["commitment_id"] for g in library._generalized_branch_commitments],
         "newly_updated_family_ids": new_family_ids,
@@ -3124,7 +4610,9 @@ def autonomous_reconcile_library_episode(
     library._reconciliation_episode_ledger.append(ep_record)
     return {
         "action": "autonomous_branch_reconciliation",
-        "episode_confirmed": True,
+        "episode_confirmed": ep_confirmed_final,
+        "delivered_program_refuted_on_probe": delivered_program_refuted_on_probe,
+        "pending_questions": pending_questions,
         **ep_record,
     }
 

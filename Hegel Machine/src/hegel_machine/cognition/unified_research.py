@@ -223,7 +223,7 @@ class UnifiedResearchAgent:
             if idx_obj is not None:
                 return idx_obj.deduplicated_audit_commitments(budget)
         ord_cache = getattr(self.library, "_ordinary_persistent_cache", None)
-        if ord_cache is not None:
+        if ord_cache is not None and getattr(ord_cache, "_dedup_audit_commitments", None):
             return ord_cache.deduplicated_audit_commitments(budget)
         ep_cache = getattr(self.library, "_episode_archive_cache", None)
         if isinstance(ep_cache, dict) and ep_cache.get("dedup_audit_commitments") is not None:
@@ -235,6 +235,30 @@ class UnifiedResearchAgent:
         if not (self.config.use_memory and self.config.world_structure_commitments and self.library.meta_priors):
             return []
         before = budget.spent
+        if getattr(self.library, "_allow_on_demand_family_reconstruction", False) and not getattr(
+            self.library, "_active_reconciled_branches", None
+        ):
+            from .branch_reconciliation import reconstruct_parametric_families_from_ordinary_archive
+            _, recon_stats = reconstruct_parametric_families_from_ordinary_archive(
+                self.library,
+                budget,
+                tolerance=self.config.minimum_improvement,
+                reconstruct_routing=bool(getattr(self.library, "_allow_on_demand_routing_reconstruction", False)),
+            )
+            commitments = [
+                deepcopy(b["commitment"])
+                for b in (recon_stats.get("reconstructed_branches") or ())
+                if isinstance(b, dict) and b.get("commitment")
+            ]
+            if actions is not None and (commitments or budget.spent != before):
+                actions.append({
+                    "action": "retrieve_ordinary_cached_commitments",
+                    "commitment_count": len(commitments),
+                    "commitment_ids": [item["commitment_id"] for item in commitments],
+                    "cache_hit": bool(recon_stats.get("cache_hit")),
+                    "compute_cost": budget.spent - before,
+                })
+            return commitments
         ord_cache = getattr(self.library, "_ordinary_persistent_cache", None)
         if ord_cache is not None:
             commitments, cache_stats = ord_cache.get_or_consolidate(
@@ -596,63 +620,21 @@ class UnifiedResearchAgent:
                 branch_dispatch_telemetry = None
                 if self.config.branch_reconciliation:
                     from .branch_reconciliation import (
-                        compute_observable_regime_features,
-                        evaluate_scope_guard,
+                        dispatch_branches_and_families_for_target,
                         instantiate_parametric_family_on_target,
-                        propagate_premise_retraction_invalidation,
-                        reconstruct_parametric_families_from_ordinary_archive,
                     )
-                    obs_regime = compute_observable_regime_features(transitions, schema)
-                    retracted_set = set(getattr(self.library, "_retracted_premise_or_claim_ids", ()) or ())
-                    raw_branches = list(getattr(self.library, "_active_reconciled_branches", ()) or ())
-                    checked_branches = (
-                        propagate_premise_retraction_invalidation(
-                            raw_branches, retracted_premise_or_claim_ids=retracted_set
-                        )
-                        if raw_branches
-                        else []
+                    disp = dispatch_branches_and_families_for_target(
+                        library=self.library,
+                        consistent_comms=consistent_comms,
+                        transitions=transitions,
+                        schema=schema,
+                        audit=audit,
+                        task_sig=task_sig,
+                        comm_budget=comm_budget,
+                        tolerance=eff_comm_tol,
                     )
-                    pruned_retracted_ids = [
-                        b["claim_id"]
-                        for b in checked_branches
-                        if b.get("support_validity") != "valid_grounded"
-                    ]
-                    pruned_scope_ids = []
-                    matched_branch_comms = []
-                    for b in checked_branches:
-                        if b.get("support_validity") != "valid_grounded" or b.get("status") == "refuted":
-                            continue
-                        if not evaluate_scope_guard(b.get("scope_guard"), obs_regime):
-                            pruned_scope_ids.append(b["claim_id"])
-                            continue
-                        b_comm = deepcopy(b.get("commitment") or b)
-                        if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
-                            matched_branch_comms.append(b_comm)
-
-                    gen_families = list(getattr(self.library, "_generalized_branch_commitments", ()) or ())
-                    on_demand_recon_stats = None
-                    if not gen_families and getattr(
-                        self.library, "_allow_on_demand_family_reconstruction", False
-                    ):
-                        gen_families, on_demand_recon_stats = (
-                            reconstruct_parametric_families_from_ordinary_archive(
-                                self.library, comm_budget, tolerance=eff_comm_tol
-                            )
-                        )
-
-                    matched_family_ids = []
-                    for gf in gen_families:
-                        if gf.get("commitment_id") in retracted_set:
-                            pruned_retracted_ids.append(gf["commitment_id"])
-                            continue
-                        if not evaluate_scope_guard(gf.get("scope_guard"), obs_regime):
-                            pruned_scope_ids.append(gf["commitment_id"])
-                            continue
-                        gf_dir = (gf.get("radius_parameters") or [{}])[0].get("direction")
-                        if audit and audit.get("verified_direction") and gf_dir and audit["verified_direction"] != gf_dir:
-                            pruned_scope_ids.append(gf["commitment_id"])
-                            continue
-                        matched_family_ids.append(gf["commitment_id"])
+                    consistent_comms = disp["ordered_consistent_comms"]
+                    for gf in disp["scheduled_families"]:
                         fam_entries = instantiate_parametric_family_on_target(
                             gf,
                             spec,
@@ -697,33 +679,7 @@ class UnifiedResearchAgent:
                         claims.extend(fam_entries)
                         if any(item["training_loss"] <= eff_comm_tol for item in claims):
                             break
-
-                    if matched_branch_comms:
-                        seen_cids = {mc["commitment_id"] for mc in matched_branch_comms}
-                        consistent_comms = [
-                            *matched_branch_comms,
-                            *(
-                                c
-                                for c in consistent_comms
-                                if c["commitment_id"] not in seen_cids
-                                and c["commitment_id"] not in set(pruned_scope_ids)
-                                and c["commitment_id"] not in set(pruned_retracted_ids)
-                            ),
-                        ]
-                    elif checked_branches:
-                        consistent_comms = [
-                            c
-                            for c in consistent_comms
-                            if c["commitment_id"] not in set(pruned_scope_ids)
-                            and c["commitment_id"] not in set(pruned_retracted_ids)
-                        ]
-                    branch_dispatch_telemetry = {
-                        "observable_regime_features": obs_regime,
-                        "matched_parametric_family_ids": matched_family_ids,
-                        "pruned_by_observable_scope_ids": pruned_scope_ids,
-                        "pruned_by_retraction_ids": pruned_retracted_ids,
-                        "on_demand_archive_family_reconstruction": on_demand_recon_stats,
-                    }
+                    branch_dispatch_telemetry = disp["telemetry"]
 
                 for comm in consistent_comms:
                     if any(item["training_loss"] <= eff_comm_tol for item in claims):
@@ -8039,8 +7995,9 @@ class UnifiedResearchAgent:
         # The schema was available for constructing a joint proposal only.
         # If no fresh joint comparison ran, keep it pending for a later visit.
         joint_roles = (object_research or {}).get("continuation", {}).get("confirmation") or {}
+        popped_pending_schema = None
         if joint_roles.get("status") == "pending":
-            self._object_schemas.pop(offered, None)
+            popped_pending_schema = self._object_schemas.pop(offered, None)
 
         used_sources = (list(dict.fromkeys([*_sources(program), *selected.get("method_source_ids", [])]))
                         if confirmed else [])
@@ -8088,11 +8045,28 @@ class UnifiedResearchAgent:
                 and not getattr(self.library, "_freeze_branch_writes", False)
             ):
                 from .branch_reconciliation import autonomous_reconcile_library_episode
-                reconcile_channels = tuple(selected_channels) if selected_channels else tuple(offered)
+                reconcile_channels = (
+                    tuple(selected_channels)
+                    if selected_channels
+                    else next(
+                        (
+                            ch_k
+                            for ch_k in (
+                                tuple(offered),
+                                *(tuple(v) for v in reversed(getattr(laboratory, "measurement_views", ())) if v),
+                            )
+                            if ch_k in self._object_schemas or ch_k in self._object_models or paired_for(ch_k)
+                        ),
+                        tuple(offered),
+                    )
+                )
                 reconcile_schema = (
                     (object_research or {}).get("schema")
+                    or self._object_schemas.get(tuple(reconcile_channels))
                     or self._object_schemas.get(tuple(offered))
-                    or _object_schema(self._spec(laboratory, reconcile_channels))
+                    or popped_pending_schema
+                    or (self._object_models.get(tuple(reconcile_channels)) or {}).get("schema")
+                    or _object_schema(self._knowledge_spec(self._spec(laboratory, reconcile_channels)))
                     or (selected.get("structure") or {}).get("schema")
                     or (selected.get("research_program") or {}).get("source_schema")
                 )
@@ -8112,15 +8086,51 @@ class UnifiedResearchAgent:
                     )
                 )
 
-                def _exec_reconcile_probe(probe_obj):
+                def _exec_reconcile_probe(probe_obj, frozen_program_versions=None):
+                    req_id = getattr(probe_obj, "probe_id", "requested_probe")
+                    frozen_v = list(frozen_program_versions or ())
                     if not reconcile_channels:
-                        return None
+                        return {
+                            "status": "unavailable",
+                            "requested_probe_id": req_id,
+                            "actual_probe_id": None,
+                            "observation_refs": [],
+                            "transition_refs": [],
+                            "program_versions_frozen_before_result": frozen_v,
+                            "rows": None,
+                            "transitions": None,
+                            "cost_ref": None,
+                        }
+                    req_seq = tuple(dict(pt) for pt in (getattr(probe_obj, "sequence", ()) or ()))
+                    req_reset = bool(getattr(probe_obj, "reset", True))
+                    # v13 A1 / Check #3: Reuse exact protocol batch if already executed (zero new independent samples!)
+                    for b_idx, b_item in enumerate(batches):
+                        b_ch = tuple(b_item.get("channels") or ())
+                        b_seq = tuple(dict(pt) for pt in (b_item.get("sequence") or ()))
+                        b_rst = bool(b_item.get("reset", True))
+                        b_obs = b_item.get("observations") or b_item.get("rows")
+                        if b_ch == tuple(reconcile_channels) and req_seq and b_seq == req_seq and b_rst == req_reset and b_obs:
+                            b_trs = list(b_item.get("transitions") or ())
+                            orig_pid = str(b_item.get("probe_id") or f"batch_{b_idx}")
+                            return {
+                                "status": "reused_exact_protocol",
+                                "requested_probe_id": req_id,
+                                "actual_probe_id": orig_pid,
+                                "observation_refs": [f"batch_{b_idx}:row_{k}" for k in range(len(b_obs))],
+                                "transition_refs": [f"batch_{b_idx}:tr_{k}" for k in range(len(b_trs))],
+                                "program_versions_frozen_before_result": frozen_v,
+                                "rows": list(b_obs),
+                                "transitions": b_trs,
+                                "cost_ref": {"reused_batch_index": b_idx, "new_observations": 0, "new_measurements": 0},
+                            }
                     p_rows = acquire(
                         reconcile_channels,
                         "reconcile_competing_branch_disagreement",
                         probe=probe_obj,
                     )
                     if p_rows is not None:
+                        b_idx = max(0, len(batches) - 1)
+                        last_b = batches[-1] if batches else {}
                         p_trans = [
                             {
                                 "controls": dict(pt),
@@ -8130,14 +8140,48 @@ class UnifiedResearchAgent:
                             for pt, obs_r, tr_d in zip(
                                 probe_obj.sequence,
                                 p_rows,
-                                batches[-1].get("transitions") or (),
+                                last_b.get("transitions") or (),
                             )
                         ]
-                        return list(p_rows), p_trans
-                    if ep_obs_rec and ep_trans_rec:
-                        return ep_obs_rec, ep_trans_rec
-                    return None
+                        return {
+                            "status": "executed_new",
+                            "requested_probe_id": req_id,
+                            "actual_probe_id": req_id,
+                            "observation_refs": [f"batch_{b_idx}:row_{k}" for k in range(len(p_rows))],
+                            "transition_refs": [f"batch_{b_idx}:tr_{k}" for k in range(len(p_trans))],
+                            "program_versions_frozen_before_result": frozen_v,
+                            "rows": list(p_rows),
+                            "transitions": p_trans,
+                            "cost_ref": {
+                                "batch_index": b_idx,
+                                "new_observations": len(p_rows),
+                                "new_measurements": int(last_b.get("measurement_cost", 0)),
+                            },
+                        }
+                    # v13 A1 / Check #1: Never disguise old episode rows as an executed probe!
+                    return {
+                        "status": "unavailable",
+                        "requested_probe_id": req_id,
+                        "actual_probe_id": None,
+                        "observation_refs": [],
+                        "transition_refs": [],
+                        "program_versions_frozen_before_result": frozen_v,
+                        "rows": None,
+                        "transitions": None,
+                        "cost_ref": None,
+                    }
 
+                raw_support_for_rec = (
+                    ep_obs_rec
+                    if (not selected_channels and ep_obs_rec)
+                    else [*selected_training, *selected_validation]
+                )
+                paid_support_dedup = list(
+                    {id(r): r for r in raw_support_for_rec}.values()
+                )
+                rec_schema_alts = list(
+                    (((self._object_models.get(tuple(reconcile_channels)) or {}).get("schema_alternatives") or {}).get("schemas") or ())
+                )
                 rec_action = autonomous_reconcile_library_episode(
                     library=self.library,
                     task_id=laboratory.spec.task_id,
@@ -8146,14 +8190,220 @@ class UnifiedResearchAgent:
                     confirmed=bool(confirmed),
                     confirmation_loss=confirmation_loss,
                     confirmation_rows_list=conf_rows_list,
-                    support_rows=[*selected_training, *selected_validation],
+                    support_rows=paid_support_dedup,
                     episode_transitions=ep_trans_rec,
                     concept_id=concept_id,
                     execute_probe_fn=_exec_reconcile_probe,
                     budget=budget,
+                    delivered_program=program,
+                    unconfirmed_candidate_entry=selected,
+                    schema_alternatives=rec_schema_alts,
+                    reconcile_view_rows=ep_obs_rec,
                     tolerance=float(self.config.minimum_improvement),
                 )
                 actions.append(rec_action)
+
+                if rec_action.get("delivered_program_refuted_on_probe"):
+                    confirmed = False
+
+                # v13 A3 / N2 / Checks #6, #7: Install reconciliation pending_questions into ordinary queues
+                # and execute recursive sub-research when funded (or preserve `pending_unfunded` when unfunded)!
+                pending_reconcile_qs = list(rec_action.get("pending_questions") or ())
+                for pq in pending_reconcile_qs:
+                    q_entry = {
+                        "question_id": pq["question_id"],
+                        "kind": "reconciliation_subquestion",
+                        "status": "pending",
+                        "pending_question": deepcopy(pq),
+                    }
+                    response_questions.append(q_entry)
+                    graph.events.append(
+                        {
+                            "event": "enqueue_reconciliation_subquestion",
+                            "question_id": pq["question_id"],
+                            "subquestion_kind": pq.get("kind"),
+                        }
+                    )
+
+                for q_entry in response_questions:
+                    if q_entry.get("kind") != "reconciliation_subquestion" or q_entry.get("status") != "pending":
+                        continue
+                    pq = q_entry["pending_question"]
+                    if pq.get("kind") != "both_competing_branches_refuted" or confirmed:
+                        continue
+                    confirm_len_subq = 24
+                    ch_unit_cost = sum(rates.get(ch, 0) for ch in reconcile_channels)
+                    obs_rem = observation_limit - spent_observations
+                    meas_rem = measurement_limit - spent_measurements
+                    if (
+                        not reconcile_channels
+                        or obs_rem < confirm_len_subq
+                        or meas_rem < confirm_len_subq * ch_unit_cost
+                        or budget.remaining < 25_000
+                    ):
+                        q_entry["status"] = "pending_unfunded"
+                        pq["status"] = "pending_unfunded"
+                        for lib_pq in getattr(self.library, "_pending_reconciliation_questions", ()):
+                            if lib_pq.get("question_id") == pq["question_id"]:
+                                lib_pq["status"] = "pending_unfunded"
+                        actions.append(
+                            {
+                                "action": "retain_unfunded_reconciliation_subquestion",
+                                "question_id": pq["question_id"],
+                                "status": "pending_unfunded",
+                                "compute_remaining": budget.remaining,
+                                "observations_remaining": obs_rem,
+                            }
+                        )
+                        continue
+
+                    # Funded recursive subquestion execution: enable requested mechanism revisions on all paid evidence!
+                    subq_paid_rows = [row for b_pair in paired_for(reconcile_channels) for _, row in b_pair]
+                    subq_trans = list(transitions_for(reconcile_channels))
+                    saved_cfg = self.config
+                    saved_limits = (observation_limit, measurement_limit)
+                    restored_popped_schema = False
+                    if popped_pending_schema is not None and tuple(offered) not in self._object_schemas:
+                        self._object_schemas[tuple(offered)] = deepcopy(popped_pending_schema)
+                        restored_popped_schema = True
+                    observation_limit -= confirm_len_subq
+                    measurement_limit -= confirm_len_subq * ch_unit_cost
+                    try:
+                        allowed_ret = set(pq.get("allowed_return_types") or ())
+                        self.config = replace(
+                            self.config,
+                            expanded_premise_revisions=True,
+                            active_threshold_probing=True,
+                            latent_state_discovery=(
+                                self.config.latent_state_discovery or ("expanded_latent_state" in allowed_ret)
+                            ),
+                        )
+                        prev_om = self._object_models.get(tuple(reconcile_channels))
+                        if isinstance(prev_om, dict):
+                            fresh_om = deepcopy(prev_om)
+                            fresh_om.pop("premise_audit", None)
+                            subq_records = []
+                            for b_rec in batches:
+                                if tuple(b_rec.get("channels") or ()) != tuple(reconcile_channels):
+                                    continue
+                                b_seq_r = list((b_rec.get("probe").sequence if hasattr(b_rec.get("probe"), "sequence") else (b_rec.get("probe") or {}).get("sequence")) or ())
+                                b_pid_r = str((b_rec.get("probe").probe_id if hasattr(b_rec.get("probe"), "probe_id") else (b_rec.get("probe") or {}).get("probe_id")) or "batch")
+                                for idx_r, (pt_r, obs_r, tr_r) in enumerate(zip(b_seq_r, b_rec.get("observations") or (), b_rec.get("transitions") or ())):
+                                    subq_records.append({
+                                        "controls": dict(pt_r),
+                                        **tr_r,
+                                        "target": float(obs_r["target"] if isinstance(obs_r, dict) else obs_r.target),
+                                        "history": [dict(p_h) for p_h in b_seq_r[:idx_r]],
+                                        "probe_id": b_pid_r,
+                                        "position": idx_r,
+                                    })
+                            if subq_records:
+                                fresh_om = self._audit_object_transition_premises(
+                                    fresh_om,
+                                    subq_records,
+                                    budget,
+                                    actions,
+                                    commitments=self._world_commitments(budget, actions),
+                                )
+                                self._object_models[tuple(reconcile_channels)] = deepcopy(fresh_om)
+                                if fresh_om.get("complete") and fresh_om.get("schema"):
+                                    self._object_schemas[tuple(reconcile_channels)] = deepcopy(fresh_om["schema"])
+                        subq_spec = self._knowledge_spec(self._spec(laboratory, reconcile_channels))
+                        subq_cands = self._research_view(
+                            subq_spec,
+                            subq_paid_rows,
+                            subq_paid_rows,
+                            budget,
+                            actions,
+                            transfer,
+                            graph,
+                            parent=selected,
+                            transitions=subq_trans,
+                            observation_remaining=observation_limit - spent_observations,
+                            measurement_remaining=measurement_limit - spent_measurements,
+                        )
+                    finally:
+                        self.config = saved_cfg
+                        observation_limit, measurement_limit = saved_limits
+                        if restored_popped_schema:
+                            self._object_schemas.pop(tuple(offered), None)
+
+                    subq_best = self._best(subq_cands)
+                    if (
+                        subq_best is not None
+                        and subq_best["validation_loss"] <= self.config.minimum_improvement
+                    ):
+                        subq_conf_rows = acquire(
+                            reconcile_channels, "confirm_reconciliation_subquestion_answer"
+                        )
+                        if subq_conf_rows is not None and budget.spend(len(subq_conf_rows)):
+                            subq_fb = subq_best.get("fallback", fallback)
+                            subq_conf_loss = float(
+                                loss(
+                                    subq_best["candidate"].program,
+                                    subq_conf_rows,
+                                    subq_fb,
+                                    self._spec(laboratory, reconcile_channels).risk_quantile,
+                                )
+                            )
+                            old_parent_cid = selected["candidate"].candidate_id
+                            new_parent_cid = subq_best["candidate"].candidate_id
+                            subq_ok = subq_conf_loss <= self.config.minimum_improvement
+                            q_entry["status"] = "answered" if subq_ok else "attempted_unresolved"
+                            q_entry["resolution"] = {
+                                "confirmed": subq_ok,
+                                "parent_candidate_before": old_parent_cid,
+                                "parent_candidate_after": new_parent_cid,
+                                "parent_program_before": program.to_dict(),
+                                "parent_program_after": subq_best["candidate"].program.to_dict(),
+                                "confirmation_loss": subq_conf_loss,
+                                "confirmation_rows": len(subq_conf_rows),
+                            }
+                            for lib_pq in getattr(self.library, "_pending_reconciliation_questions", ()):
+                                if lib_pq.get("question_id") == pq["question_id"]:
+                                    lib_pq["status"] = q_entry["status"]
+                                    lib_pq["resolution"] = deepcopy(q_entry["resolution"])
+                            actions.append(
+                                {
+                                    "action": "resolve_reconciliation_subquestion",
+                                    "question_id": pq["question_id"],
+                                    "status": q_entry["status"],
+                                    **q_entry["resolution"],
+                                }
+                            )
+                            if subq_ok:
+                                if popped_pending_schema is not None and tuple(offered) not in self._object_schemas:
+                                    self._object_schemas[tuple(offered)] = deepcopy(popped_pending_schema)
+                                selected = subq_best
+                                selected_channels = list(reconcile_channels)
+                                program = subq_best["candidate"].program
+                                fallback = subq_fb
+                                confirmation_loss = subq_conf_loss
+                                confirmation_rows = len(subq_conf_rows)
+                                confirmed = True
+                                spec_subq = self._knowledge_spec(self._spec(laboratory, selected_channels))
+                                remembered_subq = self.remember_confirmed_selection(
+                                    selected,
+                                    spec_subq,
+                                    subq_paid_rows,
+                                    subq_paid_rows,
+                                    confirmed=True,
+                                    confirmation_loss=confirmation_loss,
+                                    confirmation_rows=confirmation_rows,
+                                    selected_channels=selected_channels,
+                                    batches=batches,
+                                    actions=actions,
+                                    used_sources=list(_sources(program)),
+                                    noisy_support=None,
+                                    offered_spec=self._spec(laboratory, offered),
+                                )
+                                concept_id = remembered_subq["concept_id"]
+                                concepts_added = remembered_subq["concepts_added"]
+                                break
+                    q_entry["status"] = "attempted_unresolved"
+                    for lib_pq in getattr(self.library, "_pending_reconciliation_questions", ()):
+                        if lib_pq.get("question_id") == pq["question_id"]:
+                            lib_pq["status"] = "attempted_unresolved"
         measurement_program, measurement_channels, instrument_model_id = None, None, None
         if confirmed and selected_channels and self._learn_instruments:
             from .instrument_models import rebind_instrument_model
@@ -8312,7 +8562,7 @@ class UnifiedResearchAgent:
                  "measurement_cost": spent_measurements, "compute_cost": budget.spent,
                  "queries": len(batches)}
         for question in response_questions:
-            if confirmed and question["candidate"]["candidate"]["program"] == program.to_dict():
+            if confirmed and isinstance(question.get("candidate"), dict) and question["candidate"].get("candidate", {}).get("program") == program.to_dict():
                 question.update(status="settled", outcome="selected_on_first_visit")
         result = {"task_id": laboratory.spec.task_id,
                 "research_workflow_id": workflow.method_id if workflow is not None else None,

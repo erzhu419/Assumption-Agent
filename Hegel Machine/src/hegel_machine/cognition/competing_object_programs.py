@@ -351,58 +351,21 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
 
             if branch_reconciliation and library is not None:
                 from .branch_reconciliation import (
-                    compute_observable_regime_features,
-                    evaluate_scope_guard,
+                    dispatch_branches_and_families_for_target,
                     instantiate_parametric_family_on_target,
-                    propagate_premise_retraction_invalidation,
-                    reconstruct_parametric_families_from_ordinary_archive,
                 )
-                obs_regime = compute_observable_regime_features(transitions, schema)
-                retracted_set = set(getattr(library, "_retracted_premise_or_claim_ids", ()) or ())
-                raw_branches = list(getattr(library, "_active_reconciled_branches", ()) or ())
-                checked_branches = (
-                    propagate_premise_retraction_invalidation(
-                        raw_branches, retracted_premise_or_claim_ids=retracted_set
-                    )
-                    if raw_branches
-                    else []
+                disp = dispatch_branches_and_families_for_target(
+                    library=library,
+                    consistent_comms=consistent_comms,
+                    transitions=transitions,
+                    schema=schema,
+                    audit=premise_audit,
+                    task_sig=task_sig,
+                    comm_budget=commitment_budget,
+                    tolerance=tolerance,
                 )
-                pruned_retracted_ids = [
-                    b["claim_id"]
-                    for b in checked_branches
-                    if b.get("support_validity") != "valid_grounded"
-                ]
-                pruned_scope_ids = []
-                matched_branch_comms = []
-                for b in checked_branches:
-                    if b.get("support_validity") != "valid_grounded" or b.get("status") == "refuted":
-                        continue
-                    if not evaluate_scope_guard(b.get("scope_guard"), obs_regime):
-                        pruned_scope_ids.append(b["claim_id"])
-                        continue
-                    b_comm = deepcopy(b.get("commitment") or b)
-                    if is_commitment_empirically_consistent(b_comm, premise_audit, task_id=task_sig):
-                        matched_branch_comms.append(b_comm)
-
-                gen_families = list(getattr(library, "_generalized_branch_commitments", ()) or ())
-                on_demand_recon_stats = None
-                if not gen_families and getattr(library, "_allow_on_demand_family_reconstruction", False):
-                    gen_families, on_demand_recon_stats = reconstruct_parametric_families_from_ordinary_archive(
-                        library, commitment_budget, tolerance=tolerance
-                    )
-                matched_family_ids = []
-                for gf in gen_families:
-                    if gf.get("commitment_id") in retracted_set:
-                        pruned_retracted_ids.append(gf["commitment_id"])
-                        continue
-                    if not evaluate_scope_guard(gf.get("scope_guard"), obs_regime):
-                        pruned_scope_ids.append(gf["commitment_id"])
-                        continue
-                    gf_dir = (gf.get("radius_parameters") or [{}])[0].get("direction")
-                    if premise_audit and premise_audit.get("verified_direction") and gf_dir and premise_audit["verified_direction"] != gf_dir:
-                        pruned_scope_ids.append(gf["commitment_id"])
-                        continue
-                    matched_family_ids.append(gf["commitment_id"])
+                consistent_comms = disp["ordered_consistent_comms"]
+                for gf in disp["scheduled_families"]:
                     fam_entries = instantiate_parametric_family_on_target(
                         gf, local_spec, rows, schema, commitment_budget,
                         audit_report=premise_audit, transitions=transitions, tolerance=tolerance,
@@ -437,29 +400,8 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                     commitment_fits.extend(fam_entries)
                     if any(supports_current_evidence(item) for item in commitment_fits):
                         break
-
-                if matched_branch_comms:
-                    seen_cids = {mc["commitment_id"] for mc in matched_branch_comms}
-                    consistent_comms = [
-                        *matched_branch_comms,
-                        *(c for c in consistent_comms if c["commitment_id"] not in seen_cids
-                          and c["commitment_id"] not in set(pruned_scope_ids)
-                          and c["commitment_id"] not in set(pruned_retracted_ids)),
-                    ]
-                elif checked_branches:
-                    consistent_comms = [
-                        c for c in consistent_comms
-                        if c["commitment_id"] not in set(pruned_scope_ids)
-                        and c["commitment_id"] not in set(pruned_retracted_ids)
-                    ]
                 if index == 0:
-                    last_branch_dispatch_telemetry = {
-                        "observable_regime_features": obs_regime,
-                        "matched_parametric_family_ids": matched_family_ids,
-                        "pruned_by_observable_scope_ids": pruned_scope_ids,
-                        "pruned_by_retraction_ids": pruned_retracted_ids,
-                        "on_demand_archive_family_reconstruction": on_demand_recon_stats,
-                    }
+                    last_branch_dispatch_telemetry = disp["telemetry"]
 
             if not any(supports_current_evidence(item) for item in commitment_fits):
                 for comm in consistent_comms:

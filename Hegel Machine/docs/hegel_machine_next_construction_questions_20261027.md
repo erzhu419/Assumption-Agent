@@ -2769,3 +2769,32 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
     - **结构关系删除干预 `K_relations_deleted`（保留相同 $H^*$ 与预测程序，仅删 `scope_guard` 与撤回关系）**：降至 **`22/24`**，均值目标算力升至 **`243,011.5`（`+12.40%`，`T1` 升至 `289,948.8`、`T2` 升至 `114,241.1`）**，正向隔离证实可观测作用域与结构关系本身贡献了剪枝与防干扰收益；
     - **对象删除干预 `K_object_deleted`（保留已调和分域分支与 `scope_guard`，仅删 $H^*$ 对象）**：取得 **`23/24`（均值算力 `211,730.1`，`T1: 8/8 @ 233,132.9`）**，在 `680k` 目标预算内与 `K_reconcile` **完全打平**。遵循合同 §5 停止规则，我们如实接受打平并明确缩小主张：**在当前单参数有限语法族中，任务级完成率与算力优势主要来自可观测作用域隔离（`scope_guard`）与已调和分支组织，而非单槽反统一对象 $H^*$ 本身**（因已分域的个体条件分支已可通过 1D 区间细分重标定新阈值）。
 - **回归与独立核验：** `pytest`（`v12` 6 项 + 历史 `v11 / v10.4 / v10.3 / v10.2 / v10 / historical` 50 项）全量 **`56/56`（100%）通过**；`05_STANDALONE_VERIFY_V12.py` 零依赖隔离核验 **`all_checks_passed = True`**。
+
+
+---
+
+## §131. `v13` 证据身份、失败递归返回、路由／适用域区分与未曝光源簇配对主实验收口（2026-11-17）
+
+- **前序审计基线与执行边界：** 针对 `GPT_diagnosis_v13.md` 与 `markdown/hegel_v13/01_系统审计与主目标判定.md`、`02_下一轮最小施工与实验合同.md` 对提交 `6e963206fd2822476c894fd2d0f09db4be70223c`（`v12`）查出的 `N1–N6` 六项证据与执行缺口，本轮严格执行**零新增框架模块（仅原位修补 `premise_commitment_index.py`、`branch_reconciliation.py`、`competing_object_programs.py`、`unified_research.py` 4 个既有文件）、零新增物理家族、零在线模型调用（`model_calls = 0`）、前序 29 份历史 JSON 回执原始字节 100% 零改动**的收敛合同，并将 `v12` 全部研究链（`1001000–1005000`、`1010000–1018000`）正式退役为已曝光开发材料。
+
+### 一、PR-A & PR-B：六项代码级证据／语义缺口闭合与 16 项行为验收（`#1–#16`）
+
+1. **证据取得身份与禁止伪造已执行探针（`N1 / PR-A1 / #1, #2, #3`）：** `unified_research.py` `_exec_reconcile_probe` 与 `branch_reconciliation.py` `reconcile_competing_branches` 改用类型化返回 `{status: "executed_new" | "reused_exact_protocol" | "unavailable", requested_probe_id, actual_probe_id, observation_refs, transition_refs, program_versions_frozen_before_result, cost_ref}`。当 `acquire` 因预算被拒返回 `None` 时严格返回 `"unavailable"`（`paid_probes_executed == []`）；旧数据重分析统一走独立 `reanalyze_paid_evidence` 通道并显式标注 `independent_sample_increment = 0`。
+2. **未知 Pilot 统计与完整 AST 依赖导出（`N3 / PR-A2 / #4, #5`）：** `compute_observable_regime_features` 对空记录或零分母比例（如无负供体样本时的 `obs_negative_donor_transfer_rate`）一律返回 `None` 并附带 `_meta`（`valid_counts`、`available`、`protocol_id`、`timing`）；`evaluate_scope_guard` 升级为 `'accept' | 'reject' | 'unknown'` 三态（普通调用路径对空 pilot 返回 `'unknown'` 而非 `True`）；`extract_guard_ast_dependencies` 从**完整** `scope_guard` AST（含保留旧原子）导出全部特征与 `requires_pilot_calibration`。
+3. **双方失败递归子问题入队与父状态改变（`N2 / PR-A3 / C1 / #6, #7, #8`）：** `adjudicate_branches_on_paid_evidence` 与 `reconcile_competing_branches` 将反例绑定到具体被测程序版本，在新旧分支均失败时限制双方全称资格（保留原来源有效计算），并返回具名 `pending_questions` 接入普通 `UnifiedResearchAgent.run(lab)` 的 `response_questions` 与 `graph.events`。在 `C1` 选择点 3（`seed=9315`，`readout="focus"` + `focal_memory` 潜变量储层）上：预算不足（`195` 行）时诚实保留 `status = "pending_unfunded"` 与 `episode_status = "unresolved"`；预算充足（`560` 行）时在同次 `run()` 内触发潜变量子研究，改变父程序（`mutated_parent_program = True`），并在全新未消费确认批上以 `confirmation_loss = 2.539e-17`（外部 48 行 `MSE = 1.612e-17`）完成确认。同时对单参数实例的失败显式标注 `instance_only_not_family_refutation = True`（`#8`），并在撤回已交付程序前校验重组装版本一致性。
+4. **分支—承诺—来源映射与多源保留（`N5 / PR-A4 / #9, #10`）：** `dispatch_branches_and_families_for_target` 建立显式 `branch_id -> commitment_id -> source_concept_ids / semantic_version` 映射，区分 `not_scheduled_by_router / scope_not_established / empirically_excluded_on_context / support_invalidated` 四类状态：单源分支被经验排除时过滤对应承诺，而多源共享承诺或参数族在仍有其他独立有效来源时严格保留。
+5. **路由偏好 vs 科学适用域分离与补集未确认提案（`N4 / PR-B1, B2 / #11, #12`）：** `_refine_coexisting_branch_scopes_and_routing` 先执行显式区分 `fixed_instance_alignment` 与 `refittable_parametric_family` 的交叉预测检验：仅当预测实际失败才写入 `scope_guard`（`empirical_applicability_scope`）；不同结构签名但预测无冲突仅写入 `routing_guard`（`routing_scope_candidate`，只改变调度顺序、绝不取消适用资格）。旧 guard 的补集仅存为未确认 `proposed_complement_scope_candidate`（`confirmed_applicability_scope = False, allows_third_mechanism = True`），单 episode 候选标为 `single_episode_local_scope_candidate`，家族源重检标为 `source_preservation_verified_family`（`independent_out_of_source_confirmations = 0`）。
+6. **普通档案 3 层持久化缓存、单因子 `2×2` 与边界探针诊断（`N6 / PR-B3, B4 / C2, C3 / #13–#16`）：** `OrdinaryPersistentCommitmentCache` 与 `reconstruct_parametric_families_from_ordinary_archive` 缓存逐源提取、家族反统一及同算法路由／范围重建三层产物，并在 `_world_commitments` 中免除未使用的聚合巩固费：首次冷缓存耗 `4,875` 算力，未变更二次调用仅耗 **`1`** 单位算力（`cache_hit = True`），单源新增仅重算受影响组；全组共享 `_raw_reconciliation_evidence_archive`。在已曝光 `1016000/T1` 单因子 `2×2` 中，`guards_ON__Hstar_OFF` 最快完成（`248,878`），`guards_ON__Hstar_ON` 完成（`272,574`），`guards_OFF__Hstar_ON` 未决（`679,991`），`guards_OFF__Hstar_OFF` 完成（`270,926`）；`propose_threshold_interval_boundary_probe` 从公共相容区间生成冻结双边界模型的训练探针并与新确认分离。
+
+### 二、PR-C：8 个全新未曝光物理源链簇（`1021000–1028000`）四臂配对主实验与 §6 停止规则收口
+
+- **源形成完整账本：** 8 条未曝光源链共尝试 `32` 个源任务，严格确认 `32/32`（`0` 未决，`1` 次源期有限样本边界假确认原样保留），`8/8` 条链形成参数族；源链均值总算力 `702,412.6`（其中调和维护子集 `43,733.9`，额外区分探针均值观测 `80.0` 行），均值墙钟 `72.37s`。
+- **8 个未曝光源链簇（`n = 8`，24 题／臂，全组共享相同 `M0` 与相同原始源＋调和观测）结果：**
+  - `K_cold`（仅中性起始标定锚点）：**`23/24`（`95.83%`）**，`T1: 8/8`（`249,245`）、`T2: 8/8`（`149,500`）、`T3: 7/8`（`280,015`），假确认 `1`，均值目标算力 `226,253.3`，墙钟 `25.31s`；
+  - `R_ordinary_optimized_lazy`（完整 3 层缓存 + 允许同算法家族与路由按需重建，命中缓存 `16/24` 次＝每链后 2 题 100% 命中）：**`21/24`（`87.50%`）**，`T1: 7/8`（`319,335`）、`T2: 8/8`（`146,525`）、`T3: 6/8`（`214,969`），假确认 `2`，均值目标算力 `226,943.1`，墙钟 `34.44s`；
+  - `K_routing_no_H_star`（预调和分支／路由组织，$H^*$ 不优先）：**`22/24`（`91.67%`）**，`T1: 8/8`（`209,959`）、`T2: 8/8`（`116,648`）、`T3: 6/8`（`225,405`），假确认 `2`，均值目标算力 **`184,004.3`**，墙钟 **`23.59s`**；
+  - `K_routing_plus_H_star`（同分支／路由组织 + $H^*$ 优先）：**`20/24`（`83.33%`）**，`T1: 7/8`（`289,928`）、`T2: 7/8`（`233,359`）、`T3: 6/8`（`225,405`），假确认 `2`，均值目标算力 `249,564.3`，墙钟 `39.84s`。
+- **严格执行合同 §6 停止条件的主张收口：**
+  1. **§6 停止条件第 2 条（`K_routing_no_H_star` vs `R_ordinary_optimized_lazy`）：** 修复普通档案 3 层缓存并给齐同等原始输入后，`R_ordinary_optimized_lazy` 从 `v12` 的 `19/24` 升至 **`21/24`**，与 `K_routing_no_H_star`（**`22/24`**）在严格完成率上统计不可分（`7/8` 条源链打平，差值分布 `[0,0,0,1,0,0,0,0]`，簇双侧符号翻转 `p = 1.0000`；且 `K_cold` 亦达 `23/24`）。我们如实承认 `v12` 完成率差距的相当一部分来自旧普通基线缓存设计不足；在当前 4 源→3 目标小规模有限语法族中，预调和分支／路由组织的实际效应收敛为**将首次跨源检验与路由构建开销从首个目标期前移摊销至源期**（单题均值目标算力节省 **`-42,938.8`［`-18.92%`］**、墙钟 **`-31.51%`**，`1.02` 道目标题收回每链 `43.7k` 源期调和维护算力），而非任务完成率优势。
+  2. **§6 停止条件第 1 条（`K_routing_plus_H_star` vs `K_routing_no_H_star`）：** $H^*$ Pass-0 网格重标定优先级（`20/24` @ `249,564.3`）相对单分支 1D 区间重标定（`22/24` @ `184,004.3`）无增量收益（差值 `[0,0,0,-1,-1,0,0,0]`，`p = 0.5000`），据此明确将 $H^*$ 降格为可选结构压缩表达，不宣称其贡献任务级效用增益。
+- **全量回归与自包含交接包核验：** `pytest` 全量 **`62/62`（100%）通过**（`v13` 6 项 + `v10..v12/historical` 56 项）；自包含交接包 `markdown/Hegel_v13_GPT6_Audit_Handoff_20261117.zip`（含全量 32 份回执 + 23 个完整源码／脚本／测试文件）经零依赖沙箱校验器 `05_STANDALONE_VERIFY_V13.py` 隔离核验 **`all_checks_passed = True`**。

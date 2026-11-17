@@ -445,7 +445,11 @@ def test_b3_b4_b5_discriminating_probe_refuted_newcomer_and_scope_shrinking() ->
         paid_b.transitions,
         sc,
         old_support_regime_features=[
-            {"obs_min_active_donor_q": 0.55, "obs_min_active_gap_dq": 0.55}
+            {
+                "obs_unconditional_block_rate": 0.0,
+                "obs_min_active_donor_q": 0.55,
+                "obs_min_active_gap_dq": 0.55,
+            }
         ],
     )
     assert adj_b5["verdict"] == "old_universal_shrunk_and_conditional_branch_retained"

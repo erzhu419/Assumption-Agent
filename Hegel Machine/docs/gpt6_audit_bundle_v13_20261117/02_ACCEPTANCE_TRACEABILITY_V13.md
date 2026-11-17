@@ -1,0 +1,11 @@
+# GPT-6 v13 审计发现（N1–N6）与 16 项行为验收逐条追溯表
+
+| 审计发现 / 合同条款 | `6e963206`（v12）具体问题 | `v13` 修复落点（零新增模块） | 行为验收（#1–#16）与回执 |
+| :--- | :--- | :--- | :--- |
+| **N1 / PR-A1 证据取得身份** | `acquire -> None` 时回退旧记录并把未执行请求探针写入 `paid_probes_executed` | `unified_research.py` `_exec_reconcile_probe` + `branch_reconciliation.py` `reconcile_competing_branches`：严格区分 `executed_new / reused_exact_protocol / unavailable` 与独立 `reanalyze_paid_evidence` | **#1, #2, #3** + `05_STANDALONE_VERIFY_V13.py` + `pr_a` |
+| **N2 / PR-A3 双方失败递归返回** | 新旧均错时 `ResearchQuestion` 未向上返回，状态保持 `universal`，未触发子研究 | `adjudicate_branches_on_paid_evidence` + `reconcile_competing_branches` + `unified_research.py`：限制双方适用资格，返回绑定版本与反例的 `pending_questions` 入队；有预算执行递归子研究改变父程序，无预算保留 `pending_unfunded` | **#6, #7, #8** + `test_v13_controls_6_7` + `pr_a` (`C1`) |
+| **N3 / PR-A2 未知 Pilot 与完整 AST** | 空记录／零分母算成 `0.0`，普通 `evaluate_scope_guard` 判真；保留旧原子漏标 pilot 依赖 | `compute_observable_regime_features`（`0/0 -> None` + `_meta` 计数／协议）+ 三态 `evaluate_scope_guard`（`accept / reject / unknown`）+ `extract_guard_ast_dependencies` 全 AST 导出 | **#4, #5** + `05_STANDALONE_VERIFY_V13.py` + `pr_a` |
+| **N4 / PR-B1, B2 路由 vs 适用域** | 结构签名不同直接当作世界反例硬缩域；旧 guard 补集直接确认给新分支 | `_refine_coexisting_branch_scopes_and_routing` 先做固定实例／可重拟合族交叉预测核验：预测无冲突仅标 `routing_scope_candidate`（只影响排序）；补集仅存为未确认提案 `proposed_complement_scope_candidate` | **#11, #12** + `test_v13_controls_8_11_12` + `pr_b` |
+| **N5 / PR-A4 分支与承诺身份映射** | `pruned_scope_ids` 存 `branch:concept_*`，过滤 `consistent_comms` 比 `world_commitment:*` | `dispatch_branches_and_families_for_target` 显式维护 `branch -> commitment -> source_concept_ids`；单源排除时过滤对应承诺，多源仍有独立有效支持时保留共同承诺／家族 | **#9, #10** + `test_v13_controls_9_10` + `pr_a` |
+| **N6 / PR-B3, B4 3层普通重构缓存** | `R` 先付未使用的聚合巩固费，再逐次重算单源与反统一而不缓存完整产物 | `OrdinaryPersistentCommitmentCache` + `reconstruct_parametric_families_from_ordinary_archive` 实现逐源提取、家族反统一、同算法路由／范围重建 3 层持久化缓存（未变复用仅耗 `1` 单位算力，单源变更局部失效），全组共享调和新增原始证据 | **#13, #14** + `test_v13_controls_13_14_15_16` + `pr_b` + `pr_c` |
+| **C2, C3 / #15, #16 边界诊断与主实验** | 随机确认未覆盖窄阈值边界；8 条旧链已曝光且 `R` 缺完整缓存 | `propose_threshold_interval_boundary_probe` 由公共相容区间生成冻结版本的边界训练探针并与新确认分离；在全新未曝光源链簇 `1021000–1028000` 上按源链簇配对比较优化普通档案、分支／路由组织（`H*` 不优先）与同组织＋`H*` | **#15, #16** + `pr_b` + `pr_c` |
