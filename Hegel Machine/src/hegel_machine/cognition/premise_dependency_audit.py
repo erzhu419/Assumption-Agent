@@ -3654,9 +3654,11 @@ def audit_transition_premises(
     allow_higher_order_latent: bool = True,
     allow_nonlinear_limit_cycle: bool = True,
     observations: list | tuple = (),
+    occam_premise_minimality: bool = False,
 ) -> dict:
     """Audit support premises on paid ``before -> after`` state transitions."""
     start = budget.spent
+    occam_gate_info: dict = {"enabled": bool(occam_premise_minimality)}
     primary_commitment = commitments[0] if commitments else None
     graph = build_premise_dependency_graph(primary_commitment, model)
 
@@ -4280,6 +4282,7 @@ def audit_transition_premises(
                 "supported_premises": supported_premises,
                 "refuted_premises": refuted_premises,
                 "scientific_revision_triggers": scientific_triggers,
+                "occam_minimality_gate": occam_gate_info,
                 "compute_cost": budget.spent - start,
             }
 
@@ -4492,13 +4495,304 @@ def audit_transition_premises(
     verified_threshold_parameter: dict | None = None
     verified_hs_polytope: dict | None = None
     budget_exhausted = False
+    occam_gate_info: dict = {"enabled": bool(occam_premise_minimality)}
+    precomputed_atomic_conds: dict[str, dict[str, list[dict]]] | None = None
 
-    if custom_committed_preds:
-        from .curved_hypersurface_probing import describe_linear_in_params_hypersurface
+    if occam_premise_minimality:
+        # v10.4 Occam Premise-Minimality Hierarchy:
+        # Tier 0: Minimal null premise ("unconditional", 0 AST nodes, 0 free parameters).
+        uncond_by_dir, budget_exhausted = _solve_exchange_for_condition(
+            q_rows,
+            x_rows,
+            delta_rows,
+            dynamic,
+            x_fields,
+            bijections,
+            ordered_directions,
+            active_taus,
+            eff_tol,
+            budget,
+            edge_condition="unconditional",
+        )
+        uncond_sufficient = bool(uncond_by_dir) and (
+            len(bijections) == 1 or len(active_taus) >= max(3, n - 1)
+        )
+        screened_exact_count = 0
+        screened_calibrated_count = 0
+        if uncond_sufficient:
+            supported_by_direction = uncond_by_dir
+            verified_cond_label = "unconditional"
+            occam_gate_info = {
+                "enabled": True,
+                "unconditional_sufficient": True,
+                "selected_tier": "tier_0_unconditional",
+                "skipped_custom_predicates": len(custom_committed_preds),
+                "screened_exact_custom_predicates": 0,
+                "screened_calibrated_custom_predicates": 0,
+            }
+        elif not budget_exhausted:
+            from .curved_hypersurface_probing import describe_linear_in_params_hypersurface
 
-        for custom_pred_dict in custom_committed_preds:
-            custom_prog = Program.from_dict(custom_pred_dict)
-            if describe_linear_in_params_hypersurface(custom_prog) is not None:
+            parsed_custom = []
+            for orig_idx, custom_pred_dict in enumerate(custom_committed_preds):
+                c_prog = Program.from_dict(custom_pred_dict)
+                hs_desc = describe_linear_in_params_hypersurface(c_prog)
+                th_desc = (
+                    None
+                    if hs_desc is not None
+                    else describe_comparator_threshold_parameter(c_prog)
+                )
+                n_free = (
+                    1 + len(hs_desc.get("slope_terms", ()))
+                    if hs_desc is not None
+                    else (1 if th_desc is not None else 0)
+                )
+                parsed_custom.append(
+                    (orig_idx, custom_pred_dict, c_prog, hs_desc, th_desc, n_free, int(c_prog.size))
+                )
+
+            # Tier 1: Exact uncalibrated committed predicates (0 recalibrated parameters),
+            # ordered by (has_threshold_param, ast_size, original_index).
+            tier1_order = sorted(
+                (item for item in parsed_custom if item[3] is None),
+                key=lambda item: (1 if item[4] is not None else 0, item[6], item[0]),
+            )
+            for _, custom_pred_dict, custom_prog, _, desc_cur, _, _ in tier1_order:
+                if budget_exhausted:
+                    break
+                screened_exact_count += 1
+                by_dir, budget_exhausted = _solve_exchange_for_condition(
+                    q_rows,
+                    x_rows,
+                    delta_rows,
+                    dynamic,
+                    x_fields,
+                    bijections,
+                    ordered_directions,
+                    active_taus,
+                    eff_tol,
+                    budget,
+                    edge_condition=custom_prog,
+                )
+                if budget_exhausted:
+                    break
+                if by_dir:
+                    supported_by_direction = by_dir
+                    verified_cond_label = custom_pred_dict
+                    if desc_cur is not None:
+                        verified_threshold_parameter = desc_cur
+                        rep_m = next(iter(next(iter(by_dir.values()))))
+                        q_idx_by_name = {name: i for i, name in enumerate(dynamic)}
+                        x_idx_by_name = {name: i for i, name in enumerate(x_fields)}
+                        rep_q_to_x = [0] * n
+                        for x_f, q_f in rep_m["mapping"].items():
+                            rep_q_to_x[q_idx_by_name[q_f]] = x_idx_by_name[x_f]
+                        verified_threshold_interval = extract_comparator_threshold_interval(
+                            custom_prog,
+                            q_rows,
+                            x_rows,
+                            delta_rows,
+                            rep_m["direction"],
+                            tuple(rep_q_to_x),
+                            budget,
+                            eff_tol,
+                            anchor_value=desc_cur["initial_value"],
+                        )
+                    occam_gate_info = {
+                        "enabled": True,
+                        "unconditional_sufficient": False,
+                        "selected_tier": "tier_1_exact_committed_predicate",
+                        "skipped_custom_predicates": max(
+                            0, len(custom_committed_preds) - screened_exact_count
+                        ),
+                        "screened_exact_custom_predicates": screened_exact_count,
+                        "screened_calibrated_custom_predicates": 0,
+                    }
+                    break
+
+            # Tier 2: Parameter-free built-in comparators ("source_greater", "source_less")
+            # evaluated before continuous parameter recalibration (Tier 3).
+            if not supported_by_direction and not budget_exhausted:
+                precomputed_atomic_conds = {}
+                for cond_name in (
+                    ("source_greater", "source_less") if allow_expanded_revisions else ()
+                ):
+                    by_dir_at, budget_exhausted = _solve_exchange_for_condition(
+                        q_rows,
+                        x_rows,
+                        delta_rows,
+                        dynamic,
+                        x_fields,
+                        bijections,
+                        ordered_directions,
+                        active_taus,
+                        eff_tol,
+                        budget,
+                        edge_condition=cond_name,
+                    )
+                    if budget_exhausted:
+                        break
+                    if by_dir_at:
+                        precomputed_atomic_conds[cond_name] = by_dir_at
+                if precomputed_atomic_conds:
+                    occam_gate_info = {
+                        "enabled": True,
+                        "unconditional_sufficient": False,
+                        "selected_tier": "tier_2_atomic_comparator",
+                        "skipped_custom_predicates": max(
+                            0, len(custom_committed_preds) - screened_exact_count
+                        ),
+                        "screened_exact_custom_predicates": screened_exact_count,
+                        "screened_calibrated_custom_predicates": 0,
+                    }
+
+            # Tier 3: Continuous threshold recalibration & coupled hypersurface fitting
+            # ONLY on predicates with >= 1 continuous parameter when Tiers 0..2 all failed.
+            if (
+                not supported_by_direction
+                and not precomputed_atomic_conds
+                and not budget_exhausted
+            ):
+                tier3_order = sorted(
+                    (item for item in parsed_custom if item[5] > 0),
+                    key=lambda item: (item[5], item[6], item[0]),
+                )
+                for _, _, custom_prog, _, _, _, _ in tier3_order:
+                    if budget.remaining <= 0:
+                        budget_exhausted = True
+                        break
+                    screened_calibrated_count += 1
+                    cal_res = screen_custom_edge_predicate_on_transitions(
+                        q_rows,
+                        x_rows,
+                        delta_rows,
+                        dynamic,
+                        x_fields,
+                        bijections,
+                        custom_prog,
+                        tuple(d for d in ordered_directions if d in {"right", "left"}),
+                        budget=budget,
+                        eff_tol=eff_tol,
+                    )
+                    if cal_res.get("supported") and cal_res.get("matches"):
+                        by_dir_cal = {}
+                        for m in cal_res["matches"]:
+                            by_dir_cal.setdefault(m["direction"], []).append(m)
+                        supported_by_direction = by_dir_cal
+                        verified_cond_label = cal_res["calibrated_predicate"].to_dict()
+                        verified_threshold_interval = cal_res.get("threshold_interval")
+                        verified_threshold_parameter = cal_res.get("threshold_parameter")
+                        verified_hs_polytope = cal_res.get("hypersurface_polytope")
+                        occam_gate_info = {
+                            "enabled": True,
+                            "unconditional_sufficient": False,
+                            "selected_tier": "tier_3_calibrated_custom_predicate",
+                            "skipped_custom_predicates": max(
+                                0, len(tier3_order) - screened_calibrated_count
+                            ),
+                            "screened_exact_custom_predicates": screened_exact_count,
+                            "screened_calibrated_custom_predicates": screened_calibrated_count,
+                        }
+                        break
+
+            if (
+                not supported_by_direction
+                and not precomputed_atomic_conds
+                and not budget_exhausted
+                and uncond_by_dir
+            ):
+                supported_by_direction = uncond_by_dir
+                verified_cond_label = "unconditional"
+                occam_gate_info = {
+                    "enabled": True,
+                    "unconditional_sufficient": True,
+                    "selected_tier": "tier_0_unconditional_sparse_fallback",
+                    "skipped_custom_predicates": 0,
+                    "screened_exact_custom_predicates": screened_exact_count,
+                    "screened_calibrated_custom_predicates": screened_calibrated_count,
+                }
+            elif (
+                not supported_by_direction
+                and not precomputed_atomic_conds
+                and "selected_tier" not in occam_gate_info
+            ):
+                occam_gate_info = {
+                    "enabled": True,
+                    "unconditional_sufficient": False,
+                    "selected_tier": "none_matched",
+                    "skipped_custom_predicates": 0,
+                    "screened_exact_custom_predicates": screened_exact_count,
+                    "screened_calibrated_custom_predicates": screened_calibrated_count,
+                }
+    else:
+        if custom_committed_preds:
+            from .curved_hypersurface_probing import describe_linear_in_params_hypersurface
+
+            for custom_pred_dict in custom_committed_preds:
+                custom_prog = Program.from_dict(custom_pred_dict)
+                if describe_linear_in_params_hypersurface(custom_prog) is not None:
+                    cal_res = screen_custom_edge_predicate_on_transitions(
+                        q_rows,
+                        x_rows,
+                        delta_rows,
+                        dynamic,
+                        x_fields,
+                        bijections,
+                        custom_prog,
+                        tuple(d for d in ordered_directions if d in {"right", "left"}),
+                        budget=budget,
+                        eff_tol=eff_tol,
+                    )
+                    if cal_res.get("supported") and cal_res.get("matches"):
+                        by_dir_cal: dict[str, list[dict]] = {}
+                        for m in cal_res["matches"]:
+                            by_dir_cal.setdefault(m["direction"], []).append(m)
+                        supported_by_direction = by_dir_cal
+                        verified_cond_label = cal_res["calibrated_predicate"].to_dict()
+                        verified_threshold_interval = cal_res.get("threshold_interval")
+                        verified_threshold_parameter = cal_res.get("threshold_parameter")
+                        verified_hs_polytope = cal_res.get("hypersurface_polytope")
+                        break
+                    continue
+                by_dir, budget_exhausted = _solve_exchange_for_condition(
+                    q_rows,
+                    x_rows,
+                    delta_rows,
+                    dynamic,
+                    x_fields,
+                    bijections,
+                    ordered_directions,
+                    active_taus,
+                    eff_tol,
+                    budget,
+                    edge_condition=custom_prog,
+                )
+                if budget_exhausted:
+                    break
+                if by_dir:
+                    supported_by_direction = by_dir
+                    verified_cond_label = custom_pred_dict
+                    desc_cur = describe_comparator_threshold_parameter(custom_prog)
+                    if desc_cur is not None:
+                        verified_threshold_parameter = desc_cur
+                        rep_m = next(iter(next(iter(by_dir.values()))))
+                        q_idx_by_name = {name: i for i, name in enumerate(dynamic)}
+                        x_idx_by_name = {name: i for i, name in enumerate(x_fields)}
+                        rep_q_to_x = [0] * n
+                        for x_f, q_f in rep_m["mapping"].items():
+                            rep_q_to_x[q_idx_by_name[q_f]] = x_idx_by_name[x_f]
+                        verified_threshold_interval = extract_comparator_threshold_interval(
+                            custom_prog,
+                            q_rows,
+                            x_rows,
+                            delta_rows,
+                            rep_m["direction"],
+                            tuple(rep_q_to_x),
+                            budget,
+                            eff_tol,
+                            anchor_value=desc_cur["initial_value"],
+                        )
+                    break
                 cal_res = screen_custom_edge_predicate_on_transitions(
                     q_rows,
                     x_rows,
@@ -4512,7 +4806,7 @@ def audit_transition_premises(
                     eff_tol=eff_tol,
                 )
                 if cal_res.get("supported") and cal_res.get("matches"):
-                    by_dir_cal: dict[str, list[dict]] = {}
+                    by_dir_cal = {}
                     for m in cal_res["matches"]:
                         by_dir_cal.setdefault(m["direction"], []).append(m)
                     supported_by_direction = by_dir_cal
@@ -4521,8 +4815,9 @@ def audit_transition_premises(
                     verified_threshold_parameter = cal_res.get("threshold_parameter")
                     verified_hs_polytope = cal_res.get("hypersurface_polytope")
                     break
-                continue
-            by_dir, budget_exhausted = _solve_exchange_for_condition(
+
+        if not supported_by_direction and not budget_exhausted:
+            supported_by_direction, budget_exhausted = _solve_exchange_for_condition(
                 q_rows,
                 x_rows,
                 delta_rows,
@@ -4533,72 +4828,9 @@ def audit_transition_premises(
                 active_taus,
                 eff_tol,
                 budget,
-                edge_condition=custom_prog,
+                edge_condition="unconditional",
             )
-            if budget_exhausted:
-                break
-            if by_dir:
-                supported_by_direction = by_dir
-                verified_cond_label = custom_pred_dict
-                desc_cur = describe_comparator_threshold_parameter(custom_prog)
-                if desc_cur is not None:
-                    verified_threshold_parameter = desc_cur
-                    rep_m = next(iter(next(iter(by_dir.values()))))
-                    q_idx_by_name = {name: i for i, name in enumerate(dynamic)}
-                    x_idx_by_name = {name: i for i, name in enumerate(x_fields)}
-                    rep_q_to_x = [0] * n
-                    for x_f, q_f in rep_m["mapping"].items():
-                        rep_q_to_x[q_idx_by_name[q_f]] = x_idx_by_name[x_f]
-                    verified_threshold_interval = extract_comparator_threshold_interval(
-                        custom_prog,
-                        q_rows,
-                        x_rows,
-                        delta_rows,
-                        rep_m["direction"],
-                        tuple(rep_q_to_x),
-                        budget,
-                        eff_tol,
-                        anchor_value=desc_cur["initial_value"],
-                    )
-                break
-            cal_res = screen_custom_edge_predicate_on_transitions(
-                q_rows,
-                x_rows,
-                delta_rows,
-                dynamic,
-                x_fields,
-                bijections,
-                custom_prog,
-                tuple(d for d in ordered_directions if d in {"right", "left"}),
-                budget=budget,
-                eff_tol=eff_tol,
-            )
-            if cal_res.get("supported") and cal_res.get("matches"):
-                by_dir_cal = {}
-                for m in cal_res["matches"]:
-                    by_dir_cal.setdefault(m["direction"], []).append(m)
-                supported_by_direction = by_dir_cal
-                verified_cond_label = cal_res["calibrated_predicate"].to_dict()
-                verified_threshold_interval = cal_res.get("threshold_interval")
-                verified_threshold_parameter = cal_res.get("threshold_parameter")
-                verified_hs_polytope = cal_res.get("hypersurface_polytope")
-                break
-
-    if not supported_by_direction and not budget_exhausted:
-        supported_by_direction, budget_exhausted = _solve_exchange_for_condition(
-            q_rows,
-            x_rows,
-            delta_rows,
-            dynamic,
-            x_fields,
-            bijections,
-            ordered_directions,
-            active_taus,
-            eff_tol,
-            budget,
-            edge_condition="unconditional",
-        )
-        verified_cond_label = "unconditional"
+            verified_cond_label = "unconditional"
 
     if budget_exhausted:
         return {
@@ -4626,24 +4858,27 @@ def audit_transition_premises(
             "max_abs_delta": float(max(abs(v) for v in delta_rows[tau0])),
         }
         cond_matches_by_type: dict[str, dict[str, list[dict]]] = {}
-        for cond_name in (("source_greater", "source_less") if allow_expanded_revisions else ()):
-            by_dir, budget_exhausted = _solve_exchange_for_condition(
-                q_rows,
-                x_rows,
-                delta_rows,
-                dynamic,
-                x_fields,
-                bijections,
-                ordered_directions,
-                active_taus,
-                eff_tol,
-                budget,
-                edge_condition=cond_name,
-            )
-            if budget_exhausted:
-                break
-            if by_dir:
-                cond_matches_by_type[cond_name] = by_dir
+        if precomputed_atomic_conds is not None:
+            cond_matches_by_type = precomputed_atomic_conds
+        else:
+            for cond_name in (("source_greater", "source_less") if allow_expanded_revisions else ()):
+                by_dir, budget_exhausted = _solve_exchange_for_condition(
+                    q_rows,
+                    x_rows,
+                    delta_rows,
+                    dynamic,
+                    x_fields,
+                    bijections,
+                    ordered_directions,
+                    active_taus,
+                    eff_tol,
+                    budget,
+                    edge_condition=cond_name,
+                )
+                if budget_exhausted:
+                    break
+                if by_dir:
+                    cond_matches_by_type[cond_name] = by_dir
 
         flat_cond_matches = [
             m
@@ -4686,6 +4921,7 @@ def audit_transition_premises(
                 "supported_premises": supported_premises,
                 "refuted_premises": refuted_premises,
                 "scientific_revision_triggers": scientific_triggers,
+                "occam_minimality_gate": occam_gate_info,
                 "compute_cost": budget.spent - start,
             }
 
@@ -4751,7 +4987,8 @@ def audit_transition_premises(
         if exhaustive:
             for comm_dir, comm_cond, _ in committed_specs:
                 if (
-                    comm_cond in cond_matches_by_type
+                    isinstance(comm_cond, str)
+                    and comm_cond in cond_matches_by_type
                     and comm_dir not in cond_matches_by_type[comm_cond]
                 ):
                     dir_witness = {
@@ -4879,6 +5116,7 @@ def audit_transition_premises(
             "supported_premises": supported_premises,
             "refuted_premises": refuted_premises,
             "scientific_revision_triggers": scientific_triggers,
+            "occam_minimality_gate": occam_gate_info,
             "compute_cost": budget.spent - start,
         }
 
@@ -5098,6 +5336,7 @@ def audit_transition_premises(
         "supported_premises": supported_premises,
         "refuted_premises": refuted_premises,
         "scientific_revision_triggers": scientific_triggers,
+        "occam_minimality_gate": occam_gate_info,
         "compute_cost": budget.spent - start,
     }
 

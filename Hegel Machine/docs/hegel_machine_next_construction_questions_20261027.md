@@ -2639,3 +2639,26 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
   - **`commitment_plus_calibration_prior`**：**`9/9`（100%，`N=6,7,8` 全满贯且 `9/9` 全部编译至 `selected_channels=[]`）**，角色消歧均值算力降至 **`35,505.9`（-88.71%）**，总算力降至 **`225,681.8`（-46.67%）**。
 - **Study 2B（3 类违背假设负向控制）：** 在 `anchored`（等位置直接效应）、`ContinuumFieldLab`（无位置连续场 PDE，`7.95e-20` 通过）与 `total`（全局焦点无关读出，`4.48e-21` 通过）上 **零虚假角色绑定**（单元测试另验证 `sink` 精确触发 `refute_sensor_role_calibration_prior`）。
 - **Study 2C（预注册前瞻生命周期链 `711000–714000` 复测至 $N=6$ 与扩展 Stage 7 $N=8$）：** 源形成成功的全部 **3 条前瞻链**在 Stage 3 ($N=5$)、Stage 4–5 ($N=5$ 反例修订)、**Stage 6 ($N=6$ 回归)** 与 **Stage 7 ($N=8$ 回归)** 达成 **`12/12`（100%）全通过**（`prospective_chain_2` 因 Stage 1 未过保持诚实 `0` 先验负样本）。
+
+
+## 127. v10.4：四层奥卡姆极小性门控（Occam Premise-Minimality）、M=72×N=8 全栈联合验证与 GPT-6 自包含审计包（2026-11-17）
+
+- **前瞻证据回执与审计交付包（全程 `model_calls = 0, total_tokens = 0`；历史 `v10` 13份、`v10.2` 6份、`v10.3` 2份回执全部字节零改动）：**
+  - 新增实验回执：`docs/evidence/v10_4_occam_and_gpt6_bundle_20261117/occam_minimality_ablation_20261117.json`
+  - 仓库内结构化审计档案：`docs/gpt6_audit_bundle_v10_4_20261117/`（含 `00_README_FOR_GPT6.md`、`01_UNIFIED_AUDIT_DOSSIER_v10_2_to_v10_4.md`、`02_F01_TO_F20_AND_22_ACCEPTANCE_MATRIX.md`、`03_SCALING_HIGH_ARITY_AND_OCCAM_REPORT.md`、`04_SOURCE_AND_RECEIPT_MANIFEST.json`、`05_STANDALONE_VERIFY_V10_4.py`）
+  - 自包含外部上传包：`markdown/Hegel_v10_4_GPT6_Audit_Handoff_20261117.zip`（附带全部 22 份完整 JSON 回执与 22 个核心源码／脚本／测试文件及零第三方依赖沙箱校验器）
+
+### 一、四层奥卡姆极小性门控（`occam_premise_minimality`）单因子消融（Study 1A & 1B）
+
+1. **机制根因与设计（`premise_dependency_audit.py`）：** 在 `v10.3` $M \ge 36$ 大规模开放语法谓词库（含 13 类边谓词）中，带连续阈值自由参数的谓词（如 `q_src - q_dst > tau`）在检验 `"unconditional"` 前会将 $\tau$ 校准至初测观测下界之外（如 `-2.952`、`-2.401`），在 12 行稀疏窗口上假阳性劫持无条件守恒题并消耗 `~206k` 审计算力。`v10.4` 建立四层极小性层级：**Tier 0**（零参数 `"unconditional"` 充分即停止）$\to$ **Tier 1**（零重标定精确已承诺谓词，按 AST 规模升序）$\to$ **Tier 2**（零参数内置偏序 `source_greater`/`source_less`）$\to$ **Tier 3**（仅当全部零自由参数假设均被受阻入域边证伪时，按自由参数数升序重标定连续阈值／弯曲超曲面）。
+2. **Study 1A（严格同工具四臂消融，冷角色归纳，6 题 $N=5$ 目标，`ample_380k`）：** 公平同时授予 `archive_with_occam` 与 `structured_indexed_with_occam` 相同奥卡姆门控：
+   - **$M = 36$**：`archive_no_occam` `3/6`（均值总算力 `321,788.8`）$\to$ `archive_with_occam` **`4/6`**（`245,914.3`）；`structured_indexed_no_occam` `3/6`（`279,516.2`）$\to$ **`structured_indexed_with_occam` `5/6`（`215,422.3`，较同工具 `archive_with_occam` 单题再省 `-30,492.0` 算力）**。
+   - **$M = 72$**：`archive_no_occam` `2/6`（`340,015.7`）$\to$ `archive_with_occam` **`4/6`**（`274,952.3`）；`structured_indexed_no_occam` `3/6`（`279,537.0`）$\to$ **`structured_indexed_with_occam` `5/6`（`216,109.7`，均值审计算力由 `90.5k/136.0k` 降至 `42,558.8`，较同工具 `archive_with_occam` 单题净省 `-58,842.7` / `-21.40%` 算力且保持 `5/6` vs `4/6` 领先，一次性写入巩固盈亏平衡仅 `0.29` 题）**。
+3. **Study 1B（$M = 72$ 逆序对抗插入测试：68 条冲突开放语法先验置于 4 条基础先验之前，4 题）：** `reversed_m72_indexed_no_occam` 为 **`0/4`**（均值审计算力 `229,890.0`，总算力 `322,241.8`），而 **`reversed_m72_indexed_with_occam` 达到 `4/4`（100%）**，均值审计算力降至 **`32,546.0`（-85.84%）**，总算力降至 **`168,333.2`（-47.76%）**。
+
+### 二、Study 2：$M = 72$ 异质冲突库 $\times$ $N = 8$（$(8!)^2 = 1.63 \times 10^9$ 排列）全栈联合评测
+
+- 在 3 台 24 路控制、32 路匿名传感器的 $N = 8$ 目标仪器上同时挂载完整 72 条冲突先验库：
+  - `cold_full_tools`：**`0/3`**（均值算力 `475,354.3`）；
+  - `m72_indexed_cold_roles_with_occam`（无角色标定先验）：**`0/3`**（32 传感器冷角色消歧耗尽 `479,966.0`）；
+  - **`m72_full_stack_indexed_calibrated_occam`**：**`2/3` 完成在线纯控制通道确认 `selected_channels=[]`**（且第 2 题 `ha_dpg_left_rev_N8` 亦在独立 `fresh48` 上达到 **`1.38e-18` 机器精度 MSE**，仅因 `461.9k/480k` 预算上限未跑完最终无传感器重确认步，诚实计为 `2/3`），角色消歧均值算力降至 **`97,633.0`（-79.66%）**，全流程均值算力降至 **`296,366.0`（-38.25%）**。

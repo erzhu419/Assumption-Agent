@@ -332,7 +332,8 @@ class UnifiedResearchAgent:
             allow_expanded_revisions=self.config.expanded_premise_revisions,
             allow_latent_state=self.config.latent_state_discovery,
             allow_higher_order_latent=self.config.higher_order_latent_discovery,
-            allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery)
+            allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
+            occam_premise_minimality=self.config.occam_premise_minimality)
         if audit["status"] == "awaiting_role_identification":
             return model
         updated = apply_verified_transition_premises(model, audit)
@@ -346,6 +347,7 @@ class UnifiedResearchAgent:
             "supported_premises": list(audit.get("supported_premises", ())),
             "refuted_premises": deepcopy(audit.get("refuted_premises", ())),
             "scientific_revision_triggers": deepcopy(audit.get("scientific_revision_triggers", ())),
+            "occam_minimality_gate": deepcopy(audit.get("occam_minimality_gate")),
             "surviving_bijection_count": audit.get("surviving_bijection_count"),
             "surviving_bijections": audit.get("surviving_bijection_count"),
             "radius_interval": deepcopy(audit.get("radius_interval")),
@@ -488,7 +490,8 @@ class UnifiedResearchAgent:
                         allow_latent_state=self.config.latent_state_discovery,
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
                         allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
-                        observations=training)
+                        observations=training,
+                        occam_premise_minimality=self.config.occam_premise_minimality)
                 eff_comm_tol = tolerance
                 if audit and audit.get("stochastic_audit"):
                     sp_hat = float((audit.get("process_noise") or {}).get("sigma_p_hat", 0.0))
@@ -2765,13 +2768,19 @@ class UnifiedResearchAgent:
         if ((premise_audit is None or len(transitions) > int(premise_audit.get("tested_transitions") or 0))
                 and self.config.transition_premise_audit and model_dict and transitions):
             from .premise_dependency_audit import audit_transition_premises
+            audit_comms_2 = commitments
+            if self.config.indexed_commitment_store:
+                idx_obj_2 = getattr(self.library, "_premise_commitment_index", None)
+                if idx_obj_2 is not None:
+                    audit_comms_2 = idx_obj_2.deduplicated_audit_commitments(budget)
             premise_audit = audit_transition_premises(
-                model_dict, transitions, budget, commitments=commitments, tolerance=tolerance,
+                model_dict, transitions, budget, commitments=audit_comms_2, tolerance=tolerance,
                 allow_expanded_revisions=self.config.expanded_premise_revisions,
                 allow_latent_state=self.config.latent_state_discovery,
                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
                 allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
-                observations=rows)
+                observations=rows,
+                occam_premise_minimality=self.config.occam_premise_minimality)
         if previous is None:
             equiv_budget = SearchBudget(budget.remaining // 3) if commitments else budget
             shared = propose_equivalent_object_programs(spec, rows, equiv_budget,
