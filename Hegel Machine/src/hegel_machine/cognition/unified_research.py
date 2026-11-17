@@ -217,10 +217,38 @@ class UnifiedResearchAgent:
         from .object_dependency_methods import ObjectDependencyMethods
         return ObjectDependencyMethods(sources, budget=budget, actions=actions)
 
+    def _deduplicated_audit_commitments_from_library(self, commitments, budget):
+        if self.config.indexed_commitment_store:
+            idx_obj = getattr(self.library, "_premise_commitment_index", None)
+            if idx_obj is not None:
+                return idx_obj.deduplicated_audit_commitments(budget)
+        ord_cache = getattr(self.library, "_ordinary_persistent_cache", None)
+        if ord_cache is not None:
+            return ord_cache.deduplicated_audit_commitments(budget)
+        ep_cache = getattr(self.library, "_episode_archive_cache", None)
+        if isinstance(ep_cache, dict) and ep_cache.get("dedup_audit_commitments") is not None:
+            budget.spend(1 + len(ep_cache["dedup_audit_commitments"]))
+            return list(ep_cache["dedup_audit_commitments"])
+        return commitments
+
     def _world_commitments(self, budget, actions=None):
         if not (self.config.use_memory and self.config.world_structure_commitments and self.library.meta_priors):
             return []
         before = budget.spent
+        ord_cache = getattr(self.library, "_ordinary_persistent_cache", None)
+        if ord_cache is not None:
+            commitments, cache_stats = ord_cache.get_or_consolidate(
+                self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement
+            )
+            if actions is not None and (commitments or budget.spent != before):
+                actions.append({
+                    "action": "retrieve_ordinary_cached_commitments",
+                    "commitment_count": len(commitments),
+                    "commitment_ids": [item["commitment_id"] for item in commitments],
+                    "cache_hit": bool(cache_stats.get("cache_hit")),
+                    "compute_cost": budget.spent - before,
+                })
+            return commitments
         if self.config.indexed_commitment_store:
             from .premise_commitment_index import ensure_library_commitment_index
             commitments, _, _ = ensure_library_commitment_index(
@@ -230,10 +258,32 @@ class UnifiedResearchAgent:
                 actions.append({"action": "retrieve_indexed_world_commitments",
                     "commitment_count": len(commitments),
                     "commitment_ids": [item["commitment_id"] for item in commitments],
+                    "index_telemetry": deepcopy(getattr(self.library, "_last_index_telemetry", None)),
                     "compute_cost": budget.spent - before})
             return commitments
-        from .premise_commitment_index import extract_archive_witness_maps
+        from .premise_commitment_index import (
+            _commitment_direction_class,
+            _commitment_predicate_key,
+            _prior_state_fingerprint,
+            extract_archive_witness_maps,
+        )
         from .world_structure_commitments import consolidate_world_structure_commitments
+        cur_fps = {
+            p.get("source_concept_id", f"anon_{i}"): _prior_state_fingerprint(p)
+            for i, p in enumerate(self.library.meta_priors)
+        }
+        ep_cache = getattr(self.library, "_episode_archive_cache", None)
+        if isinstance(ep_cache, dict) and ep_cache.get("fingerprints") == cur_fps:
+            budget.spend(1)
+            commitments = deepcopy(ep_cache["commitments"])
+            if actions is not None:
+                actions.append({
+                    "action": "reuse_episode_reconstructed_commitments",
+                    "commitment_count": len(commitments),
+                    "commitment_ids": [item["commitment_id"] for item in commitments],
+                    "compute_cost": budget.spent - before,
+                })
+            return commitments
         sup_map, ce_map = extract_archive_witness_maps(self.library.meta_priors)
         commitments = consolidate_world_structure_commitments(
             self.library.meta_priors,
@@ -241,6 +291,25 @@ class UnifiedResearchAgent:
             support_rows_by_source=sup_map or None,
             counterexample_rows_by_source=ce_map or None,
             tolerance=self.config.minimum_improvement)
+        seen_p: set[str] = set()
+        seen_d: set[str] = set()
+        dedup_c: list[dict] = []
+        for c in commitments:
+            pk = _commitment_predicate_key(c)
+            dc = _commitment_direction_class(c)
+            rps = c.get("radius_parameters") or ()
+            if rps and isinstance(rps[0].get("edge_condition"), dict):
+                if pk not in seen_p:
+                    seen_p.add(pk)
+                    dedup_c.append(c)
+            elif dc not in seen_d:
+                seen_d.add(dc)
+                dedup_c.append(c)
+        self.library._episode_archive_cache = {
+            "fingerprints": cur_fps,
+            "commitments": deepcopy(commitments),
+            "dedup_audit_commitments": deepcopy(dedup_c),
+        }
         if actions is not None and (commitments or budget.spent != before):
             actions.append({"action": "consolidate_world_structure_commitments",
                 "commitment_count": len(commitments),
@@ -322,11 +391,7 @@ class UnifiedResearchAgent:
                 )
                 return updated_s
         from .premise_dependency_audit import apply_verified_transition_premises, audit_transition_premises
-        audit_comms = commitments
-        if self.config.indexed_commitment_store:
-            idx_obj = getattr(self.library, "_premise_commitment_index", None)
-            if idx_obj is not None:
-                audit_comms = idx_obj.deduplicated_audit_commitments(budget)
+        audit_comms = self._deduplicated_audit_commitments_from_library(commitments, budget)
         audit = audit_transition_premises(
             model, records, budget, commitments=audit_comms, tolerance=self.config.minimum_improvement,
             allow_expanded_revisions=self.config.expanded_premise_revisions,
@@ -479,11 +544,7 @@ class UnifiedResearchAgent:
                     and transitions
                 ):
                     from .premise_dependency_audit import audit_transition_premises
-                    audit_comms = commitments
-                    if self.config.indexed_commitment_store:
-                        idx_obj = getattr(self.library, "_premise_commitment_index", None)
-                        if idx_obj is not None:
-                            audit_comms = idx_obj.deduplicated_audit_commitments(budget)
+                    audit_comms = self._deduplicated_audit_commitments_from_library(commitments, budget)
                     audit = audit_transition_premises(
                         model, transitions, budget, commitments=audit_comms, tolerance=tolerance,
                         allow_expanded_revisions=self.config.expanded_premise_revisions,
@@ -521,7 +582,128 @@ class UnifiedResearchAgent:
                         for comm in commitments
                         if is_commitment_empirically_consistent(comm, audit, task_id=task_sig)
                     ]
+                consumption_events = []
+                if parent is None:
+                    parent_id_before = None
+                elif isinstance(parent, dict):
+                    cand_p = parent.get("candidate")
+                    parent_id_before = getattr(cand_p, "candidate_id", parent.get("candidate_id"))
+                else:
+                    parent_id_before = getattr(parent, "candidate_id", None)
+
+                branch_dispatch_telemetry = None
+                if self.config.branch_reconciliation:
+                    from .branch_reconciliation import (
+                        compute_observable_regime_features,
+                        evaluate_scope_guard,
+                        instantiate_parametric_family_on_target,
+                        propagate_premise_retraction_invalidation,
+                    )
+                    obs_regime = compute_observable_regime_features(transitions, schema)
+                    retracted_set = set(getattr(self.library, "_retracted_premise_or_claim_ids", ()) or ())
+                    raw_branches = list(getattr(self.library, "_active_reconciled_branches", ()) or ())
+                    checked_branches = (
+                        propagate_premise_retraction_invalidation(
+                            raw_branches, retracted_premise_or_claim_ids=retracted_set
+                        )
+                        if raw_branches
+                        else []
+                    )
+                    pruned_retracted_ids = [
+                        b["claim_id"]
+                        for b in checked_branches
+                        if b.get("support_validity") != "valid_grounded"
+                    ]
+                    pruned_scope_ids = []
+                    matched_branch_comms = []
+                    for b in checked_branches:
+                        if b.get("support_validity") != "valid_grounded" or b.get("status") == "refuted":
+                            continue
+                        if not evaluate_scope_guard(b.get("scope_guard"), obs_regime):
+                            pruned_scope_ids.append(b["claim_id"])
+                            continue
+                        b_comm = deepcopy(b.get("commitment") or b)
+                        if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
+                            matched_branch_comms.append(b_comm)
+
+                    gen_families = list(getattr(self.library, "_generalized_branch_commitments", ()) or ())
+                    matched_family_ids = []
+                    for gf in gen_families:
+                        if gf.get("commitment_id") in retracted_set:
+                            pruned_retracted_ids.append(gf["commitment_id"])
+                            continue
+                        if not evaluate_scope_guard(gf.get("scope_guard"), obs_regime):
+                            pruned_scope_ids.append(gf["commitment_id"])
+                            continue
+                        gf_dir = (gf.get("radius_parameters") or [{}])[0].get("direction")
+                        if audit and audit.get("verified_direction") and gf_dir and audit["verified_direction"] != gf_dir:
+                            pruned_scope_ids.append(gf["commitment_id"])
+                            continue
+                        if (
+                            audit
+                            and audit.get("verified_edge_condition") == "unconditional"
+                            and (audit.get("occam_minimality_gate") or {}).get("selection_epistemic_status")
+                            == "empirically_distinguished_unconditional"
+                        ):
+                            # Negative-donor transitions empirically refuted gated predicates -> skip gated family!
+                            pruned_scope_ids.append(gf["commitment_id"])
+                            continue
+                        matched_family_ids.append(gf["commitment_id"])
+                        fam_entries = instantiate_parametric_family_on_target(
+                            gf,
+                            spec,
+                            training,
+                            schema,
+                            comm_budget,
+                            audit_report=audit,
+                            transitions=transitions,
+                            tolerance=eff_comm_tol,
+                        )
+                        gen_cids = [e["candidate"].candidate_id for e in fam_entries if "candidate" in e]
+                        consumption_events.append({
+                            "object_id": gf["commitment_id"],
+                            "semantic_version": gf.get("semantic_group_fingerprint") or gf["commitment_id"],
+                            "source_concept_ids": list(gf.get("source_branch_ids") or ()),
+                            "consumption_site": "pass0_parametric_family_instantiation",
+                            "generated_candidate_ids": gen_cids,
+                            "parent_before": parent_id_before,
+                            "parent_after": gen_cids[0] if gen_cids else parent_id_before,
+                            "probe_before": None,
+                            "probe_after": "parametric_slot_calibration" if gen_cids else None,
+                        })
+                        claims.extend(fam_entries)
+                        if any(item["training_loss"] <= eff_comm_tol for item in claims):
+                            break
+
+                    if matched_branch_comms:
+                        seen_cids = {mc["commitment_id"] for mc in matched_branch_comms}
+                        consistent_comms = [
+                            *matched_branch_comms,
+                            *(
+                                c
+                                for c in consistent_comms
+                                if c["commitment_id"] not in seen_cids
+                                and c["commitment_id"] not in set(pruned_scope_ids)
+                                and c["commitment_id"] not in set(pruned_retracted_ids)
+                            ),
+                        ]
+                    elif checked_branches:
+                        consistent_comms = [
+                            c
+                            for c in consistent_comms
+                            if c["commitment_id"] not in set(pruned_scope_ids)
+                            and c["commitment_id"] not in set(pruned_retracted_ids)
+                        ]
+                    branch_dispatch_telemetry = {
+                        "observable_regime_features": obs_regime,
+                        "matched_parametric_family_ids": matched_family_ids,
+                        "pruned_by_observable_scope_ids": pruned_scope_ids,
+                        "pruned_by_retraction_ids": pruned_retracted_ids,
+                    }
+
                 for comm in consistent_comms:
+                    if any(item["training_loss"] <= eff_comm_tol for item in claims):
+                        break
                     if comm_budget.remaining <= 0:
                         break
                     bounds = commitment_verified_radius_bounds(comm, audit, schema_x_to_q)
@@ -534,6 +716,20 @@ class UnifiedResearchAgent:
                         allow_latent_state=self.config.latent_state_discovery,
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
                         tolerance=eff_comm_tol)
+                    gen_cids = [e["candidate"].candidate_id for e in entries if "candidate" in e]
+                    consumption_events.append({
+                        "object_id": comm["commitment_id"],
+                        "semantic_version": comm.get("semantic_group_fingerprint"),
+                        "source_concept_ids": list(comm.get("source_concept_ids") or ()),
+                        "consumption_site": "pass1_scope_instantiation",
+                        "generated_candidate_ids": gen_cids,
+                        "parent_before": parent_id_before,
+                        "parent_after": gen_cids[0] if gen_cids else parent_id_before,
+                        "probe_before": None,
+                        "probe_after": "active_threshold_or_interval_probe" if any(
+                            bool((e.get("research_program") or {}).get("steps")) for e in entries
+                        ) else None,
+                    })
                     claims.extend(entries)
                     if any(item["training_loss"] <= eff_comm_tol for item in claims):
                         break
@@ -557,6 +753,18 @@ class UnifiedResearchAgent:
                                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
                                 transitions=transitions,
                                 tolerance=eff_comm_tol)
+                            gen_cids = [e["candidate"].candidate_id for e in entries if "candidate" in e]
+                            consumption_events.append({
+                                "object_id": comm["commitment_id"],
+                                "semantic_version": comm.get("semantic_group_fingerprint"),
+                                "source_concept_ids": list(comm.get("source_concept_ids") or ()),
+                                "consumption_site": "pass2_premise_revision",
+                                "generated_candidate_ids": gen_cids,
+                                "parent_before": comm["commitment_id"],
+                                "parent_after": gen_cids[0] if gen_cids else comm["commitment_id"],
+                                "probe_before": "unrevised_parent_probe",
+                                "probe_after": "premise_revised_probe" if gen_cids else "unrevised_parent_probe",
+                            })
                             claims.extend(entries)
                             if any(item["training_loss"] <= eff_comm_tol for item in claims):
                                 break
@@ -565,6 +773,7 @@ class UnifiedResearchAgent:
                 apply_payload = {"action": "apply_world_structure_commitments",
                     "compute_cost": comm_budget.spent,
                     "candidate_count": len(claims),
+                    "consumption_events": consumption_events,
                     "consistent_commitments_matched": [c["commitment_id"] for c in consistent_comms],
                     "rejected_inconsistent_commitment_ids": [
                         c["commitment_id"] for c in commitments if c["commitment_id"] not in consistent_ids
@@ -572,6 +781,8 @@ class UnifiedResearchAgent:
                     "supported": any(item["training_loss"] <= eff_comm_tol for item in claims)}
                 if idx_stats is not None:
                     apply_payload["premise_index_stats"] = idx_stats
+                if branch_dispatch_telemetry is not None:
+                    apply_payload["branch_dispatch_telemetry"] = branch_dispatch_telemetry
                 actions.append(apply_payload)
         if not any(
             item["training_loss"]
@@ -810,6 +1021,96 @@ class UnifiedResearchAgent:
                 model = infer_object_model(raw_spec, records(), budget, prior=model)
                 model = self._audit_object_transition_premises(
                     model, records(), budget, actions, commitments=commitments)
+                exp_method = getattr(self.library, "_learned_experiment_method", None)
+                if model.get("complete") and isinstance(exp_method, dict):
+                    from .discriminating_experiment_policy import (
+                        build_generic_schema_candidate_hypotheses,
+                        generate_candidate_probe_menu,
+                        select_probe_under_method,
+                    )
+                    from .world_structure_commitments import instantiate_commitment_terms
+
+                    max_m_rounds = int(exp_method.get("max_probes_per_episode", 2))
+                    m_probe_len = int(exp_method.get("probe_length", 6))
+                    used_m_probe_ids: set[str] = set()
+                    for m_step in range(max_m_rounds):
+                        rem_m = row_limit - len(records())
+                        if rem_m < m_probe_len:
+                            break
+                        pa_m = model.get("premise_audit") or {}
+                        t_iv = pa_m.get("verified_threshold_interval")
+                        r_iv = pa_m.get("radius_interval")
+                        occam_g = pa_m.get("occam_minimality_gate") or {}
+                        needs_disc = (
+                            (not pa_m.get("verified_direction"))
+                            or bool(occam_g.get("boundary_test_needed"))
+                            or (
+                                isinstance(pa_m.get("verified_edge_condition"), dict)
+                                and (t_iv is None or (float(t_iv[1]) - float(t_iv[0])) > 0.025)
+                            )
+                            or (r_iv is None or (float(r_iv[1]) - float(r_iv[0])) > 0.04)
+                        )
+                        if not needs_disc:
+                            break
+                        sc_m = model["schema"]
+                        cand_progs = build_generic_schema_candidate_hypotheses(sc_m)
+                        for cm_k in list(commitments)[:6]:
+                            rps_k = cm_k.get("radius_parameters") or ()
+                            rv_k = float((rps_k[0].get("source_values") or [0.85])[-1]) if rps_k else 0.85
+                            sym_k = rps_k[0]["symbol"] if rps_k else "r_0"
+                            ts_k = instantiate_commitment_terms(cm_k, sc_m, radius_bindings={sym_k: rv_k})
+                            if ts_k and len(ts_k) >= 3:
+                                cand_progs.append(
+                                    Program(
+                                        "add",
+                                        children=(
+                                            ts_k[0],
+                                            Program("mul", children=(Program("const", value=0.22), ts_k[-1])),
+                                        ),
+                                    )
+                                )
+                        p_menu = generate_candidate_probe_menu(
+                            command_spec,
+                            sc_m,
+                            sc_m["controls"],
+                            seed=self.config.seed + 911 * m_step,
+                            probe_length=m_probe_len,
+                        )
+                        m_probe, m_meta = select_probe_under_method(
+                            exp_method,
+                            p_menu,
+                            cand_progs,
+                            command_spec,
+                            sc_m,
+                            sc_m["controls"],
+                            round_index=m_step,
+                            exclude_probe_ids=used_m_probe_ids,
+                            budget=budget,
+                        )
+                        used_m_probe_ids.add(m_probe.probe_id)
+                        if (
+                            acquire(
+                                channels,
+                                "execute_method_selected_discriminating_probe",
+                                probe=m_probe,
+                            )
+                            is None
+                        ):
+                            break
+                        model = self._audit_object_transition_premises(
+                            model, records(), budget, actions, commitments=commitments
+                        )
+                        actions.append(
+                            {
+                                "action": "execute_discriminating_experiment_method",
+                                **m_meta,
+                                "consumption_events": (
+                                    [m_meta["consumption_event"]]
+                                    if m_meta.get("consumption_event")
+                                    else []
+                                ),
+                            }
+                        )
                 if (
                     model.get("complete")
                     and self.config.curved_hypersurface_probing
@@ -2768,11 +3069,7 @@ class UnifiedResearchAgent:
         if ((premise_audit is None or len(transitions) > int(premise_audit.get("tested_transitions") or 0))
                 and self.config.transition_premise_audit and model_dict and transitions):
             from .premise_dependency_audit import audit_transition_premises
-            audit_comms_2 = commitments
-            if self.config.indexed_commitment_store:
-                idx_obj_2 = getattr(self.library, "_premise_commitment_index", None)
-                if idx_obj_2 is not None:
-                    audit_comms_2 = idx_obj_2.deduplicated_audit_commitments(budget)
+            audit_comms_2 = self._deduplicated_audit_commitments_from_library(commitments, budget)
             premise_audit = audit_transition_premises(
                 model_dict, transitions, budget, commitments=audit_comms_2, tolerance=tolerance,
                 allow_expanded_revisions=self.config.expanded_premise_revisions,

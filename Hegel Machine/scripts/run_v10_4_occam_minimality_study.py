@@ -79,7 +79,7 @@ def _run_scaling_arm(
         lib = KnowledgeLibrary(meta_priors=deepcopy(priors_slice))
         rec_b = SearchBudget(target_compute_cap // 2)
         _, archive_rec_compute = reconstruct_commitments_from_raw_archive(
-            lib.meta_priors, rec_b, tolerance=1e-7
+            lib.meta_priors, rec_b, install_into_library=lib, tolerance=1e-7
         )
     else:
         assert preindexed_lib is not None
@@ -87,6 +87,8 @@ def _run_scaling_arm(
         lib._indexed_prior_fingerprints = deepcopy(preindexed_lib._indexed_prior_fingerprints)
         lib._indexed_group_commitments = deepcopy(preindexed_lib._indexed_group_commitments)
         lib._premise_commitment_index = deepcopy(preindexed_lib._premise_commitment_index)
+        lib._index_build_status = getattr(preindexed_lib, "_index_build_status", "complete")
+        lib._indexed_stale_dep_cids = deepcopy(getattr(preindexed_lib, "_indexed_stale_dep_cids", set()))
 
     rem_cap = max(1000, target_compute_cap - archive_rec_compute)
     cfg = ResearchConfig(

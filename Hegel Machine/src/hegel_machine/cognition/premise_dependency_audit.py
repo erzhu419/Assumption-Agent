@@ -4522,9 +4522,60 @@ def audit_transition_premises(
         if uncond_sufficient:
             supported_by_direction = uncond_by_dir
             verified_cond_label = "unconditional"
+            # Check whether candidate conditional predicates in library are empirically refuted
+            # on observed active edges OR merely observationally undistinguished (all observed active
+            # edges happened to lie on the True side of the threshold/condition — GPT-6 v11 §5.3).
+            undistinguished_alts: list[Any] = []
+            rep_dir_u = next(iter(uncond_by_dir.keys()))
+            rep_match_u = uncond_by_dir[rep_dir_u][0]
+            r_lo_u = float(rep_match_u["radius_interval"][0])
+            q_idx_map = {name: i for i, name in enumerate(dynamic)}
+            x_idx_map = {name: i for i, name in enumerate(x_fields)}
+            rep_q2x = [0] * n
+            for xf_u, qf_u in rep_match_u["mapping"].items():
+                rep_q2x[q_idx_map[qf_u]] = x_idx_map[xf_u]
+
+            active_directed_edges: list[tuple[float, float, float, float]] = []
+            for tau_i in active_taus:
+                q_v = q_rows[tau_i]
+                x_v = x_rows[tau_i]
+                for src_i in range(n):
+                    if abs(q_v[src_i]) <= 1e-6:
+                        continue
+                    xs_v = x_v[rep_q2x[src_i]]
+                    for dst_i in range(n):
+                        if src_i == dst_i:
+                            continue
+                        xt_v = x_v[rep_q2x[dst_i]]
+                        if rep_dir_u == "right" and not (xt_v > xs_v):
+                            continue
+                        if rep_dir_u == "left" and not (xt_v < xs_v):
+                            continue
+                        if abs(xt_v - xs_v) <= r_lo_u + 1e-9:
+                            active_directed_edges.append(
+                                (xs_v, q_v[src_i], xt_v, q_v[dst_i])
+                            )
+
+            if active_directed_edges and budget.spend(max(1, len(custom_committed_preds) * 2)):
+                for cand_cond in [*custom_committed_preds, "source_greater", "source_less"]:
+                    if all(
+                        _edge_condition_holds(cand_cond, xs_e, qs_e, xt_e, qt_e)
+                        for xs_e, qs_e, xt_e, qt_e in active_directed_edges
+                    ):
+                        if cand_cond not in undistinguished_alts:
+                            undistinguished_alts.append(cand_cond)
+
             occam_gate_info = {
                 "enabled": True,
+                "author_origin": "developer_builtin_provisional_preference",
                 "unconditional_sufficient": True,
+                "selection_epistemic_status": (
+                    "provisional_occam_preference"
+                    if undistinguished_alts
+                    else "empirically_distinguished_unconditional"
+                ),
+                "undistinguished_conditional_alternatives": undistinguished_alts,
+                "boundary_test_needed": bool(undistinguished_alts),
                 "selected_tier": "tier_0_unconditional",
                 "skipped_custom_predicates": len(custom_committed_preds),
                 "screened_exact_custom_predicates": 0,
@@ -5125,25 +5176,37 @@ def audit_transition_premises(
     supported_premises.append("P_exchange_form")
 
     def _norm_cond_key(cond_val: str | dict | None) -> str:
+        import json as _json
+
+        def _as_str(v) -> str:
+            return v if isinstance(v, str) else _json.dumps(v, sort_keys=True)
+
         if not isinstance(cond_val, dict):
-            return describe_edge_condition(cond_val)
+            return _as_str(describe_edge_condition(cond_val))
         prog_c = Program.from_dict(cond_val)
         from .curved_hypersurface_probing import normalize_hypersurface_for_grouping
 
         hs_n = normalize_hypersurface_for_grouping(prog_c)
         if hs_n is not None:
-            return describe_edge_condition(hs_n.to_dict())
+            return _as_str(describe_edge_condition(hs_n.to_dict()))
         desc_c = describe_comparator_threshold_parameter(prog_c)
         if desc_c is not None:
-            return describe_edge_condition(
-                _replace_node_at_path(
-                    prog_c, tuple(desc_c["path"]), Program("arg", name="__THRESHOLD__")
-                ).to_dict()
+            return _as_str(
+                describe_edge_condition(
+                    _replace_node_at_path(
+                        prog_c, tuple(desc_c["path"]), Program("arg", name="__THRESHOLD__")
+                    ).to_dict()
+                )
             )
-        return describe_edge_condition(cond_val)
+        return _as_str(describe_edge_condition(cond_val))
 
     tau0 = active_taus[0]
     norm_verified_cond = _norm_cond_key(verified_cond_label)
+    undistinguished_norm_keys = {
+        _norm_cond_key(alt_c)
+        for alt_c in (occam_gate_info.get("undistinguished_conditional_alternatives") or ())
+    }
+    undistinguished_premises: list[dict] = []
     # Check if a commitment expected conditional exchange or nonconservation that was refuted by conservative data
     for comm_dir, comm_cond, comm_raw_cond, comm_noncons in committed_raw_specs:
         if exhaustive and comm_noncons not in (None, "conserved"):
@@ -5156,6 +5219,19 @@ def audit_transition_premises(
                 }
             )
         if exhaustive and _norm_cond_key(comm_raw_cond) != norm_verified_cond:
+            if (
+                verified_cond_label == "unconditional"
+                and comm_raw_cond in (occam_gate_info.get("undistinguished_conditional_alternatives") or ())
+            ):
+                undistinguished_premises.append(
+                    {
+                        "premise_id": "P_exchange_form",
+                        "committed_condition": comm_cond,
+                        "status": "observationally_undistinguished_boundary_untested",
+                        "provisional_preferred_condition": "unconditional",
+                    }
+                )
+                continue
             witness = {
                 **row_refs[tau0],
                 "refuted_condition": comm_cond,
@@ -5335,6 +5411,10 @@ def audit_transition_premises(
         "dependency_graph": graph,
         "supported_premises": supported_premises,
         "refuted_premises": refuted_premises,
+        "undistinguished_premises": undistinguished_premises,
+        "undistinguished_conditional_alternatives": list(
+            occam_gate_info.get("undistinguished_conditional_alternatives") or ()
+        ),
         "scientific_revision_triggers": scientific_triggers,
         "occam_minimality_gate": occam_gate_info,
         "compute_cost": budget.spent - start,

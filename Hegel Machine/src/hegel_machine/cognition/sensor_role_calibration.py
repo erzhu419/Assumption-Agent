@@ -76,17 +76,40 @@ def consolidate_sensor_role_calibration_priors(
                 if om.get("model_id"):
                     source_ids.append(str(om["model_id"]))
 
+    confirmed_source_ids: list[str] = []
+    candidate_unconfirmed_source_ids: list[str] = []
     for mp in meta_priors:
         if budget is not None and not budget.spend(2):
             break
-        if mp.get("status") == "revoked":
+        if mp.get("status") in {"revoked", "stale_dependency_invalidated"}:
+            continue
+        if mp.get("evidence_kind") == "synthetic_stress_fixture":
+            # Synthetic stress fixtures do not count as confirmed empirical source episodes!
+            sc_s = mp.get("object_schema") or {}
+            fields_s = sc_s.get("fields") or {}
+            if fields_s and all(set(v) >= {"q", "u", "x", "f"} for v in fields_s.values()):
+                has_4role_source = True
+                if mp.get("source_concept_id"):
+                    candidate_unconfirmed_source_ids.append(str(mp["source_concept_id"]))
             continue
         sc = mp.get("object_schema") or {}
         fields = sc.get("fields") or {}
         if fields and all(set(v) >= {"q", "u", "x", "f"} for v in fields.values()):
             has_4role_source = True
-            if mp.get("source_concept_id"):
-                source_ids.append(str(mp["source_concept_id"]))
+            cid_s = str(mp.get("source_concept_id") or "")
+            c_loss = mp.get("confirmation_loss")
+            rm = mp.get("research_method") or {}
+            is_conf = (
+                c_loss is not None
+                and float(c_loss) <= 1e-7
+                and int(rm.get("confirmation_rows", 0) or 0) > 0
+            )
+            if cid_s:
+                source_ids.append(cid_s)
+                if is_conf:
+                    confirmed_source_ids.append(cid_s)
+                else:
+                    candidate_unconfirmed_source_ids.append(cid_s)
 
     if not has_4role_source:
         return []
@@ -119,7 +142,17 @@ def consolidate_sensor_role_calibration_priors(
 
     prior_obj = {
         "prior_id": "sensor_calibration_prior:4role_hub_and_selector_v1",
+        "method_author_origin": "developer_builtin_procedure_with_source_parameter_hints",
+        "applicability_support_status": (
+            "empirically_confirmed_sources"
+            if confirmed_source_ids
+            else "candidate_prior_only"
+        ),
         "source_ids": list(dict.fromkeys(source_ids))[:8],
+        "confirmed_source_ids": list(dict.fromkeys(confirmed_source_ids))[:8],
+        "candidate_unconfirmed_source_ids": list(
+            dict.fromkeys(candidate_unconfirmed_source_ids)
+        )[:8],
         "expected_roles": ["q", "u", "x", "f"],
         "requires_pure_additive_drives": True,
         "requires_equal_position_silence": True,

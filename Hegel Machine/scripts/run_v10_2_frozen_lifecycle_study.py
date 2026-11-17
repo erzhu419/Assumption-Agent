@@ -49,8 +49,10 @@ from scripts.run_v10_phase2b_open_grammar_llm import (
 )
 from hegel_machine.cognition.anonymous_object_lab import AnonymousObjectLab
 from hegel_machine.cognition.equal_tool_attribution import (
+    UnifiedResourceAccount,
     build_action_chain_telemetry,
     build_bounded_open_grammar_patch_catalog,
+    extract_real_consumption_events_from_actions,
     reconstruct_commitments_from_raw_archive,
     run_single_factor_dependency_ablation_arm,
 )
@@ -221,7 +223,7 @@ def _run_stage_episode_for_arm(
     elif arm_name == "archive_full_tools":
         rec_b = SearchBudget(60000)
         reconstructed, rec_spent = reconstruct_commitments_from_raw_archive(
-            persistent_lib.meta_priors, rec_b, tolerance=1e-7
+            persistent_lib.meta_priors, rec_b, install_into_library=persistent_lib, tolerance=1e-7
         )
         archive_rec_compute = rec_spent
         active_lib = persistent_lib
@@ -282,35 +284,64 @@ def _run_stage_episode_for_arm(
         ):
             recovered_c0 = True
 
-        # Equal-tool open-grammar fallback for cold_full_tools (or if unresolved)
-        rem_comp = max(0, (base_comp_cap - archive_rec_compute) - res["costs"]["compute_cost"])
-        if not confirmed and rem_comp > 5000:
+        # Unified top-level resource account enforcement across main run + fallback + confirmation (v11 A3)
+        obs_cap = 380 if n_obj >= 6 else 340
+        top_account = UnifiedResourceAccount(
+            compute_limit=base_comp_cap,
+            observation_limit=obs_cap,
+            measurement_limit=meas_cap,
+        )
+        top_account.debit("archive_reconstruction", compute=archive_rec_compute)
+        top_account.debit(
+            "main_agent_run",
+            compute=res["costs"]["compute_cost"],
+            observations=res["costs"]["observation_cost"],
+            measurements=res["costs"]["measurement_cost"],
+        )
+
+        # Equal-tool open-grammar fallback strictly bounded by remaining unified top-level budgets!
+        if not confirmed and top_account.remaining_compute > 5000 and top_account.remaining_observations >= 132:
             with AnonymousObjectLab(**lab_kwargs) as sub_lab:
                 sub_bundle = _acquire_shared_discovery_bundle(sub_lab, seed=seed + 77)
-                og_obs = sub_bundle["observation_cost"]
-                og_meas = sub_bundle["measurement_cost"]
-                og_out = run_single_factor_dependency_ablation_arm(
-                    parent_commitment=base_parent_comm,
-                    model=sub_bundle["model"],
-                    records=sub_bundle["records"],
-                    spec=sub_bundle["spec"],
-                    training=sub_bundle["training"],
-                    validation=sub_bundle["validation"],
-                    compute_budget_limit=rem_comp,
-                    use_support_dependency_cue=True,
-                    tolerance=1e-7,
-                )
-                og_compute = sub_bundle["shared_induction_compute"] + og_out["compute_cost"]
-                if og_out["supported"] and og_out["best_entry"] is not None:
-                    prog = og_out["best_entry"]["candidate"].program
-                    ch = ("fine",)
-                    fb_val = initial_prediction(sub_bundle["training"], sub_bundle["spec"].risk_quantile)
-                    chk_mse = _eval_program_heldout_48(sub_lab, prog, fb_val, seed + 555001)
-                    og_obs += 48
-                    og_meas += 48 * 3 * n_obj
-                    if chk_mse is not None and chk_mse <= 1e-7:
-                        confirmed = True
-                        res["fallback"] = fb_val
+                if top_account.debit(
+                    "fallback_discovery_bundle",
+                    compute=sub_bundle["shared_induction_compute"],
+                    observations=sub_bundle["observation_cost"],
+                    measurements=sub_bundle["measurement_cost"],
+                ):
+                    og_obs = sub_bundle["observation_cost"]
+                    og_meas = sub_bundle["measurement_cost"]
+                    og_out = run_single_factor_dependency_ablation_arm(
+                        parent_commitment=base_parent_comm,
+                        model=sub_bundle["model"],
+                        records=sub_bundle["records"],
+                        spec=sub_bundle["spec"],
+                        training=sub_bundle["training"],
+                        validation=sub_bundle["validation"],
+                        compute_budget_limit=top_account.remaining_compute,
+                        use_support_dependency_cue=True,
+                        tolerance=1e-7,
+                    )
+                    top_account.debit("fallback_patch_search", compute=og_out["compute_cost"])
+                    og_compute = sub_bundle["shared_induction_compute"] + og_out["compute_cost"]
+                    if (
+                        og_out["supported"]
+                        and og_out["best_entry"] is not None
+                        and top_account.debit(
+                            "fallback_fresh48_confirmation",
+                            observations=48,
+                            measurements=48 * 3 * n_obj,
+                        )
+                    ):
+                        prog = og_out["best_entry"]["candidate"].program
+                        ch = ("fine",)
+                        fb_val = initial_prediction(sub_bundle["training"], sub_bundle["spec"].risk_quantile)
+                        chk_mse = _eval_program_heldout_48(sub_lab, prog, fb_val, seed + 555001)
+                        og_obs += 48
+                        og_meas += 48 * 3 * n_obj
+                        if chk_mse is not None and chk_mse <= 1e-7:
+                            confirmed = True
+                            res["fallback"] = fb_val
 
         heldout_mse = (
             float(
@@ -329,18 +360,17 @@ def _run_stage_episode_for_arm(
     tot_obs = res["costs"]["observation_cost"] + og_obs
     tot_meas = res["costs"]["measurement_cost"] + og_meas
 
+    real_cons_events = extract_real_consumption_events_from_actions(res.get("actions", ()))
     chain_tel = build_action_chain_telemetry(
         arm=arm_name,
         task_id=f"{stage_name}:{seed}",
         knowledge_available_count=avail_k,
         knowledge_retrieved_ids=retrieved_ids,
-        entered_candidate_pool=bool(retrieved_ids),
-        changed_probe_or_audit=bool(retrieved_ids),
-        changed_parent_commitment=bool(retrieved_ids),
         reorganization_type=reorg_type,
         confirmed=confirmed,
         heldout_mse=heldout_mse,
         tolerance=1e-7,
+        consumption_events=real_cons_events,
     )
 
     return {

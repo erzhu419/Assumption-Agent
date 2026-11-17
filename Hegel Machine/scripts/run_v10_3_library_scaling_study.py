@@ -59,12 +59,13 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _serialize_rows(rows) -> list[dict]:
+def _serialize_rows(rows, *, evidence_kind: str = "empirical_episode") -> list[dict]:
     return [
         {
             "features": dict(r.features),
             "target": float(r.target),
             "history": [dict(h) for h in r.history],
+            "evidence_kind": evidence_kind,
         }
         for r in rows
     ]
@@ -201,7 +202,9 @@ def _make_confirmed_regime_prior(
         "prior_id": f"scale_prior_{concept_id}",
         "source_concept_id": concept_id,
         "family_id": "T15",
-        "kind": "structural:scaled_archive",
+        "kind": "synthetic_stress_fixture:scaled_archive",
+        "evidence_kind": "synthetic_stress_fixture",
+        "empirical_confirmation": False,
         "status": "conditional",
         "task_id": f"source_task_{concept_id}",
         "source_features": list(spec.feature_names),
@@ -219,14 +222,17 @@ def _make_confirmed_regime_prior(
         },
         "research_program": plan,
         "support_rows": len(consistent_rows),
-        "support_witness_rows": _serialize_rows(consistent_rows),
+        "support_witness_rows": _serialize_rows(
+            consistent_rows, evidence_kind="synthetic_stress_fixture"
+        ),
         "validation_loss": 0.0,
-        "confirmation_loss": 0.0,
+        "confirmation_loss": None,
         "counterexamples": [
             {
                 "task_id": f"other_incompatible_world_{concept_id}",
-                "kind": "scientific_premise_refutation",
-                "rows": _serialize_rows(ce_rows),
+                "kind": "diagnostic_mutation",
+                "evidence_kind": "diagnostic_mutation",
+                "rows": _serialize_rows(ce_rows, evidence_kind="diagnostic_mutation"),
             }
         ],
         "uses": 0,
@@ -234,10 +240,11 @@ def _make_confirmed_regime_prior(
         "research_method": {
             "fit_rows": 14,
             "selection_rows": 6,
-            "confirmation_rows": 20,
+            "confirmation_rows": 0,
             "selection_loss": 0.0,
-            "confirmation_loss": 0.0,
+            "confirmation_loss": None,
             "risk_quantile": 0.5,
+            "evidence_kind": "synthetic_stress_fixture",
         },
     }
 
@@ -398,9 +405,18 @@ def _build_master_72_prior_library() -> tuple[list[dict], dict]:
             )
             serial_id += 1
 
+    for fp_f in foundational_priors:
+        fp_f["evidence_kind"] = "empirical_episode"
+        fp_f["empirical_confirmation"] = True
     all_72 = foundational_priors + hetero_priors
     assert len(all_72) == 72
-    return all_72, {"foundational_count": 4, "heterogeneous_conflicting_count": 68, "distinct_regimes": 20}
+    return all_72, {
+        "empirical_foundational_sources_count": 4,
+        "synthetic_stress_fixtures_count": 68,
+        "foundational_count": 4,
+        "heterogeneous_conflicting_count": 68,
+        "distinct_regimes": 20,
+    }
 
 
 def _target_tasks() -> list[dict]:
@@ -515,11 +531,11 @@ def _run_target_under_arm(
         lib = KnowledgeLibrary()
         indexed_flag = False
     elif arm_name == "archive_full_tools":
-        # Strong unindexed archive: reconstructs commitments on demand from raw priors (charged to target budget!)
+        # Strong unindexed archive: reconstructs commitments ONCE per target episode and caches in episode!
         lib = KnowledgeLibrary(meta_priors=deepcopy(priors_slice))
         rec_b = SearchBudget(target_compute_cap // 2)
         _, archive_rec_compute = reconstruct_commitments_from_raw_archive(
-            lib.meta_priors, rec_b, tolerance=1e-7
+            lib.meta_priors, rec_b, install_into_library=lib, tolerance=1e-7
         )
         indexed_flag = False
     elif arm_name == "structured_indexed_v10":
@@ -529,6 +545,8 @@ def _run_target_under_arm(
         lib._indexed_prior_fingerprints = deepcopy(preindexed_lib._indexed_prior_fingerprints)
         lib._indexed_group_commitments = deepcopy(preindexed_lib._indexed_group_commitments)
         lib._premise_commitment_index = deepcopy(preindexed_lib._premise_commitment_index)
+        lib._index_build_status = getattr(preindexed_lib, "_index_build_status", "complete")
+        lib._indexed_stale_dep_cids = deepcopy(getattr(preindexed_lib, "_indexed_stale_dep_cids", set()))
         indexed_flag = True
     else:
         raise ValueError(arm_name)

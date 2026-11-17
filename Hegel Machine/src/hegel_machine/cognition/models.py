@@ -181,6 +181,7 @@ class ResearchConfig:
     indexed_commitment_store: bool = False
     sensor_role_calibration_priors: bool = False
     occam_premise_minimality: bool = False
+    branch_reconciliation: bool = False
 
     def __post_init__(self) -> None:
         if self.observation_budget < 1 or self.compute_budget < 1:

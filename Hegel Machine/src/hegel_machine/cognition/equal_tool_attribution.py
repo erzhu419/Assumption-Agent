@@ -950,10 +950,22 @@ def reconstruct_commitments_from_raw_archive(
     raw_archive_priors: list[dict],
     budget: SearchBudget,
     *,
+    install_into_library: Any = None,
+    deduplicate_audit_predicates: bool = True,
     tolerance: float = 1e-7,
 ) -> tuple[list[dict], int]:
-    """Allow ``archive_full_tools`` to reconstruct equivalent commitments on demand, charging ``budget``!"""
-    from .premise_commitment_index import extract_archive_witness_maps
+    """Allow ``archive`` baselines to reconstruct commitments once per target episode and reuse them (v11 A2).
+
+    When ``install_into_library`` is provided, installs the reconstructed commitments into
+    ``library._episode_archive_cache`` keyed by semantic versions so ``UnifiedResearchAgent``
+    reuses them across all rounds of the same target episode with zero double-charging!
+    """
+    from .premise_commitment_index import (
+        _commitment_direction_class,
+        _commitment_predicate_key,
+        _prior_state_fingerprint,
+        extract_archive_witness_maps,
+    )
 
     before = budget.spent
     sup_map, ce_map = extract_archive_witness_maps(raw_archive_priors)
@@ -964,7 +976,163 @@ def reconstruct_commitments_from_raw_archive(
         counterexample_rows_by_source=ce_map or None,
         tolerance=tolerance,
     )
-    return reconstructed, budget.spent - before
+    spent = budget.spent - before
+
+    if install_into_library is not None:
+        fp_map = {
+            p.get("source_concept_id", f"anon_{i}"): _prior_state_fingerprint(p)
+            for i, p in enumerate(raw_archive_priors)
+        }
+        dedup: list[dict] = []
+        if deduplicate_audit_predicates:
+            seen_p: set[str] = set()
+            seen_d: set[str] = set()
+            for c in reconstructed:
+                pk = _commitment_predicate_key(c)
+                dc = _commitment_direction_class(c)
+                rps = c.get("radius_parameters") or ()
+                if rps and isinstance(rps[0].get("edge_condition"), dict):
+                    if pk not in seen_p:
+                        seen_p.add(pk)
+                        dedup.append(c)
+                elif dc not in seen_d:
+                    seen_d.add(dc)
+                    dedup.append(c)
+        else:
+            dedup = list(reconstructed)
+        install_into_library._episode_archive_cache = {
+            "fingerprints": fp_map,
+            "commitments": deepcopy(reconstructed),
+            "dedup_audit_commitments": deepcopy(dedup),
+            "reconstruct_compute_already_charged": spent,
+        }
+    return reconstructed, spent
+
+
+class UnifiedResourceAccount:
+    """Single top-level budget ledger governing source, main loop, fallback, and confirmation (v11 A3)."""
+
+    def __init__(
+        self,
+        *,
+        compute_limit: int,
+        observation_limit: int,
+        measurement_limit: int,
+    ) -> None:
+        self.compute_limit = int(compute_limit)
+        self.observation_limit = int(observation_limit)
+        self.measurement_limit = int(measurement_limit)
+        self.compute_spent = 0
+        self.observation_spent = 0
+        self.measurement_spent = 0
+        self.denied_events: list[dict[str, Any]] = []
+        self.ledger_events: list[dict[str, Any]] = []
+
+    @property
+    def remaining_compute(self) -> int:
+        return max(0, self.compute_limit - self.compute_spent)
+
+    @property
+    def remaining_observations(self) -> int:
+        return max(0, self.observation_limit - self.observation_spent)
+
+    @property
+    def remaining_measurements(self) -> int:
+        return max(0, self.measurement_limit - self.measurement_spent)
+
+    def can_afford(
+        self,
+        *,
+        compute: int = 0,
+        observations: int = 0,
+        measurements: int = 0,
+    ) -> bool:
+        return (
+            self.compute_spent + int(compute) <= self.compute_limit
+            and self.observation_spent + int(observations) <= self.observation_limit
+            and self.measurement_spent + int(measurements) <= self.measurement_limit
+        )
+
+    def debit(
+        self,
+        stage: str,
+        *,
+        compute: int = 0,
+        observations: int = 0,
+        measurements: int = 0,
+    ) -> bool:
+        c, o, m = int(compute), int(observations), int(measurements)
+        if not self.can_afford(compute=c, observations=o, measurements=m):
+            self.denied_events.append(
+                {
+                    "stage": stage,
+                    "requested": {"compute": c, "observations": o, "measurements": m},
+                    "remaining": {
+                        "compute": self.remaining_compute,
+                        "observations": self.remaining_observations,
+                        "measurements": self.remaining_measurements,
+                    },
+                }
+            )
+            return False
+        self.compute_spent += c
+        self.observation_spent += o
+        self.measurement_spent += m
+        self.ledger_events.append(
+            {
+                "stage": stage,
+                "compute": c,
+                "observations": o,
+                "measurements": m,
+            }
+        )
+        return True
+
+    def request_compute(self, stage: str, units: int) -> bool:
+        return self.debit(stage, compute=units)
+
+    def request_observations(
+        self, stage: str, observations: int, measurements: int = 0
+    ) -> bool:
+        return self.debit(stage, observations=observations, measurements=measurements)
+
+    @property
+    def exceeded_or_denied(self) -> bool:
+        return bool(self.denied_events)
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "limits": {
+                "compute": self.compute_limit,
+                "observations": self.observation_limit,
+                "measurements": self.measurement_limit,
+            },
+            "spent": {
+                "compute": self.compute_spent,
+                "observations": self.observation_spent,
+                "measurements": self.measurement_spent,
+            },
+            "within_all_limits": (
+                self.compute_spent <= self.compute_limit
+                and self.observation_spent <= self.observation_limit
+                and self.measurement_spent <= self.measurement_limit
+            ),
+            "budget_interrupted": bool(self.denied_events),
+            "denied_events": list(self.denied_events),
+            "ledger_events": list(self.ledger_events),
+        }
+
+
+def extract_real_consumption_events_from_actions(
+    actions: list[dict] | tuple[dict, ...],
+) -> list[dict[str, Any]]:
+    """Extract verified ``ConsumptionEvent`` records from agent action traces (v11 A3)."""
+    events: list[dict[str, Any]] = []
+    for act in actions or ():
+        for ev in act.get("consumption_events") or ():
+            if isinstance(ev, dict):
+                events.append(deepcopy(ev))
+    return events
 
 
 def build_action_chain_telemetry(
@@ -973,26 +1141,69 @@ def build_action_chain_telemetry(
     task_id: str,
     knowledge_available_count: int,
     knowledge_retrieved_ids: list[str],
-    entered_candidate_pool: bool,
-    changed_probe_or_audit: bool,
-    changed_parent_commitment: bool,
-    reorganization_type: str | None,
+    entered_candidate_pool: bool | None = None,
+    changed_probe_or_audit: bool | None = None,
+    changed_parent_commitment: bool | None = None,
+    reorganization_type: str | None = None,
     confirmed: bool,
     heldout_mse: float | None,
     tolerance: float = 1e-7,
+    consumption_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Construct complete 8-stage causal chain telemetry (Contract B4, Acceptance #15 & #16)."""
+    """Construct complete causal chain telemetry from real ``ConsumptionEvent`` diffs (v11 A3).
+
+    Never sets ``entered_candidates``, ``changed_action_or_probe``, or ``changed_parent_model``
+    from ``bool(retrieved_ids)`` when ``consumption_events`` are supplied!
+    """
     passed = bool(heldout_mse is not None and heldout_mse <= tolerance)
+    if consumption_events is not None:
+        real_entered = any(
+            bool(ev.get("generated_candidate_ids")) for ev in consumption_events
+        )
+        real_changed_parent = any(
+            ev.get("parent_before") != ev.get("parent_after")
+            for ev in consumption_events
+            if "parent_before" in ev or "parent_after" in ev
+        )
+        real_changed_probe = any(
+            ev.get("probe_before") != ev.get("probe_after")
+            for ev in consumption_events
+            if "probe_before" in ev or "probe_after" in ev
+        )
+        entered_flag = real_entered
+        changed_probe_flag = real_changed_probe
+        changed_parent_flag = real_changed_parent
+    else:
+        entered_flag = bool(entered_candidate_pool)
+        changed_probe_flag = bool(changed_probe_or_audit)
+        changed_parent_flag = bool(changed_parent_commitment)
+
+    actually_invoked = bool(
+        entered_flag or changed_probe_flag or changed_parent_flag
+    )
     if not knowledge_retrieved_ids:
-        # Acceptance #15: Unused objects MUST NEVER receive a 'used_without_benefit' label!
+        retrieval_substatus = (
+            "no_retained_knowledge_available"
+            if knowledge_available_count == 0
+            else "not_retrieved"
+        )
         knowledge_utility_status = (
             "no_retained_knowledge_available"
             if knowledge_available_count == 0
             else "retained_knowledge_not_invoked"
         )
+    elif not actually_invoked:
+        retrieval_substatus = "retrieved_not_invoked"
+        knowledge_utility_status = "retained_knowledge_not_invoked"
     elif passed and confirmed:
+        retrieval_substatus = "retrieved_and_invoked"
         knowledge_utility_status = "invoked_and_supported"
+    elif passed and not confirmed:
+        # Acceptance A3: external fresh48 pass without internal confirmation stays strictly separate!
+        retrieval_substatus = "retrieved_and_invoked"
+        knowledge_utility_status = "invoked_external_pass_unconfirmed_internally"
     else:
+        retrieval_substatus = "retrieved_and_invoked"
         knowledge_utility_status = "invoked_without_confirmed_benefit"
 
     return {
@@ -1000,12 +1211,17 @@ def build_action_chain_telemetry(
         "task_id": task_id,
         "knowledge_available_count": knowledge_available_count,
         "retrieved_ids": list(knowledge_retrieved_ids),
-        "entered_candidates": bool(entered_candidate_pool),
-        "changed_action_or_probe": bool(changed_probe_or_audit),
-        "changed_parent_model": bool(changed_parent_commitment),
+        "retrieval_substatus": retrieval_substatus,
+        "entered_candidates": entered_flag,
+        "changed_action_or_probe": changed_probe_flag,
+        "changed_parent_model": changed_parent_flag,
+        "actually_invoked": actually_invoked,
+        "consumption_events_count": len(consumption_events) if consumption_events is not None else None,
+        "consumption_events": deepcopy(consumption_events) if consumption_events is not None else None,
         "reorganization_type": reorganization_type,
         "confirmed_on_task": bool(confirmed),
-        "heldout_mse": heldout_mse,  # Acceptance #16: None stays None (never filled with 0.0!)
+        "external_fresh48_passed_unconfirmed": bool(passed and not confirmed),
+        "heldout_mse": heldout_mse,
         "passed_heldout_tolerance": passed,
         "knowledge_utility_status": knowledge_utility_status,
     }

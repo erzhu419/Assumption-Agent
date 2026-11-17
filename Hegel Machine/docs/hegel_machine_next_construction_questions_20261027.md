@@ -2662,3 +2662,45 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
   - `cold_full_tools`：**`0/3`**（均值算力 `475,354.3`）；
   - `m72_indexed_cold_roles_with_occam`（无角色标定先验）：**`0/3`**（32 传感器冷角色消歧耗尽 `479,966.0`）；
   - **`m72_full_stack_indexed_calibrated_occam`**：**`2/3` 完成在线纯控制通道确认 `selected_channels=[]`**（且第 2 题 `ha_dpg_left_rev_N8` 亦在独立 `fresh48` 上达到 **`1.38e-18` 机器精度 MSE**，仅因 `461.9k/480k` 预算上限未跑完最终无传感器重确认步，诚实计为 `2/3`），角色消歧均值算力降至 **`97,633.0`（-79.66%）**，全流程均值算力降至 **`296,366.0`（-38.25%）**。
+
+
+## 128. v11：索引原子一致性整改、8 阶段可执行分支调和生命周期与 K×M 正交验证（2026-11-17）
+
+- **前瞻证据回执与 GPT-6 自包含审计包（全程 `model_calls = 0, total_tokens = 0`；历史 `v10` 13份、`v10.2` 6份、`v10.3` 2份、`v10.4` 1份共 22 份旧回执 100% 原始字节零改动）：**
+  - 新增实验回执目录：`docs/evidence/v11_branch_lifecycle_and_km_20261117/`
+    - `deliverable_a_credibility_and_baselines_20261117.json`
+    - `deliverable_b_branch_lifecycle_20261117.json`
+    - `deliverable_c_knowledge_vs_method_2x2_20261117.json`
+  - 仓库内结构化审计档案：`docs/gpt6_audit_bundle_v11_20261117/`（含 `00_README_FOR_GPT6.md`、`01_V11_AUDIT_REMEDIATION_AND_LIFECYCLE_DOSSIER.md`、`02_ACCEPTANCE_TRACEABILITY_A_B_C.md`、`03_SOURCE_AND_RECEIPT_SCOPE.md`、`04_SOURCE_AND_RECEIPT_MANIFEST.json`、`05_STANDALONE_VERIFY_V11.py`）
+  - 自包含外部上传包：`markdown/Hegel_v11_GPT6_Audit_Handoff_20261117.zip`（附带全量 25 份 JSON 回执与 23 个未截断源码／脚本／测试文件，含完整 `unified_research.py`）
+- **对 `v10.4` 交接表述的正式撤回与纠偏：** 正式撤回 `v10.4` 中“全部问题已 100% 闭合”的过度宣称，如实确认并修复 `abe15bea` 中存在的 `_prior_state_fingerprint` 6 类原地修改盲区、`archive` 外部与内部双重巩固计费、68 条自标注压力夹具误标为经验确认源、单侧样本奥卡姆规则缺少暂定（Provisional）认识论状态，以及跨源分支调和与 `K × M` 正交拆解尚未闭环的问题。
+
+### 一、交付 A：版本绑定原子索引、强普通持久化缓存平手复核与遥测校准（`A1–A3`）
+
+1. **A1 指纹盲区清零、原子续跑与五态遥测（`premise_commitment_index.py`）：**
+   - `_prior_state_fingerprint` 递归哈希完整 `program / structure / research_program / scope / support_witness_rows / counterexamples / evidence_kind` 与 `checker_schema_version="v11.0"`，`03_fingerprint_probe.py` 实测 **`undetected_semantic_mutations = 0`**；
+   - `_cached_commitment_group_key` 绑定语义版本与校验器版本，12 条先验（6 组）中原地修改 1 条先验仅重算 **`1` 组**（其余 5 组直接复用）；
+   - 逐组原子提交并在预算耗尽时标记 `partial_budget_pending`（不将未完成状态提交为完整整库指纹），续跑后与一次足额构建达成 `resumed_parity_exact = True`；
+   - 支持父先验撤回级联失活且保留独立实证子结论；检索遥测拆分为互斥五态（`not_retrieved / not_tested / budget_pending / inconsistent / empirically_refuted`）并单列物理工作计数。
+2. **A2 消除双重计费后的四臂同工具缩放复核（`UnifiedResourceAccount = 150k` 紧预算，6 题 $N=5$）：**
+   - 统一授予 `cold_same_tools`、`archive_on_demand_cached`、`ordinary_persistent_cache`（新增 `OrdinaryPersistentCommitmentCache`）与 `structured_premise_index` 完全相同的求解器、`occam_premise_minimality=True` 与仅含 4 条真实经验源的 `SensorRoleCalibrationPrior`，核验单题巩固次数 `<= 1`：
+   - 在 $M = 12, 36, 72$ 下：`cold_same_tools = 0/6`（均值算力 `146,191.8`）；`archive_on_demand_cached = 2/6`（均值算力由 `116,466.0` 温和升至 `123,779.7`）；**`ordinary_persistent_cache`（`2/6`，`116,003.3` @ $M=72$）与 `structured_premise_index`（`2/6`，`116,097.3` @ $M=72$）在静态只读目标批次上完全打平**。因此不再将静态索引夸大为发现率增益，如实定位为局部组增量失效（$O(1)$ 重算 1 组）与前提桶剪枝的工程基础设施。
+3. **A3 证据分级、统一顶层账户与暂定奥卡姆（`equal_tool_attribution.py, premise_dependency_audit.py`）：**
+   - 68 条合成条目明确降级为 `evidence_kind="synthetic_stress_fixture", empirical_confirmation=False`（全规模真实经验源数恒为 `4`）；
+   - `UnifiedResourceAccount` 统一硬约束主循环、回退与确认开销，真实 `ConsumptionEvent` 记录动作前后差异（召回未调用保持 `retained_knowledge_not_invoked`）；
+   - 单侧样本下 Tier-0 奥卡姆输出 `selection_epistemic_status="provisional_occam_preference"` + `undistinguished_conditional_alternatives` + `boundary_test_needed=True`。
+
+### 二、交付 B：有实体内容的分支调和回路与 8 阶段真实研究链（`B1–B10`）
+
+- 在 `branch_reconciliation.py` 中复用 `Program / Probe / ResearchQuestion / KnowledgeLibrary` 实现完整 `reconcile` 回路，并在 **1 条独立开发链（`940000`）+ 4 条连续预注册未见源链（`951000–954000`，共 8 台全新阈值目标仪器，`150k` 紧预算，100% 真实 `lab.acquire` 标签）** 上通过 `B1–B10` 全流程核验（`acceptance_B1_to_B10_all_verified = True`）：
+  - 覆盖角色／量纲／滞后对齐（`B1`）、禁 `task_id/seed` 且 `unknown` 不当 `disjoint` 的可观测 `Program` `scope_guard`（`B2`）、跨匿名焦点排列的可行区分 `Probe` 合成（`B3`）、错误新候选不覆盖旧定律（`B4`）、全称假设自动缩域（`B5`）、真等价去重 vs 有限点巧合不合并（`B6`）、类型化反统一抽取共享参数族 $H^*(r_0, \theta_0)$（`B7`）、逐分支误差熔断拒绝掩盖少数区域退化的错误融合（`B8`）、有根支撑图撤回传播与无根循环拒绝（`B9`）；
+  - **Stage 8 未见源组四臂对比（8 题）：** `cold_same_tools = 0/8`（`141,090.4` 算力，`188.00` 行）、`archive_on_demand_cached = 0/8`（`135,720.8` 算力，`186.62` 行）、`ordinary_persistent_cache = 0/8`（`136,157.8` 算力，`188.62` 行），而 **`structured_branch_lifecycle_v11` 取得 `2/8` 严格预算内通过、`4/8` 触发 Pass-0 参数族直接标定，均值目标算力降至 `91,680.2`（较强普通缓存省 `-32.67%`），均值观测降至 `170.12` 行（省 `-18.50` 行）**。
+
+### 三、交付 C：世界知识（`K0/K1`）与学得研究策略（`M0/M1`）的 `2×2` 正交验证
+
+- **严格三分区与评估契约哈希锁定（`discriminating_experiment_policy.py`）：** `dev_formation`（`961001–961006`）采集真实探针消歧率回归归纳 `M1`（`author_origin="runtime_induced_from_dev_episodes"`），`dev_selection`（`962001–962004`）上由 `M0` 的 `2/4` 提升至 `3/4` 晋升并完整保留 `exploration_archive`（4 项），随后单次触碰运行 **6 条连续预注册未见源链（`971000–976000`，共 12 台 $N=6$ 目标仪器，`compute_cap=315k, obs_cap=300`）**：
+  - **`A_K0_M0`**：`8/12`（链均 `0.6667`，均值观测 `255.08` 行，均值算力 `285,035.6`）；
+  - **`B_K1_M0`（主命题 §3.1 成立）**：**`9/12`（链均 `0.7500`，均值观测 `197.25` 行，均值算力 `174,519.9`）** —— 较 `A_K0_M0` 配对节省 **`-57.83` 行观测（`95% CI [-89.25, -26.42]`）** 与 **`-38.77%` 算力**；较同源历史的强普通持久化归档 **`E_optimized_ordinary_archive_M0`（`5/12 = 0.4167`，`245.67` 行，`287,905.1` 算力）** 显著提升 **`+0.3333` 通过率（`95% CI [+0.1667, +0.5000]`）** 并节省 **`-48.42` 行观测（`95% CI [-72.25, -24.58]`）**；
+  - **`C_K0_M1`（`4/12`，`245.58` 行）与 `D_K1_M1`（`6/12`，`196.25` 行）的诚实保留与 §4 根因定位：** 严守 §3.4 不二次重跑隐藏测试集调参，如实报告 `M1` 在未见链上的负迁移（`C - A = -0.3333`，`D - B = -0.2500`）。轨迹核验表明 `M1` 在 `10/12` 题上被调用并改变探针（`29` 条 `ConsumptionEvent`），且 `C_K0_M1` 在 `12/12` 题细粒度传感器上达成 `external_fresh48_mse == 0.0`；在线纯控制重确认率下降定位于**候选探针生成缺口**（`menu_pair_scale_*` 固定 `u = 0` 减少了辨识 `actuator_curvature = 0.15` 所需的冲量激励样本）与 **$n=4$ 小样本选拔尺度过拟合**（`scale = 0.0718` 对外半径边界包夹不足）；
+  - **有界 `M1 -> M2` 二代检验：** `M2_from_M0` 与 `M2_from_M1` 在独立二代选拔集上均 `4/4` 通过（算力 `257,191.8` vs `253,485.5`），明确不夸大为开放式多代 RSI。
+- **回归与独立核验：** `05_STANDALONE_VERIFY_V11.py` 沙箱核验 `all_checks_passed = True`，`pytest`（`v11 + v10.4 + v10.3 + v10.2 + v10 + historical`）全量 **`29/29`（100%）通过**。
