@@ -53,7 +53,8 @@ def _entry(hypothesis):
         "family_id": hypothesis["family_id"], "training_loss": hypothesis["training_loss"],
         "structure": hypothesis["structure"], "structure_search": hypothesis["structure_search"]}
     for key in ("research_program", "method_source_ids",
-                "world_commitment_application", "scientific_premise_revision"):
+                "world_commitment_application", "scientific_premise_revision",
+                "_consumed_object_provenance"):
         if hypothesis.get(key) is not None:
             entry[key] = deepcopy(hypothesis[key])
     return entry
@@ -167,7 +168,9 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                                       world_commitments=(), premise_audit=None,
                                       active_threshold_probing=True,
                                       allow_latent_state=True,
-                                      allow_higher_order_latent=True):
+                                      allow_higher_order_latent=True,
+                                      library=None,
+                                      branch_reconciliation=False):
     """Fit and revise finite competing assignments within the supplied budget.
 
     ``training`` contains all paid observations for this task, including any
@@ -247,6 +250,8 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
     earlier_schemas = previous.get("schemas", [])
     earlier_searches = {item["schema_index"]: item for item in previous.get("searches", [])}
     choices, working_revisions = [], []
+    all_consumption_events = []
+    last_branch_dispatch_telemetry = None
     for index, schema in enumerate(schemas):
         allowance = budget.remaining // (len(schemas) - index)
         local_budget = SearchBudget(allowance)
@@ -320,7 +325,7 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 parent=parent, tolerance=tolerance, transitions=transitions)
             record_attempt("parent_revision", fits, parent_budget)
             search_budget.spend(parent_budget.spent)
-        if world_commitments and not any(supports_current_evidence(fit) for fit in fits):
+        if (world_commitments or (branch_reconciliation and library is not None)) and not any(supports_current_evidence(fit) for fit in fits):
             from .world_structure_commitments import (
                 commitment_applicable_triggers,
                 commitment_verified_radius_bounds,
@@ -342,35 +347,176 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 for c in world_commitments
                 if is_commitment_empirically_consistent(c, premise_audit, task_id=task_sig)
             ]
-            for comm in consistent_comms:
-                if commitment_budget.remaining <= 0:
-                    break
-                audit_bounds = commitment_verified_radius_bounds(
-                    comm, premise_audit, schema_x_to_q
+            parent_id_before = parent["hypothesis_id"] if parent else None
+
+            if branch_reconciliation and library is not None:
+                from .branch_reconciliation import (
+                    compute_observable_regime_features,
+                    evaluate_scope_guard,
+                    instantiate_parametric_family_on_target,
+                    propagate_premise_retraction_invalidation,
+                    reconstruct_parametric_families_from_ordinary_archive,
                 )
-                pred_overrides = None
-                if (
-                    premise_audit is not None
-                    and isinstance(premise_audit.get("verified_edge_condition"), dict)
-                    and comm.get("radius_parameters")
-                ):
-                    pred_overrides = {
-                        comm["radius_parameters"][0]["symbol"]: premise_audit["verified_edge_condition"]
+                obs_regime = compute_observable_regime_features(transitions, schema)
+                retracted_set = set(getattr(library, "_retracted_premise_or_claim_ids", ()) or ())
+                raw_branches = list(getattr(library, "_active_reconciled_branches", ()) or ())
+                checked_branches = (
+                    propagate_premise_retraction_invalidation(
+                        raw_branches, retracted_premise_or_claim_ids=retracted_set
+                    )
+                    if raw_branches
+                    else []
+                )
+                pruned_retracted_ids = [
+                    b["claim_id"]
+                    for b in checked_branches
+                    if b.get("support_validity") != "valid_grounded"
+                ]
+                pruned_scope_ids = []
+                matched_branch_comms = []
+                for b in checked_branches:
+                    if b.get("support_validity") != "valid_grounded" or b.get("status") == "refuted":
+                        continue
+                    if not evaluate_scope_guard(b.get("scope_guard"), obs_regime):
+                        pruned_scope_ids.append(b["claim_id"])
+                        continue
+                    b_comm = deepcopy(b.get("commitment") or b)
+                    if is_commitment_empirically_consistent(b_comm, premise_audit, task_id=task_sig):
+                        matched_branch_comms.append(b_comm)
+
+                gen_families = list(getattr(library, "_generalized_branch_commitments", ()) or ())
+                on_demand_recon_stats = None
+                if not gen_families and getattr(library, "_allow_on_demand_family_reconstruction", False):
+                    gen_families, on_demand_recon_stats = reconstruct_parametric_families_from_ordinary_archive(
+                        library, commitment_budget, tolerance=tolerance
+                    )
+                matched_family_ids = []
+                for gf in gen_families:
+                    if gf.get("commitment_id") in retracted_set:
+                        pruned_retracted_ids.append(gf["commitment_id"])
+                        continue
+                    if not evaluate_scope_guard(gf.get("scope_guard"), obs_regime):
+                        pruned_scope_ids.append(gf["commitment_id"])
+                        continue
+                    gf_dir = (gf.get("radius_parameters") or [{}])[0].get("direction")
+                    if premise_audit and premise_audit.get("verified_direction") and gf_dir and premise_audit["verified_direction"] != gf_dir:
+                        pruned_scope_ids.append(gf["commitment_id"])
+                        continue
+                    matched_family_ids.append(gf["commitment_id"])
+                    fam_entries = instantiate_parametric_family_on_target(
+                        gf, local_spec, rows, schema, commitment_budget,
+                        audit_report=premise_audit, transitions=transitions, tolerance=tolerance,
+                    )
+                    src_ids_gf = list(gf.get("source_concept_ids") or gf.get("source_branch_ids") or ())
+                    for e in fam_entries:
+                        e["_consumed_object_provenance"] = {
+                            "object_id": gf["commitment_id"],
+                            "semantic_version": gf.get("semantic_group_fingerprint") or gf["commitment_id"],
+                            "source_concept_ids": src_ids_gf,
+                            "consumption_site": "pass0_parametric_family_instantiation",
+                            "parent_before": parent_id_before,
+                        }
+                    gen_cids = [e["candidate"].candidate_id for e in fam_entries if "candidate" in e]
+                    if index == 0:
+                        all_consumption_events.append({
+                            "event_stage": "candidate_generation",
+                            "object_id": gf["commitment_id"],
+                            "semantic_version": gf.get("semantic_group_fingerprint") or gf["commitment_id"],
+                            "source_concept_ids": src_ids_gf,
+                            "consumption_site": "pass0_parametric_family_instantiation",
+                            "generated_candidate_ids": gen_cids,
+                            "selected_candidate_id": None,
+                            "adopted_confirmed": False,
+                            "parent_before": parent_id_before,
+                            "parent_after": parent_id_before,
+                            "proposed_probe_ids": [],
+                            "executed_probe_ids": [],
+                            "probe_before": None,
+                            "probe_after": None,
+                        })
+                    commitment_fits.extend(fam_entries)
+                    if any(supports_current_evidence(item) for item in commitment_fits):
+                        break
+
+                if matched_branch_comms:
+                    seen_cids = {mc["commitment_id"] for mc in matched_branch_comms}
+                    consistent_comms = [
+                        *matched_branch_comms,
+                        *(c for c in consistent_comms if c["commitment_id"] not in seen_cids
+                          and c["commitment_id"] not in set(pruned_scope_ids)
+                          and c["commitment_id"] not in set(pruned_retracted_ids)),
+                    ]
+                elif checked_branches:
+                    consistent_comms = [
+                        c for c in consistent_comms
+                        if c["commitment_id"] not in set(pruned_scope_ids)
+                        and c["commitment_id"] not in set(pruned_retracted_ids)
+                    ]
+                if index == 0:
+                    last_branch_dispatch_telemetry = {
+                        "observable_regime_features": obs_regime,
+                        "matched_parametric_family_ids": matched_family_ids,
+                        "pruned_by_observable_scope_ids": pruned_scope_ids,
+                        "pruned_by_retraction_ids": pruned_retracted_ids,
+                        "on_demand_archive_family_reconstruction": on_demand_recon_stats,
                     }
-                comm_entries = instantiate_commitment_on_schema(
-                    local_spec, rows, schema, comm, commitment_budget,
-                    radius_bounds=audit_bounds,
-                    predicate_overrides=pred_overrides,
-                    audit_report=premise_audit,
-                    transitions=transitions,
-                    active_threshold_probing=active_threshold_probing,
-                    allow_latent_state=allow_latent_state,
-                    allow_higher_order_latent=allow_higher_order_latent,
-                    tolerance=tolerance,
-                )
-                commitment_fits.extend(comm_entries)
-                if any(supports_current_evidence(item) for item in commitment_fits):
-                    break
+
+            if not any(supports_current_evidence(item) for item in commitment_fits):
+                for comm in consistent_comms:
+                    if commitment_budget.remaining <= 0:
+                        break
+                    audit_bounds = commitment_verified_radius_bounds(
+                        comm, premise_audit, schema_x_to_q
+                    )
+                    pred_overrides = None
+                    if (
+                        premise_audit is not None
+                        and isinstance(premise_audit.get("verified_edge_condition"), dict)
+                        and comm.get("radius_parameters")
+                    ):
+                        pred_overrides = {
+                            comm["radius_parameters"][0]["symbol"]: premise_audit["verified_edge_condition"]
+                        }
+                    comm_entries = instantiate_commitment_on_schema(
+                        local_spec, rows, schema, comm, commitment_budget,
+                        radius_bounds=audit_bounds,
+                        predicate_overrides=pred_overrides,
+                        audit_report=premise_audit,
+                        transitions=transitions,
+                        active_threshold_probing=active_threshold_probing,
+                        allow_latent_state=allow_latent_state,
+                        allow_higher_order_latent=allow_higher_order_latent,
+                        tolerance=tolerance,
+                    )
+                    src_ids_c = list(comm.get("source_concept_ids") or ())
+                    for e in comm_entries:
+                        e["_consumed_object_provenance"] = {
+                            "object_id": comm["commitment_id"],
+                            "semantic_version": comm.get("semantic_group_fingerprint"),
+                            "source_concept_ids": src_ids_c,
+                            "consumption_site": "pass1_scope_instantiation",
+                            "parent_before": parent_id_before,
+                        }
+                    if index == 0:
+                        all_consumption_events.append({
+                            "event_stage": "candidate_generation",
+                            "object_id": comm["commitment_id"],
+                            "semantic_version": comm.get("semantic_group_fingerprint"),
+                            "source_concept_ids": src_ids_c,
+                            "consumption_site": "pass1_scope_instantiation",
+                            "generated_candidate_ids": [e["candidate"].candidate_id for e in comm_entries if "candidate" in e],
+                            "selected_candidate_id": None,
+                            "adopted_confirmed": False,
+                            "parent_before": parent_id_before,
+                            "parent_after": parent_id_before,
+                            "proposed_probe_ids": [],
+                            "executed_probe_ids": [],
+                            "probe_before": None,
+                            "probe_after": None,
+                        })
+                    commitment_fits.extend(comm_entries)
+                    if any(supports_current_evidence(item) for item in commitment_fits):
+                        break
 
             if not any(supports_current_evidence(item) for item in commitment_fits):
                 for comm in world_commitments:
@@ -386,9 +532,94 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                             allow_higher_order_latent=allow_higher_order_latent,
                             tolerance=tolerance,
                         )
+                        src_ids_r = list(comm.get("source_concept_ids") or ())
+                        for e in comm_entries:
+                            e["_consumed_object_provenance"] = {
+                                "object_id": comm["commitment_id"],
+                                "semantic_version": comm.get("semantic_group_fingerprint"),
+                                "source_concept_ids": src_ids_r,
+                                "consumption_site": "pass2_premise_revision",
+                                "parent_before": comm["commitment_id"],
+                            }
+                        if index == 0:
+                            all_consumption_events.append({
+                                "event_stage": "candidate_generation",
+                                "object_id": comm["commitment_id"],
+                                "semantic_version": comm.get("semantic_group_fingerprint"),
+                                "source_concept_ids": src_ids_r,
+                                "consumption_site": "pass2_premise_revision",
+                                "generated_candidate_ids": [e["candidate"].candidate_id for e in comm_entries if "candidate" in e],
+                                "selected_candidate_id": None,
+                                "adopted_confirmed": False,
+                                "parent_before": comm["commitment_id"],
+                                "parent_after": comm["commitment_id"],
+                                "proposed_probe_ids": [],
+                                "executed_probe_ids": [],
+                                "probe_before": None,
+                                "probe_after": None,
+                            })
                         commitment_fits.extend(comm_entries)
                         if any(supports_current_evidence(item) for item in commitment_fits):
                             break
+            if (
+                not any(supports_current_evidence(item) for item in commitment_fits)
+                and premise_audit is not None
+                and premise_audit.get("verified_edge_condition") == "unconditional"
+                and commitment_budget.remaining > 0
+            ):
+                # Provisional Tier-0 unconditional preference was empirically refuted by paid trajectory rows;
+                # calibrate any archived conditional commitments on this schema's transitions + rows.
+                for comm in world_commitments:
+                    if commitment_budget.remaining <= 0:
+                        break
+                    rp_c = (comm.get("radius_parameters") or [{}])[0]
+                    if rp_c.get("edge_condition") in (None, "unconditional"):
+                        continue
+                    if (
+                        premise_audit.get("verified_direction")
+                        and rp_c.get("direction") != premise_audit.get("verified_direction")
+                    ):
+                        continue
+                    comm_entries = instantiate_commitment_on_schema(
+                        local_spec, rows, schema, comm, commitment_budget,
+                        radius_bounds=None,
+                        predicate_overrides=None,
+                        audit_report=None,
+                        transitions=transitions,
+                        active_threshold_probing=active_threshold_probing,
+                        allow_latent_state=allow_latent_state,
+                        allow_higher_order_latent=allow_higher_order_latent,
+                        tolerance=tolerance,
+                    )
+                    src_ids_c2 = list(comm.get("source_concept_ids") or ())
+                    for e in comm_entries:
+                        e["_consumed_object_provenance"] = {
+                            "object_id": comm["commitment_id"],
+                            "semantic_version": comm.get("semantic_group_fingerprint"),
+                            "source_concept_ids": src_ids_c2,
+                            "consumption_site": "pass1_scope_instantiation",
+                            "parent_before": parent_id_before,
+                        }
+                    if index == 0:
+                        all_consumption_events.append({
+                            "event_stage": "candidate_generation",
+                            "object_id": comm["commitment_id"],
+                            "semantic_version": comm.get("semantic_group_fingerprint"),
+                            "source_concept_ids": src_ids_c2,
+                            "consumption_site": "pass1_scope_instantiation",
+                            "generated_candidate_ids": [e["candidate"].candidate_id for e in comm_entries if "candidate" in e],
+                            "selected_candidate_id": None,
+                            "adopted_confirmed": False,
+                            "parent_before": parent_id_before,
+                            "parent_after": parent_id_before,
+                            "proposed_probe_ids": [],
+                            "executed_probe_ids": [],
+                            "probe_before": None,
+                            "probe_after": None,
+                        })
+                    commitment_fits.extend(comm_entries)
+                    if any(supports_current_evidence(item) for item in commitment_fits):
+                        break
             record_attempt("world_commitment", commitment_fits, commitment_budget)
             search_budget.spend(commitment_budget.spent)
             fits = [*fits, *commitment_fits]
@@ -425,7 +656,8 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                 "structure_search": fit["structure_search"],
                 "parent_hypothesis_id": ancestor["hypothesis_id"] if ancestor else None}
             for extra_key in ("research_program", "method_source_ids",
-                              "world_commitment_application", "scientific_premise_revision"):
+                              "world_commitment_application", "scientific_premise_revision",
+                              "_consumed_object_provenance"):
                 if fit.get(extra_key) is not None:
                     hypothesis[extra_key] = deepcopy(fit[extra_key])
             accepted.append(hypothesis)
@@ -484,7 +716,12 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
     entries = [_entry(item) for item in active]
     for entry in entries:
         entry["object_competition"] = state
-    result = {"entries": entries, "competition": state}
+    result = {
+        "entries": entries,
+        "competition": state,
+        "consumption_events": all_consumption_events,
+        "branch_dispatch_telemetry": last_branch_dispatch_telemetry,
+    }
     if working_parent_loss is not None:
         working = []
         for revision_entry in sorted(working_revisions, key=lambda item: item["training_loss"]):

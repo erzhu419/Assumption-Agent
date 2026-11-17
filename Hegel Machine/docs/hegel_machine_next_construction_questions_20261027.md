@@ -2723,3 +2723,49 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
     - **`C_K0_M1`（学得实验策略单因子）**：**`12/12`（链均 `1.0000`，纯控制通道 `12/12` 满贯，`12/12` 题改变探针、`32` 条 `ConsumptionEvent`，较 `A_K0_M0` 通过率配对提升 `+0.5000`［`95% CI [+0.1667, +0.8333]`］，均值观测 `251.67` 行，均值算力 `215,313.7`［`-26.6%`］）**；
     - **`D_K1_M1`（`K1 + M1` 联合体系）**：**`11/12`（链均 `0.9167`，纯控制通道 `10/12`，均值观测 `207.00` 行，均值算力 `143,126.5`，墙钟 `7.01s`）** —— 较 `B_K1_M0` 通过率提升 **`+0.2500`** 且配对再省 **`-10.83` 行观测（`95% CI [-17.50, -4.50]`）** 与 **`-33.6%` 算力**；较 `C_K0_M1` 配对节省 **`-44.67` 行观测（`95% CI [-56.08, -34.92]`）** 与 **`-33.5%` 算力**；较同历史强普通持久化归档 `E` 显著提升 **`+0.4167` 通过率（`95% CI [+0.1667, +0.6667]`）**、节省 **`-57.75` 行观测（`95% CI [-80.33, -36.17]`）** 与 **`-51.34%` 目标算力（提速 `3.29×`）**；
   - **有界二代检验（`v11.1 M1 -> M2`）：** `M2_from_M0` 与 `M2_from_M1` 在独立二代选拔集上均达 `4/4`（均值观测 `253.5`、均值算力 `212,643.8` 完全打平），诚实确认 5 维线性探针评分器在单代归纳后已达表征饱和，不夸大为多代开放式 RSI。
+
+
+## 130. v12：确认与范围契约闭合、普通入口自主调和生命周期及同 API 五臂反事实知识效用验证（2026-11-17）
+
+- **前瞻回执与自包含审计包（全程零新增模块、零新增物理族、`model_calls = 0, total_tokens = 0`；前序 `v10` 13份、`v10.2` 6份、`v10.3` 2份、`v10.4` 1份、`v11` 3份、`v11.1` 1份共 26 份历史回执 100% 原始字节零改动）：**
+  - 新增前瞻回执目录：`docs/evidence/v12_autonomous_reconciliation_and_utility_20261117/`
+    - `deliverable_a_v12_semantics_and_errata_20261117.json`（`scripts/run_v12_deliverable_a_errata_and_probes.py`）
+    - `deliverable_b_v12_autonomous_lifecycle_20261117.json`（`scripts/run_v12_autonomous_lifecycle_study.py`）
+    - `deliverable_c_v12_knowledge_utility_20261117.json`（`scripts/run_v12_knowledge_utility_interventions.py`）
+  - 仓库内结构化审计档案：`docs/gpt6_audit_bundle_v12_20261117/`（`00_README_FOR_GPT6.md`、`01_V12_AUTONOMOUS_LIFECYCLE_AND_UTILITY_DOSSIER.md`、`02_ACCEPTANCE_TRACEABILITY_V12.md`、`03_SOURCE_AND_RECEIPT_SCOPE.md`、`04_SOURCE_AND_RECEIPT_MANIFEST.json`、`05_STANDALONE_VERIFY_V12.py`、`SHA256SUMS.json`、`sandbox_verify_stdout.json`）
+  - 自包含外部上传包：`markdown/Hegel_v12_GPT6_Audit_Handoff_20261117.zip`（收录全量 **29 份** JSON 回执与 **22 个**未截断源码／脚本／测试文件，零 `PYTHONPATH` 隔离沙箱核验 `all_checks_passed = True`）
+- **科学定位校准与前序（`eee787bf` / `v11.1`）边界撤回声明：**
+  1. 撤回 `v11` 中将脚本编排演示等同于普通入口自主调和生命周期的表述：`v11` 全部已曝光源与分支（10 条记录）只读重分类为 `exposed_dev_only`，`180000` 常数改标为 `estimated_fallback_constant_not_measured`；
+  2. 明确系统条件边规则来自全组共享的 13 项有限开放语法目录，结论严格限定为**有限语言中的运行时发现与调和**；
+  3. 原样保留 `v11` `M1` 未见链负结果（`4/12` vs `M0` `8/12`），因此 `v12` 交付 C 严格固定默认 `M0`；同时将 `v11.1` 的共位同步旁路激励与区间二分候选菜单明确归类为**针对已知失败原因的手工工程化探针生成器诊断基线**，不包装为自主发明的方法学习。
+
+### 一、交付 A：确认契约、可观测范围、增量反统一语义与实测遥测闭合（`F01, F02, F05–F11`）
+
+1. **固定确认契约（`A1 / F01`）：** 删除后见门槛 `max(1e-7, mse + 1e-6)` 与 `theta` 槽隐式 `150,000x`（`1.5e-2`）放宽；缺失新点返回 `unknown_no_fresh_data`（`None`，绝不填 `0.0`）；误差落入 `(1e-7, 1.5e-2]` 的候选保留为 `provisional_approximate_candidate`（`confirmed = False, accepted = False`）。
+2. **可观测范围与白名单（`A2 / F02, F09`）：** 删除一切手工 `0.45 / 0.42` 覆盖；建立声明物理单位、评估时点与 `requires_pilot_acquisition` 的 `PUBLIC_OBSERVABLE_GUARD_MANIFEST`；当支持集与反例统计不分离时严格返回 `status = "scope_unidentified", scope_guard = None`；`assess_scope_overlap` 校验 `observable_bounds` 与 `scope_guard` 一致性且绝不将 `unknown` 默认当 `disjoint`。
+3. **反统一、科学身份、多槽标定、非线性量纲与支撑传播 6 项硬回归（`A3 / F05–F08`）：**
+   - `_programs_algebraically_identical` 默认 `exact=True, tol=0.0`，`0.0 < x` vs `5e-10 < x` 严格返回 `False`；
+   - `anti_unify_programs` 与 `anti_unify_program_family` 支持 3+ 分支增量合一（`.22, .46, .34` 成功产出单槽 `["theta_0"]`，对 `3! = 6` 种排列生成唯一家族 ID，且不同 AST 路径同值常数绝不偶合共槽）；
+   - `compute_family_scientific_identity` 分离局部 `predicate_skeleton_id` 与绑定方向、角色项、读出、非守恒／潜变量、量纲及 `scope_guard` 的完整科学 `commitment_id`；
+   - `propagate_premise_retraction_invalidation` 对无证据新根 `{'claim_id': 'new_root', 'status': 'candidate'}` 返回 `unverified_missing_support`，循环依赖返回 `invalid_ungrounded_cycle`；
+   - `instantiate_parametric_family_on_target` 完整标定 1–2 参数槽（双槽标定误差 `< 1e-18`），$>2$ 槽显式返回 `unsupported_multi_slot_arity`；
+   - `align_claim_to_schema` 推断齐次次数 $p$ 并按 `y_scale / (q_scale ** p)` 缩放（`q^2` 在 `q_scale = 2.0` 下权重缩放为 `0.25`），非齐次 `q + q^2` 显式返回 `aligned = False`。
+4. **实测账本与四阶段消费遥测（`A4 / F10, F11`）：** 清零 `45000 / 8000 / 350 / 180000` 填账常数；`ConsumptionEvent` 拆分为 `candidate_generation`（`parent_after == parent_before`、`probe_after = None`）与期末实际采纳时的 `episode_resolution`（仅记录真实购测物理探针 ID，删除全部伪探针名字符串）。
+
+### 二、交付 B：普通 `UnifiedResearchAgent.run(lab)` 入口上的完整自主调和生命周期（`F03`）
+
+- 脚本仅传匿名 `AnonymousObjectLab` 实例与固定预算并调用普通入口 `UnifiedResearchAgent(cfg, ..., library=shared_lib).run(lab)`（零 `relation_condition` 分流、零手喂融合对、零手工覆盖、零 `assert` 丢弃失败分母）。在 **1 条独立开发链（`1001000`，8 源任务 `8/8` 严格通过，`0` 假确认）+ 4 条连续预注册未见评估链（`1002000–1005000`）** 上单次触碰实测：
+  - **源链形成：** 4 条未见链共 `32/32`（`100%`）源任务严格通过（`0` 假确认），**`4/4` 条链自主形成参数族 $H^*$**，**`3/4` 条链完成 3 分支增量反统一（`S1 + S2 + S3 -> H*`）**，**`4/4` 条链自主触发并拒绝右／左反向错误融合**；
+  - **原域返回与未见目标移除对照：** 原无条件域（$N=5$）严格完成 **`4/4`**；未见新阈值目标（$N=5$）严格完成 **`3/4`**（第 4 链 `1005000` 目标因 24 行确认区间有限样本边界在 48 行外部测试出现 `MSE = 1.70e-3` 的 `1` 次边界假确认，严格原样保留分母与计数）；拿掉 $H^*$ 在 **`3/4` 条未见链上真实改变了候选生成站点与算力轨迹**。
+
+### 三、交付 C：固定 `M0`、同历史同求解器 API 的五臂知识效用与反事实干预实验（`F04, E01, E02`）
+
+- 在 **1 条开发链（`1010000`）+ 8 条多样化预注册未见链（`1011000–1018000`，同时改变分支到达顺序 `unconditional_first / conditional_first_reversed / minority_interleaved`、连续阈值、作用半径与匿名接线，每链 3 类目标 = 24 题／臂）** 上，5 个条件臂共享**完全相同的默认 `M0` 策略与相同的 Pass-0 `instantiate_parametric_family_on_target` 标定 API**（`R_ordinary_same_api` 显式允许在目标预算内从原始先验库按需重建参数族并调用 Pass-0 API）：
+  - **源形成与维护实测成本：** 8 条未见链共尝试 32 个源任务，严格确认 `31/32`（`1` 个未决保留在分母），`7/8` 条链形成 $H^*$；源链均值总算力 `711,922.2`，其中**自主调和与反统一维护子集仅 `16,049.5`（占 `2.25%`）**，墙钟均值 `83.10s`。
+  - **8 条未见链（24 题／臂）核心结果：**
+    - `K_cold`（仅中性起始标定锚点）：**`20/24`（`83.33%`，`95% CI [0.6415, 0.9332]`）**，`T1: 6/8`、`T2: 8/8`、`T3: 6/8`，纯控制通道交付 `21/24`，均值目标算力 `222,799.7`，墙钟 `26.16s`；
+    - `R_ordinary_same_api`（同源原始先验 + `OrdinaryPersistentCommitmentCache` + 允许按需家族重建 + 同 Pass-0 API）：**`19/24`（`79.17%`，`95% CI [0.5953, 0.9076]`）**，`T1: 5/8`（均值算力 `398,713.9`）、`T2: 8/8`（`127,924.6`）、`T3: 6/8`（`354,846.2`），纯控制通道交付 `19/24`，均值目标算力 **`293,828.2`**，墙钟 **`49.91s`**；
+    - **`K_reconcile`（自主调和库）**：**`23/24`（`95.83%`，`95% CI [0.7976, 0.9926]`）**，`T1: 8/8`（`236,246.0`）、`T2: 8/8`（`87,523.4`）、`T3: 7/8`（`324,844.8`），纯控制通道交付 **`23/24`**，均值目标算力 **`216,204.7`**（较 `R_ordinary_same_api` **提升 `+4` 题严格通过［`+16.67%`］、单题省 `-77,623.5`［`-26.42%`］算力、`T1` 新阈值族省 `-40.75%` 算力**，仅需 **`0.21` 道目标题**即收回每链 `16.0k` 的源期调和维护成本，且 `T2/T3` 零退化）；
+    - **结构关系删除干预 `K_relations_deleted`（保留相同 $H^*$ 与预测程序，仅删 `scope_guard` 与撤回关系）**：降至 **`22/24`**，均值目标算力升至 **`243,011.5`（`+12.40%`，`T1` 升至 `289,948.8`、`T2` 升至 `114,241.1`）**，正向隔离证实可观测作用域与结构关系本身贡献了剪枝与防干扰收益；
+    - **对象删除干预 `K_object_deleted`（保留已调和分域分支与 `scope_guard`，仅删 $H^*$ 对象）**：取得 **`23/24`（均值算力 `211,730.1`，`T1: 8/8 @ 233,132.9`）**，在 `680k` 目标预算内与 `K_reconcile` **完全打平**。遵循合同 §5 停止规则，我们如实接受打平并明确缩小主张：**在当前单参数有限语法族中，任务级完成率与算力优势主要来自可观测作用域隔离（`scope_guard`）与已调和分支组织，而非单槽反统一对象 $H^*$ 本身**（因已分域的个体条件分支已可通过 1D 区间细分重标定新阈值）。
+- **回归与独立核验：** `pytest`（`v12` 6 项 + 历史 `v11 / v10.4 / v10.3 / v10.2 / v10 / historical` 50 项）全量 **`56/56`（100%）通过**；`05_STANDALONE_VERIFY_V12.py` 零依赖隔离核验 **`all_checks_passed = True`**。

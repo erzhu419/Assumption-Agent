@@ -398,7 +398,8 @@ class UnifiedResearchAgent:
             allow_latent_state=self.config.latent_state_discovery,
             allow_higher_order_latent=self.config.higher_order_latent_discovery,
             allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
-            occam_premise_minimality=self.config.occam_premise_minimality)
+            occam_premise_minimality=self.config.occam_premise_minimality,
+            allow_open_grammar_exchange_screening=self.config.branch_reconciliation)
         if audit["status"] == "awaiting_role_identification":
             return model
         updated = apply_verified_transition_premises(model, audit)
@@ -552,7 +553,8 @@ class UnifiedResearchAgent:
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
                         allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
                         observations=training,
-                        occam_premise_minimality=self.config.occam_premise_minimality)
+                        occam_premise_minimality=self.config.occam_premise_minimality,
+                        allow_open_grammar_exchange_screening=self.config.branch_reconciliation)
                 eff_comm_tol = tolerance
                 if audit and audit.get("stochastic_audit"):
                     sp_hat = float((audit.get("process_noise") or {}).get("sigma_p_hat", 0.0))
@@ -598,6 +600,7 @@ class UnifiedResearchAgent:
                         evaluate_scope_guard,
                         instantiate_parametric_family_on_target,
                         propagate_premise_retraction_invalidation,
+                        reconstruct_parametric_families_from_ordinary_archive,
                     )
                     obs_regime = compute_observable_regime_features(transitions, schema)
                     retracted_set = set(getattr(self.library, "_retracted_premise_or_claim_ids", ()) or ())
@@ -627,6 +630,16 @@ class UnifiedResearchAgent:
                             matched_branch_comms.append(b_comm)
 
                     gen_families = list(getattr(self.library, "_generalized_branch_commitments", ()) or ())
+                    on_demand_recon_stats = None
+                    if not gen_families and getattr(
+                        self.library, "_allow_on_demand_family_reconstruction", False
+                    ):
+                        gen_families, on_demand_recon_stats = (
+                            reconstruct_parametric_families_from_ordinary_archive(
+                                self.library, comm_budget, tolerance=eff_comm_tol
+                            )
+                        )
+
                     matched_family_ids = []
                     for gf in gen_families:
                         if gf.get("commitment_id") in retracted_set:
@@ -637,15 +650,6 @@ class UnifiedResearchAgent:
                             continue
                         gf_dir = (gf.get("radius_parameters") or [{}])[0].get("direction")
                         if audit and audit.get("verified_direction") and gf_dir and audit["verified_direction"] != gf_dir:
-                            pruned_scope_ids.append(gf["commitment_id"])
-                            continue
-                        if (
-                            audit
-                            and audit.get("verified_edge_condition") == "unconditional"
-                            and (audit.get("occam_minimality_gate") or {}).get("selection_epistemic_status")
-                            == "empirically_distinguished_unconditional"
-                        ):
-                            # Negative-donor transitions empirically refuted gated predicates -> skip gated family!
                             pruned_scope_ids.append(gf["commitment_id"])
                             continue
                         matched_family_ids.append(gf["commitment_id"])
@@ -659,17 +663,36 @@ class UnifiedResearchAgent:
                             transitions=transitions,
                             tolerance=eff_comm_tol,
                         )
+                        src_ids_gf = list(
+                            gf.get("source_concept_ids")
+                            or gf.get("source_branch_ids")
+                            or ()
+                        )
+                        for e in fam_entries:
+                            e["_consumed_object_provenance"] = {
+                                "object_id": gf["commitment_id"],
+                                "semantic_version": gf.get("semantic_group_fingerprint")
+                                or gf["commitment_id"],
+                                "source_concept_ids": src_ids_gf,
+                                "consumption_site": "pass0_parametric_family_instantiation",
+                                "parent_before": parent_id_before,
+                            }
                         gen_cids = [e["candidate"].candidate_id for e in fam_entries if "candidate" in e]
                         consumption_events.append({
+                            "event_stage": "candidate_generation",
                             "object_id": gf["commitment_id"],
                             "semantic_version": gf.get("semantic_group_fingerprint") or gf["commitment_id"],
-                            "source_concept_ids": list(gf.get("source_branch_ids") or ()),
+                            "source_concept_ids": src_ids_gf,
                             "consumption_site": "pass0_parametric_family_instantiation",
                             "generated_candidate_ids": gen_cids,
+                            "selected_candidate_id": None,
+                            "adopted_confirmed": False,
                             "parent_before": parent_id_before,
-                            "parent_after": gen_cids[0] if gen_cids else parent_id_before,
+                            "parent_after": parent_id_before,
+                            "proposed_probe_ids": [],
+                            "executed_probe_ids": [],
                             "probe_before": None,
-                            "probe_after": "parametric_slot_calibration" if gen_cids else None,
+                            "probe_after": None,
                         })
                         claims.extend(fam_entries)
                         if any(item["training_loss"] <= eff_comm_tol for item in claims):
@@ -699,6 +722,7 @@ class UnifiedResearchAgent:
                         "matched_parametric_family_ids": matched_family_ids,
                         "pruned_by_observable_scope_ids": pruned_scope_ids,
                         "pruned_by_retraction_ids": pruned_retracted_ids,
+                        "on_demand_archive_family_reconstruction": on_demand_recon_stats,
                     }
 
                 for comm in consistent_comms:
@@ -716,19 +740,31 @@ class UnifiedResearchAgent:
                         allow_latent_state=self.config.latent_state_discovery,
                         allow_higher_order_latent=self.config.higher_order_latent_discovery,
                         tolerance=eff_comm_tol)
+                    src_ids_c = list(comm.get("source_concept_ids") or ())
+                    for e in entries:
+                        e["_consumed_object_provenance"] = {
+                            "object_id": comm["commitment_id"],
+                            "semantic_version": comm.get("semantic_group_fingerprint"),
+                            "source_concept_ids": src_ids_c,
+                            "consumption_site": "pass1_scope_instantiation",
+                            "parent_before": parent_id_before,
+                        }
                     gen_cids = [e["candidate"].candidate_id for e in entries if "candidate" in e]
                     consumption_events.append({
+                        "event_stage": "candidate_generation",
                         "object_id": comm["commitment_id"],
                         "semantic_version": comm.get("semantic_group_fingerprint"),
-                        "source_concept_ids": list(comm.get("source_concept_ids") or ()),
+                        "source_concept_ids": src_ids_c,
                         "consumption_site": "pass1_scope_instantiation",
                         "generated_candidate_ids": gen_cids,
+                        "selected_candidate_id": None,
+                        "adopted_confirmed": False,
                         "parent_before": parent_id_before,
-                        "parent_after": gen_cids[0] if gen_cids else parent_id_before,
+                        "parent_after": parent_id_before,
+                        "proposed_probe_ids": [],
+                        "executed_probe_ids": [],
                         "probe_before": None,
-                        "probe_after": "active_threshold_or_interval_probe" if any(
-                            bool((e.get("research_program") or {}).get("steps")) for e in entries
-                        ) else None,
+                        "probe_after": None,
                     })
                     claims.extend(entries)
                     if any(item["training_loss"] <= eff_comm_tol for item in claims):
@@ -753,21 +789,90 @@ class UnifiedResearchAgent:
                                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
                                 transitions=transitions,
                                 tolerance=eff_comm_tol)
+                            src_ids_r = list(comm.get("source_concept_ids") or ())
+                            for e in entries:
+                                e["_consumed_object_provenance"] = {
+                                    "object_id": comm["commitment_id"],
+                                    "semantic_version": comm.get("semantic_group_fingerprint"),
+                                    "source_concept_ids": src_ids_r,
+                                    "consumption_site": "pass2_premise_revision",
+                                    "parent_before": comm["commitment_id"],
+                                }
                             gen_cids = [e["candidate"].candidate_id for e in entries if "candidate" in e]
                             consumption_events.append({
+                                "event_stage": "candidate_generation",
                                 "object_id": comm["commitment_id"],
                                 "semantic_version": comm.get("semantic_group_fingerprint"),
-                                "source_concept_ids": list(comm.get("source_concept_ids") or ()),
+                                "source_concept_ids": src_ids_r,
                                 "consumption_site": "pass2_premise_revision",
                                 "generated_candidate_ids": gen_cids,
+                                "selected_candidate_id": None,
+                                "adopted_confirmed": False,
                                 "parent_before": comm["commitment_id"],
-                                "parent_after": gen_cids[0] if gen_cids else comm["commitment_id"],
-                                "probe_before": "unrevised_parent_probe",
-                                "probe_after": "premise_revised_probe" if gen_cids else "unrevised_parent_probe",
+                                "parent_after": comm["commitment_id"],
+                                "proposed_probe_ids": [],
+                                "executed_probe_ids": [],
+                                "probe_before": None,
+                                "probe_after": None,
                             })
                             claims.extend(entries)
                             if any(item["training_loss"] <= eff_comm_tol for item in claims):
                                 break
+                if (
+                    not any(item["training_loss"] <= eff_comm_tol for item in claims)
+                    and audit is not None
+                    and audit.get("verified_edge_condition") == "unconditional"
+                    and comm_budget.remaining > 0
+                ):
+                    for comm in commitments:
+                        if comm_budget.remaining <= 0:
+                            break
+                        rp_c = (comm.get("radius_parameters") or [{}])[0]
+                        if rp_c.get("edge_condition") in (None, "unconditional"):
+                            continue
+                        if (
+                            audit.get("verified_direction")
+                            and rp_c.get("direction") != audit.get("verified_direction")
+                        ):
+                            continue
+                        entries_c = instantiate_commitment_on_schema(
+                            spec, training, schema, comm, comm_budget,
+                            radius_bounds=None,
+                            audit_report=None,
+                            transitions=transitions,
+                            active_threshold_probing=self.config.active_threshold_probing,
+                            allow_latent_state=self.config.latent_state_discovery,
+                            allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                            tolerance=eff_comm_tol,
+                        )
+                        src_ids_c2 = list(comm.get("source_concept_ids") or ())
+                        for e in entries_c:
+                            e["_consumed_object_provenance"] = {
+                                "object_id": comm["commitment_id"],
+                                "semantic_version": comm.get("semantic_group_fingerprint"),
+                                "source_concept_ids": src_ids_c2,
+                                "consumption_site": "pass1_scope_instantiation",
+                                "parent_before": parent_id_before,
+                            }
+                        consumption_events.append({
+                            "event_stage": "candidate_generation",
+                            "object_id": comm["commitment_id"],
+                            "semantic_version": comm.get("semantic_group_fingerprint"),
+                            "source_concept_ids": src_ids_c2,
+                            "consumption_site": "pass1_scope_instantiation",
+                            "generated_candidate_ids": [e["candidate"].candidate_id for e in entries_c if "candidate" in e],
+                            "selected_candidate_id": None,
+                            "adopted_confirmed": False,
+                            "parent_before": parent_id_before,
+                            "parent_after": parent_id_before,
+                            "proposed_probe_ids": [],
+                            "executed_probe_ids": [],
+                            "probe_before": None,
+                            "probe_after": None,
+                        })
+                        claims.extend(entries_c)
+                        if any(item["training_loss"] <= eff_comm_tol for item in claims):
+                            break
                 budget.spend(comm_budget.spent)
                 consistent_ids = {c["commitment_id"] for c in consistent_comms}
                 apply_payload = {"action": "apply_world_structure_commitments",
@@ -793,8 +898,56 @@ class UnifiedResearchAgent:
             )
             for item in claims
         ):
-            claims.extend(propose_structures(spec, training, budget, parent=parent,
-                tolerance=tolerance, transitions=transitions))
+            base_struct_claims = propose_structures(spec, training, budget, parent=parent,
+                tolerance=tolerance, transitions=transitions)
+            claims.extend(base_struct_claims)
+            # Cold open-grammar conditional revision when starting with 0 priors on a conditional world
+            if (
+                self.config.branch_reconciliation
+                and schema is not None
+                and base_struct_claims
+                and not any(item["training_loss"] <= tolerance for item in claims)
+            ):
+                model_c = spec.context.get("object_model")
+                model_c = json.loads(model_c) if isinstance(model_c, str) else model_c
+                audit_c = (model_c or {}).get("premise_audit")
+                if audit_c is None and model_c and transitions:
+                    from .premise_dependency_audit import audit_transition_premises
+                    audit_c = audit_transition_premises(
+                        model_c, transitions, budget, tolerance=tolerance,
+                        allow_expanded_revisions=self.config.expanded_premise_revisions,
+                        allow_open_grammar_exchange_screening=True)
+                if audit_c and audit_c.get("scientific_revision_triggers"):
+                    from .world_structure_commitments import (
+                        consolidate_world_structure_commitments,
+                        propose_scientific_premise_revision,
+                    )
+                    for bc in base_struct_claims[:3]:
+                        if not bc.get("structure") or budget.remaining <= 0:
+                            break
+                        synth_prior = {
+                            "source_concept_id": "cold_base_structure",
+                            "status": "supported",
+                            "object_schema": schema,
+                            "structure": bc["structure"],
+                            "research_program": bc.get("research_program"),
+                        }
+                        synth_comms = consolidate_world_structure_commitments(
+                            [synth_prior], budget=budget, tolerance=tolerance
+                        )
+                        if synth_comms:
+                            rev_entries = propose_scientific_premise_revision(
+                                synth_comms[0], audit_c, spec, training, schema, budget,
+                                active_threshold_probing=self.config.active_threshold_probing,
+                                allow_latent_state=self.config.latent_state_discovery,
+                                allow_higher_order_latent=self.config.higher_order_latent_discovery,
+                                transitions=transitions,
+                                tolerance=tolerance)
+                            for re_it in rev_entries:
+                                re_it["method_source_ids"] = []
+                            claims.extend(rev_entries)
+                            if any(item["training_loss"] <= tolerance for item in claims):
+                                break
         return claims
 
     def _research_objects(self, laboratory, channels, acquire, batches, budget, actions,
@@ -1522,8 +1675,8 @@ class UnifiedResearchAgent:
             self._remember_relation_research(prior, selected, offered_spec or spec, actions)
         if confirmation_ref is not None:
             prior.setdefault("confirmation_refs", []).append(deepcopy(confirmation_ref))
-        if self.config.indexed_commitment_store and not prior.get("support_witness_rows"):
-            witness_sample = list(selected_training[:12]) + list(selected_validation[:8])
+        if (self.config.indexed_commitment_store or self.config.branch_reconciliation) and not prior.get("support_witness_rows"):
+            witness_sample = list(selected_training[:16]) + list(selected_validation[:12])
             prior["support_witness_rows"] = [
                 {
                     "features": dict(r.features),
@@ -3088,7 +3241,8 @@ class UnifiedResearchAgent:
                 allow_higher_order_latent=self.config.higher_order_latent_discovery,
                 allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
                 observations=rows,
-                occam_premise_minimality=self.config.occam_premise_minimality)
+                occam_premise_minimality=self.config.occam_premise_minimality,
+                allow_open_grammar_exchange_screening=self.config.branch_reconciliation)
         if previous is None:
             equiv_budget = SearchBudget(budget.remaining // 3) if commitments else budget
             shared = propose_equivalent_object_programs(spec, rows, equiv_budget,
@@ -3114,7 +3268,23 @@ class UnifiedResearchAgent:
             working_parent_loss=working_parent_loss, world_commitments=commitments,
             premise_audit=premise_audit,
             allow_latent_state=self.config.latent_state_discovery,
-            allow_higher_order_latent=self.config.higher_order_latent_discovery)
+            allow_higher_order_latent=self.config.higher_order_latent_discovery,
+            library=self.library if self.config.use_memory else None,
+            branch_reconciliation=self.config.branch_reconciliation)
+        if result.get("consumption_events") or result.get("branch_dispatch_telemetry"):
+            actions.append({
+                "action": "apply_world_structure_commitments",
+                "compute_cost": 0,
+                "candidate_count": len(result["entries"]),
+                "consumption_events": list(result.get("consumption_events") or ()),
+                "consistent_commitments_matched": [
+                    ev["object_id"]
+                    for ev in (result.get("consumption_events") or ())
+                    if ev.get("consumption_site") == "pass1_scope_instantiation"
+                ],
+                "branch_dispatch_telemetry": result.get("branch_dispatch_telemetry"),
+                "supported": bool(result["entries"]),
+            })
         # A working loss refutes this executable on this episode's paid
         # evidence. Re-importing a parent's role assignment in another episode
         # must not import that loss. Resumes restore the live competition.
@@ -3418,7 +3588,14 @@ class UnifiedResearchAgent:
         if (calls or relation_kernels or drafts_available) and self.config.max_question_depth > 0:
             directions.append("program_revision")
         if structured:
-            directions.append("structural_research")
+            if (
+                self.config.world_structure_commitments
+                and self.config.use_memory
+                and self.library.meta_priors
+            ):
+                directions.insert(0, "structural_research")
+            else:
+                directions.append("structural_research")
         if usable_parent:
             directions.append("dependent_residual_revision")
 
@@ -3762,7 +3939,26 @@ class UnifiedResearchAgent:
                     if name in search_limits and name != "program_revision" else None)
                 for name in directions
                 if quotes.get(name, entry_cost) - len(comparison) <= limits.get(name, search_remaining)]
-            if learn_policy:
+            struct_priority_opt = (
+                next(
+                    (
+                        option
+                        for option in options
+                        if option.name == "structural_research"
+                        and option.compute_cost <= search_remaining
+                    ),
+                    None,
+                )
+                if (
+                    self.config.world_structure_commitments
+                    and self.config.use_memory
+                    and self.library.meta_priors
+                )
+                else None
+            )
+            if struct_priority_opt is not None:
+                selected_action = struct_priority_opt
+            elif learn_policy:
                 selected_action = policy.choose(options, observation_remaining=observation_remaining,
                     measurement_remaining=measurement_remaining, compute_remaining=search_remaining,
                     minimum_improvement=self.config.minimum_improvement)
@@ -4873,7 +5069,12 @@ class UnifiedResearchAgent:
         if (paid_object_bank and offered and self.config.use_memory
                 and self.config.world_structure_commitments and not object_continuation):
             target_obj_schema = _object_schema(self._spec(laboratory, offered))
-            if target_obj_schema is not None and self._world_commitments(budget, actions):
+            if self.config.branch_reconciliation and (
+                self._world_commitments(budget, actions)
+                or getattr(self.library, "_generalized_branch_commitments", None)
+            ):
+                cross_scale_commitment_ready = True
+            elif target_obj_schema is not None and self._world_commitments(budget, actions):
                 from .world_structure_commitments import _extract_source_schema
                 target_arity = len(target_obj_schema.get("objects", ()))
                 same_arity_prior = any(
@@ -5460,6 +5661,19 @@ class UnifiedResearchAgent:
                             selected_training, selected_validation = [[pair[0] for pair in batch]
                                                                       for batch in paired_for(offered)[-2:]]
         reused_object_bank = False
+        if (
+            cross_scale_commitment_ready
+            and self.config.branch_reconciliation
+            and prefetched_inputs is None
+            and not confirmed
+            and not method_trial
+        ):
+            first_cal = acquire(offered, "diagnose_input_mapping")
+            second_cal = acquire(offered, "compare_input_mapping")
+            if first_cal is not None and second_cal is not None:
+                if self._learn_instruments:
+                    research_instruments(offered)
+                prefetched_inputs = (first_cal, second_cal)
         if (object_research and object_research.get("groups") and not object_continuation
                 and prefetched_inputs is None and not confirmed and not method_trial):
             purchased = [row for batch in paired_for(offered) for _, row in batch]
@@ -6706,7 +6920,15 @@ class UnifiedResearchAgent:
                         item["method_source_ids"] = sources
                         item["candidate"] = replace(item["candidate"], parents=tuple(dict.fromkeys(
                             [*item["candidate"].parents, *sources])))
-                if origin.get("world_commitment_application") or origin.get("scientific_premise_revision"):
+                if (
+                    origin.get("world_commitment_application")
+                    or origin.get("scientific_premise_revision")
+                    or origin.get("_consumed_object_provenance")
+                ):
+                    orig_schema = (
+                        (origin.get("structure") or {}).get("schema")
+                        or ((origin.get("research_program") or {}).get("source_schema"))
+                    )
                     for item in candidates:
                         if origin.get("world_commitment_application"):
                             item["world_commitment_application"] = deepcopy(origin["world_commitment_application"])
@@ -6720,6 +6942,14 @@ class UnifiedResearchAgent:
                                 item["research_program"]["scientific_premise_revision"] = deepcopy(
                                     origin["scientific_premise_revision"]
                                 )
+                        if origin.get("_consumed_object_provenance"):
+                            item["_consumed_object_provenance"] = deepcopy(
+                                origin["_consumed_object_provenance"]
+                            )
+                        if orig_schema and item.get("research_program") is not None:
+                            item["research_program"].setdefault(
+                                "source_schema", deepcopy(orig_schema)
+                            )
                         sources = list(dict.fromkeys([*item.get("method_source_ids", []),
                             *origin.get("method_source_ids", [])]))
                         item["method_source_ids"] = sources
@@ -6801,6 +7031,12 @@ class UnifiedResearchAgent:
                        if key not in ("probe", "hypotheses", "question_hypotheses", "predicted_fields")},
                     "probe_id": plan["probe"].probe_id if plan["probe"] else None})
                 if plan["probe"] is None:
+                    if (
+                        selected.get("world_commitment_application")
+                        or selected.get("scientific_premise_revision")
+                        or selected.get("_consumed_object_provenance")
+                    ):
+                        pending_relation_candidates = []
                     break
                 if (spent_observations + plan["probe"].cost + length > observation_limit or
                     spent_measurements + (plan["probe"].cost + length) * sum(rates[name] for name in selected_channels)
@@ -7820,6 +8056,7 @@ class UnifiedResearchAgent:
         for event in transfer:
             event["accepted"] = bool(confirmed and set(event["source_ids"]) & set(used_sources)
                                      and event["status"] == "supported")
+        concept_id = None
         concepts_added = []
         if self.config.use_memory and self.config.strategy != "fixed":
             if not confirmed and selected.get("research_program"):
@@ -7846,6 +8083,77 @@ class UnifiedResearchAgent:
                     used_sources=used_sources, noisy_support=noisy_support,
                     offered_spec=self._spec(laboratory, offered))
                 concept_id, concepts_added = remembered["concept_id"], remembered["concepts_added"]
+            if (
+                self.config.branch_reconciliation
+                and not getattr(self.library, "_freeze_branch_writes", False)
+            ):
+                from .branch_reconciliation import autonomous_reconcile_library_episode
+                reconcile_channels = tuple(selected_channels) if selected_channels else tuple(offered)
+                reconcile_schema = (
+                    (object_research or {}).get("schema")
+                    or self._object_schemas.get(tuple(offered))
+                    or _object_schema(self._spec(laboratory, reconcile_channels))
+                    or (selected.get("structure") or {}).get("schema")
+                    or (selected.get("research_program") or {}).get("source_schema")
+                )
+                ep_trans_rec = list(transitions_for(reconcile_channels)) if reconcile_channels else []
+                ep_obs_rec = (
+                    [row for b_pair in paired_for(reconcile_channels) for _, row in b_pair]
+                    if reconcile_channels
+                    else []
+                )
+                conf_rows_list = (
+                    list(confirmation)
+                    if ("confirmation" in locals() and confirmation)
+                    else (
+                        list(ep_obs_rec[-int(confirmation_rows) :])
+                        if (confirmed and confirmation_rows and ep_obs_rec)
+                        else []
+                    )
+                )
+
+                def _exec_reconcile_probe(probe_obj):
+                    if not reconcile_channels:
+                        return None
+                    p_rows = acquire(
+                        reconcile_channels,
+                        "reconcile_competing_branch_disagreement",
+                        probe=probe_obj,
+                    )
+                    if p_rows is not None:
+                        p_trans = [
+                            {
+                                "controls": dict(pt),
+                                **tr_d,
+                                "target": float(obs_r.target),
+                            }
+                            for pt, obs_r, tr_d in zip(
+                                probe_obj.sequence,
+                                p_rows,
+                                batches[-1].get("transitions") or (),
+                            )
+                        ]
+                        return list(p_rows), p_trans
+                    if ep_obs_rec and ep_trans_rec:
+                        return ep_obs_rec, ep_trans_rec
+                    return None
+
+                rec_action = autonomous_reconcile_library_episode(
+                    library=self.library,
+                    task_id=laboratory.spec.task_id,
+                    spec=self._spec(laboratory, reconcile_channels),
+                    schema_dict=reconcile_schema,
+                    confirmed=bool(confirmed),
+                    confirmation_loss=confirmation_loss,
+                    confirmation_rows_list=conf_rows_list,
+                    support_rows=[*selected_training, *selected_validation],
+                    episode_transitions=ep_trans_rec,
+                    concept_id=concept_id,
+                    execute_probe_fn=_exec_reconcile_probe,
+                    budget=budget,
+                    tolerance=float(self.config.minimum_improvement),
+                )
+                actions.append(rec_action)
         measurement_program, measurement_channels, instrument_model_id = None, None, None
         if confirmed and selected_channels and self._learn_instruments:
             from .instrument_models import rebind_instrument_model
@@ -7929,6 +8237,77 @@ class UnifiedResearchAgent:
                        if confirmed else None)
             workflow.finish(selected["candidate"].program, confirmed=confirmed,
                 threshold=self.config.minimum_improvement, actions=actions, concept=concept)
+        # Resolve 4-stage ConsumptionEvents with actual selected candidate, adoption, and physical probe IDs (v12 A4 / F11)
+        selected_cid_final = (
+            selected["candidate"].candidate_id
+            if selected and selected.get("candidate") is not None
+            else None
+        )
+        selected_prov = (selected or {}).get("_consumed_object_provenance")
+        gen_events_seen = [
+            (act_idx, ev)
+            for act_idx, act in enumerate(actions)
+            if act.get("action") == "apply_world_structure_commitments"
+            for ev in (act.get("consumption_events") or ())
+            if isinstance(ev, dict) and ev.get("event_stage") == "candidate_generation"
+        ]
+        if gen_events_seen:
+            first_apply_idx = gen_events_seen[0][0]
+            followup_probe_ids = [
+                str(act.get("probe_id"))
+                for act in actions[first_apply_idx + 1 :]
+                if act.get("action") == "acquire"
+                and act.get("probe_id")
+                and act.get("purpose")
+                not in {
+                    "compare_on_new_trajectory",
+                    "confirm_frozen_program",
+                    "confirm_short_frozen_program",
+                    "confirm_instrument_replacement",
+                }
+            ]
+            resolution_events = []
+            for _, gev in gen_events_seen:
+                g_cids = set(gev.get("generated_candidate_ids") or ())
+                was_selected = bool(
+                    (selected_cid_final and selected_cid_final in g_cids)
+                    or (
+                        selected_prov
+                        and selected_prov.get("object_id") == gev.get("object_id")
+                        and selected_prov.get("consumption_site") == gev.get("consumption_site")
+                    )
+                )
+                was_adopted = bool(was_selected and confirmed)
+                p_before = gev.get("parent_before")
+                exec_probes = list(dict.fromkeys(followup_probe_ids)) if was_selected else []
+                resolution_events.append(
+                    {
+                        "event_stage": "episode_resolution",
+                        "object_id": gev.get("object_id"),
+                        "semantic_version": gev.get("semantic_version"),
+                        "source_concept_ids": list(gev.get("source_concept_ids") or ()),
+                        "consumption_site": gev.get("consumption_site"),
+                        "generated_candidate_ids": list(gev.get("generated_candidate_ids") or ()),
+                        "selected_candidate_id": selected_cid_final if was_selected else None,
+                        "adopted_confirmed": was_adopted,
+                        "adopted_program": program.to_dict() if was_adopted else None,
+                        "parent_before": p_before,
+                        "parent_after": selected_cid_final if was_adopted else p_before,
+                        "proposed_probe_ids": list(gev.get("proposed_probe_ids") or ()),
+                        "executed_probe_ids": exec_probes,
+                        "probe_before": None,
+                        "probe_after": exec_probes[0] if exec_probes else None,
+                    }
+                )
+            actions.append(
+                {
+                    "action": "resolve_commitment_consumption",
+                    "compute_cost": 0,
+                    "selected_candidate_id": selected_cid_final,
+                    "confirmed": bool(confirmed),
+                    "consumption_events": resolution_events,
+                }
+            )
         costs = {"observation_cost": spent_observations,
                  "measurement_cost": spent_measurements, "compute_cost": budget.spent,
                  "queries": len(batches)}

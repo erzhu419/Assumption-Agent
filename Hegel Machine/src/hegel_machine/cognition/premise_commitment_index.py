@@ -176,6 +176,24 @@ def _canonical_cond_str(raw: Any) -> str:
     return json.dumps(norm, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def _const_erased_cond_str(raw: Any) -> str:
+    def _erase(nd: Any) -> Any:
+        if not isinstance(nd, dict):
+            return nd
+        if nd.get("op") == "const":
+            return {"op": "__CONST__"}
+        return {
+            "op": nd.get("op"),
+            "name": nd.get("name"),
+            "lag": nd.get("lag"),
+            "children": [_erase(ch) for ch in (nd.get("children") or ())],
+        }
+
+    if isinstance(raw, dict):
+        return json.dumps(_erase(raw), sort_keys=True, separators=(",", ":"))
+    return _canonical_cond_str(raw)
+
+
 def _commitment_predicate_key(comm: dict) -> str:
     r_params = comm.get("radius_parameters") or ()
     if not r_params:
@@ -342,6 +360,8 @@ class PremiseCommitmentIndex:
         self.by_direction: dict[str, list[str]] = {}
         self.by_conservation: dict[str, list[str]] = {}
         self.by_predicate_key: dict[str, list[str]] = {}
+        self.by_predicate_key: dict[str, list[str]] = {}
+        self.by_predicate_skeleton_key: dict[str, list[str]] = {}
         self.by_signature: dict[tuple[str, str, str, bool], list[str]] = {}
         self.unique_custom_predicate_commitments: list[dict] = []
         self.build_complete: bool = True
@@ -357,6 +377,7 @@ class PremiseCommitmentIndex:
         self.by_direction = {}
         self.by_conservation = {}
         self.by_predicate_key = {}
+        self.by_predicate_skeleton_key = {}
         self.by_signature = {}
         seen_pred_keys: set[str] = set()
         self.unique_custom_predicate_commitments = []
@@ -379,9 +400,14 @@ class PremiseCommitmentIndex:
             self.by_direction.setdefault(d_cls, []).append(cid)
             self.by_conservation.setdefault(c_cls, []).append(cid)
             self.by_predicate_key.setdefault(p_key, []).append(cid)
+            r_params = comm.get("radius_parameters") or ()
+            if r_params:
+                raw_ec = r_params[0].get("edge_condition")
+                self.by_predicate_skeleton_key.setdefault(
+                    _const_erased_cond_str(raw_ec), []
+                ).append(cid)
             self.by_signature.setdefault((c_cls, d_cls, p_key, h_lat), []).append(cid)
 
-            r_params = comm.get("radius_parameters") or ()
             if r_params:
                 raw_ec = r_params[0].get("edge_condition")
                 if isinstance(raw_ec, dict) and p_key not in seen_pred_keys:
@@ -495,9 +521,17 @@ class PremiseCommitmentIndex:
             pred_pool = set(self.by_predicate_key.get(ec_key, ())) | set(
                 self.by_predicate_key.get("none", ())
             )
+            if isinstance(v_ec, dict):
+                pred_pool |= set(
+                    self.by_predicate_skeleton_key.get(_const_erased_cond_str(v_ec), ())
+                )
             # Also include observationally_undistinguished conditional alternatives if provisional Occam!
             for alt_ec in audit.get("undistinguished_conditional_alternatives") or ():
                 pred_pool |= set(self.by_predicate_key.get(_canonical_cond_str(alt_ec), ()))
+                if isinstance(alt_ec, dict):
+                    pred_pool |= set(
+                        self.by_predicate_skeleton_key.get(_const_erased_cond_str(alt_ec), ())
+                    )
         else:
             pred_pool = set(all_ids)
 

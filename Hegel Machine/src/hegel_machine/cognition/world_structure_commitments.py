@@ -2841,6 +2841,128 @@ def instantiate_commitment_on_schema(
 
     best_radius, best_terms, best_fit, active_role_terms = best_record
 
+    # Response-level 1D comparator threshold cell refinement inside eff_threshold_interval:
+    # single-step transitions may leave a bracket [t_lo, t_hi] whose midpoint misclassifies
+    # lag/history frames in trajectory readout rows. Refine across exact observed LHS cells.
+    if (
+        best_fit["loss"] > tolerance
+        and isinstance(effective_cond, (dict, Program))
+        and effective_direction in {"right", "left"}
+    ):
+        from .language import EvaluationContext
+
+        base_pred_prog = edge_condition_predicate(effective_cond)
+        th_desc = describe_comparator_threshold_parameter(base_pred_prog)
+        if (
+            th_desc is not None
+            and th_desc.get("comparator_lhs")
+            and th_desc.get("path") is not None
+            and budget.spend(max(1, len(rows)))
+        ):
+            lhs_prog = Program.from_dict(th_desc["comparator_lhs"])
+            th_path = tuple(th_desc["path"])
+            f_names = tuple(target.feature_names)
+            frames_th = {
+                tuple(fr[nm] for nm in f_names): fr
+                for r_obs in rows
+                for fr in (r_obs.features, *r_obs.history[-4:])
+                if all(nm in fr for nm in f_names)
+            }
+            r_scan = (
+                float(radius_bounds[1]) + 1e-6
+                if radius_bounds is not None
+                else float(best_radius) + 0.1
+            )
+            sign_d = 1.0 if effective_direction == "right" else -1.0
+            lhs_vals: list[float] = []
+            is_gap_lhs = (
+                lhs_prog.op == "sub"
+                and len(lhs_prog.children) == 2
+                and lhs_prog.children[0].op == "arg"
+                and lhs_prog.children[0].name == "edge_source_quantity"
+                and lhs_prog.children[1].op == "arg"
+                and lhs_prog.children[1].name == "edge_target_quantity"
+            )
+            is_src_q_lhs = lhs_prog.op == "arg" and lhs_prog.name == "edge_source_quantity"
+            for s_obj in target.objects:
+                xs_n, qs_n = target.fields[s_obj]["x"], target.fields[s_obj]["q"]
+                for t_obj in target.objects:
+                    if s_obj == t_obj:
+                        continue
+                    xt_n, qt_n = target.fields[t_obj]["x"], target.fields[t_obj]["q"]
+                    for fr in frames_th.values():
+                        if abs(float(fr[qs_n])) <= 1e-9:
+                            continue
+                        dx_v = sign_d * (float(fr[xt_n]) - float(fr[xs_n]))
+                        if 0.0 < dx_v <= r_scan:
+                            if is_gap_lhs:
+                                lhs_vals.append(float(fr[qs_n]) - float(fr[qt_n]))
+                            elif is_src_q_lhs:
+                                lhs_vals.append(float(fr[qs_n]))
+                            else:
+                                b_expr = lhs_prog._expand(
+                                    {
+                                        "edge_source_position": Program("const", value=float(fr[xs_n])),
+                                        "edge_source_quantity": Program("const", value=float(fr[qs_n])),
+                                        "edge_target_position": Program("const", value=float(fr[xt_n])),
+                                        "edge_target_quantity": Program("const", value=float(fr[qt_n])),
+                                    }
+                                )
+                                lhs_vals.append(
+                                    float(EvaluationContext(Observation({}, 0.0)).evaluate(b_expr))
+                                )
+            if eff_threshold_interval is not None:
+                t_lo_b, t_hi_b = float(eff_threshold_interval[0]), float(eff_threshold_interval[1])
+                in_band = sorted({v for v in lhs_vals if t_lo_b - 1e-6 <= v <= t_hi_b + 1e-6})
+                anchors_th = [t_lo_b, *in_band, t_hi_b]
+            elif lhs_vals:
+                in_band = sorted(set(lhs_vals))
+                anchors_th = [in_band[0] - 0.02, *in_band, in_band[-1] + 0.02]
+            else:
+                anchors_th = []
+            raw_cells_th = [
+                (a, b) for a, b in zip(anchors_th, anchors_th[1:]) if b - a > 1e-9
+            ]
+            if len(raw_cells_th) > 24:
+                step_c = max(1, len(raw_cells_th) // 24)
+                cells_th = raw_cells_th[::step_c][:24]
+            else:
+                cells_th = raw_cells_th
+            r_cands_th = [best_radius, *(r for r in candidates[:3] if abs(r - best_radius) > 1e-9)][:3]
+            for r_th in r_cands_th:
+                if best_fit["loss"] <= tolerance or budget.denied_requests:
+                    break
+                r_bind_th = {
+                    p["symbol"]: (r_th if p["symbol"] == primary_sym else float(p["source_values"][-1]))
+                    for p in params
+                }
+                for c_lo, c_hi in cells_th:
+                    cand_th = 0.5 * (c_lo + c_hi)
+                    cand_pred = _replace_const_at_path(base_pred_prog, th_path, cand_th)
+                    cand_pred_ov = {**pred_overrides, primary_sym: cand_pred.to_dict()}
+                    terms_th = instantiate_commitment_terms(
+                        commitment,
+                        target,
+                        radius_bindings=r_bind_th,
+                        direction_overrides=overrides,
+                        predicate_overrides=cand_pred_ov,
+                        role_terms_override=active_role_terms,
+                    )
+                    if terms_th is None:
+                        continue
+                    fit_th = fitter.fit(terms_th)
+                    if fit_th is None:
+                        break
+                    if fit_th["loss"] < best_fit["loss"]:
+                        best_radius = r_th
+                        best_terms = terms_th
+                        best_fit = fit_th
+                        pred_overrides = cand_pred_ov
+                        effective_cond = cand_pred.to_dict()
+                        eff_threshold_interval = [float(c_lo), float(c_hi)]
+                        if best_fit["loss"] <= tolerance:
+                            break
+
     # POMDP Track 2A: If active_role_terms ALREADY contains per-object accumulate poles
     # (e.g. consolidated focal_memory commitment transferring across scale to a new decay pole),
     # recalibrate the 1D continuous pole when loss > tolerance.
@@ -3504,14 +3626,33 @@ def is_commitment_empirically_consistent(
             return False
         v_cond = audit_report.get("verified_edge_condition")
         if v_cond is not None:
+            raw_comm_c = primary.get("edge_condition") or "unconditional"
             norm_comm = describe_edge_condition(
-                _normalize_edge_condition_for_grouping(primary.get("edge_condition") or "unconditional")
+                _normalize_edge_condition_for_grouping(raw_comm_c)
             )
             norm_ver = describe_edge_condition(
                 _normalize_edge_condition_for_grouping(v_cond or "unconditional")
             )
             if norm_comm != norm_ver:
-                return False
+                # Allow continuous threshold recalibration within identical operator skeleton in Pass-1
+                def _const_erased(nd: object) -> object:
+                    if not isinstance(nd, dict):
+                        return nd
+                    if nd.get("op") == "const":
+                        return {"op": "__CONST__"}
+                    return {
+                        "op": nd.get("op"),
+                        "name": nd.get("name"),
+                        "lag": nd.get("lag"),
+                        "children": [_const_erased(ch) for ch in (nd.get("children") or ())],
+                    }
+
+                if not (
+                    isinstance(raw_comm_c, dict)
+                    and isinstance(v_cond, dict)
+                    and _const_erased(raw_comm_c) == _const_erased(v_cond)
+                ):
+                    return False
 
     return True
 
@@ -3933,6 +4074,9 @@ def propose_scientific_premise_revision(
         )
         budget.spend(local.spent)
         results.extend(entries)
-        if any(entry["training_loss"] <= tolerance for entry in entries):
+        if (
+            any(entry["training_loss"] <= tolerance for entry in entries)
+            and revision_meta.get("revision_kind") != "exchange_condition_revision"
+        ):
             break
     return results

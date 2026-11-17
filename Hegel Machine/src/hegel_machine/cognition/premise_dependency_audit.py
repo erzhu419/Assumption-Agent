@@ -3655,6 +3655,7 @@ def audit_transition_premises(
     allow_nonlinear_limit_cycle: bool = True,
     observations: list | tuple = (),
     occam_premise_minimality: bool = False,
+    allow_open_grammar_exchange_screening: bool = False,
 ) -> dict:
     """Audit support premises on paid ``before -> after`` state transitions."""
     start = budget.spent
@@ -4937,6 +4938,73 @@ def audit_transition_premises(
             for items in by_dir.values()
             for m in items
         ]
+        open_grammar_calibrated: dict[str, dict] = {}
+        if (
+            not flat_cond_matches
+            and allow_open_grammar_exchange_screening
+            and not budget_exhausted
+        ):
+            from .equal_tool_attribution import build_bounded_open_grammar_patch_catalog
+
+            def _count_free_consts(nd: dict) -> tuple[int, int]:
+                # Count non-zero tunable threshold/coefficient constants + AST size for Occam tiering
+                if nd.get("op") == "const":
+                    v = float(nd.get("value") or 0.0)
+                    return (0 if v == 0.0 else 1, 1)
+                c_sum, s_sum = 0, 1
+                for ch in nd.get("children") or ():
+                    if isinstance(ch, dict):
+                        cc, ss = _count_free_consts(ch)
+                        c_sum += cc
+                        s_sum += ss
+                return (c_sum, s_sum)
+
+            cand_dirs = tuple(d for d in ordered_directions if d in {"right", "left"})
+            ordered_patches = sorted(
+                build_bounded_open_grammar_patch_catalog()["P_exchange_form"],
+                key=lambda pt: _count_free_consts(pt["edge_predicate"]),
+            )
+            matched_param_arity: int | None = None
+            for patch in ordered_patches:
+                p_arity, _ = _count_free_consts(patch["edge_predicate"])
+                if matched_param_arity is not None and p_arity > matched_param_arity:
+                    # Occam parameter-arity minimality: do not escalate to 2-parameter curved
+                    # hypersurfaces once <= 1-parameter comparators explain the transitions!
+                    break
+                if budget.remaining <= 0:
+                    budget_exhausted = True
+                    break
+                pred_cand = Program.from_dict(patch["edge_predicate"])
+                cal_res = screen_custom_edge_predicate_on_transitions(
+                    q_rows,
+                    x_rows,
+                    delta_rows,
+                    dynamic,
+                    x_fields,
+                    bijections,
+                    pred_cand,
+                    cand_dirs,
+                    budget=budget,
+                    eff_tol=eff_tol,
+                )
+                if cal_res.get("supported") and cal_res.get("matches"):
+                    by_dir_og: dict[str, list[dict]] = {}
+                    for m in cal_res["matches"]:
+                        by_dir_og.setdefault(m["direction"], []).append(m)
+                    og_key = f"open_grammar:{patch['patch_id']}"
+                    cond_matches_by_type[og_key] = by_dir_og
+                    open_grammar_calibrated[og_key] = {
+                        "predicate": cal_res["calibrated_predicate"],
+                        "threshold_interval": cal_res.get("threshold_interval"),
+                        "threshold_parameter": cal_res.get("threshold_parameter"),
+                    }
+                    matched_param_arity = p_arity
+            flat_cond_matches = [
+                m
+                for by_dir in cond_matches_by_type.values()
+                for items in by_dir.values()
+                for m in items
+            ]
         if not flat_cond_matches:
             _set_node(
                 "P_exchange_form",
@@ -4976,8 +5044,14 @@ def audit_transition_premises(
                 "compute_cost": budget.spent - start,
             }
 
-        # State-conditional exchange (source_greater / source_less) verified!
+        # State-conditional exchange (atomic or finite open-grammar comparator) verified!
         supported_conds = list(cond_matches_by_type.keys())
+        resolved_supported_conds = [
+            open_grammar_calibrated[k]["predicate"].to_dict()
+            if k in open_grammar_calibrated
+            else k
+            for k in supported_conds
+        ]
         supported_directions = list(
             dict.fromkeys(
                 d_name
@@ -4998,7 +5072,7 @@ def audit_transition_premises(
             _set_node(
                 "P_exchange_form",
                 "refuted",
-                verified_conditions=supported_conds,
+                verified_conditions=resolved_supported_conds,
                 counterexample=witness,
             )
             refuted_premises.append(
@@ -5007,32 +5081,53 @@ def audit_transition_premises(
                     "committed_condition": committed_cond_ids[0]
                     if committed_cond_ids
                     else "unconditional",
-                    "verified_conditions": supported_conds,
+                    "verified_conditions": resolved_supported_conds,
                     "reason": "state_dependent_edge_condition_required",
                     "counterexample": witness,
                 }
             )
+            retracted_raw_list: list[object] = []
+            for comm_item in commitments or ():
+                rc_raw = (comm_item.get("radius_parameters") or [{}])[0].get(
+                    "edge_condition", "unconditional"
+                )
+                if rc_raw not in retracted_raw_list:
+                    retracted_raw_list.append(rc_raw)
+            if not retracted_raw_list:
+                retracted_raw_list = [
+                    committed_cond_ids[0] if committed_cond_ids else "unconditional"
+                ]
             for cond_name, by_dir in cond_matches_by_type.items():
-                pred_prog = edge_condition_predicate(cond_name)
+                og_info = open_grammar_calibrated.get(cond_name)
+                pred_prog = (
+                    og_info["predicate"]
+                    if og_info is not None
+                    else edge_condition_predicate(cond_name)
+                )
+                repl_cond = pred_prog.to_dict() if og_info is not None else cond_name
+                t_iv = og_info.get("threshold_interval") if og_info is not None else None
                 for alt_dir, alt_matches in by_dir.items():
                     low = min(m["radius_interval"][0] for m in alt_matches)
                     high = max(m["radius_interval"][1] for m in alt_matches)
-                    scientific_triggers.append(
-                        {
-                            "kind": "exchange_condition_revision",
-                            "retracted_condition": committed_cond_ids[0]
-                            if committed_cond_ids
-                            else "unconditional",
-                            "replacement_condition": cond_name,
-                            "predicate_program": pred_prog.to_dict(),
-                            "replacement_direction": alt_dir,
-                            "radius_interval": [float(low), float(high)],
-                            "supporting_transitions": len(q_rows),
-                            "counterexample": witness,
-                        }
-                    )
+                    for ret_raw in retracted_raw_list:
+                        scientific_triggers.append(
+                            {
+                                "kind": "exchange_condition_revision",
+                                "retracted_condition": committed_cond_ids[0]
+                                if committed_cond_ids
+                                else "unconditional",
+                                "retracted_condition_raw": ret_raw,
+                                "replacement_condition": repl_cond,
+                                "predicate_program": pred_prog.to_dict(),
+                                "replacement_direction": alt_dir,
+                                "radius_interval": [float(low), float(high)],
+                                "threshold_interval": list(t_iv) if t_iv else None,
+                                "supporting_transitions": len(q_rows),
+                                "counterexample": witness,
+                            }
+                        )
         else:
-            _set_node("P_exchange_form", "supported", verified_conditions=supported_conds)
+            _set_node("P_exchange_form", "supported", verified_conditions=resolved_supported_conds)
             supported_premises.append("P_exchange_form")
 
         if exhaustive:
@@ -5130,6 +5225,11 @@ def audit_transition_premises(
             if unique_focus and "P_focus_membership" not in supported_premises:
                 supported_premises.append("P_focus_membership")
 
+        ver_thresh_iv = (
+            open_grammar_calibrated[supported_conds[0]].get("threshold_interval")
+            if len(supported_conds) == 1 and supported_conds[0] in open_grammar_calibrated
+            else None
+        )
         return {
             "status": "verified_conditional_exchange",
             "conservation_supported": True,
@@ -5142,8 +5242,9 @@ def audit_transition_premises(
             "active_transitions": len(active_taus),
             "supported_directions": supported_directions,
             "verified_direction": supported_directions[0] if len(supported_directions) == 1 else None,
-            "supported_edge_conditions": supported_conds,
-            "verified_edge_condition": supported_conds[0] if len(supported_conds) == 1 else None,
+            "supported_edge_conditions": resolved_supported_conds,
+            "verified_edge_condition": resolved_supported_conds[0] if len(resolved_supported_conds) == 1 else None,
+            "verified_threshold_interval": ver_thresh_iv,
             "surviving_bijection_count": len(flat_cond_matches),
             "narrowed_position_domains": narrowed_domains,
             "narrowed_focus_domains": narrowed_focus_domains,

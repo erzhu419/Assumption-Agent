@@ -1150,25 +1150,59 @@ def build_action_chain_telemetry(
     tolerance: float = 1e-7,
     consumption_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Construct complete causal chain telemetry from real ``ConsumptionEvent`` diffs (v11 A3).
+    """Construct complete 4-stage causal chain telemetry from real ``ConsumptionEvent`` diffs (v11 A3, v12 A4 / F11).
 
-    Never sets ``entered_candidates``, ``changed_action_or_probe``, or ``changed_parent_model``
-    from ``bool(retrieved_ids)`` when ``consumption_events`` are supplied!
+    Separates:
+      1. ``candidates_generated_count`` / ``entered_candidates`` (candidate generation stage)
+      2. ``selected_candidate_ids`` / ``selected_from_knowledge`` (validation selection stage)
+      3. ``adopted_confirmed_candidate_ids`` / ``changed_parent_model`` (actual adoption stage)
+      4. ``proposed_probe_ids`` vs ``executed_probe_ids`` / ``changed_action_or_probe`` (real paid probes only)
     """
     passed = bool(heldout_mse is not None and heldout_mse <= tolerance)
+    gen_cids_all: list[str] = []
+    selected_cids_all: list[str] = []
+    adopted_cids_all: list[str] = []
+    proposed_probes_all: list[str] = []
+    executed_probes_all: list[str] = []
+
     if consumption_events is not None:
-        real_entered = any(
-            bool(ev.get("generated_candidate_ids")) for ev in consumption_events
+        for ev in consumption_events:
+            for cid in ev.get("generated_candidate_ids") or ():
+                if cid not in gen_cids_all:
+                    gen_cids_all.append(str(cid))
+            sel_id = ev.get("selected_candidate_id")
+            if sel_id and str(sel_id) not in selected_cids_all:
+                selected_cids_all.append(str(sel_id))
+            if ev.get("adopted_confirmed") and sel_id and str(sel_id) not in adopted_cids_all:
+                adopted_cids_all.append(str(sel_id))
+            for pid in ev.get("proposed_probe_ids") or ():
+                if str(pid) not in proposed_probes_all:
+                    proposed_probes_all.append(str(pid))
+            for pid in ev.get("executed_probe_ids") or ():
+                if str(pid) not in executed_probes_all:
+                    executed_probes_all.append(str(pid))
+
+        real_entered = bool(gen_cids_all)
+        has_resolution_stage = any(
+            ev.get("event_stage") == "episode_resolution" for ev in consumption_events
         )
-        real_changed_parent = any(
-            ev.get("parent_before") != ev.get("parent_after")
-            for ev in consumption_events
-            if "parent_before" in ev or "parent_after" in ev
-        )
-        real_changed_probe = any(
+        if has_resolution_stage:
+            real_changed_parent = any(
+                ev.get("event_stage") == "episode_resolution"
+                and ev.get("parent_before") != ev.get("parent_after")
+                for ev in consumption_events
+            )
+        else:
+            real_changed_parent = any(
+                ev.get("parent_before") != ev.get("parent_after")
+                for ev in consumption_events
+                if "parent_before" in ev or "parent_after" in ev
+            )
+        real_changed_probe = bool(executed_probes_all) or any(
             ev.get("probe_before") != ev.get("probe_after")
             for ev in consumption_events
-            if "probe_before" in ev or "probe_after" in ev
+            if ("probe_before" in ev or "probe_after" in ev)
+            and (ev.get("probe_before") is not None or ev.get("probe_after") is not None)
         )
         entered_flag = real_entered
         changed_probe_flag = real_changed_probe
@@ -1199,7 +1233,6 @@ def build_action_chain_telemetry(
         retrieval_substatus = "retrieved_and_invoked"
         knowledge_utility_status = "invoked_and_supported"
     elif passed and not confirmed:
-        # Acceptance A3: external fresh48 pass without internal confirmation stays strictly separate!
         retrieval_substatus = "retrieved_and_invoked"
         knowledge_utility_status = "invoked_external_pass_unconfirmed_internally"
     else:
@@ -1213,6 +1246,13 @@ def build_action_chain_telemetry(
         "retrieved_ids": list(knowledge_retrieved_ids),
         "retrieval_substatus": retrieval_substatus,
         "entered_candidates": entered_flag,
+        "candidates_generated_count": len(gen_cids_all),
+        "selected_from_knowledge": bool(selected_cids_all),
+        "selected_candidate_ids": selected_cids_all,
+        "adopted_confirmed_from_knowledge": bool(adopted_cids_all),
+        "adopted_confirmed_candidate_ids": adopted_cids_all,
+        "proposed_probe_ids": proposed_probes_all,
+        "executed_probe_ids": executed_probes_all,
         "changed_action_or_probe": changed_probe_flag,
         "changed_parent_model": changed_parent_flag,
         "actually_invoked": actually_invoked,
@@ -1221,6 +1261,7 @@ def build_action_chain_telemetry(
         "reorganization_type": reorganization_type,
         "confirmed_on_task": bool(confirmed),
         "external_fresh48_passed_unconfirmed": bool(passed and not confirmed),
+        "false_internal_confirmation": bool(confirmed and heldout_mse is not None and not passed),
         "heldout_mse": heldout_mse,
         "passed_heldout_tolerance": passed,
         "knowledge_utility_status": knowledge_utility_status,
