@@ -71,6 +71,41 @@ def compute_semantic_version(obj: dict) -> str:
     return _prior_state_fingerprint(obj)
 
 
+def compute_evidence_archive_fingerprint(raw_archive: list[dict] | tuple[dict, ...] | None) -> str:
+    """Content-complete SHA-256 fingerprint over replayable ``EvidenceBatch`` entries (v14 §4.1).
+
+    Hashes every observation, transition, probe sequence/reset/protocol, channel list, schema/bindings,
+    and tested program versions — NEVER relying on ``len(archive)`` alone!
+    """
+    if not raw_archive:
+        return "ev_archive:empty"
+    canonical_items = []
+    for idx, batch in enumerate(raw_archive):
+        if not isinstance(batch, dict):
+            canonical_items.append({"idx": idx, "raw": str(batch)})
+            continue
+        canonical_items.append(
+            {
+                "idx": idx,
+                "evidence_id": batch.get("evidence_id"),
+                "episode_uid": batch.get("episode_uid") or batch.get("task_id"),
+                "source_concept_id": batch.get("source_concept_id"),
+                "actual_probe_id": batch.get("actual_probe_id") or batch.get("probe_id"),
+                "protocol_id": batch.get("protocol_id"),
+                "probe": batch.get("probe"),
+                "channels": batch.get("channels"),
+                "schema_version": batch.get("schema_version"),
+                "schema": batch.get("schema"),
+                "bindings": batch.get("bindings"),
+                "observations": batch.get("observations_serialized") or batch.get("rows_serialized"),
+                "transitions": batch.get("transitions"),
+                "program_versions_frozen_before_result": batch.get("program_versions_frozen_before_result"),
+            }
+        )
+    raw = json.dumps(canonical_items, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return f"ev_archive_v14:{hashlib.sha256(raw).hexdigest()[:24]}"
+
+
 def _deserialize_witness_rows(
     raw_rows: list[Any] | tuple[Any, ...],
     *,
@@ -881,6 +916,9 @@ class OrdinaryPersistentCommitmentCache:
         stale_cids = _detect_stale_dependency_ids(priors, cur_fp)
         active_fp = {k: v for k, v in cur_fp.items() if k not in stale_cids}
         return active_fp, stale_cids
+
+    def evidence_archive_fingerprint(self, raw_archive: list[dict] | tuple[dict, ...] | None) -> str:
+        return compute_evidence_archive_fingerprint(raw_archive)
 
     def get_or_consolidate(
         self,

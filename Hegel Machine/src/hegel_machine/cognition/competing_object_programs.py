@@ -349,6 +349,10 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
             ]
             parent_id_before = parent["hypothesis_id"] if parent else None
 
+            deferred_router_families = []
+            budget_not_reached_ids = []
+            deferred_router_families_tried = []
+
             if branch_reconciliation and library is not None:
                 from .branch_reconciliation import (
                     dispatch_branches_and_families_for_target,
@@ -365,7 +369,14 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                     tolerance=tolerance,
                 )
                 consistent_comms = disp["ordered_consistent_comms"]
-                for gf in disp["scheduled_families"]:
+                deferred_router_families = list(disp.get("deferred_router_families") or ())
+                sched_fams = list(disp["scheduled_families"])
+                for f_idx, gf in enumerate(sched_fams):
+                    if commitment_budget.remaining <= 0:
+                        budget_not_reached_ids.extend(
+                            str(rem_gf.get("commitment_id")) for rem_gf in sched_fams[f_idx:]
+                        )
+                        break
                     fam_entries = instantiate_parametric_family_on_target(
                         gf, local_spec, rows, schema, commitment_budget,
                         audit_report=premise_audit, transitions=transitions, tolerance=tolerance,
@@ -404,8 +415,11 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                     last_branch_dispatch_telemetry = disp["telemetry"]
 
             if not any(supports_current_evidence(item) for item in commitment_fits):
-                for comm in consistent_comms:
+                for c_idx, comm in enumerate(consistent_comms):
                     if commitment_budget.remaining <= 0:
+                        budget_not_reached_ids.extend(
+                            str(rem_c.get("commitment_id")) for rem_c in consistent_comms[c_idx:]
+                        )
                         break
                     audit_bounds = commitment_verified_radius_bounds(
                         comm, premise_audit, schema_x_to_q
@@ -459,6 +473,56 @@ def research_competing_object_programs(spec, training, budget, *, previous=None,
                     commitment_fits.extend(comm_entries)
                     if any(supports_current_evidence(item) for item in commitment_fits):
                         break
+
+            # v14 §3.3: Router deferral is ordering-only! When primary candidates fail and budget remains,
+            # consume `deferred_router_families` as fallback rather than silently dropping them.
+            if deferred_router_families and not any(supports_current_evidence(item) for item in commitment_fits):
+                from .branch_reconciliation import instantiate_parametric_family_on_target
+
+                for df_idx, d_gf in enumerate(deferred_router_families):
+                    if commitment_budget.remaining <= 0:
+                        budget_not_reached_ids.extend(
+                            str(rem_df.get("commitment_id")) for rem_df in deferred_router_families[df_idx:]
+                        )
+                        break
+                    deferred_router_families_tried.append(str(d_gf.get("commitment_id")))
+                    df_entries = instantiate_parametric_family_on_target(
+                        d_gf, local_spec, rows, schema, commitment_budget,
+                        audit_report=premise_audit, transitions=transitions, tolerance=tolerance,
+                    )
+                    src_ids_df = list(d_gf.get("source_concept_ids") or d_gf.get("source_branch_ids") or ())
+                    for e in df_entries:
+                        e["_consumed_object_provenance"] = {
+                            "object_id": d_gf["commitment_id"],
+                            "semantic_version": d_gf.get("semantic_group_fingerprint") or d_gf["commitment_id"],
+                            "source_concept_ids": src_ids_df,
+                            "consumption_site": "pass1b_deferred_router_family_instantiation",
+                            "parent_before": parent_id_before,
+                        }
+                    if index == 0:
+                        all_consumption_events.append({
+                            "event_stage": "candidate_generation",
+                            "object_id": d_gf["commitment_id"],
+                            "semantic_version": d_gf.get("semantic_group_fingerprint") or d_gf["commitment_id"],
+                            "source_concept_ids": src_ids_df,
+                            "consumption_site": "pass1b_deferred_router_family_instantiation",
+                            "generated_candidate_ids": [e["candidate"].candidate_id for e in df_entries if "candidate" in e],
+                            "selected_candidate_id": None,
+                            "adopted_confirmed": False,
+                            "parent_before": parent_id_before,
+                            "parent_after": parent_id_before,
+                            "proposed_probe_ids": [],
+                            "executed_probe_ids": [],
+                            "probe_before": None,
+                            "probe_after": None,
+                        })
+                    commitment_fits.extend(df_entries)
+                    if any(supports_current_evidence(item) for item in commitment_fits):
+                        break
+
+            if index == 0 and isinstance(last_branch_dispatch_telemetry, dict):
+                last_branch_dispatch_telemetry["deferred_router_families_tried"] = deferred_router_families_tried
+                last_branch_dispatch_telemetry["budget_not_reached"] = budget_not_reached_ids
 
             if not any(supports_current_evidence(item) for item in commitment_fits):
                 for comm in world_commitments:
