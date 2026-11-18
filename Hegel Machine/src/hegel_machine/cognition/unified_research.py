@@ -233,30 +233,56 @@ class UnifiedResearchAgent:
         return commitments
 
     def _world_commitments(self, budget, actions=None):
-        if not (self.config.use_memory and self.config.world_structure_commitments and self.library.meta_priors):
+        if not (self.config.use_memory and self.config.world_structure_commitments):
             return []
         before = budget.spent
+        if getattr(self.library, "_allow_on_demand_raw_history_reconstruction", False):
+            from .branch_reconciliation import reconstruct_missing_objects_from_raw_history
+            reconstruct_missing_objects_from_raw_history(
+                self.library,
+                budget,
+                actions=actions,
+                tolerance=self.config.minimum_improvement,
+            )
+        if not self.library.meta_priors:
+            return []
         if getattr(self.library, "_allow_on_demand_family_reconstruction", False) and not getattr(
             self.library, "_active_reconciled_branches", None
         ):
-            from .branch_reconciliation import reconstruct_parametric_families_from_ordinary_archive
-            _, recon_stats = reconstruct_parametric_families_from_ordinary_archive(
-                self.library,
-                budget,
-                tolerance=self.config.minimum_improvement,
-                reconstruct_routing=bool(getattr(self.library, "_allow_on_demand_routing_reconstruction", False)),
+            from .premise_commitment_index import OrdinaryPersistentCommitmentCache
+            ord_cache = (
+                getattr(self.library, "_ordinary_commitment_cache", None)
+                or getattr(self.library, "_ordinary_persistent_cache", None)
             )
-            commitments = [
-                deepcopy(b["commitment"])
-                for b in (recon_stats.get("reconstructed_branches") or ())
-                if isinstance(b, dict) and b.get("commitment")
-            ]
+            if ord_cache is None:
+                ord_cache = OrdinaryPersistentCommitmentCache()
+            self.library._ordinary_commitment_cache = ord_cache
+            self.library._ordinary_persistent_cache = ord_cache
+            commitments, cache_stats = ord_cache.get_or_consolidate(
+                self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement
+            )
+            recon_stats = None
+            prioritize_hstar = bool(getattr(self.library, "_prioritize_generalized_families", True))
+            do_routing_recon = bool(getattr(self.library, "_allow_on_demand_routing_reconstruction", False))
+            if self.config.branch_reconciliation and (do_routing_recon or prioritize_hstar):
+                from .branch_reconciliation import reconstruct_parametric_families_from_ordinary_archive
+                _, recon_stats = reconstruct_parametric_families_from_ordinary_archive(
+                    self.library,
+                    budget,
+                    tolerance=self.config.minimum_improvement,
+                    reconstruct_routing=do_routing_recon,
+                    build_families=prioritize_hstar,
+                )
             if actions is not None and (commitments or budget.spent != before):
                 actions.append({
                     "action": "retrieve_ordinary_cached_commitments",
                     "commitment_count": len(commitments),
                     "commitment_ids": [item["commitment_id"] for item in commitments],
-                    "cache_hit": bool(recon_stats.get("cache_hit")),
+                    "cache_hit": bool(
+                        cache_stats.get("cache_hit")
+                        and (recon_stats is None or recon_stats.get("cache_hit"))
+                    ),
+                    "on_demand_archive_reconstruction": recon_stats,
                     "compute_cost": budget.spent - before,
                 })
             return commitments
@@ -265,12 +291,28 @@ class UnifiedResearchAgent:
             commitments, cache_stats = ord_cache.get_or_consolidate(
                 self.library.meta_priors, budget=budget, tolerance=self.config.minimum_improvement
             )
+            recon_stats = None
+            prioritize_hstar = bool(getattr(self.library, "_prioritize_generalized_families", True))
+            do_routing_recon = bool(getattr(self.library, "_allow_on_demand_routing_reconstruction", False))
+            if self.config.branch_reconciliation and (do_routing_recon or prioritize_hstar):
+                from .branch_reconciliation import reconstruct_parametric_families_from_ordinary_archive
+                _, recon_stats = reconstruct_parametric_families_from_ordinary_archive(
+                    self.library,
+                    budget,
+                    tolerance=self.config.minimum_improvement,
+                    reconstruct_routing=do_routing_recon,
+                    build_families=prioritize_hstar,
+                )
             if actions is not None and (commitments or budget.spent != before):
                 actions.append({
                     "action": "retrieve_ordinary_cached_commitments",
                     "commitment_count": len(commitments),
                     "commitment_ids": [item["commitment_id"] for item in commitments],
-                    "cache_hit": bool(cache_stats.get("cache_hit")),
+                    "cache_hit": bool(
+                        cache_stats.get("cache_hit")
+                        and (recon_stats is None or recon_stats.get("cache_hit"))
+                    ),
+                    "on_demand_archive_reconstruction": recon_stats,
                     "compute_cost": budget.spent - before,
                 })
             return commitments
@@ -424,7 +466,10 @@ class UnifiedResearchAgent:
             allow_higher_order_latent=self.config.higher_order_latent_discovery,
             allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
             occam_premise_minimality=self.config.occam_premise_minimality,
-            allow_open_grammar_exchange_screening=self.config.branch_reconciliation)
+            allow_open_grammar_exchange_screening=bool(
+                self.config.branch_reconciliation
+                or getattr(self.library, "_enable_open_grammar_exchange_screening", False)
+            ))
         if audit["status"] == "awaiting_role_identification":
             return model
         updated = apply_verified_transition_premises(model, audit)
@@ -579,7 +624,10 @@ class UnifiedResearchAgent:
                         allow_nonlinear_limit_cycle=self.config.nonlinear_limit_cycle_discovery,
                         observations=training,
                         occam_premise_minimality=self.config.occam_premise_minimality,
-                        allow_open_grammar_exchange_screening=self.config.branch_reconciliation)
+                        allow_open_grammar_exchange_screening=bool(
+                            self.config.branch_reconciliation
+                            or getattr(self.library, "_enable_open_grammar_exchange_screening", False)
+                        ))
                 eff_comm_tol = tolerance
                 if audit and audit.get("stochastic_audit"):
                     sp_hat = float((audit.get("process_noise") or {}).get("sigma_p_hat", 0.0))
@@ -933,7 +981,7 @@ class UnifiedResearchAgent:
             claims.extend(base_struct_claims)
             # Cold open-grammar conditional revision when starting with 0 priors on a conditional world
             if (
-                self.config.branch_reconciliation
+                (self.config.branch_reconciliation or getattr(self.library, "_enable_open_grammar_exchange_screening", False))
                 and schema is not None
                 and base_struct_claims
                 and not any(item["training_loss"] <= tolerance for item in claims)
@@ -7071,32 +7119,38 @@ class UnifiedResearchAgent:
                         item["method_source_ids"] = sources
                         item["candidate"] = replace(item["candidate"], parents=tuple(dict.fromkeys(
                             [*item["candidate"].parents, *sources])))
-                if (
-                    origin.get("world_commitment_application")
-                    or origin.get("scientific_premise_revision")
-                    or origin.get("_consumed_object_provenance")
-                ):
+                orig_wca = origin.get("world_commitment_application") or (
+                    (origin.get("research_program") or {}).get("world_commitment_application")
+                )
+                orig_spr = origin.get("scientific_premise_revision") or (
+                    (origin.get("research_program") or {}).get("scientific_premise_revision")
+                )
+                if orig_wca or orig_spr or origin.get("_consumed_object_provenance"):
                     orig_schema = (
                         (origin.get("structure") or {}).get("schema")
                         or ((origin.get("research_program") or {}).get("source_schema"))
                     )
+                    orig_cid_rel = origin["candidate"].candidate_id
                     for item in candidates:
-                        if origin.get("world_commitment_application"):
-                            item["world_commitment_application"] = deepcopy(origin["world_commitment_application"])
+                        if orig_wca:
+                            item["world_commitment_application"] = deepcopy(orig_wca)
                             if item.get("research_program") is not None:
-                                item["research_program"]["world_commitment_application"] = deepcopy(
-                                    origin["world_commitment_application"]
-                                )
-                        if origin.get("scientific_premise_revision"):
-                            item["scientific_premise_revision"] = deepcopy(origin["scientific_premise_revision"])
+                                item["research_program"]["world_commitment_application"] = deepcopy(orig_wca)
+                        if orig_spr:
+                            item["scientific_premise_revision"] = deepcopy(orig_spr)
                             if item.get("research_program") is not None:
-                                item["research_program"]["scientific_premise_revision"] = deepcopy(
-                                    origin["scientific_premise_revision"]
-                                )
+                                item["research_program"]["scientific_premise_revision"] = deepcopy(orig_spr)
                         if origin.get("_consumed_object_provenance"):
-                            item["_consumed_object_provenance"] = deepcopy(
-                                origin["_consumed_object_provenance"]
-                            )
+                            prov_copy = deepcopy(origin["_consumed_object_provenance"])
+                            if item["candidate"].candidate_id != orig_cid_rel:
+                                prov_copy.setdefault("transformation_parent_chain", []).append(
+                                    {
+                                        "operation": "relation_interval_conditioning",
+                                        "from_candidate_id": orig_cid_rel,
+                                        "to_candidate_id": item["candidate"].candidate_id,
+                                    }
+                                )
+                            item["_consumed_object_provenance"] = prov_copy
                         if orig_schema and item.get("research_program") is not None:
                             item["research_program"].setdefault(
                                 "source_schema", deepcopy(orig_schema)
@@ -7182,10 +7236,14 @@ class UnifiedResearchAgent:
                        if key not in ("probe", "hypotheses", "question_hypotheses", "predicted_fields")},
                     "probe_id": plan["probe"].probe_id if plan["probe"] else None})
                 if plan["probe"] is None:
-                    if (
-                        selected.get("world_commitment_application")
-                        or selected.get("scientific_premise_revision")
-                        or selected.get("_consumed_object_provenance")
+                    if plan.get("forecast_status") in {"algebraically_shared", "insufficient_competition"} or (
+                        plan.get("forecast_status") != "compute_exhausted"
+                        and (
+                            selected.get("world_commitment_application")
+                            or selected.get("scientific_premise_revision")
+                            or selected.get("_consumed_object_provenance")
+                            or (selected.get("research_program") or {}).get("world_commitment_application")
+                        )
                     ):
                         pending_relation_candidates = []
                     break
@@ -7444,12 +7502,12 @@ class UnifiedResearchAgent:
                     "compute_remaining": budget.remaining, "observation_rows": next_rows})
                 charge_research_followup(confirmation_origin, "frozen_confirmation", confirmation_costs)
                 break
-            # v14 §5.3 / Replay F: Ordinary-loop residual threshold boundary probe prior to fresh confirmation!
+            # v14 §5.3 / v15 §7.2: Equal threshold boundary probe capability for both Ordinary and Recursive arms!
             cur_bp_cid = (calibrated if calibrated is not None else selected)["candidate"].candidate_id
             if (
                 cur_bp_cid not in probed_bp_cids
                 and self.config.active_threshold_probing
-                and self.config.branch_reconciliation
+                and self.config.world_structure_commitments
                 and selected_channels
                 and laboratory.spec.risk_quantile == .5
             ):
@@ -7641,6 +7699,18 @@ class UnifiedResearchAgent:
                     alternative = entry["candidate"].program
                     if canonical_object_program(alternative) == chosen:
                         continue
+                    alt_req = {name for name, _ in alternative.observed_variables()} - {"__target__"}
+                    alt_rel = [
+                        row
+                        for row in {id(r): r for r in (*inherited_relation_evidence, *selected_training)}.values()
+                        if alt_req <= set(row.features)
+                    ]
+                    if alt_rel:
+                        if not budget.spend(len(alt_rel)):
+                            relation_ambiguous = True
+                            break
+                        if loss(alternative, alt_rel, fallback, laboratory.spec.risk_quantile) > self.config.minimum_improvement:
+                            continue
                     if not budget.spend(len(confirmation)):
                         relation_ambiguous = True
                         break
@@ -8515,10 +8585,20 @@ class UnifiedResearchAgent:
                         "cost_ref": None,
                     }
 
+                conf_id_set = {id(r) for r in conf_rows_list}
+                pre_conf_ep_obs = [r for r in ep_obs_rec if id(r) not in conf_id_set]
+                need_hist_rows = (
+                    max((len(r.history) for r in selected_training), default=0) < 2
+                    and max((len(r.history) for r in pre_conf_ep_obs), default=0) >= 2
+                )
                 raw_support_for_rec = (
                     ep_obs_rec
                     if (not selected_channels and ep_obs_rec)
-                    else [*selected_training, *selected_validation]
+                    else (
+                        [*pre_conf_ep_obs, *selected_training, *selected_validation]
+                        if need_hist_rows
+                        else [*selected_training, *selected_validation]
+                    )
                 )
                 paid_support_dedup = list(
                     {id(r): r for r in raw_support_for_rec}.values()
@@ -8844,7 +8924,15 @@ class UnifiedResearchAgent:
                         try:
                             research_inherited_relation_intervals()
                             subq_best = selected
-                            subq_paid_rows = list(selected_training)
+                            subq_paid_rows = list(
+                                {
+                                    id(r): r
+                                    for r in (
+                                        *[row for b_pair in paired_for(reconcile_channels) for _, row in b_pair],
+                                        *selected_training,
+                                    )
+                                }.values()
+                            )
                         finally:
                             observation_limit, measurement_limit = saved_lim_iv
                             if restored_iv_schema:
@@ -9052,22 +9140,65 @@ class UnifiedResearchAgent:
                        if confirmed else None)
             workflow.finish(selected["candidate"].program, confirmed=confirmed,
                 threshold=self.config.minimum_improvement, actions=actions, concept=concept)
-        # Resolve 4-stage ConsumptionEvents with actual selected candidate, adoption, and physical probe IDs (v12 A4 / F11)
+        # Resolve 5-stage structured ConsumptionEvents with version lineage, transformations, confirmation & resource refs (v15 §5.1)
+        from .premise_commitment_index import compute_semantic_version
+
         selected_cid_final = (
             selected["candidate"].candidate_id
             if selected and selected.get("candidate") is not None
             else None
         )
+        selected_prog_ver = (
+            hashlib.sha256(json.dumps(program.to_dict(), sort_keys=True).encode("utf-8")).hexdigest()[:16]
+            if program is not None
+            else None
+        )
         selected_prov = (selected or {}).get("_consumed_object_provenance")
+        prior_ver_map = {
+            str(p.get("source_concept_id")): compute_semantic_version(p)
+            for p in (getattr(self.library, "meta_priors", ()) or ())
+            if isinstance(p, dict) and p.get("source_concept_id")
+        }
+        prior_raw_recon_map = {
+            str(p.get("source_concept_id")): bool(p.get("generated_from_raw_history", False))
+            for p in (getattr(self.library, "meta_priors", ()) or ())
+            if isinstance(p, dict) and p.get("source_concept_id")
+        }
+        confirm_probe_ids = [
+            str(act.get("probe_id"))
+            for act in actions
+            if act.get("action") == "acquire"
+            and act.get("probe_id")
+            and act.get("purpose") in {"confirm_frozen_program", "confirm_short_frozen_program"}
+        ]
+        fresh_conf_ref = {
+            "confirmed": bool(confirmed),
+            "confirmation_loss": float(confirmation_loss) if confirmation_loss is not None else None,
+            "confirmation_rows": int(confirmation_rows) if confirmation_rows else 0,
+            "confirmation_probe_id": confirm_probe_ids[-1] if confirm_probe_ids else None,
+        }
+        ep_cost_snapshot = {
+            "observation_cost": spent_observations + prior_cumulative_offset["observation_cost"],
+            "measurement_cost": spent_measurements + prior_cumulative_offset["measurement_cost"],
+            "compute_cost": budget.spent + prior_cumulative_offset["compute_cost"],
+            "queries": len(batches) + prior_cumulative_offset["queries"],
+        }
         gen_events_seen = [
-            (act_idx, ev)
+            (act_idx, act, ev)
             for act_idx, act in enumerate(actions)
             if act.get("action") == "apply_world_structure_commitments"
             for ev in (act.get("consumption_events") or ())
             if isinstance(ev, dict) and ev.get("event_stage") == "candidate_generation"
         ]
+        resolution_events = []
+        covered_selected_sources: set[str] = set()
         if gen_events_seen:
             first_apply_idx = gen_events_seen[0][0]
+            probes_before = [
+                str(act.get("probe_id"))
+                for act in actions[:first_apply_idx]
+                if act.get("action") == "acquire" and act.get("probe_id")
+            ]
             followup_probe_ids = [
                 str(act.get("probe_id"))
                 for act in actions[first_apply_idx + 1 :]
@@ -9081,11 +9212,12 @@ class UnifiedResearchAgent:
                     "confirm_instrument_replacement",
                 }
             ]
-            resolution_events = []
-            for _, gev in gen_events_seen:
-                g_cids = set(gev.get("generated_candidate_ids") or ())
+            for _, apply_act, gev in gen_events_seen:
+                g_cids = list(gev.get("generated_candidate_ids") or ())
+                g_cid_set = set(g_cids)
+                src_ids_ev = [str(s) for s in (gev.get("source_concept_ids") or ())]
                 was_selected = bool(
-                    (selected_cid_final and selected_cid_final in g_cids)
+                    (selected_cid_final and selected_cid_final in g_cid_set)
                     or (
                         selected_prov
                         and selected_prov.get("object_id") == gev.get("object_id")
@@ -9093,32 +9225,104 @@ class UnifiedResearchAgent:
                     )
                 )
                 was_adopted = bool(was_selected and confirmed)
+                if was_selected:
+                    covered_selected_sources.update(src_ids_ev)
                 p_before = gev.get("parent_before")
                 exec_probes = list(dict.fromkeys(followup_probe_ids)) if was_selected else []
+                trans_chain = (
+                    list((selected_prov or {}).get("transformation_parent_chain") or ())
+                    if was_selected
+                    else []
+                )
                 resolution_events.append(
                     {
                         "event_stage": "episode_resolution",
                         "object_id": gev.get("object_id"),
                         "semantic_version": gev.get("semantic_version"),
-                        "source_concept_ids": list(gev.get("source_concept_ids") or ()),
+                        "source_concept_ids": src_ids_ev,
+                        "source_semantic_versions": {
+                            s: prior_ver_map.get(s) for s in src_ids_ev
+                        },
+                        "generated_from_raw_history": any(prior_raw_recon_map.get(s, False) for s in src_ids_ev),
                         "consumption_site": gev.get("consumption_site"),
-                        "generated_candidate_ids": list(gev.get("generated_candidate_ids") or ()),
+                        "stages": {
+                            "available": True,
+                            "retrieved": True,
+                            "candidate_generated": bool(g_cids),
+                            "selected": was_selected,
+                            "confirmed_adopted": was_adopted,
+                        },
+                        "generated_candidate_ids": g_cids,
+                        "transformation_parent_chain": trans_chain,
                         "selected_candidate_id": selected_cid_final if was_selected else None,
+                        "selected_program_version": selected_prog_ver if was_selected else None,
                         "adopted_confirmed": was_adopted,
                         "adopted_program": program.to_dict() if was_adopted else None,
+                        "fresh_confirmation_evidence": fresh_conf_ref if was_selected else None,
                         "parent_before": p_before,
                         "parent_after": selected_cid_final if was_adopted else p_before,
                         "proposed_probe_ids": list(gev.get("proposed_probe_ids") or ()),
                         "executed_probe_ids": exec_probes,
-                        "probe_before": None,
-                        "probe_after": exec_probes[0] if exec_probes else None,
+                        "probe_before": probes_before[-1] if probes_before else None,
+                        "probe_after": exec_probes[0] if exec_probes else (confirm_probe_ids[-1] if (was_selected and confirm_probe_ids) else None),
+                        "resource_references": {
+                            "commitment_pass_compute_cost": int(apply_act.get("compute_cost", 0)),
+                            "episode_costs": deepcopy(ep_cost_snapshot),
+                        },
                     }
                 )
+        # Also record structured 5-stage attribution when `selected` came via direct `_recall` / `method_source_ids`!
+        direct_srcs = [
+            str(s)
+            for s in dict.fromkeys(
+                [*(used_sources or ()), *((selected or {}).get("method_source_ids") or ())]
+            )
+            if str(s) in prior_ver_map and str(s) not in covered_selected_sources
+        ]
+        if direct_srcs and selected_cid_final is not None:
+            for d_src in direct_srcs:
+                resolution_events.append(
+                    {
+                        "event_stage": "episode_resolution",
+                        "object_id": f"recall_concept:{d_src}",
+                        "semantic_version": prior_ver_map.get(d_src),
+                        "source_concept_ids": [d_src],
+                        "source_semantic_versions": {d_src: prior_ver_map.get(d_src)},
+                        "generated_from_raw_history": bool(prior_raw_recon_map.get(d_src, False)),
+                        "consumption_site": "direct_recall_or_template_binding",
+                        "stages": {
+                            "available": True,
+                            "retrieved": True,
+                            "candidate_generated": True,
+                            "selected": True,
+                            "confirmed_adopted": bool(confirmed),
+                        },
+                        "generated_candidate_ids": [selected_cid_final],
+                        "transformation_parent_chain": [],
+                        "selected_candidate_id": selected_cid_final,
+                        "selected_program_version": selected_prog_ver,
+                        "adopted_confirmed": bool(confirmed),
+                        "adopted_program": program.to_dict() if confirmed else None,
+                        "fresh_confirmation_evidence": fresh_conf_ref,
+                        "parent_before": d_src,
+                        "parent_after": selected_cid_final if confirmed else d_src,
+                        "proposed_probe_ids": [],
+                        "executed_probe_ids": [],
+                        "probe_before": None,
+                        "probe_after": confirm_probe_ids[-1] if confirm_probe_ids else None,
+                        "resource_references": {
+                            "commitment_pass_compute_cost": 0,
+                            "episode_costs": deepcopy(ep_cost_snapshot),
+                        },
+                    }
+                )
+        if resolution_events:
             actions.append(
                 {
                     "action": "resolve_commitment_consumption",
                     "compute_cost": 0,
                     "selected_candidate_id": selected_cid_final,
+                    "selected_program_version": selected_prog_ver,
                     "confirmed": bool(confirmed),
                     "consumption_events": resolution_events,
                 }

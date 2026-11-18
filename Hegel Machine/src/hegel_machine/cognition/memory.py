@@ -1395,6 +1395,22 @@ class KnowledgeLibrary:
                             and entry["template_id"] not in removed],
         })
 
+    def export_object_version_inventory(self) -> dict[str, Any]:
+        """Export compact executable-carrier & independent-support inventory by ``(concept_id, semantic_version)`` (v15 §3.3)."""
+        return export_library_object_inventory(self)
+
+    def without_object_version(
+        self,
+        concept_id: str,
+        semantic_version: str | None = None,
+        *,
+        mode: str = "repaired_version",
+    ) -> "KnowledgeLibrary":
+        """Remove a specific ``(concept_id, semantic_version)`` and ONLY its exclusively supported carriers (v15 §3.1–§3.3)."""
+        return remove_library_object_version(
+            self, concept_id, semantic_version=semantic_version, mode=mode
+        )
+
     def _definition_records(self) -> list[dict]:
         return [{"definition": definition.to_dict(),
                  "template_id": self.definition_bindings[definition_id]["template_id"],
@@ -1457,3 +1473,407 @@ class KnowledgeLibrary:
                    transfer_serial=payload.get("transfer_serial"),
                    condition_coverages=payload.get("condition_coverages", []),
                    research_workflows=payload.get("research_workflows"))
+
+
+
+def export_library_object_inventory(library: Any) -> dict[str, Any]:
+    """Export a compact inventory of executable carriers and independent support by ``(concept_id, semantic_version)`` (v15 §3.3)."""
+    from .premise_commitment_index import compute_semantic_version
+
+    concepts_list = list(getattr(library, "concepts", ()) or ())
+    abstracts_list = list(getattr(library, "abstracts", ()) or ())
+    defs_dict = dict(getattr(library, "definitions", None) or {})
+    binds_dict = dict(getattr(library, "definition_bindings", None) or {})
+    priors_list = list(getattr(library, "meta_priors", ()) or ())
+    branches_list = list(getattr(library, "_active_reconciled_branches", ()) or ())
+    families_list = list(getattr(library, "_generalized_branch_commitments", ()) or ())
+    raw_archive = list(getattr(library, "_raw_reconciliation_evidence_archive", ()) or ())
+
+    ver_by_cid: dict[str, str] = {}
+    for p in priors_list:
+        scid = p.get("source_concept_id")
+        if scid:
+            ver_by_cid[str(scid)] = compute_semantic_version(p)
+    for b in branches_list:
+        scid = b.get("source_concept_id")
+        if scid and b.get("semantic_version"):
+            ver_by_cid.setdefault(str(scid), str(b["semantic_version"]))
+
+    all_cids = sorted(
+        {
+            *(str(getattr(c, "concept_id", "")) for c in concepts_list if getattr(c, "concept_id", None)),
+            *(str(getattr(a, "source_concept_id", "")) for a in abstracts_list if getattr(a, "source_concept_id", None)),
+            *(str(getattr(d, "source_concept_id", "")) for d in defs_dict.values() if getattr(d, "source_concept_id", None)),
+            *(str(p.get("source_concept_id")) for p in priors_list if p.get("source_concept_id")),
+            *(
+                str(s)
+                for b in branches_list
+                for s in ([b.get("source_concept_id")] if b.get("source_concept_id") else [])
+                + list(b.get("source_concept_ids") or ())
+                if s
+            ),
+        }
+    )
+
+    by_object: dict[str, dict[str, Any]] = {}
+    for cid in all_cids:
+        c_matches = [c for c in concepts_list if getattr(c, "concept_id", None) == cid and getattr(c, "status", "available") != "revoked"]
+        a_matches = [a for a in abstracts_list if getattr(a, "source_concept_id", None) == cid and getattr(a, "status", "available") != "revoked"]
+        d_keys = [k for k, d in defs_dict.items() if getattr(d, "source_concept_id", None) == cid]
+        a_tids = {getattr(a, "template_id", None) for a in a_matches}
+        b_keys = [
+            k
+            for k, b in binds_dict.items()
+            if k in set(d_keys) or (isinstance(b, dict) and (b.get("template_id") in a_tids or str(b.get("template_id", "")).startswith(f"{cid}:")))
+        ]
+        p_matches = [p for p in priors_list if p.get("source_concept_id") == cid]
+        br_matches = [
+            b
+            for b in branches_list
+            if b.get("source_concept_id") == cid or cid in (b.get("source_concept_ids") or ())
+        ]
+        ind_parents = sorted(
+            {
+                str(par)
+                for c in c_matches
+                for par in (getattr(c, "parents", ()) or ())
+                if str(par) != cid and not str(par).startswith(f"{cid}:")
+            }
+            | {
+                str(par)
+                for p in p_matches
+                for par in (p.get("parent_concept_ids") or ())
+                if str(par) != cid
+            }
+        )
+        sem_v = ver_by_cid.get(cid)
+        by_object[cid] = {
+            "concept_id": cid,
+            "semantic_version": sem_v,
+            "has_executable_concept": len(c_matches) > 0,
+            "in_concepts": len(c_matches) > 0,
+            "in_abstracts": len(a_matches) > 0,
+            "abstract_template_ids": [getattr(a, "template_id", None) for a in a_matches],
+            "in_definitions": len(d_keys) > 0,
+            "definition_ids": d_keys,
+            "in_definition_bindings": len(b_keys) > 0,
+            "definition_binding_keys": b_keys,
+            "in_meta_priors": len(p_matches) > 0,
+            "in_active_branches": len(br_matches) > 0,
+            "branch_ids": [b.get("claim_id") for b in br_matches],
+            "independent_parent_roots": ind_parents,
+            "executable_recall_reachable": bool(c_matches and a_matches and d_keys and b_keys),
+        }
+
+    return {
+        "objects": by_object,
+        "by_object": by_object,
+        "generalized_family_ids": [gf.get("commitment_id") for gf in families_list],
+        "raw_reconciliation_evidence_batches_count": len(raw_archive),
+        "allow_on_demand_family_reconstruction": bool(getattr(library, "_allow_on_demand_family_reconstruction", False)),
+        "allow_on_demand_routing_reconstruction": bool(getattr(library, "_allow_on_demand_routing_reconstruction", False)),
+        "allow_on_demand_raw_history_reconstruction": bool(getattr(library, "_allow_on_demand_raw_history_reconstruction", False)),
+    }
+
+
+def remove_library_object_version(
+    library: Any,
+    concept_id: str,
+    semantic_version: str | None = None,
+    *,
+    mode: str = "repaired_version",
+) -> Any:
+    """Version-specific minimal object or branch-materialization removal (v15 §3.1–§3.3).
+
+    - ``mode == "branch_materialization"``: removes ONLY materialized branch/family/index/cache carriers for
+      ``(concept_id, semantic_version)``, retaining ``concepts``, ``abstracts``, ``definitions``, ``meta_priors``,
+      ``_raw_reconciliation_evidence_archive``, and on-demand reconstruction permissions.
+    - ``mode == "repaired_version"``: removes ``(concept_id, semantic_version)`` AND all executable carriers
+      (list-shaped ``concepts``, ``abstracts``, ``definitions``, ``definition_bindings``, ``meta_priors``,
+      ``_active_reconciled_branches``, caches) whose **sole** valid support is ``concept_id``, while
+      preserving shared rules/commitments/families that retain an independent valid second source, preserving
+      raw history (``_raw_reconciliation_evidence_archive``), and enabling legal on-demand reconstruction!
+    """
+    from .premise_commitment_index import compute_semantic_version
+
+    out = deepcopy(library)
+    if not concept_id:
+        return out
+
+    # Check semantic_version match when explicitly provided and verifiable
+    if semantic_version is not None:
+        matching_prior = next(
+            (p for p in (getattr(out, "meta_priors", ()) or ()) if p.get("source_concept_id") == concept_id),
+            None,
+        )
+        matching_branch = next(
+            (b for b in (getattr(out, "_active_reconciled_branches", ()) or ()) if b.get("source_concept_id") == concept_id),
+            None,
+        )
+        observed_vers = {
+            v
+            for v in (
+                compute_semantic_version(matching_prior) if isinstance(matching_prior, dict) and len(matching_prior) > 1 else None,
+                (matching_branch or {}).get("semantic_version"),
+            )
+            if v is not None
+        }
+        if observed_vers and semantic_version not in observed_vers:
+            return out
+
+    def _clear_materialized_caches(target_lib: Any) -> None:
+        target_lib._premise_commitment_index = None
+        target_lib._indexed_prior_fingerprints = None
+        target_lib._indexed_group_commitments = None
+        target_lib._episode_archive_cache = None
+        target_lib._ordinary_commitment_cache = None
+        target_lib._ordinary_persistent_cache = None
+        target_lib._pairwise_branch_crosscheck_memo = None
+        target_lib._reconstructed_from_raw_history_episode_ids = set()
+
+    def _prune_branches_and_families(target_lib: Any, removed_cids: set[str]) -> None:
+        removed_bids = {f"branch:{cid}" for cid in removed_cids} | {f"archive_src:{cid}" for cid in removed_cids}
+        kept_branches = []
+        for b in getattr(target_lib, "_active_reconciled_branches", ()) or ():
+            b_srcs = list(
+                dict.fromkeys(
+                    [*(b.get("source_concept_ids") or ()), *([b["source_concept_id"]] if b.get("source_concept_id") else [])]
+                )
+            )
+            rem_srcs = [s for s in b_srcs if s not in removed_cids]
+            if b_srcs and not rem_srcs:
+                if b.get("claim_id"):
+                    removed_bids.add(str(b["claim_id"]))
+                continue
+            if b.get("claim_id") in removed_bids and not rem_srcs:
+                continue
+            b_copy = deepcopy(b)
+            if rem_srcs and len(rem_srcs) < len(b_srcs):
+                b_copy["source_concept_ids"] = rem_srcs
+                b_copy["source_concept_id"] = rem_srcs[0]
+                if isinstance(b_copy.get("commitment"), dict):
+                    b_copy["commitment"]["source_concept_ids"] = list(rem_srcs)
+            kept_branches.append(b_copy)
+        target_lib._active_reconciled_branches = kept_branches
+
+        kept_fams = []
+        for gf in getattr(target_lib, "_generalized_branch_commitments", ()) or ():
+            dep_bids = list(gf.get("depends_on_claim_ids") or gf.get("source_branch_ids") or ())
+            gf_srcs = list(gf.get("source_concept_ids") or ())
+            min_deps = int(gf.get("min_grounded_dependencies", 2 if len(dep_bids) >= 2 else 1))
+            if dep_bids:
+                rem_bids = [bid for bid in dep_bids if bid not in removed_bids]
+                if len(rem_bids) < min_deps:
+                    continue
+                gf_copy = deepcopy(gf)
+                gf_copy["depends_on_claim_ids"] = rem_bids
+                gf_copy["source_branch_ids"] = rem_bids
+                if gf_srcs:
+                    gf_copy["source_concept_ids"] = [s for s in gf_srcs if s not in removed_cids]
+                kept_fams.append(gf_copy)
+            elif gf_srcs:
+                rem_gf_srcs = [s for s in gf_srcs if s not in removed_cids]
+                if len(rem_gf_srcs) < min_deps:
+                    continue
+                gf_copy = deepcopy(gf)
+                gf_copy["source_concept_ids"] = rem_gf_srcs
+                kept_fams.append(gf_copy)
+            else:
+                kept_fams.append(deepcopy(gf))
+        target_lib._generalized_branch_commitments = kept_fams
+
+    if mode == "branch_materialization":
+        _prune_branches_and_families(out, {concept_id})
+        _clear_materialized_caches(out)
+        out._allow_on_demand_family_reconstruction = True
+        out._allow_on_demand_routing_reconstruction = True
+        return out
+
+    # `mode == "repaired_version"`: compute exclusive-support transitive closure!
+    all_concept_ids = {
+        str(getattr(c, "concept_id"))
+        for c in (getattr(out, "concepts", ()) or ())
+        if getattr(c, "concept_id", None) and getattr(c, "status", "available") != "revoked"
+    } | {
+        str(p.get("source_concept_id"))
+        for p in (getattr(out, "meta_priors", ()) or ())
+        if p.get("source_concept_id")
+    }
+    removed_cids: set[str] = {str(concept_id)}
+    changed = True
+    while changed:
+        changed = False
+        for c in getattr(out, "concepts", ()) or ():
+            cid_c = str(getattr(c, "concept_id", ""))
+            if not cid_c or cid_c in removed_cids:
+                continue
+            raw_pars = [str(par) for par in (getattr(c, "parents", ()) or ())]
+            concept_pars = [
+                par.split(":", 1)[0] if ":abstract:" in par else par
+                for par in raw_pars
+            ]
+            valid_concept_pars = [par for par in concept_pars if par in all_concept_ids and par != cid_c]
+            called_def_srcs = []
+            prog_c = getattr(c, "program", None)
+            if isinstance(prog_c, Program):
+                called_def_srcs = [
+                    str(defn.source_concept_id)
+                    for defn in _called_definitions(prog_c)
+                    if getattr(defn, "source_concept_id", None)
+                ]
+            # Remove a child concept ONLY if either:
+            #   (a) its executable body hard-calls a definition owned by `removed_cids`, OR
+            #   (b) it declares supporting concept parents and EVERY valid parent is in `removed_cids`!
+            if any(src_d in removed_cids for src_d in called_def_srcs) or (
+                valid_concept_pars and all(par in removed_cids for par in valid_concept_pars)
+            ):
+                removed_cids.add(cid_c)
+                changed = True
+
+    # 1) Prune list-shaped `concepts` (updating surviving multi-source parents)
+    if hasattr(out, "concepts") and isinstance(out.concepts, list):
+        kept_concepts = []
+        for c in out.concepts:
+            cid_c = str(getattr(c, "concept_id", ""))
+            if cid_c in removed_cids:
+                continue
+            if hasattr(c, "parents") and getattr(c, "parents", None):
+                kept_pars = [
+                    par
+                    for par in c.parents
+                    if str(par) not in removed_cids
+                    and str(par).split(":", 1)[0] not in removed_cids
+                ]
+                try:
+                    c.parents = kept_pars
+                except Exception:
+                    pass
+            kept_concepts.append(c)
+        out.concepts = kept_concepts
+
+    # 2) Prune list-shaped `abstracts` (preserving shared templates that retain another independent valid source/parent!)
+    removed_tids: set[str] = set()
+    if hasattr(out, "abstracts") and isinstance(out.abstracts, list):
+        kept_abstracts = []
+        for a in out.abstracts:
+            tid_a = str(getattr(a, "template_id", ""))
+            src_a = str(getattr(a, "source_concept_id", ""))
+            pars_a = [str(par) for par in (getattr(a, "parents", ()) or ())]
+            valid_other_pars = [
+                par for par in pars_a if par not in removed_cids and par.split(":", 1)[0] not in removed_cids
+            ]
+            if src_a in removed_cids and not valid_other_pars:
+                if tid_a:
+                    removed_tids.add(tid_a)
+                continue
+            if src_a in removed_cids and valid_other_pars:
+                # Re-anchor shared multi-source template onto surviving independent root!
+                try:
+                    a.source_concept_id = valid_other_pars[0].split(":", 1)[0]
+                    a.parents = valid_other_pars
+                except Exception:
+                    pass
+            elif pars_a and hasattr(a, "parents"):
+                try:
+                    a.parents = valid_other_pars
+                except Exception:
+                    pass
+            kept_abstracts.append(a)
+        out.abstracts = kept_abstracts
+
+    # 3) Prune `definitions`, `definition_bindings`, and `_call_templates`
+    if hasattr(out, "definitions") and isinstance(out.definitions, dict):
+        removed_def_ids: set[str] = set()
+        for def_id, defn in list(out.definitions.items()):
+            src_d = str(getattr(defn, "source_concept_id", ""))
+            bind_d = (getattr(out, "definition_bindings", None) or {}).get(def_id)
+            tid_d = bind_d.get("template_id") if isinstance(bind_d, dict) else None
+            if (src_d in removed_cids and tid_d not in {getattr(a, "template_id", None) for a in getattr(out, "abstracts", ())}) or (
+                tid_d and str(tid_d) in removed_tids
+            ):
+                removed_def_ids.add(def_id)
+                del out.definitions[def_id]
+        if hasattr(out, "definition_bindings") and isinstance(out.definition_bindings, dict):
+            for def_id in list(out.definition_bindings.keys()):
+                bind_d = out.definition_bindings[def_id]
+                tid_d = bind_d.get("template_id") if isinstance(bind_d, dict) else None
+                if def_id in removed_def_ids or (tid_d and str(tid_d) in removed_tids) or any(
+                    str(def_id).startswith(f"{rc}:") for rc in removed_cids
+                ):
+                    del out.definition_bindings[def_id]
+    if hasattr(out, "_refresh_definitions") and callable(getattr(out, "_refresh_definitions")):
+        try:
+            out._refresh_definitions()
+        except Exception:
+            pass
+
+    # 4) Prune `meta_priors` (preserving priors with independent surviving roots)
+    if hasattr(out, "meta_priors") and isinstance(out.meta_priors, list):
+        kept_priors = []
+        for p in out.meta_priors:
+            scid_p = str(p.get("source_concept_id", ""))
+            if scid_p in removed_cids:
+                continue
+            pars_p = [str(x) for x in (p.get("parent_concept_ids") or ())]
+            if pars_p:
+                rem_pars = [x for x in pars_p if x not in removed_cids]
+                p = deepcopy(p)
+                p["parent_concept_ids"] = rem_pars
+            kept_priors.append(p)
+        out.meta_priors = kept_priors
+
+    # 5) Prune auxiliary structures (`research_drafts`, `condition_coverages`, `measurements`, `experiments`)
+    if hasattr(out, "research_drafts") and isinstance(out.research_drafts, list):
+        kept_drafts = []
+        for dr in out.research_drafts:
+            s_ids = [str(s) for s in (dr.get("source_ids") or ())]
+            rem_s = [s for s in s_ids if s not in removed_cids]
+            if s_ids and not rem_s:
+                continue
+            dr_c = deepcopy(dr)
+            if s_ids:
+                dr_c["source_ids"] = rem_s
+            kept_drafts.append(dr_c)
+        out.research_drafts = kept_drafts
+
+    if hasattr(out, "condition_coverages") and isinstance(out.condition_coverages, list):
+        kept_cov = []
+        for cv in out.condition_coverages:
+            s_ids = [str(s) for s in (cv.get("source_ids") or ())]
+            rem_s = [s for s in s_ids if s not in removed_cids]
+            if s_ids and not rem_s:
+                continue
+            cv_c = deepcopy(cv)
+            if s_ids:
+                cv_c["source_ids"] = rem_s
+            kept_cov.append(cv_c)
+        out.condition_coverages = kept_cov
+
+    if hasattr(out, "deleted_ids") and isinstance(out.deleted_ids, list):
+        for r_cid in sorted(removed_cids):
+            if r_cid not in out.deleted_ids:
+                out.deleted_ids.append(r_cid)
+
+    # 6) Prune materialized branches/families & clear caches while PRESERVING `_raw_reconciliation_evidence_archive`
+    #    (stripping only pre-solved commitment/coefficients on the removed concept so raw-history reconstruction
+    #     genuinely re-solves from raw observations & transitions!) and ENABLING legal on-demand reconstruction!
+    if hasattr(out, "_raw_reconciliation_evidence_archive") and isinstance(
+        out._raw_reconciliation_evidence_archive, list
+    ):
+        cleaned_archive = []
+        for ev_item in out._raw_reconciliation_evidence_archive:
+            if isinstance(ev_item, dict) and str(ev_item.get("source_concept_id") or "") in removed_cids:
+                ev_copy = deepcopy(ev_item)
+                ev_copy.pop("commitment", None)
+                ev_copy.pop("coefficients", None)
+                ev_copy.pop("radius_value", None)
+                cleaned_archive.append(ev_copy)
+            else:
+                cleaned_archive.append(deepcopy(ev_item))
+        out._raw_reconciliation_evidence_archive = cleaned_archive
+    _prune_branches_and_families(out, removed_cids)
+    _clear_materialized_caches(out)
+    out._allow_on_demand_family_reconstruction = True
+    out._allow_on_demand_routing_reconstruction = True
+    out._allow_on_demand_raw_history_reconstruction = True
+    return out

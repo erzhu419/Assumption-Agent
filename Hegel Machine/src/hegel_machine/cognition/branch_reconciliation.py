@@ -1607,6 +1607,7 @@ def adjudicate_branches_on_paid_evidence(
             old_support_regime_features or [],
             obs_reg,
             scope_kind="empirical_applicability_scope",
+            claim_level="bound_instance",
         )
         if shrunk_old.get("status") == "scope_unidentified":
             pending_new = deepcopy(new_claim)
@@ -1729,6 +1730,7 @@ def adjudicate_branches_on_paid_evidence(
                 old_support_regime_features,
                 obs_reg,
                 scope_kind="empirical_applicability_scope",
+                claim_level="bound_instance",
             )
             if upd_old.get("status") == "scope_unidentified":
                 upd_old["status"] = "contested_scope_unidentified"
@@ -3725,10 +3727,12 @@ def _refine_coexisting_branch_scopes_and_routing(
     *,
     budget: SearchBudget | None = None,
     tolerance: float = 1e-7,
+    crosscheck_memo: dict[tuple[Any, ...], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Separate ``bound_instance`` vs ``refittable_template`` empirical applicability scopes from ``routing_scope_candidate`` (v14 §3.2)."""
+    """Separate ``bound_instance`` vs ``refittable_template`` empirical applicability scopes from ``routing_scope_candidate`` (v14 §3.2, v15 §6)."""
     if len(active_branches) < 2:
         return active_branches
+    tol_key = round(float(tolerance), 14)
     refined: list[dict[str, Any]] = []
     for b_i in active_branches:
         if b_i.get("status") == "refuted":
@@ -3736,6 +3740,7 @@ def _refine_coexisting_branch_scopes_and_routing(
             continue
         cur_b = deepcopy(b_i)
         sig_i = _branch_regime_signature(cur_b["commitment"])
+        ver_i = str(cur_b.get("semantic_version") or cur_b.get("assembled_program_version") or cur_b["claim_id"])
         sup_regs_i = list(cur_b.get("pilot_regime_features") or ())
         empirical_instance_ce_regs: list[dict[str, Any]] = []
         empirical_template_ce_regs: list[dict[str, Any]] = []
@@ -3751,9 +3756,18 @@ def _refine_coexisting_branch_scopes_and_routing(
             if not regs_j:
                 continue
             prot_j = ((regs_j[0].get("_meta") or {}).get("protocol_id") if isinstance(regs_j[0], dict) else None)
-            cross_check = _cross_evaluate_fixed_instance_on_neighbor(
-                cur_b, b_j, budget=budget, tolerance=tolerance
-            )
+            ver_j = str(b_j.get("semantic_version") or b_j.get("assembled_program_version") or b_j["claim_id"])
+            inst_memo_key = ("fixed_instance", ver_i, ver_j, tol_key)
+            if crosscheck_memo is not None and inst_memo_key in crosscheck_memo:
+                if budget is not None and not budget.spend(1):
+                    continue
+                cross_check = deepcopy(crosscheck_memo[inst_memo_key])
+            else:
+                cross_check = _cross_evaluate_fixed_instance_on_neighbor(
+                    cur_b, b_j, budget=budget, tolerance=tolerance
+                )
+                if crosscheck_memo is not None and cross_check.get("execution_status") == "evaluated":
+                    crosscheck_memo[inst_memo_key] = deepcopy(cross_check)
             if cross_check.get("execution_status") == "budget_deferred":
                 continue
             if cross_check.get("evaluated") and cross_check.get("empirically_refuted"):
@@ -3773,9 +3787,21 @@ def _refine_coexisting_branch_scopes_and_routing(
                 instance_receipts.append(inst_rec)
                 routing_receipts.append(inst_rec)
 
-                tmpl_check = _cross_evaluate_refittable_template_on_neighbor(
-                    cur_b, b_j, budget=budget, tolerance=tolerance
-                )
+                tmpl_memo_key = ("refittable_template", ver_i, ver_j, tol_key)
+                if crosscheck_memo is not None and tmpl_memo_key in crosscheck_memo:
+                    if budget is not None and not budget.spend(1):
+                        continue
+                    tmpl_check = deepcopy(crosscheck_memo[tmpl_memo_key])
+                else:
+                    tmpl_check = _cross_evaluate_refittable_template_on_neighbor(
+                        cur_b, b_j, budget=budget, tolerance=tolerance
+                    )
+                    if (
+                        crosscheck_memo is not None
+                        and tmpl_check.get("execution_status") == "evaluated"
+                        and tmpl_check.get("search_completeness") != "budget_interrupted_partial"
+                    ):
+                        crosscheck_memo[tmpl_memo_key] = deepcopy(tmpl_check)
                 if tmpl_check.get("evaluated") and tmpl_check.get("empirically_refuted"):
                     empirical_template_ce_regs.extend(regs_j)
                     template_receipts.append(
@@ -3808,7 +3834,7 @@ def _refine_coexisting_branch_scopes_and_routing(
             evaluate_scope_guard(cur_b.get("scope_guard"), ce_r) != "reject"
             for ce_r in empirical_instance_ce_regs
         ):
-            cur_b = shrink_claim_to_observable_scope(
+            shr_inst = shrink_claim_to_observable_scope(
                 cur_b,
                 sup_regs_i,
                 empirical_instance_ce_regs,
@@ -3816,6 +3842,10 @@ def _refine_coexisting_branch_scopes_and_routing(
                 claim_level="bound_instance",
                 cross_check_receipts=instance_receipts,
             )
+            if shr_inst.get("status") == "scope_unidentified":
+                shr_inst["status"] = "instance_scope_unknown"
+                shr_inst["scope_claim_level"] = "bound_instance"
+            cur_b = shr_inst
         if sup_regs_i and empirical_template_ce_regs and any(
             evaluate_scope_guard(cur_b.get("template_scope_guard"), ce_r) != "reject"
             for ce_r in empirical_template_ce_regs
@@ -3830,6 +3860,10 @@ def _refine_coexisting_branch_scopes_and_routing(
             )
             if tmpl_shrunk.get("template_scope_guard") is not None:
                 cur_b["template_scope_guard"] = deepcopy(tmpl_shrunk["template_scope_guard"])
+                cur_b["scope_claim_level"] = "refittable_template"
+                cur_b["template_scope_cross_check_receipts"] = deepcopy(template_receipts)
+            elif tmpl_shrunk.get("status") == "scope_unidentified":
+                cur_b["status"] = "template_and_instance_scope_unknown"
                 cur_b["scope_claim_level"] = "refittable_template"
                 cur_b["template_scope_cross_check_receipts"] = deepcopy(template_receipts)
         if sup_regs_i and routing_neg_regs and any(
@@ -3848,7 +3882,7 @@ def _refine_coexisting_branch_scopes_and_routing(
     return refined
 
 
-RECON_ALGO_VERSION = "v14_ordinary_lazy_recon_1"
+RECON_ALGO_VERSION = "v15_unified_state_transition_1"
 
 
 def replay_evidence_batches_onto_branches(
@@ -3857,11 +3891,13 @@ def replay_evidence_batches_onto_branches(
     *,
     budget: SearchBudget | None = None,
     tolerance: float = 1e-7,
+    refine_coexisting: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Shared evidence-replay engine producing semantically equivalent branch states for ``K_eager`` & ``R_lazy`` (v14 §4.1).
+    """Shared evidence-replay engine separating bound-instance counterexamples from refittable templates (v15 §4.1).
 
-    Replays full ``EvidenceBatch`` entries (``observations_serialized`` / ``rows_serialized``, ``transitions``, ``schema``,
-    ``protocol_id``) against reconstructed or active branches before running ``_refine_coexisting_branch_scopes_and_routing``.
+    When ``shrink_claim_to_observable_scope`` returns ``scope_unidentified``, ALWAYS evaluates
+    ``_cross_evaluate_refittable_template_on_neighbor`` and preserves retained local source support +
+    refittable template eligibility as ``instance_scope_unknown`` rather than global ``refuted``.
     """
     cur_branches = deepcopy(branches)
     replayed_batches = 0
@@ -3918,6 +3954,31 @@ def replay_evidence_batches_onto_branches(
             if m_val <= tolerance:
                 continue
             b_cur = cur_branches[idx]
+            tmpl_chk = _cross_evaluate_refittable_template_on_neighbor(
+                b_cur, ev_neighbor_stub, budget=budget, tolerance=tolerance
+            )
+            if tmpl_chk.get("execution_status") == "budget_deferred":
+                interrupted = True
+                break
+            tmpl_infeasible = bool(
+                tmpl_chk.get("evaluated")
+                and tmpl_chk.get("empirically_refuted")
+                and str(tmpl_chk.get("verdict") or "infeasible_on_declared_domain") == "infeasible_on_declared_domain"
+            )
+            tmpl_status_label = (
+                "template_retained_rebindable"
+                if (tmpl_chk.get("evaluated") and not tmpl_chk.get("empirically_refuted"))
+                else str(tmpl_chk.get("verdict") or "search_incomplete")
+            )
+            ce_rec = {
+                "evidence_kind": "replayed_evidence_batch",
+                "evidence_id": ev_neighbor_stub["claim_id"],
+                "protocol_id": ev_prot,
+                "refutation_mse": m_val,
+                "any_competitor_passed": bool(any_passed),
+                "template_check_verdict": tmpl_chk.get("verdict"),
+                "template_empirically_refuted": bool(tmpl_chk.get("evaluated") and tmpl_chk.get("empirically_refuted")),
+            }
             sup_regs = list(b_cur.get("pilot_regime_features") or ())
             shrunk_ok = False
             if ev_regime is not None and sup_regs:
@@ -3929,22 +3990,38 @@ def replay_evidence_batches_onto_branches(
                     claim_level="bound_instance",
                 )
                 if shrunk_b.get("shrunk") and shrunk_b.get("scope_guard") is not None:
-                    tmpl_chk = _cross_evaluate_refittable_template_on_neighbor(
-                        b_cur, ev_neighbor_stub, budget=budget, tolerance=tolerance
-                    )
-                    if tmpl_chk.get("evaluated") and tmpl_chk.get("empirically_refuted"):
+                    if tmpl_infeasible:
                         shrunk_b["template_scope_guard"] = deepcopy(shrunk_b["scope_guard"])
                         shrunk_b["scope_claim_level"] = "refittable_template"
+                    else:
+                        shrunk_b["scope_claim_level"] = "bound_instance"
+                        shrunk_b["template_status"] = tmpl_status_label
+                    shrunk_b.setdefault("counterexamples", []).append(ce_rec)
                     cur_branches[idx] = shrunk_b
                     shrunk_ok = True
             if not shrunk_ok:
                 b_upd = deepcopy(b_cur)
-                b_upd["status"] = "refuted" if any_passed else "contested_refuted_on_probe"
+                b_upd["previous_status"] = b_cur.get("status", "universal")
                 b_upd["refutation_mse"] = m_val
+                b_upd.setdefault("counterexamples", []).append(ce_rec)
+                has_prior_local_support = bool(sup_regs or b_cur.get("support_rows_serialized") or b_cur.get("independent_empirical_support"))
+                if tmpl_infeasible and not has_prior_local_support:
+                    b_upd["status"] = "refuted" if any_passed else "contested_refuted_on_probe"
+                    b_upd["scope_claim_level"] = "refittable_template"
+                elif tmpl_infeasible:
+                    b_upd["status"] = "template_and_instance_scope_unknown"
+                    b_upd["scope_claim_level"] = "refittable_template"
+                    b_upd["template_status"] = "infeasible_on_counterexample_batch_scope_unknown"
+                else:
+                    b_upd["status"] = "instance_scope_unknown" if any_passed else "contested_instance_scope_unknown"
+                    b_upd["scope_claim_level"] = "bound_instance"
+                    b_upd["template_status"] = tmpl_status_label
                 cur_branches[idx] = b_upd
+        if interrupted:
+            break
         replayed_batches += 1
 
-    if not interrupted and len(cur_branches) >= 2:
+    if refine_coexisting and not interrupted and len(cur_branches) >= 2:
         denied_before = budget.denied_requests if budget is not None else 0
         cur_branches = _refine_coexisting_branch_scopes_and_routing(
             cur_branches, budget=budget, tolerance=tolerance
@@ -3958,6 +4035,478 @@ def replay_evidence_batches_onto_branches(
     }
 
 
+def apply_reconciliation_step_from_evidence(
+    prior_branches: list[dict[str, Any]],
+    new_claim: dict[str, Any],
+    *,
+    spec: TaskSpec | None,
+    schema_dict: dict[str, Any],
+    execute_probe_fn: Any = None,
+    budget: SearchBudget | None = None,
+    tolerance: float = 1e-7,
+    crosscheck_memo: dict[tuple[Any, ...], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Single shared chronological state-transition step for BOTH online ``K`` and lazy ``R`` (v15 §4.2).
+
+    Consumes ONLY candidates & versions that already existed prior to this episode plus ``new_claim``,
+    adjudicates competing claims on paid/archived discriminating evidence, and refines instance/template
+    empirical scopes and routing guards identically regardless of eager vs lazy execution timing.
+    """
+    new_src_cid = str(new_claim.get("source_concept_id") or "")
+    new_claim_id = str(new_claim.get("claim_id") or "")
+    old_branches = [
+        deepcopy(b)
+        for b in (prior_branches or ())
+        if str(b.get("claim_id") or "") != new_claim_id
+        and (not new_src_cid or str(b.get("source_concept_id") or "") != new_src_cid)
+    ]
+    decisions: list[dict[str, Any]] = []
+    paid_probes_executed: list[dict[str, Any]] = []
+    pending_questions: list[dict[str, Any]] = []
+    upd_new = deepcopy(new_claim)
+    obs_regime_list = list(new_claim.get("pilot_regime_features") or ())
+
+    if old_branches:
+        old_regimes_by_id = {
+            str(b["claim_id"]): list(b.get("pilot_regime_features") or ())
+            for b in old_branches
+        }
+        rec_res = reconcile_competing_branches(
+            new_claim,
+            old_branches,
+            spec,
+            schema_dict,
+            execute_probe_fn=execute_probe_fn,
+            controls_by_object=schema_dict.get("controls") if isinstance(schema_dict, dict) else None,
+            old_support_regimes_by_id=old_regimes_by_id,
+            budget=budget,
+            tolerance=tolerance,
+        )
+        decisions = list(rec_res.get("decisions") or ())
+        paid_probes_executed = list(rec_res.get("paid_probes_executed") or ())
+        pending_questions = list(rec_res.get("pending_questions") or ())
+        upd_new = rec_res.get("updated_new_claim") or deepcopy(new_claim)
+        upd_olds = list(rec_res.get("updated_old_claims") or old_branches)
+        cons_into = upd_new.get("consolidated_into")
+        if cons_into:
+            for ob in upd_olds:
+                if str(ob.get("claim_id")) == str(cons_into):
+                    if obs_regime_list:
+                        ob.setdefault("pilot_regime_features", []).extend(deepcopy(obs_regime_list))
+                    ob.setdefault("empirical_support_refs", []).extend(
+                        upd_new.get("empirical_support_refs") or ()
+                    )
+            active_branches = upd_olds
+        elif upd_new.get("status") in {"refuted", "contested_refuted_on_probe"}:
+            active_branches = upd_olds
+        else:
+            active_branches = [*upd_olds, upd_new]
+    else:
+        active_branches = [upd_new]
+
+    active_branches = _refine_coexisting_branch_scopes_and_routing(
+        active_branches,
+        budget=budget,
+        tolerance=tolerance,
+        crosscheck_memo=crosscheck_memo,
+    )
+    return {
+        "active_branches": active_branches,
+        "updated_new_claim": upd_new,
+        "decisions": decisions,
+        "paid_probes_executed": paid_probes_executed,
+        "pending_questions": pending_questions,
+    }
+
+
+def reconstruct_missing_objects_from_raw_history(
+    library: Any,
+    budget: SearchBudget,
+    *,
+    actions: list[dict[str, Any]] | None = None,
+    tolerance: float = 1e-7,
+) -> list[dict[str, Any]]:
+    """Legally reconstruct removed/unmaterialized hypotheses from preserved raw empirical history (v15 §3.2, §3.3).
+
+    Uses ONLY preserved raw observations, fresh holdout rows, transitions, and schemas in
+    ``library._raw_reconciliation_evidence_archive`` plus surviving independent priors via ordinary research APIs
+    (``audit_transition_premises`` + ``propose_scientific_premise_revision``), billing all compute to ``budget``
+    and recording ``generated_from_raw_history = True``, start/end events, reconstructed version, and cost.
+    """
+    if not getattr(library, "_allow_on_demand_raw_history_reconstruction", False):
+        return []
+    raw_archive = list(getattr(library, "_raw_reconciliation_evidence_archive", ()) or ())
+    if not raw_archive:
+        return []
+
+    from .models import Candidate
+    from .premise_commitment_index import compute_semantic_version
+    from .premise_dependency_audit import audit_transition_premises
+    from .world_structure_commitments import (
+        commitment_verified_radius_bounds,
+        consolidate_world_structure_commitments,
+        instantiate_commitment_on_schema,
+        propose_scientific_premise_revision,
+    )
+
+    known_cids = {
+        str(getattr(c, "concept_id", ""))
+        for c in (getattr(library, "concepts", ()) or ())
+        if getattr(c, "status", "available") != "revoked"
+    } | {
+        str(p.get("source_concept_id", ""))
+        for p in (getattr(library, "meta_priors", ()) or ())
+        if p.get("status") not in {"revoked", "stale_dependency_invalidated"}
+    }
+    done_ev_ids: set[str] = set(getattr(library, "_reconstructed_from_raw_history_episode_ids", None) or set())
+    if not hasattr(library, "_raw_history_reconstruction_ledger") or library._raw_history_reconstruction_ledger is None:
+        library._raw_history_reconstruction_ledger = []
+
+    reconstructed_events: list[dict[str, Any]] = []
+    for ev in raw_archive:
+        if not isinstance(ev, dict) or ev.get("kind") != "source_episode_batch":
+            continue
+        ev_id = str(ev.get("evidence_id") or ev.get("episode_uid") or "")
+        orig_cid = str(ev.get("source_concept_id") or "")
+        if not ev_id or ev_id in done_ev_ids or (orig_cid and orig_cid in known_cids):
+            continue
+        obs_rows = _deserialize_obs_rows(ev.get("observations_serialized") or ev.get("rows_serialized") or ())
+        fresh_rows = _deserialize_obs_rows(ev.get("fresh_holdout_rows_serialized") or ())
+        ev_trans = list(ev.get("transitions") or ())
+        ev_schema = ev.get("schema")
+        if not obs_rows or not ev_schema:
+            continue
+
+        start_spent = budget.spent
+        budget_before = budget.remaining
+        denied_before = budget.denied_requests
+        start_evt = {
+            "action": "start_raw_history_object_reconstruction",
+            "evidence_id": ev_id,
+            "episode_uid": ev.get("episode_uid"),
+            "task_id": ev.get("task_id"),
+            "removed_or_missing_source_concept_id": orig_cid or None,
+            "budget_remaining_before": budget_before,
+        }
+        if actions is not None:
+            actions.append(start_evt)
+
+        if budget.remaining < 200:
+            end_evt = {
+                "action": "complete_raw_history_object_reconstruction",
+                "evidence_id": ev_id,
+                "status": "budget_deferred",
+                "generated_from_raw_history": False,
+                "compute_cost": budget.spent - start_spent,
+                "budget_remaining_before": budget_before,
+                "budget_remaining_after": budget.remaining,
+            }
+            if actions is not None:
+                actions.append(end_evt)
+            library._raw_history_reconstruction_ledger.append(end_evt)
+            break
+
+        f_names = tuple(ev.get("channels") or _as_schema(ev_schema).feature_names)
+        f_bounds_raw = ev.get("feature_bounds") or {}
+        f_bounds = (
+            {str(k): (float(v[0]), float(v[1])) for k, v in f_bounds_raw.items() if isinstance(v, (list, tuple)) and len(v) == 2}
+            if isinstance(f_bounds_raw, dict) and f_bounds_raw
+            else {fn: (-2.0, 2.0) for fn in f_names}
+        )
+        recon_spec = TaskSpec(
+            task_id=str(ev.get("task_id") or f"raw_recon:{ev_id}"),
+            description="On-demand reconstruction from preserved raw episode evidence",
+            feature_names=f_names,
+            initial_probes=(),
+            available_probes=(),
+            feature_bounds=f_bounds,
+            context={"object_schema": json.dumps(ev_schema)},
+        )
+
+        surviving_priors = [
+            p
+            for p in (getattr(library, "meta_priors", ()) or ())
+            if p.get("status") not in {"revoked", "stale_dependency_invalidated"}
+        ]
+        surviving_comms = (
+            consolidate_world_structure_commitments(surviving_priors, budget=budget, tolerance=tolerance)
+            if surviving_priors
+            else []
+        )
+
+        # 1) Check if an already-surviving commitment explains this raw episode without needing a new object
+        already_explained = False
+        for s_comm in surviving_comms:
+            if budget.remaining < 50:
+                break
+            s_entries = instantiate_commitment_on_schema(
+                recon_spec,
+                obs_rows,
+                ev_schema,
+                s_comm,
+                budget,
+                transitions=ev_trans,
+                active_threshold_probing=True,
+                allow_latent_state=False,
+                tolerance=tolerance,
+            )
+            if any(float(it["training_loss"]) <= tolerance for it in s_entries):
+                already_explained = True
+                break
+        if already_explained:
+            done_ev_ids.add(ev_id)
+            end_evt = {
+                "action": "complete_raw_history_object_reconstruction",
+                "evidence_id": ev_id,
+                "status": "already_explained_by_surviving_library",
+                "generated_from_raw_history": False,
+                "compute_cost": budget.spent - start_spent,
+                "budget_remaining_before": budget_before,
+                "budget_remaining_after": budget.remaining,
+            }
+            if actions is not None:
+                actions.append(end_evt)
+            library._raw_history_reconstruction_ledger.append(end_evt)
+            continue
+
+        # 2) Run ordinary transition premise audit + latent/premise revision on preserved raw evidence
+        sc_obj_r = _as_schema(ev_schema)
+        synth_groups = [
+            {
+                "q": sc_obj_r.fields[g]["q"],
+                "u": sc_obj_r.fields[g]["u"],
+                "x": sc_obj_r.fields[g]["x"],
+                "f": sc_obj_r.fields[g]["f"],
+                "controls": dict(sc_obj_r.controls.get(g) or {}),
+            }
+            for g in sc_obj_r.objects
+            if all(r_k in sc_obj_r.fields.get(g, {}) for r_k in ("q", "u", "x", "f"))
+        ]
+        dyn_fields = [gr["q"] for gr in synth_groups]
+        pos_cands = {
+            gr["x"]: {
+                "control": (gr["controls"].get("x") or ""),
+                "quantities": list(dyn_fields),
+                "support_pairs": max(8, len(ev_trans)),
+            }
+            for gr in synth_groups
+        }
+        synth_model = {
+            "complete": True,
+            "schema": deepcopy(ev_schema),
+            "groups": synth_groups,
+            "dynamic_fields": dyn_fields,
+            "position_candidates": pos_cands,
+            "unresolved": [],
+        }
+        audit_raw = (
+            audit_transition_premises(
+                synth_model,
+                ev_trans,
+                budget,
+                commitments=surviving_comms,
+                tolerance=tolerance,
+                allow_expanded_revisions=True,
+                allow_latent_state=True,
+                observations=obs_rows,
+                allow_open_grammar_exchange_screening=True,
+            )
+            if ev_trans and synth_groups
+            else None
+        )
+        if audit_raw is not None and audit_raw.get("status") in {
+            "awaiting_role_identification",
+            "no_transition_rows",
+        }:
+            audit_raw = None
+        schema_x_to_q = {
+            gr["x"]: gr["q"]
+            for gr in synth_groups
+            if gr.get("x") and gr.get("q")
+        }
+        candidate_entries: list[dict[str, Any]] = []
+        # Pass A (Occam order): try 1st-order latent & transition revisions across ALL surviving parents first
+        # before spending 200k+ compute on 2D higher-order AR(2)/coupled searches on a mismatched parent direction!
+        for allow_ho in (False, True):
+            if any(float(it["training_loss"]) <= tolerance for it in candidate_entries):
+                break
+            for parent_comm in surviving_comms:
+                if budget.remaining < 100:
+                    break
+                r_bounds_p = commitment_verified_radius_bounds(parent_comm, audit_raw, schema_x_to_q)
+                bracket_list: list[list[float] | tuple[float, float] | None] = [r_bounds_p]
+                if not allow_ho and r_bounds_p is not None and (float(r_bounds_p[1]) - float(r_bounds_p[0])) > 0.025:
+                    lo_r, hi_r = float(r_bounds_p[0]), float(r_bounds_p[1])
+                    n_sub = min(8, max(2, int((hi_r - lo_r) / 0.02)))
+                    step_r = (hi_r - lo_r) / n_sub
+                    bracket_list.extend([(lo_r + k_i * step_r, lo_r + (k_i + 1) * step_r) for k_i in range(n_sub)])
+                elif not allow_ho and r_bounds_p is None:
+                    for k_i in range(6):
+                        bracket_list.append((0.65 + k_i * 0.08, 0.65 + (k_i + 1) * 0.08))
+                hit_parent = False
+                for r_br in bracket_list:
+                    if budget.remaining < 100:
+                        break
+                    lat_cands = instantiate_commitment_on_schema(
+                        recon_spec,
+                        obs_rows,
+                        ev_schema,
+                        parent_comm,
+                        budget,
+                        radius_bounds=r_br,
+                        audit_report=audit_raw,
+                        transitions=ev_trans,
+                        active_threshold_probing=True,
+                        allow_latent_state=True,
+                        allow_higher_order_latent=allow_ho,
+                        tolerance=tolerance,
+                    )
+                    candidate_entries.extend(lat_cands)
+                    if any(float(it["training_loss"]) <= tolerance for it in lat_cands):
+                        hit_parent = True
+                        break
+                    if allow_ho:
+                        break
+                if hit_parent:
+                    break
+                if audit_raw is not None:
+                    rev_cands = propose_scientific_premise_revision(
+                        parent_comm,
+                        audit_raw,
+                        recon_spec,
+                        obs_rows,
+                        ev_schema,
+                        budget,
+                        active_threshold_probing=True,
+                        allow_latent_state=True,
+                        allow_higher_order_latent=allow_ho,
+                        transitions=ev_trans,
+                        tolerance=tolerance,
+                    )
+                    candidate_entries.extend(rev_cands)
+                    if any(float(it["training_loss"]) <= tolerance for it in rev_cands):
+                        break
+
+        best_cand = (
+            min(candidate_entries, key=lambda x: (float(x["training_loss"]), x["candidate"].program.size))
+            if candidate_entries
+            else None
+        )
+        confirm_eval_rows = fresh_rows if fresh_rows else obs_rows[-max(8, len(obs_rows) // 4) :]
+        confirmed_ok = False
+        fresh_mse = None
+        if best_cand is not None and float(best_cand["training_loss"]) <= tolerance and confirm_eval_rows:
+            if budget.spend(len(confirm_eval_rows)):
+                fresh_mse = float(loss(best_cand["candidate"].program, confirm_eval_rows, 0.0, 0.5))
+                confirmed_ok = bool(fresh_mse <= tolerance)
+
+        if confirmed_ok and best_cand is not None:
+            cand_obj = best_cand["candidate"]
+            new_cid, _ = library.learn(cand_obj, recon_spec, obs_rows)
+            obs_reg = (
+                compute_observable_regime_features(ev_trans, ev_schema, source_ref=new_cid)
+                if ev_trans
+                else None
+            )
+            new_prior_rec = {
+                "prior_id": f"meta_prior_raw_recon_{len(library.meta_priors) + 1:04d}",
+                "source_concept_id": new_cid,
+                "family_id": best_cand.get("family_id", "raw_history_reconstructed"),
+                "kind": best_cand.get("kind", "structure"),
+                "claim": "Reconstructed from preserved raw episode evidence and fresh holdout confirmation",
+                "status": "supported",
+                "task_id": recon_spec.task_id,
+                "source_features": list(recon_spec.feature_names),
+                "control_features": list(recon_spec.feature_bounds),
+                "object_schema": deepcopy(ev_schema),
+                "structure": deepcopy(best_cand.get("structure")),
+                "research_program": deepcopy(best_cand.get("research_program")),
+                "world_commitment_application": deepcopy(best_cand.get("world_commitment_application")),
+                "scientific_premise_revision": deepcopy(best_cand.get("scientific_premise_revision")),
+                "generated_from_raw_history": True,
+                "reconstructed_from_evidence_id": ev_id,
+                "reconstructed_from_removed_concept_id": orig_cid or None,
+                "support_rows": len(obs_rows),
+                "validation_loss": float(fresh_mse or 0.0),
+                "confirmation_loss": float(fresh_mse or 0.0),
+                "support_witness_rows": _serialize_obs_rows(obs_rows, limit=512),
+                "fresh_confirmation_witness_rows": _serialize_obs_rows(confirm_eval_rows, limit=128),
+                "pilot_regime_features": [deepcopy(obs_reg)] if obs_reg is not None else [],
+                "independent_empirical_support": True,
+                "epistemic_status": "confirmed_exact",
+                "evidence_kind": "empirical_episode",
+                "empirical_confirmation": True,
+                "counterexamples": [],
+                "uses": 0,
+                "parent_concept_ids": list(
+                    dict.fromkeys(
+                        (best_cand.get("world_commitment_application") or {}).get("source_concept_ids") or ()
+                    )
+                ),
+            }
+            new_sem_ver = compute_semantic_version(new_prior_rec)
+            new_prior_rec["reconstruction_compute_cost"] = budget.spent - start_spent
+            library.meta_priors.append(new_prior_rec)
+            # Invalidate caches so the newly reconstructed object becomes a legal candidate immediately!
+            library._premise_commitment_index = None
+            library._episode_archive_cache = None
+            if getattr(library, "_ordinary_commitment_cache", None) is not None:
+                library._ordinary_commitment_cache._snapshot_fp = None
+                library._ordinary_commitment_cache._snapshot_commitments = []
+
+            done_ev_ids.add(ev_id)
+            known_cids.add(new_cid)
+            end_evt = {
+                "action": "complete_raw_history_object_reconstruction",
+                "evidence_id": ev_id,
+                "episode_uid": ev.get("episode_uid"),
+                "task_id": recon_spec.task_id,
+                "status": "reconstructed_and_confirmed",
+                "generated_from_raw_history": True,
+                "removed_or_missing_source_concept_id": orig_cid or None,
+                "reconstructed_concept_id": new_cid,
+                "reconstructed_semantic_version": new_sem_ver,
+                "reconstructed_program_version": _program_semantic_version(cand_obj.program),
+                "fresh_confirmation_loss": fresh_mse,
+                "compute_cost": budget.spent - start_spent,
+                "budget_remaining_before": budget_before,
+                "budget_remaining_after": budget.remaining,
+            }
+            if actions is not None:
+                actions.append(end_evt)
+            library._raw_history_reconstruction_ledger.append(end_evt)
+            reconstructed_events.append(end_evt)
+        else:
+            status_lbl = (
+                "budget_deferred"
+                if budget.denied_requests > denied_before
+                else "reconstruction_unconfirmed_or_incomplete"
+            )
+            if status_lbl != "budget_deferred":
+                done_ev_ids.add(ev_id)
+            end_evt = {
+                "action": "complete_raw_history_object_reconstruction",
+                "evidence_id": ev_id,
+                "episode_uid": ev.get("episode_uid"),
+                "task_id": recon_spec.task_id,
+                "status": status_lbl,
+                "generated_from_raw_history": False,
+                "removed_or_missing_source_concept_id": orig_cid or None,
+                "reconstructed_concept_id": None,
+                "reconstructed_semantic_version": None,
+                "fresh_confirmation_loss": fresh_mse,
+                "compute_cost": budget.spent - start_spent,
+                "budget_remaining_before": budget_before,
+                "budget_remaining_after": budget.remaining,
+            }
+            if actions is not None:
+                actions.append(end_evt)
+            library._raw_history_reconstruction_ledger.append(end_evt)
+
+    library._reconstructed_from_raw_history_episode_ids = done_ev_ids
+    return reconstructed_events
+
+
 def reconstruct_parametric_families_from_ordinary_archive(
     library: Any,
     budget: SearchBudget,
@@ -3966,12 +4515,14 @@ def reconstruct_parametric_families_from_ordinary_archive(
     reconstruct_routing: bool | None = None,
     build_families: bool | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """3-layer content-addressed cached on-demand reconstruction from raw ``meta_priors`` + ``_raw_reconciliation_evidence_archive`` (v14 §4).
+    """3-layer content-addressed cached on-demand reconstruction sharing chronological state-transition semantics with ``K`` (v15 §4.2–§4.4).
 
     Caches the exact products needed by ordinary lazy study without redundant grouped consolidation:
       1. Per-prior commitment, radius/coefficients, & witness extraction preserving individual numeric constants;
       2. Optional source-set anti-unified parametric families (SKIPPED when ``_prioritize_generalized_families`` is ``False``!);
-      3. Content-fingerprinted empirical scope / routing candidates computed by ``replay_evidence_batches_onto_branches``.
+      3. Chronological step replay via ``apply_reconciliation_step_from_evidence`` over archived ``source_episode_batch`` +
+         ``discriminating_probe_batch`` records (falling back to ``replay_evidence_batches_onto_branches`` on standalone batches),
+         returning ``reconstruction_status = 'partial_pending'`` with resumable progress if budget exhausts mid-replay.
     """
     from .premise_commitment_index import (
         OrdinaryPersistentCommitmentCache,
@@ -4001,6 +4552,7 @@ def reconstruct_parametric_families_from_ordinary_archive(
             "reconstructed_branches_count": 0,
             "compute_spent": 0,
             "cache_hit": True,
+            "reconstruction_status": "complete",
             "families_skipped_noH": not do_build_families,
             "layer1_reused": 0,
             "layer1_extracted": 0,
@@ -4016,7 +4568,13 @@ def reconstruct_parametric_families_from_ordinary_archive(
     library._ordinary_persistent_cache = ord_cache
 
     if budget is not None and not budget.spend(1):
-        return [], {"reconstructed_count": 0, "compute_spent": 0, "cache_hit": False, "interrupted": True}
+        return [], {
+            "reconstructed_count": 0,
+            "compute_spent": 0,
+            "cache_hit": False,
+            "interrupted": True,
+            "reconstruction_status": "partial_pending",
+        }
 
     active_fp, stale_cids = ord_cache.active_prior_fingerprints(priors)
     tol_key = round(float(tolerance), 14)
@@ -4050,14 +4608,24 @@ def reconstruct_parametric_families_from_ordinary_archive(
             interrupted = True
             break
         denied0 = budget.denied_requests
-        c_list = consolidate_world_structure_commitments([p], budget=budget, tolerance=tolerance)
-        if budget.denied_requests > denied0:
-            interrupted = True
-            break
+        sp_memo = getattr(ord_cache, "_single_prior_comm_memo", None)
+        if isinstance(sp_memo, dict) and (cid, active_fp[cid]) in sp_memo:
+            if not budget.spend(1):
+                interrupted = True
+                break
+            c_list = deepcopy(sp_memo[(cid, active_fp[cid])])
+        else:
+            c_list = consolidate_world_structure_commitments([p], budget=budget, tolerance=tolerance)
+            if budget.denied_requests > denied0:
+                interrupted = True
+                break
+            if isinstance(sp_memo, dict):
+                sp_memo[(cid, active_fp[cid])] = deepcopy(c_list)
         if not c_list:
             continue
         comm_i = deepcopy(c_list[0])
         comm_i["commitment_id"] = f"archive_comm:{cid}"
+        comm_i["source_concept_ids"] = [cid]
         rp = (comm_i.get("radius_parameters") or [{"symbol": "r_0", "source_values": [0.95]}])[0]
         r_sym_i = str(rp.get("symbol") or "r_0")
         r_val_i = float((rp.get("source_values") or [0.95])[-1])
@@ -4100,6 +4668,9 @@ def reconstruct_parametric_families_from_ordinary_archive(
             "coefficients": coeffs_i,
             "assembled_program_version": _program_semantic_version(assembled_i),
             "schema": deepcopy(p_schema),
+            "source_features": list(p.get("source_features") or ()),
+            "control_features": list(p.get("control_features") or ()),
+            "generated_from_raw_history": bool(p.get("generated_from_raw_history", False)),
             "sig": sig,
             "has_param": bool(has_param),
             "pilot_regime_features": deepcopy(list(p.get("pilot_regime_features") or ())),
@@ -4167,9 +4738,9 @@ def reconstruct_parametric_families_from_ordinary_archive(
             else:
                 ord_cache._family_au_memo[l2_key] = {"accepted": False, "family_commitment": None}
 
-    # Layer 3: Content-addressed on-demand evidence replay & routing reconstruction (v14 §4.1, §4.2)
-    reconstructed_branches: list[dict[str, Any]] = [
-        {
+    # Layer 3: Content-addressed chronological state-transition replay (v15 §4.2, §4.3, §4.4)
+    def _item_to_initial_branch(it: dict[str, Any]) -> dict[str, Any]:
+        return {
             "claim_id": it["claim_id"],
             "source_concept_id": it["source_concept_id"],
             "source_concept_ids": [it["source_concept_id"]],
@@ -4177,44 +4748,259 @@ def reconstruct_parametric_families_from_ordinary_archive(
             "radius_value": it["radius_value"],
             "coefficients": deepcopy(it["coefficients"]),
             "assembled_program_version": it["assembled_program_version"],
+            "delivered_program_version": it["assembled_program_version"],
+            "assembled_matches_delivered_version": True,
             "semantic_version": it["fingerprint"],
             "schema": deepcopy(it["schema"]),
             "status": "universal",
+            "confirmed": True,
+            "epistemic_status": "confirmed_exact",
             "independent_empirical_support": True,
+            "generated_from_raw_history": bool(it.get("generated_from_raw_history", False)),
             "pilot_regime_features": deepcopy(it["pilot_regime_features"]),
             "support_rows_serialized": deepcopy(it["support_rows_serialized"]),
             "fresh_holdout_rows_serialized": deepcopy(it["fresh_rows_serialized"]),
         }
-        for it in extracted_items
-    ]
+
+    reconstructed_branches: list[dict[str, Any]] = [_item_to_initial_branch(it) for it in extracted_items]
     layer3_reused = False
     layer3_built = False
     raw_archive = list(getattr(library, "_raw_reconciliation_evidence_archive", ()) or ())
     ev_archive_fp = ord_cache.evidence_archive_fingerprint(raw_archive)
     replayed_batches_count = 0
+    completed_steps = 0
+    total_steps = len(extracted_items)
 
     if do_routing and extracted_items and not interrupted:
-        all_fp_tuple = tuple(sorted(f"{it['source_concept_id']}:{it['fingerprint']}" for it in extracted_items))
+        all_fp_tuple = tuple(f"{it['source_concept_id']}:{it['fingerprint']}" for it in extracted_items)
         l3_key = (all_fp_tuple, ev_archive_fp, do_build_families, tol_key, RECON_ALGO_VERSION)
         if l3_key in ord_cache._routing_scope_memo:
             cached_l3 = ord_cache._routing_scope_memo[l3_key]
             reconstructed_branches = deepcopy(cached_l3["branches"])
             replayed_batches_count = int(cached_l3.get("replayed_evidence_batches", 0))
+            completed_steps = int(cached_l3.get("completed_steps", total_steps))
             fam_guards = cached_l3.get("family_guards_by_sig") or {}
             for gf in families:
                 fsig = _branch_regime_signature(gf)
                 if fsig in fam_guards:
                     gf.update(deepcopy(fam_guards[fsig]))
             layer3_reused = True
-        elif budget.remaining >= 20:
+        elif budget.remaining < 20:
+            interrupted = True
+        else:
             denied0 = budget.denied_requests
-            raw_b_list = deepcopy(reconstructed_branches)
-            reconstructed_branches, replay_stats = replay_evidence_batches_onto_branches(
-                raw_b_list, raw_archive, budget=budget, tolerance=tolerance
-            )
-            replayed_batches_count = int(replay_stats.get("replayed_evidence_batches", 0))
-            if replay_stats.get("interrupted"):
-                interrupted = True
+            src_ep_batches = [
+                ev
+                for ev in raw_archive
+                if isinstance(ev, dict) and ev.get("kind") == "source_episode_batch"
+            ]
+            if src_ep_batches:
+                # Chronological step-by-step replay using the EXACT SAME `apply_reconciliation_step_from_evidence` as online `K`!
+                extracted_by_cid = {it["source_concept_id"]: it for it in extracted_items}
+                probes_by_seq: dict[Any, list[dict[str, Any]]] = {}
+                consumed_ev_ids: set[str] = set()
+                for ev in raw_archive:
+                    if isinstance(ev, dict) and ev.get("kind") == "discriminating_probe_batch":
+                        probes_by_seq.setdefault(ev.get("episode_seq"), []).append(ev)
+
+                # Build ordered chronological plan directly from `raw_archive` arrival order (including `ev_fail` batches!)
+                step_plan: list[tuple[str, dict[str, Any] | None, dict[str, Any] | None]] = []
+                seen_step_cids: set[str] = set()
+                for ev_raw in raw_archive:
+                    if not isinstance(ev_raw, dict):
+                        continue
+                    ekind = ev_raw.get("kind")
+                    if ekind == "discriminating_probe_batch":
+                        continue
+                    if ekind == "source_episode_batch":
+                        scid = str(ev_raw.get("source_concept_id") or "")
+                        if scid in extracted_by_cid and scid not in seen_step_cids:
+                            seen_step_cids.add(scid)
+                            step_plan.append(("reconcile_source_step", extracted_by_cid[scid], ev_raw))
+                        else:
+                            step_plan.append(("orphan_evidence_batch", None, ev_raw))
+                    else:
+                        step_plan.append(("standalone_evidence_batch", None, ev_raw))
+                for it in extracted_items:
+                    if it["source_concept_id"] not in seen_step_cids:
+                        seen_step_cids.add(it["source_concept_id"])
+                        step_plan.append(("reconcile_source_step", it, None))
+
+                total_steps = len(step_plan)
+                partial_memo = getattr(ord_cache, "_partial_replay_progress", {}).get(l3_key)
+                if isinstance(partial_memo, dict):
+                    start_idx = int(partial_memo.get("completed_steps", 0))
+                    cur_branches = deepcopy(partial_memo.get("branches") or [])
+                    replayed_batches_count = int(partial_memo.get("replayed_batches", 0))
+                    consumed_ev_ids = set(partial_memo.get("consumed_ev_ids") or ())
+                else:
+                    start_idx = 0
+                    cur_branches = []
+
+                crosscheck_memo = getattr(ord_cache, "_pairwise_crosscheck_memo", None)
+                completed_steps = start_idx
+
+                for step_idx in range(start_idx, total_steps):
+                    if budget.remaining < 20:
+                        interrupted = True
+                        break
+                    step_denied_before = budget.denied_requests
+                    prev_branches_snapshot = deepcopy(cur_branches)
+                    prev_consumed_snapshot = set(consumed_ev_ids)
+                    prev_replayed_snapshot = replayed_batches_count
+                    mode_tag, it_step, ev_step = step_plan[step_idx]
+
+                    if mode_tag == "reconcile_source_step" and it_step is not None:
+                        ep_seq = ev_step.get("episode_seq") if isinstance(ev_step, dict) else None
+                        seq_probes = list(probes_by_seq.get(ep_seq) or ()) if ep_seq is not None else []
+                        f_names_s = tuple(
+                            (ev_step.get("channels") if isinstance(ev_step, dict) else None)
+                            or it_step.get("source_features")
+                            or _as_schema(it_step["schema"]).feature_names
+                        )
+                        fb_raw = (ev_step.get("feature_bounds") if isinstance(ev_step, dict) else None) or {}
+                        f_bounds_s = (
+                            {
+                                str(k): (float(v[0]), float(v[1]))
+                                for k, v in fb_raw.items()
+                                if isinstance(v, (list, tuple)) and len(v) == 2
+                            }
+                            if isinstance(fb_raw, dict) and fb_raw
+                            else {fn: (-2.0, 2.0) for fn in f_names_s}
+                        )
+                        step_spec = TaskSpec(
+                            task_id=str((ev_step or {}).get("task_id") or f"replay_step_{step_idx}"),
+                            description="Chronological replay reconciliation step",
+                            feature_names=f_names_s,
+                            initial_probes=(),
+                            available_probes=(),
+                            feature_bounds=f_bounds_s,
+                        )
+                        used_probe_indices: set[int] = set()
+
+                        def _archived_probe_lookup_fn(probe_obj: Any, _seq_p=seq_probes, _used=used_probe_indices, **kw: Any) -> dict[str, Any]:
+                            nonlocal replayed_batches_count
+                            req_pid = getattr(probe_obj, "probe_id", None)
+                            req_seq = [dict(f) for f in getattr(probe_obj, "sequence", ())]
+                            matched_i = None
+                            for p_i, cand_ev in enumerate(_seq_p):
+                                if p_i in _used:
+                                    continue
+                                if req_pid and cand_ev.get("requested_probe_id") == req_pid:
+                                    matched_i = p_i
+                                    break
+                                cand_seq = ((cand_ev.get("probe") or {}).get("sequence") or [])
+                                if req_seq and cand_seq == req_seq:
+                                    matched_i = p_i
+                                    break
+                            if matched_i is None:
+                                for p_i in range(len(_seq_p)):
+                                    if p_i not in _used:
+                                        matched_i = p_i
+                                        break
+                            if matched_i is None:
+                                return {"status": "unavailable", "reason": "no_archived_probe_batch_in_replay"}
+                            cand_ev = _seq_p[matched_i]
+                            p_rows = _deserialize_obs_rows(
+                                cand_ev.get("observations_serialized") or cand_ev.get("rows_serialized") or ()
+                            )
+                            if not budget.spend(max(1, len(p_rows))):
+                                return {"status": "unavailable", "reason": "budget_deferred"}
+                            _used.add(matched_i)
+                            if cand_ev.get("evidence_id"):
+                                consumed_ev_ids.add(str(cand_ev["evidence_id"]))
+                            replayed_batches_count += 1
+                            return {
+                                "status": "reused_exact_protocol",
+                                "requested_probe_id": req_pid,
+                                "actual_probe_id": cand_ev.get("actual_probe_id") or cand_ev.get("probe_id"),
+                                "rows": p_rows,
+                                "transitions": deepcopy(list(cand_ev.get("transitions") or ())),
+                                "program_versions_frozen_before_result": list(
+                                    kw.get("frozen_program_versions")
+                                    or cand_ev.get("program_versions_frozen_before_result")
+                                    or ()
+                                ),
+                            }
+
+                        step_out = apply_reconciliation_step_from_evidence(
+                            cur_branches,
+                            _item_to_initial_branch(it_step),
+                            spec=step_spec,
+                            schema_dict=it_step["schema"],
+                            execute_probe_fn=_archived_probe_lookup_fn if seq_probes else None,
+                            budget=budget,
+                            tolerance=tolerance,
+                            crosscheck_memo=crosscheck_memo,
+                        )
+                        cur_branches = step_out["active_branches"]
+                        if isinstance(ev_step, dict) and ev_step.get("evidence_id"):
+                            consumed_ev_ids.add(str(ev_step["evidence_id"]))
+                        replayed_batches_count += 1
+                    elif mode_tag in {"orphan_evidence_batch", "standalone_evidence_batch"} and isinstance(ev_step, dict) and cur_branches:
+                        ep_seq = ev_step.get("episode_seq")
+                        extra_evs = [ev_step, *(probes_by_seq.get(ep_seq) or ())] if mode_tag == "orphan_evidence_batch" else [ev_step]
+                        cur_branches, sub_stats = replay_evidence_batches_onto_branches(
+                            cur_branches,
+                            extra_evs,
+                            budget=budget,
+                            tolerance=tolerance,
+                            refine_coexisting=(mode_tag != "standalone_evidence_batch"),
+                        )
+                        replayed_batches_count += int(sub_stats.get("replayed_evidence_batches", 0))
+                        for x_ev in extra_evs:
+                            if x_ev.get("evidence_id"):
+                                consumed_ev_ids.add(str(x_ev["evidence_id"]))
+                        if sub_stats.get("interrupted"):
+                            interrupted = True
+
+                    if budget.denied_requests > step_denied_before or interrupted:
+                        interrupted = True
+                        cur_branches = prev_branches_snapshot
+                        consumed_ev_ids = prev_consumed_snapshot
+                        replayed_batches_count = prev_replayed_snapshot
+                        break
+                    completed_steps = step_idx + 1
+
+                # Replay any standalone evidence batches not tied to a source episode sequence
+                if not interrupted:
+                    leftover_evs = [
+                        ev
+                        for ev in raw_archive
+                        if isinstance(ev, dict)
+                        and ev.get("kind") not in {"source_episode_batch", "discriminating_probe_batch"}
+                        and str(ev.get("evidence_id") or "") not in consumed_ev_ids
+                    ]
+                    if leftover_evs and cur_branches:
+                        cur_branches, lo_stats = replay_evidence_batches_onto_branches(
+                            cur_branches, leftover_evs, budget=budget, tolerance=tolerance
+                        )
+                        replayed_batches_count += int(lo_stats.get("replayed_evidence_batches", 0))
+                        if lo_stats.get("interrupted"):
+                            interrupted = True
+
+                reconstructed_branches = cur_branches
+                if interrupted:
+                    ord_cache._partial_replay_progress[l3_key] = {
+                        "completed_steps": completed_steps,
+                        "total_steps": total_steps,
+                        "branches": deepcopy(reconstructed_branches),
+                        "replayed_batches": replayed_batches_count,
+                        "consumed_ev_ids": sorted(consumed_ev_ids),
+                    }
+                else:
+                    ord_cache._partial_replay_progress.pop(l3_key, None)
+            else:
+                raw_b_list = deepcopy(reconstructed_branches)
+                reconstructed_branches, replay_stats = replay_evidence_batches_onto_branches(
+                    raw_b_list, raw_archive, budget=budget, tolerance=tolerance
+                )
+                replayed_batches_count = int(replay_stats.get("replayed_evidence_batches", 0))
+                if replay_stats.get("interrupted"):
+                    interrupted = True
+                else:
+                    completed_steps = total_steps
+
             fam_guards_map: dict[tuple[str, str, str, str], dict[str, Any]] = {}
             if do_build_families and not interrupted:
                 for gf in families:
@@ -4274,6 +5060,7 @@ def reconstruct_parametric_families_from_ordinary_archive(
                     "branches": deepcopy(reconstructed_branches),
                     "family_guards_by_sig": deepcopy(fam_guards_map),
                     "replayed_evidence_batches": replayed_batches_count,
+                    "completed_steps": completed_steps,
                     "evidence_archive_fingerprint": ev_archive_fp,
                 }
                 layer3_built = True
@@ -4286,8 +5073,11 @@ def reconstruct_parametric_families_from_ordinary_archive(
     )
     return families, {
         "reconstructed_count": len(families),
-        "reconstructed_branches": reconstructed_branches,
-        "reconstructed_branches_count": len(reconstructed_branches),
+        "reconstructed_branches": reconstructed_branches if (not do_routing or not interrupted or completed_steps > 0) else [],
+        "reconstructed_branches_count": len(reconstructed_branches) if (not do_routing or not interrupted or completed_steps > 0) else 0,
+        "reconstruction_status": "partial_pending" if interrupted else "complete",
+        "completed_steps": completed_steps if do_routing else len(extracted_items),
+        "total_steps": total_steps,
         "compute_spent": budget.spent - start_spent,
         "cache_hit": all_hit,
         "interrupted": interrupted,
@@ -4375,10 +5165,19 @@ def dispatch_branches_and_families_for_target(
     invalidated_or_excluded_sources: set[str] = set()
     invalidated_or_excluded_comm_ids: set[str] = set()
     deferred_router_sources: set[str] = set()
+    unknown_scope_sources: set[str] = set()
 
     matched_branch_comms: list[dict[str, Any]] = []
     unknown_scope_comms: list[dict[str, Any]] = []
     deferred_router_comms: list[dict[str, Any]] = []
+
+    unknown_status_set = {
+        "instance_scope_unknown",
+        "contested_instance_scope_unknown",
+        "scope_unidentified",
+        "contested_scope_unidentified",
+        "template_and_instance_scope_unknown",
+    }
 
     for b in checked_branches:
         bid = str(b["claim_id"])
@@ -4424,6 +5223,15 @@ def dispatch_branches_and_families_for_target(
         b_expected_prot = next(iter(b_sup_prots)) if len(b_sup_prots) == 1 else b.get("expected_protocol")
 
         if use_guards:
+            if b.get("status") in unknown_status_set and b.get("scope_guard") is None:
+                # v15 §4.1: Counterexample revoked universal claim while observable summary could not separate domains:
+                # lower scheduling priority (`scope_not_established`) without masquerading as global scientific refutation!
+                scope_not_established_ids.append(bid)
+                unknown_scope_sources.update(b_srcs)
+                if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
+                    unknown_scope_comms.append(b_comm)
+                continue
+
             app_res = evaluate_scope_guard(
                 b.get("scope_guard"), obs_regime, expected_protocol=b_expected_prot
             )
@@ -4460,8 +5268,9 @@ def dispatch_branches_and_families_for_target(
                 if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
                     deferred_router_comms.append(b_comm)
                 continue
-            if app_res == "unknown" or rot_res == "unknown":
+            if app_res == "unknown" or rot_res == "unknown" or b.get("status") in unknown_status_set:
                 scope_not_established_ids.append(bid)
+                unknown_scope_sources.update(b_srcs)
                 if is_commitment_empirically_consistent(b_comm, audit, task_id=task_sig):
                     unknown_scope_comms.append(b_comm)
                 continue
@@ -4471,6 +5280,7 @@ def dispatch_branches_and_families_for_target(
 
     # Build `accepted_pool`, `unknown_pool`, and `deferred_pool` completely BEFORE single-pass deduplication!
     accepted_consistent_comms: list[dict[str, Any]] = []
+    unknown_consistent_comms: list[dict[str, Any]] = []
     deferred_consistent_comms: list[dict[str, Any]] = []
 
     for c in consistent_comms:
@@ -4496,6 +5306,8 @@ def dispatch_branches_and_families_for_target(
 
         if valid_remaining_srcs and all(s in deferred_router_sources for s in valid_remaining_srcs):
             deferred_consistent_comms.append(c_copy)
+        elif valid_remaining_srcs and all(s in unknown_scope_sources for s in valid_remaining_srcs):
+            unknown_consistent_comms.append(c_copy)
         else:
             accepted_consistent_comms.append(c_copy)
 
@@ -4504,6 +5316,7 @@ def dispatch_branches_and_families_for_target(
     ordered_candidates = [
         *matched_branch_comms,
         *accepted_consistent_comms,
+        *unknown_consistent_comms,
         *unknown_scope_comms,
         *deferred_consistent_comms,
         *deferred_router_comms,
@@ -5126,13 +5939,25 @@ def refine_candidate_via_threshold_boundary_probe(
                 cur_val = chosen_th
                 cur_pred = mid_pred
                 cur_entry = deepcopy(cur_entry)
+                prev_cid_bp = cur_entry["candidate"].candidate_id
                 cur_entry["candidate"] = Candidate(
-                    f"{cur_entry['candidate'].candidate_id}:boundary_refined_{probes_used}",
+                    f"{prev_cid_bp}:boundary_refined_{probes_used}",
                     chosen_prog,
                     "threshold_boundary_probe_refinement",
                     rationale=f"Refined threshold from {old_th:.4f} to {chosen_th:.4f} on [{new_lo:.4f}, {new_hi:.4f}]",
-                    parents=(cur_entry["candidate"].candidate_id,),
+                    parents=(prev_cid_bp,),
                 )
+                if isinstance(cur_entry.get("_consumed_object_provenance"), dict):
+                    cur_entry["_consumed_object_provenance"].setdefault(
+                        "transformation_parent_chain", []
+                    ).append(
+                        {
+                            "operation": "threshold_boundary_probe_refinement",
+                            "from_candidate_id": prev_cid_bp,
+                            "to_candidate_id": cur_entry["candidate"].candidate_id,
+                            "probe_id": bp_probe.probe_id,
+                        }
+                    )
                 cur_entry["training_loss"] = chosen_err
                 cur_entry["validation_loss"] = chosen_err
                 if isinstance(cur_entry.get("structure"), dict) and cur_entry["structure"].get("fits"):
@@ -5629,9 +6454,13 @@ def autonomous_reconcile_library_episode(
         "fresh_holdout_rows_serialized": ser_fresh,
     }
 
-    old_branches = [
-        b for b in library._active_reconciled_branches if str(b.get("claim_id")) != f"branch:{concept_id}"
-    ]
+    ep_seq = int(getattr(library, "_reconciliation_episode_seq", 0) or 0) + 1
+    library._reconciliation_episode_seq = ep_seq
+    crosscheck_memo = getattr(library, "_pairwise_branch_crosscheck_memo", None)
+    if crosscheck_memo is None:
+        crosscheck_memo = {}
+        library._pairwise_branch_crosscheck_memo = crosscheck_memo
+
     decisions: list[dict[str, Any]] = []
     paid_probes_executed: list[dict[str, Any]] = []
     pending_questions: list[dict[str, Any]] = []
@@ -5640,7 +6469,7 @@ def autonomous_reconcile_library_episode(
     def _recording_probe_fn(probe_obj: Any, **kw: Any) -> Any:
         res_p = execute_probe_fn(probe_obj, **kw) if kw else execute_probe_fn(probe_obj)
         if isinstance(res_p, dict) and res_p.get("status") in {"executed_new", "reused_exact_protocol"} and res_p.get("rows"):
-            # v14 §4.1: Archive complete replayable `EvidenceBatch` so `R_lazy` replays identical evidence & protocol!
+            # v14 §4.1 / v15 §4.2: Archive complete replayable `EvidenceBatch` with `episode_seq` so `R_lazy` replays identical chronological steps!
             p_ser = _serialize_obs_rows(list(res_p["rows"]), limit=128)
             p_trans = deepcopy(list(res_p.get("transitions") or ())[:128])
             probe_dict = (
@@ -5654,17 +6483,19 @@ def autonomous_reconcile_library_episode(
                 probe_dict["sequence"] = [dict(f) for f in getattr(probe_obj, "sequence", ())]
                 probe_dict["reset"] = bool(getattr(probe_obj, "reset", True))
                 probe_dict["probe_id"] = getattr(probe_obj, "probe_id", None)
-            if res_p.get("status") == "executed_new":
+            if res_p.get("status") in {"executed_new", "reused_exact_protocol"}:
                 library._raw_reconciliation_evidence_archive.append(
                     {
                         "evidence_id": f"ev_probe:{task_id}:{res_p.get('actual_probe_id')}:{len(library._raw_reconciliation_evidence_archive)}",
+                        "kind": "discriminating_probe_batch",
+                        "episode_seq": ep_seq,
                         "task_id": task_id,
                         "episode_uid": eff_ep_uid,
                         "source_concept_id": concept_id,
                         "status": res_p.get("status"),
                         "probe_id": res_p.get("actual_probe_id"),
                         "actual_probe_id": res_p.get("actual_probe_id"),
-                        "requested_probe_id": res_p.get("requested_probe_id"),
+                        "requested_probe_id": res_p.get("requested_probe_id") or getattr(probe_obj, "probe_id", None),
                         "protocol_id": "paid_episode_transitions",
                         "probe": deepcopy(probe_dict),
                         "channels": list(res_p.get("channels") or spec.feature_names),
@@ -5695,66 +6526,72 @@ def autonomous_reconcile_library_episode(
                         delivered_program_refuted_on_probe = True
         return res_p
 
-    if old_branches:
-        old_regimes_by_id = {
-            str(b["claim_id"]): list(b.get("pilot_regime_features") or ())
-            for b in old_branches
-        }
-        rec_res = reconcile_competing_branches(
-            new_claim,
-            old_branches,
-            spec,
-            schema_dict,
-            execute_probe_fn=_recording_probe_fn if execute_probe_fn is not None else None,
-            controls_by_object=schema_dict.get("controls"),
-            old_support_regimes_by_id=old_regimes_by_id,
-            budget=budget,
-            tolerance=tolerance,
-        )
-        decisions = list(rec_res.get("decisions") or ())
-        paid_probes_executed = list(rec_res.get("paid_probes_executed") or ())
-        pending_questions = list(rec_res.get("pending_questions") or ())
-        for pq in pending_questions:
-            pq.setdefault("episode_uid", eff_ep_uid)
-            pq.setdefault("task_id", task_id)
-        if pending_questions:
-            existing_qids = {
-                str(q.get("question_id"))
-                for q in library._pending_reconciliation_questions
-                if q.get("question_id")
-            }
-            for pq in pending_questions:
-                if pq.get("question_id") not in existing_qids:
-                    library._pending_reconciliation_questions.append(deepcopy(pq))
-                    if pq.get("question_id"):
-                        existing_qids.add(str(pq["question_id"]))
-        upd_new = rec_res.get("updated_new_claim") or new_claim
-        upd_olds = list(rec_res.get("updated_old_claims") or old_branches)
-        cons_into = upd_new.get("consolidated_into")
-        if cons_into:
-            for ob in upd_olds:
-                if str(ob.get("claim_id")) == str(cons_into):
-                    ob.setdefault("pilot_regime_features", []).append(deepcopy(obs_regime))
-                    ob.setdefault("empirical_support_refs", []).extend(
-                        upd_new.get("empirical_support_refs") or ()
-                    )
-            active_branches = upd_olds
-        elif upd_new.get("status") in {"refuted", "contested_refuted_on_probe"}:
-            # Check A3 version guard: only revoke `new_prior` if `delivered_program` itself failed or matched `assembled_ver`!
-            if delivered_program_refuted_on_probe or assembled_ver == delivered_ver:
-                new_prior["status"] = "contested_counterexample_on_probe"
-                delivered_program_refuted_on_probe = True
-            active_branches = upd_olds
-        else:
-            active_branches = [*upd_olds, upd_new]
-    else:
-        active_branches = [new_claim]
-
-    # v14 §3.2: Separate `bound_instance` vs `refittable_template` empirical scopes from `routing_scope_candidate`!
-    active_branches = _refine_coexisting_branch_scopes_and_routing(
-        active_branches, budget=budget, tolerance=tolerance
+    step_res = apply_reconciliation_step_from_evidence(
+        library._active_reconciled_branches,
+        new_claim,
+        spec=spec,
+        schema_dict=schema_dict,
+        execute_probe_fn=_recording_probe_fn if execute_probe_fn is not None else None,
+        budget=budget,
+        tolerance=tolerance,
+        crosscheck_memo=crosscheck_memo,
     )
+    decisions = list(step_res["decisions"])
+    paid_probes_executed = list(step_res["paid_probes_executed"])
+    pending_questions = list(step_res["pending_questions"])
+    upd_new = step_res["updated_new_claim"]
+    active_branches = step_res["active_branches"]
+
+    for pq in pending_questions:
+        pq.setdefault("episode_uid", eff_ep_uid)
+        pq.setdefault("task_id", task_id)
+    if pending_questions:
+        existing_qids = {
+            str(q.get("question_id"))
+            for q in library._pending_reconciliation_questions
+            if q.get("question_id")
+        }
+        for pq in pending_questions:
+            if pq.get("question_id") not in existing_qids:
+                library._pending_reconciliation_questions.append(deepcopy(pq))
+                if pq.get("question_id"):
+                    existing_qids.add(str(pq["question_id"]))
+
+    if upd_new.get("status") in {"refuted", "contested_refuted_on_probe"}:
+        # Check A3 version guard: only revoke `new_prior` if `delivered_program` itself failed or matched `assembled_ver`!
+        if delivered_program_refuted_on_probe or assembled_ver == delivered_ver:
+            new_prior["status"] = "contested_counterexample_on_probe"
+            delivered_program_refuted_on_probe = True
+
     library._active_reconciled_branches = active_branches
+
+    # Archive chronological `source_episode_batch` for exact `R` state-transition replay & raw-history reconstruction (v15 §3.2, §4.2)
+    if not delivered_program_refuted_on_probe:
+        library._raw_reconciliation_evidence_archive.append(
+            {
+                "evidence_id": f"ev_source:{task_id}:{concept_id}:{ep_seq}",
+                "kind": "source_episode_batch",
+                "episode_seq": ep_seq,
+                "task_id": task_id,
+                "episode_uid": eff_ep_uid,
+                "source_concept_id": concept_id,
+                "semantic_version": final_sem_ver,
+                "protocol_id": "paid_episode_transitions",
+                "channels": list(spec.feature_names),
+                "feature_bounds": {k: list(v) for k, v in (spec.feature_bounds or {}).items()},
+                "schema": deepcopy(schema_dict),
+                "bindings": deepcopy(schema_dict.get("fields") or {}) if isinstance(schema_dict, dict) else {},
+                "radius_value": r_val,
+                "coefficients": deepcopy(coeffs),
+                "commitment": deepcopy(new_comm),
+                "pilot_regime_features": [deepcopy(obs_regime)],
+                "observations_serialized": deepcopy(ser_support),
+                "rows_serialized": deepcopy(ser_support),
+                "fresh_holdout_rows_serialized": deepcopy(ser_fresh),
+                "transitions": deepcopy(list(episode_transitions)[:512]),
+                "transitions_count": min(512, len(episode_transitions)),
+            }
+        )
 
     # Record completion or budget deferral for post-subresearch re-reconciliation (§5.2)
     ev_fp_after = compute_evidence_archive_fingerprint(library._raw_reconciliation_evidence_archive)
@@ -5775,20 +6612,23 @@ def autonomous_reconcile_library_episode(
         library._completed_reconciliation_signatures.append(f"{concept_id}:{final_sem_ver}:{ev_fp_after}")
 
     # Autonomous anti-unification & cross-mechanism false-merge screening over grounded parameterized branches
+    # v15 §7.1: Skip eager H* family construction when `_prioritize_generalized_families` is False (zero consumers)!
+    do_eager_families = bool(getattr(library, "_prioritize_generalized_families", True))
     param_branches: list[tuple[str, tuple[str, str, str, str], dict[str, Any]]] = []
-    for b in active_branches:
-        if b.get("status") in {"refuted", "contested_refuted_on_probe"} or b.get("independent_empirical_support") is not True:
-            continue
-        rp_b = (b["commitment"].get("radius_parameters") or [{}])[0]
-        raw_ec_b = rp_b.get("edge_condition")
-        if raw_ec_b in (None, "unconditional"):
-            continue
-        pred_b = _canonical_edge_predicate_ast(raw_ec_b)
-        op_skel_b, has_param_b = _predicate_operator_skeleton_key(pred_b)
-        if not has_param_b:
-            continue
-        full_sig_b = _branch_regime_signature(b["commitment"])
-        param_branches.append((op_skel_b, full_sig_b, b))
+    if do_eager_families:
+        for b in active_branches:
+            if b.get("status") in {"refuted", "contested_refuted_on_probe"} or b.get("independent_empirical_support") is not True:
+                continue
+            rp_b = (b["commitment"].get("radius_parameters") or [{}])[0]
+            raw_ec_b = rp_b.get("edge_condition")
+            if raw_ec_b in (None, "unconditional"):
+                continue
+            pred_b = _canonical_edge_predicate_ast(raw_ec_b)
+            op_skel_b, has_param_b = _predicate_operator_skeleton_key(pred_b)
+            if not has_param_b:
+                continue
+            full_sig_b = _branch_regime_signature(b["commitment"])
+            param_branches.append((op_skel_b, full_sig_b, b))
 
     def _to_au_record(b_item: dict[str, Any]) -> dict[str, Any]:
         return {

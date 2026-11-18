@@ -177,9 +177,9 @@ def _run_episode_with_telemetry(
             if bdt and dispatch_tel is None:
                 dispatch_tel = bdt
             if bdt:
-                for u_id in bdt.get("scope_unknown_branch_ids") or ():
+                for u_id in bdt.get("scope_not_established") or bdt.get("scope_unknown_branch_ids") or ():
                     scope_unknown_count += 1
-                for ex_id in bdt.get("excluded_out_of_scope_branch_ids") or ():
+                for ex_id in bdt.get("empirically_excluded_on_context") or bdt.get("excluded_out_of_scope_branch_ids") or ():
                     if ex_id not in scope_excluded_ids:
                         scope_excluded_ids.append(ex_id)
                 od_st = bdt.get("on_demand_archive_family_reconstruction")
@@ -211,7 +211,7 @@ def _run_episode_with_telemetry(
         "task_id": res["task_id"],
         "episode_uid": res.get("episode_uid"),
         "status": res["status"],
-        "concept_id": res.get("concept_id"),
+        "concept_id": res.get("concept_id") or ((res.get("concepts_added") or [None])[0]),
         "internally_confirmed": internally_confirmed,
         "confirmation_loss": res.get("confirmation_loss"),
         "external_fresh48_mse": ext_mse,
@@ -901,8 +901,68 @@ def _build_d3_target_libraries(
     cold_snapshot: KnowledgeLibrary,
     repaired_lib: KnowledgeLibrary,
     repaired_concept_id: str | None,
+    repaired_semantic_version: str | None = None,
 ) -> dict[str, KnowledgeLibrary]:
-    """Construct the 5 fair Question-B target arms (§7.2), including minimal single-object removals."""
+    """Construct the 5 fair Question-B target arms (v15 §3.1–§3.3), with true versioned removal & legal rebuild."""
+    if hasattr(repaired_lib, "without_object_version") and repaired_concept_id:
+        lib_branch_rm = repaired_lib.without_object_version(
+            repaired_concept_id, repaired_semantic_version, mode="branch_materialization"
+        )
+        lib_obj_rm = repaired_lib.without_object_version(
+            repaired_concept_id, repaired_semantic_version, mode="repaired_version"
+        )
+    else:
+        lib_branch_rm = deepcopy(repaired_lib)
+        lib_obj_rm = deepcopy(repaired_lib)
+        if repaired_concept_id:
+            rep_bid = f"branch:{repaired_concept_id}"
+            lib_branch_rm._active_reconciled_branches = [
+                b
+                for b in getattr(lib_branch_rm, "_active_reconciled_branches", ())
+                if b.get("claim_id") != rep_bid
+                and b.get("source_concept_id") != repaired_concept_id
+                and list(b.get("source_concept_ids") or ()) != [repaired_concept_id]
+            ]
+            lib_obj_rm.meta_priors = [
+                p for p in getattr(lib_obj_rm, "meta_priors", ()) if p.get("source_concept_id") != repaired_concept_id
+            ]
+            if hasattr(lib_obj_rm, "concepts"):
+                if isinstance(lib_obj_rm.concepts, list):
+                    lib_obj_rm.concepts = [
+                        c for c in lib_obj_rm.concepts if getattr(c, "concept_id", None) != repaired_concept_id
+                    ]
+                elif isinstance(lib_obj_rm.concepts, dict):
+                    lib_obj_rm.concepts.pop(repaired_concept_id, None)
+            if hasattr(lib_obj_rm, "abstracts") and isinstance(lib_obj_rm.abstracts, list):
+                lib_obj_rm.abstracts = [
+                    a for a in lib_obj_rm.abstracts if getattr(a, "source_concept_id", None) != repaired_concept_id
+                ]
+            if hasattr(lib_obj_rm, "definitions") and isinstance(lib_obj_rm.definitions, dict):
+                removed_defs = {
+                    dk
+                    for dk, dv in lib_obj_rm.definitions.items()
+                    if getattr(dv, "source_concept_id", None) == repaired_concept_id
+                }
+                for dk in removed_defs:
+                    del lib_obj_rm.definitions[dk]
+                if hasattr(lib_obj_rm, "definition_bindings") and isinstance(lib_obj_rm.definition_bindings, dict):
+                    for bk in list(lib_obj_rm.definition_bindings.keys()):
+                        bval = lib_obj_rm.definition_bindings[bk]
+                        tid = bval.get("template_id") if isinstance(bval, dict) else None
+                        if (
+                            bk in removed_defs
+                            or str(bk).startswith(f"{repaired_concept_id}:")
+                            or (tid and str(tid).startswith(f"{repaired_concept_id}:"))
+                        ):
+                            del lib_obj_rm.definition_bindings[bk]
+            lib_obj_rm._active_reconciled_branches = [
+                b
+                for b in getattr(lib_obj_rm, "_active_reconciled_branches", ())
+                if b.get("claim_id") != rep_bid
+                and b.get("source_concept_id") != repaired_concept_id
+                and list(b.get("source_concept_ids") or ()) != [repaired_concept_id]
+            ]
+
     lib_cold = deepcopy(cold_snapshot)
     lib_cold._freeze_branch_writes = True
     lib_cold._allow_on_demand_family_reconstruction = False
@@ -929,18 +989,6 @@ def _build_d3_target_libraries(
     lib_r._enable_scope_and_routing_guards = True
     lib_r._prioritize_generalized_families = False
 
-    # Intervention 1 (§7.2): Remove ONLY `branch:{repaired_concept_id}` from K's reconciled branch table,
-    # keeping raw `meta_priors` (including `repaired_concept_id`) and ordinary reconstruction permissions!
-    lib_branch_rm = deepcopy(repaired_lib)
-    if repaired_concept_id:
-        rep_bid = f"branch:{repaired_concept_id}"
-        lib_branch_rm._active_reconciled_branches = [
-            b
-            for b in lib_branch_rm._active_reconciled_branches
-            if b.get("claim_id") != rep_bid
-            and b.get("source_concept_id") != repaired_concept_id
-            and list(b.get("source_concept_ids") or ()) != [repaired_concept_id]
-        ]
     lib_branch_rm._premise_commitment_index = None
     lib_branch_rm._indexed_prior_fingerprints = None
     lib_branch_rm._indexed_group_commitments = None
@@ -950,30 +998,13 @@ def _build_d3_target_libraries(
     lib_branch_rm._enable_scope_and_routing_guards = True
     lib_branch_rm._prioritize_generalized_families = False
 
-    # Intervention 2 (§7.2): Minimal single-object removal — remove ONLY the repaired version & its
-    # exclusively supported derived branch/concept, while keeping ALL other Markov sources, raw history,
-    # full `latent_state_discovery=True` capability, and full task budgets!
-    lib_obj_rm = deepcopy(repaired_lib)
-    if repaired_concept_id:
-        rep_bid = f"branch:{repaired_concept_id}"
-        lib_obj_rm.meta_priors = [
-            p for p in lib_obj_rm.meta_priors if p.get("source_concept_id") != repaired_concept_id
-        ]
-        if hasattr(lib_obj_rm, "concepts") and isinstance(lib_obj_rm.concepts, dict):
-            lib_obj_rm.concepts.pop(repaired_concept_id, None)
-        lib_obj_rm._active_reconciled_branches = [
-            b
-            for b in lib_obj_rm._active_reconciled_branches
-            if b.get("claim_id") != rep_bid
-            and b.get("source_concept_id") != repaired_concept_id
-            and list(b.get("source_concept_ids") or ()) != [repaired_concept_id]
-        ]
     lib_obj_rm._premise_commitment_index = None
     lib_obj_rm._indexed_prior_fingerprints = None
     lib_obj_rm._indexed_group_commitments = None
     lib_obj_rm._freeze_branch_writes = True
-    lib_obj_rm._allow_on_demand_family_reconstruction = False
-    lib_obj_rm._allow_on_demand_routing_reconstruction = False
+    lib_obj_rm._allow_on_demand_family_reconstruction = True
+    lib_obj_rm._allow_on_demand_routing_reconstruction = True
+    lib_obj_rm._allow_on_demand_raw_history_reconstruction = True
     lib_obj_rm._enable_scope_and_routing_guards = True
     lib_obj_rm._prioritize_generalized_families = False
 
@@ -1170,17 +1201,19 @@ def _evaluate_d3_chain(spec_c: dict[str, Any]) -> dict[str, Any]:
         meas_b=D3_CONFLICT_MEAS_BUDGET,
     )
 
-    # Extract continuous repaired object ledger from `repaired_lib` & `qA_subq_raw`
+    # Extract continuous repaired object ledger from `repaired_lib` & `qA_subq_raw` (v15 §2.2: use real production action names & fields!)
     subq_resolve_acts = [
         a for a in qA_subq_raw["actions"] if a.get("action") == "resolve_reconciliation_subquestion"
     ]
     post_rec_acts = [
-        a for a in qA_subq_raw["actions"] if a.get("is_post_subresearch_re_reconcile") is True
+        a
+        for a in qA_subq_raw["actions"]
+        if a.get("action") == "autonomous_branch_reconciliation" and a.get("is_post_subresearch_re_reconcile") is True
     ]
     init_rec_acts = [
         a
         for a in qA_subq_raw["actions"]
-        if a.get("action") == "autonomous_reconcile_library_episode"
+        if a.get("action") == "autonomous_branch_reconciliation"
         and not a.get("is_post_subresearch_re_reconcile")
     ]
 
@@ -1200,15 +1233,16 @@ def _evaluate_d3_chain(spec_c: dict[str, Any]) -> dict[str, Any]:
     repaired_sem_ver = (
         repaired_branch.get("semantic_version")
         if isinstance(repaired_branch, dict)
-        else (_program_semantic_version(repaired_prog_dict) if repaired_prog_dict else None)
+        else (_program_semantic_version(repaired_prog_dict) if (repaired_cid and repaired_prog_dict) else None)
     )
     has_accumulate = "accumulate" in json.dumps(repaired_prog_dict or {})
+    qualified_repaired = bool(qA_subq_summary["strict_pass"] and repaired_cid and has_accumulate)
 
     repaired_object_record = {
-        "produced_qualified_repaired_object": bool(qA_subq_summary["strict_pass"] and repaired_cid and has_accumulate),
-        "repaired_concept_id": repaired_cid,
-        "repaired_branch_id": f"branch:{repaired_cid}" if repaired_cid else None,
-        "repaired_semantic_version": repaired_sem_ver,
+        "produced_qualified_repaired_object": qualified_repaired,
+        "repaired_concept_id": repaired_cid if qualified_repaired else None,
+        "repaired_branch_id": f"branch:{repaired_cid}" if qualified_repaired else None,
+        "repaired_semantic_version": repaired_sem_ver if qualified_repaired else None,
         "contains_accumulate_operator": has_accumulate,
         "fixed_and_rebindable_parameters": {
             "source_fitted_latent_poles": (repaired_branch or {}).get("commitment", {}).get("latent_poles"),
@@ -1222,20 +1256,25 @@ def _evaluate_d3_chain(spec_c: dict[str, Any]) -> dict[str, Any]:
             ],
         },
         "initial_conflict_reconciliation_event": {
-            "status": init_rec_acts[0].get("status") if init_rec_acts else None,
+            "executed": bool(init_rec_acts),
+            "epistemic_status": init_rec_acts[0].get("epistemic_status") if init_rec_acts else "missing_evidence",
             "decisions": init_rec_acts[0].get("reconciliation_decisions") if init_rec_acts else [],
+            "paid_probes_executed": init_rec_acts[0].get("paid_probes_executed") if init_rec_acts else [],
+            "pending_questions": init_rec_acts[0].get("pending_questions") if init_rec_acts else [],
         },
         "subquestion_resolution_event": subq_resolve_acts[-1] if subq_resolve_acts else None,
         "post_subresearch_re_reconciliation_event": {
             "executed": bool(post_rec_acts),
-            "status": post_rec_acts[-1].get("status") if post_rec_acts else None,
+            "epistemic_status": post_rec_acts[-1].get("epistemic_status") if post_rec_acts else "missing_evidence",
             "decisions": post_rec_acts[-1].get("reconciliation_decisions") if post_rec_acts else [],
+            "paid_probes_executed": post_rec_acts[-1].get("paid_probes_executed") if post_rec_acts else [],
+            "pending_questions": post_rec_acts[-1].get("pending_questions") if post_rec_acts else [],
         },
         "repaired_prior_present_in_library": repaired_prior is not None,
     }
 
     # Step 4 — QUESTION B (§7.2): Downstream reuse on unseen N=5 targets (`T1`, `T2`, `T3`) across 5 fair arms!
-    target_libs = _build_d3_target_libraries(cold_snapshot, repaired_lib, repaired_cid)
+    target_libs = _build_d3_target_libraries(cold_snapshot, repaired_lib, repaired_cid, repaired_sem_ver)
     d3_targets = [
         (
             "T1_unseen_focal_memory_N5",
@@ -1331,25 +1370,74 @@ def _evaluate_d3_chain(spec_c: dict[str, Any]) -> dict[str, Any]:
             )
             ep_b["target_regime_role"] = t_role
             ep_b["prefix_step_index_k"] = k_idx
-            # Check whether this unseen target actually consumed `repaired_cid` / `branch:{repaired_cid}`!
-            raw_str = json.dumps(raw_b.get("actions") or [])
-            ep_b["invoked_repaired_object"] = bool(
-                repaired_cid and (repaired_cid in raw_str or f"branch_comm:{repaired_cid}" in raw_str)
+            # v15 §5.1: Structured 5-stage adoption check (NEVER substring matching!)
+            ep_cons_events = (ep_b.get("causal_consumption_telemetry") or {}).get("consumption_events") or []
+            adopted_repaired = any(
+                bool(ev.get("adopted_confirmed"))
+                and bool(qualified_repaired and repaired_cid)
+                and (
+                    repaired_cid in (ev.get("source_concept_ids") or ())
+                    or str(ev.get("object_id") or "") in {f"branch_comm:{repaired_cid}", f"archive_comm:{repaired_cid}", f"recall_concept:{repaired_cid}"}
+                )
+                for ev in ep_cons_events
             )
-            if arm_b in {"R_lazy_noH", "K_minimal_branch_removed_raw_kept"} and hasattr(
+            ep_b["invoked_repaired_object"] = adopted_repaired
+            if arm_b in {"R_lazy_noH", "K_minimal_branch_removed_raw_kept", "K_minimal_repaired_object_removed_other_sources_kept"} and hasattr(
                 l_b, "_ordinary_commitment_cache"
             ):
                 target_libs[arm_b]._ordinary_commitment_cache = l_b._ordinary_commitment_cache
             qB_results[arm_b].append(ep_b)
 
-    # Build the machine-generated 7-Sentence Factual Ledger (§7.3) from this exact continuous chain!
+    # Build status-aware machine-generated 7-Sentence Factual Ledger (v15 §2.2: never emit fake confirmation on failed chains!)
     m_ids = [f"{b['claim_id']}@{b['semantic_version']}" for b in initial_markov_branches]
     t1_k = qB_results["K_eager_noH"][0]
     t1_r = qB_results["R_lazy_noH"][0]
     t1_rm = qB_results["K_minimal_repaired_object_removed_other_sources_kept"][0]
     t2_k = qB_results["K_eager_noH"][1]
     t3_k = qB_results["K_eager_noH"][2]
-    subq_q_id = subq_resolve_acts[-1]["question_id"] if subq_resolve_acts else "none"
+    subq_q_id = subq_resolve_acts[-1]["question_id"] if subq_resolve_acts else "missing_evidence"
+    init_decs = repaired_object_record["initial_conflict_reconciliation_event"]["decisions"]
+    post_decs = repaired_object_record["post_subresearch_re_reconciliation_event"]["decisions"]
+    post_ep_status = repaired_object_record["post_subresearch_re_reconciliation_event"]["epistemic_status"]
+
+    if qualified_repaired:
+        s4_text = (
+            f"Subquestion `{subq_q_id}` invoked `latent_state_discovery` on paid fine rows/transitions and replaced "
+            f"parent candidate `{subq_resolve_acts[-1]['parent_candidate_before'] if subq_resolve_acts else 'missing_evidence'}` "
+            f"with `accumulate`-bearing candidate `{subq_resolve_acts[-1]['parent_candidate_after'] if subq_resolve_acts else 'missing_evidence'}` "
+            f"(`{repaired_cid}` @ `{repaired_sem_ver}`)."
+        )
+        s5_text = (
+            f"Repaired object `{repaired_cid}` (`{repaired_sem_ver}`) passed an independent fresh 24-row confirmation probe "
+            f"(loss={qA_subq_summary['confirmation_loss']}, external48_mse={qA_subq_summary['external_fresh48_mse']}) "
+            f"and completed local post-subresearch re-reconciliation (epistemic_status=`{post_ep_status}`, "
+            f"decisions={json.dumps(post_decs, ensure_ascii=False)})."
+        )
+        s6_text = (
+            f"On unseen N=5 target `{t1_k['episode_tag']}`, `K_eager_noH` structured adoption of `{repaired_cid}` was "
+            f"`{t1_k['invoked_repaired_object']}` (strict_pass={t1_k['strict_pass']}, compute={t1_k['measured_costs']['compute_cost']}, "
+            f"obs={t1_k['measured_costs']['observation_cost']}), whereas true version-removed arm "
+            f"`K_minimal_repaired_object_removed_other_sources_kept` achieved strict_pass={t1_rm['strict_pass']}, "
+            f"compute={t1_rm['measured_costs']['compute_cost']}, obs={t1_rm['measured_costs']['observation_cost']}; "
+            f"old Markov `T2` passed={t2_k['strict_pass']} and mismatched left-conditional `T3` passed={t3_k['strict_pass']}."
+        )
+    else:
+        s4_text = (
+            f"Subquestion `{subq_q_id}` did NOT yield a confirmed repaired hypothesis (`status={qA_subq_summary['status']}`, "
+            f"produced_qualified_repaired_object=False, subquestion_event="
+            f"`{subq_resolve_acts[-1].get('status') if subq_resolve_acts else 'missing_evidence'}`)."
+        )
+        s5_text = (
+            f"missing_evidence: No repaired object passed fresh confirmation on `{cid}:S_conflict_focal_memory_N4` "
+            f"(confirmation_loss={qA_subq_summary['confirmation_loss']}, external48_mse={qA_subq_summary['external_fresh48_mse']}); "
+            f"post-subresearch re-reconciliation did not confirm a new branch (`epistemic_status={post_ep_status}`)."
+        )
+        s6_text = (
+            f"Because Question A remained `{qA_subq_summary['status']}` with no qualified repaired object, downstream target "
+            f"`{t1_k['episode_tag']}` had zero repaired-object adoption (`invoked_repaired_object=False`, "
+            f"strict_pass={t1_k['strict_pass']}, compute={t1_k['measured_costs']['compute_cost']})."
+        )
+
     seven_sentences = {
         "1_prior_ordinary_experiences_and_versions": (
             f"After neutral anchor {cal_ep['episode_tag']} and ordinary Markov episodes "
@@ -1358,36 +1446,17 @@ def _evaluate_d3_chain(spec_c: dict[str, Any]) -> dict[str, Any]:
         ),
         "2_refuting_real_evidence_and_failed_versions": (
             f"On paid episode {qA_subq_summary['episode_uid']} ({cid}:S_conflict_focal_memory_N4, "
-            f"decay={d_src}, weight={w_src}), paid fine-channel observations refuted both Markov versions {m_ids} "
-            f"under historical state-dependence."
+            f"decay={d_src}, weight={w_src}), paid fine-channel observations were evaluated against Markov versions {m_ids} "
+            f"(initial_reconcile_status=`{repaired_object_record['initial_conflict_reconciliation_event']['epistemic_status']}`)."
         ),
         "3_reconciliation_choice_rationale": (
-            f"Because both competing Markov branches failed on the same paid trajectory (`both_competing_branches_refuted`), "
-            f"the adjudicator narrowed their Markov claim status rather than falsely merging them and opened subquestion `{subq_q_id}` "
-            f"requesting `expanded_latent_state`."
+            f"Initial reconciliation recorded decisions={json.dumps(init_decs, ensure_ascii=False)} and subquestion=`{subq_q_id}`."
+            if init_decs or subq_resolve_acts
+            else f"missing_evidence: Question A halted at `{qA_subq_summary['status']}` before producing a confirmed reconciliation decision."
         ),
-        "4_subanswer_parent_mutation": (
-            f"Subquestion `{subq_q_id}` invoked `latent_state_discovery` on all paid fine rows/transitions and replaced "
-            f"the unconfirmed Markov candidate `{subq_resolve_acts[-1]['parent_candidate_before'] if subq_resolve_acts else 'none'}` "
-            f"with `accumulate`-bearing candidate `{subq_resolve_acts[-1]['parent_candidate_after'] if subq_resolve_acts else 'none'}` "
-            f"(`{repaired_cid}` @ `{repaired_sem_ver}`)."
-        ),
-        "5_fresh_confirmation_and_historical_branch_checks": (
-            f"Repaired object `{repaired_cid}` passed an independent fresh 24-row confirmation probe "
-            f"(loss={qA_subq_summary['confirmation_loss']}, external48_mse={qA_subq_summary['external_fresh48_mse']}) "
-            f"and ran local post-subresearch re-reconciliation (status="
-            f"`{repaired_object_record['post_subresearch_re_reconciliation_event']['status']}`) so Markov and "
-            f"`focal_memory` branches coexist by observable scope."
-        ),
-        "6_unseen_target_consumption_and_action_change": (
-            f"On unseen N=5 target `{t1_k['episode_tag']}` (new decay={d_t1}, weight={w_t1}, radius={r_t1}), "
-            f"`K_eager_noH` invoked `{repaired_cid}`={t1_k['invoked_repaired_object']} via `{t1_k['selected_kind']}` "
-            f"(strict_pass={t1_k['strict_pass']}, compute={t1_k['measured_costs']['compute_cost']}, obs={t1_k['measured_costs']['observation_cost']}), "
-            f"whereas removing ONLY `{repaired_cid}` (`K_minimal_repaired_object_removed_other_sources_kept`) yielded "
-            f"strict_pass={t1_rm['strict_pass']}, compute={t1_rm['measured_costs']['compute_cost']}, obs={t1_rm['measured_costs']['observation_cost']}; "
-            f"meanwhile old Markov `T2` passed={t2_k['strict_pass']} and mismatched left-conditional `T3` passed={t3_k['strict_pass']} "
-            f"(wrong_transfer={t3_k['wrong_knowledge_transfer']})."
-        ),
+        "4_subanswer_parent_mutation": s4_text,
+        "5_fresh_confirmation_and_historical_branch_checks": s5_text,
+        "6_unseen_target_consumption_and_action_change": s6_text,
         "7_equal_capability_ordinary_method_comparison": (
             f"On Question A (`S_conflict`), equal-API ordinary failure-retry (`branch_reconciliation=False, latent_state_discovery=True`) "
             f"achieved strict_pass={qA_ord_summary['strict_pass']} at compute={qA_ord_summary['measured_costs']['compute_cost']}, "

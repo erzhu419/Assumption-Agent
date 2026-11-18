@@ -71,11 +71,40 @@ def compute_semantic_version(obj: dict) -> str:
     return _prior_state_fingerprint(obj)
 
 
-def compute_evidence_archive_fingerprint(raw_archive: list[dict] | tuple[dict, ...] | None) -> str:
-    """Content-complete SHA-256 fingerprint over replayable ``EvidenceBatch`` entries (v14 §4.1).
+REPLAY_EVIDENCE_SEMANTIC_FIELDS: tuple[str, ...] = (
+    "kind",
+    "episode_seq",
+    "evidence_id",
+    "episode_uid",
+    "task_id",
+    "source_concept_id",
+    "semantic_version",
+    "actual_probe_id",
+    "probe_id",
+    "requested_probe_id",
+    "protocol_id",
+    "probe",
+    "channels",
+    "schema_version",
+    "schema",
+    "bindings",
+    "radius_value",
+    "coefficients",
+    "commitment",
+    "observations_serialized",
+    "rows_serialized",
+    "fresh_holdout_rows_serialized",
+    "transitions",
+    "program_versions_frozen_before_result",
+)
 
-    Hashes every observation, transition, probe sequence/reset/protocol, channel list, schema/bindings,
-    and tested program versions — NEVER relying on ``len(archive)`` alone!
+
+def compute_evidence_archive_fingerprint(raw_archive: list[dict] | tuple[dict, ...] | None) -> str:
+    """Content-complete SHA-256 fingerprint over replayable ``EvidenceBatch`` entries (v15 §4.4).
+
+    Hashes every semantic field read by replay — observations, transitions, probe sequence/reset/protocol,
+    channel list, schema/bindings, ``radius_value``, ``coefficients``, ``commitment``, fresh holdout rows,
+    and tested program versions — while ignoring non-semantic wall-clock timestamps.
     """
     if not raw_archive:
         return "ev_archive:empty"
@@ -84,26 +113,37 @@ def compute_evidence_archive_fingerprint(raw_archive: list[dict] | tuple[dict, .
         if not isinstance(batch, dict):
             canonical_items.append({"idx": idx, "raw": str(batch)})
             continue
+        obs_payload = batch.get("observations_serialized")
+        if obs_payload is None:
+            obs_payload = batch.get("rows_serialized")
         canonical_items.append(
             {
                 "idx": idx,
+                "kind": batch.get("kind"),
+                "episode_seq": batch.get("episode_seq"),
                 "evidence_id": batch.get("evidence_id"),
                 "episode_uid": batch.get("episode_uid") or batch.get("task_id"),
                 "source_concept_id": batch.get("source_concept_id"),
+                "semantic_version": batch.get("semantic_version"),
                 "actual_probe_id": batch.get("actual_probe_id") or batch.get("probe_id"),
+                "requested_probe_id": batch.get("requested_probe_id"),
                 "protocol_id": batch.get("protocol_id"),
                 "probe": batch.get("probe"),
                 "channels": batch.get("channels"),
                 "schema_version": batch.get("schema_version"),
                 "schema": batch.get("schema"),
                 "bindings": batch.get("bindings"),
-                "observations": batch.get("observations_serialized") or batch.get("rows_serialized"),
+                "radius_value": batch.get("radius_value"),
+                "coefficients": batch.get("coefficients"),
+                "commitment": batch.get("commitment"),
+                "observations": obs_payload,
+                "fresh_holdout_rows": batch.get("fresh_holdout_rows_serialized"),
                 "transitions": batch.get("transitions"),
                 "program_versions_frozen_before_result": batch.get("program_versions_frozen_before_result"),
             }
         )
     raw = json.dumps(canonical_items, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-    return f"ev_archive_v14:{hashlib.sha256(raw).hexdigest()[:24]}"
+    return f"ev_archive_v15:{hashlib.sha256(raw).hexdigest()[:24]}"
 
 
 def _deserialize_witness_rows(
@@ -903,10 +943,14 @@ class OrdinaryPersistentCommitmentCache:
         self._snapshot_fp: dict[str, str] | None = None
         self._snapshot_commitments: list[dict] = []
         self._dedup_audit_comms: list[dict] = []
+        self._dedup_audit_commitments: list[dict] = []
         # v13 B3 3-layer memoization for ordinary lazy reconstruction (per-prior, family AU, optional routing/scope)
         self._per_prior_extraction_memo: dict[tuple[str, str, float, str], dict[str, Any]] = {}
         self._family_au_memo: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._routing_scope_memo: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._partial_replay_progress: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._pairwise_crosscheck_memo: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._single_prior_comm_memo: dict[tuple[str, str], list[dict]] = {}
 
     def active_prior_fingerprints(self, priors: list[dict]) -> tuple[dict[str, str], set[str]]:
         cur_fp = {
@@ -1001,6 +1045,10 @@ class OrdinaryPersistentCommitmentCache:
                 interrupted = True
                 break
             self._group_memo[memo_key] = deepcopy(built)
+            if len(glist) == 1:
+                cid0 = str(glist[0].get("source_concept_id") or "")
+                if cid0 and cid0 in cur_fp:
+                    self._single_prior_comm_memo[(cid0, cur_fp[cid0])] = deepcopy(built)
             for c in built:
                 cc = deepcopy(c)
                 cc["commitment_id"] = f"ord_cache_comm:{idx_g:04d}"
@@ -1026,6 +1074,7 @@ class OrdinaryPersistentCommitmentCache:
             self._snapshot_fp = active_fp
             self._snapshot_commitments = deepcopy(out_comms)
             self._dedup_audit_comms = deepcopy(dedup)
+            self._dedup_audit_commitments = deepcopy(dedup)
         return out_comms, {
             "cache_hit": False,
             "interrupted": interrupted,

@@ -2849,3 +2849,55 @@ AWM的具体规则由LLM提出；四种结构变换、检查制度及形式化�
   1. **三层结论第一层（机制已真实接通）成立：** Replays A–F、GPT-6 V14 三探针与全部 214 个前瞻评测 episode **零假确认（`0/214`）** 证实生产路径合同、预算门禁、三态未知语义、持久递归恢复与阈值边界探针均已扎实闭合。
   2. **三层结论第二、三层按实测收缩主张（§9 停止规则 1 & 2）：** 在当前有限语法与 `N=4 -> N=5` 短链工作负载下，（a）在相同无 `H*` 口径下，`K_eager_noH` 与 `R_lazy_noH`、`K_cold` 在严格完成率上完全打平（均为 `23/24`），计入源期维护费后 `k <= 3` 的中位全成本仍以按需缓存 `R_lazy_noH` 更省（`K_eager_noH` 仅在 `3/8` 条重尾目标链上展现尾部保护）；（b）在 `focal_memory` 链上，虽然修复生成的具名 `accumulate` 对象在 `T1` 被真实检索与重标定消费，但因现有 Frisch-Waugh-Lovell 1D 极点求解器从保留的马尔可夫右向承诺重修 `focal_memory` 仅需约 `1.5k` 算力，最小单对象移除臂（`140.8k`）与 `R_lazy_noH`（`143.3k`）均迅速追平 `K_eager_noH`（`144.1k`）。我们严格接受该收缩结论，不削弱普通基线，亦不再在有限语法小库上追加新模块。
 - **独立交接包沙箱核验：** `markdown/Hegel_v14_GPT6_Audit_Handoff_20261118.zip`（`2,655,757` 字节，含全量 35 份严格 JSON 回执、24 个完整源码／脚本／测试文件及 V14 探针）经 `PYTHONPATH="" python3 05_STANDALONE_VERIFY_V14.py` 在 `/tmp` 隔离核验 **`all_checks_passed = True`**。
+
+
+---
+
+## §133. `v15` 真实单版本移除与合法重建、`K`/`R` 统一状态转移及 `E1`/`E2` 零拼接前瞻双实验收口（2026-11-18）
+
+- **前序审计基线与收敛铁律：** 针对 `GPT_diagnosis_v15.md` 与 `markdown/hegel_v15/01_V14_系统审计与主目标判定.md`、`02_下一轮最小施工与实验合同.md` 对提交 `c9b60dc525b5d87409619cc5c7b0f904d6761bf8`（`v14`）查出的 10 项记账与归因勘误、`KnowledgeLibrary.concepts` list 型容器移除失效、`K`/`R` 重放语义与状态转移分叉、子串匹配替代结构化采用链以及 `A-ordinary` 与 `B-R` 不可拼接问题，本轮严格执行**零新增 `src/` 模块（仅原位修改 `premise_commitment_index.py`、`memory.py`、`branch_reconciliation.py`、`unified_research.py` 4 个既有文件）、零新增物理家族、零在线模型调用（`model_calls = 0`）、前序 35 份历史 JSON 回执原始字节 100% 零改动、全量 `allow_nan=False` 严格 JSON、表格数字 100% 由逐题 JSON 自动渲染**的最小施工与单次触碰实验合同，并将 `1001000–1046000` 全部退役为已曝光开发／诊断材料。
+
+### 一、Deliverable 1：V14 十项公开勘误与 6 条已曝光连续链状态感知重导出（`§2.1–§2.2`）
+
+1. **V14 十项公开勘误（`deliverable_1_v14_errata_and_factual_reexport_20261118.json`）：**
+   - V14 原始回执共 **`232`** 条臂—episode 判定（D2 `112` + D3 `120`，按 `episode_uid` 去重为 **`106`** 条独立物理 episode；`207` 严格通过、`25` 未决、`0` 假确认；此前文本写 `214` 漏计了 D3 的 `6` 条锚点与 `12` 条马尔可夫源，配对统计单位仍为源簇 `n = 8 / 6`）；
+   - D2 锚点真实均值算力为 **`114,263.125`**、运行墙钟为 **`6.39594s`**（修正手算 `82,193.6` / `4.31s`）；
+   - D2 目标均值测量精确值为 `K_cold = 4,032.5`、`R_lazy_noH = 4,122.5`、`K_eager_noH = 3,932.5`；
+   - V14 D3 的 `invoked_repaired_object` 为子串匹配，按类型化 `consumption_events` 核验仅证实在 `K_eager_noH` 的 `3/4` 链（`1041000, 1044000, 1046000`）与 `R_lazy_noH` 的 `1/4` 链（`1041000`）确认采用，其余标记为 `unproved_by_v14_telemetry`；
+   - 修正失败链 `1043000`（外评 MSE `0.03976`）与 `1045000`（外评 MSE `0.03268`）模板拼接导致的 `"Repaired object None passed..."` 伪确认文本；
+   - 撤回将 V14 D2 `R` vs `K` 单纯归因于维护时机的表述（V14 中 `24/24` 对首次调度存在分歧）；
+   - 公开确认 V14 `_build_d3_target_libraries` 对 list 型 `concepts` 误用 `isinstance(..., dict)` 导致 `concept_0004` 未从 `concepts/abstracts/definitions/definition_bindings` 真正删除，故不对 V14 D3 作边际单对象价值宣称；
+   - 明确 `wrong_knowledge_transfer == 0` 仅指采用库知识后的假确认为零（不含额外成本或未决），且修正作用域事件导出键名为调度器真实写入的 `scope_not_established` / `empirically_excluded_on_context`；
+   - 修补 `_prioritize_generalized_families == False` 时跳过无消费者的源期 `H*` 反统一构造；
+   - 明确禁止将问题 A 普通重试与问题 B 共享库 `R` 拼接为端到端运行，改为 `E1` 与 `E2` 双实验分开验证。
+2. **6 条已曝光 D3 链重导出：** 直接读取真实 `autonomous_branch_reconciliation` 初始与子研究后重调和事件，在保留原 V14 MSE 与成本记录不改动的前提下生成状态感知七句账本，失败链明确输出 `unresolved` / `missing_evidence`。
+
+### 二、Deliverable 2：GPT-6 V15 探针修复、三项真实移除控制、8 簇 K/R 对齐与 6 案例回放（`§3–§5`）
+
+1. **真实单版本移除与合法计费重建（`memory.py` + `branch_reconciliation.py`）：**
+   - 实现 `export_library_object_inventory` 与按 `(concept_id, semantic_version)` 作用的 `remove_library_object_version`（及 `KnowledgeLibrary.without_object_version`），完整清理 list 型 `concepts`、list 型 `abstracts`、dict 型 `definitions`、`definition_bindings`、`meta_priors`、分支与缓存中**仅由被删版本独占支持**的载体，保留拥有第二独立有效来源的共享规则与 `_raw_reconciliation_evidence_archive` 原始观测／跃迁（剥离被删概念预解出的 `commitment`/`coefficients`），并开启目标期合法计费重建 `reconstruct_missing_objects_from_raw_history`；
+   - **三项控制实测（`deliverable_2_removal_replay_parity_and_exposed_diagnostics_20261118.json`）：** 控制 1 验证移除 `concept_0004`（`0fc3ce3f69f4093815893cfb`）后四大容器与 `_recall` 残留全为 `False`、原始证据保持 `8` 批；控制 2 验证独占派生 `concept_0005` 被同步移除而双源共享 `concept_0006` 保留可调；控制 3 验证从保留原始经历计费 **`67,053`** 算力合法重建出 `concept_0005`（版本 `d16da439cede2073d663ffc6`，`generated_from_raw_history = True`，`fresh_confirmation_loss = 1.08e-16`）。
+2. **`K`/`R` 统一时间序状态转移与 `scope_unidentified` 修复：**
+   - `replay_evidence_batches_onto_branches` 在 `scope_unidentified` 分支始终执行可重绑模板交叉核验并标为 `instance_scope_unknown`（保留局部源支持与可重绑模板资格，交由调度器记入 `scope_not_established`）；`compute_evidence_archive_fingerprint` 纳入 `radius_value`、`commitment` 与序列化观测；
+   - 在线 `K` 与按需 `R` 共用 `apply_reconciliation_step_from_evidence` 并严格按 `raw_archive` 到达顺序重放（含未确认源 `ev_fail` 批次），预算不足时返回 `partial_pending` 并支持续跑；
+   - **8 条既有 D2 源簇（`1031000–1038000`）共 `24` 对目标比对：** 源末态与首次调度语义分歧总计 **`0/24`**；`1037000/T3` 消除不可区分关系克隆后 `K` 与 `R` 双双合法 `completed`；GPT-6 V15 两项 AST 探针（`probe_d3_object_removal.py`、`probe_scope_replay.py`）与 V14 三项探针全部原样通过。
+
+### 三、Deliverable 3（前瞻 `E1`）：同原始历史组织价值与真实移除对照（`1051000–1056000`，单次冻结运行）
+
+- **实验设置：** 源码与协议在完成 Deliverables 1 & 2 后完全冻结，在 `6` 个全新未曝光源簇（`1051000–1056000`，每簇 `5` 个源题 `S_cal, S1, S2, S3, S4`，`6/6` 簇的 `S4` 均产出合格 `accumulate` 修复对象）与每簇 `6` 个拉丁方顺序平衡未见 `N=5` 目标（`Role_A` 相容潜变量、`Role_B` 返回旧域、`Role_C` 不相容左向条件反例各 `2` 题，共 **`36` 题/臂**）上单次运行：
+  - `K_eager_persistent`：严格通过 **`33/36`**（外部准确 `34/36`，假确认 `2`，未决且外评已准 `1`；`Role_A: 12/12`、`Role_B: 9/12`、`Role_C: 12/12`），均值目标算力 **`168,817.2`**，均值观测 **`244.7`**，均值测量 **`3,320.0`**，`K` vs `R` 首次调度语义分歧 **`0/36`**；
+  - `R_same_history_lazy`：严格通过 **`33/36`**（外部准确 `34/36`，假确认 `2`，未决 `1`；分角色通过数与观测／测量同 `K` 完全一致），均值目标算力 **`172,203.1`**（冷缓存 `k=1` 均值重建算力 `25,015.5`、暖缓存 `k=2..6` 均值 `7.8`）；
+  - `K_cold`（仅中性锚点 `S_cal`）：严格通过 **`32/36`**（`Role_A: 12/12`、`Role_B: 9/12`、`Role_C: 11/12`），均值目标算力 **`174,034.0`**，均值观测 **`240.8`**；
+  - `K_true_repaired_version_removed_raw_rebuild_allowed`：严格通过 **`5/36`**（均值目标算力 **`735,629.2`**，触发 `31` 次原始经历重建：`1054000` 在首题以 `475,939` 算力成功重建 `concept_0006` 并取得 `5/6` 通过；其余 `5` 簇因入口无子预算上限的 `allow_ho=True` 2D 高阶潜变量搜索耗尽 `~839.9k / 840k` 额度而触发 `budget_deferred`）。
+- **前缀全成本对比（`R - K`，含源期维护算力 `C^K_maint` 均值 `18,216.3`/簇与额外区分探针观测 `48.0`/簇）：** `k=1: +2,100.3`、`k=3: +2,099.3`、`k=6: +2,099.2`（中位数 `+3,012.5`，`K` 全算力更省簇数 `4/6`，描述性符号翻转 `p = 0.1250`），而全观测差 `R - K = -48.0`（`R` 更省源探针观测）。
+
+### 四、Deliverable 4（前瞻 `E2`）：零拼接端到端策略比较与 `§10` 停止规则收口
+
+- **实验设置：** `Ordinary_autonomous_end_to_end`（`branch_reconciliation=False`，带 `OrdinaryPersistentCommitmentCache` 及完全相同的局部研究器／边界探针／开集筛选触发规则）使用自身在源任务中实际形成的库 `L^Ord_c` 继续 `T1..T6`，`K_autonomous_end_to_end` 使用 `L^K_c` 继续 `T1..T6`，全程零拼接：
+  - **源形成期（`30` 题/策略）：** `K_autonomous_source` 严格通过 **`30/30`**（均值算力 **`122,583.6`**，观测 **`219.9`**）；`Ordinary_autonomous_source` 严格通过 **`24/30`**（均值算力 **`221,758.2`**，观测 **`296.4`**，`6` 次未决全部发生在无分支作用域隔离的 `S3_right_dpg_N4`）；
+  - **后继目标期（`36` 题/策略）：** `Ordinary_autonomous_end_to_end` 在自身精简库 `L^Ord_c` 上严格通过 **`34/36`**（外部准确 `35/36`，假确认 `1`；`Role_A: 12/12`、`Role_B: 10/12`、`Role_C: 12/12`），均值目标算力 **`135,223.9`**，均值观测 **`185.3`**；`K_autonomous_end_to_end` 严格通过 **`33/36`**（均值目标算力 **`168,817.2`**，均值观测 **`244.7`**）；
+  - **端到端前缀全轨迹差（`Ordinary - K`）：** 累计算力差均值 `k=0(仅源): +495,873.2`、`k=1: +458,227.2`、`k=3: +394,531.8`、`k=6: +294,313.3`（中位数 `+276,370.0`，`5/6` 簇 `K` 累计算力更低，描述性 `p = 0.2188`）；累计观测差均值 `k=0: +382.5`、`k=6: +26.3`（`3/6` 簇打平）。
+- **严格执行 `§10` 停止规则的研究结论：**
+  1. **工程与契约闭合成立：** 单版本真实容器移除、五阶段结构化采用链、`K`/`R` 同一时间序状态转移（既有 `24/24` + 前瞻 `36/36` 共 **`60/60` 对零调度分歧**）、`scope_unidentified -> instance_scope_unknown` 以及 `E1`/`E2` 零拼接双实验全部按合同闭合；`pytest` `v11..v15` 全套回归通过。
+  2. **按 `§10` 停止规则第 1、2、4、6 条如实收缩效用主张：**（a）在同历史 `E1` 下，统一状态转移后的 `K` 与 `R` 完成率完全相同（`33/36`）、全算力差仅约 `2.1k` 且 `R` 省 `48` 行源探针观测，`K_cold` 亦达 `32/36`，说明当前有限语法空间局部研究器已足够强，持久预调和相对按需缓存无显著净效率优势；（b）在端到端 `E2` 下，`K` 的真实收益集中于**多机制顺序源流冲突隔离**（消除 `Ordinary` 在 `S3` 上的 `6/6` 源期卡死并节省 `495.9k` 源期算力）与**显式版本／作用域可审计性**，而在后继 `N=5` 目标求解上强普通方法已达 `34/36` 且单题更省；同时无上限入口原始经历重建在多先验下暴露出预算挤占风险（`5/6` 簇触发 `budget_deferred`）。本阶段就此在有限语法小库命题上收口，不削弱普通基线，亦不追加新模块。
+- **独立交接包沙箱核验：** `markdown/Hegel_v15_GPT6_Audit_Handoff_20261118.zip`（`4,368,414` 字节，SHA-256 `aae821c4d4cc7df42b5efd1678db72fc802391786ac371736bb929c3dd9348d7`，含 `87` 个核验文件、全量 `39` 份严格 JSON 回执、含 `memory.py` 在内的 `33` 个完整源码／测试／探针文件）经 `PYTHONPATH="" python3 05_STANDALONE_VERIFY_V15.py` 在 `/tmp` 隔离核验 **`all_checks_passed = True`**。
