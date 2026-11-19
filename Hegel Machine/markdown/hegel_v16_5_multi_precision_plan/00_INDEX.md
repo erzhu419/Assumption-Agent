@@ -21,6 +21,10 @@
    - 全面审阅回应 `./Hegel_V165_Review_20261119/GPT_diagnosis.md` 全套 17 份文档与复算脚本；**正式将“各领域局部哲学树森林（Vertical 条件蕴含/回退/CEGAR 细化） + 中间层节点横向相似性虫洞（Horizontal Wormhole Edges，M1 即一等运行！）”确立为核心拓扑结构**（一举消除全局 `L0->L4` 线性阶梯的包含关系反例），并锁定开工前 9 项精确数学、源码语义身份接线与非物理首轮实验（簇 A 二分边界 + 簇 B 有理饱和/并列瓶颈 + 簇 C 同服务多视图路由）调整。
 8. **[08_V16_6_M0_M1_Implementation_and_CrossDomain_Results.md](./08_V16_6_M0_M1_Implementation_and_CrossDomain_Results.md)**（**M0 + M1 代码落地与首轮跨域实验完整实测报告**）
    - 完整记录 `question_semantics` / `growth_methods` / `workflow_execution` 接线升级、`wormhole_forest.py` / `family_plugins.py` 实现、9 项数学反例单元测试、V15 12 道 Role-A 费用对账，以及 `2 Dev + 4 Frozen Eval Clusters`（每臂 56 道未见目标）上相对全权限 `O_strong` 与 `O_HExA-inspired` 的端到端净收益及 12 份实测证据清单。
+9. **[09_V16_7_RedTeam_Response_and_Upgraded_Results.md](./09_V16_7_RedTeam_Response_and_Upgraded_Results.md)**（**V16.7 红队复核闭环与公平强化实测报告**）
+   - 针对 `Hegel_V166_diagnosis/GPT_diagnonsis_v166.md` 23 项红队控制点逐一工程修复（同时完整保留并加固面向 M2/M3 的哲学森林 + 横向虫洞核心骨架）；`O_strong` 升级为从 `raw_archive` 自由重建结构化经验并缓存复用的真正强基线，所有 8 臂达到 `56/56` 严格通过、`0` 假确认，双源对比单源净摊销曲线 $\Delta C(N)$ 正式转负（$-9.38$）。
+10. **[10_V16_8_M2_Open_Workspace_AST_Wormholes_Report.md](./10_V16_8_M2_Open_Workspace_AST_Wormholes_Report.md)**（**V16.8 M2 开放 Python 代码工作区、AST 骨架虫洞与跨领域实测报告**）
+    - 全面告别固定插件分发，打通真实磁盘目录 `observations.json` + 动态合成 `model.py` + `code_agent.evaluate_python_model` 隔离进程验证闭环；实现剥离 `ObservationMap` 符号/仿射外壳后的 Python AST 骨架范式化（化学勒夏特列 `+1` 与电磁楞次 `-1` 自动归一至同一 AST 骨架摘要），并在 `240` 个独立工作区评测中首次同时严格击败全权限 `O_strong_CodeSession`（`-41.03` target / `-27.43` e2e，`4/4` 负）与同内容扁平代码库 `Flat_EqualContent_CodeBank`（`-1.74`，`4/4` 负）。
 
 ## 关联文献归档库
 

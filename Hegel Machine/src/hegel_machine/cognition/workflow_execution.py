@@ -49,8 +49,9 @@ def _evaluate_condition_node(step, *, evidence, selected_fit, diagnostics, thres
             gap = max(abs(float(r.target) - float(rows[0].target)) for r in rows[1:])
             min_gap = float(predicate.get("min_gap", 1e-6))
             return "SUPPORTED_IN_SCOPE" if gap > min_gap else "NOT_DETECTED_UNDER_PROTOCOL"
-    fallback = recipe.get("observed_outcome_status", "UNKNOWN")
-    return fallback if fallback in WITNESS_OUTCOMES else "UNKNOWN"
+    # Without an executable current-target predicate, historical source outcome_status
+    # is provenance only and MUST NOT fire refuted/supported branches on a new target!
+    return "UNKNOWN"
 
 
 class WorkflowEpisode:

@@ -111,51 +111,108 @@ class OrderedBoundaryPlugin:
     def verify_or_find_earliest_flip(
         query_fn,
         n_length: int,
-        candidate_right_idx: int,
+        candidate_right_idx: int | None = None,
         *,
-        stride: int = 8,
+        monotone_certificate_valid: bool = False,
+        min_anomaly_width: int = 1,
+        known_observations: dict[int, int | str] | None = None,
         budget_remaining_fn=None,
     ) -> dict[str, Any]:
-        """When TaskView demands ``earliest_global_threshold``, check prefix before candidate!
+        """Sound earliest-boundary verifier: never claims earliest without prefix coverage or certificate!
 
-        Never passes off an arbitrary midpoint flip as the earliest flip without checking
-        whether an earlier flip occurred in ``[0 .. candidate_right_idx - 1]``.
+        1. If ``monotone_certificate_valid`` is True and ``candidate_right_idx`` was found by
+           valid opposite-endpoint bisection, verifying ``(candidate_right_idx - 1, candidate_right_idx)``
+           certifies the unique global threshold.
+        2. Otherwise, if ``min_anomaly_width == W >= 1`` is guaranteed by explicit contract,
+           scanning prefix with stride ``W`` cannot miss an anomaly block of width ``>= W``.
+           Default ``W = 1`` (arbitrary non-monotone sequence!) scans every prefix index
+           ``1, 2, ...`` until the first flip ``v[i] != v[0]`` is directly observed!
+        3. If budget runs out before certifying the prefix up to a flip, returns
+           ``UNCONFIRMED_EARLIEST_BUDGET_INSUFFICIENT`` (never fabricating an earliest claim!).
         """
-        v0 = query_fn(0)
-        if v0 == "SKIP":
-            return {"status": "PROTOCOL_ERROR", "boundary_right_index": None}
-        # Coarse prefix scan up to candidate_right_idx to detect earlier flips
-        prev_idx = 0
-        for idx in range(min(stride, candidate_right_idx), candidate_right_idx + 1, max(1, stride)):
+        cache: dict[int, int | str] = dict(known_observations or {})
+
+        def get_val(idx: int) -> int | str | None:
+            if idx in cache:
+                return cache[idx]
             if budget_remaining_fn is not None and budget_remaining_fn() <= 0:
-                return {"status": "UNKNOWN", "reason": "budget_exhausted_earliest_check", "boundary_right_index": None}
-            v_cur = query_fn(idx)
+                return None
+            val = query_fn(idx)
+            if val is not None:
+                cache[idx] = val
+            return val
+
+        v0 = get_val(0)
+        if v0 is None or v0 == "SKIP":
+            return {"status": "PROTOCOL_ERROR", "boundary_right_index": None}
+
+        if monotone_certificate_valid and candidate_right_idx is not None and candidate_right_idx >= 1:
+            vl = get_val(candidate_right_idx - 1)
+            vr = get_val(candidate_right_idx)
+            if vl is not None and vr is not None and vl != "SKIP" and vr != "SKIP" and vl == v0 and vr != v0:
+                return {
+                    "status": "SUPPORTED_IN_SCOPE",
+                    "guarantee_kind": "earliest_global_threshold",
+                    "certificate_basis": "verified_monotone_premise",
+                    "boundary_right_index": candidate_right_idx,
+                    "earlier_than_bisect_candidate": False,
+                }
+
+        stride = max(1, int(min_anomaly_width))
+        upper_limit = candidate_right_idx if (candidate_right_idx is not None and candidate_right_idx < n_length) else (n_length - 1)
+
+        if stride == 1:
+            last_non_skip = v0
+            for idx in range(1, upper_limit + 1):
+                v_cur = get_val(idx)
+                if v_cur is None:
+                    return {
+                        "status": "UNCONFIRMED_EARLIEST_BUDGET_INSUFFICIENT",
+                        "reason": "prefix_coverage_incomplete_under_budget",
+                        "boundary_right_index": None,
+                        "fallback_any_flip_candidate": candidate_right_idx,
+                    }
+                if v_cur == "SKIP":
+                    continue
+                if v_cur != v0:
+                    return {
+                        "status": "SUPPORTED_IN_SCOPE",
+                        "guarantee_kind": "earliest_global_threshold",
+                        "certificate_basis": "complete_prefix_observation_certificate",
+                        "boundary_right_index": idx,
+                        "bridged_skip_before_flip": cache.get(idx - 1) == "SKIP",
+                        "earlier_than_bisect_candidate": (candidate_right_idx is not None and idx < candidate_right_idx),
+                    }
+                last_non_skip = v_cur
+            # If candidate_right_idx was None (e.g. same-endpoint sequence) and full scan found no flip:
+            return {"status": "NOT_DETECTED_UNDER_PROTOCOL", "reason": "no_flip_in_certified_prefix", "boundary_right_index": None}
+
+        # Declared min_anomaly_width >= 2 contract path
+        prev_idx = 0
+        for idx in range(min(stride, upper_limit), upper_limit + 1, stride):
+            v_cur = get_val(idx)
+            if v_cur is None:
+                return {
+                    "status": "UNCONFIRMED_EARLIEST_BUDGET_INSUFFICIENT",
+                    "reason": "strided_prefix_incomplete_under_budget",
+                    "boundary_right_index": None,
+                }
             if v_cur == "SKIP":
                 continue
             if v_cur != v0:
-                # Found earliest sign-change bracket [prev_idx, idx]; refine linearly inside small stride
                 for fine_idx in range(prev_idx + 1, idx + 1):
-                    if budget_remaining_fn is not None and budget_remaining_fn() <= 0:
-                        return {"status": "UNKNOWN", "reason": "budget_exhausted_fine_earliest", "boundary_right_index": None}
-                    vf = query_fn(fine_idx)
+                    vf = get_val(fine_idx)
+                    if vf is None:
+                        return {"status": "UNCONFIRMED_EARLIEST_BUDGET_INSUFFICIENT", "boundary_right_index": None}
                     if vf != "SKIP" and vf != v0:
                         return {
                             "status": "SUPPORTED_IN_SCOPE",
                             "guarantee_kind": "earliest_global_threshold",
+                            "certificate_basis": f"min_anomaly_width_{stride}_certificate",
                             "boundary_right_index": fine_idx,
-                            "earlier_than_bisect_candidate": fine_idx < candidate_right_idx,
+                            "earlier_than_bisect_candidate": (candidate_right_idx is not None and fine_idx < candidate_right_idx),
                         }
             prev_idx = idx
-        # Also verify candidate_right_idx itself
-        vc_prev = query_fn(candidate_right_idx - 1)
-        vc = query_fn(candidate_right_idx)
-        if vc_prev != "SKIP" and vc != "SKIP" and vc_prev == v0 and vc != v0:
-            return {
-                "status": "SUPPORTED_IN_SCOPE",
-                "guarantee_kind": "earliest_global_threshold",
-                "boundary_right_index": candidate_right_idx,
-                "earlier_than_bisect_candidate": False,
-            }
         return {"status": "UNKNOWN", "reason": "earliest_not_confirmed", "boundary_right_index": None}
 
 

@@ -13,7 +13,8 @@ import sys
 from .executable_evidence import bind_components, materialize, record_answer, refresh_dependencies
 from .online_inquiry_llm import _PLAN_RUNNER
 from .question_semantics import (
-    _CONTRACT_MEANING_FIELDS, _strip_cosmetic, compile_question, validate_answer_type,
+    _CONTRACT_MEANING_FIELDS, _strip_cosmetic, compile_question,
+    extract_outcome_status, validate_answer_type,
 )
 from .question_queries import evaluate_on_evidence
 from .question_object_queries import evaluate_parameter_region
@@ -592,10 +593,13 @@ def step_question(agent, question, laboratory, *, mission=None):
         agent.costs['compute_cost'] += answer.get('compute_cost', 0)
         debit_mission_compute(agent, mission, before_compute)
         question['query_execution'] = {'basis': basis, 'answer': deepcopy(answer)}
-    if answer.get('outcome_status') in {'UNKNOWN', 'PROTOCOL_ERROR', 'EXECUTION_ERROR'}:
+    norm_outcome = answer.get('outcome_status') if isinstance(answer, dict) else None
+    if norm_outcome is None and isinstance(answer, dict) and isinstance(answer.get('value'), dict):
+        norm_outcome = answer['value'].get('outcome_status')
+    if norm_outcome in {'UNKNOWN', 'PROTOCOL_ERROR', 'EXECUTION_ERROR'}:
         _discard_answer(question)
-        return {'status': 'scoped_unknown', 'reason': answer['outcome_status'].lower(),
-                'outcome_status': answer['outcome_status'],
+        return {'status': 'scoped_unknown', 'reason': norm_outcome.lower(),
+                'outcome_status': norm_outcome,
                 'evidence': deepcopy(answer.get('evidence', []))}
     if answer['status'] != 'answered':
         _discard_answer(question)

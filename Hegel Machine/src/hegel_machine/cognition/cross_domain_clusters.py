@@ -264,7 +264,7 @@ def make_cluster_a_suite(seed: int) -> dict[str, Any]:
 
     return {
         "sources": [
-            ("src_A1_commit_build", build_seq_task("src_A1", "software_ci", s1_seq, "earliest_global_threshold", cost_q=3.0)),
+            ("src_A1_commit_build", build_seq_task("src_A1", "software_ci", s1_seq, "earliest_global_threshold", cost_q=3.0, obs_budget=140, meas_budget=420.0)),
             ("src_A2_dac_ladder", build_seq_task("src_A2", "hardware_dac", s2_seq, "some_adjacent_flip", cost_q=2.5)),
         ],
         "near_miss": (
@@ -272,7 +272,7 @@ def make_cluster_a_suite(seed: int) -> dict[str, Any]:
             build_seq_task("nm_A", "ci_hotfix_revert", nm_seq, "earliest_global_threshold", cost_q=3.0, obs_budget=80, meas_budget=240.0),
         ),
         "targets": [
-            ("T_A1_monotone_earliest", build_seq_task("T_A1", "db_migration_chain", t1_seq, "earliest_global_threshold", cost_q=3.0)),
+            ("T_A1_monotone_earliest", build_seq_task("T_A1", "db_migration_chain", t1_seq, "earliest_global_threshold", cost_q=3.0, obs_budget=140, meas_budget=420.0)),
             ("T_A2_nonmonotone_any_flip", build_seq_task("T_A2", "feature_flag_rollout", t2_seq, "some_adjacent_flip", cost_q=3.0)),
             ("T_A3_nonmonotone_earliest_strict", build_seq_task("T_A3", "multi_revert_release", t3_seq, "earliest_global_threshold", cost_q=3.0, obs_budget=72, meas_budget=216.0)),
             ("T_A4_same_endpoints_pocket", build_seq_task("T_A4", "canary_config_pocket", t4_seq, "earliest_global_threshold", cost_q=3.0, obs_budget=72, meas_budget=216.0)),
@@ -298,12 +298,17 @@ class PublicResourceResponseTask:
         task_view: dict[str, Any],
         meter: CostMeter,
         private_sim_fn: Callable[[dict[str, float]], float],
+        domain_regime_attrs: dict[str, Any] | None = None,
     ) -> None:
         self.task_id = task_id
         self.surface_domain = surface_domain
         self.control_bounds = dict(control_bounds)
         self.cost_per_probe = float(cost_per_probe)
-        self.task_view = dict(task_view)
+        self.domain_regime_attrs = dict(domain_regime_attrs or {})
+        self.task_view = {
+            **dict(task_view),
+            **({"domain_regime_attrs": dict(domain_regime_attrs)} if domain_regime_attrs else {}),
+        }
         self.meter = meter
         self._sim = private_sim_fn
         self.observations: list[tuple[dict[str, float], float, str]] = []
@@ -322,17 +327,20 @@ class PublicResourceResponseTask:
 
 
 def _sim_parallel_worker_timeline(u_workers: float, *, serial_time: float, parallel_work: float, n_jobs: int = 30) -> float:
-    """Discrete-batch timeline simulation of serial lock contention + parallel worker pool."""
-    # Simulate n_jobs passing through a mutex serial stage + worker pool queue
-    lock_free_at = 0.0
-    worker_free_at = [0.0 for _ in range(max(1, int(round(u_workers * 10))))]
-    # Continuous effective worker pool scaling (supporting fractional resource shares / vCPUs)
-    eff_parallel_time = parallel_work / float(u_workers)
-    total_elapsed = n_jobs * serial_time + eff_parallel_time * n_jobs / max(1.0, min(float(n_jobs), float(u_workers) + (float(n_jobs) - float(u_workers)) * (float(u_workers) / float(n_jobs))))
-    # Exact batch throughput rate (normalized jobs per unit time):
-    # Each cycle takes (serial_time + parallel_work / u_workers)
-    cycle_time = serial_time + (parallel_work / float(u_workers))
-    return 1.0 / cycle_time
+    """Event-clock simulation of n_jobs passing sequentially through a mutex commit stage + fork-join worker pool."""
+    clock = 0.0
+    n_chunks = 24
+    chunk_work = float(parallel_work) / n_chunks
+    eff_rate = float(u_workers)
+    for _job in range(n_jobs):
+        # Stage 1: Exclusive serial mutex / coordinator commit
+        clock += float(serial_time)
+        # Stage 2: Fork-join barrier across parallel worker share
+        parallel_accum = 0.0
+        for _c in range(n_chunks):
+            parallel_accum += chunk_work / eff_rate
+        clock += parallel_accum
+    return float(n_jobs) / max(clock, 1e-9)
 
 
 def _sim_enzyme_rk4_initial_rate(substrate_u: float, *, e_total: float, k1: float, km1: float, kcat: float) -> float:
@@ -381,6 +389,7 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
         noise_std: float = 0.002,
         noise_seed: int = 1,
         clipping_ceiling: float | None = None,
+        domain_regime_attrs: dict[str, Any] | None = None,
     ):
         def factory() -> PublicResourceResponseTask:
             local_rng = Random(noise_seed)
@@ -408,6 +417,7 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
                 task_view=tv,
                 meter=meter,
                 private_sim_fn=noisy_sim,
+                domain_regime_attrs=domain_regime_attrs,
             )
 
         def evaluator(submission: dict[str, Any]) -> dict[str, Any]:
@@ -415,11 +425,13 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
                 return {"strict_pass": False, "false_confirmation": False, "rmse": None}
             pred_fn = submission["predict_fn"]
             errs = []
+            preds = []
             for u_q in eval_grid:
                 true_y = sim_fn(u_q)
                 if clipping_ceiling is not None:
                     true_y = min(clipping_ceiling, true_y)
                 pred_y = float(pred_fn(u_q))
+                preds.append(round(pred_y, 6))
                 errs.append((pred_y - true_y) ** 2)
             rmse = math.sqrt(sum(errs) / len(errs))
             ok = rmse <= rmse_tol
@@ -428,6 +440,7 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
                 "false_confirmation": bool(not ok),
                 "rmse": round(rmse, 6),
                 "tolerance": rmse_tol,
+                "eval_predictions": preds,
             }
 
         return factory, evaluator
@@ -511,6 +524,7 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
                     "src_B1", "parallel_compute_pool",
                     lambda u, s=s1_serial, p=s1_par: _sim_parallel_worker_timeline(u, serial_time=s, parallel_work=p),
                     s1_eval_grid, noise_seed=seed + 201,
+                    domain_regime_attrs={"has_serial_mutex": True, "medium_phase": "digital_scheduler"},
                 ),
             ),
             (
@@ -521,6 +535,7 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
                         u, e_total=e0, k1=k1, km1=km1, kcat=kc
                     ),
                     s2_eval_grid, noise_seed=seed + 202,
+                    domain_regime_attrs={"has_serial_mutex": False, "medium_phase": "aqueous_catalysis"},
                 ),
             ),
         ],
@@ -548,6 +563,7 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
                     "T_B1", "membrane_carrier_flux",
                     lambda u, a=tb1_a, b=tb1_b: u / (a * u + b),
                     eval_grid_target, rmse_tol=0.025, obs_budget=10, meas_budget=60.0, noise_seed=seed + 301,
+                    domain_regime_attrs={"has_serial_mutex": False, "medium_phase": "lipid_bilayer"},
                 ),
             ),
             (
@@ -594,29 +610,98 @@ def make_cluster_b_suite(seed: int) -> dict[str, Any]:
 
 
 # ============================================================================
-# CLUSTER C: Same-Service Multi-View & Multi-Scale Routing
+# CLUSTER C: Same-Service Multi-View & Multi-Scale Event-Stream Queue Routing
 # ============================================================================
 
 def make_cluster_c_same_service_suite(seed: int) -> dict[str, Any]:
-    """One unified versioned packet-queue microservice queried under 3 TaskViews / ScaleMaps."""
+    """One unified versioned FIFO packet-queue microservice simulated at packet level under 3 TaskViews.
+
+    Unlike pre-stuffed metadata, public ``T_C1`` and ``T_C2`` declare ONLY an unverified
+    ``proposed_discarded_variables: ["packet_burst_clustering"]`` with ``verified_discarded_in_scope: []``.
+    A public scale-calibration probe on the same packet-queue simulator lets arms empirically test
+    whether ``window_average`` preserves ``response_curve_and_target_sizing`` vs ``burst_p99_tail_latency``!
+    """
     rng = Random(seed + 2000)
     n_commits = 64
     fault_commit = rng.randint(14, 52)
     serial_overhead = rng.uniform(0.20, 0.30)
     work_per_req = rng.uniform(1.2, 1.9)
-    burst_intensity = rng.uniform(3.2, 4.5)
+    burst_intensity = rng.uniform(2.6, 3.6)
+
+    # Pre-generate deterministic Markov ON-OFF arrival batch pattern for this service seed
+    arrival_rng = Random(seed + 2099)
+    n_epochs = 160
+    burst_batches: list[int] = []
+    in_burst = False
+    for _ in range(n_epochs):
+        if in_burst:
+            burst_batches.append(arrival_rng.randint(5, 8))
+            if arrival_rng.random() < 0.35:
+                in_burst = False
+        else:
+            burst_batches.append(1)
+            if arrival_rng.random() < 0.18:
+                in_burst = True
+    total_packets = sum(burst_batches)
 
     def simulate_packet_queue(u_workers: float, *, burst_mode: bool) -> dict[str, float]:
-        mean_tput = 1.0 / (serial_overhead + work_per_req / float(u_workers))
-        # Under ON-OFF packet bursts, p99 tail latency spikes nonlinearly if u_workers < critical burst capacity,
-        # whereas time-averaged throughput discards burst arrival clustering completely!
-        burst_ratio = burst_intensity / float(u_workers)
-        p99_latency = (0.4 + 0.8 / float(u_workers) + 6.5 * (burst_ratio ** 2)) if burst_mode else (0.4 + 0.8 / float(u_workers))
+        """Simulate individual packets passing through the FIFO server queue."""
+        u_eff = float(u_workers)
+        base_pkt_service = serial_overhead + (work_per_req / u_eff)
+
+        # 1. Busy-period saturation completion trace (total served packets / active busy clock)
+        busy_clock = 0.0
+        for batch_k in (burst_batches if burst_mode else [1] * total_packets):
+            for _ in range(batch_k):
+                busy_clock += base_pkt_service
+        mean_tput = float(total_packets) / max(busy_clock, 1e-9)
+
+        # 2. Live FIFO packet arrival-departure trace (computing empirical p99 sojourn latency!)
+        server_free_at = 0.0
+        arrive_clock = 0.0
+        sojourns: list[float] = []
+        epoch_gap = 25.0  # Plenty of inter-epoch drain spacing; bursts collide within an epoch!
+        batches = burst_batches if burst_mode else [1] * total_packets
+        for batch_k in batches:
+            # Within a burst batch, packets arrive 0.001s apart and contend on queue/buffer
+            contention_penalty = (
+                0.35 * ((burst_intensity / u_eff) ** 2) if (burst_mode and batch_k > 1) else 0.0
+            )
+            eff_svc = base_pkt_service + contention_penalty
+            for j in range(batch_k):
+                pkt_arr = arrive_clock + 0.0005 * j
+                pkt_start = max(server_free_at, pkt_arr)
+                pkt_dep = pkt_start + eff_svc
+                server_free_at = pkt_dep
+                sojourns.append(pkt_dep - pkt_arr)
+            arrive_clock = server_free_at + epoch_gap
+
+        sojourns.sort()
+        idx_99 = min(len(sojourns) - 1, max(0, int(0.99 * len(sojourns))))
+        p99_latency = sojourns[idx_99]
         return {"mean_throughput": mean_tput, "p99_tail_latency": p99_latency}
 
     eval_u = [2.0, 5.0, 10.0, 18.0, 24.0]
+    unverified_window_scale_map = {
+        "coarse_graining_op": "window_average",
+        "closure_scope": "steady_state_only",
+        "proposed_discarded_variables": ["packet_burst_clustering"],
+        "verified_discarded_in_scope": [],
+    }
 
-    # View C1: Steady-state Mean Throughput (explicit window_average ScaleMap valid!)
+    def run_scale_invariance_probe(meter: CostMeter) -> dict[str, Any] | None:
+        """Public empirical probe comparing burst_mode=False vs burst_mode=True at u=4.0."""
+        if not meter.charge("scale_calibration", obs=2, meas=6.0, compute=4.0):
+            return None
+        smooth_obs = simulate_packet_queue(4.0, burst_mode=False)
+        burst_obs = simulate_packet_queue(4.0, burst_mode=True)
+        return {
+            "u_probed": 4.0,
+            "tput_abs_diff": abs(burst_obs["mean_throughput"] - smooth_obs["mean_throughput"]),
+            "p99_abs_diff": abs(burst_obs["p99_tail_latency"] - smooth_obs["p99_tail_latency"]),
+        }
+
+    # View C1: Steady-state Mean Throughput (unverified ScaleMap in public task!)
     def make_c1():
         def factory() -> PublicResourceResponseTask:
             meter = CostMeter(obs_budget=10, meas_budget=60.0, compute_budget=500.0)
@@ -627,18 +712,7 @@ def make_cluster_c_same_service_suite(seed: int) -> dict[str, Any]:
                 "target_metric": "rmse_original_scale",
                 "tolerance": 0.025,
                 "eval_query_points": list(eval_u),
-                "available_scale_map": {
-                    "coarse_graining_op": "window_average",
-                    "preserved_queries": ["response_curve_and_target_sizing", "steady_mean_throughput"],
-                    "closure_scope": "steady_state_only",
-                    "proposed_discarded_variables": ["packet_burst_clustering"],
-                    "verified_discarded_in_scope": [{
-                        "variable": "packet_burst_clustering",
-                        "task_view_goal": "response_curve_and_target_sizing",
-                        "error_bound": 0.005,
-                        "evidence_ref": "stationary_ergodic_mean_window",
-                    }],
-                },
+                "available_scale_map": dict(unverified_window_scale_map),
             }
             return PublicResourceResponseTask(
                 task_id="T_C1_service_mean_throughput",
@@ -648,14 +722,16 @@ def make_cluster_c_same_service_suite(seed: int) -> dict[str, Any]:
                 task_view=tv,
                 meter=meter,
                 private_sim_fn=lambda ctrl: simulate_packet_queue(ctrl["u"], burst_mode=True)["mean_throughput"],
+                domain_regime_attrs={"has_serial_mutex": False, "medium_phase": "network_packet_queue"},
             )
 
         def evaluator(sub: dict[str, Any]) -> dict[str, Any]:
             if sub.get("status") != "completed" or "predict_fn" not in sub:
                 return {"strict_pass": False, "false_confirmation": False}
-            errs = [(float(sub["predict_fn"](u)) - simulate_packet_queue(u, burst_mode=True)["mean_throughput"]) ** 2 for u in eval_u]
+            preds = [round(float(sub["predict_fn"](u)), 6) for u in eval_u]
+            errs = [(p - simulate_packet_queue(u, burst_mode=True)["mean_throughput"]) ** 2 for p, u in zip(preds, eval_u)]
             rmse = math.sqrt(sum(errs) / len(errs))
-            return {"strict_pass": rmse <= 0.025, "false_confirmation": rmse > 0.025, "rmse": round(rmse, 6)}
+            return {"strict_pass": rmse <= 0.025, "false_confirmation": rmse > 0.025, "rmse": round(rmse, 6), "eval_predictions": preds}
 
         return factory, evaluator
 
@@ -670,18 +746,7 @@ def make_cluster_c_same_service_suite(seed: int) -> dict[str, Any]:
                 "target_metric": "rmse_original_scale",
                 "tolerance": 0.15,
                 "eval_query_points": list(eval_u),
-                "available_scale_map": {
-                    "coarse_graining_op": "window_average",
-                    "preserved_queries": ["response_curve_and_target_sizing", "steady_mean_throughput"],
-                    "closure_scope": "steady_state_only",
-                    "proposed_discarded_variables": ["packet_burst_clustering"],
-                    "verified_discarded_in_scope": [{
-                        "variable": "packet_burst_clustering",
-                        "task_view_goal": "steady_mean_throughput",
-                        "error_bound": 0.005,
-                        "evidence_ref": "stationary_ergodic_mean_window",
-                    }],
-                },
+                "available_scale_map": dict(unverified_window_scale_map),
             }
             return PublicResourceResponseTask(
                 task_id="T_C2_service_burst_tail_latency",
@@ -696,9 +761,10 @@ def make_cluster_c_same_service_suite(seed: int) -> dict[str, Any]:
         def evaluator(sub: dict[str, Any]) -> dict[str, Any]:
             if sub.get("status") != "completed" or "predict_fn" not in sub:
                 return {"strict_pass": False, "false_confirmation": False}
-            errs = [(float(sub["predict_fn"](u)) - simulate_packet_queue(u, burst_mode=True)["p99_tail_latency"]) ** 2 for u in eval_u]
+            preds = [round(float(sub["predict_fn"](u)), 6) for u in eval_u]
+            errs = [(p - simulate_packet_queue(u, burst_mode=True)["p99_tail_latency"]) ** 2 for p, u in zip(preds, eval_u)]
             rmse = math.sqrt(sum(errs) / len(errs))
-            return {"strict_pass": rmse <= 0.15, "false_confirmation": rmse > 0.15, "rmse": round(rmse, 6)}
+            return {"strict_pass": rmse <= 0.15, "false_confirmation": rmse > 0.15, "rmse": round(rmse, 6), "eval_predictions": preds}
 
         return factory, evaluator
 
@@ -733,9 +799,28 @@ def make_cluster_c_same_service_suite(seed: int) -> dict[str, Any]:
         return factory, evaluator
 
     return {
+        "service_object_id": "unified_checkout_service",
+        "scale_invariance_probe_fn": run_scale_invariance_probe,
         "targets": [
             ("T_C1_service_mean_throughput", make_c1()),
             ("T_C2_service_burst_tail_latency", make_c2()),
             ("T_C3_service_version_fault_isolation", make_c3()),
-        ]
+        ],
     }
+
+
+def make_extended_amortization_stream(seed: int) -> list[tuple[str, str, Any]]:
+    """Build a 28-target unseen stream (2 independent draws of the 14-target distribution) for ΔC(N) curves."""
+    s1_a, s1_b, s1_c = make_cluster_a_suite(seed), make_cluster_b_suite(seed), make_cluster_c_same_service_suite(seed)
+    s2_a, s2_b, s2_c = make_cluster_a_suite(seed + 50_000), make_cluster_b_suite(seed + 50_000), make_cluster_c_same_service_suite(seed + 50_000)
+    wave1 = [
+        *[("Cluster_A", n, p) for n, p in s1_a["targets"]],
+        *[("Cluster_B", n, p) for n, p in s1_b["targets"]],
+        *[("Cluster_C", n, p) for n, p in s1_c["targets"]],
+    ]
+    wave2 = [
+        *[("Cluster_A", f"{n}_w2", p) for n, p in s2_a["targets"]],
+        *[("Cluster_B", f"{n}_w2", p) for n, p in s2_b["targets"]],
+        *[("Cluster_C", f"{n}_w2", p) for n, p in s2_c["targets"]],
+    ]
+    return wave1 + wave2

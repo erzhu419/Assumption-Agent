@@ -37,12 +37,40 @@ _OUTCOME_PARTITION_STATES = {
 }
 
 
-def _strip_cosmetic(value):
+_OPAQUE_SEMANTIC_CONTAINERS = {
+    'value', 'expected', 'literal', 'payload', 'parameters',
+    'query_expression', 'program_steps', 'coefficients',
+}
+
+
+def _strip_cosmetic(value, *, inside_opaque=False):
     if isinstance(value, dict):
-        return {k: _strip_cosmetic(v) for k, v in value.items() if k not in _COSMETIC_CONTRACT_KEYS}
+        if inside_opaque:
+            return {k: _strip_cosmetic(v, inside_opaque=True) for k, v in value.items()}
+        out = {}
+        for k, v in value.items():
+            if k in _COSMETIC_CONTRACT_KEYS:
+                continue
+            out[k] = _strip_cosmetic(v, inside_opaque=(k in _OPAQUE_SEMANTIC_CONTAINERS))
+        return out
     if isinstance(value, list):
-        return [_strip_cosmetic(item) for item in value]
+        return [_strip_cosmetic(item, inside_opaque=inside_opaque) for item in value]
     return deepcopy(value)
+
+
+def extract_outcome_status(answer):
+    """Extract normalized outcome_status from either top-level answer or typed answer['value']."""
+    if not isinstance(answer, dict):
+        return None
+    top = answer.get('outcome_status')
+    if isinstance(top, str) and top:
+        return top
+    val = answer.get('value')
+    if isinstance(val, dict):
+        nested = val.get('outcome_status')
+        if isinstance(nested, str) and nested:
+            return nested
+    return None
 
 
 def native_evaluation_contract(semantics):

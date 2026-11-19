@@ -415,3 +415,150 @@ def test_m0_forest_horizontal_wormholes_and_or_support_and_fidelity_compression(
     assert comp["accepted"] is False
     assert comp["lost_accept_indices"] == [0, 1]
     assert comp["false_new_reject_indices"] == [0, 1]
+
+
+def test_m0_v167_redteam_controls_schema_strip_nested_error_and_revision_governance() -> None:
+    """Locks in all 12 M0 red-team controls from GPT-6 V16.6 audit (`probe_m0_semantics.py`)."""
+    from hegel_machine.cognition.question_semantics import extract_outcome_status
+
+    # 1. Schema-aware cosmetic strip: `notes` inside semantic `value` MUST affect digest & bump version!
+    old_cc = {"preconditions": [{"field": "payload", "op": "==", "value": {"notes": "mode_A"}}]}
+    new_cc = {"preconditions": [{"field": "payload", "op": "==", "value": {"notes": "mode_B"}}]}
+    oq = adopt_question_semantics(None, {
+        "id": "q_opaque_val",
+        "claim_contract": old_cc,
+        "semantic_answer": {"status": "answered", "value": True},
+    })
+    nq = adopt_question_semantics(oq, {"id": "q_opaque_val", "claim_contract": new_cc})
+    assert nq["meaning_version"] == oq["meaning_version"] + 1
+    assert "semantic_answer" not in nq
+
+    # 2. Nested EXECUTION_ERROR extraction
+    assert extract_outcome_status({"status": "answered", "value": {"outcome_status": "EXECUTION_ERROR"}}) == "EXECUTION_ERROR"
+    assert extract_outcome_status({"outcome_status": "PROTOCOL_ERROR"}) == "PROTOCOL_ERROR"
+
+    # 3. Forest revision propagates meaning_version to QuestionSpec & blocks stale v1 edges until revalidated
+    tv = {"goal_kind": "some_adjacent_flip", "tolerance": 0.0}
+    cc = {
+        "claim_id": "c_ord",
+        "preconditions": [],
+        "conclusion_or_action": {"guarantee": "some_adjacent_flip"},
+        "protocol_spec": {},
+        "evidence_status": "SUPPORTED_IN_SCOPE",
+        "permission_tier": "local_solver_guidance",
+    }
+    forest = PhilosophicalForest()
+    forest.register_node(
+        node_id="a", tree_id="tree_a", layer_role="mid", task_view=tv,
+        observation_map={"raw_channel": "label"}, claim_contract=deepcopy(cc),
+        probe_signatures=["sig:ordered_opposite_endpoints"],
+        question_spec={"id": "fq", "kind": "mechanism", "answer_type": "scoped_outcome"},
+    )
+    forest.register_node(
+        node_id="b", tree_id="tree_b", layer_role="mid", task_view=tv,
+        observation_map={"raw_channel": "label"}, claim_contract=deepcopy(cc),
+        probe_signatures=["sig:ordered_opposite_endpoints"],
+    )
+    forest.register_node(
+        node_id="weak", tree_id="tree_a", layer_role="root", task_view=tv,
+        observation_map={"raw_channel": "label"}, claim_contract=deepcopy(cc),
+    )
+    forest.add_local_implication_edge(stronger_node_id="a", weaker_node_id="weak", preserved_contract={"claim": "old"}, scope={})
+    forest.add_horizontal_wormhole(
+        wormhole_id="wh", node_a_id="a", node_b_id="b",
+        probe_signature_refs=["sig:ordered_opposite_endpoints"],
+        role_and_observation_map={}, hop_error_budget=0.0,
+    )
+    forest.questions["fq"]["semantic_answer"] = {"status": "answered", "value": {"outcome_status": "SUPPORTED_IN_SCOPE"}}
+
+    new_cc_rev = deepcopy(cc)
+    new_cc_rev["conclusion_or_action"] = {"guarantee": "changed_contract"}
+    rev = forest.empirical_revise_node(
+        "a", witness_episode_id="w1", cause="claim_refuted_or_unprofitable", updated_claim_contract=new_cc_rev,
+    )
+    assert rev["version"] == 2
+    assert rev["question_id"] == "fq"
+    assert forest.questions["fq"]["meaning_version"] == 2
+    assert "semantic_answer" not in forest.questions["fq"]
+    assert forest.weaker_parents_of("a") == []
+    stale_wh = [
+        r for r in forest.recall_mid_layer_wormholes(["sig:ordered_opposite_endpoints"], task_view=tv)
+        if r["entry_kind"] == "horizontal_mid_wormhole"
+    ]
+    assert stale_wh == []
+
+    # Explicit revalidation restores the wormhole at version 2!
+    reval = forest.revalidate_wormhole_after_revision("wh", witness_episode_id="w1_reval", reason="reverified")
+    assert reval["node_a_version"] == 2
+    live_wh = [
+        r for r in forest.recall_mid_layer_wormholes(["sig:ordered_opposite_endpoints"], task_view=tv)
+        if r["entry_kind"] == "horizontal_mid_wormhole"
+    ]
+    assert len(live_wh) == 2
+
+    # 4. Unknown exclusion predicate & declared permission ceiling
+    low_tier_cc = {**cc, "permission_tier": "retrieve_candidate"}
+    wh_unknown_excl = {
+        "permission_tier": "retrieve_candidate",
+        "hop_error_budget": 0.0,
+        "align_conditions": {"exclusion_predicates": [{"field": "sensor_clipped", "op": "==", "value": True}]},
+    }
+    auth_denied = authorize_abstraction_use(
+        requested_tier="validated_pruning",
+        task_view=tv,
+        target_features={},
+        claim_contract=low_tier_cc,
+        wormhole_edge=wh_unknown_excl,
+        heldout_confirmed=True,
+        implication_verified=True,
+    )
+    assert auth_denied["granted"] is False
+    assert auth_denied["granted_tier"] == "retrieve_candidate"
+
+    # 5. FidelityCompression blocks conflicting {ACC, REJ} and {UNK, UNK} -> ACC promotions
+    na = {"node_id": "rej_node", "claim_contract": {"preconditions": [], "prediction": False}}
+    nb = {"node_id": "acc_node", "claim_contract": {"preconditions": [], "prediction": True}}
+    conflict_res = fidelity_compress_nodes(
+        na, nb, [{"observed": True}],
+        lambda node, q: "ACC" if node["claim_contract"]["prediction"] == q["observed"] else "REJ",
+    )
+    assert conflict_res["accepted"] is False
+    assert conflict_res["conflicting_verdict_indices"] == [0]
+
+    unk_promo = fidelity_compress_nodes(
+        na, nb, [{}],
+        lambda node, _q: "ACC" if node["node_id"].startswith("merged:") else "UNK",
+    )
+    assert unk_promo["accepted"] is False
+    assert unk_promo["unauthorized_unknown_promotion_indices"] == [0]
+
+    # 6. Workflow condition node without predicate_spec evaluates to UNKNOWN (never replays source REFUTED_IN_SCOPE)
+    bounds = {"u": (0.0, 10.0)}
+    spec = TaskSpec("branch_no_pred", "No pred", ("u",), (), (), feature_bounds=bounds, context={"control_roles": {"u": "focus"}})
+    channels = (MeasurementChannel("ch", 1, "sensor"),)
+    trace_no_pred = [
+        {"event_id": "m", "action": "measure", "produces": ["rows"], "recipe": {"sequence": [{"u": u} for u in (1.0, 3.0, 5.0, 9.0)], "channels": ["ch"]}},
+        {"event_id": "c", "action": "scientific_refutation_witness", "consumes": ["rows"], "outcome_status": "REFUTED_IN_SCOPE", "recipe": {}},
+        {"event_id": "branch", "action": "measure", "produces": ["extra"], "when_outcome": {"from_event": "c", "outcomes": ["REFUTED_IN_SCOPE"]}, "recipe": {"sequence": [{"u": 2.0}, {"u": 7.0}], "channels": ["ch"]}},
+        {"event_id": "f", "action": "fit", "consumes": ["rows"], "produces": ["fit"], "recipe": {"estimator": "residual_expression_search", "channels": ["ch"]}},
+        {"event_id": "confirm", "action": "confirm", "consumes": ["fit"], "recipe": {"sequence": [{"u": 4.0}, {"u": 8.0}], "channels": ["ch"]}},
+    ]
+    book = ResearchMethodBook()
+    book.learn(trace_no_pred, {"feature_bounds": bounds, "control_roles": {"u": "focus"}, "channel_names": ["ch"], "feature_count": 1}, success=True, task_id="src")
+    ep = WorkflowEpisode(book, spec, channels, context={"control_roles": {"u": "focus"}})
+    acquired_batches: list[int] = []
+    cand = Candidate("lin", Program("feature", name="u"), "fit")
+    out = ep.replay(
+        acquire=lambda ch, p, probe: (acquired_batches.append(len(probe.sequence)) or [Observation({"u": r["u"]}, r["u"]) for r in probe.sequence]),
+        project=lambda obs, a, b: obs,
+        fit=lambda ch, tr, va: [{"candidate": cand, "training_loss": 0.0, "validation_loss": 0.0}],
+        legal_views=[("ch",)],
+        remaining=lambda: {"observation_remaining": 50, "measurement_remaining": 50, "compute_remaining": 500},
+        confirmation_length=2,
+        threshold=1e-6,
+        diagnostics={},
+        actions=[],
+    )
+    assert out["node_outcomes"]["step_1"] == "UNKNOWN"
+    assert acquired_batches == [4]
+

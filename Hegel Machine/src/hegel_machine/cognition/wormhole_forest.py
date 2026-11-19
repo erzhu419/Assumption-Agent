@@ -147,6 +147,29 @@ def evaluate_predicate_rule(rule: dict[str, Any], features: dict[str, Any]) -> s
     return "UNKNOWN"
 
 
+def _tier_name_from_rank(rank: int) -> str:
+    clamped = max(1, min(4, int(rank)))
+    return next(name for name, r in PERMISSION_ORDER.items() if r == clamped)
+
+
+def _validate_evidence_receipt(
+    evidence_receipt: dict[str, Any] | None,
+    claim_contract: dict[str, Any],
+    task_view: dict[str, Any],
+) -> bool:
+    if not isinstance(evidence_receipt, dict):
+        return False
+    if evidence_receipt.get("passed") is not True:
+        return False
+    expected_claim = claim_contract.get("claim_id")
+    if expected_claim and evidence_receipt.get("claim_id") not in {expected_claim, "*"}:
+        return False
+    if "observed_error" in evidence_receipt and "tolerance" in task_view:
+        if float(evidence_receipt["observed_error"]) > float(task_view["tolerance"]) + 1e-12:
+            return False
+    return True
+
+
 def authorize_abstraction_use(
     *,
     requested_tier: str,
@@ -156,12 +179,29 @@ def authorize_abstraction_use(
     scale_map: dict[str, Any] | None = None,
     wormhole_edge: dict[str, Any] | None = None,
     heldout_confirmed: bool = False,
+    evidence_receipt: dict[str, Any] | None = None,
     implication_verified: bool = False,
     trial_budget_ok: bool = True,
 ) -> dict[str, Any]:
-    """Enforce the 4-tier permission gate; proposed discarded variables never self-certify."""
+    """Enforce the 4-tier permission gate; proposed discarded variables & unknown exclusions never self-certify."""
     if requested_tier not in PERMISSION_ORDER:
         raise ValueError(f"Unsupported permission tier: {requested_tier}")
+
+    receipt_ok = _validate_evidence_receipt(evidence_receipt, claim_contract, task_view)
+    confirmed = bool(heldout_confirmed or receipt_ok)
+
+    # Compute declared permission ceiling from ClaimContract & HorizontalWormholeEdge
+    declared_max_rank = 4
+    if "permission_tier" in claim_contract and claim_contract["permission_tier"] in PERMISSION_ORDER:
+        declared_max_rank = min(declared_max_rank, PERMISSION_ORDER[claim_contract["permission_tier"]])
+    if wormhole_edge is not None and wormhole_edge.get("permission_tier") in PERMISSION_ORDER:
+        declared_max_rank = min(declared_max_rank, PERMISSION_ORDER[wormhole_edge["permission_tier"]])
+    if receipt_ok and evidence_receipt.get("upgrade_to_tier") in PERMISSION_ORDER:
+        upgrade_cap = PERMISSION_ORDER["validated_pruning"] if implication_verified else PERMISSION_ORDER["local_solver_guidance"]
+        declared_max_rank = max(declared_max_rank, min(upgrade_cap, PERMISSION_ORDER[evidence_receipt["upgrade_to_tier"]]))
+
+    def cap_tier(rank: int) -> str:
+        return _tier_name_from_rank(min(rank, declared_max_rank))
 
     reasons: list[str] = []
     # Check explicit preconditions & ALIGN near-miss exclusions
@@ -206,7 +246,7 @@ def authorize_abstraction_use(
         if scale_map.get("closure_scope") == "not_closed":
             return {
                 "granted": False,
-                "granted_tier": "bounded_trial",
+                "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"]),
                 "requested_tier": requested_tier,
                 "reason": "coarse_graining_not_closed_for_target",
             }
@@ -224,7 +264,7 @@ def authorize_abstraction_use(
             reasons.append(f"unverified_proposed_discards:{sorted(unverified_discards)}")
             return {
                 "granted": False,
-                "granted_tier": "bounded_trial" if trial_budget_ok else "retrieve_candidate",
+                "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
                 "requested_tier": requested_tier,
                 "reason": "proposed_discarded_variables_require_in_scope_verification",
                 "details": reasons,
@@ -234,10 +274,10 @@ def authorize_abstraction_use(
     if wormhole_edge is not None and PERMISSION_ORDER[requested_tier] >= PERMISSION_ORDER["local_solver_guidance"]:
         hop_err = float(wormhole_edge.get("hop_error_budget", 0.0))
         tol = float(task_view.get("tolerance", 0.0))
-        if hop_err > tol and not heldout_confirmed:
+        if hop_err > tol and not confirmed:
             return {
                 "granted": False,
-                "granted_tier": "bounded_trial" if trial_budget_ok else "retrieve_candidate",
+                "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
                 "requested_tier": requested_tier,
                 "reason": "wormhole_error_exceeds_tolerance_without_target_confirmation",
                 "hop_error_budget": hop_err,
@@ -247,6 +287,24 @@ def authorize_abstraction_use(
     if requested_tier == "retrieve_candidate":
         return {"granted": True, "granted_tier": "retrieve_candidate", "requested_tier": requested_tier, "reason": "signature_recall_allowed"}
 
+    # For tiers >= bounded_trial, check declared permission ceiling unless upgraded by receipt
+    if PERMISSION_ORDER[requested_tier] > declared_max_rank:
+        # Also note if unknown predicates/exclusions exist
+        has_unknown_excl = "UNKNOWN" in excl_results
+        has_unknown_prec = "UNKNOWN" in precond_results
+        reason = (
+            "unknown_exclusion_predicate_and_declared_permission_cap"
+            if has_unknown_excl
+            else ("unknown_precondition_and_declared_permission_cap" if has_unknown_prec else "exceeds_declared_permission_tier")
+        )
+        return {
+            "granted": False,
+            "granted_tier": _tier_name_from_rank(declared_max_rank),
+            "requested_tier": requested_tier,
+            "reason": reason,
+            "declared_max_tier": _tier_name_from_rank(declared_max_rank),
+        }
+
     if requested_tier == "bounded_trial":
         if not trial_budget_ok:
             return {"granted": False, "granted_tier": "retrieve_candidate", "requested_tier": requested_tier, "reason": "trial_budget_exceeded"}
@@ -255,26 +313,41 @@ def authorize_abstraction_use(
     if "UNKNOWN" in precond_results:
         return {
             "granted": False,
-            "granted_tier": "bounded_trial" if trial_budget_ok else "retrieve_candidate",
+            "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
             "requested_tier": requested_tier,
             "reason": "unknown_precondition_requires_probe_before_guidance",
         }
+    if "UNKNOWN" in excl_results:
+        return {
+            "granted": False,
+            "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
+            "requested_tier": requested_tier,
+            "reason": "unknown_exclusion_predicate_requires_probe_before_guidance",
+            "exclusion_results": excl_results,
+        }
 
     if requested_tier == "local_solver_guidance":
-        if not heldout_confirmed:
+        if claim_contract.get("evidence_status") not in {"SUPPORTED_IN_SCOPE", "derived"}:
             return {
                 "granted": False,
-                "granted_tier": "bounded_trial",
+                "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
+                "requested_tier": requested_tier,
+                "reason": "claim_not_supported_in_scope",
+            }
+        if not confirmed:
+            return {
+                "granted": False,
+                "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"]),
                 "requested_tier": requested_tier,
                 "reason": "heldout_target_point_confirmation_required",
             }
         return {"granted": True, "granted_tier": "local_solver_guidance", "requested_tier": requested_tier, "reason": "in_scope_alignment_and_heldout_confirmed"}
 
     # validated_pruning
-    if not (implication_verified and heldout_confirmed and claim_contract.get("evidence_status") == "SUPPORTED_IN_SCOPE"):
+    if not (implication_verified and confirmed and claim_contract.get("evidence_status") == "SUPPORTED_IN_SCOPE"):
         return {
             "granted": False,
-            "granted_tier": "local_solver_guidance" if heldout_confirmed else "bounded_trial",
+            "granted_tier": cap_tier(PERMISSION_ORDER["local_solver_guidance"] if confirmed else PERMISSION_ORDER["bounded_trial"]),
             "requested_tier": requested_tier,
             "reason": "validated_pruning_requires_verified_implication_and_in_scope_support",
         }
@@ -323,13 +396,14 @@ def fidelity_compress_nodes(
     evaluation_queries: list[dict[str, Any]],
     evaluator_fn,
 ) -> dict[str, Any]:
-    """Check aligned Acceptance, Rejection, AND Unknown preservation before merging.
+    """Check aligned Acceptance, Rejection, Conflict, AND Unknown preservation before merging.
 
-    Unlike a naive ``Rej(merged) >= Rej(A) U Rej(B)`` check (which could pass by
-    falsely rejecting every valid input), fidelity compression requires:
-      1. Zero lost accepted cases: Acc(A) U Acc(B) <= Acc(merged) on overlapping scope;
-      2. Zero lost true rejections: Rej(A) U Rej(B) <= Rej(merged);
-      3. Zero newly fabricated false rejections on valid cases.
+    Fidelity compression requires:
+      1. Zero direct conflicts: {res_a, res_b} != {'ACC', 'REJ'} on any query;
+      2. Zero unauthorized promotions from {'UNK', 'UNK'} to 'ACC' or 'REJ';
+      3. Zero lost accepted cases: Acc(A) U Acc(B) <= Acc(merged) when non-conflicting;
+      4. Zero lost true rejections: Rej(A) U Rej(B) <= Rej(merged) when non-conflicting;
+      5. Zero newly fabricated false rejections on valid cases.
     """
     merged_preconditions = list({
         json.dumps(p, sort_keys=True): deepcopy(p)
@@ -338,12 +412,24 @@ def fidelity_compress_nodes(
     merged_node = deepcopy(node_a)
     merged_node["node_id"] = f"merged:{node_a['node_id']}+{node_b['node_id']}"
     merged_node["claim_contract"]["preconditions"] = merged_preconditions
+    merged_node["claim_contract"]["disjunctive_branches"] = [
+        deepcopy(node_a["claim_contract"]),
+        deepcopy(node_b["claim_contract"]),
+    ]
 
     lost_accepts, lost_rejects, false_new_rejects = [], [], []
+    conflicting_verdicts, unauthorized_promotions = [], []
     for idx, q in enumerate(evaluation_queries):
         res_a = evaluator_fn(node_a, q)  # 'ACC' | 'REJ' | 'UNK' (UNK = out of scope / undecided)
         res_b = evaluator_fn(node_b, q)
         res_m = evaluator_fn(merged_node, q)
+        # 0a. Contradictory source nodes ({ACC, REJ}) CANNOT be fidelity-compressed!
+        if {res_a, res_b} == {"ACC", "REJ"}:
+            conflicting_verdicts.append(idx)
+            continue
+        # 0b. Merged node must NEVER promote {'UNK', 'UNK'} into 'ACC' or 'REJ'!
+        if res_a == "UNK" and res_b == "UNK" and res_m != "UNK":
+            unauthorized_promotions.append(idx)
         # 1. Any query accepted by an applicable branch (without a genuine empirical REJ) must stay ACC
         if ("ACC" in {res_a, res_b}) and ("REJ" not in {res_a, res_b}) and res_m != "ACC":
             lost_accepts.append(idx)
@@ -354,7 +440,13 @@ def fidelity_compress_nodes(
         if res_m == "REJ" and ("REJ" not in {res_a, res_b}):
             false_new_rejects.append(idx)
 
-    valid = not lost_accepts and not lost_rejects and not false_new_rejects
+    valid = not (
+        lost_accepts
+        or lost_rejects
+        or false_new_rejects
+        or conflicting_verdicts
+        or unauthorized_promotions
+    )
     return {
         "kind": "FidelityCompression",
         "accepted": valid,
@@ -362,6 +454,8 @@ def fidelity_compress_nodes(
         "lost_accept_indices": lost_accepts,
         "lost_reject_indices": lost_rejects,
         "false_new_reject_indices": false_new_rejects,
+        "conflicting_verdict_indices": conflicting_verdicts,
+        "unauthorized_unknown_promotion_indices": unauthorized_promotions,
     }
 
 
@@ -392,6 +486,7 @@ class PhilosophicalForest:
         claim_contract: ClaimContract | dict[str, Any],
         scale_map: ScaleMap | dict[str, Any] | None = None,
         probe_signatures: list[str] | None = None,
+        program_steps: list[dict[str, Any]] | None = None,
         question_spec: dict[str, Any] | None = None,
         support_paths: list[list[dict[str, Any]]] | None = None,
         source_cluster_ids: list[str] | None = None,
@@ -400,12 +495,14 @@ class PhilosophicalForest:
         om = observation_map.to_dict() if isinstance(observation_map, ObservationMap) else deepcopy(observation_map)
         sm = scale_map.to_dict() if isinstance(scale_map, ScaleMap) else deepcopy(scale_map)
         cc = claim_contract.to_dict() if isinstance(claim_contract, ClaimContract) else deepcopy(claim_contract)
+        prog = deepcopy(program_steps) if program_steps is not None else []
 
         sem_digest = canonical_digest({
             "task_view": tv,
             "observation_map": om,
             "scale_map": sm,
             "claim_contract": cc,
+            "program_steps": prog,
         })
         existing = self.nodes.get(node_id)
         version = 1 if existing is None else existing["version"] + 1
@@ -414,8 +511,12 @@ class PhilosophicalForest:
 
         q_record = None
         if question_spec is not None:
+            base_q = {
+                k: deepcopy(v) for k, v in question_spec.items()
+                if k not in {"meaning_version", "meaning_digest", "meaning_history"}
+            }
             incoming_q = {
-                **deepcopy(question_spec),
+                **base_q,
                 "task_view": tv,
                 "observation_map": om,
                 "protocol_spec": deepcopy(cc.get("protocol_spec", {})),
@@ -436,11 +537,16 @@ class PhilosophicalForest:
             "scale_map": sm,
             "claim_contract": cc,
             "probe_signatures": list(probe_signatures or ()),
+            "program_steps": prog,
             "question_id": q_record["id"] if q_record else None,
             "question_meaning_version": q_record["meaning_version"] if q_record else None,
             "support_paths": deepcopy(support_paths) if support_paths is not None else [],
             "source_cluster_ids": list(dict.fromkeys(source_cluster_ids or ())),
-            "utility_ledger": {"trials": 0, "successes": 0, "total_savings": 0.0, "total_overhead": 0.0, "archived_low_utility": False},
+            "utility_ledger": (
+                deepcopy(existing["utility_ledger"])
+                if existing is not None
+                else {"trials": 0, "successes": 0, "total_savings": 0.0, "total_overhead": 0.0, "archived_low_utility": False}
+            ),
         }
         self.nodes[node_id] = node
         return deepcopy(node)
@@ -490,13 +596,19 @@ class PhilosophicalForest:
         return False
 
     def weaker_parents_of(self, node_id: str) -> list[dict[str, Any]]:
-        """Return verified weaker parent nodes within the same local tree."""
+        """Return verified weaker parent nodes bound strictly to current live endpoint versions."""
+        if node_id not in self.nodes:
+            return []
+        cur_stronger_ver = self.nodes[node_id]["version"]
         parents = []
         for edge in self.local_implication_edges:
+            w_id = edge["weaker_node_id"]
             if (edge["stronger_node_id"] == node_id
+                    and edge["stronger_version"] == cur_stronger_ver
                     and edge["evidence_status"] in {"derived", "SUPPORTED_IN_SCOPE"}
-                    and edge["weaker_node_id"] in self.nodes):
-                parents.append(deepcopy(self.nodes[edge["weaker_node_id"]]))
+                    and w_id in self.nodes
+                    and edge["weaker_version"] == self.nodes[w_id]["version"]):
+                parents.append(deepcopy(self.nodes[w_id]))
         return parents
 
     def add_horizontal_wormhole(
@@ -511,6 +623,7 @@ class PhilosophicalForest:
         lipschitz_factor: float = 1.0,
         align_conditions: dict[str, Any] | None = None,
         permission_tier: str = "bounded_trial",
+        compatible_goal_kinds: list[str] | None = None,
         source_episode_refs: list[str] | None = None,
     ) -> dict[str, Any]:
         node_a = self.nodes[node_a_id]
@@ -543,8 +656,42 @@ class PhilosophicalForest:
                 "revision_provenance": [],
             }),
             "permission_tier": permission_tier,
+            "compatible_goal_kinds": list(compatible_goal_kinds) if compatible_goal_kinds is not None else [],
+            "stale_endpoint_revision": False,
             "source_episode_refs": list(source_episode_refs or ()),
         }
+        self.horizontal_wormhole_edges[wormhole_id] = edge
+        return deepcopy(edge)
+
+    def revalidate_wormhole_after_revision(
+        self,
+        wormhole_id: str,
+        *,
+        witness_episode_id: str,
+        updated_role_and_observation_map: dict[str, Any] | None = None,
+        updated_permission_tier: str | None = None,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Explicitly revalidate & rebind a HorizontalWormholeEdge to revised live endpoint versions."""
+        edge = deepcopy(self.horizontal_wormhole_edges[wormhole_id])
+        self.wormhole_history.setdefault(wormhole_id, []).append(deepcopy(edge))
+        live_a = self.nodes[edge["node_a_id"]]
+        live_b = self.nodes[edge["node_b_id"]]
+        edge["node_a_version"] = live_a["version"]
+        edge["node_b_version"] = live_b["version"]
+        edge["stale_endpoint_revision"] = False
+        if updated_role_and_observation_map is not None:
+            edge["role_and_observation_map"] = deepcopy(updated_role_and_observation_map)
+        if updated_permission_tier is not None:
+            edge["permission_tier"] = updated_permission_tier
+        edge["align_conditions"].setdefault("revision_provenance", []).append({
+            "episode_id": witness_episode_id,
+            "action": "revalidate_endpoint_versions",
+            "node_a_version": live_a["version"],
+            "node_b_version": live_b["version"],
+            "reason": reason,
+        })
+        edge["version"] += 1
         self.horizontal_wormhole_edges[wormhole_id] = edge
         return deepcopy(edge)
 
@@ -585,24 +732,33 @@ class PhilosophicalForest:
         *,
         witness_episode_id: str,
         cause: str,
+        updated_task_view: dict[str, Any] | None = None,
         updated_observation_map: dict[str, Any] | None = None,
         updated_scale_map: dict[str, Any] | None = None,
         updated_claim_contract: dict[str, Any] | None = None,
+        updated_program_steps: list[dict[str, Any]] | None = None,
+        updated_question_spec: dict[str, Any] | None = None,
         reinterpreted_counterexample_ids: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Versioned empirical revision (may withdraw an erroneous old rejection with provenance)."""
+        """Versioned empirical revision (propagates meaning version to QuestionSpec & marks stale edges)."""
         if cause not in DIAGNOSIS_CAUSES:
             raise ValueError(f"Unknown diagnosis cause: {cause}")
         old = self.nodes[node_id]
+        q_spec_to_pass = updated_question_spec
+        if q_spec_to_pass is None and old.get("question_id") and old["question_id"] in self.questions:
+            q_spec_to_pass = deepcopy(self.questions[old["question_id"]])
+
         updated = self.register_node(
             node_id=node_id,
             tree_id=old["tree_id"],
             layer_role=old["layer_role"],
-            task_view=old["task_view"],
+            task_view=updated_task_view if updated_task_view is not None else old["task_view"],
             observation_map=updated_observation_map if updated_observation_map is not None else old["observation_map"],
             scale_map=updated_scale_map if updated_scale_map is not None else old["scale_map"],
             claim_contract=updated_claim_contract if updated_claim_contract is not None else old["claim_contract"],
             probe_signatures=old["probe_signatures"],
+            program_steps=updated_program_steps if updated_program_steps is not None else old.get("program_steps", []),
+            question_spec=q_spec_to_pass,
             support_paths=old["support_paths"],
             source_cluster_ids=old["source_cluster_ids"],
         )
@@ -615,6 +771,11 @@ class PhilosophicalForest:
             "reinterpreted_counterexample_ids": list(reinterpreted_counterexample_ids or ()),
         }
         self.nodes[node_id] = updated
+        # Mark incident horizontal wormholes stale until explicitly revalidated!
+        for wh in self.horizontal_wormhole_edges.values():
+            if ((wh["node_a_id"] == node_id and wh["node_a_version"] != updated["version"]) or
+                    (wh["node_b_id"] == node_id and wh["node_b_version"] != updated["version"])):
+                wh["stale_endpoint_revision"] = True
         return deepcopy(updated)
 
     def recall_mid_layer_wormholes(
@@ -624,11 +785,14 @@ class PhilosophicalForest:
         task_view: dict[str, Any],
         allow_horizontal_wormholes: bool = True,
     ) -> list[dict[str, Any]]:
-        """Recall candidate intermediate nodes & horizontal wormholes by observed ProbeSignatures."""
+        """Recall candidate intermediate nodes & live-version horizontal wormholes by ProbeSignatures."""
         sig_set = set(observed_signatures)
+        goal = task_view.get("goal_kind")
         candidates: list[dict[str, Any]] = []
         for node in self.nodes.values():
             if node["utility_ledger"].get("archived_low_utility"):
+                continue
+            if node["claim_contract"].get("evidence_status") == "REFUTED_IN_SCOPE":
                 continue
             overlap = sorted(sig_set & set(node.get("probe_signatures", ())))
             if not overlap:
@@ -645,17 +809,30 @@ class PhilosophicalForest:
                 continue
             # Horizontal mid-layer wormhole bridge jumps across distinct trees!
             for wh in self.horizontal_wormhole_edges.values():
+                if wh.get("stale_endpoint_revision"):
+                    continue
+                if wh["node_a_id"] not in self.nodes or wh["node_b_id"] not in self.nodes:
+                    continue
+                live_a = self.nodes[wh["node_a_id"]]
+                live_b = self.nodes[wh["node_b_id"]]
+                if wh["node_a_version"] != live_a["version"] or wh["node_b_version"] != live_b["version"]:
+                    continue
+                compat_goals = wh.get("compatible_goal_kinds") or ()
+                if compat_goals and goal is not None and goal not in compat_goals:
+                    continue
                 peer_id = None
                 if wh["node_a_id"] == node["node_id"]:
                     peer_id = wh["node_b_id"]
                 elif wh["node_b_id"] == node["node_id"]:
                     peer_id = wh["node_a_id"]
-                if peer_id is None or peer_id not in self.nodes:
+                if peer_id is None:
                     continue
                 peer = self.nodes[peer_id]
                 if peer["utility_ledger"].get("archived_low_utility"):
                     continue
-                wh_overlap = sorted(sig_set & (set(wh["probe_signature_refs"]) | set(node["probe_signatures"])))
+                if peer["claim_contract"].get("evidence_status") == "REFUTED_IN_SCOPE":
+                    continue
+                wh_overlap = sorted(sig_set & set(wh["probe_signature_refs"]))
                 if wh_overlap:
                     candidates.append({
                         "entry_kind": "horizontal_mid_wormhole",
@@ -799,17 +976,17 @@ class TwoStageWormholeGate:
                 "transfer_pass_rate": transfer_pass_rate,
                 "direct_pass_rate": direct_pass_rate,
             }
-        t_costs = [r[0] for r in records]
-        d_costs = [r[1] for r in records]
+        paired_diffs = [r[0] - r[1] for r in records]
         n = len(records)
-        ucb_transfer = mean(t_costs) + (pstdev(t_costs) / math.sqrt(n))
-        lcb_direct = mean(d_costs) - (pstdev(d_costs) / math.sqrt(n))
-        admit = ucb_transfer < (lcb_direct - self.margin) or (transfer_pass_rate > direct_pass_rate)
+        mean_paired_diff = mean(paired_diffs)
+        se_paired_diff = pstdev(paired_diffs) / math.sqrt(n)
+        empirical_upper_diff = mean_paired_diff + 0.35 * se_paired_diff
+        admit = (empirical_upper_diff < -self.margin) or (transfer_pass_rate > direct_pass_rate)
         return {
             "admit_transfer": bool(admit),
-            "mode": "calibrated_empirical_cost_gate",
-            "ucb_transfer_remaining": ucb_transfer,
-            "lcb_direct_remaining": lcb_direct,
+            "mode": "calibrated_paired_diff_empirical_gate",
+            "mean_paired_diff": mean_paired_diff,
+            "empirical_upper_diff": empirical_upper_diff,
             "margin": self.margin,
             "sample_count": n,
         }
