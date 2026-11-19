@@ -25,6 +25,10 @@
    - 针对 `Hegel_V166_diagnosis/GPT_diagnonsis_v166.md` 23 项红队控制点逐一工程修复（同时完整保留并加固面向 M2/M3 的哲学森林 + 横向虫洞核心骨架）；`O_strong` 升级为从 `raw_archive` 自由重建结构化经验并缓存复用的真正强基线，所有 8 臂达到 `56/56` 严格通过、`0` 假确认，双源对比单源净摊销曲线 $\Delta C(N)$ 正式转负（$-9.38$）。
 10. **[10_V16_8_M2_Open_Workspace_AST_Wormholes_Report.md](./10_V16_8_M2_Open_Workspace_AST_Wormholes_Report.md)**（**V16.8 M2 开放 Python 代码工作区、AST 骨架虫洞与跨领域实测报告**）
     - 全面告别固定插件分发，打通真实磁盘目录 `observations.json` + 动态合成 `model.py` + `code_agent.evaluate_python_model` 隔离进程验证闭环；实现剥离 `ObservationMap` 符号/仿射外壳后的 Python AST 骨架范式化（化学勒夏特列 `+1` 与电磁楞次 `-1` 自动归一至同一 AST 骨架摘要），并在 `240` 个独立工作区评测中首次同时严格击败全权限 `O_strong_CodeSession`（`-41.03` target / `-27.43` e2e，`4/4` 负）与同内容扁平代码库 `Flat_EqualContent_CodeBank`（`-1.74`，`4/4` 负）。
+11. **[11_V16_9_M2_Audit_Closure_and_Open_Author_Report.md](./11_V16_9_M2_Audit_Closure_and_Open_Author_Report.md)**（**V16.9 M2 红队审计闭环、原生 `CodeAgent` 开放作者修订链与全历史公平对照报告**）
+    - 完整闭合 `Hegel_M2_Audit` 全部聚焦反例（确认失败诚实返回 `scoped_unknown`、`fit` 训练前缀冻结隔离、收据多重身份绑定、纯数据流 AST 规范化与旁注一致性互验、$S_d$ 坐标排列不变性、真实解释执行 `program_steps`、独立克隆 RNG 与实测子进程墙钟）；放开 `O_strong_AllValidatedPriors` 全部同维历史候选与 `HExA` 错误库消费，并打通原生 `CodeAgent` + `scipy.optimize.least_squares` 两条非模板开放算子反例修订与跨领域逆序迁移链（`384/384` 工作区严格通过、`0` 假确认），同时坚定保留面向 M3 大规模森林检索的核心图拓扑。
+12. **[12_V17_0_M3_HippoRAG_Scale_Wormhole_Report.md](./12_V17_0_M3_HippoRAG_Scale_Wormhole_Report.md)**（**V17.0 M3 大规模异质森林 `K=36`、HippoRAG 特异性加权 PPR 与横向虫洞单因子实测报告**）
+    - 扩展至每簇 `36` 个跨学科源与反例近失工作区（`23` 类可执行 Python 机理）、`24` 道未见目标 × `4` 冻结评测簇 × `7` 受控单因子臂 = `672` 个目标工作区 + `8` 个域外诚实性工作区（全部 `96/96` 严格通过、`0` 假确认、域外 `8/8` 返回 `scoped_unknown`）；在 100% 相同冻结森林元数据下，`Hegel_M3_HippoPPR` 实现授权 `Recall@2 = 1.0000`（`92/92`），在纯物理测量费（`λ=0`）与端到端总复合成本上同时严格击败 `Flat_BM25_EqualMetadata`（`-10.29` e2e，`4/4` 负）、`Forest_VerticalPPR_NoWormholes`（`-69.82` e2e，`4/4` 负）、`HippoPPR_UncheckedRecall`（`-29.77` target，`4/4` 负）、`O_strong_AllValidatedPriors`（`-104.64` e2e，`N*=7` 回本，`4/4` 负）与 `O_HExA_CodeSkills`（`-296.89` e2e，`4/4` 负）。
 
 ## 关联文献归档库
 

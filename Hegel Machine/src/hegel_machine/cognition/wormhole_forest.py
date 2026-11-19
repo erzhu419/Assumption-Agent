@@ -162,11 +162,41 @@ def _validate_evidence_receipt(
     if evidence_receipt.get("passed") is not True:
         return False
     expected_claim = claim_contract.get("claim_id")
-    if expected_claim and evidence_receipt.get("claim_id") not in {expected_claim, "*"}:
-        return False
-    if "observed_error" in evidence_receipt and "tolerance" in task_view:
-        if float(evidence_receipt["observed_error"]) > float(task_view["tolerance"]) + 1e-12:
+    if expected_claim:
+        if evidence_receipt.get("claim_id") != expected_claim or evidence_receipt.get("claim_id") == "*":
             return False
+    elif not evidence_receipt.get("claim_id") or evidence_receipt.get("claim_id") == "*":
+        return False
+
+    if "observed_error" not in evidence_receipt:
+        return False
+    raw_err = evidence_receipt["observed_error"]
+    if not isinstance(raw_err, (int, float)) or isinstance(raw_err, bool):
+        return False
+    err_val = float(raw_err)
+    if not math.isfinite(err_val) or err_val < 0.0:
+        return False
+    tol = task_view.get("tolerance", claim_contract.get("tolerance"))
+    if tol is not None:
+        if not math.isfinite(float(tol)) or err_val > float(tol) + 1e-12:
+            return False
+
+    expected_target = task_view.get("target_id")
+    if expected_target is not None and evidence_receipt.get("target_id") != expected_target:
+        return False
+
+    expected_version = task_view.get("node_version", claim_contract.get("node_version"))
+    if expected_version is not None and evidence_receipt.get("node_version") != expected_version:
+        return False
+
+    expected_model_sha = task_view.get("expected_model_sha256")
+    if expected_model_sha is not None and evidence_receipt.get("model_sha256") != expected_model_sha:
+        return False
+
+    expected_conf_digest = task_view.get("expected_confirmation_digest")
+    if expected_conf_digest is not None and evidence_receipt.get("confirmation_digest") != expected_conf_digest:
+        return False
+
     return True
 
 

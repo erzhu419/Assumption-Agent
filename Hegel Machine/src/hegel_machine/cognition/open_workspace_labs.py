@@ -13,6 +13,7 @@ Every laboratory in M2 exposes ONE unified ``CodeAgent``-compatible workspace in
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 import json
 import math
@@ -41,6 +42,8 @@ class OpenWorkspaceTaskLab:
         private_oracle_fn: Callable[[dict[str, float]], float],
         private_readout_cal_fn: Callable[[float], float] | None = None,
         domain_regime_attrs: dict[str, Any] | None = None,
+        noise_std: float = 0.0,
+        noise_seed: int | None = None,
     ) -> None:
         self.task_id = task_id
         self.surface_domain = surface_domain
@@ -56,11 +59,58 @@ class OpenWorkspaceTaskLab:
             **({"domain_regime_attrs": dict(self.domain_regime_attrs)} if self.domain_regime_attrs else {}),
         }
         self.meter = meter
-        self._oracle = private_oracle_fn
+        self._base_oracle_fn = private_oracle_fn
+        self._noise_std = float(noise_std)
+        self._noise_seed = noise_seed
+        self._noise_rng: Random | None = (
+            Random(noise_seed) if (noise_seed is not None and self._noise_std > 0.0) else None
+        )
+        self._oracle = self._make_bound_oracle()
         self._readout_cal = private_readout_cal_fn
         self.observations: list[Observation] = []
         self.calibration_readings: list[tuple[float, float]] = []
         self.python_execution_seconds: float = 0.0
+        self.measured_python_wall_seconds: float = 0.0
+
+    def _make_bound_oracle(self) -> Callable[[dict[str, float]], float]:
+        base_fn = self._base_oracle_fn
+        rng = self._noise_rng
+        sd = self._noise_std
+
+        def _eval_point(pt: dict[str, float]) -> float:
+            val = float(base_fn(pt))
+            if rng is not None and sd > 0.0:
+                val += rng.gauss(0.0, sd)
+            return val
+
+        return _eval_point
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "OpenWorkspaceTaskLab":
+        cloned = OpenWorkspaceTaskLab(
+            task_id=self.task_id,
+            surface_domain=self.surface_domain,
+            feature_names=tuple(self.feature_names),
+            feature_bounds=deepcopy(self.feature_bounds, memo),
+            cost_per_obs=self.cost_per_obs,
+            task_view=deepcopy(self.task_view, memo),
+            meter=deepcopy(self.meter, memo),
+            private_oracle_fn=self._base_oracle_fn,
+            private_readout_cal_fn=self._readout_cal,
+            domain_regime_attrs=deepcopy(self.domain_regime_attrs, memo),
+            noise_std=self._noise_std,
+            noise_seed=self._noise_seed,
+        )
+        memo[id(self)] = cloned
+        if self._noise_rng is not None:
+            cloned_rng = Random()
+            cloned_rng.setstate(self._noise_rng.getstate())
+            cloned._noise_rng = cloned_rng
+        cloned._oracle = cloned._make_bound_oracle()
+        cloned.observations = deepcopy(self.observations, memo)
+        cloned.calibration_readings = deepcopy(self.calibration_readings, memo)
+        cloned.python_execution_seconds = float(self.python_execution_seconds)
+        cloned.measured_python_wall_seconds = float(self.measured_python_wall_seconds)
+        return cloned
 
     def sync_workspace_files(self, workspace: Path) -> None:
         workspace.mkdir(parents=True, exist_ok=True)
@@ -131,8 +181,33 @@ class OpenWorkspaceTaskLab:
         return out
 
     def record_python_wall_time(self, seconds: float, *, phase: str = "python_exec", compute_units: float = 4.0) -> None:
-        self.python_execution_seconds += float(seconds)
+        dt = max(0.0, float(seconds))
+        self.python_execution_seconds += dt
+        self.measured_python_wall_seconds += dt
         self.meter.charge(phase, compute=compute_units)
+
+
+def _load_verified_confirmed_prefix(
+    workspace: Path,
+    paid_observations: list[Observation],
+) -> list[Observation]:
+    """Use frozen pre-confirmation training prefix if saved and verified as a subset of paid rows."""
+    prefix_path = workspace / "confirmed_training_observations.json"
+    if not prefix_path.is_file():
+        return paid_observations
+    try:
+        raw_rows = json.loads(prefix_path.read_text(encoding="utf-8"))
+        if not isinstance(raw_rows, list) or len(raw_rows) > len(paid_observations):
+            return paid_observations
+        reconstructed: list[Observation] = []
+        for idx, item in enumerate(raw_rows):
+            paid = paid_observations[idx]
+            if item.get("features") != paid.features or abs(float(item.get("target", 0.0)) - float(paid.target)) > 1e-12:
+                return paid_observations
+            reconstructed.append(paid)
+        return reconstructed
+    except Exception:
+        return paid_observations
 
 
 def _evaluate_workspace_submission(
@@ -141,22 +216,26 @@ def _evaluate_workspace_submission(
     paid_observations: list[Observation],
     heldout_eval_rows: list[Observation],
     rmse_tolerance: float,
+    *,
+    submission_status: str = "completed",
 ) -> dict[str, Any]:
     """Closed read-only benchmark evaluator executing ``workspace / model_rel_path`` in subprocess!"""
-    if not model_rel_path or not (workspace / model_rel_path).is_file():
+    if submission_status != "completed" or not model_rel_path or not (workspace / model_rel_path).is_file():
         return {
             "strict_pass": False,
             "false_confirmation": False,
-            "reason": "missing_submitted_model_file",
+            "reason": "unconfirmed_or_missing_submitted_model_file",
+            "submission_status": submission_status,
             "rmse": None,
         }
+    training_obs = _load_verified_confirmed_prefix(workspace, paid_observations)
     eval_res = evaluate_python_model(
         workspace,
         model_rel_path,
         heldout_eval_rows,
         timeout_seconds=15.0,
         risk_quantile=0.5,
-        training_observations=paid_observations,
+        training_observations=training_obs,
         require_fit=False,
     )
     if eval_res.get("returncode") != 0 or "mse" not in eval_res:
@@ -288,12 +367,8 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
         ]
 
         def factory() -> OpenWorkspaceTaskLab:
-            local_rng = Random(noise_seed)
             meter = CostMeter(obs_budget=obs_budget, meas_budget=meas_budget, compute_budget=800.0)
-
-            def noisy_oracle(pt: dict[str, float]) -> float:
-                return transform_out(clean_fn(pt)) + local_rng.gauss(0.0, noise_std)
-
+            clean_transformed = lambda pt: transform_out(clean_fn(pt))
             cal_fn = (lambda lv: transform_out(lv)) if expose_calibration_channel else None
             tv: dict[str, Any] = {
                 "goal_kind": goal_kind,
@@ -310,9 +385,11 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
                 cost_per_obs=cost_per_obs,
                 task_view=tv,
                 meter=meter,
-                private_oracle_fn=noisy_oracle,
+                private_oracle_fn=clean_transformed,
                 private_readout_cal_fn=cal_fn,
                 domain_regime_attrs=domain_regime_attrs,
+                noise_std=noise_std,
+                noise_seed=noise_seed,
             )
 
         def evaluator(workspace: Path, submission: dict[str, Any], paid_obs: list[Observation]) -> dict[str, Any]:
@@ -322,6 +399,7 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
                 paid_obs,
                 heldout_rows,
                 rmse_tol,
+                submission_status=str(submission.get("status", "incomplete")),
             )
 
         return factory, evaluator
@@ -365,7 +443,7 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
     cb_s1_c1, cb_s1_c2 = rng.uniform(1.7, 2.3), rng.uniform(2.2, 2.9)
     cb_s2_c1, cb_s2_c2 = rng.uniform(1.4, 2.0), rng.uniform(2.5, 3.2)
     tb1_c1, tb1_c2 = rng.uniform(1.8, 2.4), rng.uniform(2.1, 2.8)
-    tb2_c1, tb2_c2, tb2_cap = 2.2, 2.6, rng.uniform(16.0, 20.0)
+    tb2_c1, tb2_c2, tb2_cap = 2.2, 2.6, rng.uniform(15.8, 18.8)
     tb3_coef = rng.uniform(2.2, 3.0)
 
     grid_2d = [
@@ -487,10 +565,24 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
                     domain="network_egress_shaper",
                     feature_names=("policer_rate",),
                     feature_bounds={"policer_rate": (1.0, 28.0)},
-                    clean_fn=lambda pt: pt["policer_rate"] / (0.24 * pt["policer_rate"] + 1.9),
+                    clean_fn=lambda pt: pt["policer_rate"] / (0.26 * pt["policer_rate"] + 1.75 + 0.00045 * (pt["policer_rate"] ** 2)),
                     eval_points=[{"policer_rate": u} for u in eval_1d_u],
                     rmse_tol=0.03,
                     noise_seed=seed + 32,
+                    domain_regime_attrs={"packed_bed": False},
+                ),
+            ),
+            (
+                "src_M2C3_edge_cdn_relay",
+                build_task_pair(
+                    tid="src_M2C3",
+                    domain="edge_cdn_relay_buffer",
+                    feature_names=("ingress_rate",),
+                    feature_bounds={"ingress_rate": (1.0, 28.0)},
+                    clean_fn=lambda pt: pt["ingress_rate"] / (0.24 * pt["ingress_rate"] + 1.60 + 0.00145 * (pt["ingress_rate"] ** 2)),
+                    eval_points=[{"ingress_rate": u} for u in eval_1d_u],
+                    rmse_tol=0.020,
+                    noise_seed=seed + 33,
                     domain_regime_attrs={"packed_bed": False},
                 ),
             ),
@@ -721,7 +813,7 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
                     domain_regime_attrs={"packed_bed": False},
                 ),
             ),
-            # 10. 2-Hop Non-Transitive Drift Target (S1 <->[0.015] S2 <->[0.018] S3_approx, strict tol=0.025 on subtle monotone drift!)
+            # 10. 2-Hop Non-Transitive Drift Target (S_C1 <-> S_C2 <-> S_C3 empirical chain, NO target hint flag!)
             (
                 "Cluster_M2C",
                 "T_M2C4_two_hop_drift_non_transitive",
@@ -730,14 +822,14 @@ def make_m2_open_workspace_suite(seed: int) -> dict[str, Any]:
                     domain="congested_relay_two_hop",
                     feature_names=("relay_load",),
                     feature_bounds={"relay_load": (1.0, 28.0)},
-                    clean_fn=lambda pt: pt["relay_load"] / (0.22 * pt["relay_load"] + 1.5 + 0.0022 * (pt["relay_load"] ** 2)),
+                    clean_fn=lambda pt: pt["relay_load"] / (0.22 * pt["relay_load"] + 1.5 + 0.0023 * (pt["relay_load"] ** 2)),
                     eval_points=[{"relay_load": u} for u in eval_1d_u],
                     goal_kind="open_workspace_mechanism_prediction",
-                    rmse_tol=0.025,
+                    rmse_tol=0.022,
                     obs_budget=16,
                     meas_budget=80.0,
                     noise_seed=seed + 110,
-                    domain_regime_attrs={"two_hop_bridge_only": True, "packed_bed": False},
+                    domain_regime_attrs={"packed_bed": False},
                 ),
             ),
         ],

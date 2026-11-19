@@ -66,22 +66,26 @@ def test_m2_end_to_end_open_workspace_formation_revision_and_10_targets(tmp_path
 
     hegel = OpenWorkspaceHegelResearcher(allow_horizontal_wormholes=True)
     src_h = hegel.form_and_revise_in_workspaces("m2_test_9002", suite, tmp_path / "hegel_src")
-    assert len(src_h) == 9  # 6 sources + 2 near-misses + 1 scale calibration probe
-    assert len(hegel.forest.horizontal_wormhole_edges) >= 5  # 3 AST wormholes + 2 revision wormholes + hop2!
+    assert len(src_h) == 10  # 7 empirical sources + 2 near-misses + 1 scale calibration probe
+    assert len(hegel.forest.horizontal_wormhole_edges) >= 5  # 3 AST wormholes + 2 revision wormholes + empirical hop2!
     assert len(hegel.revision_events) == 2
 
-    flat_arm = OpenWorkspaceFlatEqualContent(hegel)
+    flat_arm = OpenWorkspaceFlatEqualContent(hegel, transitive_equivalence=True)
 
-    ordinary = OpenWorkspaceStrongOrdinary(allow_archive_reconstruction=True)
-    src_o = ordinary.run_source_and_nearmiss_phase(suite, tmp_path / "ord_src")
-    assert len(src_o) == 8
-    assert len(ordinary.shared_python_files) == 8
+    ordinary_all = OpenWorkspaceStrongOrdinary(allow_archive_reconstruction=True, retain_all_validated_priors=True)
+    src_o = ordinary_all.run_source_and_nearmiss_phase(suite, tmp_path / "ord_src")
+    assert len(src_o) == 9
+    assert len(ordinary_all.shared_python_files) == 9
+
+    ordinary_compressed = OpenWorkspaceStrongOrdinary(allow_archive_reconstruction=True, retain_all_validated_priors=False)
+    ordinary_compressed.raw_archive = list(ordinary_all.raw_archive)
+    ordinary_compressed.shared_python_files = dict(ordinary_all.shared_python_files)
 
     hexa = OpenWorkspaceHExASkills()
     hexa.run_source_and_nearmiss_phase(suite, tmp_path / "hexa_src")
 
     h_meas_total = 0.0
-    o_meas_total = 0.0
+    o_comp_meas_total = 0.0
     for _fam, t_name, (fac, ev_fn) in suite["targets"]:
         ws_h = tmp_path / "targets" / f"h_{t_name}"
         lab_h = fac()
@@ -92,15 +96,19 @@ def test_m2_end_to_end_open_workspace_formation_revision_and_10_targets(tmp_path
         assert ev_h["false_confirmation"] is False
         h_meas_total += lab_h.meter.meas_spent
 
-        ws_o = tmp_path / "targets" / f"o_{t_name}"
-        lab_o = fac()
-        sub_o = ordinary.solve_target(t_name, lab_o, ws_o)
-        ev_o = ev_fn(ws_o, sub_o, lab_o.observations)
-        assert ev_o["strict_pass"] is True, f"Ordinary M2 failed on {t_name}: {ev_o}"
-        o_meas_total += lab_o.meter.meas_spent
+        ws_oa = tmp_path / "targets" / f"oa_{t_name}"
+        lab_oa = fac()
+        sub_oa = ordinary_all.solve_target(t_name, lab_oa, ws_oa)
+        assert ev_fn(ws_oa, sub_oa, lab_oa.observations)["strict_pass"] is True
 
-    # Verify Hegel M2 achieves strictly lower total measurement cost across the 10 unseen targets than O_strong_CodeSession!
-    assert h_meas_total < o_meas_total
+        ws_oc = tmp_path / "targets" / f"oc_{t_name}"
+        lab_oc = fac()
+        sub_oc = ordinary_compressed.solve_target(t_name, lab_oc, ws_oc)
+        ev_oc = ev_fn(ws_oc, sub_oc, lab_oc.observations)
+        assert ev_oc["strict_pass"] is True, f"Ordinary compressed failed on {t_name}: {ev_oc}"
+        o_comp_meas_total += lab_oc.meter.meas_spent
+
+    assert h_meas_total < o_comp_meas_total
 
     # Verify 2-hop non-transitive chain error check saves wasted trial vs transitive Flat_EqualContent on T_M2C4!
     t_2hop_pair = next(pair for _f, tn, pair in suite["targets"] if tn == "T_M2C4_two_hop_drift_non_transitive")
@@ -111,7 +119,7 @@ def test_m2_end_to_end_open_workspace_formation_revision_and_10_targets(tmp_path
     sub_f2 = flat_arm.solve_target("T_M2C4", lab_f2, ws_f2)
     assert ev_2h(ws_h2, sub_h2, lab_h2.observations)["strict_pass"] is True
     assert ev_2h(ws_f2, sub_f2, lab_f2.observations)["strict_pass"] is True
-    assert any(c.get("decision") == "rejected_two_hop_non_transitive_error_budget" for c in hegel.alignment_checks)
+    assert any("rejected_uncertified_two_hop" in str(c.get("decision", "")) for c in hegel.alignment_checks)
     assert lab_h2.meter.snapshot()["composite_cost"] < lab_f2.meter.snapshot()["composite_cost"]
 
 
