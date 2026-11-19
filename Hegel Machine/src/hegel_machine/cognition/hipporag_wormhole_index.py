@@ -207,6 +207,8 @@ class HippoRAGWormholeIndex:
 
         # 1. Intra-tree vertical implication / sublation edges (`parent -> stronger_child`)
         for v_edge in forest.local_implication_edges:
+            if v_edge.get("stale_endpoint_revision"):
+                continue
             sa, wa = v_edge["stronger_node_id"], v_edge["weaker_node_id"]
             if sa in self.active_nodes and wa in self.active_nodes:
                 if (
@@ -225,6 +227,8 @@ class HippoRAGWormholeIndex:
         n_coarse_edges = 0
         if self.include_coarse_graining_edges:
             for cg_edge in getattr(forest, "coarse_graining_edges", ()):
+                if cg_edge.get("stale_endpoint_revision"):
+                    continue
                 fa, ca = cg_edge["fine_node_id"], cg_edge["coarse_node_id"]
                 if fa in self.active_nodes and ca in self.active_nodes:
                     if (

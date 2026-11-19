@@ -212,6 +212,20 @@ def _load_verified_confirmed_prefix(
         return paid_observations
 
 
+def _normalize_workspace_relative_model_path(workspace: Path, model_rel_path: str) -> str | None:
+    """Resolve ``model_rel_path`` strictly inside ``workspace`` and return a relative POSIX path."""
+    ws_root = workspace.resolve()
+    cand = Path(model_rel_path)
+    full = cand.resolve() if cand.is_absolute() else (ws_root / cand).resolve()
+    try:
+        rel = full.relative_to(ws_root)
+    except ValueError:
+        return None
+    if not full.is_file():
+        return None
+    return rel.as_posix()
+
+
 def _evaluate_workspace_submission(
     workspace: Path,
     model_rel_path: str | None,
@@ -222,7 +236,8 @@ def _evaluate_workspace_submission(
     submission_status: str = "completed",
 ) -> dict[str, Any]:
     """Closed read-only benchmark evaluator executing ``workspace / model_rel_path`` in subprocess!"""
-    if submission_status != "completed" or not model_rel_path or not (workspace / model_rel_path).is_file():
+    safe_rel = _normalize_workspace_relative_model_path(workspace, model_rel_path) if model_rel_path else None
+    if submission_status != "completed" or not safe_rel:
         return {
             "strict_pass": False,
             "false_confirmation": False,
@@ -243,7 +258,7 @@ def _evaluate_workspace_submission(
         (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
         eval_res = evaluate_python_model(
             sandbox,
-            model_rel_path,
+            safe_rel,
             heldout_eval_rows,
             timeout_seconds=15.0,
             risk_quantile=0.5,

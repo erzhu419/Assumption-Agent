@@ -1,0 +1,216 @@
+{
+  "commit": "612d8eea5c8104f4a652c8f4b09df5b8b81ca1b8",
+  "ast": [
+    {
+      "name": "whitelisted_function_shadowing",
+      "model_a": "def exp(x):\n    return x*x\ndef predict(row):\n    return exp(row['features']['x'])\n",
+      "model_b": "def exp(x):\n    return x*x*x\ndef predict(row):\n    return exp(row['features']['x'])\n",
+      "canonical_a": {
+        "ast_skeleton_digest": "unknown:a836095bfc67",
+        "canonical_ast_dump": "UNSUPPORTED:shadowed_callable:exp:a836095bfc673e3ee1c8f5695e224edf2d86e52a3f558eaba25da8ed07d30e1d",
+        "feature_role_order": [],
+        "schema_tag": null,
+        "skeleton_status": "UNSUPPORTED_AST_CONSTRUCT",
+        "model_sha256": "a836095bfc673e3ee1c8f5695e224edf2d86e52a3f558eaba25da8ed07d30e1d"
+      },
+      "canonical_b": {
+        "ast_skeleton_digest": "unknown:f45b4a23f9ca",
+        "canonical_ast_dump": "UNSUPPORTED:shadowed_callable:exp:f45b4a23f9cadc8a94ce8cb18e1c06bba8ecab25a4872c71a9889681f25b7d33",
+        "feature_role_order": [],
+        "schema_tag": null,
+        "skeleton_status": "UNSUPPORTED_AST_CONSTRUCT",
+        "model_sha256": "f45b4a23f9cadc8a94ce8cb18e1c06bba8ecab25a4872c71a9889681f25b7d33"
+      },
+      "same_digest": false,
+      "x": 2.0,
+      "prediction_a": 4.0,
+      "prediction_b": 8.0
+    },
+    {
+      "name": "keyword_semantics_discarded",
+      "model_a": "def predict(row):\n    return round(row['features']['x'], ndigits=1)\n",
+      "model_b": "def predict(row):\n    return round(row['features']['x'], ndigits=3)\n",
+      "canonical_a": {
+        "ast_skeleton_digest": "521bf8a490d1d0",
+        "canonical_ast_dump": "Call(func=Name(id='FN_round', ctx=Load()), args=[Name(id='ROLE_0', ctx=Load())], keywords=[keyword(arg='ndigits', value=Name(id='PREC_1', ctx=Load()))])",
+        "feature_role_order": [
+          "x"
+        ],
+        "schema_tag": null,
+        "skeleton_status": "VERIFIED_PURE_AST",
+        "model_sha256": "d7b3927a256bb7fc4b171f1a2ade7efe0c4fd0f5e2144cf34817c78cfd11d247"
+      },
+      "canonical_b": {
+        "ast_skeleton_digest": "b929ed7dfa655b",
+        "canonical_ast_dump": "Call(func=Name(id='FN_round', ctx=Load()), args=[Name(id='ROLE_0', ctx=Load())], keywords=[keyword(arg='ndigits', value=Name(id='PREC_3', ctx=Load()))])",
+        "feature_role_order": [
+          "x"
+        ],
+        "schema_tag": null,
+        "skeleton_status": "VERIFIED_PURE_AST",
+        "model_sha256": "b891c543d562fce1925d7f233d3222b36e493cffb58bc840d71a4b0bee9d867f"
+      },
+      "same_digest": false,
+      "x": 1.2345,
+      "prediction_a": 1.2,
+      "prediction_b": 1.234
+    }
+  ],
+  "confirmation_files": {
+    "argument_memorizer.py": {
+      "execution_error": false,
+      "rmse": 9.0,
+      "confirmation_digest": "6c5ba308f729509e",
+      "predictions": [
+        0.0
+      ],
+      "wall_seconds": 0.04952134700579336,
+      "training_prefix_count": 2
+    },
+    "file_memorizer.py": {
+      "execution_error": false,
+      "rmse": 9.0,
+      "confirmation_digest": "6c5ba308f729509e",
+      "predictions": [
+        0.0
+      ],
+      "wall_seconds": 0.03536352499941131,
+      "training_prefix_count": 2
+    },
+    "model_file_memorizer.py": {
+      "execution_error": false,
+      "rmse": 9.0,
+      "confirmation_digest": "6c5ba308f729509e",
+      "predictions": [
+        0.0
+      ],
+      "wall_seconds": 0.03161120499862591,
+      "training_prefix_count": 2
+    },
+    "disk_observations": [
+      {
+        "features": {
+          "u": 1.0
+        },
+        "target": 1.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 2.0
+        },
+        "target": 4.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 3.0
+        },
+        "target": 9.0,
+        "history": []
+      }
+    ],
+    "disk_model_observations": [
+      {
+        "features": {
+          "u": 1.0
+        },
+        "target": 1.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 2.0
+        },
+        "target": 4.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 3.0
+        },
+        "target": 9.0,
+        "history": []
+      }
+    ],
+    "training_prefix_count": 2,
+    "confirmation_target": 9.0
+  },
+  "provider_dataflow": {
+    "diagnostic_action": {
+      "action": "run",
+      "arguments": {
+        "path": "diagnose_residuals.py",
+        "code": "print('diagnostic')",
+        "channels": [
+          "primary"
+        ]
+      },
+      "usage": {
+        "total_tokens": 220
+      }
+    },
+    "after_feedback_a": {
+      "action": "write",
+      "arguments": {
+        "path": "diag_synthesized_haldane_bypass_2d.py",
+        "code": "import math\n\n_SCHEMA_FAMILY_TAG = 'haldane_inhibited_plus_bypass_2d'\n_CORE_LAW_EXPR = \"((_PARAMS['p0'] * f['x0'] / (_PARAMS['p1'] + f['x0'] + _PARAMS['p2'] * (f['x0'] ** 2))) + _PARAMS['p3'] * f['x1'])\"\n_PARAMS = {'p0': 1.0, 'p1': 1.0, 'p2': 0.0, 'p3': 0.0}\n\ndef fit(observations):\n    from scipy.optimize import least_squares\n    if not observations:\n        return\n    x0 = [float(r['features']['x0']) for r in observations]\n    x1 = [float(r['features']['x1']) for r in observations]\n    ys = [(float(r['target']) - (0)) / ((1) * (1)) for r in observations]\n    def res(p):\n        return [((p[0] * s / (p[1] + s + p[2] * (s ** 2))) + p[3] * b) - y for s, b, y in zip(x0, x1, ys)]\n    sol = least_squares(res, x0=[8.0, 2.5, 0.06, 0.5], bounds=([1e-4, 1e-4, 0.0, -50.0], [500.0, 500.0, 50.0, 50.0]))\n    _PARAMS['p0'], _PARAMS['p1'], _PARAMS['p2'], _PARAMS['p3'] = [float(v) for v in sol.x]\n\ndef predict(row):\n    f = row['features']\n    latent = ((_PARAMS['p0'] * f['x0'] / (_PARAMS['p1'] + f['x0'] + _PARAMS['p2'] * (f['x0'] ** 2))) + _PARAMS['p3'] * f['x1'])\n    return 0 + (1) * (1) * latent\n"
+      },
+      "usage": {
+        "total_tokens": 260
+      }
+    },
+    "after_feedback_b": {
+      "action": "write",
+      "arguments": {
+        "path": "diag_synthesized_ringing_2d.py",
+        "code": "import math\n\n_SCHEMA_FAMILY_TAG = 'underdamped_ringing_2d'\n_CORE_LAW_EXPR = \"(_PARAMS['p0'] * f['x0'] * (1.0 - math.exp(-f['x1'] / _PARAMS['p1']) * math.cos(_PARAMS['p2'] * f['x1'])))\"\n_PARAMS = {'p0': 1.0, 'p1': 1.0, 'p2': 0.0, 'p3': 0.0}\n\ndef fit(observations):\n    from scipy.optimize import least_squares\n    if not observations:\n        return\n    us = [float(r['features']['x0']) for r in observations]\n    ts = [float(r['features']['x1']) for r in observations]\n    ys = [(float(r['target']) - (0)) / ((1) * (1)) for r in observations]\n    best_sol = None\n    for w_init in (0.9, 1.4, 2.0, 2.6):\n        sol = least_squares(\n            lambda p: [(p[0] * u * (1.0 - math.exp(-t / p[1]) * math.cos(p[2] * t))) - y for u, t, y in zip(us, ts, ys)],\n            x0=[1.5, 1.8, w_init],\n            bounds=([1e-4, 0.1, 0.0], [200.0, 50.0, 10.0]),\n        )\n        if best_sol is None or sol.cost < best_sol.cost:\n            best_sol = sol\n    _PARAMS['p0'], _PARAMS['p1'], _PARAMS['p2'] = [float(v) for v in best_sol.x]\n\ndef predict(row):\n    f = row['features']\n    latent = (_PARAMS['p0'] * f['x0'] * (1.0 - math.exp(-f['x1'] / _PARAMS['p1']) * math.cos(_PARAMS['p2'] * f['x1'])))\n    return 0 + (1) * (1) * latent\n"
+      },
+      "usage": {
+        "total_tokens": 260
+      }
+    },
+    "same_next_action": false
+  },
+  "code_agent_file_fit_lifecycle": {
+    "submission": {
+      "status": "scoped_unknown",
+      "model_path": null,
+      "confirmation_rmse": 9.0,
+      "code_agent_events": 4
+    },
+    "external_evaluation": {
+      "strict_pass": false,
+      "false_confirmation": false,
+      "reason": "unconfirmed_or_missing_submitted_model_file",
+      "submission_status": "scoped_unknown",
+      "rmse": null
+    }
+  },
+  "receipt_optional_bindings": {
+    "legacy_view_all_bindings_omitted": {
+      "granted": false,
+      "granted_tier": "bounded_trial",
+      "requested_tier": "local_solver_guidance",
+      "reason": "heldout_target_point_confirmation_required"
+    },
+    "target_binding_present": {
+      "granted": false,
+      "granted_tier": "bounded_trial",
+      "requested_tier": "local_solver_guidance",
+      "reason": "heldout_target_point_confirmation_required"
+    },
+    "missing_confirmation_digest_accepted": {
+      "granted": false,
+      "granted_tier": "bounded_trial",
+      "requested_tier": "local_solver_guidance",
+      "reason": "heldout_target_point_confirmation_required"
+    },
+    "legacy_boolean_bypass": {
+      "granted": false,
+      "granted_tier": "bounded_trial",
+      "requested_tier": "local_solver_guidance",
+      "reason": "heldout_target_point_confirmation_required"
+    }
+  }
+}

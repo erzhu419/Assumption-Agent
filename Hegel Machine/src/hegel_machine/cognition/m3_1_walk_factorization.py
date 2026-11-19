@@ -309,6 +309,13 @@ class M3_1FactorizedResearcher(M3ForestResearcher):
                 wormhole_equivalence_pooling=True,
                 damping_alpha=0.0,
             )
+        elif self.retrieval_mode == "hipporag_alpha0_nopool":
+            idx = HippoRAGWormholeIndex(
+                self.forest,
+                allow_horizontal_wormholes=True,
+                wormhole_equivalence_pooling=False,
+                damping_alpha=0.0,
+            )
         elif self.retrieval_mode == "hipporag_walk_nopool":
             idx = HippoRAGWormholeIndex(
                 self.forest,
