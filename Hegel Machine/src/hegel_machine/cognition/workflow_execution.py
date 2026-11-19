@@ -8,7 +8,49 @@ it does not own a second researcher or an independent observation ledger.
 from copy import deepcopy
 import math
 
-from .growth_methods import instantiate, _compile
+from .growth_methods import WITNESS_OUTCOMES, instantiate, _compile
+
+
+def _evaluate_condition_node(step, *, evidence, selected_fit, diagnostics, threshold):
+    """Evaluate a compiled condition / scientific_refutation_witness step into a typed outcome."""
+    recipe = step.get("recipe", {})
+    predicate = recipe.get("predicate_spec")
+    if isinstance(predicate, dict):
+        kind = predicate.get("kind")
+        if kind == "validation_residual_le":
+            if selected_fit is None:
+                return "UNKNOWN"
+            loss_val = float(selected_fit[0]["validation_loss"])
+            bound = float(predicate.get("atol", threshold))
+            return "SUPPORTED_IN_SCOPE" if loss_val <= bound else "REFUTED_IN_SCOPE"
+        if kind == "diagnostic_predicate":
+            field = predicate.get("field")
+            if not field or field not in diagnostics or diagnostics[field] is None:
+                return "NOT_DETECTED_UNDER_PROTOCOL" if predicate.get("missing_as_not_detected") else "UNKNOWN"
+            actual = diagnostics[field]
+            op, expected = predicate.get("op", "=="), predicate.get("value")
+            matched = (
+                (op == "==" and actual == expected) or
+                (op == "!=" and actual != expected) or
+                (op == "<=" and float(actual) <= float(expected)) or
+                (op == "<" and float(actual) < float(expected)) or
+                (op == ">=" and float(actual) >= float(expected)) or
+                (op == ">" and float(actual) > float(expected)) or
+                (op == "in" and actual in expected)
+            )
+            return ("SUPPORTED_IN_SCOPE" if matched else
+                    predicate.get("on_false", "REFUTED_IN_SCOPE"))
+        if kind == "observation_gap_gt":
+            dep = step.get("depends_on", [None])[0]
+            batches = evidence.get(dep, ())
+            if not batches or len(batches[0][0]) < 2:
+                return "NOT_DETECTED_UNDER_PROTOCOL"
+            rows = batches[0][0]
+            gap = max(abs(float(r.target) - float(rows[0].target)) for r in rows[1:])
+            min_gap = float(predicate.get("min_gap", 1e-6))
+            return "SUPPORTED_IN_SCOPE" if gap > min_gap else "NOT_DETECTED_UNDER_PROTOCOL"
+    fallback = recipe.get("observed_outcome_status", "UNKNOWN")
+    return fallback if fallback in WITNESS_OUTCOMES else "UNKNOWN"
 
 
 class WorkflowEpisode:
@@ -212,7 +254,18 @@ class WorkflowEpisode:
                             "planned_observation_rows": plans[candidate["method_id"]]["observation_rows"]}
                             for candidate in alternatives]})
         evidence, choices, selected, purchased = {}, {}, None, []
+        node_outcomes, skipped_steps, execution_aborted = {}, [], False
         for step in steps:
+            if "when_outcome" in step:
+                guard = step["when_outcome"]
+                observed_outcome = node_outcomes.get(guard["from_node"], "UNKNOWN")
+                if observed_outcome not in set(guard["outcomes"]):
+                    skipped_steps.append({"node_id": step["node_id"],
+                        "from_node": guard["from_node"], "observed_outcome": observed_outcome,
+                        "required_outcomes": list(guard["outcomes"])})
+                    actions.append({"action": "skip_branch_step", "method_id": method["method_id"],
+                        "node_id": step["node_id"], "observed_outcome": observed_outcome})
+                    continue
             if step["action"] == "confirm":
                 continue  # The native agent buys and decides fresh confirmation.
             channels = (choices[step["channels_from"]] if "channels_from" in step else
@@ -221,8 +274,24 @@ class WorkflowEpisode:
                 observed = acquire(channels, "replay_research_workflow", probe=step["probe"])
                 if observed is None:
                     break
+                if isinstance(observed, dict) and observed.get("execution_error"):
+                    execution_aborted = True
+                    actions.append({"action": "execution_error_research_workflow",
+                        "method_id": method["method_id"], "node_id": step["node_id"],
+                        "reason": observed.get("reason", "tool_or_probe_execution_error")})
+                    break
                 evidence[step["node_id"]] = [(observed, channels)]
                 purchased.append((observed, channels))
+            if step["action"] in {"condition", "scientific_refutation_witness"}:
+                outcome = _evaluate_condition_node(
+                    step, evidence=evidence, selected_fit=selected,
+                    diagnostics=self.diagnostics, threshold=threshold,
+                )
+                node_outcomes[step["node_id"]] = outcome
+                actions.append({"action": "evaluate_workflow_condition",
+                    "method_id": method["method_id"], "node_id": step["node_id"],
+                    "outcome_status": outcome})
+                continue
             if step["action"] != "fit":
                 continue
             batches = []
@@ -279,6 +348,10 @@ class WorkflowEpisode:
                             "loss": item[0]["validation_loss"]} for item in trials]})
             else:
                 break
+        if execution_aborted:
+            return {"selected": None, "adequate": False, "purchased": purchased,
+                    "execution_error": True, "node_outcomes": node_outcomes,
+                    "skipped_steps": skipped_steps}
         if selected is not None:
             self.replay_program = selected[0]["candidate"].program
             self.replay_fit_id = self.fit_ids.get(self.replay_program)
@@ -289,8 +362,10 @@ class WorkflowEpisode:
                 self.feedback_recorded = self.replay_failed = True
                 actions.append({"action": "refute_research_workflow", "method_id": method["method_id"],
                     "basis": "paid_validation", "validation_loss": selected[0]["validation_loss"]})
-            return {"selected": selected, "adequate": adequate, "purchased": purchased}
-        return {"selected": None, "adequate": False, "purchased": purchased}
+            return {"selected": selected, "adequate": adequate, "purchased": purchased,
+                    "node_outcomes": node_outcomes, "skipped_steps": skipped_steps}
+        return {"selected": None, "adequate": False, "purchased": purchased,
+                "node_outcomes": node_outcomes, "skipped_steps": skipped_steps}
 
     def finish(self, program, *, confirmed, threshold, actions, concept=None):
         chosen_confirmation = None

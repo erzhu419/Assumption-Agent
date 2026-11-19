@@ -12,7 +12,9 @@ import sys
 
 from .executable_evidence import bind_components, materialize, record_answer, refresh_dependencies
 from .online_inquiry_llm import _PLAN_RUNNER
-from .question_semantics import compile_question, validate_answer_type
+from .question_semantics import (
+    _CONTRACT_MEANING_FIELDS, _strip_cosmetic, compile_question, validate_answer_type,
+)
 from .question_queries import evaluate_on_evidence
 from .question_object_queries import evaluate_parameter_region
 from .question_agenda import (
@@ -556,10 +558,13 @@ def step_question(agent, question, laboratory, *, mission=None):
         from .question_routing import find_distinguishing_experiment
         return find_distinguishing_experiment(agent, question, laboratory, mission=mission)
     record_bindings = executed_plan_records(agent, question)
+    contract_basis = {key: _strip_cosmetic(question[key])
+                      for key in _CONTRACT_MEANING_FIELDS if key in question}
     basis = {'meaning_version': question.get('meaning_version', 1),
              'paid_records': len(agent.observations), 'paid_rows': len(agent.rows),
              'query': deepcopy(compiled.get('query')), 'context': deepcopy(question.get('context_ref')),
-             'region_version': region.get('version'), 'record_bindings': record_bindings}
+             'region_version': region.get('version'), 'record_bindings': record_bindings,
+             **({'contracts': contract_basis} if contract_basis else {})}
     cached = question.get('query_execution')
     if operation == 'FindSharedStructure':
         from .question_object_queries import evaluate_shared_structure
@@ -587,6 +592,11 @@ def step_question(agent, question, laboratory, *, mission=None):
         agent.costs['compute_cost'] += answer.get('compute_cost', 0)
         debit_mission_compute(agent, mission, before_compute)
         question['query_execution'] = {'basis': basis, 'answer': deepcopy(answer)}
+    if answer.get('outcome_status') in {'UNKNOWN', 'PROTOCOL_ERROR', 'EXECUTION_ERROR'}:
+        _discard_answer(question)
+        return {'status': 'scoped_unknown', 'reason': answer['outcome_status'].lower(),
+                'outcome_status': answer['outcome_status'],
+                'evidence': deepcopy(answer.get('evidence', []))}
     if answer['status'] != 'answered':
         _discard_answer(question)
         if answer.get('author_work') and question.get('pending_author_work'):
@@ -601,7 +611,8 @@ def step_question(agent, question, laboratory, *, mission=None):
                   'evidence', 'scope', 'finite_status', 'case_results',
                   'counterexample_case_indices', 'unresolved_cases', 'source_ref', 'completeness',
                   'region_kind', 'independent_confirmation', 'scientific_support',
-                  'source_reconstruction_only', 'search_completeness') if key in answer}
+                  'source_reconstruction_only', 'search_completeness',
+                  'outcome_status', 'permission_tier', 'decision_region_status') if key in answer}
     effective['meaning_version'] = question.get('meaning_version', 1)
     if prior and {k: v for k, v in prior.items() if k != 'version'} == effective:
         current = prior

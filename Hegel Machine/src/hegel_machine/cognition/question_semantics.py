@@ -7,8 +7,15 @@ from copy import deepcopy
 from math import isfinite
 
 
+_CONTRACT_MEANING_FIELDS = (
+    'task_view', 'observation_map', 'readout_spec',
+    'scale_map', 'scale_spec', 'protocol_spec',
+    'claim_contract', 'decision_region',
+)
+_COSMETIC_CONTRACT_KEYS = {'display_label', 'description', 'notes', 'ui_hint'}
 _MEANING_FIELDS = ('mission_id', 'kind', 'subject_refs', 'context_ref',
-                   'answer_type', 'answer_resolution_ref')
+                   'answer_type', 'answer_resolution_ref',
+                   *_CONTRACT_MEANING_FIELDS)
 _ANSWER_FIELDS = ('answer', 'executable_answer', 'answer_history', 'structural_answer_history',
                   'authored_status', 'evidence_status', 'check_results', 'analysis_scope',
                   'evidence', 'revision_index', 'reviewed_through_observation',
@@ -22,7 +29,20 @@ _ANSWER_FIELDS = ('answer', 'executable_answer', 'answer_history', 'structural_a
                   'resolution_experiments', 'conditional_continuation', 'frozen_recall_execution',
                   'revision_candidate_exports', 'revision_export_errors')
 _ANSWER_TYPES = {'number', 'vector', 'interval', 'distribution', 'boolean_claim', 'binding',
-                 'program', 'relation', 'scoped_unknown'}
+                 'program', 'relation', 'scoped_unknown', 'scoped_outcome'}
+_OUTCOME_PARTITION_STATES = {
+    'SUPPORTED_IN_SCOPE', 'NOT_DETECTED_UNDER_PROTOCOL', 'REFUTED_IN_SCOPE',
+    'BOUNDARY_DEGENERATE', 'SENSOR_MISMATCH', 'MODEL_MISMATCH',
+    'UNKNOWN', 'PROTOCOL_ERROR', 'EXECUTION_ERROR',
+}
+
+
+def _strip_cosmetic(value):
+    if isinstance(value, dict):
+        return {k: _strip_cosmetic(v) for k, v in value.items() if k not in _COSMETIC_CONTRACT_KEYS}
+    if isinstance(value, list):
+        return [_strip_cosmetic(item) for item in value]
+    return deepcopy(value)
 
 
 def native_evaluation_contract(semantics):
@@ -48,7 +68,11 @@ def native_evaluation_contract(semantics):
 
 
 def _meaning(question):
-    meaning = {key: deepcopy(question[key]) for key in _MEANING_FIELDS if key in question}
+    meaning = {}
+    for key in _MEANING_FIELDS:
+        if key in question:
+            meaning[key] = (_strip_cosmetic(question[key]) if key in _CONTRACT_MEANING_FIELDS
+                            else deepcopy(question[key]))
     query = question.get('query_semantics')
     if isinstance(query, dict):
         meaning['query_semantics'] = {key: deepcopy(query[key]) for key in
@@ -166,7 +190,55 @@ def validate_answer_type(value, answer_type):
         return isinstance(value, (str, dict)) and bool(value)
     if answer_type == 'scoped_unknown':
         return isinstance(value, dict) and value.get('status') in {'unknown', 'scoped_unknown'}
+    if answer_type == 'scoped_outcome':
+        return (isinstance(value, dict)
+                and value.get('outcome_status') in _OUTCOME_PARTITION_STATES)
     return False
+
+
+def evaluate_decision_region(region, surviving_candidates, *, candidate_losses=None):
+    """Evaluate HEC-style action-bound decision region stopping without vacuous pass.
+
+    A region must bind a concrete executable ``action_ref`` and ``output_contract``
+    (never a bare precision label like 'L3'). Empty surviving candidates always
+    route to ``MODEL_MISMATCH`` rather than vacuously satisfying subset inclusion.
+    """
+    if not isinstance(region, dict):
+        raise ValueError('decision_region must be a dict')
+    action_ref = region.get('action_ref')
+    output_contract = region.get('output_contract')
+    if (not isinstance(action_ref, str) or not action_ref
+            or action_ref in {'L0', 'L1', 'L2', 'L3', 'L4'}):
+        raise ValueError('decision_region requires a concrete executable action_ref, not a layer label')
+    if not isinstance(output_contract, dict) or not output_contract:
+        raise ValueError('decision_region requires a non-empty output_contract')
+    surviving = list(surviving_candidates or ())
+    if not surviving:
+        return {
+            'status': 'MODEL_MISMATCH',
+            'stop_discrimination': False,
+            'action_ref': None,
+            'surviving_count': 0,
+            'requires_independent_confirmation': True,
+        }
+    compatible = set(region.get('compatible_candidate_refs', ()))
+    tol = float(region.get('tolerated_loss', 0.0))
+    if candidate_losses is not None:
+        all_within = all(
+            cand in candidate_losses and isfinite(float(candidate_losses[cand]))
+            and float(candidate_losses[cand]) <= tol
+            for cand in surviving
+        )
+    else:
+        all_within = bool(compatible) and set(surviving) <= compatible
+    return {
+        'status': 'DECISION_EQUIVALENT_IN_SCOPE' if all_within else 'NEEDS_FURTHER_DISCRIMINATION',
+        'stop_discrimination': bool(all_within),
+        'action_ref': action_ref if all_within else None,
+        'surviving_count': len(surviving),
+        'requires_independent_confirmation': True,
+        'independent_confirmation_ref': deepcopy(region.get('independent_confirmation_ref')),
+    }
 
 
 _INSTANCE_FIELDS = ('body_ref', 'parameters', 'fitted_state_ref', 'training_cutoff',

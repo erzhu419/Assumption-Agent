@@ -1,0 +1,1101 @@
+[
+  {
+    "sha": "41609f5f68724f19b2dadb71f8358734ea2037e8",
+    "date": "2026-04-17T03:08:49Z",
+    "message": "Phase 2 + Phase 3: KB evolution and formal isomorphism detection\n\nPhase 2 (experience feedback loop):\n- Experience writer logs ExecutionRecords with structural features\n- Failure-weighted evaluator (9% -> 22% keep rate on contrast groups)\n- LLM-based condition writer replaces template text with semantic descriptions\n- Tier-aware integrator: 36 tentative conditions applied to KB, 18/27 strategies affected\n- OOD leave-one-domain-out validation: KB evolution helps practical domains\n  (+2.9pp business, +7.7pp daily_life hard) but hurts formal domains (-6.4 math)\n- Zero-shot KB eval jumped pre=0% -> v2=6.8% on held-out test set\n\nPhase 3 (formalization layer):\n- Markov kernel builder (108 states x 16 actions, LLM-classified)\n- Distance metrics: Frobenius, spectral, Fisher-Rao, KL (Perrone 2024 asymmetry)\n- Blackwell partial order via scipy linprog\n- Strategy Execution Graph + graph edit distance (networkx)\n- Data-driven threshold calibration\n- Discovered 94 structural relations in 27 strategies (vs 0 in human annotation);\n  formally refutes literature-expected pairs (S01-S15, S03-S16) via SEG evidence\n\nInfrastructure:\n- GPU migration: RE-SAC training 50K episodes in ~8min on RTX 4060\n- Precomputed feature + embedding cache (sentence-transformer once, reuse forever)\n- Domain-partitioned base_env for OOD validation",
+    "api_url": "https://api.github.com/repos/erzhu419/Assumption-Agent/commits/41609f5f68724f19b2dadb71f8358734ea2037e8?per_page=100&page=1",
+    "stats": {
+      "total": 13073,
+      "additions": 12991,
+      "deletions": 82
+    },
+    "returned_file_count": 80,
+    "files_may_be_paginated": false,
+    "files": [
+      {
+        "path": ".gitignore",
+        "status": "modified",
+        "additions": 24,
+        "deletions": 0,
+        "changes": 24,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/.gitignore"
+      },
+      {
+        "path": "phase one/analysis/full_training_results.json",
+        "status": "modified",
+        "additions": 12,
+        "deletions": 12,
+        "changes": 24,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fanalysis%2Ffull_training_results.json"
+      },
+      {
+        "path": "phase one/dispatcher/feature_extractor.py",
+        "status": "modified",
+        "additions": 33,
+        "deletions": 18,
+        "changes": 51,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fdispatcher%2Ffeature_extractor.py"
+      },
+      {
+        "path": "phase one/dispatcher/kb_matcher.py",
+        "status": "added",
+        "additions": 74,
+        "deletions": 0,
+        "changes": 74,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fdispatcher%2Fkb_matcher.py"
+      },
+      {
+        "path": "phase one/dispatcher/resac_discrete.py",
+        "status": "modified",
+        "additions": 15,
+        "deletions": 9,
+        "changes": 24,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fdispatcher%2Fresac_discrete.py"
+      },
+      {
+        "path": "phase one/dispatcher/torch_dispatcher.py",
+        "status": "modified",
+        "additions": 25,
+        "deletions": 16,
+        "changes": 41,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fdispatcher%2Ftorch_dispatcher.py"
+      },
+      {
+        "path": "phase one/experience_writer/exp_writer.py",
+        "status": "added",
+        "additions": 117,
+        "deletions": 0,
+        "changes": 117,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fexperience_writer%2Fexp_writer.py"
+      },
+      {
+        "path": "phase one/scripts/generate_experiences.py",
+        "status": "added",
+        "additions": 180,
+        "deletions": 0,
+        "changes": 180,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fscripts%2Fgenerate_experiences.py"
+      },
+      {
+        "path": "phase one/scripts/ood_retrain.py",
+        "status": "added",
+        "additions": 221,
+        "deletions": 0,
+        "changes": 221,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fscripts%2Food_retrain.py"
+      },
+      {
+        "path": "phase one/scripts/precompute_embeddings.py",
+        "status": "added",
+        "additions": 65,
+        "deletions": 0,
+        "changes": 65,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fscripts%2Fprecompute_embeddings.py"
+      },
+      {
+        "path": "phase one/scripts/precompute_features.py",
+        "status": "added",
+        "additions": 145,
+        "deletions": 0,
+        "changes": 145,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fscripts%2Fprecompute_features.py"
+      },
+      {
+        "path": "phase one/scripts/retrain_with_kb.py",
+        "status": "added",
+        "additions": 190,
+        "deletions": 0,
+        "changes": 190,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fscripts%2Fretrain_with_kb.py"
+      },
+      {
+        "path": "phase one/scripts/train_full.py",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "changes": 4,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Fscripts%2Ftrain_full.py"
+      },
+      {
+        "path": "phase one/task_env/base_env.py",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 6,
+        "changes": 16,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Ftask_env%2Fbase_env.py"
+      },
+      {
+        "path": "phase one/training/ppo_trainer.py",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20one%2Ftraining%2Fppo_trainer.py"
+      },
+      {
+        "path": "phase three/_config.py",
+        "status": "added",
+        "additions": 69,
+        "deletions": 0,
+        "changes": 69,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2F_config.py"
+      },
+      {
+        "path": "phase three/analysis/action_classifier_cache.json",
+        "status": "added",
+        "additions": 4844,
+        "deletions": 0,
+        "changes": 4844,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fanalysis%2Faction_classifier_cache.json"
+      },
+      {
+        "path": "phase three/formalization/core/feature_discretizer.py",
+        "status": "added",
+        "additions": 52,
+        "deletions": 0,
+        "changes": 52,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fcore%2Ffeature_discretizer.py"
+      },
+      {
+        "path": "phase three/formalization/core/kernel_builder.py",
+        "status": "added",
+        "additions": 166,
+        "deletions": 0,
+        "changes": 166,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fcore%2Fkernel_builder.py"
+      },
+      {
+        "path": "phase three/formalization/core/llm_action_classifier.py",
+        "status": "added",
+        "additions": 136,
+        "deletions": 0,
+        "changes": 136,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fcore%2Fllm_action_classifier.py"
+      },
+      {
+        "path": "phase three/formalization/core/seg.py",
+        "status": "added",
+        "additions": 110,
+        "deletions": 0,
+        "changes": 110,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fcore%2Fseg.py"
+      },
+      {
+        "path": "phase three/formalization/isomorphism/detector.py",
+        "status": "added",
+        "additions": 103,
+        "deletions": 0,
+        "changes": 103,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fisomorphism%2Fdetector.py"
+      },
+      {
+        "path": "phase three/formalization/metrics/blackwell.py",
+        "status": "added",
+        "additions": 84,
+        "deletions": 0,
+        "changes": 84,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fmetrics%2Fblackwell.py"
+      },
+      {
+        "path": "phase three/formalization/metrics/metric_suite.py",
+        "status": "added",
+        "additions": 86,
+        "deletions": 0,
+        "changes": 86,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fformalization%2Fmetrics%2Fmetric_suite.py"
+      },
+      {
+        "path": "phase three/scripts/run_formalization.py",
+        "status": "added",
+        "additions": 92,
+        "deletions": 0,
+        "changes": 92,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fscripts%2Frun_formalization.py"
+      },
+      {
+        "path": "phase three/scripts/run_formalization_v2.py",
+        "status": "added",
+        "additions": 157,
+        "deletions": 0,
+        "changes": 157,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20three%2Fscripts%2Frun_formalization_v2.py"
+      },
+      {
+        "path": "phase two/_config.py",
+        "status": "added",
+        "additions": 47,
+        "deletions": 0,
+        "changes": 47,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2F_config.py"
+      },
+      {
+        "path": "phase two/analysis/integrator_decisions.json",
+        "status": "added",
+        "additions": 1528,
+        "deletions": 0,
+        "changes": 1528,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fanalysis%2Fintegrator_decisions.json"
+      },
+      {
+        "path": "phase two/analysis/kb_diff_report.json",
+        "status": "added",
+        "additions": 2038,
+        "deletions": 0,
+        "changes": 2038,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fanalysis%2Fkb_diff_report.json"
+      },
+      {
+        "path": "phase two/analysis/pipeline_v2_summary.json",
+        "status": "added",
+        "additions": 21,
+        "deletions": 0,
+        "changes": 21,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fanalysis%2Fpipeline_v2_summary.json"
+      },
+      {
+        "path": "phase two/experience_distiller/condition_writer.py",
+        "status": "added",
+        "additions": 163,
+        "deletions": 0,
+        "changes": 163,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fexperience_distiller%2Fcondition_writer.py"
+      },
+      {
+        "path": "phase two/experience_distiller/distiller.py",
+        "status": "added",
+        "additions": 243,
+        "deletions": 0,
+        "changes": 243,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fexperience_distiller%2Fdistiller.py"
+      },
+      {
+        "path": "phase two/experience_evaluator/evaluator.py",
+        "status": "added",
+        "additions": 167,
+        "deletions": 0,
+        "changes": 167,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fexperience_evaluator%2Fevaluator.py"
+      },
+      {
+        "path": "phase two/knowledge_integrator/integrator.py",
+        "status": "added",
+        "additions": 238,
+        "deletions": 0,
+        "changes": 238,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fknowledge_integrator%2Fintegrator.py"
+      },
+      {
+        "path": "phase two/scripts/kb_diff_report.py",
+        "status": "added",
+        "additions": 85,
+        "deletions": 0,
+        "changes": 85,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fscripts%2Fkb_diff_report.py"
+      },
+      {
+        "path": "phase two/scripts/run_distiller.py",
+        "status": "added",
+        "additions": 46,
+        "deletions": 0,
+        "changes": 46,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fscripts%2Frun_distiller.py"
+      },
+      {
+        "path": "phase two/scripts/run_evaluator.py",
+        "status": "added",
+        "additions": 31,
+        "deletions": 0,
+        "changes": 31,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fscripts%2Frun_evaluator.py"
+      },
+      {
+        "path": "phase two/scripts/run_integrator.py",
+        "status": "added",
+        "additions": 47,
+        "deletions": 0,
+        "changes": 47,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fscripts%2Frun_integrator.py"
+      },
+      {
+        "path": "phase two/scripts/run_pipeline_v2.py",
+        "status": "added",
+        "additions": 99,
+        "deletions": 0,
+        "changes": 99,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fscripts%2Frun_pipeline_v2.py"
+      },
+      {
+        "path": "phase two/scripts/zero_shot_kb_eval.py",
+        "status": "added",
+        "additions": 114,
+        "deletions": 0,
+        "changes": 114,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20two%2Fscripts%2Fzero_shot_kb_eval.py"
+      },
+      {
+        "path": "phase zero/change_history/S01.jsonl",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 0,
+        "changes": 4,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS01.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S02.jsonl",
+        "status": "modified",
+        "additions": 13,
+        "deletions": 0,
+        "changes": 13,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS02.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S03.jsonl",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 0,
+        "changes": 6,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS03.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S05.jsonl",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS05.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S06.jsonl",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 0,
+        "changes": 10,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS06.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S07.jsonl",
+        "status": "modified",
+        "additions": 12,
+        "deletions": 0,
+        "changes": 12,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS07.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S08.jsonl",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS08.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S09.jsonl",
+        "status": "modified",
+        "additions": 9,
+        "deletions": 0,
+        "changes": 9,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS09.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S11.jsonl",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 0,
+        "changes": 10,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS11.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S13.jsonl",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 0,
+        "changes": 3,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS13.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S14.jsonl",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS14.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S15.jsonl",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 0,
+        "changes": 3,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS15.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S16.jsonl",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 0,
+        "changes": 4,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS16.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S17.jsonl",
+        "status": "modified",
+        "additions": 5,
+        "deletions": 0,
+        "changes": 5,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS17.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S18.jsonl",
+        "status": "modified",
+        "additions": 16,
+        "deletions": 0,
+        "changes": 16,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS18.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S19.jsonl",
+        "status": "modified",
+        "additions": 9,
+        "deletions": 0,
+        "changes": 9,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS19.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S21.jsonl",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 0,
+        "changes": 4,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS21.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S22.jsonl",
+        "status": "modified",
+        "additions": 9,
+        "deletions": 0,
+        "changes": 9,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS22.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S23.jsonl",
+        "status": "modified",
+        "additions": 9,
+        "deletions": 0,
+        "changes": 9,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS23.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S24.jsonl",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 0,
+        "changes": 6,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS24.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S25.jsonl",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 0,
+        "changes": 3,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS25.jsonl"
+      },
+      {
+        "path": "phase zero/change_history/S26.jsonl",
+        "status": "modified",
+        "additions": 9,
+        "deletions": 0,
+        "changes": 9,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fchange_history%2FS26.jsonl"
+      },
+      {
+        "path": "phase zero/kb/strategies/S01_controlled_variable_method.json",
+        "status": "modified",
+        "additions": 23,
+        "deletions": 1,
+        "changes": 24,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS01_controlled_variable_method.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S02_divide_and_conquer.json",
+        "status": "modified",
+        "additions": 86,
+        "deletions": 1,
+        "changes": 87,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS02_divide_and_conquer.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S03_analogical_reasoning.json",
+        "status": "modified",
+        "additions": 31,
+        "deletions": 1,
+        "changes": 32,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS03_analogical_reasoning.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S06_specialization_before_generalization.json",
+        "status": "modified",
+        "additions": 89,
+        "deletions": 1,
+        "changes": 90,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS06_specialization_before_generalization.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S07_backward_reasoning.json",
+        "status": "modified",
+        "additions": 69,
+        "deletions": 1,
+        "changes": 70,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS07_backward_reasoning.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S09_dimension_reduction___simplification.json",
+        "status": "modified",
+        "additions": 70,
+        "deletions": 1,
+        "changes": 71,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS09_dimension_reduction___simplification.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S11_satisficing.json",
+        "status": "modified",
+        "additions": 89,
+        "deletions": 1,
+        "changes": 90,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS11_satisficing.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S15_incremental_building.json",
+        "status": "modified",
+        "additions": 34,
+        "deletions": 1,
+        "changes": 35,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS15_incremental_building.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S16_method_of_agreement.json",
+        "status": "modified",
+        "additions": 27,
+        "deletions": 1,
+        "changes": 28,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS16_method_of_agreement.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S17_method_of_difference.json",
+        "status": "modified",
+        "additions": 30,
+        "deletions": 1,
+        "changes": 31,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS17_method_of_difference.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S18_abstraction___generalization.json",
+        "status": "modified",
+        "additions": 126,
+        "deletions": 1,
+        "changes": 127,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS18_abstraction___generalization.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S19_constraint_relaxation.json",
+        "status": "modified",
+        "additions": 50,
+        "deletions": 1,
+        "changes": 51,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS19_constraint_relaxation.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S21_dead_end_recognition___cut_losses.json",
+        "status": "modified",
+        "additions": 37,
+        "deletions": 1,
+        "changes": 38,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS21_dead_end_recognition___cut_losses.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S22_problem_reframing.json",
+        "status": "modified",
+        "additions": 51,
+        "deletions": 1,
+        "changes": 52,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS22_problem_reframing.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S23_approximate_acceptance_under_resource_constraints.json",
+        "status": "modified",
+        "additions": 47,
+        "deletions": 1,
+        "changes": 48,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS23_approximate_acceptance_under_resource_constraints.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S24_critical_node___bottleneck_identification.json",
+        "status": "modified",
+        "additions": 27,
+        "deletions": 1,
+        "changes": 28,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS24_critical_node___bottleneck_identification.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S25_emergence_detection.json",
+        "status": "modified",
+        "additions": 31,
+        "deletions": 1,
+        "changes": 32,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS25_emergence_detection.json"
+      },
+      {
+        "path": "phase zero/kb/strategies/S26_path_dependency_analysis.json",
+        "status": "modified",
+        "additions": 47,
+        "deletions": 1,
+        "changes": 48,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/41609f5f68724f19b2dadb71f8358734ea2037e8/phase%20zero%2Fkb%2Fstrategies%2FS26_path_dependency_analysis.json"
+      }
+    ]
+  },
+  {
+    "sha": "1b312fda80db5c7bca0fbde5e889959660cf2ce8",
+    "date": "2026-04-22T16:05:48Z",
+    "message": "v15/v16: case-based reasoning + audit — v16 beats Self-Discover +22pp\n\nNew overall champion on 100-problem benchmark (3-flash gen + judge):\n  - v16 vs baseline_long:      86-14 (+72pp)\n  - v16 vs ours_27:            61-39 (+22pp) ← first to beat Self-Discover\n  - v16 vs v13_reflect:        61-38-1 (+23pp) ← first to beat prior champion\n  - v16 vs v14_hybrid:         60-40 (+20pp)\n  - v16 vs v15_exemplar:       67-33 (+34pp)\n\n## Architecture (v16)\n\nDomain router:\n  math/science -> v12c hygiene (1-pass bare prompt + self-check)\n  others       -> 2-turn cases+reflect\n\n2-turn path:\n  Turn 1 (EXECUTE_V15): draft with\n    - Stage-1 priors\n    - 2 wisdoms × (3 pre-mined cross-domain exemplars + 1 runtime same-domain exemplar)\n    - problem\n  Turn 2 (REFLECT_PROMPT): audit + revise\n    - draft + priors + wisdom-brief (no repeat of cases to save context)\n    - \"audit: did each prior/wisdom shape draft, or just get cited? integrate 1-2 biggest misses\"\n\n## Validation of user's \"civil law without precedents\" hypothesis\n\nUser observed: giving wisdom text alone is like legal statutes without case\nprecedents — too ambiguous. Validated empirically:\n  v15 (cases only): loses head-to-head to v13_reflect (39-61)\n  v13_reflect (reflect only): ties ours_27 (50-50)\n  v16 (cases + reflect): wins everything including ours_27\n\nEach layer contributes independent value; combination unlocks new tier.\n\n## Mining strategy\n\nStatic prep (build_diverse_exemplars_v15.py, GPT-5.4, ~23 min one-time):\n  For each wisdom, pick 3 maximally-DIVERSE (cross-domain) problems from\n  sample_100 that illustrate the principle. 75/75 achieved 3-domain spread.\n\nRuntime same-domain retrieval: embedding cosine sim within same domain as P.\n  Provides \"domain-bridging\" case on top of cross-domain diversity.\n\n## Files\n\nphase one/scripts/validation/\n  - phase2_v15_exemplar_framework.py: 1-turn cases variant\n  - phase2_v16_cases_reflect.py:      2-turn cases+reflect (champion)\n  - build_diverse_exemplars_v15.py:   offline exemplar mining\n  - build_v14_hybrid.py:              earlier hybrid (v13-reflect + ours_27 per domain)\n  - phase2_baseline_long.py:          budget-matched baseline\n  - build_holdout_50.py:              held-out seed=7 50-problem set\n\nphase two/analysis/cache/\n  - wisdom_diverse_exemplars.json:   75 wisdoms × 3 cross-domain exemplars\n  - phase2_v14/v15/v16_*_answers.json, _drafts.json, _structures.json\n  - judgments/ for all v14-v16 pair comparisons\n\n## Domain breakdown (v16 vs ours_27)\n\n  daily_life:  80% (v16 crushes soft)\n  business:    80%\n  engineering: 60%\n  sw_eng:      60%\n  science:     53% (tie-ish)\n  mathematics: 33% (Self-Discover structure still strongest)\n\nMath remains the floor — case-based reasoning doesn't help computation.\n\n## Remaining for validation\n\n  - Held-out 50 (seed=7): does v16 margin hold on unseen problems?\n  - Cross-judge with GPT-5.4: rules out judge position bias (we saw non-transitivity)\n  - Cross-generator (Opus/GPT-5.4): does architecture transfer upmarket?\n  - n=300 scale: tighter stat significance\n\nSee v16_final_results.md for full analysis (stays on local-docs).",
+    "api_url": "https://api.github.com/repos/erzhu419/Assumption-Agent/commits/1b312fda80db5c7bca0fbde5e889959660cf2ce8?per_page=100&page=1",
+    "stats": {
+      "total": 16109,
+      "additions": 16108,
+      "deletions": 1
+    },
+    "returned_file_count": 26,
+    "files_may_be_paginated": false,
+    "files": [
+      {
+        "path": "phase one/scripts/validation/build_diverse_exemplars_v15.py",
+        "status": "added",
+        "additions": 191,
+        "deletions": 0,
+        "changes": 191,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20one%2Fscripts%2Fvalidation%2Fbuild_diverse_exemplars_v15.py"
+      },
+      {
+        "path": "phase one/scripts/validation/build_v14_hybrid.py",
+        "status": "added",
+        "additions": 74,
+        "deletions": 0,
+        "changes": 74,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20one%2Fscripts%2Fvalidation%2Fbuild_v14_hybrid.py"
+      },
+      {
+        "path": "phase one/scripts/validation/phase2_v15_case_framework.py",
+        "status": "added",
+        "additions": 236,
+        "deletions": 0,
+        "changes": 236,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20one%2Fscripts%2Fvalidation%2Fphase2_v15_case_framework.py"
+      },
+      {
+        "path": "phase one/scripts/validation/phase2_v15_exemplar_framework.py",
+        "status": "added",
+        "additions": 254,
+        "deletions": 0,
+        "changes": 254,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20one%2Fscripts%2Fvalidation%2Fphase2_v15_exemplar_framework.py"
+      },
+      {
+        "path": "phase one/scripts/validation/phase2_v16_cases_reflect.py",
+        "status": "added",
+        "additions": 235,
+        "deletions": 0,
+        "changes": 235,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20one%2Fscripts%2Fvalidation%2Fphase2_v16_cases_reflect.py"
+      },
+      {
+        "path": "phase two/analysis/cache/answers/phase2_v14_hybrid_answers.json",
+        "status": "added",
+        "additions": 102,
+        "deletions": 0,
+        "changes": 102,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fanswers%2Fphase2_v14_hybrid_answers.json"
+      },
+      {
+        "path": "phase two/analysis/cache/answers/phase2_v15_exemplar_answers.json",
+        "status": "added",
+        "additions": 102,
+        "deletions": 0,
+        "changes": 102,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fanswers%2Fphase2_v15_exemplar_answers.json"
+      },
+      {
+        "path": "phase two/analysis/cache/answers/phase2_v16_answers.json",
+        "status": "added",
+        "additions": 102,
+        "deletions": 0,
+        "changes": 102,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fanswers%2Fphase2_v16_answers.json"
+      },
+      {
+        "path": "phase two/analysis/cache/answers/phase2_v16_drafts.json",
+        "status": "added",
+        "additions": 72,
+        "deletions": 0,
+        "changes": 72,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fanswers%2Fphase2_v16_drafts.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judge_content_cache.json",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudge_content_cache.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v14_hybrid_vs_baseline.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v14_hybrid_vs_baseline.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v14_hybrid_vs_baseline_long.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v14_hybrid_vs_baseline_long.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v14_hybrid_vs_ours_27.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v14_hybrid_vs_ours_27.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v14_hybrid_vs_phase2_v13_reflect.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v14_hybrid_vs_phase2_v13_reflect.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v15_exemplar_vs_baseline_long.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v15_exemplar_vs_baseline_long.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v15_exemplar_vs_ours_27.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v15_exemplar_vs_ours_27.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v15_exemplar_vs_phase2_v13_reflect.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v15_exemplar_vs_phase2_v13_reflect.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v15_exemplar_vs_phase2_v14_hybrid.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v15_exemplar_vs_phase2_v14_hybrid.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v16_vs_baseline_long.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v16_vs_baseline_long.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v16_vs_ours_27.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v16_vs_ours_27.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v16_vs_phase2_v13_reflect.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v16_vs_phase2_v13_reflect.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v16_vs_phase2_v14_hybrid.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v16_vs_phase2_v14_hybrid.json"
+      },
+      {
+        "path": "phase two/analysis/cache/judgments/phase2_v16_vs_phase2_v15_exemplar.json",
+        "status": "added",
+        "additions": 902,
+        "deletions": 0,
+        "changes": 902,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fjudgments%2Fphase2_v16_vs_phase2_v15_exemplar.json"
+      },
+      {
+        "path": "phase two/analysis/cache/structures/phase2_v15_exemplar_structures.json",
+        "status": "added",
+        "additions": 418,
+        "deletions": 0,
+        "changes": 418,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fstructures%2Fphase2_v15_exemplar_structures.json"
+      },
+      {
+        "path": "phase two/analysis/cache/structures/phase2_v16_structures.json",
+        "status": "added",
+        "additions": 418,
+        "deletions": 0,
+        "changes": 418,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fstructures%2Fphase2_v16_structures.json"
+      },
+      {
+        "path": "phase two/analysis/cache/wisdom_diverse_exemplars.json",
+        "status": "added",
+        "additions": 2177,
+        "deletions": 0,
+        "changes": 2177,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/1b312fda80db5c7bca0fbde5e889959660cf2ce8/phase%20two%2Fanalysis%2Fcache%2Fwisdom_diverse_exemplars.json"
+      }
+    ]
+  },
+  {
+    "sha": "027e659381b11ab54e7481ba5e9633e405d99fa6",
+    "date": "2026-06-01T02:18:10Z",
+    "message": "Close reconstruction self-evolution loop gaps",
+    "api_url": "https://api.github.com/repos/erzhu419/Assumption-Agent/commits/027e659381b11ab54e7481ba5e9633e405d99fa6?per_page=100&page=1",
+    "stats": {
+      "total": 2357,
+      "additions": 2354,
+      "deletions": 3
+    },
+    "returned_file_count": 11,
+    "files_may_be_paginated": false,
+    "files": [
+      {
+        "path": "assumption_os/README.md",
+        "status": "modified",
+        "additions": 100,
+        "deletions": 3,
+        "changes": 103,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2FREADME.md"
+      },
+      {
+        "path": "assumption_os/evolution_cycle.py",
+        "status": "modified",
+        "additions": 12,
+        "deletions": 0,
+        "changes": 12,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Fevolution_cycle.py"
+      },
+      {
+        "path": "assumption_os/formal_mapping.py",
+        "status": "modified",
+        "additions": 195,
+        "deletions": 0,
+        "changes": 195,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Fformal_mapping.py"
+      },
+      {
+        "path": "assumption_os/manifest_logger.py",
+        "status": "added",
+        "additions": 205,
+        "deletions": 0,
+        "changes": 205,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Fmanifest_logger.py"
+      },
+      {
+        "path": "assumption_os/recursive_daemon.py",
+        "status": "added",
+        "additions": 320,
+        "deletions": 0,
+        "changes": 320,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Frecursive_daemon.py"
+      },
+      {
+        "path": "assumption_os/recursive_executor.py",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 0,
+        "changes": 2,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Frecursive_executor.py"
+      },
+      {
+        "path": "assumption_os/residual_clusterer.py",
+        "status": "added",
+        "additions": 405,
+        "deletions": 0,
+        "changes": 405,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Fresidual_clusterer.py"
+      },
+      {
+        "path": "assumption_os/trajectory_search.py",
+        "status": "added",
+        "additions": 299,
+        "deletions": 0,
+        "changes": 299,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Ftrajectory_search.py"
+      },
+      {
+        "path": "assumption_os/world_model.py",
+        "status": "added",
+        "additions": 434,
+        "deletions": 0,
+        "changes": 434,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/assumption_os%2Fworld_model.py"
+      },
+      {
+        "path": "phase four/assumption_graph/reconstruction_gap_closure_log_20260601.md",
+        "status": "added",
+        "additions": 53,
+        "deletions": 0,
+        "changes": 53,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/phase%20four%2Fassumption_graph%2Freconstruction_gap_closure_log_20260601.md"
+      },
+      {
+        "path": "tests/test_assumption_os.py",
+        "status": "modified",
+        "additions": 329,
+        "deletions": 0,
+        "changes": 329,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/027e659381b11ab54e7481ba5e9633e405d99fa6/tests%2Ftest_assumption_os.py"
+      }
+    ]
+  },
+  {
+    "sha": "77f47b75ad9f66bb50948a36d7afca03bb6e22e9",
+    "date": "2026-06-06T17:18:07Z",
+    "message": "Add HippoRAG QA transfer probe",
+    "api_url": "https://api.github.com/repos/erzhu419/Assumption-Agent/commits/77f47b75ad9f66bb50948a36d7afca03bb6e22e9?per_page=100&page=1",
+    "stats": {
+      "total": 2852,
+      "additions": 2846,
+      "deletions": 6
+    },
+    "returned_file_count": 6,
+    "files_may_be_paginated": false,
+    "files": [
+      {
+        "path": "assumption_os/hipporag_qa_probe.py",
+        "status": "added",
+        "additions": 749,
+        "deletions": 0,
+        "changes": 749,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/77f47b75ad9f66bb50948a36d7afca03bb6e22e9/assumption_os%2Fhipporag_qa_probe.py"
+      },
+      {
+        "path": "assumption_os/paper_repro_pack.py",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 0,
+        "changes": 10,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/77f47b75ad9f66bb50948a36d7afca03bb6e22e9/assumption_os%2Fpaper_repro_pack.py"
+      },
+      {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/hipporag_qa_probe_20260606.json",
+        "status": "added",
+        "additions": 1962,
+        "deletions": 0,
+        "changes": 1962,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/77f47b75ad9f66bb50948a36d7afca03bb6e22e9/phase%20four%2Fassumption_graph%2Fpaper_readiness_20260604%2Fhipporag_qa_probe_20260606.json"
+      },
+      {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/paper_repro_pack_20260605.json",
+        "status": "modified",
+        "additions": 26,
+        "deletions": 6,
+        "changes": 32,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/77f47b75ad9f66bb50948a36d7afca03bb6e22e9/phase%20four%2Fassumption_graph%2Fpaper_readiness_20260604%2Fpaper_repro_pack_20260605.json"
+      },
+      {
+        "path": "reconstruction/md/hipporag_qa_probe_20260606.md",
+        "status": "added",
+        "additions": 85,
+        "deletions": 0,
+        "changes": 85,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/77f47b75ad9f66bb50948a36d7afca03bb6e22e9/reconstruction%2Fmd%2Fhipporag_qa_probe_20260606.md"
+      },
+      {
+        "path": "tests/test_assumption_os.py",
+        "status": "modified",
+        "additions": 14,
+        "deletions": 0,
+        "changes": 14,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/77f47b75ad9f66bb50948a36d7afca03bb6e22e9/tests%2Ftest_assumption_os.py"
+      }
+    ]
+  },
+  {
+    "sha": "d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf",
+    "date": "2026-06-12T02:04:04Z",
+    "message": "Add finite category Lean export",
+    "api_url": "https://api.github.com/repos/erzhu419/Assumption-Agent/commits/d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf?per_page=100&page=1",
+    "stats": {
+      "total": 1167,
+      "additions": 1166,
+      "deletions": 1
+    },
+    "returned_file_count": 5,
+    "files_may_be_paginated": false,
+    "files": [
+      {
+        "path": "assumption_os/finite_category_lean_export.py",
+        "status": "added",
+        "additions": 362,
+        "deletions": 0,
+        "changes": 362,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf/assumption_os%2Ffinite_category_lean_export.py"
+      },
+      {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/finite_category_certificate_20260612.lean",
+        "status": "added",
+        "additions": 632,
+        "deletions": 0,
+        "changes": 632,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf/phase%20four%2Fassumption_graph%2Fpaper_readiness_20260604%2Ffinite_category_certificate_20260612.lean"
+      },
+      {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/finite_category_lean_export_20260612.json",
+        "status": "added",
+        "additions": 65,
+        "deletions": 0,
+        "changes": 65,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf/phase%20four%2Fassumption_graph%2Fpaper_readiness_20260604%2Ffinite_category_lean_export_20260612.json"
+      },
+      {
+        "path": "reconstruction/md/last_three_part_execution_plan_20260612.md",
+        "status": "modified",
+        "additions": 38,
+        "deletions": 1,
+        "changes": 39,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf/reconstruction%2Fmd%2Flast_three_part_execution_plan_20260612.md"
+      },
+      {
+        "path": "tests/test_finite_category_lean_export.py",
+        "status": "added",
+        "additions": 69,
+        "deletions": 0,
+        "changes": 69,
+        "url": "https://github.com/erzhu419/Assumption-Agent/blob/d9bb635fcfecd9a17a0e9fe08d4c197dcad206cf/tests%2Ftest_finite_category_lean_export.py"
+      }
+    ]
+  }
+]

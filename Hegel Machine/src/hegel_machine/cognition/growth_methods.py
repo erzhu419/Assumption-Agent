@@ -17,7 +17,15 @@ from .language import Program
 
 
 DIAGNOSTICS = ("alias_error", "residual_error", "prior_error", "repeat_variance", "feature_count")
-PRIMITIVES = {"fit", "vary_controls", "measure", "compose", "condition", "replicate", "confirm"}
+PRIMITIVES = {
+    "fit", "vary_controls", "measure", "compose", "condition",
+    "replicate", "confirm", "scientific_refutation_witness",
+}
+WITNESS_OUTCOMES = {
+    "SUPPORTED_IN_SCOPE", "REFUTED_IN_SCOPE", "NOT_DETECTED_UNDER_PROTOCOL",
+    "BOUNDARY_DEGENERATE", "SENSOR_MISMATCH", "UNKNOWN",
+}
+_FORBIDDEN_SCOPE_KEYS = {"task_id", "family_id", "hidden_family", "oracle", "ground_truth"}
 
 
 def _roles(context, bounds):
@@ -78,7 +86,18 @@ def _compile(trace, diagnostics):
         event_id = event.get("event_id", f"event_{index}")
         consumes, produces = list(event.get("consumes", ())), list(event.get("produces", ()))
         explicit = event.get("depends_on", ())
-        unusable = (event.get("success", True) is False or
+        outcome_status = event.get("outcome_status") or event.get("details", {}).get("outcome_status")
+        is_execution_error = (
+            event.get("execution_error") is True
+            or outcome_status == "EXECUTION_ERROR"
+        )
+        is_valid_witness = (
+            not is_execution_error
+            and event.get("action") in {"condition", "scientific_refutation_witness"}
+            and outcome_status in WITNESS_OUTCOMES
+        )
+        unusable = (is_execution_error or
+                    (event.get("success", True) is False and not is_valid_witness) or
                     any(item in failed_evidence for item in consumes) or
                     any(item in failed_events for item in explicit))
         if unusable:
@@ -87,7 +106,19 @@ def _compile(trace, diagnostics):
             continue
         dependencies = [node_id for item in explicit for node_id in event_nodes.get(item, ())]
         dependencies += [node_id for item in consumes for node_id in evidence_nodes.get(item, ())]
-        if not any(key in event for key in ("consumes", "produces", "depends_on")) and nodes:
+        guard = deepcopy(event.get("when_outcome"))
+        if isinstance(guard, dict):
+            ref_event = guard.pop("from_event", None)
+            if ref_event is not None:
+                mapped = event_nodes.get(ref_event, ())
+                if not mapped:
+                    failed_events.add(event_id)
+                    failed_evidence.update(produces)
+                    continue
+                guard["from_node"] = mapped[-1]
+            if guard.get("from_node") and guard["from_node"] not in dependencies:
+                dependencies.append(guard["from_node"])
+        if not any(key in event for key in ("consumes", "produces", "depends_on", "when_outcome")) and nodes:
             dependencies.append(nodes[-1]["node_id"])
         dependencies = list(dict.fromkeys(dependencies))
         if event["action"] not in PRIMITIVES:
@@ -102,23 +133,34 @@ def _compile(trace, diagnostics):
         action = event["action"]
         if action == "confirm" and event.get("details", {}).get("model_confirmed") is False:
             action = "vary_controls"
+        recipe = _recipe(event, diagnostics)
+        if outcome_status in WITNESS_OUTCOMES:
+            recipe["observed_outcome_status"] = outcome_status
         node = {"node_id": node_id, "action": action,
                 "depends_on": dependencies,
-                "recipe": _recipe(event, diagnostics)}
+                "recipe": recipe}
+        if isinstance(guard, dict) and guard.get("from_node") and guard.get("outcomes"):
+            node["when_outcome"] = {"from_node": guard["from_node"],
+                                    "outcomes": list(guard["outcomes"])}
         nodes.append(node)
         event_nodes[event_id] = [node_id]
         for item in produces:
             evidence_nodes[item] = [node_id]
             failed_evidence.discard(item)
     # A completed trace may contain useful but ultimately unused explorations.
-    # Retain the evidence ancestry of the confirmation, not their sunk cost.
+    # Retain the evidence ancestry of confirmations AND any conditional witness
+    # branches attached to retained condition/refutation nodes.
     confirmations = [node["node_id"] for node in nodes if node["action"] == "confirm"]
     if confirmations:
         by_id = {node["node_id"]: node for node in nodes}
         needed = set(confirmations)
-        pending = list(confirmations)
+        for node in nodes:
+            if "when_outcome" in node or node["action"] in {"condition", "scientific_refutation_witness"}:
+                needed.add(node["node_id"])
+        pending = list(needed)
         while pending:
-            for dependency in by_id[pending.pop()]["depends_on"]:
+            current = pending.pop()
+            for dependency in by_id[current]["depends_on"]:
                 if dependency not in needed:
                     needed.add(dependency)
                     pending.append(dependency)
@@ -127,6 +169,8 @@ def _compile(trace, diagnostics):
         for node in nodes:
             node["node_id"] = renamed[node["node_id"]]
             node["depends_on"] = [renamed[item] for item in node["depends_on"]]
+            if "when_outcome" in node and node["when_outcome"]["from_node"] in renamed:
+                node["when_outcome"]["from_node"] = renamed[node["when_outcome"]["from_node"]]
     comparison_ancestors = {}
     for node in nodes:
         node["consumes"] = [f"{dependency}:evidence" for dependency in node["depends_on"]]
@@ -201,6 +245,34 @@ def _matches(method, diagnostics):
             return False
         if rule["op"] == "<" and not float(value) < rule["value"]:
             return False
+    for rule in method["applicability"].get("protocol_conditions", ()):
+        field = rule.get("field")
+        if not field or field in _FORBIDDEN_SCOPE_KEYS or field not in diagnostics:
+            return False
+        actual = diagnostics[field]
+        if actual is None:
+            return False
+        op, expected = rule.get("op"), rule.get("value")
+        if op == "==" and actual != expected:
+            return False
+        if op == "!=" and actual == expected:
+            return False
+        if op == "in" and actual not in expected:
+            return False
+        if op == "not_in" and actual in expected:
+            return False
+        if op in {"<", "<=", ">", ">="}:
+            if not isinstance(actual, (int, float)) or isinstance(actual, bool) or not math.isfinite(float(actual)):
+                return False
+            val = float(actual)
+            if op == "<" and not val < float(expected):
+                return False
+            if op == "<=" and not val <= float(expected):
+                return False
+            if op == ">" and not val > float(expected):
+                return False
+            if op == ">=" and not val >= float(expected):
+                return False
     return True
 
 
