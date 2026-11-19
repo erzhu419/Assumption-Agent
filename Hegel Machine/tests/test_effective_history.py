@@ -219,6 +219,41 @@ def test_committed_store_replay_mismatch_never_becomes_verified(tmp_path, histor
     assert Path(item['source']).read_bytes() == original
 
 
+def test_closed_directory_pair_preserves_exact_members_and_shared_content(tmp_path, history_store):
+    original, resumed = tmp_path / 'original', tmp_path / 'resumed'
+    original.mkdir(mode=0o750)
+    resumed.mkdir()
+    paid = original / 'training.json.gz'
+    raw = gzip_bytes(snapshot_bytes())
+    paid.write_bytes(raw)
+    paid.chmod(0o640)
+    mtime_ns = 1_723_456_789_123_456_789
+    os.utime(paid, ns=(mtime_ns, mtime_ns))
+    (resumed / 'copy.json.gz').write_bytes(raw)
+    (resumed / 'previous.json.gz').symlink_to('../original/training.json.gz')
+    os.link(paid, resumed / 'same-inode.gz')
+    unique = b'{"status":"provider_failed","costs":{"compute_cost":123}}'
+    (resumed / 'result.json').write_bytes(unique)
+    item = {'unit': 'Local/paired', 'kind': 'tree', 'source': str(tmp_path),
+            'roots': [original.name, resumed.name]}
+
+    receipt = compact_unit(history_store, item, tmp_path)
+    assert receipt['status'] == 'verified'
+    assert receipt['reused_chunk_bytes'] == len(raw)
+    assert receipt['verified_payload_bytes'] == 2 * len(raw) + len(unique)
+    restored = tmp_path / 'restored'
+    assert restore_unit(history_store, item['unit'], restored) == 7
+    before, after = restored / original.name, restored / resumed.name
+    assert (before / paid.name).read_bytes() == raw
+    assert stat.S_IMODE((before / paid.name).stat().st_mode) == 0o640
+    assert (before / paid.name).stat().st_mtime_ns == mtime_ns
+    assert stat.S_IMODE(before.stat().st_mode) == 0o750
+    assert (after / 'copy.json.gz').read_bytes() == raw
+    assert (after / 'previous.json.gz').readlink() == Path('../original/training.json.gz')
+    assert (after / 'same-inode.gz').samefile(before / paid.name)
+    assert (after / 'result.json').read_bytes() == unique
+
+
 def test_interrupted_packed_unit_resumes_verification_without_repacking(tmp_path, monkeypatch):
     payload = snapshot_bytes()
     item = gzip_item(tmp_path, 'C/interrupted-verification', payload)

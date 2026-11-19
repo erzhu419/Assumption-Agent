@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import shlex
 import sqlite3
+import stat
 import struct
 import subprocess
 import tarfile
@@ -208,6 +209,42 @@ def tar_metadata(member):
     return result
 
 
+def tree_members(source, roots):
+    """Enumerate an explicitly named closed scene without expanding its links."""
+    hardlinks = {}
+
+    def walk(path):
+        info = path.lstat()
+        name = str(path.relative_to(source))
+        metadata = {'name': name, 'mode': stat.S_IMODE(info.st_mode),
+                    'uid': info.st_uid, 'gid': info.st_gid, 'mtime_ns': info.st_mtime_ns,
+                    'size': info.st_size, 'linkname': ''}
+        if stat.S_ISDIR(info.st_mode):
+            metadata['type'] = '5'
+            yield path, metadata
+            for child in sorted(path.iterdir()):
+                yield from walk(child)
+        elif stat.S_ISLNK(info.st_mode):
+            metadata.update(type='2', linkname=os.readlink(path))
+            yield path, metadata
+        elif stat.S_ISREG(info.st_mode):
+            identity = info.st_dev, info.st_ino
+            previous = hardlinks.setdefault(identity, name) if info.st_nlink > 1 else name
+            metadata.update(type='0' if previous == name else '1',
+                            linkname='' if previous == name else previous)
+            yield path, metadata
+        else:
+            raise ValueError(f'Unsupported historical filesystem member: {path}')
+
+    if not roots or len(set(roots)) != len(roots):
+        raise ValueError('Historical tree requires distinct named roots')
+    for name in roots:
+        path = source / name
+        if Path(name).name != name or name in {'.', '..'} or not stat.S_ISDIR(path.lstat().st_mode):
+            raise ValueError(f'Historical tree root must be a direct directory: {name}')
+        yield from walk(path)
+
+
 def gzip_header(stream):
     stream.seek(0)
     prefix = stream.read(10)
@@ -333,6 +370,17 @@ def compact_unit(store, item, work_root, *, progress=None):
                     if progress and count % 500 == 0:
                         progress({'unit': unit, 'stage': 'packing', 'members': count,
                                   **store.stats})
+        elif item['kind'] == 'tree':
+            for path, metadata in tree_members(source, item['roots']):
+                sequence = None
+                if metadata['type'] == '0':
+                    with path.open('rb') as payload:
+                        metadata, sequence = save_file(store, payload, metadata, work_root)
+                store.connection.execute('INSERT INTO entries VALUES(?,?,?,?)',
+                    (unit, count, json.dumps(metadata), sequence))
+                count += 1
+                if progress and count % 50000 == 0:
+                    progress({'unit': unit, 'stage': 'packing', 'members': count, **store.stats})
         else:
             metadata = {'name': item['member'], 'mode': initial.st_mode & 0o7777,
                         'mtime': initial.st_mtime, 'type': '0', 'size': initial.st_size,
@@ -386,6 +434,17 @@ def verify_unit(store, receipt, work_root, *, progress=None):
                 if member.isfile():
                     with archive.extractfile(member) as payload:
                         verified += _verify_file(store, sequence, payload, metadata, work_root)
+    elif receipt['kind'] == 'tree':
+        for path, metadata in tree_members(source, receipt['roots']):
+            row = next(rows, None)
+            if row is None:
+                raise ValueError(f'Historical tree omits a member: {path}')
+            saved, sequence = json.loads(row[0]), row[1]
+            if any(saved.get(key) != value for key, value in metadata.items()):
+                raise ValueError(f'Historical tree metadata differs: {path}')
+            if metadata['type'] == '0':
+                with path.open('rb') as payload:
+                    verified += verify_stream(store, sequence, payload)
     else:
         metadata, sequence = next(rows)
         with source.open('rb') as payload:
@@ -412,13 +471,15 @@ def restore_unit(store, unit, destination, member=None):
     destination = Path(destination)
     directories = []
     restored = 0
-    matched = 0
+    members = None if member is None else {member} if isinstance(member, str) else set(member)
+    matched = set()
     for metadata, sequence in store.connection.execute(
             'SELECT metadata,sequence FROM entries WHERE unit=? ORDER BY ordinal', (unit,)):
         metadata = json.loads(metadata)
-        if member is not None and metadata['name'] != member:
-            continue
-        matched += 1
+        if members is not None:
+            if metadata['name'] not in members:
+                continue
+            matched.add(metadata['name'])
         path = destination / metadata['name']
         # Match the old archive's --skip-old-files recovery contract.
         if path.exists() or path.is_symlink():
@@ -451,16 +512,22 @@ def restore_unit(store, unit, destination, member=None):
             os.link(destination / metadata['linkname'], path)
         else:
             raise ValueError('Unsupported historical tar member: ' + metadata['type'])
-        if not path.is_symlink():
+        if path.is_symlink():
+            if 'mtime_ns' in metadata:
+                os.utime(path, ns=(metadata['mtime_ns'], metadata['mtime_ns']), follow_symlinks=False)
+        else:
             os.chmod(path, metadata['mode'])
             if 'mtime_ns' in metadata:
-                os.utime(path, ns=(metadata['atime_ns'], metadata['mtime_ns']))
+                os.utime(path, ns=(metadata.get('atime_ns', metadata['mtime_ns']), metadata['mtime_ns']))
             else:
                 os.utime(path, (metadata['mtime'], metadata['mtime']))
         restored += 1
     for path, metadata in reversed(directories):
         os.chmod(path, metadata['mode'])
-        os.utime(path, (metadata['mtime'], metadata['mtime']))
-    if member is not None and matched == 0:
-        raise ValueError('Historical member was not found: ' + member)
+        if 'mtime_ns' in metadata:
+            os.utime(path, ns=(metadata['mtime_ns'], metadata['mtime_ns']))
+        else:
+            os.utime(path, (metadata['mtime'], metadata['mtime']))
+    if members is not None and (missing := members - matched):
+        raise ValueError('Historical member was not found: ' + ', '.join(sorted(missing)))
     return restored
