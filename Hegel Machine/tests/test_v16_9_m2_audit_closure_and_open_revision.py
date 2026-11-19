@@ -119,19 +119,20 @@ def test_v16_9_confirmation_prefix_isolation_honest_unknown_and_bound_receipts(t
 
     # F7: Evidence receipt must bind target_id, node_version, model_sha256, and finite observed_error <= tol!
     cc = {"claim_id": "same_law", "permission_tier": "local_solver_guidance", "evidence_status": "SUPPORTED_IN_SCOPE", "preconditions": []}
-    tv = {"goal_kind": "open_workspace_mechanism_prediction", "tolerance": 0.01, "target_id": "new_target", "node_version": 2, "expected_model_sha256": "abc123"}
+    tv = {"goal_kind": "open_workspace_mechanism_prediction", "tolerance": 0.01, "target_id": "new_target", "node_version": 2, "expected_model_sha256": "abc123", "expected_confirmation_digest": "conf_dig_01"}
     bad_receipts = [
-        {"claim_id": "same_law", "passed": True, "target_id": "old_target", "node_version": 1, "model_sha256": "abc123", "observed_error": 0.0},
-        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123"},
-        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "observed_error": float("nan")},
-        {"claim_id": "*", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "observed_error": 0.002},
-        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "wrong_sha", "observed_error": 0.002},
+        {"claim_id": "same_law", "passed": True, "target_id": "old_target", "node_version": 1, "model_sha256": "abc123", "confirmation_digest": "conf_dig_01", "observed_error": 0.0},
+        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "confirmation_digest": "conf_dig_01"},
+        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "confirmation_digest": "conf_dig_01", "observed_error": float("nan")},
+        {"claim_id": "*", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "confirmation_digest": "conf_dig_01", "observed_error": 0.002},
+        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "wrong_sha", "confirmation_digest": "conf_dig_01", "observed_error": 0.002},
+        {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "observed_error": 0.002},
     ]
     for r_bad in bad_receipts:
         auth = authorize_abstraction_use(requested_tier="local_solver_guidance", task_view=tv, target_features={}, claim_contract=cc, evidence_receipt=r_bad)
         assert auth["granted"] is False
 
-    good_receipt = {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "observed_error": 0.004}
+    good_receipt = {"claim_id": "same_law", "passed": True, "target_id": "new_target", "node_version": 2, "model_sha256": "abc123", "confirmation_digest": "conf_dig_01", "observed_error": 0.004}
     good_auth = authorize_abstraction_use(requested_tier="local_solver_guidance", task_view=tv, target_features={}, claim_contract=cc, evidence_receipt=good_receipt)
     assert good_auth["granted"] is True
 

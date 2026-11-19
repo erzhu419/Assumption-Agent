@@ -204,10 +204,11 @@ def _render_stateful_least_squares_module(
 
 
 class ScriptedOpenGrammarCodeProvider:
-    """Deterministic CodeProvider driving real ``CodeAgent`` query/run/write/evaluate/finish turns!
+    """Feedback-driven CodeProvider executing real ``CodeAgent`` query/run/write/evaluate/finish turns!
 
-    Executes genuine residual-localization Python scripts in the task workspace and tests competing
-    compositional operator mutations when inherited priors fail on counterexample witnesses.
+    Genuinely inspects ``evaluate`` MSE feedback and ``run`` diagnostic ``stdout`` (residual turnover,
+    secondary-channel slope, oscillatory overshoot) to select subsequent Python operator hypotheses,
+    and triggers ``fallback_query_batches`` ONLY when initial pilot fits fail tolerance.
     """
 
     def __init__(
@@ -217,33 +218,130 @@ class ScriptedOpenGrammarCodeProvider:
         candidate_specs: list[tuple[str, str]],  # [(filename, python_code), ...]
         diagnostic_script: str | None = None,
         tolerance: float = 0.035,
+        run_diag_after_first_failure: bool = False,
+        fallback_query_batches: list[list[dict[str, float]]] | None = None,
     ) -> None:
         self.query_batches = list(query_batches)
+        self.fallback_query_batches = list(fallback_query_batches or [])
         self.candidate_specs = list(candidate_specs)
         self.diagnostic_script = diagnostic_script
         self.tolerance = float(tolerance)
+        self.run_diag_after_first_failure = bool(run_diag_after_first_failure)
         self._q_idx = 0
+        self._fb_q_idx = 0
+        self._used_fallback_queries = False
         self._ran_diag = False
+        self._processed_run_steps: set[int] = set()
         self._c_idx = 0
         self._phase = "write"
         self._best_model: tuple[float, str] | None = None
+        self.last_parsed_diagnostic: dict[str, Any] | None = None
+
+    def _prioritize_remaining_from_stdout(self, stdout: str, request: dict[str, Any] | None = None) -> None:
+        raw = (stdout or "").strip()
+        parsed: dict[str, Any] = {}
+        if raw:
+            last_line = raw.splitlines()[-1].strip()
+            try:
+                obj = json.loads(last_line)
+                if isinstance(obj, dict):
+                    parsed = obj
+            except Exception:
+                parsed = {"raw": raw}
+        self.last_parsed_diagnostic = parsed
+        pattern = str(parsed.get("pattern", raw)).lower()
+        rem = list(enumerate(self.candidate_specs[self._c_idx :]))
+        if not rem:
+            return
+
+        # If none of the pre-listed candidates match the diagnosed operator regime, dynamically
+        # synthesize the matching open-grammar Python module from capabilities!
+        caps_fnames = list((request or {}).get("capabilities", {}).get("feature_names") or ())
+        role_pair = caps_fnames[:2] if len(caps_fnames) >= 2 else (["x0", "x1"] if not caps_fnames else [caps_fnames[0], caps_fnames[0]])
+        existing_blobs = " ".join(f"{fn} {cd}".lower() for _, (fn, cd) in rem)
+
+        if any(tok in pattern for tok in ("oscillatory", "overshoot", "ringing", "oscillation")):
+            if "ringing" not in existing_blobs and "math.cos" not in existing_blobs:
+                dyn_code = _render_stateful_least_squares_module(
+                    mechanism_id="underdamped_ringing_2d",
+                    role_names=role_pair,
+                    lens={"sign": 1.0, "scale": 1.0, "offset": 0.0},
+                    operator_ast_kind="underdamped_ringing_2d",
+                )
+                self.candidate_specs.insert(self._c_idx, ("diag_synthesized_ringing_2d.py", dyn_code))
+                return
+        elif "turnover" in pattern and "bypass" in pattern and "no_bypass" not in pattern:
+            if "bypass" not in existing_blobs and "p3" not in existing_blobs:
+                dyn_code = _render_stateful_least_squares_module(
+                    mechanism_id="haldane_inhibited_plus_bypass_2d",
+                    role_names=role_pair,
+                    lens={"sign": 1.0, "scale": 1.0, "offset": 0.0},
+                    operator_ast_kind="haldane_inhibited_plus_bypass_2d",
+                )
+                self.candidate_specs.insert(self._c_idx, ("diag_synthesized_haldane_bypass_2d.py", dyn_code))
+                return
+        elif "turnover" in pattern or "inhibited" in pattern:
+            if "haldane" not in existing_blobs:
+                dyn_code = _render_stateful_least_squares_module(
+                    mechanism_id="haldane_inhibited_1d",
+                    role_names=[role_pair[0]],
+                    lens={"sign": 1.0, "scale": 1.0, "offset": 0.0},
+                    operator_ast_kind="haldane_inhibited_1d",
+                )
+                self.candidate_specs.insert(self._c_idx, ("diag_synthesized_haldane_1d.py", dyn_code))
+                return
+
+        if len(rem) <= 1:
+            return
+
+        def rank_key(item: tuple[int, tuple[str, str]]) -> tuple[int, int]:
+            rel_idx, (fname, code) = item
+            blob = f"{fname} {code}".lower()
+            if any(tok in pattern for tok in ("oscillatory", "overshoot", "ringing", "oscillation")):
+                if "ringing" in blob or "math.cos" in blob:
+                    return (0, rel_idx)
+                return (1 if rel_idx > 0 else 2, rel_idx)
+            if "turnover" in pattern and "bypass" in pattern and "no_bypass" not in pattern:
+                if "bypass" in blob or "p3" in blob:
+                    return (0, rel_idx)
+                return (1 if "haldane" in blob else 2, rel_idx)
+            if "turnover" in pattern or "inhibited" in pattern:
+                if "inhibited_1d" in blob or ("haldane" in blob and "bypass" not in blob):
+                    return (0, rel_idx)
+                return (1 if rel_idx > 0 else 2, rel_idx)
+            if "nonmonotone" in pattern or "nonlinear_shift" in pattern:
+                return (0 if rel_idx > 0 else 1, rel_idx)
+            return (0, rel_idx)
+
+        rem.sort(key=rank_key)
+        self.candidate_specs[self._c_idx :] = [pair for _, pair in rem]
 
     def next_action(self, request: dict[str, Any]) -> dict[str, Any]:
         events = request.get("events", [])
-        # Record feedback from most recent `evaluate`
-        if events and events[-1].get("action") == "evaluate":
-            fb = events[-1].get("feedback", {})
-            if fb.get("returncode") == 0 and "mse" in fb:
-                rmse = math.sqrt(max(0.0, float(fb["mse"])))
-                mpath = events[-1]["arguments"]["model"]
-                if self._best_model is None or rmse < self._best_model[0]:
-                    self._best_model = (rmse, mpath)
-                if rmse <= self.tolerance:
-                    return {
-                        "action": "finish",
-                        "arguments": {"model": mpath, "channels": ["primary"], "lesson": f"Confirmed open AST {mpath} (train_rmse={rmse:.5f})"},
-                        "usage": {"total_tokens": 180},
-                    }
+        # Record feedback from most recent `evaluate` or `run`
+        if events:
+            last_ev = events[-1]
+            if last_ev.get("action") == "evaluate":
+                fb = last_ev.get("feedback", {})
+                if fb.get("returncode") == 0 and "mse" in fb:
+                    rmse = math.sqrt(max(0.0, float(fb["mse"])))
+                    mpath = last_ev["arguments"]["model"]
+                    if self._best_model is None or rmse < self._best_model[0]:
+                        self._best_model = (rmse, mpath)
+                    if rmse <= self.tolerance:
+                        return {
+                            "action": "finish",
+                            "arguments": {
+                                "model": mpath,
+                                "channels": ["primary"],
+                                "lesson": f"Confirmed open AST {mpath} (train_rmse={rmse:.5f})",
+                            },
+                            "usage": {"total_tokens": 180},
+                        }
+            elif last_ev.get("action") == "run" and len(events) not in self._processed_run_steps:
+                self._processed_run_steps.add(len(events))
+                fb = last_ev.get("feedback", {})
+                self._prioritize_remaining_from_stdout(str(fb.get("stdout", "")), request)
 
         if self._q_idx < len(self.query_batches):
             batch = self.query_batches[self._q_idx]
@@ -254,7 +352,12 @@ class ScriptedOpenGrammarCodeProvider:
                 "usage": {"total_tokens": 160},
             }
 
-        if self.diagnostic_script and not self._ran_diag:
+        should_run_diag = (
+            self.diagnostic_script is not None
+            and not self._ran_diag
+            and (not self.run_diag_after_first_failure or self._c_idx >= 1)
+        )
+        if should_run_diag:
             self._ran_diag = True
             return {
                 "action": "run",
@@ -278,6 +381,21 @@ class ScriptedOpenGrammarCodeProvider:
                 "arguments": {"model": fname, "channels": ["primary"]},
                 "usage": {"total_tokens": 140},
             }
+
+        # Only acquire fallback queries if all candidates failed tolerance on initial pilot!
+        if not self._used_fallback_queries and self.fallback_query_batches:
+            if self._fb_q_idx < len(self.fallback_query_batches):
+                fb_batch = self.fallback_query_batches[self._fb_q_idx]
+                self._fb_q_idx += 1
+                if self._fb_q_idx >= len(self.fallback_query_batches):
+                    self._used_fallback_queries = True
+                    self._c_idx = 0
+                    self._phase = "write"
+                return {
+                    "action": "query",
+                    "arguments": {"sequence": fb_batch, "channels": ["primary"]},
+                    "usage": {"total_tokens": 160},
+                }
 
         # All candidates evaluated; finish with best if within tolerance, else exhaust steps cleanly
         if self._best_model is not None and self._best_model[0] <= self.tolerance:
@@ -503,11 +621,12 @@ def _run_code_agent_with_prefix_confirm(
 
     # STRICT F11 PREFIX ISOLATION: snapshot `fit_prefix` BEFORE purchasing `confirm_pt`!
     fit_prefix = list(lab.observations)
-    c_rows = lab.acquire([confirm_pt], workspace=workspace, phase="confirm")
+    c_rows = lab.acquire([confirm_pt], workspace=None, phase="confirm")
     if not c_rows:
         return {"status": "scoped_unknown", "model_path": None, "code_agent_events": len(ca_res["events"])}
 
     val = validate_workspace_model_on_rows(workspace, selected_model, c_rows, lab, training_prefix=fit_prefix)
+    lab.sync_workspace_files(workspace)
     if val.get("execution_error") or val["rmse"] > tol:
         return {
             "status": "scoped_unknown",
@@ -524,6 +643,7 @@ def _run_code_agent_with_prefix_confirm(
         selected_schema=ast_info.get("schema_tag"),
         ast_skeleton_digest=ast_info.get("ast_skeleton_digest"),
         confirmation_rmse=val["rmse"],
+        confirmation_digest=val.get("confirmation_digest"),
         extra_meta={
             "skeleton_status": ast_info.get("skeleton_status"),
             "feature_role_order": ast_info.get("feature_role_order"),
@@ -697,14 +817,29 @@ def run_open_revision_chain_experiment(seed: int, root_workspace: Path) -> dict[
         diag_py = (
             "import json\n"
             "rows = json.load(open('observations.json'))\n"
-            "ys = [r['target'] for r in rows]\n"
-            "print(json.dumps({'n_rows': len(rows), 'y_min': min(ys), 'y_max': max(ys), 'non_monotone_span': max(ys) - ys[-1]}))\n"
+            f"f0, f1 = {act_wit[0]!r}, {act_wit[1]!r}\n"
+            "low_f1 = sorted([r for r in rows if r['features'][f1] <= min(x['features'][f1] for x in rows) + 0.3], key=lambda r: r['features'][f0])\n"
+            "low_f0 = sorted([r for r in rows if r['features'][f0] <= min(x['features'][f0] for x in rows) + 0.3], key=lambda r: r['features'][f1])\n"
+            "turn_f0 = (max(r['target'] for r in low_f1) - low_f1[-1]['target']) if len(low_f1) >= 3 else 0.0\n"
+            "span_f1 = (low_f0[-1]['target'] - low_f0[0]['target']) if len(low_f0) >= 2 else 0.0\n"
+            "high_f0 = sorted([r for r in rows if r['features'][f0] >= 0.7 * max(x['features'][f0] for x in rows)], key=lambda r: r['features'][f1])\n"
+            "ring_f1 = (max(r['target'] for r in high_f0) - high_f0[-1]['target']) if len(high_f0) >= 2 else 0.0\n"
+            "if ring_f1 > 0.25 and turn_f0 <= 0.15:\n"
+            "    pat = 'oscillatory_overshoot'\n"
+            "elif turn_f0 > 0.15 and span_f1 > 0.20:\n"
+            "    pat = 'turnover_plus_bypass_2d'\n"
+            "elif turn_f0 > 0.15:\n"
+            "    pat = 'turnover_1d_no_bypass'\n"
+            "else:\n"
+            "    pat = 'monotone'\n"
+            "print(json.dumps({'pattern': pat, 'turn_f0': round(turn_f0, 5), 'span_f1': round(span_f1, 5), 'ring_f1': round(ring_f1, 5)}))\n"
         )
         wit_prov = ScriptedOpenGrammarCodeProvider(
             query_batches=[wit_pilot],
             candidate_specs=wit_cands,
             diagnostic_script=diag_py,
             tolerance=float(lab_wit.task_view["tolerance"]),
+            run_diag_after_first_failure=True,
         )
         wit_conf_pt = {**fix_wit, act_wit[0]: lab_wit.feature_bounds[act_wit[0]][0] + 0.64 * (lab_wit.feature_bounds[act_wit[0]][1] - lab_wit.feature_bounds[act_wit[0]][0]), act_wit[1]: lab_wit.feature_bounds[act_wit[1]][0] + 0.42 * (lab_wit.feature_bounds[act_wit[1]][1] - lab_wit.feature_bounds[act_wit[1]][0])}
         sub_wit = _run_code_agent_with_prefix_confirm(lab_wit, ws_wit, wit_prov, wit_conf_pt)
@@ -873,13 +1008,20 @@ def run_open_revision_chain_experiment(seed: int, root_workspace: Path) -> dict[
                             "claim_id": chosen["claim_contract"]["claim_id"],
                             "node_version": chosen["version"],
                             "model_sha256": sub_t["model_sha256"],
+                            "confirmation_digest": sub_t["confirmation_digest"],
                             "observed_error": sub_t["confirmation_rmse"],
                             "passed": True,
                             "upgrade_to_tier": "local_solver_guidance",
                         }
                         auth = authorize_abstraction_use(
                             requested_tier="local_solver_guidance",
-                            task_view={**lab_t.task_view, "target_id": t_name, "node_version": chosen["version"], "expected_model_sha256": sub_t["model_sha256"]},
+                            task_view={
+                                **lab_t.task_view,
+                                "target_id": t_name,
+                                "node_version": chosen["version"],
+                                "expected_model_sha256": sub_t["model_sha256"],
+                                "expected_confirmation_digest": sub_t["confirmation_digest"],
+                            },
                             target_features={"detected_signature": sig_info["signature"]},
                             claim_contract=chosen["claim_contract"],
                             wormhole_edge=recalled[0]["wormhole_edge"],
@@ -940,7 +1082,8 @@ def run_open_revision_chain_experiment(seed: int, root_workspace: Path) -> dict[
                             _render_stateful_least_squares_module(mechanism_id=okind, role_names=rn, lens=lens_t, operator_ast_kind=okind),
                         ))
                 prov = ScriptedOpenGrammarCodeProvider(
-                    query_batches=[pilot_pts, extra_q],
+                    query_batches=[pilot_pts],
+                    fallback_query_batches=[extra_q],
                     candidate_specs=sess_cands,
                     tolerance=float(lab_t.task_view["tolerance"]),
                 )

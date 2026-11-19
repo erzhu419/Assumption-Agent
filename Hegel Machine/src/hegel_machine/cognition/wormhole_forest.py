@@ -182,20 +182,36 @@ def _validate_evidence_receipt(
             return False
 
     expected_target = task_view.get("target_id")
-    if expected_target is not None and evidence_receipt.get("target_id") != expected_target:
+    rec_target = evidence_receipt.get("target_id")
+    if not expected_target or not rec_target or rec_target != expected_target:
         return False
 
     expected_version = task_view.get("node_version", claim_contract.get("node_version"))
-    if expected_version is not None and evidence_receipt.get("node_version") != expected_version:
+    rec_version = evidence_receipt.get("node_version")
+    if expected_version is None or not isinstance(rec_version, int) or isinstance(rec_version, bool) or rec_version != expected_version:
         return False
 
+    requires_model_binding = (
+        task_view.get("goal_kind") == "open_workspace_mechanism_prediction"
+        or str(claim_contract.get("family_plugin", "")).endswith("_ast")
+        or task_view.get("expected_model_sha256") is not None
+    )
     expected_model_sha = task_view.get("expected_model_sha256")
-    if expected_model_sha is not None and evidence_receipt.get("model_sha256") != expected_model_sha:
-        return False
+    rec_model_sha = evidence_receipt.get("model_sha256")
+    if requires_model_binding:
+        if not expected_model_sha or not rec_model_sha or rec_model_sha != expected_model_sha:
+            return False
 
+    requires_conf_digest = (
+        task_view.get("goal_kind") == "open_workspace_mechanism_prediction"
+        or str(claim_contract.get("family_plugin", "")) in {"m3_open_workspace_ast", "m2_open_workspace_ast", "open_code_agent_ast"}
+        or task_view.get("expected_confirmation_digest") is not None
+    )
     expected_conf_digest = task_view.get("expected_confirmation_digest")
-    if expected_conf_digest is not None and evidence_receipt.get("confirmation_digest") != expected_conf_digest:
-        return False
+    rec_conf_digest = evidence_receipt.get("confirmation_digest")
+    if requires_conf_digest:
+        if not expected_conf_digest or not rec_conf_digest or rec_conf_digest != expected_conf_digest:
+            return False
 
     return True
 
@@ -218,7 +234,12 @@ def authorize_abstraction_use(
         raise ValueError(f"Unsupported permission tier: {requested_tier}")
 
     receipt_ok = _validate_evidence_receipt(evidence_receipt, claim_contract, task_view)
-    confirmed = bool(heldout_confirmed or receipt_ok)
+    if evidence_receipt is not None:
+        confirmed = bool(receipt_ok)
+    elif task_view.get("goal_kind") == "open_workspace_mechanism_prediction" and task_view.get("target_id") is not None:
+        confirmed = False
+    else:
+        confirmed = bool(heldout_confirmed)
 
     # Compute declared permission ceiling from ClaimContract & HorizontalWormholeEdge
     declared_max_rank = 4
@@ -240,7 +261,15 @@ def authorize_abstraction_use(
     if wormhole_edge is not None:
         align_conds = wormhole_edge.get("align_conditions", {})
         preconditions.extend(align_conds.get("inclusion_predicates", ()))
-        exclusions.extend(align_conds.get("exclusion_predicates", ()))
+        child_required = {
+            (r.get("field"), r.get("op"), r.get("value"))
+            for r in claim_contract.get("preconditions", ())
+            if isinstance(r, dict)
+        }
+        for ex_r in align_conds.get("exclusion_predicates", ()):
+            if isinstance(ex_r, dict) and (ex_r.get("field"), ex_r.get("op"), ex_r.get("value")) in child_required:
+                continue
+            exclusions.append(ex_r)
 
     precond_results = [evaluate_predicate_rule(r, target_features) for r in preconditions]
     excl_results = [evaluate_predicate_rule(r, target_features) for r in exclusions]
@@ -496,6 +525,7 @@ class PhilosophicalForest:
         self.nodes: dict[str, dict[str, Any]] = {}
         self.node_history: dict[str, list[dict[str, Any]]] = {}
         self.local_implication_edges: list[dict[str, Any]] = []
+        self.coarse_graining_edges: list[dict[str, Any]] = []
         self.horizontal_wormhole_edges: dict[str, dict[str, Any]] = {}
         self.wormhole_history: dict[str, list[dict[str, Any]]] = {}
         self.conflict_relations: list[dict[str, Any]] = []
@@ -641,6 +671,83 @@ class PhilosophicalForest:
                 parents.append(deepcopy(self.nodes[w_id]))
         return parents
 
+    def _can_reach_coarse_graining(self, start: str, goal: str) -> bool:
+        stack, seen = [start], set()
+        while stack:
+            cur = stack.pop()
+            if cur == goal:
+                return True
+            if cur in seen:
+                continue
+            seen.add(cur)
+            for edge in self.coarse_graining_edges:
+                if edge["fine_node_id"] == cur:
+                    stack.append(edge["coarse_node_id"])
+        return False
+
+    def add_coarse_graining_edge(
+        self,
+        *,
+        fine_node_id: str,
+        coarse_node_id: str,
+        scale_map: ScaleMap | dict[str, Any],
+        empirical_closure_certificate: dict[str, Any],
+        evidence_status: str = "SUPPORTED_IN_SCOPE",
+    ) -> dict[str, Any]:
+        """Connect a fine-scale hypothesis node to its coarse-grained emergent node via operator Pi_s."""
+        fine = self.nodes[fine_node_id]
+        coarse = self.nodes[coarse_node_id]
+        if fine["tree_id"] != coarse["tree_id"]:
+            raise ValueError("Coarse-graining edges connect scales within the same local system tree")
+        if self._can_reach_coarse_graining(coarse_node_id, fine_node_id):
+            raise ValueError("Cycle detected in coarse_graining_edges")
+        sm = scale_map.to_dict() if isinstance(scale_map, ScaleMap) else deepcopy(scale_map)
+        edge = {
+            "fine_node_id": fine_node_id,
+            "fine_version": fine["version"],
+            "coarse_node_id": coarse_node_id,
+            "coarse_version": coarse["version"],
+            "scale_map": sm,
+            "empirical_closure_certificate": deepcopy(empirical_closure_certificate),
+            "evidence_status": evidence_status,
+        }
+        self.coarse_graining_edges.append(edge)
+        return deepcopy(edge)
+
+    def fine_scale_children_of(self, coarse_node_id: str) -> list[dict[str, Any]]:
+        """Return live fine-scale underlying nodes when coarse-graining closure breaks (dialectical escalation)."""
+        if coarse_node_id not in self.nodes:
+            return []
+        cur_ver = self.nodes[coarse_node_id]["version"]
+        out = []
+        for edge in self.coarse_graining_edges:
+            f_id = edge["fine_node_id"]
+            if (
+                edge["coarse_node_id"] == coarse_node_id
+                and edge["coarse_version"] == cur_ver
+                and f_id in self.nodes
+                and edge["fine_version"] == self.nodes[f_id]["version"]
+            ):
+                out.append(deepcopy(self.nodes[f_id]))
+        return out
+
+    def coarse_scale_parents_of(self, fine_node_id: str) -> list[dict[str, Any]]:
+        """Return live coarse-grained emergent nodes reachable via Pi_s from ``fine_node_id``."""
+        if fine_node_id not in self.nodes:
+            return []
+        cur_ver = self.nodes[fine_node_id]["version"]
+        out = []
+        for edge in self.coarse_graining_edges:
+            c_id = edge["coarse_node_id"]
+            if (
+                edge["fine_node_id"] == fine_node_id
+                and edge["fine_version"] == cur_ver
+                and c_id in self.nodes
+                and edge["coarse_version"] == self.nodes[c_id]["version"]
+            ):
+                out.append(deepcopy(self.nodes[c_id]))
+        return out
+
     def add_horizontal_wormhole(
         self,
         *,
@@ -655,6 +762,7 @@ class PhilosophicalForest:
         permission_tier: str = "bounded_trial",
         compatible_goal_kinds: list[str] | None = None,
         source_episode_refs: list[str] | None = None,
+        scale_regime: str | None = None,
     ) -> dict[str, Any]:
         node_a = self.nodes[node_a_id]
         node_b = self.nodes[node_b_id]
@@ -689,6 +797,7 @@ class PhilosophicalForest:
             "compatible_goal_kinds": list(compatible_goal_kinds) if compatible_goal_kinds is not None else [],
             "stale_endpoint_revision": False,
             "source_episode_refs": list(source_episode_refs or ()),
+            **({"scale_regime": scale_regime} if scale_regime is not None else {}),
         }
         self.horizontal_wormhole_edges[wormhole_id] = edge
         return deepcopy(edge)
@@ -893,6 +1002,11 @@ class PhilosophicalForest:
             if not ((e["stronger_node_id"] == node_id and e["stronger_version"] == version) or
                     (e["weaker_node_id"] == node_id and e["weaker_version"] == version))
         ]
+        clone.coarse_graining_edges = [
+            e for e in clone.coarse_graining_edges
+            if not ((e["fine_node_id"] == node_id and e["fine_version"] == version) or
+                    (e["coarse_node_id"] == node_id and e["coarse_version"] == version))
+        ]
         # Propagate AND/OR support invalidation: each path in support_paths is an AND-conjunction;
         # a node survives iff it has no support_paths dependency or >= 1 complete OR-path remains!
         changed = True
@@ -930,6 +1044,56 @@ class PhilosophicalForest:
         # Minton utility problem guard: demote persistently net-negative nodes after >= 3 trials
         if led["trials"] >= 3 and (led["total_savings"] - led["total_overhead"]) < -2.0:
             led["archived_low_utility"] = True
+
+    def compress_compatible_nodes(
+        self,
+        *,
+        keeper_node_id: str,
+        redundant_node_id: str,
+        evaluation_queries: list[dict[str, Any]],
+        evaluator_fn,
+    ) -> dict[str, Any]:
+        """Run zero-conflict, zero-false-rejection FidelityCompression and archive redundant duplicate."""
+        if keeper_node_id not in self.nodes or redundant_node_id not in self.nodes:
+            return {"accepted": False, "reason": "missing_node"}
+        node_a = self.nodes[keeper_node_id]
+        node_b = self.nodes[redundant_node_id]
+        if node_a["utility_ledger"].get("archived_low_utility") or node_b["utility_ledger"].get("archived_low_utility"):
+            return {"accepted": False, "reason": "already_archived"}
+        report = fidelity_compress_nodes(node_a, node_b, evaluation_queries, evaluator_fn)
+        if not report["accepted"]:
+            return report
+        # Union observable signatures & provenance on keeper while preserving versioned history
+        merged_sigs = list(dict.fromkeys([*node_a.get("probe_signatures", ()), *node_b.get("probe_signatures", ())]))
+        node_a["probe_signatures"] = merged_sigs
+        node_a["source_cluster_ids"] = list(
+            dict.fromkeys([*node_a.get("source_cluster_ids", ()), *node_b.get("source_cluster_ids", ())])
+        )
+        node_a.setdefault("fidelity_merged_members", []).append({
+            "redundant_node_id": redundant_node_id,
+            "redundant_version": node_b["version"],
+            "query_count": len(evaluation_queries),
+        })
+        node_b["utility_ledger"]["archived_low_utility"] = True
+        node_b["utility_ledger"]["archived_reason"] = "fidelity_compressed"
+        node_b["utility_ledger"]["merged_into_node_id"] = keeper_node_id
+        # Rebind live wormholes from redundant_node_id to keeper_node_id when across distinct trees
+        for wid, wh in list(self.horizontal_wormhole_edges.items()):
+            if wh.get("stale_endpoint_revision"):
+                continue
+            if wh["node_a_id"] == redundant_node_id and wh["tree_b_id"] != node_a["tree_id"]:
+                wh["node_a_id"] = keeper_node_id
+                wh["node_a_version"] = node_a["version"]
+                wh["tree_a_id"] = node_a["tree_id"]
+            elif wh["node_b_id"] == redundant_node_id and wh["tree_a_id"] != node_a["tree_id"]:
+                wh["node_b_id"] = keeper_node_id
+                wh["node_b_version"] = node_a["version"]
+                wh["tree_b_id"] = node_a["tree_id"]
+        return {
+            **report,
+            "keeper_node_id": keeper_node_id,
+            "archived_redundant_node_id": redundant_node_id,
+        }
 
 
 class TwoStageWormholeGate:

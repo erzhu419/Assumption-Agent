@@ -1,0 +1,227 @@
+{
+  "commit": "612d8eea5c8104f4a652c8f4b09df5b8b81ca1b8",
+  "ast": [
+    {
+      "name": "whitelisted_function_shadowing",
+      "model_a": "def exp(x):\n    return x*x\ndef predict(row):\n    return exp(row['features']['x'])\n",
+      "model_b": "def exp(x):\n    return x*x*x\ndef predict(row):\n    return exp(row['features']['x'])\n",
+      "canonical_a": {
+        "ast_skeleton_digest": "bc3936d8eed847",
+        "canonical_ast_dump": "Call(func=Name(id='FN_exp', ctx=Load()), args=[Name(id='ROLE_0', ctx=Load())], keywords=[])",
+        "feature_role_order": [
+          "x"
+        ],
+        "schema_tag": null,
+        "skeleton_status": "VERIFIED_PURE_AST",
+        "model_sha256": "a836095bfc673e3ee1c8f5695e224edf2d86e52a3f558eaba25da8ed07d30e1d"
+      },
+      "canonical_b": {
+        "ast_skeleton_digest": "bc3936d8eed847",
+        "canonical_ast_dump": "Call(func=Name(id='FN_exp', ctx=Load()), args=[Name(id='ROLE_0', ctx=Load())], keywords=[])",
+        "feature_role_order": [
+          "x"
+        ],
+        "schema_tag": null,
+        "skeleton_status": "VERIFIED_PURE_AST",
+        "model_sha256": "f45b4a23f9cadc8a94ce8cb18e1c06bba8ecab25a4872c71a9889681f25b7d33"
+      },
+      "same_digest": true,
+      "x": 2.0,
+      "prediction_a": 4.0,
+      "prediction_b": 8.0
+    },
+    {
+      "name": "keyword_semantics_discarded",
+      "model_a": "def predict(row):\n    return round(row['features']['x'], ndigits=1)\n",
+      "model_b": "def predict(row):\n    return round(row['features']['x'], ndigits=3)\n",
+      "canonical_a": {
+        "ast_skeleton_digest": "3373782e121a1e",
+        "canonical_ast_dump": "Call(func=Name(id='FN_round', ctx=Load()), args=[Name(id='ROLE_0', ctx=Load())], keywords=[])",
+        "feature_role_order": [
+          "x"
+        ],
+        "schema_tag": null,
+        "skeleton_status": "VERIFIED_PURE_AST",
+        "model_sha256": "d7b3927a256bb7fc4b171f1a2ade7efe0c4fd0f5e2144cf34817c78cfd11d247"
+      },
+      "canonical_b": {
+        "ast_skeleton_digest": "3373782e121a1e",
+        "canonical_ast_dump": "Call(func=Name(id='FN_round', ctx=Load()), args=[Name(id='ROLE_0', ctx=Load())], keywords=[])",
+        "feature_role_order": [
+          "x"
+        ],
+        "schema_tag": null,
+        "skeleton_status": "VERIFIED_PURE_AST",
+        "model_sha256": "b891c543d562fce1925d7f233d3222b36e493cffb58bc840d71a4b0bee9d867f"
+      },
+      "same_digest": true,
+      "x": 1.2345,
+      "prediction_a": 1.2,
+      "prediction_b": 1.234
+    }
+  ],
+  "confirmation_files": {
+    "argument_memorizer.py": {
+      "execution_error": false,
+      "rmse": 9.0,
+      "predictions": [
+        0.0
+      ],
+      "wall_seconds": 0.038684191997163,
+      "training_prefix_count": 2
+    },
+    "file_memorizer.py": {
+      "execution_error": false,
+      "rmse": 0.0,
+      "predictions": [
+        9.0
+      ],
+      "wall_seconds": 0.04835840099985944,
+      "training_prefix_count": 2
+    },
+    "model_file_memorizer.py": {
+      "execution_error": false,
+      "rmse": 0.0,
+      "predictions": [
+        9.0
+      ],
+      "wall_seconds": 0.03718155700335046,
+      "training_prefix_count": 2
+    },
+    "disk_observations": [
+      {
+        "features": {
+          "u": 1.0
+        },
+        "target": 1.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 2.0
+        },
+        "target": 4.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 3.0
+        },
+        "target": 9.0,
+        "history": []
+      }
+    ],
+    "disk_model_observations": [
+      {
+        "features": {
+          "u": 1.0
+        },
+        "target": 1.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 2.0
+        },
+        "target": 4.0,
+        "history": []
+      },
+      {
+        "features": {
+          "u": 3.0
+        },
+        "target": 9.0,
+        "history": []
+      }
+    ],
+    "training_prefix_count": 2,
+    "confirmation_target": 9.0
+  },
+  "provider_dataflow": {
+    "diagnostic_action": {
+      "action": "run",
+      "arguments": {
+        "path": "diagnose_residuals.py",
+        "code": "print('diagnostic')",
+        "channels": [
+          "primary"
+        ]
+      },
+      "usage": {
+        "total_tokens": 220
+      }
+    },
+    "after_feedback_a": {
+      "action": "write",
+      "arguments": {
+        "path": "candidate.py",
+        "code": "def predict(row): return 1.0\n"
+      },
+      "usage": {
+        "total_tokens": 260
+      }
+    },
+    "after_feedback_b": {
+      "action": "write",
+      "arguments": {
+        "path": "candidate.py",
+        "code": "def predict(row): return 1.0\n"
+      },
+      "usage": {
+        "total_tokens": 260
+      }
+    },
+    "same_next_action": true
+  },
+  "code_agent_file_fit_lifecycle": {
+    "submission": {
+      "status": "completed",
+      "model_path": "model.py",
+      "model_sha256": "b9c04d0c200c22d8bff7ab60adaa77d082c4f84b542711909c8ccdfcb16a20a8",
+      "selected_schema": null,
+      "ast_skeleton_digest": "unknown:b9c04d0c200c",
+      "confirmation_rmse": 0.0,
+      "confirmed_training_prefix_count": 2,
+      "skeleton_status": "UNSUPPORTED_AST_CONSTRUCT",
+      "feature_role_order": [],
+      "code_agent_events": 4,
+      "code_agent_model_calls": 4
+    },
+    "external_evaluation": {
+      "strict_pass": false,
+      "false_confirmation": true,
+      "rmse": 16.0,
+      "tolerance": 0.01,
+      "external_python_wall_seconds": 0.03041,
+      "eval_predictions": [
+        0.0
+      ]
+    }
+  },
+  "receipt_optional_bindings": {
+    "legacy_view_all_bindings_omitted": {
+      "granted": true,
+      "granted_tier": "local_solver_guidance",
+      "requested_tier": "local_solver_guidance",
+      "reason": "in_scope_alignment_and_heldout_confirmed"
+    },
+    "target_binding_present": {
+      "granted": false,
+      "granted_tier": "bounded_trial",
+      "requested_tier": "local_solver_guidance",
+      "reason": "heldout_target_point_confirmation_required"
+    },
+    "missing_confirmation_digest_accepted": {
+      "granted": true,
+      "granted_tier": "local_solver_guidance",
+      "requested_tier": "local_solver_guidance",
+      "reason": "in_scope_alignment_and_heldout_confirmed"
+    },
+    "legacy_boolean_bypass": {
+      "granted": true,
+      "granted_tier": "local_solver_guidance",
+      "requested_tier": "local_solver_guidance",
+      "reason": "in_scope_alignment_and_heldout_confirmed"
+    }
+  }
+}

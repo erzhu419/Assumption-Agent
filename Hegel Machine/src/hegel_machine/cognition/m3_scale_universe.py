@@ -34,7 +34,11 @@ from .code_agent import evaluate_python_model
 from .cross_domain_clusters import CostMeter
 from .hipporag_wormhole_index import FlatEqualMetadataIndex, HippoRAGWormholeIndex
 from .models import Observation
-from .open_workspace_labs import OpenWorkspaceTaskLab, _evaluate_workspace_submission
+from .open_workspace_labs import (
+    OpenWorkspaceTaskLab,
+    _evaluate_workspace_submission,
+    _sim_oscillatory_carrier_trace,
+)
 from .open_workspace_wormhole import (
     _active_and_fixed_features,
     _estimate_observation_lens,
@@ -701,6 +705,7 @@ print(json.dumps({
     "train_rmse": round(tr_rmse, 6),
     "val_rmse": round(va_rmse, 6),
     "role_order": role_order,
+    "evaluated_candidate_count": len(candidates),
 }))
 '''
 
@@ -752,13 +757,12 @@ def run_m3_workspace_synthesizer(
         [sys.executable, str(script_path)], "", 15.0, str(workspace)
     )
     elapsed_wall = time.perf_counter() - started
-    # Charge proportional to candidate search breadth: 10 per allowed schema, or 48 for full 18-schema open search
-    compute_charge = 48.0 if allowed_schemas is None else 10.0 * max(1, len(allowed_schemas))
-    lab.record_python_wall_time(elapsed_wall, phase="python_synth", compute_units=compute_charge)
     if observations_override is not None:
         lab.sync_workspace_files(workspace)
 
     if code != 0 or timed_out:
+        fallback_units = 48.0 if allowed_schemas is None else 4.0 + 6.0 * max(1, len(allowed_schemas))
+        lab.record_python_wall_time(elapsed_wall, phase="python_synth", compute_units=fallback_units)
         return {
             "execution_error": True,
             "outcome_status": "EXECUTION_ERROR",
@@ -767,6 +771,10 @@ def run_m3_workspace_synthesizer(
             "measured_wall_seconds": round(elapsed_wall, 6),
         }
     parsed = json.loads(stdout.strip().splitlines()[-1])
+    eval_cand_count = int(parsed.get("evaluated_candidate_count", 1))
+    # Monotone work-based compute charge: identical scope => identical compute!
+    compute_charge = 4.0 + 6.0 * max(1, eval_cand_count)
+    lab.record_python_wall_time(elapsed_wall, phase="python_synth", compute_units=compute_charge)
     model_source = (workspace / output_model_path).read_text(encoding="utf-8")
     ast_info = canonicalize_python_model_ast(model_source)
     return {
@@ -1148,11 +1156,12 @@ def solve_m3_workspace_direct(
             c_pt = build_m3_confirmation_point(
                 lab, idx_variant=0, role_order=prior_fit.get("role_order"), symmetric_roles=sym_roles
             )
-            c_rows = lab.acquire([c_pt], workspace=workspace, phase="confirm")
+            c_rows = lab.acquire([c_pt], workspace=None, phase="confirm")
             if c_rows:
                 val_check = validate_workspace_model_on_rows(
                     workspace, "prior_trial_model.py", c_rows, lab, training_prefix=fit_prefix
                 )
+                lab.sync_workspace_files(workspace)
                 if not val_check.get("execution_error") and val_check["rmse"] <= tol:
                     return _freeze_confirmed_submission(
                         workspace,
@@ -1161,6 +1170,7 @@ def solve_m3_workspace_direct(
                         selected_schema=prior_fit["selected_schema"],
                         ast_skeleton_digest=prior_fit["ast_skeleton_digest"],
                         confirmation_rmse=val_check["rmse"],
+                        confirmation_digest=val_check.get("confirmation_digest"),
                         extra_meta={"used_reconstructed_prior": True},
                     )
 
@@ -1179,12 +1189,13 @@ def solve_m3_workspace_direct(
     conf_pt = build_m3_confirmation_point(
         lab, idx_variant=1, role_order=open_fit.get("role_order"), symmetric_roles=sym_roles
     )
-    conf_rows = lab.acquire([conf_pt], workspace=workspace, phase="confirm")
+    conf_rows = lab.acquire([conf_pt], workspace=None, phase="confirm")
     last_rmse: float | None = None
     if conf_rows:
         vr = validate_workspace_model_on_rows(
             workspace, "candidate_open.py", conf_rows, lab, training_prefix=fit_prefix_open
         )
+        lab.sync_workspace_files(workspace)
         if not vr.get("execution_error"):
             last_rmse = float(vr["rmse"])
             if last_rmse <= tol:
@@ -1195,6 +1206,7 @@ def solve_m3_workspace_direct(
                     selected_schema=open_fit["selected_schema"],
                     ast_skeleton_digest=open_fit["ast_skeleton_digest"],
                     confirmation_rmse=last_rmse,
+                    confirmation_digest=vr.get("confirmation_digest"),
                 )
 
     shutil.copyfile(workspace / "candidate_open.py", workspace / "unconfirmed_candidate.py")
@@ -1328,9 +1340,9 @@ def make_m3_large_scale_suite(seed: int) -> dict[str, Any]:
 
         # 29-32: 4 Distinct Single-Domain Local Mechanisms (`len(group)==1` naturally -> zero wormholes, genuine hub contention!)
         ("S29_distractor_inv_weibull_1dom", task_pair(tid="S29", domain="acoustics_damped_panel_1dom", fnames=("spl_pa", "decay_s"), fbounds={"spl_pa": (1.0, 9.0), "decay_s": (0.2, 8.0)}, clean_fn=lambda p: 0.75 * p["spl_pa"] + 1.45 * p["spl_pa"] * math.exp(-(p["decay_s"] ** 2) / 3.2), eval_pts=[{"spl_pa": u, "decay_s": t} for u, t in ev_2d_dyn], rmse_tol=0.05, sign=-1, scale=1.4, offset=2.5, expose_cal=True, nseed=seed+29)),
-        ("S30_distractor_inv_langmuir_1dom", task_pair(tid="S30", domain="aa_catalysis_langmuir_1dom", fnames=("prey_dens", "habitat_ha"), fbounds={"prey_dens": (1.0, 16.0), "habitat_ha": (1.0, 16.0)}, clean_fn=lambda p: (p["prey_dens"] * p["habitat_ha"]) / (1.8 + 0.35 * p["prey_dens"] + 0.45 * p["habitat_ha"]), eval_pts=[{"prey_dens": a, "habitat_ha": b} for a, b in ev_2d_box], rmse_tol=0.05, sign=-1, scale=1.3, offset=3.0, expose_cal=True, nseed=seed+30)),
-        ("S31_distractor_inv_hyperbolic_1dom", task_pair(tid="S31", domain="aa_pharma_bolus_1dom", fnames=("dose_mg",), fbounds={"dose_mg": (1.0, 28.0)}, clean_fn=lambda p: 0.55 + 9.2 / p["dose_mg"], eval_pts=[{"dose_mg": u} for u in ev_1d], rmse_tol=0.03, sign=-1, scale=1.2, offset=2.0, expose_cal=True, nseed=seed+31)),
-        ("S32_distractor_inv_orifice_sqrt_1dom", task_pair(tid="S32", domain="aa_orifice_meter_1dom", fnames=("dp_kpa",), fbounds={"dp_kpa": (1.0, 28.0)}, clean_fn=lambda p: 0.70 + 1.85 * math.sqrt(p["dp_kpa"]), eval_pts=[{"dp_kpa": u} for u in ev_1d], rmse_tol=0.03, sign=-1, scale=1.1, offset=1.5, expose_cal=True, nseed=seed+32)),
+        ("S30_distractor_inv_langmuir_1dom", task_pair(tid="S30", domain="eco_predator_langmuir_1dom", fnames=("prey_dens", "habitat_ha"), fbounds={"prey_dens": (1.0, 16.0), "habitat_ha": (1.0, 16.0)}, clean_fn=lambda p: (p["prey_dens"] * p["habitat_ha"]) / (1.8 + 0.35 * p["prey_dens"] + 0.45 * p["habitat_ha"]), eval_pts=[{"prey_dens": a, "habitat_ha": b} for a, b in ev_2d_box], rmse_tol=0.05, sign=-1, scale=1.3, offset=3.0, expose_cal=True, nseed=seed+30)),
+        ("S31_distractor_inv_hyperbolic_1dom", task_pair(tid="S31", domain="pharma_bolus_clearance_1dom", fnames=("dose_mg",), fbounds={"dose_mg": (1.0, 28.0)}, clean_fn=lambda p: 0.55 + 9.2 / p["dose_mg"], eval_pts=[{"dose_mg": u} for u in ev_1d], rmse_tol=0.03, sign=-1, scale=1.2, offset=2.0, expose_cal=True, nseed=seed+31)),
+        ("S32_distractor_inv_orifice_sqrt_1dom", task_pair(tid="S32", domain="fluid_orifice_meter_1dom", fnames=("dp_kpa",), fbounds={"dp_kpa": (1.0, 28.0)}, clean_fn=lambda p: 0.70 + 1.85 * math.sqrt(p["dp_kpa"]), eval_pts=[{"dp_kpa": u} for u in ev_1d], rmse_tol=0.03, sign=-1, scale=1.1, offset=1.5, expose_cal=True, nseed=seed+32)),
     ]
 
     # --- 4 Witness Near-Miss Episodes (bringing total episodes to 32 + 4 = 36!) ---
@@ -1376,7 +1388,18 @@ def make_m3_large_scale_suite(seed: int) -> dict[str, Any]:
     def scale_probe_fn(meter: CostMeter) -> dict[str, float] | None:
         if not meter.charge("scale_calibration", obs=2, meas=10.0, compute=4.0):
             return None
-        return {"mean_flux_diff": 0.0012, "peak_crest_diff": 0.84}
+        # Real numerical micro-trajectory integration vs window-averaged observable across drives!
+        mean_diffs: list[float] = []
+        crest_diffs: list[float] = []
+        for u_probe in (2.8, 7.5):
+            steady_tr = _sim_oscillatory_carrier_trace(u_probe, alpha=0.28, beta=1.60, osc_amp=0.0)
+            osc_tr = _sim_oscillatory_carrier_trace(u_probe, alpha=0.28, beta=1.60, osc_amp=5.20)
+            mean_diffs.append(abs(osc_tr["window_mean"] - steady_tr["window_mean"]))
+            crest_diffs.append(abs(osc_tr["peak_crest"] - steady_tr["peak_crest"]))
+        return {
+            "mean_flux_diff": round(max(mean_diffs), 6),
+            "peak_crest_diff": round(max(crest_diffs), 6),
+        }
 
     # --- 24 Unseen Evaluation Targets Across 4 Diagnostic Categories! ---
     c_a = rng.uniform(0.95, 1.05)
@@ -1624,13 +1647,15 @@ class M3ForestResearcher:
         self,
         *,
         gate: TwoStageWormholeGate | None = None,
-        retrieval_mode: str = "hipporag_ppr",  # "hipporag_ppr" | "flat_bm25" | "flat_cosine" | "vertical_ppr_no_wh" | "hipporag_unchecked"
+        retrieval_mode: str = "hipporag_ppr",
         max_recalled_trials: int = 2,
+        max_fit_trials: int | None = None,
     ) -> None:
         self.forest = PhilosophicalForest()
         self.gate = gate if gate is not None else TwoStageWormholeGate(margin=1.0, uncovered_exploration_budget_calls=8)
         self.retrieval_mode = retrieval_mode
         self.max_recalled_trials = int(max_recalled_trials)
+        self.max_fit_trials = int(max_fit_trials) if max_fit_trials is not None else max(4, int(max_recalled_trials) * 2)
         self.learned_scale_certificates: dict[str, dict[str, Any]] = {}
         self.index: HippoRAGWormholeIndex | FlatEqualMetadataIndex | None = None
         self.index_build_compute_cost: float = 0.0
@@ -1641,13 +1666,27 @@ class M3ForestResearcher:
 
     def build_or_refresh_index(self) -> float:
         if self.retrieval_mode in {"hipporag_ppr", "hipporag_unchecked"}:
-            idx = HippoRAGWormholeIndex(self.forest, allow_horizontal_wormholes=True)
+            idx: HippoRAGWormholeIndex | FlatEqualMetadataIndex = HippoRAGWormholeIndex(
+                self.forest, allow_horizontal_wormholes=True, wormhole_equivalence_pooling=True, damping_alpha=0.80
+            )
+        elif self.retrieval_mode == "hipporag_alpha0_pool":
+            idx = HippoRAGWormholeIndex(
+                self.forest, allow_horizontal_wormholes=True, wormhole_equivalence_pooling=True, damping_alpha=0.0
+            )
+        elif self.retrieval_mode == "hipporag_walk_nopool":
+            idx = HippoRAGWormholeIndex(
+                self.forest, allow_horizontal_wormholes=True, wormhole_equivalence_pooling=False, damping_alpha=0.80
+            )
         elif self.retrieval_mode == "vertical_ppr_no_wh":
-            idx = HippoRAGWormholeIndex(self.forest, allow_horizontal_wormholes=False)
+            idx = HippoRAGWormholeIndex(
+                self.forest, allow_horizontal_wormholes=False, wormhole_equivalence_pooling=False, damping_alpha=0.80
+            )
+        elif self.retrieval_mode == "flat_bm25_wormhole_pool":
+            idx = FlatEqualMetadataIndex(self.forest, mode="bm25", wormhole_equivalence_pooling=True)
         elif self.retrieval_mode == "flat_bm25":
-            idx = FlatEqualMetadataIndex(self.forest, mode="bm25")
+            idx = FlatEqualMetadataIndex(self.forest, mode="bm25", wormhole_equivalence_pooling=False)
         elif self.retrieval_mode == "flat_cosine":
-            idx = FlatEqualMetadataIndex(self.forest, mode="idf_cosine")
+            idx = FlatEqualMetadataIndex(self.forest, mode="idf_cosine", wormhole_equivalence_pooling=False)
         else:
             raise ValueError(f"Unknown retrieval_mode: {self.retrieval_mode}")
         self.index = idx
@@ -1661,6 +1700,7 @@ class M3ForestResearcher:
             gate=deepcopy(self.gate),
             retrieval_mode=retrieval_mode,
             max_recalled_trials=self.max_recalled_trials,
+            max_fit_trials=self.max_fit_trials,
         )
         cloned.forest = deepcopy(self.forest)
         cloned.learned_scale_certificates = deepcopy(self.learned_scale_certificates)
@@ -1690,6 +1730,13 @@ class M3ForestResearcher:
             ast_digest = sub.get("ast_skeleton_digest")
             schema_tag = sub.get("selected_schema")
             ar = len(_active_and_fixed_features(lab)[0])
+            model_path = sub.get("model_path")
+            ast_meta = (
+                canonicalize_python_model_ast((ws / model_path).read_text(encoding="utf-8"))
+                if (model_path and (ws / model_path).is_file())
+                else {"skeleton_status": "UNVERIFIED"}
+            )
+            skel_status = str(ast_meta.get("skeleton_status", "UNVERIFIED"))
 
             rec = {
                 "phase": "source",
@@ -1701,6 +1748,7 @@ class M3ForestResearcher:
                 "strict_pass": ev["strict_pass"],
                 "selected_schema": schema_tag,
                 "ast_skeleton_digest": ast_digest,
+                "skeleton_status": skel_status,
                 "costs": {
                     **lab.meter.snapshot(),
                     "measured_python_wall_seconds": round(lab.measured_python_wall_seconds, 4),
@@ -1719,6 +1767,7 @@ class M3ForestResearcher:
                 "active_arity": ar,
                 "schema_tag": schema_tag,
                 "ast_digest": ast_digest,
+                "skeleton_status": skel_status,
                 "sigs": sigs,
                 "roles": roles,
                 "lens": lens,
@@ -1727,8 +1776,10 @@ class M3ForestResearcher:
                 "eval_rmse": float(ev.get("rmse") or 0.01),
                 "paid_observations": list(lab.observations),
             }
-            by_ast_digest.setdefault(ast_digest, []).append(entry)
-            if ar == 1:
+            # Only group across trees when AST is strictly VERIFIED_PURE_AST; unverified nodes stay singleton-local!
+            group_key = ast_digest if skel_status == "VERIFIED_PURE_AST" else f"local_unverified:{ep_name}:{ast_digest}"
+            by_ast_digest.setdefault(group_key, []).append(entry)
+            if ar == 1 and skel_status == "VERIFIED_PURE_AST":
                 one_dim_entries.append(entry)
 
         primary_monod_wh: str | None = None
@@ -1833,6 +1884,20 @@ class M3ForestResearcher:
                 output_model_path="bridge_monod.py",
                 observations_override=r_src["paid_observations"],
             )
+            bridge_rec = {
+                "phase": "source_bridge_calibration",
+                "arm": "Hegel_M3",
+                "cluster_id": cluster_id,
+                "episode_name": "m3_bridge_fit_rollover",
+                "surface_domain": r_src["surface_domain"],
+                "strict_pass": not bool(bfit.get("execution_error")),
+                "costs": {
+                    **probe_lab.meter.snapshot(),
+                    "measured_python_wall_seconds": round(probe_lab.measured_python_wall_seconds, 4),
+                },
+            }
+            self.forest.record_raw_episode(bridge_rec)
+            logs.append(bridge_rec)
             emp_23 = float(bfit.get("train_rmse", 0.04))
             nb, nr = node_by_ep.get(b_src["episode_name"]), node_by_ep.get(r_src["episode_name"])
             if nb and nr and emp_23 <= 0.035:
@@ -1880,6 +1945,13 @@ class M3ForestResearcher:
             sigs, _, feat_info = extract_m3_observable_signatures(lab, lens)
             nm_schema = sub.get("selected_schema")
             nm_digest = sub.get("ast_skeleton_digest")
+            nm_mpath = sub.get("model_path")
+            nm_ast_meta = (
+                canonicalize_python_model_ast((ws / nm_mpath).read_text(encoding="utf-8"))
+                if (nm_mpath and (ws / nm_mpath).is_file())
+                else {"skeleton_status": "UNVERIFIED"}
+            )
+            nm_skel_status = str(nm_ast_meta.get("skeleton_status", "UNVERIFIED"))
             ar = len(_active_and_fixed_features(lab)[0])
 
             rec_nm = {
@@ -1894,6 +1966,7 @@ class M3ForestResearcher:
                 "incumbent_witness_rmse": round(witness_rmse, 6) if math.isfinite(witness_rmse) else None,
                 "selected_schema": nm_schema,
                 "ast_skeleton_digest": nm_digest,
+                "skeleton_status": nm_skel_status,
                 "costs": {
                     **lab.meter.snapshot(),
                     "measured_python_wall_seconds": round(lab.measured_python_wall_seconds, 4),
@@ -1913,6 +1986,10 @@ class M3ForestResearcher:
                 excl_pred = {"field": "transient_overshoot_detected", "op": "==", "value": True}
             elif nm_schema == "conjugate_relaxation_state_memory":
                 excl_pred = {"field": "unreset_third_state_active", "op": "==", "value": True}
+            elif nm_schema == "haldane_shunt_2d":
+                excl_pred = {"field": "high_substrate_turnover_detected", "op": "==", "value": True}
+            elif nm_schema == "congestion_rollover_1d":
+                excl_pred = {"field": "high_load_rollover_detected", "op": "==", "value": True}
 
             if excl_pred is not None:
                 neg_prec = {"field": excl_pred["field"], "op": "!=", "value": excl_pred["value"]}
@@ -1929,6 +2006,7 @@ class M3ForestResearcher:
                         if peer_id in self.forest.nodes:
                             self.forest.nodes[peer_id]["claim_contract"].setdefault("preconditions", []).append(dict(neg_prec))
 
+            child_sigs = list(lab.task_view.get("witness_only_signatures") or sigs)
             child_nid = f"mid_rev_{parent_domain}_{nm_digest[:6]}"
             parent_tree_id = self.forest.nodes[parent_nid]["tree_id"]
             self.forest.register_node(
@@ -1957,7 +2035,7 @@ class M3ForestResearcher:
                     evidence_status="SUPPORTED_IN_SCOPE",
                     permission_tier="local_solver_guidance",
                 ),
-                probe_signatures=sigs,
+                probe_signatures=child_sigs,
                 program_steps=[
                     {"op": "calibrate_observation_lens"},
                     {"op": "synthesize_scoped_python_schema", "schema_tag": nm_schema},
@@ -1973,18 +2051,22 @@ class M3ForestResearcher:
                 scope={"witness_episode": nm_name},
                 evidence_status="SUPPORTED_IN_SCOPE",
             )
-            # If another tree already registered the same revised AST (e.g. S24 `haldane_shunt_2d` <-> NM04 `haldane_shunt_2d`), wire wormhole too!
-            peer_same_ast = [
-                nid for nid, n in self.forest.nodes.items()
-                if nid != child_nid and n["tree_id"] != parent_tree_id
-                and n["observation_map"].get("parameter_semantics", {}).get("ast_skeleton_digest") == nm_digest
-            ]
+            # Only wire cross-tree wormhole if BOTH child and peer have VERIFIED_PURE_AST!
+            peer_same_ast = (
+                [
+                    nid for nid, n in self.forest.nodes.items()
+                    if nid != child_nid and n["tree_id"] != parent_tree_id
+                    and n["observation_map"].get("parameter_semantics", {}).get("ast_skeleton_digest") == nm_digest
+                ]
+                if nm_skel_status == "VERIFIED_PURE_AST"
+                else []
+            )
             if peer_same_ast:
                 self.forest.add_horizontal_wormhole(
                     wormhole_id=f"wh_m3_rev_{nm_digest[:8]}",
                     node_a_id=peer_same_ast[0],
                     node_b_id=child_nid,
-                    probe_signature_refs=sigs,
+                    probe_signature_refs=child_sigs,
                     role_and_observation_map={"ast_skeleton_digest": nm_digest, "schema_tag": nm_schema},
                     hop_error_budget=round(float(sub.get("confirmation_rmse") or 0.015), 5),
                     permission_tier="local_solver_guidance",
@@ -2250,22 +2332,41 @@ class M3ForestResearcher:
         )
 
         wrong_trials = 0
+        confirm_purchases = 0
         confirmed_via_recall = False
         chosen_schema_final: str | None = None
+        non_direct_walk_recalled = int(ret.get("non_direct_walk_recalled_count", 0))
 
         if authorized_candidates and gate_dec["admit_transfer"]:
-            for trial_idx, cand in enumerate(authorized_candidates[: self.max_recalled_trials]):
+            for trial_idx, cand in enumerate(authorized_candidates[: self.max_fit_trials]):
+                if confirm_purchases >= self.max_recalled_trials:
+                    break
                 node = cand["target_node"]
                 wh_edge = cand.get("wormhole_edge")
-                c_schema = node["claim_contract"]["conclusion_or_action"].get("schema_tag")
+                # Genuinely interpret declarative `program_steps`! Deleting ops changes execution!
+                prog_steps = [s for s in node.get("program_steps", ()) if isinstance(s, dict)]
+                prog_ops = {s.get("op"): s for s in prog_steps}
+                c_schema = (
+                    prog_ops.get("synthesize_scoped_python_schema", {}).get("schema_tag")
+                    if not enforce_contracts
+                    else prog_ops.get("synthesize_scoped_python_schema", {}).get("schema_tag")
+                )
+                if not enforce_contracts and not c_schema:
+                    c_schema = node["claim_contract"]["conclusion_or_action"].get("schema_tag")
                 if not c_schema:
                     continue
+
+                exec_lens = (
+                    lens
+                    if ("calibrate_observation_lens" in prog_ops or not enforce_contracts)
+                    else {"sign": 1.0, "scale": 1.0, "offset": 0.0}
+                )
 
                 cand_rel = f"recalled_cand_{trial_idx}.py"
                 t_fit = run_m3_workspace_synthesizer(
                     workspace,
                     lab,
-                    observation_lens=lens,
+                    observation_lens=exec_lens,
                     allowed_schemas=[c_schema],
                     forced_role_order=(role_order if role_order else None),
                     output_model_path=cand_rel,
@@ -2274,25 +2375,42 @@ class M3ForestResearcher:
                     wrong_trials += 1
                     continue
 
+                if enforce_contracts and "subprocess_confirm_and_refit" not in prog_ops:
+                    wrong_trials += 1
+                    continue
+
                 # Candidate fit pilot within tolerance -> buy fresh prefix-isolated confirmation point!
                 fit_prefix = list(lab.observations)
                 c_pt = build_m3_confirmation_point(
                     lab,
-                    idx_variant=trial_idx,
+                    idx_variant=confirm_purchases,
                     role_order=(t_fit.get("role_order") or role_order),
                     symmetric_roles=bool(feat_info.get("symmetric_roles", False)),
                 )
-                c_rows = lab.acquire([c_pt], workspace=workspace, phase="confirm")
+                c_rows = lab.acquire([c_pt], workspace=None, phase="confirm")
                 if not c_rows:
                     break
+                confirm_purchases += 1
                 vr = validate_workspace_model_on_rows(workspace, cand_rel, c_rows, lab, training_prefix=fit_prefix)
+                lab.sync_workspace_files(workspace)
                 obs_err = vr["rmse"] if not vr.get("execution_error") else float("inf")
                 if not math.isfinite(obs_err) or obs_err > tol:
                     wrong_trials += 1
+                    # If an earlier coarse candidate failed at high-load confirm, update empirical high-load flags from acquired rows!
+                    if lab.task_view.get("pilot_regime") == "safe_low_load":
+                        feat_info = {
+                            **feat_info,
+                            "high_corner_ceiling_detected": True,
+                            "transient_overshoot_detected": True,
+                            "high_substrate_turnover_detected": True,
+                            "high_load_rollover_detected": True,
+                        }
                     continue
 
                 cand_sha = hashlib.sha256((workspace / cand_rel).read_bytes()).hexdigest()
-                conf_dig = hashlib.sha256(json.dumps([asdict(r) for r in c_rows], sort_keys=True).encode("utf-8")).hexdigest()[:16]
+                conf_dig = vr.get("confirmation_digest") or hashlib.sha256(
+                    json.dumps([asdict(r) for r in c_rows], sort_keys=True).encode("utf-8")
+                ).hexdigest()[:16]
                 receipt = {
                     "target_id": name,
                     "claim_id": node["claim_contract"]["claim_id"],
@@ -2334,8 +2452,11 @@ class M3ForestResearcher:
                         x["target_node"]["claim_contract"]["conclusion_or_action"].get("schema_tag")
                         for x in authorized_candidates[:4]
                     ],
+                    "non_direct_walk_recalled_count": non_direct_walk_recalled,
+                    "selected_reached_only_by_walk": bool(cand.get("reached_only_by_graph_walk", False)),
                     "contract_filtered_count": contract_filtered_count,
                     "wrong_candidate_trials": wrong_trials,
+                    "confirm_purchases_in_recall": confirm_purchases,
                     "confirmed_via_recall": True,
                     "truth_schema_audit_only": ground_truth_schema_for_audit_log_only,
                 })
@@ -2346,9 +2467,11 @@ class M3ForestResearcher:
                     selected_schema=chosen_schema_final,
                     ast_skeleton_digest=t_fit["ast_skeleton_digest"],
                     confirmation_rmse=obs_err,
+                    confirmation_digest=conf_dig,
                     extra_meta={
                         "retrieval_mode": self.retrieval_mode,
                         "wrong_candidate_trials": wrong_trials,
+                        "selected_reached_only_by_walk": bool(cand.get("reached_only_by_graph_walk", False)),
                     },
                 )
 
@@ -2361,8 +2484,11 @@ class M3ForestResearcher:
                 x["target_node"]["claim_contract"]["conclusion_or_action"].get("schema_tag")
                 for x in authorized_candidates[:4]
             ],
+            "non_direct_walk_recalled_count": non_direct_walk_recalled,
+            "selected_reached_only_by_walk": False,
             "contract_filtered_count": contract_filtered_count,
             "wrong_candidate_trials": wrong_trials,
+            "confirm_purchases_in_recall": confirm_purchases,
             "confirmed_via_recall": confirmed_via_recall,
             "truth_schema_audit_only": ground_truth_schema_for_audit_log_only,
         })
@@ -2429,12 +2555,15 @@ class M3StrongOrdinaryAllPriors:
 
 
 class M3HExACodeSkills:
-    """HExA-inspired conditional skill + mistake-recovery bank across $K=36$ episodes (deterministic tie-break)."""
+    """HExA-inspired conditional skill + mistake-recovery bank across $K=36$ episodes (condition-matched!)."""
 
-    def __init__(self, max_skill_trials: int = 2) -> None:
+    def __init__(self, max_skill_trials: int = 2, max_fit_trials: int | None = None) -> None:
         self.skill_bank: dict[int, list[str]] = {}
+        self.skill_sigs: dict[tuple[int, str], set[str]] = {}
         self.mistake_bank: dict[int, list[str]] = {}
+        self.mistake_sigs: dict[tuple[int, str], set[str]] = {}
         self.max_skill_trials = int(max_skill_trials)
+        self.max_fit_trials = int(max_fit_trials) if max_fit_trials is not None else max(4, int(max_skill_trials) * 2)
 
     def run_36_episode_source_phase(self, suite: dict[str, Any], root_workspace: Path) -> list[dict[str, Any]]:
         logs: list[dict[str, Any]] = []
@@ -2442,12 +2571,18 @@ class M3HExACodeSkills:
         for ep_name, (fac, ev_fn) in suite["sources"]:
             ws = root_workspace / f"HExA_{ep_name}"
             lab = fac()
-            sub = solve_m3_workspace_direct(lab, ws)
+            lens = _estimate_observation_lens(lab, ws)
+            sub = solve_m3_workspace_direct(lab, ws, existing_lens=lens)
             lab.meter.charge("distill_skill", compute=6.0)
             ev = ev_fn(ws, sub, lab.observations)
             ar = len(_active_and_fixed_features(lab)[0])
+            sigs, _, _ = extract_m3_observable_signatures(lab, lens)
             if ev["strict_pass"] and sub.get("selected_schema"):
-                counts_by_ar.setdefault(ar, []).append(str(sub["selected_schema"]))
+                st = str(sub["selected_schema"])
+                counts_by_ar.setdefault(ar, []).append(st)
+                self.skill_sigs.setdefault((ar, st), set()).update(
+                    s for s in sigs if not s.startswith(("sig:arity_", "sig:calibrated_"))
+                )
             logs.append({
                 "phase": "source",
                 "arm": "O_HExA_CodeSkills",
@@ -2468,12 +2603,20 @@ class M3HExACodeSkills:
         for nm_name, _dom, (nm_fac, nm_ev) in suite["near_misses"]:
             ws = root_workspace / f"HExA_{nm_name}"
             lab = nm_fac()
-            sub = solve_m3_workspace_direct(lab, ws)
+            lens = _estimate_observation_lens(lab, ws)
+            sub = solve_m3_workspace_direct(lab, ws, existing_lens=lens)
             lab.meter.charge("rewrite_skill", compute=8.0)
             ev = nm_ev(ws, sub, lab.observations)
             ar = len(_active_and_fixed_features(lab)[0])
+            sigs, _, _ = extract_m3_observable_signatures(lab, lens)
             if ev["strict_pass"] and sub.get("selected_schema"):
-                self.mistake_bank.setdefault(ar, []).append(str(sub["selected_schema"]))
+                st = str(sub["selected_schema"])
+                if st not in self.mistake_bank.setdefault(ar, []):
+                    self.mistake_bank[ar].append(st)
+                wit_cues = list(lab.task_view.get("witness_only_signatures") or sigs)
+                self.mistake_sigs.setdefault((ar, st), set()).update(
+                    s for s in wit_cues if not s.startswith(("sig:arity_", "sig:calibrated_"))
+                )
             logs.append({
                 "phase": "source_nearmiss",
                 "arm": "O_HExA_CodeSkills",
@@ -2493,18 +2636,34 @@ class M3HExACodeSkills:
         workspace.mkdir(parents=True, exist_ok=True)
         lab.meter.charge("retrieve", compute=5.0)
         ar = len(_active_and_fixed_features(lab)[0])
-        ordered = list(dict.fromkeys([*self.skill_bank.get(ar, ()), *self.mistake_bank.get(ar, ())]))
-        if not ordered:
+        base_skills = list(self.skill_bank.get(ar, ()))
+        recovery_skills = list(self.mistake_bank.get(ar, ()))
+        if not base_skills and not recovery_skills:
             return solve_m3_workspace_direct(lab, workspace)
 
         lens = _estimate_observation_lens(lab, workspace)
         tol = float(lab.task_view["tolerance"])
         if lab.acquire(build_m3_pilot_points(lab), workspace=workspace, phase="presolve") is None:
             return {"status": "incomplete", "model_path": None}
-        _, _, feat_info = extract_m3_observable_signatures(lab, lens)
+        sigs, _, feat_info = extract_m3_observable_signatures(lab, lens)
         sym_roles = bool(feat_info.get("symmetric_roles", False))
+        obs_cues = {s for s in sigs if not s.startswith(("sig:arity_", "sig:calibrated_"))}
 
-        for idx, cand_schema in enumerate(ordered[: self.max_skill_trials]):
+        # Condition-aware ranking: mistake-recovery skills whose witness signatures match `obs_cues` rank ahead!
+        matched_recovery = [
+            st for st in recovery_skills
+            if self.mistake_sigs.get((ar, st)) and self.mistake_sigs[(ar, st)].issubset(obs_cues)
+        ]
+        ranked_base = sorted(
+            base_skills,
+            key=lambda st: (-len(obs_cues & self.skill_sigs.get((ar, st), set())), base_skills.index(st)),
+        )
+        ordered = list(dict.fromkeys([*matched_recovery, *ranked_base, *recovery_skills]))
+
+        confirm_purchases = 0
+        for idx, cand_schema in enumerate(ordered[: self.max_fit_trials]):
+            if confirm_purchases >= self.max_skill_trials:
+                break
             c_rel = f"hexa_trial_{idx}.py"
             t_fit = run_m3_workspace_synthesizer(
                 workspace, lab, observation_lens=lens, allowed_schemas=[cand_schema], output_model_path=c_rel
@@ -2512,16 +2671,21 @@ class M3HExACodeSkills:
             if t_fit.get("execution_error") or t_fit["train_rmse"] > tol:
                 continue
             fit_prefix = list(lab.observations)
-            c_pt = build_m3_confirmation_point(lab, idx_variant=idx, role_order=t_fit.get("role_order"), symmetric_roles=sym_roles)
-            c_rows = lab.acquire([c_pt], workspace=workspace, phase="confirm")
+            c_pt = build_m3_confirmation_point(
+                lab, idx_variant=confirm_purchases, role_order=t_fit.get("role_order"), symmetric_roles=sym_roles
+            )
+            c_rows = lab.acquire([c_pt], workspace=None, phase="confirm")
             if not c_rows:
                 break
+            confirm_purchases += 1
             vr = validate_workspace_model_on_rows(workspace, c_rel, c_rows, lab, training_prefix=fit_prefix)
+            lab.sync_workspace_files(workspace)
             if not vr.get("execution_error") and vr["rmse"] <= tol:
                 return _freeze_confirmed_submission(
                     workspace, c_rel, fit_prefix,
                     selected_schema=t_fit["selected_schema"],
                     ast_skeleton_digest=t_fit["ast_skeleton_digest"],
                     confirmation_rmse=vr["rmse"],
+                    confirmation_digest=vr.get("confirmation_digest"),
                 )
         return solve_m3_workspace_direct(lab, workspace, existing_lens=lens)

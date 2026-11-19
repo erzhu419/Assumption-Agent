@@ -1,0 +1,1 @@
+import json; print(len(json.load(open('observations.json'))))

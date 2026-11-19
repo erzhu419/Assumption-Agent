@@ -30,6 +30,7 @@ import math
 from pathlib import Path
 import shutil
 import sys
+from tempfile import TemporaryDirectory
 import time
 from typing import Any
 
@@ -62,9 +63,15 @@ class _SkeletonNormalizer(ast.NodeTransformer):
         "exp", "log", "sqrt", "sin", "cos", "tanh",
     }
 
-    def __init__(self, feature_aliases: set[str] | None = None, param_dicts: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        feature_aliases: set[str] | None = None,
+        param_dicts: set[str] | None = None,
+        shadowed_names: set[str] | None = None,
+    ) -> None:
         self.feature_aliases = set(feature_aliases or {"f", "features"})
         self.param_dicts = set(param_dicts or {"_PARAMS", "PARAMS"})
+        self.shadowed_names = set(shadowed_names or ())
         self.extracted_feature_order: list[str] = []
         self._feature_to_slot: dict[str, str] = {}
         self.unsupported_reason: str | None = None
@@ -134,16 +141,45 @@ class _SkeletonNormalizer(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         fname = None
+        root_name = None
         if isinstance(node.func, ast.Name):
             fname = node.func.id
+            root_name = fname
         elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
             fname = f"{node.func.value.id}.{node.func.attr}"
+            root_name = node.func.value.id
         if fname not in self._ALLOWED_CALLS:
             self.unsupported_reason = f"unsupported_call:{fname}"
             return node
-        new_args = [self.visit(a) for a in node.args]
+        if root_name in self.shadowed_names or fname in self.shadowed_names:
+            self.unsupported_reason = f"shadowed_callable:{fname}"
+            return node
         short_fn = fname.split(".")[-1]
-        return ast.Call(func=ast.Name(id=f"FN_{short_fn}", ctx=ast.Load()), args=new_args, keywords=[])
+        new_args: list[ast.AST] = []
+        for idx_arg, a in enumerate(node.args):
+            if isinstance(a, ast.Starred):
+                self.unsupported_reason = "unsupported_starred_args"
+                return node
+            if short_fn == "round" and idx_arg == 1:
+                pv = self.eval_numeric_literal(a)
+                if pv is not None:
+                    new_args.append(ast.Name(id=f"PREC_{int(round(pv))}", ctx=ast.Load()))
+                    continue
+            new_args.append(self.visit(a))
+        new_keywords: list[ast.keyword] = []
+        for kw in sorted(node.keywords, key=lambda k: (k.arg or "")):
+            if kw.arg is None:
+                self.unsupported_reason = "unsupported_starred_kwargs"
+                return node
+            if short_fn == "round" and kw.arg == "ndigits":
+                pv = self.eval_numeric_literal(kw.value)
+                if pv is not None:
+                    new_keywords.append(
+                        ast.keyword(arg="ndigits", value=ast.Name(id=f"PREC_{int(round(pv))}", ctx=ast.Load()))
+                    )
+                    continue
+            new_keywords.append(ast.keyword(arg=kw.arg, value=self.visit(kw.value)))
+        return ast.Call(func=ast.Name(id=f"FN_{short_fn}", ctx=ast.Load()), args=new_args, keywords=new_keywords)
 
     def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
         slice_node = node.slice
@@ -168,7 +204,7 @@ class _SkeletonNormalizer(ast.NodeTransformer):
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.AST:
-        if node.id.startswith(("ROLE_", "POS_NUM", "NEG_NUM", "ZERO", "EXP_", "FN_")):
+        if node.id.startswith(("ROLE_", "POS_NUM", "NEG_NUM", "ZERO", "EXP_", "FN_", "PREC_")):
             return node
         self.unsupported_reason = f"unresolved_symbol:{node.id}"
         return node
@@ -184,23 +220,50 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
     predict_fn: ast.FunctionDef | None = None
     module_consts: dict[str, ast.AST] = {}
     param_dicts: set[str] = {"_PARAMS", "PARAMS"}
+    shadowed_names: set[str] = set()
+    allowed_math_imports = {"exp", "log", "sqrt", "sin", "cos", "tanh"}
 
     for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "math" and (alias.asname is None or alias.asname == "math"):
+                    continue
+                shadowed_names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                bound_name = alias.asname or alias.name
+                if node.module == "math" and alias.name in allowed_math_imports and bound_name == alias.name:
+                    continue
+                shadowed_names.add(bound_name)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if isinstance(node, ast.FunctionDef) and node.name == "predict" and predict_fn is None:
+                predict_fn = node
+            elif node.name not in {"fit"}:
+                shadowed_names.add(node.name)
+            elif predict_fn is not None and node.name == "predict":
+                shadowed_names.add(node.name)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             tname = node.targets[0].id
             if tname == "_CORE_LAW_EXPR" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 annot_expr = ast.parse(node.value.value, mode="eval").body
             elif tname == "_SCHEMA_FAMILY_TAG" and isinstance(node.value, ast.Constant):
                 explicit_schema_tag = str(node.value.value)
+            elif tname == "_LENS" and isinstance(node.value, ast.Dict):
+                continue
             elif _SkeletonNormalizer.eval_numeric_literal(node.value) is not None:
                 module_consts[tname] = deepcopy(node.value)
+                if tname in _SkeletonNormalizer._ALLOWED_CALLS or tname == "math":
+                    shadowed_names.add(tname)
             elif isinstance(node.value, ast.Dict):
-                # Distinguish parameter dicts from empty/arbitrary memorizer caches:
-                # only dicts named _PARAMS / PARAMS are treated as fitted scalar coefficients.
                 if tname not in param_dicts:
                     module_consts[tname] = deepcopy(node.value)
-        elif isinstance(node, ast.FunctionDef) and node.name == "predict":
-            predict_fn = node
+                    shadowed_names.add(tname)
+            else:
+                shadowed_names.add(tname)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            target_node = node.target
+            if isinstance(target_node, ast.Name):
+                shadowed_names.add(target_node.id)
 
     class _EnvInliner(ast.NodeTransformer):
         def __init__(self, env: dict[str, ast.AST], row_arg: str, feat_aliases: set[str]) -> None:
@@ -280,6 +343,7 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
     predict_core: ast.AST | None = None
     feat_aliases: set[str] = {"f", "features"}
     impure_predict = False
+    row_arg = "row"
 
     if predict_fn is not None:
         row_arg = predict_fn.args.args[0].arg if predict_fn.args.args else "row"
@@ -290,6 +354,8 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
                 continue
             if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
                 var_name = stmt.targets[0].id
+                if var_name in _SkeletonNormalizer._ALLOWED_CALLS or var_name == "math":
+                    shadowed_names.add(var_name)
                 if _is_row_features_expr(stmt.value, row_arg):
                     feat_aliases.add(var_name)
                 else:
@@ -307,7 +373,6 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
             if _contains_feature_ref(raw_ret, row_arg, feat_aliases):
                 predict_core = _strip_outer_affine(raw_ret, row_arg, feat_aliases)
             else:
-                # Constant-only return (e.g. `return 100000.0`) — preserve exact constant identity!
                 cval = _SkeletonNormalizer.eval_numeric_literal(raw_ret)
                 if cval is not None:
                     predict_core = ast.Name(id=f"POS_NUM_{cval:.8g}", ctx=ast.Load())
@@ -330,7 +395,9 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
         }
 
     if predict_core is not None:
-        norm_pred = _SkeletonNormalizer(feature_aliases=feat_aliases, param_dicts=param_dicts)
+        norm_pred = _SkeletonNormalizer(
+            feature_aliases=feat_aliases, param_dicts=param_dicts, shadowed_names=shadowed_names
+        )
         pred_tree = norm_pred.visit(deepcopy(predict_core))
         ast.fix_missing_locations(pred_tree)
         if norm_pred.unsupported_reason is not None:
@@ -345,8 +412,20 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
         pred_dump = ast.dump(pred_tree, include_attributes=False)
 
         if annot_expr is not None:
-            norm_ann = _SkeletonNormalizer(feature_aliases=feat_aliases | {"f"}, param_dicts=param_dicts)
-            ann_tree = norm_ann.visit(deepcopy(annot_expr))
+            ann_aliases = feat_aliases | {"f", "features"}
+            if _contains_feature_ref(annot_expr, row_arg, ann_aliases):
+                annot_core = _strip_outer_affine(deepcopy(annot_expr), row_arg, ann_aliases)
+            else:
+                acval = _SkeletonNormalizer.eval_numeric_literal(annot_expr)
+                annot_core = (
+                    ast.Name(id=f"POS_NUM_{acval:.8g}", ctx=ast.Load())
+                    if acval is not None
+                    else deepcopy(annot_expr)
+                )
+            norm_ann = _SkeletonNormalizer(
+                feature_aliases=ann_aliases, param_dicts=param_dicts, shadowed_names=shadowed_names
+            )
+            ann_tree = norm_ann.visit(annot_core)
             ast.fix_missing_locations(ann_tree)
             ann_dump = ast.dump(ann_tree, include_attributes=False)
             if norm_ann.unsupported_reason is not None or ann_dump != pred_dump:
@@ -370,8 +449,17 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
         }
 
     # Annotation-only snippet (e.g. unit test passing `_CORE_LAW_EXPR = ...` without `def predict`)
-    norm_only = _SkeletonNormalizer(feature_aliases={"f", "features"}, param_dicts=param_dicts)
-    only_tree = norm_only.visit(deepcopy(annot_expr))  # type: ignore[arg-type]
+    ann_only_aliases = {"f", "features"}
+    assert annot_expr is not None
+    annot_only_core = (
+        _strip_outer_affine(deepcopy(annot_expr), "row", ann_only_aliases)
+        if _contains_feature_ref(annot_expr, "row", ann_only_aliases)
+        else deepcopy(annot_expr)
+    )
+    norm_only = _SkeletonNormalizer(
+        feature_aliases=ann_only_aliases, param_dicts=param_dicts, shadowed_names=shadowed_names
+    )
+    only_tree = norm_only.visit(annot_only_core)
     ast.fix_missing_locations(only_tree)
     only_dump = ast.dump(only_tree, include_attributes=False)
     digest = hashlib.sha256(only_dump.encode("utf-8")).hexdigest()[:14]
@@ -795,7 +883,7 @@ def validate_workspace_model_on_rows(
     *,
     training_prefix: list[Observation] | None = None,
 ) -> dict[str, Any]:
-    """Run ``code_agent.evaluate_python_model`` with strictly isolated pre-confirmation ``training_prefix``!"""
+    """Run ``code_agent.evaluate_python_model`` in a clean sandbox containing strictly ``isolated_prefix``!"""
     if training_prefix is None:
         n_eval = len(rows)
         if n_eval > 0 and len(lab.observations) >= n_eval and lab.observations[-n_eval:] == rows:
@@ -806,15 +894,25 @@ def validate_workspace_model_on_rows(
     else:
         isolated_prefix = list(training_prefix)
 
-    res = evaluate_python_model(
-        workspace,
-        model_rel_path,
-        rows,
-        timeout_seconds=12.0,
-        risk_quantile=0.5,
-        training_observations=isolated_prefix,
-        require_fit=False,
-    )
+    with TemporaryDirectory(prefix="hegel-confirm-sandbox-") as tmp_dir:
+        sandbox = Path(tmp_dir) / "ws"
+        shutil.copytree(
+            workspace,
+            sandbox,
+            ignore=shutil.ignore_patterns("observations.json", "model_observations.json", "__pycache__", "*.pyc"),
+        )
+        prefix_payload = json.dumps([asdict(r) for r in isolated_prefix], ensure_ascii=False)
+        (sandbox / "observations.json").write_text(prefix_payload, encoding="utf-8")
+        (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+        res = evaluate_python_model(
+            sandbox,
+            model_rel_path,
+            rows,
+            timeout_seconds=12.0,
+            risk_quantile=0.5,
+            training_observations=isolated_prefix,
+            require_fit=False,
+        )
     lab.record_python_wall_time(
         float(res.get("external_python_wall_seconds", 0.0)),
         phase="python_eval",
@@ -828,9 +926,13 @@ def validate_workspace_model_on_rows(
             "stderr": (res.get("stderr") or "")[-400:],
         }
     rmse = math.sqrt(max(0.0, float(res["mse"])))
+    conf_digest = hashlib.sha256(
+        json.dumps([asdict(r) for r in rows], sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
     return {
         "execution_error": False,
         "rmse": rmse,
+        "confirmation_digest": conf_digest,
         "predictions": res.get("predictions", []),
         "wall_seconds": float(res.get("external_python_wall_seconds", 0.0)),
         "training_prefix_count": len(isolated_prefix),
@@ -845,6 +947,7 @@ def _freeze_confirmed_submission(
     selected_schema: str | None,
     ast_skeleton_digest: str | None,
     confirmation_rmse: float,
+    confirmation_digest: str | None = None,
     extra_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Freeze exact confirmed ``model.py`` bytes and ``confirmed_training_observations.json`` without unconfirmed refit!"""
@@ -865,6 +968,7 @@ def _freeze_confirmed_submission(
         "selected_schema": selected_schema,
         "ast_skeleton_digest": ast_skeleton_digest,
         "confirmation_rmse": round(float(confirmation_rmse), 6),
+        "confirmation_digest": confirmation_digest,
         "confirmed_training_prefix_count": len(training_prefix),
         **(extra_meta or {}),
     }

@@ -19,6 +19,8 @@ import json
 import math
 from pathlib import Path
 from random import Random
+import shutil
+from tempfile import TemporaryDirectory
 from typing import Any, Callable
 
 from .code_agent import evaluate_python_model
@@ -229,15 +231,25 @@ def _evaluate_workspace_submission(
             "rmse": None,
         }
     training_obs = _load_verified_confirmed_prefix(workspace, paid_observations)
-    eval_res = evaluate_python_model(
-        workspace,
-        model_rel_path,
-        heldout_eval_rows,
-        timeout_seconds=15.0,
-        risk_quantile=0.5,
-        training_observations=training_obs,
-        require_fit=False,
-    )
+    with TemporaryDirectory(prefix="hegel-eval-sandbox-") as tmp_dir:
+        sandbox = Path(tmp_dir) / "ws"
+        shutil.copytree(
+            workspace,
+            sandbox,
+            ignore=shutil.ignore_patterns("observations.json", "model_observations.json", "__pycache__", "*.pyc"),
+        )
+        prefix_payload = json.dumps([asdict(r) for r in training_obs], ensure_ascii=False)
+        (sandbox / "observations.json").write_text(prefix_payload, encoding="utf-8")
+        (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+        eval_res = evaluate_python_model(
+            sandbox,
+            model_rel_path,
+            heldout_eval_rows,
+            timeout_seconds=15.0,
+            risk_quantile=0.5,
+            training_observations=training_obs,
+            require_fit=False,
+        )
     if eval_res.get("returncode") != 0 or "mse" not in eval_res:
         return {
             "strict_pass": False,

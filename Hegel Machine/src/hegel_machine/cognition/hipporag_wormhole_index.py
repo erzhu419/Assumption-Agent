@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from collections import deque
 from copy import deepcopy
+import hashlib
+import json
 import math
 import time
 from typing import Any
@@ -36,6 +38,61 @@ from .wormhole_forest import PhilosophicalForest
 
 
 _FORBIDDEN_QUERY_PREFIXES = ("schema:", "mech:", "domain:", "task:", "truth:", "oracle:")
+
+
+def _node_content_tie_key(node: dict[str, Any]) -> str:
+    """Identifier-independent deterministic tie-breaker over canonical contract & observable cues."""
+    cc = node.get("claim_contract", {})
+    payload = {
+        "action": cc.get("conclusion_or_action", {}),
+        "preconditions": cc.get("preconditions", ()),
+        "sigs": sorted(node.get("probe_signatures", ())),
+        "sign": node.get("observation_map", {}).get("sign_convention", 1),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _build_same_schema_wormhole_components(
+    node_ids: list[str],
+    active_nodes: dict[str, dict[str, Any]],
+    adj_wh: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[str]]:
+    """Connected components of live, non-stale same-schema HorizontalWormholeEdges."""
+    same_schema_adj: dict[str, list[str]] = {nid: [] for nid in node_ids}
+    seen_wids: set[str] = set()
+    for wh_list in adj_wh.values():
+        for wh in wh_list:
+            wid = wh["wormhole_id"]
+            if wid in seen_wids:
+                continue
+            seen_wids.add(wid)
+            na, nb = wh["node_a_id"], wh["node_b_id"]
+            if na in active_nodes and nb in active_nodes:
+                sa_tag = active_nodes[na]["claim_contract"]["conclusion_or_action"].get("schema_tag")
+                sb_tag = active_nodes[nb]["claim_contract"]["conclusion_or_action"].get("schema_tag")
+                if sa_tag and sa_tag == sb_tag:
+                    same_schema_adj[na].append(nb)
+                    same_schema_adj[nb].append(na)
+
+    wh_comp_of: dict[str, list[str]] = {}
+    visited: set[str] = set()
+    for nid in node_ids:
+        if nid in visited:
+            continue
+        comp: list[str] = []
+        q: deque[str] = deque([nid])
+        visited.add(nid)
+        while q:
+            cur = q.popleft()
+            comp.append(cur)
+            for nxt in same_schema_adj.get(cur, ()):
+                if nxt not in visited:
+                    visited.add(nxt)
+                    q.append(nxt)
+        comp.sort()
+        for m in comp:
+            wh_comp_of[m] = comp
+    return wh_comp_of
 
 
 def validate_observable_query_signatures(signatures: list[str]) -> list[str]:
@@ -84,18 +141,26 @@ class HippoRAGWormholeIndex:
         forest: PhilosophicalForest,
         *,
         allow_horizontal_wormholes: bool = True,
+        wormhole_equivalence_pooling: bool = True,
+        include_coarse_graining_edges: bool = True,
+        scale_aware: bool = True,
         damping_alpha: float = 0.80,
         specificity_exponent: float = 1.15,
         self_loop_weight: float = 0.25,
         refined_sink_self_weight: float = 2.40,
         vertical_up_weight: float = 1.85,
         vertical_down_weight: float = 0.10,
+        coarse_up_weight: float = 1.15,
+        fine_down_weight: float = 0.85,
         wormhole_base_weight: float = 1.55,
         max_ppr_iterations: int = 50,
         convergence_tol: float = 1e-9,
     ) -> None:
         t0 = time.perf_counter()
         self.allow_horizontal_wormholes = bool(allow_horizontal_wormholes)
+        self.wormhole_equivalence_pooling = bool(wormhole_equivalence_pooling)
+        self.include_coarse_graining_edges = bool(include_coarse_graining_edges)
+        self.scale_aware = bool(scale_aware)
         self.damping_alpha = float(damping_alpha)
         self.specificity_exponent = float(specificity_exponent)
         self.max_ppr_iterations = int(max_ppr_iterations)
@@ -121,6 +186,9 @@ class HippoRAGWormholeIndex:
 
         self.node_ids: list[str] = sorted(self.active_nodes.keys())
         self.n_to_idx: dict[str, int] = {nid: i for i, nid in enumerate(self.node_ids)}
+        self.content_tie_keys: dict[str, str] = {
+            nid: _node_content_tie_key(node) for nid, node in self.active_nodes.items()
+        }
         n_verts = len(self.node_ids)
         adj_weights: list[dict[int, float]] = [{} for _ in range(n_verts)]
 
@@ -153,6 +221,22 @@ class HippoRAGWormholeIndex:
                     self.graph_adj_nodes[wa].append((sa, None))
                     n_vert_edges += 1
 
+        # 1b. Intra-tree multi-scale coarse-graining edges (`fine -> coarse` via Pi_s & reverse escalation)
+        n_coarse_edges = 0
+        if self.include_coarse_graining_edges:
+            for cg_edge in getattr(forest, "coarse_graining_edges", ()):
+                fa, ca = cg_edge["fine_node_id"], cg_edge["coarse_node_id"]
+                if fa in self.active_nodes and ca in self.active_nodes:
+                    if (
+                        cg_edge["fine_version"] == self.active_nodes[fa]["version"]
+                        and cg_edge["coarse_version"] == self.active_nodes[ca]["version"]
+                    ):
+                        _add_directed(fa, ca, float(coarse_up_weight))
+                        _add_directed(ca, fa, float(fine_down_weight))
+                        self.graph_adj_nodes[fa].append((ca, None))
+                        self.graph_adj_nodes[ca].append((fa, None))
+                        n_coarse_edges += 1
+
         # 2. Self-retention weights (higher on terminal witness-refined nodes so escalated mass concentrates)
         for nid in self.node_ids:
             if nid in refined_children and nid not in parents_with_children:
@@ -162,7 +246,6 @@ class HippoRAGWormholeIndex:
 
         # 3. Cross-tree horizontal wormhole edges (toggled off in VerticalPPR ablation!)
         n_wh_edges = 0
-        same_schema_wh_adj: dict[str, list[str]] = {nid: [] for nid in self.node_ids}
         if self.allow_horizontal_wormholes:
             seen_wh_ids: set[str] = set()
             for wh_list in self.adj_wh.values():
@@ -179,34 +262,17 @@ class HippoRAGWormholeIndex:
                         _add_directed(nb, na, w_wh)
                         self.graph_adj_nodes[na].append((nb, wh))
                         self.graph_adj_nodes[nb].append((na, wh))
-                        sa_tag = self.active_nodes[na]["claim_contract"]["conclusion_or_action"].get("schema_tag")
-                        sb_tag = self.active_nodes[nb]["claim_contract"]["conclusion_or_action"].get("schema_tag")
-                        if sa_tag and sa_tag == sb_tag:
-                            same_schema_wh_adj[na].append(nb)
-                            same_schema_wh_adj[nb].append(na)
                         n_wh_edges += 1
 
-        # Connected components of same-AST horizontal wormhole equivalence classes
-        self.wh_component_of: dict[str, list[str]] = {}
-        visited_comp: set[str] = set()
-        for nid in self.node_ids:
-            if nid in visited_comp:
-                continue
-            comp: list[str] = []
-            q: deque[str] = deque([nid])
-            visited_comp.add(nid)
-            while q:
-                cur = q.popleft()
-                comp.append(cur)
-                for nxt in same_schema_wh_adj.get(cur, ()):
-                    if nxt not in visited_comp:
-                        visited_comp.add(nxt)
-                        q.append(nxt)
-            comp.sort()
-            for m in comp:
-                self.wh_component_of[m] = comp
+        if self.allow_horizontal_wormholes and self.wormhole_equivalence_pooling:
+            self.wh_component_of = _build_same_schema_wormhole_components(
+                self.node_ids, self.active_nodes, self.adj_wh
+            )
+        else:
+            self.wh_component_of = {nid: [nid] for nid in self.node_ids}
 
         # Row-stochastic transition matrix for probability-conserving power iteration
+        self.singleton_bg_mass: list[float] = [0.0] * n_verts
         self.transitions: list[list[tuple[int, float]]] = []
         for u_idx in range(n_verts):
             nbrs = adj_weights[u_idx]
@@ -222,9 +288,10 @@ class HippoRAGWormholeIndex:
             "concept_node_vertices": len(self.active_nodes),
             "bipartite_obs_links": n_obs_edges,
             "vertical_tree_edges": n_vert_edges,
+            "coarse_graining_edges": n_coarse_edges,
             "horizontal_wormhole_edges": n_wh_edges,
         }
-        total_edges = n_obs_edges + n_vert_edges + n_wh_edges
+        total_edges = n_obs_edges + n_vert_edges + n_coarse_edges + n_wh_edges
         self.index_build_compute_cost = round(0.35 * (len(self.sig_to_nodes) + n_verts) + 0.15 * total_edges, 4)
 
     def _shortest_wormhole_path_from_direct_hits(
@@ -285,6 +352,7 @@ class HippoRAGWormholeIndex:
                 "candidates": [],
                 "iterations": 0,
                 "stationary_mass_sum": 0.0,
+                "non_direct_walk_recalled_count": 0,
                 "query_compute_cost": 1.0,
                 "query_wall_seconds": time.perf_counter() - t0,
                 "seed_specificity_weights": {},
@@ -306,23 +374,32 @@ class HippoRAGWormholeIndex:
         p = list(reset_vec)
         alpha = self.damping_alpha
         iters = 0
-        for it in range(1, self.max_ppr_iterations + 1):
-            iters = it
-            nxt = [(1.0 - alpha) * r for r in reset_vec]
-            for u_idx, pu in enumerate(p):
-                if pu <= 1e-15:
-                    continue
-                scaled = alpha * pu
-                for v_idx, prob in self.transitions[u_idx]:
-                    nxt[v_idx] += scaled * prob
-            diff = sum(abs(a - b) for a, b in zip(nxt, p))
-            p = nxt
-            if diff <= self.convergence_tol:
-                break
+        if alpha > 1e-12:
+            for it in range(1, self.max_ppr_iterations + 1):
+                iters = it
+                nxt = [(1.0 - alpha) * r for r in reset_vec]
+                bg_pool = 0.0
+                for u_idx, pu in enumerate(p):
+                    if pu <= 1e-15:
+                        continue
+                    scaled = alpha * pu
+                    for v_idx, prob in self.transitions[u_idx]:
+                        nxt[v_idx] += scaled * prob
+                    if self.singleton_bg_mass[u_idx] > 0.0:
+                        bg_pool += scaled * self.singleton_bg_mass[u_idx]
+                if bg_pool > 0.0:
+                    for v_idx, rv in enumerate(reset_vec):
+                        if rv > 0.0:
+                            nxt[v_idx] += bg_pool * rv
+                diff = sum(abs(a - b) for a, b in zip(nxt, p))
+                p = nxt
+                if diff <= self.convergence_tol:
+                    break
 
         direct_hit_nids = {nid for s in valid_sigs for nid in self.sig_to_nodes.get(s, ())}
         goal = task_view.get("goal_kind")
         req_arity = task_view.get("active_arity")
+        req_scale = task_view.get("target_scale_regime")
 
         scored_nodes: list[dict[str, Any]] = []
         for nid, node in self.active_nodes.items():
@@ -334,10 +411,20 @@ class HippoRAGWormholeIndex:
             node_arity = node["observation_map"].get("parameter_semantics", {}).get("active_arity")
             if req_arity is not None and node_arity is not None and int(node_arity) != int(req_arity):
                 continue
+            if self.scale_aware and req_scale is not None:
+                sm = node.get("scale_map") or {}
+                node_scale = (sm.get("window_or_partition") or {}).get("scale_regime")
+                if node_scale is not None and node_scale != req_scale:
+                    class_p *= 0.05
+                    node_p *= 0.05
             wh_chain, rep_wh = self._shortest_wormhole_path_from_direct_hits(nid, direct_hit_nids)
             if rep_wh is not None and goal and rep_wh.get("compatible_goal_kinds"):
                 if goal not in rep_wh["compatible_goal_kinds"]:
                     continue
+            if self.scale_aware and req_scale is not None and rep_wh is not None:
+                wh_scale = rep_wh.get("scale_regime")
+                if wh_scale is not None and wh_scale != req_scale:
+                    class_p *= 0.20
             matched_sigs = sorted(set(valid_sigs) & set(node.get("probe_signatures", ())))
             scored_nodes.append({
                 "node_id": nid,
@@ -346,30 +433,35 @@ class HippoRAGWormholeIndex:
                 "ppr_score": round(float(class_p), 8),
                 "score": round(float(class_p), 8),
                 "matched_signatures": matched_sigs,
+                "reached_only_by_graph_walk": (nid not in direct_hit_nids),
                 "wormhole_edge": rep_wh,
                 "wormhole_path_edges": wh_chain,
                 "entry_kind": ("horizontal_mid_wormhole" if wh_chain else "local_tree_node"),
                 "granted_tier": "retrieve_candidate",
+                "_tie_key": self.content_tie_keys[nid],
             })
 
-        # Keep representative with highest class PPR (tie-broken by direct node_ppr, then node_id) per schema
-        scored_nodes.sort(key=lambda item: (-item["ppr_score"], -item["node_ppr"], item["node_id"]))
+        # Content-hash tie-breaking (strictly invariant to node_id / domain string renaming!)
+        scored_nodes.sort(key=lambda item: (-item["ppr_score"], -item["node_ppr"], item["_tie_key"]))
         deduped: list[dict[str, Any]] = []
         seen_schemas: set[str] = set()
         for item in scored_nodes:
-            st = str(item["target_node"]["claim_contract"]["conclusion_or_action"].get("schema_tag") or item["node_id"])
+            st = str(item["target_node"]["claim_contract"]["conclusion_or_action"].get("schema_tag") or item["_tie_key"])
             if st in seen_schemas:
                 continue
             seen_schemas.add(st)
-            deduped.append(item)
+            item_clean = {k: v for k, v in item.items() if k != "_tie_key"}
+            deduped.append(item_clean)
             if len(deduped) >= top_k:
                 break
 
+        non_direct_walk_count = sum(1 for c in deduped if c.get("reached_only_by_graph_walk"))
         q_compute = round(1.4 + 0.025 * len(self.active_nodes) + 0.03 * iters, 4)
         return {
             "candidates": deduped,
             "iterations": iters,
             "stationary_mass_sum": round(sum(p), 8),
+            "non_direct_walk_recalled_count": non_direct_walk_count,
             "query_compute_cost": q_compute,
             "query_wall_seconds": time.perf_counter() - t0,
             "seed_specificity_weights": seed_weights,
@@ -380,8 +472,8 @@ class FlatEqualMetadataIndex:
     """Strict Equal-Content Flat Retriever (BM25 or IDF-Cosine) over the EXACT SAME Forest Metadata!
 
     Preserves 100% of every node's ``ClaimContract``, ``ObservationMap``, ``ScaleMap``,
-    ``ALIGN`` exclusions, and cumulative ``wormhole_path_edges``; changes ONLY the ranking
-    mechanism from graph PPR to flat per-document BM25 / IDF-cosine scoring!
+    ``ALIGN`` exclusions, and cumulative ``wormhole_path_edges``; supports optional
+    ``wormhole_equivalence_pooling`` to factorize Wormhole Pooling vs Random Walk cleanly!
     """
 
     def __init__(
@@ -389,6 +481,7 @@ class FlatEqualMetadataIndex:
         forest: PhilosophicalForest,
         *,
         mode: str = "bm25",  # "bm25" | "idf_cosine"
+        wormhole_equivalence_pooling: bool = False,
         k1: float = 1.5,
         b: float = 0.75,
     ) -> None:
@@ -396,11 +489,13 @@ class FlatEqualMetadataIndex:
             raise ValueError(f"Unsupported FlatEqualMetadataIndex mode: {mode}")
         t0 = time.perf_counter()
         self.mode = mode
+        self.wormhole_equivalence_pooling = bool(wormhole_equivalence_pooling)
         self.k1 = float(k1)
         self.b = float(b)
 
         adj_wh, _ = _extract_node_incident_metadata(forest)
         self.records: list[dict[str, Any]] = []
+        active_nodes_map: dict[str, dict[str, Any]] = {}
         df: dict[str, int] = {}
 
         for nid, node in sorted(forest.nodes.items()):
@@ -408,6 +503,7 @@ class FlatEqualMetadataIndex:
                 continue
             if node["claim_contract"].get("evidence_status") != "SUPPORTED_IN_SCOPE":
                 continue
+            active_nodes_map[nid] = deepcopy(node)
             sigs = validate_observable_query_signatures(list(node.get("probe_signatures", ())))
             for s in set(sigs):
                 df[s] = df.get(s, 0) + 1
@@ -428,7 +524,15 @@ class FlatEqualMetadataIndex:
                 "sigs": sigs,
                 "wormhole_edge": rep_wh,
                 "wormhole_path_edges": wh_chain,
+                "tie_key": _node_content_tie_key(node),
             })
+
+        if self.wormhole_equivalence_pooling:
+            self.wh_component_of = _build_same_schema_wormhole_components(
+                sorted(active_nodes_map.keys()), active_nodes_map, adj_wh
+            )
+        else:
+            self.wh_component_of = {r["node_id"]: [r["node_id"]] for r in self.records}
 
         n_docs = max(1, len(self.records))
         self.idf: dict[str, float] = {
@@ -453,23 +557,15 @@ class FlatEqualMetadataIndex:
         goal = task_view.get("goal_kind")
 
         q_norm = math.sqrt(sum(self.idf.get(s, 0.5) ** 2 for s in q_set)) or 1.0
-        scored: list[dict[str, Any]] = []
-
+        raw_doc_scores: dict[str, float] = {}
+        overlaps_by_nid: dict[str, list[str]] = {}
         for rec in self.records:
-            node = rec["target_node"]
-            node_arity = node["observation_map"].get("parameter_semantics", {}).get("active_arity")
-            if req_arity is not None and node_arity is not None and int(node_arity) != int(req_arity):
-                continue
-            rep_wh = rec["wormhole_edge"]
-            if rep_wh is not None and goal and rep_wh.get("compatible_goal_kinds"):
-                if goal not in rep_wh["compatible_goal_kinds"]:
-                    continue
-
             doc_sigs = rec["sigs"]
             overlap = sorted(q_set & set(doc_sigs))
+            overlaps_by_nid[rec["node_id"]] = overlap
             if not overlap:
+                raw_doc_scores[rec["node_id"]] = 0.0
                 continue
-
             if self.mode == "bm25":
                 dl = max(1, len(doc_sigs))
                 denom_norm = 1.0 - self.b + self.b * (dl / max(1e-6, self.avg_dl))
@@ -480,33 +576,56 @@ class FlatEqualMetadataIndex:
             else:
                 d_norm = math.sqrt(sum(self.idf.get(s, 0.5) ** 2 for s in set(doc_sigs))) or 1.0
                 sc = sum(self.idf.get(s, 0.5) ** 2 for s in overlap) / (q_norm * d_norm)
+            raw_doc_scores[rec["node_id"]] = float(sc)
+
+        scored: list[dict[str, Any]] = []
+        for rec in self.records:
+            nid = rec["node_id"]
+            node = rec["target_node"]
+            node_arity = node["observation_map"].get("parameter_semantics", {}).get("active_arity")
+            if req_arity is not None and node_arity is not None and int(node_arity) != int(req_arity):
+                continue
+            rep_wh = rec["wormhole_edge"]
+            if rep_wh is not None and goal and rep_wh.get("compatible_goal_kinds"):
+                if goal not in rep_wh["compatible_goal_kinds"]:
+                    continue
+
+            comp_members = self.wh_component_of.get(nid, [nid])
+            pooled_sc = sum(raw_doc_scores.get(m, 0.0) for m in comp_members)
+            if pooled_sc <= 1e-12:
+                continue
 
             scored.append({
-                "node_id": rec["node_id"],
+                "node_id": nid,
                 "target_node": deepcopy(node),
-                "score": round(float(sc), 8),
-                "matched_signatures": overlap,
+                "doc_score": round(raw_doc_scores.get(nid, 0.0), 8),
+                "score": round(float(pooled_sc), 8),
+                "matched_signatures": overlaps_by_nid.get(nid, []),
+                "reached_only_by_graph_walk": False,
                 "wormhole_edge": deepcopy(rep_wh),
                 "wormhole_path_edges": deepcopy(rec["wormhole_path_edges"]),
                 "entry_kind": ("horizontal_mid_wormhole" if rec["wormhole_path_edges"] else "local_tree_node"),
                 "granted_tier": "retrieve_candidate",
+                "_tie_key": rec["tie_key"],
             })
 
-        scored.sort(key=lambda item: (-item["score"], item["node_id"]))
+        scored.sort(key=lambda item: (-item["score"], -item["doc_score"], item["_tie_key"]))
         deduped: list[dict[str, Any]] = []
         seen_schemas: set[str] = set()
         for item in scored:
-            st = str(item["target_node"]["claim_contract"]["conclusion_or_action"].get("schema_tag") or item["node_id"])
+            st = str(item["target_node"]["claim_contract"]["conclusion_or_action"].get("schema_tag") or item["_tie_key"])
             if st in seen_schemas:
                 continue
             seen_schemas.add(st)
-            deduped.append(item)
+            item_clean = {k: v for k, v in item.items() if k != "_tie_key"}
+            deduped.append(item_clean)
             if len(deduped) >= top_k:
                 break
 
         q_compute = round(1.0 + 0.08 * len(self.records), 4)
         return {
             "candidates": deduped,
+            "non_direct_walk_recalled_count": 0,
             "query_compute_cost": q_compute,
             "query_wall_seconds": time.perf_counter() - t0,
         }

@@ -1660,7 +1660,11 @@ class HegelV166Researcher:
                 # Step 3: Request Tier-3 `local_solver_guidance` backed by target `evidence_receipt`!
                 guidance_auth = authorize_abstraction_use(
                     requested_tier="local_solver_guidance",
-                    task_view=task.task_view,
+                    task_view={
+                        **task.task_view,
+                        "target_id": name,
+                        "node_version": chosen["target_node"]["version"],
+                    },
                     target_features=target_features,
                     claim_contract=chosen["target_node"]["claim_contract"],
                     scale_map=effective_scale_map,
