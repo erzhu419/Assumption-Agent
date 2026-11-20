@@ -1235,6 +1235,7 @@ def _validate_and_interpret_m4_program_steps(
     *,
     node: dict[str, Any],
     target_arity: int,
+    action_override: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Validate and interpret ordered declarative ``program_steps`` on an M4 ``PhilosophicalForest`` node.
 
@@ -1280,7 +1281,11 @@ def _validate_and_interpret_m4_program_steps(
                 return None
             declared_scale = s_reg
 
-    act = node.get("claim_contract", {}).get("conclusion_or_action", {})
+    act = (
+        action_override
+        if isinstance(action_override, dict)
+        else node.get("claim_contract", {}).get("conclusion_or_action", {})
+    )
     expected_tag = str(act.get("operator_tag", ""))
     comp_step = step_map["compile_and_fit_composed_ast"]
     step_tag = comp_step.get("operator_tag")

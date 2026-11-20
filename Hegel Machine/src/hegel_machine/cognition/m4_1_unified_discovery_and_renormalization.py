@@ -1411,12 +1411,17 @@ def _load_node_verified_operator_spec(
     node: dict[str, Any],
     *,
     artifact_root: str | Path | None = None,
+    action_override: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Load operator_spec for a forest node; if backed by a persisted ``authored_artifact_path``,
     MUST pass ``load_verified_authored_method`` integrity AND node-expected ``ast_skeleton_digest``
     (plus ``confirmed_instance_digest`` in zero-fit frozen mode when declared on the node)!
     """
-    act = node["claim_contract"]["conclusion_or_action"]
+    act = (
+        action_override
+        if isinstance(action_override, dict)
+        else node["claim_contract"]["conclusion_or_action"]
+    )
     art_path_str = act.get("authored_artifact_path")
     expected_dig = act.get("ast_skeleton_digest")
     expected_inst = act.get("confirmed_instance_digest")
@@ -1548,14 +1553,6 @@ def evaluate_unified_target_under_arm(
         auth_cands: list[dict[str, Any]] = []
         for c in ret.get("candidates", ()):
             nd = c["target_node"]
-            plan = _validate_and_interpret_m4_program_steps(
-                nd.get("program_steps"), node=nd, target_arity=len(target.feature_names)
-            )
-            if plan is None:
-                continue
-            verified_spec = _load_node_verified_operator_spec(nd)
-            if verified_spec is None:
-                continue
             b_auth = authorize_abstraction_use(
                 requested_tier="bounded_trial",
                 task_view={**tv_q, "target_id": target.target_id, "node_version": nd["version"]},
@@ -1564,8 +1561,18 @@ def evaluate_unified_target_under_arm(
                 scale_map=nd.get("scale_map"),
                 wormhole_edge=c.get("wormhole_edge"),
             )
-            if b_auth["granted"]:
-                auth_cands.append({**c, "_verified_spec": verified_spec, "_exec_plan": plan})
+            if not b_auth["granted"]:
+                continue
+            eff_act = b_auth.get("selected_action") or nd["claim_contract"]["conclusion_or_action"]
+            plan = _validate_and_interpret_m4_program_steps(
+                nd.get("program_steps"), node=nd, target_arity=len(target.feature_names), action_override=eff_act
+            )
+            if plan is None:
+                continue
+            verified_spec = _load_node_verified_operator_spec(nd, artifact_root=forest.artifact_root, action_override=eff_act)
+            if verified_spec is None:
+                continue
+            auth_cands.append({**c, "_verified_spec": verified_spec, "_exec_plan": plan, "_selected_action": eff_act})
 
         if auth_cands:
             c0_cand = auth_cands[0]

@@ -184,7 +184,7 @@ class HippoRAGWormholeIndex:
         for nid, node in sorted(forest.nodes.items()):
             if node["utility_ledger"].get("archived_low_utility"):
                 continue
-            if node["claim_contract"].get("evidence_status") != "SUPPORTED_IN_SCOPE":
+            if node["claim_contract"].get("evidence_status") not in {"SUPPORTED_IN_SCOPE", "STRUCTURAL_HYPOTHESIS_ONLY"}:
                 continue
             self.active_nodes[nid] = deepcopy(node)
 
@@ -539,7 +539,7 @@ class FlatEqualMetadataIndex:
         for nid, node in sorted(forest.nodes.items()):
             if node["utility_ledger"].get("archived_low_utility"):
                 continue
-            if node["claim_contract"].get("evidence_status") != "SUPPORTED_IN_SCOPE":
+            if node["claim_contract"].get("evidence_status") not in {"SUPPORTED_IN_SCOPE", "STRUCTURAL_HYPOTHESIS_ONLY"}:
                 continue
             active_nodes_map[nid] = deepcopy(node)
             sigs = validate_observable_query_signatures(list(node.get("probe_signatures", ())))

@@ -554,6 +554,31 @@ class ForestScopeDispatcher:
                     })
                     continue
 
+            nd_canon_roles = _extract_canonical_box_roles(nd, artifact_root=self.forest.artifact_root)
+            if role_map is not None and nd_canon_roles:
+                rm_ok, rm_reason, _ = validate_canonical_role_map_contract(
+                    tuple(str(k) for k in features.keys()),
+                    nd_canon_roles,
+                    explicit_role_map=role_map,
+                )
+                if not rm_ok:
+                    rec_bad_rm = {
+                        "query_id": query_id,
+                        "status": "invalid_contradictory_role_map",
+                        "selected_node_id": None,
+                        "selected_version": None,
+                        "escalated_from_coarse_node": escalated_from_coarse,
+                        "fit_called": False,
+                        "cold_loader_fit_called": False,
+                        "prediction": None,
+                        "ground_truth": round(float(ground_truth), 8) if ground_truth is not None else None,
+                        "abs_error": None,
+                        "within_tolerance": False,
+                        "rejection_reasons": [{"node_id": nid, "reason": rm_reason}],
+                    }
+                    self.dispatch_receipts.append(rec_bad_rm)
+                    return rec_bad_rm
+
             vbox = (sm.get("window_or_partition") or {}).get("verified_input_box")
             if vbox and not self._point_in_box(features, vbox, role_map=role_map):
                 escalated_from_coarse = nid
@@ -562,7 +587,12 @@ class ForestScopeDispatcher:
                 rejection_reasons.append({"node_id": nid, "reason": "outside_verified_scale_box"})
                 continue
 
-            merged_target_feats = {**features, **target_metadata}
+            mapped_feats_pre = (
+                {str(role_map[qk]): float(qv) for qk, qv in features.items() if qk in role_map}
+                if role_map is not None
+                else features
+            )
+            merged_target_feats = {**features, **mapped_feats_pre, **target_metadata}
             # Pre-check scope/branch eligibility first so disjunctive OR branches select their own bound action!
             pre_auth = authorize_abstraction_use(
                 requested_tier="bounded_trial",
@@ -579,6 +609,33 @@ class ForestScopeDispatcher:
                 continue
 
             act = pre_auth.get("selected_action") or nd["claim_contract"]["conclusion_or_action"]
+            if role_map is not None:
+                act_canon_roles = _extract_canonical_box_roles(
+                    nd, artifact_root=self.forest.artifact_root, action_override=act
+                )
+                if act_canon_roles:
+                    rm_ok2, rm_reason2, _ = validate_canonical_role_map_contract(
+                        tuple(str(k) for k in features.keys()),
+                        act_canon_roles,
+                        explicit_role_map=role_map,
+                    )
+                    if not rm_ok2:
+                        rec_bad_rm2 = {
+                            "query_id": query_id,
+                            "status": "invalid_contradictory_role_map",
+                            "selected_node_id": None,
+                            "selected_version": None,
+                            "escalated_from_coarse_node": escalated_from_coarse,
+                            "fit_called": False,
+                            "cold_loader_fit_called": False,
+                            "prediction": None,
+                            "ground_truth": round(float(ground_truth), 8) if ground_truth is not None else None,
+                            "abs_error": None,
+                            "within_tolerance": False,
+                            "rejection_reasons": [{"node_id": nid, "reason": rm_reason2}],
+                        }
+                        self.dispatch_receipts.append(rec_bad_rm2)
+                        return rec_bad_rm2
             art_path_raw = act.get("authored_artifact_path")
             fine_mode = act.get("fine_ode_direct_mode") is True
 
@@ -2480,11 +2537,18 @@ def _extract_canonical_box_roles(
     node: dict[str, Any],
     *,
     artifact_root: str | Path | None = None,
+    action_override: dict[str, Any] | None = None,
 ) -> list[str]:
     sm = node.get("scale_map") or {}
     vbox = (sm.get("window_or_partition") or {}).get("verified_input_box") or {}
     vbox_keys = [str(k) for k in vbox.keys()]
-    act = (node.get("claim_contract") or {}).get("conclusion_or_action") or {}
+    act = (
+        action_override
+        if isinstance(action_override, dict)
+        else ((node.get("claim_contract") or {}).get("conclusion_or_action") or {})
+    )
+    if act.get("fine_ode_direct_mode") is True:
+        return ["u_drive", "T_horizon"]
     if isinstance(act.get("role_names"), list) and act["role_names"]:
         return [str(r) for r in act["role_names"]]
     art_path = act.get("authored_artifact_path")
@@ -2505,6 +2569,49 @@ def _extract_canonical_box_roles(
     return vbox_keys
 
 
+def validate_canonical_role_map_contract(
+    target_feature_names: tuple[str, ...],
+    canon_roles: list[str],
+    *,
+    explicit_role_map: dict[str, str] | None = None,
+) -> tuple[bool, str, list[dict[str, str]]]:
+    """Unified public coordinate-role contract enforcing full & partial canonical-axis identity locks.
+
+    - Any input coordinate whose name ALREADY matches a canonical role in ``canon_roles`` MUST map to itself
+      (`tf -> tf`), preventing both implicit permutation and contradictory caller ``role_map`` overrides!
+    - Anonymous coordinates (e.g. ``x0, x1``) may map bijectively onto the remaining canonical roles.
+    """
+    if not canon_roles:
+        return True, "ok", []
+    t_names = [str(tf) for tf in target_feature_names]
+    c_names = [str(cr) for cr in canon_roles]
+    if len(t_names) != len(c_names) or len(set(t_names)) != len(t_names) or len(set(c_names)) != len(c_names):
+        return False, "arity_or_uniqueness_mismatch_role_map", []
+
+    canon_set = set(c_names)
+    if explicit_role_map is not None:
+        norm_map = {str(k): str(v) for k, v in explicit_role_map.items()}
+        if set(norm_map.keys()) != set(t_names) or set(norm_map.values()) != canon_set:
+            return False, "invalid_explicit_role_map_bijection", []
+        for tf in t_names:
+            if tf in canon_set and norm_map[tf] != tf:
+                return False, "contradictory_canonical_axis_role_map", []
+        return True, "ok", [norm_map]
+
+    from itertools import permutations
+
+    allowed: list[dict[str, str]] = []
+    for perm in permutations(c_names):
+        rmap = {tf: cr for tf, cr in zip(t_names, perm)}
+        if any(tf in canon_set and rmap[tf] != tf for tf in t_names):
+            continue
+        if rmap not in allowed:
+            allowed.append(rmap)
+    if not allowed:
+        return False, "no_consistent_canonical_bijection", []
+    return True, "ok", allowed
+
+
 def _role_order_from_canonical_role_map(canon_roles: list[str], role_map: dict[str, str]) -> list[str]:
     """Invert ``target_feature -> canonical_role`` bijection into ``compile_operator_spec_to_python`` ``role_names``."""
     inv = {str(cr): str(tf) for tf, cr in role_map.items()}
@@ -2517,37 +2624,26 @@ def _find_all_valid_canonical_role_maps_for_box(
     points_to_check: list[dict[str, float]],
     *,
     artifact_root: str | Path | None = None,
+    action_override: dict[str, Any] | None = None,
 ) -> tuple[bool, list[dict[str, str]], list[str]]:
-    """Return ``(has_no_box_or_valid, valid_role_maps, canon_roles)``.
-
-    CRITICAL INVARIANT:
-      - If ``node`` has no ``verified_input_box``, returns ``(True, [], [])``.
-      - When ``set(target_feature_names) == set(canon_roles)`` (canonical physical coordinate names are
-        explicitly declared on the task, e.g. ``('u_drive', 'T_horizon')``), ONLY the identity map
-        ``{k: k}`` is permitted — axes can NEVER be swapped to sneak out-of-box points into ``verified_input_box``!
-      - When ``target_feature_names`` are anonymous/surface-renamed, returns all bijections that map
-        EVERY point in ``points_to_check`` inside ``verified_input_box``.
-    """
+    """Return ``(has_no_box_or_valid, valid_role_maps, canon_roles)`` under full & partial canonical locks."""
     sm = node.get("scale_map") or {}
     vbox = (sm.get("window_or_partition") or {}).get("verified_input_box")
     if not isinstance(vbox, dict) or not vbox:
         return True, [], []
 
     vbox_keys = [str(k) for k in vbox.keys()]
-    canon_roles = _extract_canonical_box_roles(node, artifact_root=artifact_root)
+    canon_roles = _extract_canonical_box_roles(
+        node, artifact_root=artifact_root, action_override=action_override
+    )
     if len(target_feature_names) != len(canon_roles) or not set(vbox_keys).issubset(set(canon_roles)):
         return False, [], canon_roles
 
-    from itertools import permutations
-
-    if set(target_feature_names) == set(canon_roles):
-        candidate_maps = [{str(k): str(k) for k in target_feature_names}]
-    else:
-        candidate_maps = []
-        for perm in permutations(canon_roles):
-            rmap = {str(tf): str(cr) for tf, cr in zip(target_feature_names, perm)}
-            if rmap not in candidate_maps:
-                candidate_maps.append(rmap)
+    rm_ok, _, candidate_maps = validate_canonical_role_map_contract(
+        target_feature_names, canon_roles, explicit_role_map=None
+    )
+    if not rm_ok:
+        return False, [], canon_roles
 
     valid_maps = [
         rmap
@@ -2563,10 +2659,11 @@ def _find_valid_canonical_role_map_for_box(
     points_to_check: list[dict[str, float]],
     *,
     artifact_root: str | Path | None = None,
+    action_override: dict[str, Any] | None = None,
 ) -> tuple[bool, dict[str, str] | None]:
     """Resolve a canonical coordinate bijection (`target_feature -> certified_box_axis`) before checking bounds."""
     ok, valid_maps, _ = _find_all_valid_canonical_role_maps_for_box(
-        target_feature_names, node, points_to_check, artifact_root=artifact_root
+        target_feature_names, node, points_to_check, artifact_root=artifact_root, action_override=action_override
     )
     if not ok:
         return False, None
@@ -2712,23 +2809,10 @@ def evaluate_m4_2_target_under_arm(
             nd = cand["target_node"]
             if int(nd["observation_map"]["parameter_semantics"].get("active_arity", 0)) != len(target.feature_names):
                 continue
-            plan = _validate_and_interpret_m4_program_steps(
-                nd.get("program_steps"), node=nd, target_arity=len(target.feature_names)
-            )
-            if plan is None:
-                continue
             sm = nd.get("scale_map") or {}
             nd_scale = (sm.get("window_or_partition") or {}).get("scale_regime")
             # Coarse `meso` reduction on `Pi_s` requires a live non-stale coarse_graining_edge for THIS node!
             if is_pi_s_target and nd_scale == "meso" and not forest.fine_scale_children_of(nd["node_id"]):
-                continue
-            v_spec = _load_node_verified_operator_spec(nd, artifact_root=forest.artifact_root)
-            if v_spec is None:
-                continue
-            in_box, valid_rmaps, canon_roles = _find_all_valid_canonical_role_maps_for_box(
-                target.feature_names, nd, [*target.pilot_points, *target.confirm_points], artifact_root=forest.artifact_root
-            )
-            if not in_box:
                 continue
             gate = authorize_abstraction_use(
                 requested_tier="bounded_trial",
@@ -2738,14 +2822,34 @@ def evaluate_m4_2_target_under_arm(
                 scale_map=nd.get("scale_map"),
                 wormhole_edge=cand.get("wormhole_edge"),
             )
-            if gate["granted"]:
-                cand_copy = dict(cand)
-                cand_copy["_verified_spec"] = v_spec
-                cand_copy["_exec_plan"] = plan
-                cand_copy["_valid_role_maps"] = valid_rmaps
-                cand_copy["_canon_roles"] = canon_roles
-                cand_copy["_canonical_role_map"] = valid_rmaps[0] if valid_rmaps else None
-                auth_cands.append(cand_copy)
+            if not gate["granted"]:
+                continue
+            eff_act = gate.get("selected_action") or nd["claim_contract"]["conclusion_or_action"]
+            plan = _validate_and_interpret_m4_program_steps(
+                nd.get("program_steps"), node=nd, target_arity=len(target.feature_names), action_override=eff_act
+            )
+            if plan is None:
+                continue
+            v_spec = _load_node_verified_operator_spec(nd, artifact_root=forest.artifact_root, action_override=eff_act)
+            if v_spec is None:
+                continue
+            in_box, valid_rmaps, canon_roles = _find_all_valid_canonical_role_maps_for_box(
+                target.feature_names,
+                nd,
+                [*target.pilot_points, *target.confirm_points],
+                artifact_root=forest.artifact_root,
+                action_override=eff_act,
+            )
+            if not in_box:
+                continue
+            cand_copy = dict(cand)
+            cand_copy["_verified_spec"] = v_spec
+            cand_copy["_exec_plan"] = plan
+            cand_copy["_valid_role_maps"] = valid_rmaps
+            cand_copy["_canon_roles"] = canon_roles
+            cand_copy["_canonical_role_map"] = valid_rmaps[0] if valid_rmaps else None
+            cand_copy["_selected_action"] = eff_act
+            auth_cands.append(cand_copy)
 
         # Try top authorized recalled candidates sequentially (retaining all paid rows & enforcing 0 overlap!)
         tried_tags: set[str] = set()

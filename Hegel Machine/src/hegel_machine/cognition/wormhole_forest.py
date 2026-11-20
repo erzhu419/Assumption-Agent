@@ -216,6 +216,48 @@ def _validate_evidence_receipt(
     return True
 
 
+def validate_claim_certificate_instance_identity(
+    claim_contract: dict[str, Any] | None,
+    closure_certificate: dict[str, Any] | None,
+) -> tuple[bool, str, dict[str, Any]]:
+    """Shared side-effect-free validator enforcing node / OR-branch / certificate instance equality."""
+    cc = claim_contract or {}
+    cert = closure_certificate or {}
+    target_act = cc.get("conclusion_or_action") or {}
+    node_inst = target_act.get("confirmed_instance_digest")
+    cert_inst = cert.get("confirmed_instance_digest")
+    raw_branches = cc.get("disjunctive_branches") or ()
+    branch_insts: list[Any] = []
+    for br in raw_branches:
+        if isinstance(br, dict) and isinstance(br.get("conclusion_or_action"), dict):
+            b_act = br["conclusion_or_action"]
+            b_inst = b_act.get("confirmed_instance_digest")
+            if b_inst is not None or b_act.get("authored_artifact_path"):
+                branch_insts.append(b_inst)
+
+    if node_inst is not None or cert_inst is not None or bool(branch_insts):
+        if not node_inst or not cert_inst or str(node_inst) != str(cert_inst):
+            return (
+                False,
+                "certificate_instance_digest_mismatch",
+                {
+                    "node_confirmed_instance_digest": node_inst,
+                    "certificate_confirmed_instance_digest": cert_inst,
+                },
+            )
+        for br_inst in branch_insts:
+            if not br_inst or str(br_inst) != str(cert_inst):
+                return (
+                    False,
+                    "branch_certificate_instance_digest_mismatch",
+                    {
+                        "branch_confirmed_instance_digest": br_inst,
+                        "certificate_confirmed_instance_digest": cert_inst,
+                    },
+                )
+    return True, "ok", {"confirmed_instance_digest": (str(cert_inst) if cert_inst else None)}
+
+
 def authorize_abstraction_use(
     *,
     requested_tier: str,
@@ -465,7 +507,13 @@ def authorize_abstraction_use(
         }
 
     if requested_tier == "local_solver_guidance":
-        if effective_evidence_status not in {"SUPPORTED_IN_SCOPE", "derived"}:
+        upgraded_structural_trial = (
+            effective_evidence_status == "STRUCTURAL_HYPOTHESIS_ONLY"
+            and receipt_ok
+            and evidence_receipt is not None
+            and evidence_receipt.get("upgrade_to_tier") == "local_solver_guidance"
+        )
+        if effective_evidence_status not in {"SUPPORTED_IN_SCOPE", "derived"} and not upgraded_structural_trial:
             return {
                 "granted": False,
                 "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
@@ -919,11 +967,15 @@ class PhilosophicalForest:
             raise ValueError("Cycle detected in coarse_graining_edges")
         sm = scale_map.to_dict() if isinstance(scale_map, ScaleMap) else deepcopy(scale_map)
         cert_copy = deepcopy(empirical_closure_certificate)
+        ident_ok, ident_reason, ident_meta = validate_claim_certificate_instance_identity(
+            coarse.get("claim_contract") or {}, cert_copy
+        )
+        if not ident_ok:
+            raise ValueError(f"{ident_reason}:{ident_meta}")
         cert_digest = hashlib.sha256(
             json.dumps(cert_copy, sort_keys=True).encode("utf-8")
         ).hexdigest()[:16]
-        c_act = (coarse.get("claim_contract") or {}).get("conclusion_or_action") or {}
-        c_inst = c_act.get("confirmed_instance_digest") or cert_copy.get("confirmed_instance_digest")
+        c_inst = ident_meta.get("confirmed_instance_digest")
         edge = {
             "fine_node_id": fine_node_id,
             "fine_version": fine["version"],
@@ -940,6 +992,24 @@ class PhilosophicalForest:
         self.mutation_epoch += 1
         return deepcopy(edge)
 
+    def _is_coarse_graining_edge_identity_valid(self, edge: dict[str, Any]) -> bool:
+        c_id = edge.get("coarse_node_id")
+        if c_id not in self.nodes:
+            return False
+        coarse_nd = self.nodes[c_id]
+        cert = edge.get("empirical_closure_certificate") or {}
+        ident_ok, _, ident_meta = validate_claim_certificate_instance_identity(
+            coarse_nd.get("claim_contract") or {}, cert
+        )
+        if not ident_ok:
+            return False
+        exp_inst = ident_meta.get("confirmed_instance_digest")
+        edge_inst = edge.get("confirmed_instance_digest")
+        if exp_inst is not None or edge_inst is not None:
+            if not exp_inst or not edge_inst or str(exp_inst) != str(edge_inst):
+                return False
+        return True
+
     def fine_scale_children_of(self, coarse_node_id: str) -> list[dict[str, Any]]:
         """Return live fine-scale underlying nodes when coarse-graining closure breaks (dialectical escalation)."""
         if coarse_node_id not in self.nodes:
@@ -955,6 +1025,7 @@ class PhilosophicalForest:
                 and edge["coarse_version"] == cur_ver
                 and f_id in self.nodes
                 and edge["fine_version"] == self.nodes[f_id]["version"]
+                and self._is_coarse_graining_edge_identity_valid(edge)
             ):
                 out.append(deepcopy(self.nodes[f_id]))
         return out
@@ -974,6 +1045,7 @@ class PhilosophicalForest:
                 and edge["fine_version"] == cur_ver
                 and c_id in self.nodes
                 and edge["coarse_version"] == self.nodes[c_id]["version"]
+                and self._is_coarse_graining_edge_identity_valid(edge)
             ):
                 out.append(deepcopy(self.nodes[c_id]))
         return out
@@ -1282,29 +1354,17 @@ class PhilosophicalForest:
             }
 
         target_cc = updated_claim_contract if updated_claim_contract is not None else self.nodes[node_id].get("claim_contract")
-        target_act = (target_cc or {}).get("conclusion_or_action") or {}
-        node_inst = target_act.get("confirmed_instance_digest")
-        cert_inst = closure_certificate.get("confirmed_instance_digest")
-        if node_inst is not None or cert_inst is not None:
-            if not node_inst or not cert_inst or str(node_inst) != str(cert_inst):
-                return {
-                    "accepted": False,
-                    "reason": "certificate_instance_digest_mismatch",
-                    "node_confirmed_instance_digest": node_inst,
-                    "certificate_confirmed_instance_digest": cert_inst,
-                    "rebound_coarse_graining_edges": 0,
-                }
-            for br in (target_cc or {}).get("disjunctive_branches", ()):
-                if isinstance(br, dict) and isinstance(br.get("conclusion_or_action"), dict):
-                    br_inst = br["conclusion_or_action"].get("confirmed_instance_digest")
-                    if br_inst is not None and str(br_inst) != str(cert_inst):
-                        return {
-                            "accepted": False,
-                            "reason": "branch_certificate_instance_digest_mismatch",
-                            "branch_confirmed_instance_digest": br_inst,
-                            "certificate_confirmed_instance_digest": cert_inst,
-                            "rebound_coarse_graining_edges": 0,
-                        }
+        ident_ok, ident_reason, ident_meta = validate_claim_certificate_instance_identity(
+            target_cc or {}, closure_certificate
+        )
+        if not ident_ok:
+            return {
+                "accepted": False,
+                "reason": ident_reason,
+                **ident_meta,
+                "rebound_coarse_graining_edges": 0,
+            }
+        cert_inst = ident_meta.get("confirmed_instance_digest")
 
         target_sm = updated_scale_map if updated_scale_map is not None else self.nodes[node_id].get("scale_map")
         if not isinstance(target_sm, dict) or target_sm.get("closure_scope") in {None, "", "not_closed"}:

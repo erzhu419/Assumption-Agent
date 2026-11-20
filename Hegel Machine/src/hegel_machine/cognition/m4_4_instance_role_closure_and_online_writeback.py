@@ -115,6 +115,7 @@ from .wormhole_forest import (
     TaskView,
     authorize_abstraction_use,
     canonical_digest,
+    validate_claim_certificate_instance_identity,
 )
 
 
@@ -128,6 +129,9 @@ def serialize_location_independent_forest(forest: PhilosophicalForest) -> dict[s
         "horizontal_wormhole_edges": deepcopy(forest.horizontal_wormhole_edges),
         "wormhole_history": deepcopy(forest.wormhole_history),
         "conflict_relations": deepcopy(forest.conflict_relations),
+        "mutation_epoch": int(forest.mutation_epoch),
+        "questions": deepcopy(forest.questions),
+        "raw_episode_archive": deepcopy(forest.raw_episode_archive),
     }
 
 
@@ -142,18 +146,29 @@ def load_location_independent_forest(snapshot_path: Path, bundle_root: Path) -> 
     f.horizontal_wormhole_edges = data["horizontal_wormhole_edges"]
     f.wormhole_history = data["wormhole_history"]
     f.conflict_relations = data["conflict_relations"]
+    f.mutation_epoch = int(data.get("mutation_epoch", 0))
+    f.questions = data.get("questions", {})
+    f.raw_episode_archive = data.get("raw_episode_archive", [])
     return f
 
 
 def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | PhilosophicalForest) -> dict[str, Any]:
-    """Recompute exact production 5-field ``semantic_digest`` & ``closure_certificate_digest`` across all nodes/edges."""
+    """Recompute exact production 5-field ``semantic_digest``, ``closure_certificate_digest``,
+    history semantic digests, & cross-object ``node / OR-branch / edge / certificate`` instance equality!
+    """
     nodes = forest_dict_or_obj.nodes if isinstance(forest_dict_or_obj, PhilosophicalForest) else forest_dict_or_obj["nodes"]
+    node_history = (
+        forest_dict_or_obj.node_history
+        if isinstance(forest_dict_or_obj, PhilosophicalForest)
+        else forest_dict_or_obj.get("node_history", {})
+    )
     cg_edges = (
         forest_dict_or_obj.coarse_graining_edges
         if isinstance(forest_dict_or_obj, PhilosophicalForest)
         else forest_dict_or_obj["coarse_graining_edges"]
     )
     sem_mismatches: list[dict[str, Any]] = []
+    hist_sem_mismatches: list[dict[str, Any]] = []
     missing_inst_nodes: list[str] = []
     artifact_node_count = 0
     for nid, nd in sorted(nodes.items()):
@@ -162,13 +177,32 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
         })
         if actual_sem != nd["semantic_digest"]:
             sem_mismatches.append({"node_id": nid, "recorded": nd["semantic_digest"], "computed": actual_sem})
-        act = (nd.get("claim_contract") or {}).get("conclusion_or_action") or {}
+        cc = nd.get("claim_contract") or {}
+        act = cc.get("conclusion_or_action") or {}
         if act.get("authored_artifact_path"):
             artifact_node_count += 1
             if not act.get("confirmed_instance_digest"):
                 missing_inst_nodes.append(nid)
+        for br_i, br in enumerate(cc.get("disjunctive_branches", ())):
+            if isinstance(br, dict):
+                b_act = br.get("conclusion_or_action") or {}
+                if b_act.get("authored_artifact_path") and not b_act.get("confirmed_instance_digest"):
+                    missing_inst_nodes.append(f"{nid}:branch_{br_i}")
+
+    for h_nid, h_list in sorted(node_history.items()):
+        for h_idx, h_nd in enumerate(h_list):
+            h_actual = canonical_digest({
+                k: h_nd[k] for k in ("task_view", "observation_map", "scale_map", "claim_contract", "program_steps")
+            })
+            if h_actual != h_nd["semantic_digest"]:
+                hist_sem_mismatches.append({
+                    "history_key": f"{h_nid}:{h_idx}",
+                    "recorded": h_nd["semantic_digest"],
+                    "computed": h_actual,
+                })
 
     cert_mismatches: list[dict[str, Any]] = []
+    edge_inst_mismatches: list[dict[str, Any]] = []
     for ce in cg_edges:
         cert = ce.get("empirical_closure_certificate")
         rec_dig = ce.get("closure_certificate_digest")
@@ -179,6 +213,19 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
                 "recorded": rec_dig,
                 "computed": comp_dig,
             })
+        c_nid = ce.get("coarse_node_id")
+        if c_nid in nodes and not ce.get("stale_endpoint_revision"):
+            c_cc = nodes[c_nid].get("claim_contract") or {}
+            id_ok, id_reason, id_meta = validate_claim_certificate_instance_identity(c_cc, cert or {})
+            exp_inst = id_meta.get("confirmed_instance_digest")
+            edge_inst = ce.get("confirmed_instance_digest")
+            if not id_ok or ((exp_inst is not None or edge_inst is not None) and str(exp_inst) != str(edge_inst)):
+                edge_inst_mismatches.append({
+                    "coarse_node_id": c_nid,
+                    "reason": id_reason if not id_ok else "edge_confirmed_instance_digest_mismatch",
+                    "edge_confirmed_instance_digest": edge_inst,
+                    **id_meta,
+                })
 
     return {
         "node_count": len(nodes),
@@ -186,8 +233,12 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
         "missing_expected_instance_nodes": missing_inst_nodes,
         "semantic_digest_mismatch_count": len(sem_mismatches),
         "semantic_digest_mismatches": sem_mismatches,
+        "history_semantic_digest_mismatch_count": len(hist_sem_mismatches),
+        "history_semantic_digest_mismatches": hist_sem_mismatches,
         "certificate_digest_mismatch_count": len(cert_mismatches),
         "certificate_digest_mismatches": cert_mismatches,
+        "edge_certificate_instance_mismatch_count": len(edge_inst_mismatches),
+        "edge_certificate_instance_mismatches": edge_inst_mismatches,
     }
 
 
@@ -770,6 +821,7 @@ def _write_back_discovered_mechanism_to_forest(
         program_steps=prog_steps,
         source_cluster_ids=[f"online_{primary_tree_id}"],
     )
+    weaker_edge_added = False
     if weaker_parent_id and weaker_parent_id in forest.nodes and forest.nodes[weaker_parent_id]["tree_id"] == primary_tree_id:
         forest.add_local_implication_edge(
             stronger_node_id=primary_node_id,
@@ -777,7 +829,21 @@ def _write_back_discovered_mechanism_to_forest(
             preserved_contract={"online_compositional_sublation": True},
             scope={"ceiling_extension": True},
         )
+        weaker_edge_added = True
 
+    # Before second-domain empirical confirmation, register the cross-domain cue slot ONLY as a
+    # `STRUCTURAL_HYPOTHESIS_ONLY` (`bounded_trial`) candidate sharing the pure AST structure (NO cloned
+    # second-domain physical instance digest, blocking premature zero-fit `R3` on unconfirmed Domain B!).
+    structural_only_act = {
+        "operator_tag": operator_tag,
+        "operator_spec": deepcopy(art["operator_spec"]),
+        "role_names": [str(r) for r in art.get("role_names", ())],
+        "ast_skeleton_digest": str(art["ast_skeleton_digest"]),
+        "model_source_sha256": str(art["model_sha256"]),
+        "structural_alias_of_source_node": primary_node_id,
+    }
+    src_ep_id = str(art.get("task_id") or primary_node_id)
+    src_conf_err = float((bundle or {}).get("observed_confirm_rmse", 0.01))
     forest.register_node(
         node_id=twin_node_id,
         tree_id=twin_tree_id,
@@ -788,11 +854,11 @@ def _write_back_discovered_mechanism_to_forest(
             f"claim_{twin_node_id}",
             "m4_open_compositional_ast",
             preconditions=deepcopy(preconditions),
-            conclusion_or_action=deepcopy(act_dict),
-            protocol_spec={"isolated_confirm": True},
+            conclusion_or_action=structural_only_act,
+            protocol_spec={"isolated_confirm": True, "requires_second_domain_confirmation": True},
             tolerance=tolerance,
-            evidence_status="SUPPORTED_IN_SCOPE",
-            permission_tier="local_solver_guidance",
+            evidence_status="STRUCTURAL_HYPOTHESIS_ONLY",
+            permission_tier="bounded_trial",
         ),
         probe_signatures=list(twin_cues),
         program_steps=prog_steps,
@@ -803,12 +869,14 @@ def _write_back_discovered_mechanism_to_forest(
         node_a_id=primary_node_id,
         node_b_id=twin_node_id,
         probe_signature_refs=[*primary_cues, *twin_cues],
-        role_and_observation_map={"role_map": "identity_canonical"},
-        hop_error_budget=0.01,
-        permission_tier="local_solver_guidance",
+        role_and_observation_map={"role_map": "identity_canonical", "status": "structural_candidate_bridge"},
+        hop_error_budget=round(max(src_conf_err, 0.005), 6),
+        permission_tier="bounded_trial",
+        source_episode_refs=[src_ep_id],
     )
-    # Explicit write-back bookkeeping compute cost (`1.5` per node + `0.8` per edge)
-    return 4.6
+    # Exact write-back bookkeeping compute cost (`1.5` per node + `0.8` per edge actually added!)
+    edges_added = 1 + (1 if weaker_edge_added else 0)
+    return round(1.5 * 2 + 0.8 * edges_added, 4)
 
 
 def run_m4_4_online_writeback_and_multicue_stream(
@@ -1100,10 +1168,10 @@ def run_m4_4_online_writeback_and_multicue_stream(
 
             wb_comp_step = 0.0
             if enable_writeback and wb_meta is not None:
-                if phase_kind == "online_revision_event":
+                if phase_kind == "online_revision_event" and rec.get("confirmed_ok") and rec.get("strict_pass"):
                     nid_rev = str(wb_meta["revise_node_id"])
                     upd_cc = deepcopy(live_f.nodes[nid_rev]["claim_contract"])
-                    # Keep W4 backward-compatible on normal tasks while recording versioned online refinement!
+                    # Protocol-metadata update gated on `confirmed_ok` (triggers live index refresh without claiming empirical scope narrowing)
                     upd_cc["protocol_spec"] = {**upd_cc.get("protocol_spec", {}), "online_bleed_verified_max": 1.6}
                     live_f.empirical_revise_node(
                         nid_rev,
@@ -1115,7 +1183,7 @@ def run_m4_4_online_writeback_and_multicue_stream(
                     wb_comp_step = 2.0
                     writeback_events.append({
                         "step": step_num,
-                        "event": "empirical_revise_node",
+                        "event": "protocol_metadata_update",
                         "node_id": nid_rev,
                         "new_version": live_f.nodes[nid_rev]["version"],
                     })

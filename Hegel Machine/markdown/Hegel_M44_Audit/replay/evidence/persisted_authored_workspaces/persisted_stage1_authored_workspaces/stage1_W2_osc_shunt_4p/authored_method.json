@@ -1,0 +1,236 @@
+{
+  "ast_skeleton_digest": "17d05c4bf44ecf",
+  "authored_model_source": "import math\n\n_SCHEMA_FAMILY_TAG = 'atomic_exp_relax_2d__comb_osc_ringing__comb_shunt'\n_CORE_LAW_EXPR = \"(((_PARAMS['p0'] * f['u']) * (1 - (math.exp(-f['t'] / _PARAMS['p1']) * math.cos(_PARAMS['p2'] * f['t'])))) + (_PARAMS['p3'] * f['t']))\"\n_PARAMS = {'p0': 1.5, 'p1': 1.2, 'p2': 1.8, 'p3': 0.6}\n\ndef fit(observations):\n    if not observations:\n        return\n    rows_f = [r['features'] for r in observations]\n    ys = [(float(r['target']) - (0)) / ((1) * (1)) for r in observations]\n    lbs = [0.0001, 0.05, 0.05, -80.0]\n    ubs = [200.0, 50.0, 12.0, 80.0]\n    m_p = len(lbs)\n    def _res(p):\n        out = []\n        for f, y in zip(rows_f, ys):\n            out.append(((((p[0] * f['u']) * (1 - (math.exp(-f['t'] / p[1]) * math.cos(p[2] * f['t'])))) + (p[3] * f['t']))) - y)\n        return out\n    def _loss(p):\n        rv = _res(p)\n        return sum(e * e for e in rv)\n    def _lm(x_start):\n        p = [max(lbs[i], min(ubs[i], float(x_start[i]))) for i in range(m_p)]\n        cur = _loss(p)\n        lam = 1e-3\n        for _ in range(28):\n            if cur <= 1e-13:\n                break\n            r0 = _res(p)\n            jac = []\n            for j in range(m_p):\n                h = max(1e-6, 1e-5 * abs(p[j]))\n                pj = min(ubs[j], p[j] + h)\n                actual_h = pj - p[j]\n                if abs(actual_h) < 1e-9:\n                    pj = max(lbs[j], p[j] - h)\n                    actual_h = pj - p[j]\n                p_pert = list(p)\n                p_pert[j] = pj\n                rp = _res(p_pert)\n                jac.append([(rp[k] - r0[k]) / actual_h for k in range(len(r0))])\n            jtj = [[(lam if a == b else 0.0) + sum(jac[a][k] * jac[b][k] for k in range(len(r0))) for b in range(m_p)] for a in range(m_p)]\n            jtr = [-sum(jac[a][k] * r0[k] for k in range(len(r0))) for a in range(m_p)]\n            aug = [jtj[a] + [jtr[a]] for a in range(m_p)]\n            ok = True\n            for col in range(m_p):\n                piv = max(range(col, m_p), key=lambda r_i: abs(aug[r_i][col]))\n                aug[col], aug[piv] = aug[piv], aug[col]\n                if abs(aug[col][col]) <= 1e-15:\n                    ok = False\n                    break\n                inv_d = 1.0 / aug[col][col]\n                for c2 in range(col, m_p + 1):\n                    aug[col][c2] *= inv_d\n                for r_i in range(m_p):\n                    if r_i != col and abs(aug[r_i][col]) > 0.0:\n                        fac = aug[r_i][col]\n                        for c2 in range(col, m_p + 1):\n                            aug[r_i][c2] -= fac * aug[col][c2]\n            if not ok:\n                lam *= 10.0\n                continue\n            dp = [aug[a][m_p] for a in range(m_p)]\n            cand = [max(lbs[i], min(ubs[i], p[i] + dp[i])) for i in range(m_p)]\n            c_loss = _loss(cand)\n            if c_loss < cur:\n                impr = cur - c_loss\n                p, cur = cand, c_loss\n                lam = max(1e-7, lam * 0.35)\n                if impr < 1e-12:\n                    break\n            else:\n                lam = min(1e6, lam * 6.0)\n        for step in (0.15, 0.03, 0.005):\n            for j in range(m_p):\n                for sgn in (-1.0, 1.0):\n                    cand = list(p)\n                    cand[j] = max(lbs[j], min(ubs[j], p[j] + sgn * step * max(0.5, abs(p[j]))))\n                    cl = _loss(cand)\n                    if cl < cur:\n                        p, cur = cand, cl\n        return cur, p\n    starts = [[1.5, 1.2, 0.9, 0.6], [1.5, 1.2, 1.5, 0.6], [1.5, 1.2, 2.2, 0.6], [1.5, 1.2, 2.9, 0.6]]\n    if ys:\n        if False and m_p >= 2:\n            s_emp = list(starts[0])\n            s_emp[-1] = max(lbs[-1], min(ubs[-1], max(ys)))\n            starts.insert(0, s_emp)\n    best_cost, best_p = None, list(starts[0])\n    for st in starts:\n        c_val, c_p = _lm(st)\n        if best_cost is None or c_val < best_cost:\n            best_cost, best_p = c_val, c_p\n            if best_cost <= 1e-10:\n                break\n    _PARAMS['p0'] = float(best_p[0])\n    _PARAMS['p1'] = float(best_p[1])\n    _PARAMS['p2'] = float(best_p[2])\n    _PARAMS['p3'] = float(best_p[3])\n\ndef predict(row):\n    f = row['features']\n    latent = (((_PARAMS['p0'] * f['u']) * (1 - (math.exp(-f['t'] / _PARAMS['p1']) * math.cos(_PARAMS['p2'] * f['t'])))) + (_PARAMS['p3'] * f['t']))\n    return 0 + (1) * (1) * latent\n",
+  "canonical_ast_dump": "BinOp(left=BinOp(left=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Mult(), right=Name(id='ROLE_0', ctx=Load())), op=Mult(), right=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Sub(), right=BinOp(left=Call(func=Name(id='FN_exp', ctx=Load()), args=[BinOp(left=UnaryOp(op=USub(), operand=Name(id='ROLE_1', ctx=Load())), op=Div(), right=Name(id='POS_NUM', ctx=Load()))], keywords=[]), op=Mult(), right=Call(func=Name(id='FN_cos', ctx=Load()), args=[BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Mult(), right=Name(id='ROLE_1', ctx=Load()))], keywords=[])))), op=Add(), right=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Mult(), right=Name(id='ROLE_1', ctx=Load())))",
+  "composed_candidate_count": 2,
+  "composed_history": [
+    {
+      "ast_skeleton_digest": "17d05c4bf44ecf",
+      "composed_family_hint": "atomic_exp_relax_2d__comb_osc_ringing__comb_shunt",
+      "triggered_by_stdout": {
+        "fast_transient_decay": false,
+        "high_drive_turnover_drop": false,
+        "kink_plateau_ceiling": false,
+        "oscillatory_overshoot": true,
+        "residual_rmse": 0.458477,
+        "secondary_active": false,
+        "secondary_channel_corr": 0.1845
+      }
+    },
+    {
+      "ast_skeleton_digest": "5ab363f56cb6c7",
+      "composed_family_hint": "atomic_exp_relax_2d__comb_osc_ringing",
+      "triggered_by_stdout": {
+        "fast_transient_decay": false,
+        "high_drive_turnover_drop": false,
+        "kink_plateau_ceiling": false,
+        "oscillatory_overshoot": true,
+        "residual_rmse": 0.458477,
+        "secondary_active": false,
+        "secondary_channel_corr": 0.1845
+      }
+    }
+  ],
+  "confirm_rmse": 0.0,
+  "confirmation_digest": "65e6b215f8f674f3",
+  "confirmed_instance_digest": "3414331949d2cd782322da0ce194acd18a7f9b666158729e9b45a4975b99dab7",
+  "confirmed_ok": true,
+  "diagnostic_report": {
+    "fast_transient_decay": false,
+    "high_drive_turnover_drop": false,
+    "kink_plateau_ceiling": false,
+    "oscillatory_overshoot": true,
+    "residual_rmse": 0.458477,
+    "secondary_active": false,
+    "secondary_channel_corr": 0.1845
+  },
+  "diagnostic_rounds": 1,
+  "fitted_params": {
+    "p0": 2.200000107115782,
+    "p1": 1.3499997770133358,
+    "p2": 2.149999991236416,
+    "p3": 0.4199999374587153
+  },
+  "fitted_params_sha256": "6f2fd66653cf855c6768783c3cff9b51d1b4a9024a65fcb1b4682a7dbc0b7299",
+  "host_confirmation_bundle": {
+    "ast_skeleton_digest": "17d05c4bf44ecf",
+    "confirm_rows": [
+      {
+        "features": {
+          "t": 0.95,
+          "u": 1.7
+        },
+        "target": 4.979813460646746
+      },
+      {
+        "features": {
+          "t": 2.65,
+          "u": 2.1
+        },
+        "target": 5.192299445966231
+      }
+    ],
+    "confirm_rows_sha256": "65e6b215f8f674f3d01dac03b98bad48fd13c1b9ac7c87fbc00ac68cdc9f21e1",
+    "confirmed_instance_digest": "3414331949d2cd782322da0ce194acd18a7f9b666158729e9b45a4975b99dab7",
+    "confirmed_ok": true,
+    "fitted_params_sha256": "6f2fd66653cf855c6768783c3cff9b51d1b4a9024a65fcb1b4682a7dbc0b7299",
+    "model_sha256": "a5cd1dcc870516baf32888d52aebcea2d48a084593408acad8be5fa5204e43a3",
+    "observed_confirm_rmse": 1.6e-07,
+    "task_id": "stage1_W2_osc_shunt_4p",
+    "tolerance": 0.05,
+    "training_prefix_rows": [
+      {
+        "features": {
+          "t": 0.15,
+          "u": 1.0
+        },
+        "history": [],
+        "target": 0.39584503336554233
+      },
+      {
+        "features": {
+          "t": 0.65,
+          "u": 1.4
+        },
+        "history": [],
+        "target": 3.0248598424369564
+      },
+      {
+        "features": {
+          "t": 1.25,
+          "u": 1.8
+        },
+        "history": [],
+        "target": 5.894826885883031
+      },
+      {
+        "features": {
+          "t": 2.05,
+          "u": 2.2
+        },
+        "history": [],
+        "target": 6.019239021662537
+      },
+      {
+        "features": {
+          "t": 3.1,
+          "u": 1.6
+        },
+        "history": [],
+        "target": 4.493286795968764
+      },
+      {
+        "features": {
+          "t": 4.2,
+          "u": 2.5
+        },
+        "history": [],
+        "target": 7.490185404133266
+      }
+    ],
+    "training_prefix_sha256": "4d7d5a8a725a4b10b46e3d91e4abfce163811bcda1463b3aba2b4203f936cd67"
+  },
+  "model_sha256": "a5cd1dcc870516baf32888d52aebcea2d48a084593408acad8be5fa5204e43a3",
+  "operator_spec": {
+    "arity": 2,
+    "family_hint": "atomic_exp_relax_2d__comb_osc_ringing__comb_shunt",
+    "left": {
+      "arity": 2,
+      "family_hint": "atomic_exp_relax_2d__comb_osc_ringing",
+      "left": {
+        "left": {
+          "idx": 0,
+          "init": 1.5,
+          "lb": 0.0001,
+          "op": "param",
+          "ub": 200.0
+        },
+        "op": "mul",
+        "right": {
+          "op": "var",
+          "role": 0
+        }
+      },
+      "multi_start_param": {
+        "grid": [
+          0.9,
+          1.5,
+          2.2,
+          2.9
+        ],
+        "idx": 2
+      },
+      "op": "mul",
+      "right": {
+        "left": {
+          "op": "const",
+          "val": 1.0
+        },
+        "op": "sub",
+        "right": {
+          "left": {
+            "den": {
+              "idx": 1,
+              "init": 1.2,
+              "lb": 0.05,
+              "op": "param",
+              "ub": 50.0
+            },
+            "num": {
+              "op": "var",
+              "role": 1
+            },
+            "op": "exp_neg_div"
+          },
+          "op": "mul",
+          "right": {
+            "op": "cos_mul",
+            "param": {
+              "idx": 2,
+              "init": 1.8,
+              "lb": 0.05,
+              "op": "param",
+              "ub": 12.0
+            },
+            "var": {
+              "op": "var",
+              "role": 1
+            }
+          }
+        }
+      }
+    },
+    "multi_start_param": {
+      "grid": [
+        0.9,
+        1.5,
+        2.2,
+        2.9
+      ],
+      "idx": 2
+    },
+    "op": "add",
+    "right": {
+      "left": {
+        "idx": 3,
+        "init": 0.6,
+        "lb": -80.0,
+        "op": "param",
+        "ub": 80.0
+      },
+      "op": "mul",
+      "right": {
+        "op": "var",
+        "role": 1
+      }
+    }
+  },
+  "role_names": [
+    "u",
+    "t"
+  ],
+  "skeleton_status": "VERIFIED_PURE_AST",
+  "surface_domain": "underdamped_servo",
+  "task_id": "stage1_W2_osc_shunt_4p",
+  "training_prefix_count": 6
+}

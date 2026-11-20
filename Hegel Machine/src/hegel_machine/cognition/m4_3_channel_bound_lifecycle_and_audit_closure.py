@@ -1164,8 +1164,23 @@ def evaluate_m4_3_target_under_arm(
                     continue
                 if not forest.fine_scale_children_of(p_nd["node_id"]):
                     continue
+                p_gate = authorize_abstraction_use(
+                    requested_tier="bounded_trial",
+                    task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
+                    target_features={"active_arity": len(target.feature_names), "modality": target.modality},
+                    claim_contract=p_nd["claim_contract"],
+                    scale_map=p_sm,
+                    wormhole_edge=pc.get("wormhole_edge"),
+                )
+                if not p_gate["granted"]:
+                    continue
+                p_eff_act = p_gate.get("selected_action") or p_nd["claim_contract"]["conclusion_or_action"]
                 in_p_box, p_valid_rmaps, _ = _find_all_valid_canonical_role_maps_for_box(
-                    target.feature_names, p_nd, list(target.pilot_points), artifact_root=forest.artifact_root
+                    target.feature_names,
+                    p_nd,
+                    list(target.pilot_points),
+                    artifact_root=forest.artifact_root,
+                    action_override=p_eff_act,
                 )
                 if not in_p_box:
                     continue
@@ -1182,20 +1197,11 @@ def evaluate_m4_3_target_under_arm(
                             break
                     if usable_p_rmap is None:
                         continue
-                p_gate = authorize_abstraction_use(
-                    requested_tier="bounded_trial",
-                    task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
-                    target_features={"active_arity": len(target.feature_names), "modality": target.modality},
-                    claim_contract=p_nd["claim_contract"],
-                    scale_map=p_sm,
-                    wormhole_edge=pc.get("wormhole_edge"),
-                )
-                if p_gate["granted"]:
-                    selected_channel = "coarse_macro"
-                    authorizing_coarse_node_id = str(p_nd["node_id"])
-                    authorizing_coarse_vbox = deepcopy(p_vbox) if isinstance(p_vbox, dict) else None
-                    authorizing_coarse_role_map = deepcopy(usable_p_rmap)
-                    break
+                selected_channel = "coarse_macro"
+                authorizing_coarse_node_id = str(p_nd["node_id"])
+                authorizing_coarse_vbox = deepcopy(p_vbox) if isinstance(p_vbox, dict) else None
+                authorizing_coarse_role_map = deepcopy(usable_p_rmap)
+                break
 
     # Deterministic task-seeded Gaussian pilot sensor noise (`pilot_noise_std`) identical across ALL arms!
     pilot_noise_rng = Random(target.pilot_noise_seed) if target.pilot_noise_std > 0.0 else None
@@ -1239,6 +1245,8 @@ def evaluate_m4_3_target_under_arm(
         obs_feats["secondary_bleed_active"] = True
     if target.is_multiscale_two_channel:
         obs_feats["modality"] = target.modality
+    for fn_coord in target.feature_names:
+        obs_feats.setdefault(fn_coord, max(float(r["features"][fn_coord]) for r in frozen_prefix))
 
     chosen_rel: str | None = None
     confirmed_ok = False
@@ -1252,6 +1260,11 @@ def evaluate_m4_3_target_under_arm(
     selected_conf_digest: str | None = None
     confirmed_vbox: dict[str, Any] | None = None
     confirmed_role_map: dict[str, str] | None = None
+    confirmed_coord_preconditions: list[dict[str, Any]] = []
+    confirmed_role_order: list[str] | None = None
+    confirmed_canon_roles: list[str] | None = None
+    refuted_recall_traces: list[dict[str, Any]] = []
+    confirmed_recall_bundle: dict[str, Any] | None = None
     max_overlap = 0
     refuted_tags: set[str] = set()
 
@@ -1277,29 +1290,11 @@ def evaluate_m4_3_target_under_arm(
             nd = cand["target_node"]
             if int(nd["observation_map"]["parameter_semantics"].get("active_arity", 0)) != len(target.feature_names):
                 continue
-            plan = _validate_and_interpret_m4_program_steps(
-                nd.get("program_steps"), node=nd, target_arity=len(target.feature_names)
-            )
-            if plan is None:
-                continue
             sm = nd.get("scale_map") or {}
             nd_scale = (sm.get("window_or_partition") or {}).get("scale_regime")
             if target.is_multiscale_two_channel and nd_scale == "meso" and not forest.fine_scale_children_of(nd["node_id"]):
                 continue
-            act = nd["claim_contract"]["conclusion_or_action"]
-            if act.get("fine_ode_direct_mode") is True:
-                # Fine ODE node on short-horizon quench: only reachable/usable on `micro_fine` channel!
-                v_spec = micro_fast_2d_spec
-            else:
-                v_spec = _load_node_verified_operator_spec(nd, artifact_root=forest.artifact_root)
-                meter.charge("artifact_integrity_check", compute=0.25)
-                if v_spec is None:
-                    continue
-            in_box, valid_rmaps, canon_roles = _find_all_valid_canonical_role_maps_for_box(
-                target.feature_names, nd, [r["features"] for r in frozen_prefix], artifact_root=forest.artifact_root
-            )
-            if not in_box:
-                continue
+            # Authorize `bounded_trial` FIRST so disjunctive OR branches select their own independent `selected_action`!
             gate = authorize_abstraction_use(
                 requested_tier="bounded_trial",
                 task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
@@ -1308,16 +1303,44 @@ def evaluate_m4_3_target_under_arm(
                 scale_map=sm,
                 wormhole_edge=cand.get("wormhole_edge"),
             )
-            if gate["granted"]:
-                auth_cands.append({
-                    **dict(cand),
-                    "_verified_spec": v_spec,
-                    "_exec_plan": plan,
-                    "_valid_role_maps": valid_rmaps,
-                    "_canon_roles": canon_roles,
-                    "_canonical_role_map": valid_rmaps[0] if valid_rmaps else None,
-                    "_fine_ode_direct": bool(act.get("fine_ode_direct_mode") is True),
-                })
+            if not gate["granted"]:
+                continue
+            eff_act = gate.get("selected_action") or nd["claim_contract"]["conclusion_or_action"]
+            plan = _validate_and_interpret_m4_program_steps(
+                nd.get("program_steps"), node=nd, target_arity=len(target.feature_names), action_override=eff_act
+            )
+            if plan is None:
+                continue
+            if eff_act.get("fine_ode_direct_mode") is True:
+                # Fine ODE node on short-horizon quench: only reachable/usable on `micro_fine` channel!
+                v_spec = micro_fast_2d_spec
+            else:
+                v_spec = _load_node_verified_operator_spec(
+                    nd, artifact_root=forest.artifact_root, action_override=eff_act
+                )
+                meter.charge("artifact_integrity_check", compute=0.25)
+                if v_spec is None:
+                    continue
+            in_box, valid_rmaps, canon_roles = _find_all_valid_canonical_role_maps_for_box(
+                target.feature_names,
+                nd,
+                [r["features"] for r in frozen_prefix],
+                artifact_root=forest.artifact_root,
+                action_override=eff_act,
+            )
+            if not in_box:
+                continue
+            auth_cands.append({
+                **dict(cand),
+                "_verified_spec": v_spec,
+                "_exec_plan": plan,
+                "_selected_action": eff_act,
+                "_selected_branch": gate.get("selected_branch"),
+                "_valid_role_maps": valid_rmaps,
+                "_canon_roles": canon_roles,
+                "_canonical_role_map": valid_rmaps[0] if valid_rmaps else None,
+                "_fine_ode_direct": bool(eff_act.get("fine_ode_direct_mode") is True),
+            })
 
         tried_tags: set[str] = set()
         for c_cand in auth_cands:
@@ -1436,7 +1459,22 @@ def evaluate_m4_3_target_under_arm(
                 )
             total_evaluated += ev_c
             unmetered_evals += ev_c
+            eff_act_c = c_cand.get("_selected_action") or nd["claim_contract"]["conclusion_or_action"]
+            act_rnames_c = [str(x) for x in eff_act_c.get("role_names", ())]
             if best_c is None or best_c["train_rmse"] > target.tolerance:
+                if best_c is not None:
+                    refuted_recall_traces.append({
+                        "node_id": str(nd["node_id"]),
+                        "node_version": int(nd["version"]),
+                        "stage": "pilot_fit_rejected",
+                        "train_rmse": float(best_c["train_rmse"]),
+                        "tolerance": float(target.tolerance),
+                        "role_order": list(best_c.get("role_order") or target.feature_names),
+                        "canon_roles": act_rnames_c or list(target.feature_names),
+                        "model_source": best_c["model_source"],
+                        "training_prefix_rows": deepcopy(frozen_prefix),
+                        "evaluated_rows": deepcopy(frozen_prefix),
+                    })
                 continue
 
             # Lock ONE consistent `role_map` across authorization, model fit, fresh confirm batch, & final query guard!
@@ -1446,6 +1484,8 @@ def evaluate_m4_3_target_under_arm(
                     if _role_order_from_canonical_role_map(canon_roles_c, rm) == list(best_c["role_order"]):
                         locked_rmap = rm
                         break
+            elif best_c.get("role_order") and act_rnames_c and len(act_rnames_c) == len(best_c["role_order"]):
+                locked_rmap = {str(tf): str(cr) for cr, tf in zip(act_rnames_c, best_c["role_order"])}
             c_cand["_canonical_role_map"] = locked_rmap
 
             nd_vbox = ((nd.get("scale_map") or {}).get("window_or_partition") or {}).get("verified_input_box")
@@ -1481,6 +1521,27 @@ def evaluate_m4_3_target_under_arm(
             if cf_ev["returncode"] == 0 and float(cf_ev["rmse"]) <= target.tolerance:
                 m_sha = hashlib.sha256(best_c["model_source"].encode("utf-8")).hexdigest()
                 c_dig = hashlib.sha256(json.dumps(cf_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+                t3_obs_feats = dict(obs_feats)
+                if locked_rmap:
+                    all_paid_c = [*frozen_prefix, *cf_rows]
+                    for tf_k, cr_k in locked_rmap.items():
+                        t3_obs_feats[cr_k] = max(float(r["features"][tf_k]) for r in all_paid_c)
+                is_struct_hyp = (
+                    (c_cand.get("_selected_branch") or nd["claim_contract"]).get("evidence_status")
+                    == "STRUCTURAL_HYPOTHESIS_ONLY"
+                    or (c_cand.get("wormhole_edge") or {}).get("permission_tier") == "bounded_trial"
+                )
+                ev_rec_t3: dict[str, Any] = {
+                    "passed": True,
+                    "claim_id": nd["claim_contract"]["claim_id"],
+                    "observed_error": float(cf_ev["rmse"]),
+                    "target_id": target.target_id,
+                    "node_version": nd["version"],
+                    "model_sha256": m_sha,
+                    "confirmation_digest": c_dig,
+                }
+                if is_struct_hyp:
+                    ev_rec_t3["upgrade_to_tier"] = "local_solver_guidance"
                 t3 = authorize_abstraction_use(
                     requested_tier="local_solver_guidance",
                     task_view={
@@ -1491,21 +1552,14 @@ def evaluate_m4_3_target_under_arm(
                         "expected_model_sha256": m_sha,
                         "expected_confirmation_digest": c_dig,
                     },
-                    target_features=obs_feats,
+                    target_features=t3_obs_feats,
                     claim_contract=nd["claim_contract"],
                     scale_map=nd.get("scale_map"),
                     wormhole_edge=c_cand.get("wormhole_edge"),
-                    evidence_receipt={
-                        "passed": True,
-                        "claim_id": nd["claim_contract"]["claim_id"],
-                        "observed_error": float(cf_ev["rmse"]),
-                        "target_id": target.target_id,
-                        "node_version": nd["version"],
-                        "model_sha256": m_sha,
-                        "confirmation_digest": c_dig,
-                    },
+                    evidence_receipt=ev_rec_t3,
                 )
-                if t3["granted"]:
+                t3_act = t3.get("selected_action") or nd["claim_contract"]["conclusion_or_action"]
+                if t3["granted"] and t3_act == eff_act_c:
                     confirmed_ok = True
                     confirmed_via_recall = True
                     chosen_rel = best_c["model_relpath"]
@@ -1515,8 +1569,45 @@ def evaluate_m4_3_target_under_arm(
                     selected_model_sha256 = m_sha
                     selected_conf_digest = c_dig
                     confirmed_vbox = deepcopy(((nd.get("scale_map") or {}).get("window_or_partition") or {}).get("verified_input_box"))
-                    confirmed_role_map = deepcopy(c_cand.get("_canonical_role_map"))
+                    confirmed_role_map = deepcopy(locked_rmap)
+                    confirmed_role_order = list(best_c.get("role_order") or target.feature_names)
+                    confirmed_canon_roles = act_rnames_c or list(target.feature_names)
+                    confirmed_coord_preconditions = [
+                        deepcopy(pr)
+                        for pr in nd["claim_contract"].get("preconditions", ())
+                        if isinstance(pr, dict) and pr.get("field") in set(confirmed_canon_roles)
+                    ]
+                    confirmed_recall_bundle = {
+                        "target_id": target.target_id,
+                        "surface_domain": target.domain_cue,
+                        "selected_node_id": selected_node_id,
+                        "selected_node_evidence_status": (c_cand.get("_selected_branch") or nd["claim_contract"]).get("evidence_status"),
+                        "operator_tag": c_tag,
+                        "operator_spec": deepcopy(c_cand["_verified_spec"]),
+                        "role_names": list(confirmed_role_order),
+                        "canonical_role_map": deepcopy(locked_rmap),
+                        "model_source": best_c["model_source"],
+                        "model_relpath": best_c["model_relpath"],
+                        "training_prefix_rows": deepcopy(frozen_prefix),
+                        "confirm_rows": deepcopy(cf_rows),
+                        "observed_confirm_rmse": round(float(cf_ev["rmse"]), 8),
+                        "tolerance": float(target.tolerance),
+                    }
                     break
+            else:
+                all_eval_rows = [*frozen_prefix, *cf_rows]
+                refuted_recall_traces.append({
+                    "node_id": str(nd["node_id"]),
+                    "node_version": int(nd["version"]),
+                    "stage": "fresh_confirm_refuted",
+                    "confirm_rmse": float(cf_ev["rmse"]) if cf_ev["returncode"] == 0 else None,
+                    "tolerance": float(target.tolerance),
+                    "role_order": list(best_c.get("role_order") or target.feature_names),
+                    "canon_roles": act_rnames_c or list(target.feature_names),
+                    "model_source": best_c["model_source"],
+                    "training_prefix_rows": deepcopy(frozen_prefix),
+                    "evaluated_rows": deepcopy(all_eval_rows),
+                })
             refuted_tags.add(c_tag)
             frozen_prefix = [*frozen_prefix, *cf_rows]
 
@@ -1712,6 +1803,15 @@ def evaluate_m4_3_target_under_arm(
     if unmetered_evals > 0 or not open_code_agent_fallback:
         meter.charge("candidate_eval_compute", compute=round(2.5 + 6.0 * unmetered_evals, 4))
 
+    if refuted_recall_traces:
+        (work_dir / "refuted_recall_traces.json").write_text(
+            json.dumps(refuted_recall_traces, indent=2, sort_keys=True), encoding="utf-8"
+        )
+    if confirmed_recall_bundle is not None:
+        (work_dir / "confirmed_recall_bundle.json").write_text(
+            json.dumps(confirmed_recall_bundle, indent=2, sort_keys=True), encoding="utf-8"
+        )
+
     # 5. Enforce `model_scope_contract.json` on final/continuation queries!
     (work_dir / "model_scope_contract.json").write_text(
         json.dumps(
@@ -1720,6 +1820,7 @@ def evaluate_m4_3_target_under_arm(
                 "authorizing_coarse_node_id": authorizing_coarse_node_id,
                 "verified_input_box": confirmed_vbox,
                 "canonical_role_map": confirmed_role_map,
+                "coordinate_preconditions": confirmed_coord_preconditions,
             },
             indent=2,
             sort_keys=True,
@@ -1734,6 +1835,15 @@ def evaluate_m4_3_target_under_arm(
         ):
             out_of_box_blocked = True
             confirmed_ok = False
+    if confirmed_ok and confirmed_coord_preconditions and confirmed_role_map:
+        from hegel_machine.cognition.wormhole_forest import evaluate_predicate_rule
+
+        for pt in target.heldout_points:
+            mapped_pt = {str(confirmed_role_map[qk]): float(qv) for qk, qv in pt.items() if qk in confirmed_role_map}
+            if any(evaluate_predicate_rule(pr, mapped_pt) == "FALSE" for pr in confirmed_coord_preconditions):
+                out_of_box_blocked = True
+                confirmed_ok = False
+                break
 
     heldout_rows = [{"features": dict(pt), "target": float(target.oracle_fn(pt))} for pt in target.heldout_points]
     if confirmed_ok and chosen_rel is not None:

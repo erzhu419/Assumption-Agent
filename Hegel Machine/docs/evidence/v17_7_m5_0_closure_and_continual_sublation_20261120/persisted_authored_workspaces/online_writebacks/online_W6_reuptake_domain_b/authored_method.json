@@ -1,0 +1,132 @@
+{
+  "ast_skeleton_digest": "e0f4e45e60c3d3",
+  "authored_model_source": "import math\n\n_SCHEMA_FAMILY_TAG = 'atomic_michaelis_1d__comb_quad_inh'\n_CORE_LAW_EXPR = \"((_PARAMS['p0'] * f['x_load']) / ((_PARAMS['p1'] + f['x_load']) + (_PARAMS['p2'] * (f['x_load'] ** 2))))\"\n_PARAMS = {'p0': 6, 'p1': 2, 'p2': 0.08}\n\ndef fit(observations):\n    if not observations:\n        return\n    rows_f = [r['features'] for r in observations]\n    ys = [(float(r['target']) - (3.534868015e-15)) / ((1) * (1)) for r in observations]\n    lbs = [0.0001, 0.0001, 0.0]\n    ubs = [500.0, 500.0, 60.0]\n    m_p = len(lbs)\n    def _res(p):\n        out = []\n        for f, y in zip(rows_f, ys):\n            out.append((((p[0] * f['x_load']) / ((p[1] + f['x_load']) + (p[2] * (f['x_load'] ** 2))))) - y)\n        return out\n    def _loss(p):\n        rv = _res(p)\n        return sum(e * e for e in rv)\n    def _lm(x_start):\n        p = [max(lbs[i], min(ubs[i], float(x_start[i]))) for i in range(m_p)]\n        cur = _loss(p)\n        lam = 1e-3\n        for _ in range(28):\n            if cur <= 1e-13:\n                break\n            r0 = _res(p)\n            jac = []\n            for j in range(m_p):\n                h = max(1e-6, 1e-5 * abs(p[j]))\n                pj = min(ubs[j], p[j] + h)\n                actual_h = pj - p[j]\n                if abs(actual_h) < 1e-9:\n                    pj = max(lbs[j], p[j] - h)\n                    actual_h = pj - p[j]\n                p_pert = list(p)\n                p_pert[j] = pj\n                rp = _res(p_pert)\n                jac.append([(rp[k] - r0[k]) / actual_h for k in range(len(r0))])\n            jtj = [[(lam if a == b else 0.0) + sum(jac[a][k] * jac[b][k] for k in range(len(r0))) for b in range(m_p)] for a in range(m_p)]\n            jtr = [-sum(jac[a][k] * r0[k] for k in range(len(r0))) for a in range(m_p)]\n            aug = [jtj[a] + [jtr[a]] for a in range(m_p)]\n            ok = True\n            for col in range(m_p):\n                piv = max(range(col, m_p), key=lambda r_i: abs(aug[r_i][col]))\n                aug[col], aug[piv] = aug[piv], aug[col]\n                if abs(aug[col][col]) <= 1e-15:\n                    ok = False\n                    break\n                inv_d = 1.0 / aug[col][col]\n                for c2 in range(col, m_p + 1):\n                    aug[col][c2] *= inv_d\n                for r_i in range(m_p):\n                    if r_i != col and abs(aug[r_i][col]) > 0.0:\n                        fac = aug[r_i][col]\n                        for c2 in range(col, m_p + 1):\n                            aug[r_i][c2] -= fac * aug[col][c2]\n            if not ok:\n                lam *= 10.0\n                continue\n            dp = [aug[a][m_p] for a in range(m_p)]\n            cand = [max(lbs[i], min(ubs[i], p[i] + dp[i])) for i in range(m_p)]\n            c_loss = _loss(cand)\n            if c_loss < cur:\n                impr = cur - c_loss\n                p, cur = cand, c_loss\n                lam = max(1e-7, lam * 0.35)\n                if impr < 1e-12:\n                    break\n            else:\n                lam = min(1e6, lam * 6.0)\n        for step in (0.15, 0.03, 0.005):\n            for j in range(m_p):\n                for sgn in (-1.0, 1.0):\n                    cand = list(p)\n                    cand[j] = max(lbs[j], min(ubs[j], p[j] + sgn * step * max(0.5, abs(p[j]))))\n                    cl = _loss(cand)\n                    if cl < cur:\n                        p, cur = cand, cl\n        return cur, p\n    starts = [[6.0, 2.0, 0.08]]\n    if ys:\n        if False and m_p >= 2:\n            s_emp = list(starts[0])\n            s_emp[-1] = max(lbs[-1], min(ubs[-1], max(ys)))\n            starts.insert(0, s_emp)\n    best_cost, best_p = None, list(starts[0])\n    for st in starts:\n        c_val, c_p = _lm(st)\n        if best_cost is None or c_val < best_cost:\n            best_cost, best_p = c_val, c_p\n            if best_cost <= 1e-10:\n                break\n    _PARAMS['p0'] = float(best_p[0])\n    _PARAMS['p1'] = float(best_p[1])\n    _PARAMS['p2'] = float(best_p[2])\n\ndef predict(row):\n    f = row['features']\n    latent = ((_PARAMS['p0'] * f['x_load']) / ((_PARAMS['p1'] + f['x_load']) + (_PARAMS['p2'] * (f['x_load'] ** 2))))\n    return 3.534868015e-15 + (1) * (1) * latent\n",
+  "confirmation_digest": "16835830625c5d8c",
+  "confirmed_instance_digest": "c0f6589ed3300b24a73c92aec6676d2411bb1e34ec3989ed273048ddf05249d8",
+  "confirmed_ok": true,
+  "fitted_params": {
+    "p0": 11.799999946301556,
+    "p1": 2.1499999845095723,
+    "p2": 0.14499999885475517
+  },
+  "fitted_params_sha256": "e258fadfd65c886dd1820e9c8abe7671d936eca0149e2eecd9ae31111d82463e",
+  "host_confirmation_bundle": {
+    "ast_skeleton_digest": "e0f4e45e60c3d3",
+    "confirm_rows": [
+      {
+        "features": {
+          "x_load": 3.8
+        },
+        "target": 5.574479723513763
+      }
+    ],
+    "confirm_rows_sha256": "16835830625c5d8c4244e5da9429e61c179f025998ae61ff345e2322ddcd4364",
+    "confirmed_instance_digest": "c0f6589ed3300b24a73c92aec6676d2411bb1e34ec3989ed273048ddf05249d8",
+    "confirmed_ok": true,
+    "fitted_params_sha256": "e258fadfd65c886dd1820e9c8abe7671d936eca0149e2eecd9ae31111d82463e",
+    "model_sha256": "ccdd4e51a5e0407030afd4ff6a9ed672fa2adeb37cbcdf49d71da6b1443fe9dc",
+    "observed_confirm_rmse": 0.0,
+    "task_id": "M50_S06_Confirm_W6_ReuptakeDomainB",
+    "tolerance": 0.045,
+    "training_prefix_rows": [
+      {
+        "features": {
+          "x_load": 0.45
+        },
+        "target": 2.01950092465379
+      },
+      {
+        "features": {
+          "x_load": 1.25
+        },
+        "target": 4.067212408444636
+      },
+      {
+        "features": {
+          "x_load": 2.6
+        },
+        "target": 5.354088862517888
+      },
+      {
+        "features": {
+          "x_load": 5.2
+        },
+        "target": 5.444156581609115
+      },
+      {
+        "features": {
+          "x_load": 8.4
+        },
+        "target": 4.769695686485862
+      },
+      {
+        "features": {
+          "x_load": 11.4
+        },
+        "target": 4.152595217662421
+      }
+    ],
+    "training_prefix_sha256": "bf8b42ec8efe9d79f1abb2f4ece601d897cd1e3ddcf4752019bb3f75a3ba6a45"
+  },
+  "model_sha256": "ccdd4e51a5e0407030afd4ff6a9ed672fa2adeb37cbcdf49d71da6b1443fe9dc",
+  "operator_spec": {
+    "arity": 1,
+    "family_hint": "atomic_michaelis_1d__comb_quad_inh",
+    "left": {
+      "left": {
+        "idx": 0,
+        "init": 6.0,
+        "lb": 0.0001,
+        "op": "param",
+        "ub": 500.0
+      },
+      "op": "mul",
+      "right": {
+        "op": "var",
+        "role": 0
+      }
+    },
+    "op": "div",
+    "right": {
+      "left": {
+        "left": {
+          "idx": 1,
+          "init": 2.0,
+          "lb": 0.0001,
+          "op": "param",
+          "ub": 500.0
+        },
+        "op": "add",
+        "right": {
+          "op": "var",
+          "role": 0
+        }
+      },
+      "op": "add",
+      "right": {
+        "left": {
+          "idx": 2,
+          "init": 0.08,
+          "lb": 0.0,
+          "op": "param",
+          "ub": 60.0
+        },
+        "op": "mul",
+        "right": {
+          "base": {
+            "op": "var",
+            "role": 0
+          },
+          "exp": 2,
+          "op": "pow_int"
+        }
+      }
+    }
+  },
+  "role_names": [
+    "x_load"
+  ],
+  "skeleton_status": "VERIFIED_PURE_AST",
+  "surface_domain": "cue_reuptake_saturation_b",
+  "task_id": "M50_S06_Confirm_W6_ReuptakeDomainB"
+}
