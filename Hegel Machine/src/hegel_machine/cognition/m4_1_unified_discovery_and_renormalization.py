@@ -1209,10 +1209,11 @@ def extract_unified_observable_pilot_cues(
     xs0 = [float(r["features"][f0]) for r in pilot_rows]
     pairs0 = sorted(zip(xs0, ys), key=lambda t: t[0])
 
+    cue_sigs = [f"sig:{dc}" for dc in str(domain_cue).split("|") if dc]
     if arity == 1:
         slope = (pairs0[-1][1] - pairs0[0][1]) / max(1e-6, pairs0[-1][0] - pairs0[0][0])
         pol = "pos" if slope >= 0 else "neg"
-        sigs = [f"sig:{pol}_arity_1", f"sig:{domain_cue}"]
+        sigs = [f"sig:{pol}_arity_1", *cue_sigs]
         obs_feats: dict[str, Any] = {"active_arity": 1, "max_primary_load": max(xs0)}
         if len(pairs0) >= 4:
             mid = len(pairs0) // 2
@@ -1235,7 +1236,7 @@ def extract_unified_observable_pilot_cues(
     span1 = max(xs1) - min(xs1)
     dom_eff = b0 * span0 if abs(b0 * span0) >= abs(b1 * span1) else b1 * span1
     pol = "pos" if dom_eff >= 0 else "neg"
-    sigs = [f"sig:{pol}_arity_2", f"sig:{domain_cue}"]
+    sigs = [f"sig:{pol}_arity_2", *cue_sigs]
     obs_feats = {"active_arity": 2, "max_primary_load": max(max(xs0), max(xs1))}
 
     # Detect non-monotone interior turnover vs oscillatory ringing symmetrically across both coordinates!
@@ -1406,17 +1407,34 @@ def build_unified_12_target_suite(seed: int = 20261120) -> tuple[list[UnifiedTar
     return targets, oos_targets
 
 
-def _load_node_verified_operator_spec(node: dict[str, Any]) -> dict[str, Any] | None:
+def _load_node_verified_operator_spec(
+    node: dict[str, Any],
+    *,
+    artifact_root: str | Path | None = None,
+) -> dict[str, Any] | None:
     """Load operator_spec for a forest node; if backed by a persisted ``authored_artifact_path``,
-    MUST pass ``load_verified_authored_method`` integrity AND node-expected ``ast_skeleton_digest`` binding!
+    MUST pass ``load_verified_authored_method`` integrity AND node-expected ``ast_skeleton_digest``
+    (plus ``confirmed_instance_digest`` in zero-fit frozen mode when declared on the node)!
     """
     act = node["claim_contract"]["conclusion_or_action"]
     art_path_str = act.get("authored_artifact_path")
     expected_dig = act.get("ast_skeleton_digest")
+    expected_inst = act.get("confirmed_instance_digest")
     if art_path_str:
+        art_p = Path(str(art_path_str))
+        if not art_p.is_absolute() and artifact_root is not None:
+            root_p = Path(str(artifact_root))
+            cand_p = (root_p / art_p).resolve()
+            if not cand_p.exists() and art_p.parts and art_p.parts[0] == "persisted_authored_workspaces" and len(art_p.parts) > 1:
+                alt_p = (root_p / Path(*art_p.parts[1:])).resolve()
+                if alt_p.exists():
+                    cand_p = alt_p
+            art_p = cand_p
         verified = load_verified_authored_method(
-            Path(art_path_str),
+            art_p,
             expected_ast_digest=(str(expected_dig) if expected_dig else None),
+            expected_instance_digest=(str(expected_inst) if expected_inst else None),
+            verify_frozen_only=bool(expected_inst),
         )
         if verified is None:
             return None
@@ -1432,10 +1450,11 @@ def _autonomous_fit_candidate_specs(
     training_rows: list[dict[str, Any]],
     tolerance: float,
     calibrate_lens: bool = True,
+    allowed_role_orders: list[list[str]] | None = None,
 ) -> tuple[dict[str, Any] | None, int]:
     """Fit candidate ``ExprNode`` specs with autonomous S_d role permutation & paid-data affine lens estimation."""
     ws_dir.mkdir(parents=True, exist_ok=True)
-    perms = _infer_role_permutations(feature_names)
+    perms = [list(r) for r in allowed_role_orders] if allowed_role_orders is not None else _infer_role_permutations(feature_names)
     evaluated = 0
     best: dict[str, Any] | None = None
 
@@ -1463,8 +1482,14 @@ def _autonomous_fit_candidate_specs(
                     "model_source": py_code,
                     "train_rmse": rmse,
                 }
-            if ev["returncode"] == 0 and rmse <= tolerance * 0.85:
+            if (
+                ev["returncode"] == 0
+                and rmse <= tolerance * 0.85
+                and not (allowed_role_orders is not None and len(allowed_role_orders) > 1)
+            ):
                 return best, evaluated
+        if best is not None and best["tag"] == otag and best["train_rmse"] <= tolerance * 0.85:
+            return best, evaluated
     return best, evaluated
 
 

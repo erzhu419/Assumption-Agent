@@ -67,7 +67,9 @@ from .m4_2_unified_closure_and_pi_lifecycle import (
     _build_stage0_open_atomic_bases,
     _eval_pi_s_coarse_scalar,
     _eval_pi_s_fine_scalar,
+    _find_all_valid_canonical_role_maps_for_box,
     _find_valid_canonical_role_map_for_box,
+    _role_order_from_canonical_role_map,
     _run_metered_atomic_calibration,
     build_and_evolve_m4_2_cross_pillar_forest,
     build_m4_2_target_suite,
@@ -529,9 +531,12 @@ class CompiledRelationalCueTable:
         self.forest = forest
         self.sig_table: dict[str, list[dict[str, Any]]] = {}
         self.compile_compute_cost: float = 0.0
+        self.recompile_count: int = 0
+        self._indexed_forest_state: tuple[Any, ...] = ()
         self._compile()
 
     def _compile(self) -> None:
+        self.sig_table = {}
         live_nodes = {
             nid: nd for nid, nd in self.forest.nodes.items()
             if not nd["utility_ledger"].get("archived_low_utility")
@@ -543,22 +548,34 @@ class CompiledRelationalCueTable:
                 continue
             s_id, t_id = wh["node_a_id"], wh["node_b_id"]
             if s_id in live_nodes and t_id in live_nodes:
-                adj[s_id].append((t_id, deepcopy(wh)))
-                adj[t_id].append((s_id, deepcopy(wh)))
+                if (
+                    wh.get("node_a_version", live_nodes[s_id]["version"]) == live_nodes[s_id]["version"]
+                    and wh.get("node_b_version", live_nodes[t_id]["version"]) == live_nodes[t_id]["version"]
+                ):
+                    adj[s_id].append((t_id, deepcopy(wh)))
+                    adj[t_id].append((s_id, deepcopy(wh)))
         for ie in self.forest.local_implication_edges:
             if ie.get("stale_endpoint_revision"):
                 continue
             s_id, w_id = ie["stronger_node_id"], ie["weaker_node_id"]
             if s_id in live_nodes and w_id in live_nodes:
-                adj[w_id].append((s_id, None))
-                adj[s_id].append((w_id, None))
+                if (
+                    ie.get("stronger_version", live_nodes[s_id]["version"]) == live_nodes[s_id]["version"]
+                    and ie.get("weaker_version", live_nodes[w_id]["version"]) == live_nodes[w_id]["version"]
+                ):
+                    adj[w_id].append((s_id, None))
+                    adj[s_id].append((w_id, None))
         for ce in self.forest.coarse_graining_edges:
             if ce.get("stale_endpoint_revision"):
                 continue
             f_id, c_id = ce["fine_node_id"], ce["coarse_node_id"]
             if f_id in live_nodes and c_id in live_nodes:
-                adj[f_id].append((c_id, None))
-                adj[c_id].append((f_id, None))
+                if (
+                    ce.get("fine_version", live_nodes[f_id]["version"]) == live_nodes[f_id]["version"]
+                    and ce.get("coarse_version", live_nodes[c_id]["version"]) == live_nodes[c_id]["version"]
+                ):
+                    adj[f_id].append((c_id, None))
+                    adj[c_id].append((f_id, None))
 
         all_sigs = sorted({s for nd in live_nodes.values() for s in nd.get("probe_signatures", ())})
         visited_ops = 0
@@ -590,8 +607,18 @@ class CompiledRelationalCueTable:
                 for nid, (hop_d, wh_e) in ranked
             ]
         self.compile_compute_cost = round(6.0 + 0.12 * visited_ops, 4)
+        self._indexed_forest_state = self.forest.forest_state_signature()
+
+    def ensure_fresh(self) -> float:
+        cur_state = self.forest.forest_state_signature()
+        if cur_state == self._indexed_forest_state:
+            return 0.0
+        self._compile()
+        self.recompile_count += 1
+        return float(self.compile_compute_cost)
 
     def retrieve(self, observed_signatures: list[str], *, task_view: dict[str, Any], top_k: int = 8) -> dict[str, Any]:
+        recompile_cost = self.ensure_fresh()
         req_arity = task_view.get("active_arity")
         req_scale = task_view.get("target_scale_regime") or task_view.get("scale_regime")
         agg: dict[str, dict[str, Any]] = {}
@@ -621,46 +648,17 @@ class CompiledRelationalCueTable:
         cands = sorted(agg.values(), key=lambda x: (-x["score"], x["node_id"]))[:top_k]
         return {
             "candidates": cands,
-            "query_compute_cost": round(0.35 + 0.05 * len(cands), 4),
+            "query_compute_cost": round(0.35 + 0.05 * len(cands) + recompile_cost, 4),
+            "table_recompiled": recompile_cost > 0.0,
+            "table_recompile_compute_cost": recompile_cost,
         }
 
 
 def build_m4_3_continual_forest(work_root: Path) -> dict[str, Any]:
-    """Build the ``V17.5 (M4.3)`` continual forest on top of ``M4.2`` formation, adding:
-      - High-signature overbroad lure (`sig:two_channel_coupled` + onset cues) so Minton Stage-2 pruning
-        has direct, measurable downstream causal effect on non-Pi targets too;
-      - Explicit ``cue_vascular_ceiling_onset`` specialization bridge for ``W3 (MurrayCapped_1D)``;
-      - Full 6-family stratified DEV order (`Haldane`, `Osc`, `MurrayCapped`, `MonodOnset`, `MurrayOnset`, `Pi_s`);
-      - Compiled relational cue-table before & after Stage-2 maintenance (metering rebuild cost);
-      - Relocatable JSON snapshots for both ``true_stage0_forest`` and ``post_stage2_forest``.
-    """
+    """Build the ``M4.3 / M4.4`` continual forest on top of ``M4.2`` formation with clean self-verifying digests."""
     built = build_and_evolve_m4_2_cross_pillar_forest(work_root)
-    # Give `lure_cellular_overbroad_2d` in `forest_before_stage2_maintenance` realistic high-overlap generic
-    # signatures so an unmaintained forest genuinely ranks the overbroad lure ahead of specialized leaves
-    # on feed-reactor queries until Minton utility feedback archives it in Stage 2!
     unmaint = built["forest_before_stage2_maintenance"]
     maint = built["forest"]
-    lure_sigs = [
-        "sig:pos_arity_2",
-        "sig:neg_arity_2",
-        "sig:sensor_pos",
-        "sig:sensor_neg",
-        "sig:two_channel_coupled",
-        "sig:cue_feed_reactor",
-        "sig:cue_pore_collapse",
-        "sig:cue_servo_transient",
-    ]
-    unmaint.nodes["lure_cellular_overbroad_2d"]["probe_signatures"] = list(lure_sigs)
-    maint.nodes["lure_cellular_overbroad_2d"]["probe_signatures"] = list(lure_sigs)
-
-    # Ensure `stage0_murray_1d` carries `sig:cue_vascular_ceiling_onset` so 2-hop walk reaches `W3` (`MurrayCapped`)!
-    for f_obj in (built["forest_after_stage0"], unmaint, maint):
-        if "stage0_murray_1d" in f_obj.nodes:
-            cur_s = list(f_obj.nodes["stage0_murray_1d"].get("probe_signatures", ()))
-            for extra_s in ("sig:pos_arity_1", "sig:neg_arity_1", "sig:cue_vascular_ceiling_onset"):
-                if extra_s not in cur_s:
-                    cur_s.append(extra_s)
-            f_obj.nodes["stage0_murray_1d"]["probe_signatures"] = cur_s
 
     # Compile Same-Info Relational CueTable at Stage 1 AND rebuild after Stage 2 maintenance!
     cue_table_pre_s2 = CompiledRelationalCueTable(unmaint)
@@ -669,15 +667,22 @@ def build_m4_3_continual_forest(work_root: Path) -> dict[str, Any]:
         cue_table_pre_s2.compile_compute_cost + cue_table_post_s2.compile_compute_cost, 4
     )
 
-    # 6-family stratified DEV static order (`seed = 99_223_026`, completely disjoint from fresh M4.3 TEST seeds!)
+    # 6-family stratified DEV static order (`seed = 99_223_026`, completely disjoint from fresh TEST seeds!):
+    # Covers ALL 6 families INCLUDING 1 adiabatic (`20`) + 1 quench (`22`) `Pi_s` AND applies matching pilot Gaussian sensor noise!
     dev_targets, _ = build_m4_3_target_suite(seed=99_223_026, onset_pilot_noise_std=0.0020)
-    stratified_dev = [dev_targets[i] for i in (0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 21)]
+    stratified_dev = [dev_targets[i] for i in (0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 22)]
     ord_forward = built["ordinary_history_forward"]
     dev_wins: dict[str, int] = {t: 0 for t, _ in ord_forward}
     dev_meter = CostMeter(obs_budget=800, meas_budget=8000.0, compute_budget=25000.0)
     dev_ws = work_root / "m43_stratified_dev_tune"
     for dt in stratified_dev:
-        p_rows = [{"features": dict(pt), "target": float(dt.oracle_fn(pt))} for pt in dt.pilot_points]
+        dt_rng = Random(dt.pilot_noise_seed) if dt.pilot_noise_std > 0.0 else None
+        p_rows = []
+        for pt in dt.pilot_points:
+            yv = float(dt.oracle_fn(pt))
+            if dt_rng is not None and dt.pilot_noise_std > 0.0 and not dt.is_multiscale_two_channel:
+                yv += dt_rng.gauss(0.0, dt.pilot_noise_std)
+            p_rows.append({"features": dict(pt), "target": yv})
         c0_rows = [{"features": dict(dt.confirm_points[0]), "target": float(dt.oracle_fn(dt.confirm_points[0]))}]
         u_cost = 10.0 if dt.is_multiscale_two_channel else 4.0
         dev_meter.charge("dev_obs", obs=len(p_rows) + 1, meas=u_cost * (len(p_rows) + 1), compute=2.5)
@@ -1120,6 +1125,8 @@ def evaluate_m4_3_target_under_arm(
     ms_lab: MultiScaleWorkspaceTaskLab | None = None
     selected_channel = "macro_single"
     authorizing_coarse_node_id: str | None = None
+    authorizing_coarse_vbox: dict[str, Any] | None = None
+    authorizing_coarse_role_map: dict[str, str] | None = None
 
     if target.is_multiscale_two_channel:
         assert target.coarse_oracle_fn is not None
@@ -1152,15 +1159,29 @@ def evaluate_m4_3_target_under_arm(
             for pc in pre_ret["candidates"]:
                 p_nd = pc["target_node"]
                 p_sm = p_nd.get("scale_map") or {}
+                p_vbox = (p_sm.get("window_or_partition") or {}).get("verified_input_box")
                 if (p_sm.get("window_or_partition") or {}).get("scale_regime") != "meso":
                     continue
                 if not forest.fine_scale_children_of(p_nd["node_id"]):
                     continue
-                in_p_box, _ = _find_valid_canonical_role_map_for_box(
-                    target.feature_names, p_nd, [*target.pilot_points, *target.confirm_points[:1]]
+                in_p_box, p_valid_rmaps, _ = _find_all_valid_canonical_role_maps_for_box(
+                    target.feature_names, p_nd, list(target.pilot_points), artifact_root=forest.artifact_root
                 )
                 if not in_p_box:
                     continue
+                # Also verify `target.feature_bounds` has non-empty interior intersection with `p_vbox` under >= 1 valid map!
+                usable_p_rmap: dict[str, str] | None = None
+                if isinstance(p_vbox, dict) and p_vbox:
+                    for cand_rm in p_valid_rmaps:
+                        if all(
+                            max(float(target.feature_bounds[tf][0]), float(p_vbox[cand_rm[tf]][0]))
+                            <= min(float(target.feature_bounds[tf][1]), float(p_vbox[cand_rm[tf]][1])) - 1e-7
+                            for tf in target.feature_names
+                        ):
+                            usable_p_rmap = cand_rm
+                            break
+                    if usable_p_rmap is None:
+                        continue
                 p_gate = authorize_abstraction_use(
                     requested_tier="bounded_trial",
                     task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
@@ -1172,15 +1193,29 @@ def evaluate_m4_3_target_under_arm(
                 if p_gate["granted"]:
                     selected_channel = "coarse_macro"
                     authorizing_coarse_node_id = str(p_nd["node_id"])
+                    authorizing_coarse_vbox = deepcopy(p_vbox) if isinstance(p_vbox, dict) else None
+                    authorizing_coarse_role_map = deepcopy(usable_p_rmap)
                     break
 
-    # Deterministic task-seeded pilot sensor jitter (`pilot_noise_std`) identical across ALL arms!
+    # Deterministic task-seeded Gaussian pilot sensor noise (`pilot_noise_std`) identical across ALL arms!
     pilot_noise_rng = Random(target.pilot_noise_seed) if target.pilot_noise_std > 0.0 else None
 
-    def _acquire_points(pts: list[dict[str, float]], *, phase: str) -> list[dict[str, Any]]:
+    def _acquire_points(
+        pts: list[dict[str, float]],
+        *,
+        phase: str,
+        enforced_vbox: dict[str, Any] | None = None,
+        enforced_role_map: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         if not pts:
             return []
         if ms_lab is not None:
+            if selected_channel == "coarse_macro":
+                chk_box = enforced_vbox if enforced_vbox is not None else authorizing_coarse_vbox
+                chk_rmap = enforced_role_map if enforced_role_map is not None else authorizing_coarse_role_map
+                if isinstance(chk_box, dict) and chk_box:
+                    if not all(is_point_inside_verified_box(pt, chk_box, role_map=chk_rmap) for pt in pts):
+                        raise RuntimeError(f"Attempted coarse_macro acquisition outside verified_input_box in phase={phase}")
             c_rows = ms_lab.acquire_channel(pts, channel=selected_channel, phase=phase)
             u_c = ms_lab.coarse_cost_per_obs if selected_channel == "coarse_macro" else ms_lab.micro_cost_per_obs
             meter.charge(phase, obs=len(c_rows), meas=round(u_c * len(c_rows), 4), compute=0.0)
@@ -1256,11 +1291,12 @@ def evaluate_m4_3_target_under_arm(
                 # Fine ODE node on short-horizon quench: only reachable/usable on `micro_fine` channel!
                 v_spec = micro_fast_2d_spec
             else:
-                v_spec = _load_node_verified_operator_spec(nd)
+                v_spec = _load_node_verified_operator_spec(nd, artifact_root=forest.artifact_root)
+                meter.charge("artifact_integrity_check", compute=0.25)
                 if v_spec is None:
                     continue
-            in_box, c_rmap = _find_valid_canonical_role_map_for_box(
-                target.feature_names, nd, [*target.pilot_points, *target.confirm_points[:1]]
+            in_box, valid_rmaps, canon_roles = _find_all_valid_canonical_role_maps_for_box(
+                target.feature_names, nd, [r["features"] for r in frozen_prefix], artifact_root=forest.artifact_root
             )
             if not in_box:
                 continue
@@ -1277,7 +1313,9 @@ def evaluate_m4_3_target_under_arm(
                     **dict(cand),
                     "_verified_spec": v_spec,
                     "_exec_plan": plan,
-                    "_canonical_role_map": c_rmap,
+                    "_valid_role_maps": valid_rmaps,
+                    "_canon_roles": canon_roles,
+                    "_canonical_role_map": valid_rmaps[0] if valid_rmaps else None,
                     "_fine_ode_direct": bool(act.get("fine_ode_direct_mode") is True),
                 })
 
@@ -1294,46 +1332,27 @@ def evaluate_m4_3_target_under_arm(
                 selected_channel = "micro_fine"
                 frozen_prefix = _acquire_points(target.pilot_points, phase="escalated_micro_pilot")
 
+            valid_rmaps_c = c_cand.get("_valid_role_maps") or []
+            canon_roles_c = c_cand.get("_canon_roles") or []
+
             if c_cand.get("_fine_ode_direct"):
-                # Calibrate affine readout lens `(offset, sign*scale)` against exact 2-mode RK4 fine trajectory!
-                rk4_x = [
-                    float(_eval_pi_s_fine_scalar(r["features"]["u_drive"], r["features"]["T_horizon"], DEFAULT_PI_S_ODE_PARAMS)["y_micro"])
-                    for r in frozen_prefix
-                ]
-                ys = [float(r["target"]) for r in frozen_prefix]
-                mx, my = mean(rk4_x), mean(ys)
-                slope = sum((x - mx) * (y - my) for x, y in zip(rk4_x, ys)) / (sum((x - mx) ** 2 for x in rk4_x) + 1e-12)
-                intercept = my - slope * mx
-                # Also compile pure-AST `micro_fast_2d_spec` or exact RK4 surrogate? Keep pure-AST invariant:
-                # fit `micro_fast_2d_spec` or exact rational/2-exp surrogate! Let's check `micro_fast_2d_spec` first:
-                best_c, ev_c = _autonomous_fit_candidate_specs(
-                    work_dir,
-                    specs_to_try=[(c_tag, c_cand["_verified_spec"])],
-                    feature_names=target.feature_names,
-                    training_rows=frozen_prefix,
-                    tolerance=target.tolerance,
-                    calibrate_lens=True,
-                )
-                # Note: `ode_micro_2mode_node` is the host's trusted fine 2-mode RK4 solver (`host_trusted_exact_solver`);
-                # write pure-AST affine-calibrated exact 2-mode RK4 closed-form eigenmode expression (2 exponentials!)
-                tau_s, tau_f = DEFAULT_PI_S_ODE_PARAMS["tau_s"], DEFAULT_PI_S_ODE_PARAMS["tau_f"]
-                # Exact linear 2-mode eigen-solution `y(u, T) = intercept + slope * u * (c0 + c1*exp(l1*T) + c2*exp(l2*T))`
-                u_probe_1 = _eval_pi_s_fine_scalar(1.0, 0.20, DEFAULT_PI_S_ODE_PARAMS)["y_micro"]
-                u_probe_2 = _eval_pi_s_fine_scalar(1.0, 0.80, DEFAULT_PI_S_ODE_PARAMS)["y_micro"]
-                u_probe_3 = _eval_pi_s_fine_scalar(1.0, 4.50, DEFAULT_PI_S_ODE_PARAMS)["y_micro"]
-                # Compute exact eigenvalues of A = [[-1/tau_s, g_sf/tau_s], [-g_fs/tau_f, -1/tau_f]]
+                # Exact linear 2-mode eigen-solution of A = [[-1/tau_s, g_sf], [-g_fs/tau_f, -1/tau_f]] (`a12 == g_sf`!):
+                # Zero discarded pre-fit; explicitly meters local trusted ODE solver evaluations in `CostMeter`!
+                ode_p = dict((nd["claim_contract"]["conclusion_or_action"] or {}).get("ode_params") or DEFAULT_PI_S_ODE_PARAMS)
+                tau_s, tau_f = float(ode_p["tau_s"]), float(ode_p["tau_f"])
                 a11 = -1.0 / tau_s
-                a12 = DEFAULT_PI_S_ODE_PARAMS["g_sf"] / tau_s
-                a21 = -DEFAULT_PI_S_ODE_PARAMS["g_fs"] / tau_f
+                a12 = float(ode_p["g_sf"])
+                a21 = -float(ode_p["g_fs"]) / tau_f
                 a22 = -1.0 / tau_f
                 tr_a = a11 + a22
                 det_a = a11 * a22 - a12 * a21
                 disc = math.sqrt(max(0.0, tr_a * tr_a - 4.0 * det_a))
                 lam1 = 0.5 * (tr_a + disc)
                 lam2 = 0.5 * (tr_a - disc)
-                # Solve 3x3 linear system for (k0, k1, k2) at T = (0.20, 0.80, 4.50)
+
                 ts_cal = (0.20, 0.80, 4.50)
-                ys_cal = (u_probe_1, u_probe_2, u_probe_3)
+                ys_cal = tuple(_eval_pi_s_fine_scalar(1.0, tv, ode_p)["y_micro"] for tv in ts_cal)
+                meter.charge("local_trusted_rk4_basis_compute", compute=round(0.35 * len(ts_cal), 4))
                 mat = [[1.0, math.exp(lam1 * t_v), math.exp(lam2 * t_v), y_v] for t_v, y_v in zip(ts_cal, ys_cal)]
                 for col in range(3):
                     piv = max(range(col, 3), key=lambda r_i: abs(mat[r_i][col]))
@@ -1347,43 +1366,65 @@ def evaluate_m4_3_target_under_arm(
                             for c2 in range(col, 4):
                                 mat[r_i][c2] -= fac * mat[col][c2]
                 k0, k1, k2 = mat[0][3], mat[1][3], mat[2][3]
-                fine_py = (
-                    "import math\n"
-                    f"_PARAMS = {{'intercept': {intercept:.12g}, 'slope': {slope:.12g}}}\n"
-                    "def fit(observations):\n"
-                    "    if not observations:\n"
-                    "        return\n"
-                    "    xs, ys = [], []\n"
-                    "    for r in observations:\n"
-                    "        u = float(r['features']['u_drive'])\n"
-                    "        t = float(r['features']['T_horizon'])\n"
-                    f"        ym = u * ({k0:.12g} + {k1:.12g} * math.exp({lam1:.12g} * t) + {k2:.12g} * math.exp({lam2:.12g} * t))\n"
-                    "        xs.append(ym)\n"
-                    "        ys.append(float(r['target']))\n"
-                    "    mx = sum(xs) / len(xs)\n"
-                    "    my = sum(ys) / len(ys)\n"
-                    "    sl = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / (sum((x - mx) ** 2 for x in xs) + 1e-12)\n"
-                    "    _PARAMS['slope'] = sl\n"
-                    "    _PARAMS['intercept'] = my - sl * mx\n"
-                    "def predict(row):\n"
-                    "    f = row.get('features', row)\n"
-                    "    u = float(f['u_drive'])\n"
-                    "    t = float(f['T_horizon'])\n"
-                    f"    ym = u * ({k0:.12g} + {k1:.12g} * math.exp({lam1:.12g} * t) + {k2:.12g} * math.exp({lam2:.12g} * t))\n"
-                    "    return _PARAMS['intercept'] + _PARAMS['slope'] * ym\n"
+
+                role_orders_fine = (
+                    [list(target.feature_names)]
+                    if set(target.feature_names) == {"u_drive", "T_horizon"}
+                    else [list(rp) for rp in _infer_role_permutations(target.feature_names)]
                 )
-                (work_dir / "recalled_fine_2mode.py").write_text(fine_py, encoding="utf-8")
-                tr_ev = evaluate_isolated_python_model(
-                    work_dir, "recalled_fine_2mode.py", frozen_prefix, isolated_prefix_rows=frozen_prefix
-                )
-                best_c = {
-                    "tag": c_tag,
-                    "train_rmse": float(tr_ev["rmse"]),
-                    "model_relpath": "recalled_fine_2mode.py",
-                    "model_source": fine_py,
-                }
-                ev_c = 1
+                best_c = None
+                ev_c = 0
+                for f_idx, r_ord in enumerate(role_orders_fine):
+                    u_key = "u_drive" if "u_drive" in r_ord else r_ord[0]
+                    t_key = "T_horizon" if "T_horizon" in r_ord else r_ord[1]
+                    fine_rel = "recalled_fine_2mode.py" if f_idx == 0 else f"recalled_fine_2mode_{f_idx}.py"
+                    fine_py = (
+                        "import math\n"
+                        "_PARAMS = {'intercept': 0.0, 'slope': 1.0}\n"
+                        "def fit(observations):\n"
+                        "    if not observations:\n"
+                        "        return\n"
+                        "    xs, ys = [], []\n"
+                        "    for r in observations:\n"
+                        f"        u = float(r['features'][{u_key!r}])\n"
+                        f"        t = float(r['features'][{t_key!r}])\n"
+                        f"        ym = u * ({k0:.15g} + {k1:.15g} * math.exp({lam1:.15g} * t) + {k2:.15g} * math.exp({lam2:.15g} * t))\n"
+                        "        xs.append(ym)\n"
+                        "        ys.append(float(r['target']))\n"
+                        "    mx = sum(xs) / len(xs)\n"
+                        "    my = sum(ys) / len(ys)\n"
+                        "    sl = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / (sum((x - mx) ** 2 for x in xs) + 1e-12)\n"
+                        "    _PARAMS['slope'] = sl\n"
+                        "    _PARAMS['intercept'] = my - sl * mx\n"
+                        "def predict(row):\n"
+                        "    f = row.get('features', row)\n"
+                        f"    u = float(f[{u_key!r}])\n"
+                        f"    t = float(f[{t_key!r}])\n"
+                        f"    ym = u * ({k0:.15g} + {k1:.15g} * math.exp({lam1:.15g} * t) + {k2:.15g} * math.exp({lam2:.15g} * t))\n"
+                        "    return _PARAMS['intercept'] + _PARAMS['slope'] * ym\n"
+                    )
+                    (work_dir / fine_rel).write_text(fine_py, encoding="utf-8")
+                    tr_ev = evaluate_isolated_python_model(
+                        work_dir, fine_rel, frozen_prefix, isolated_prefix_rows=frozen_prefix
+                    )
+                    ev_c += 1
+                    f_rmse = float(tr_ev["rmse"])
+                    if tr_ev["returncode"] == 0 and math.isfinite(f_rmse) and (best_c is None or f_rmse < best_c["train_rmse"]):
+                        best_c = {
+                            "tag": c_tag,
+                            "role_order": [u_key, t_key],
+                            "train_rmse": f_rmse,
+                            "model_relpath": fine_rel,
+                            "model_source": fine_py,
+                        }
+                    if tr_ev["returncode"] == 0 and f_rmse <= target.tolerance * 0.85:
+                        break
             else:
+                allowed_orders_c = (
+                    [_role_order_from_canonical_role_map(canon_roles_c, rm) for rm in valid_rmaps_c]
+                    if valid_rmaps_c
+                    else None
+                )
                 best_c, ev_c = _autonomous_fit_candidate_specs(
                     work_dir,
                     specs_to_try=[(c_tag, c_cand["_verified_spec"])],
@@ -1391,22 +1432,48 @@ def evaluate_m4_3_target_under_arm(
                     training_rows=frozen_prefix,
                     tolerance=target.tolerance,
                     calibrate_lens=bool(plan_c["calibrate_lens"]),
+                    allowed_role_orders=allowed_orders_c,
                 )
             total_evaluated += ev_c
             unmetered_evals += ev_c
             if best_c is None or best_c["train_rmse"] > target.tolerance:
                 continue
 
+            # Lock ONE consistent `role_map` across authorization, model fit, fresh confirm batch, & final query guard!
+            locked_rmap = c_cand.get("_canonical_role_map")
+            if valid_rmaps_c and best_c.get("role_order"):
+                for rm in valid_rmaps_c:
+                    if _role_order_from_canonical_role_map(canon_roles_c, rm) == list(best_c["role_order"]):
+                        locked_rmap = rm
+                        break
+            c_cand["_canonical_role_map"] = locked_rmap
+
+            nd_vbox = ((nd.get("scale_map") or {}).get("window_or_partition") or {}).get("verified_input_box")
+            target_vbox = (
+                {tf: nd_vbox[locked_rmap[tf]] for tf in target.feature_names}
+                if isinstance(nd_vbox, dict) and nd_vbox and locked_rmap
+                else None
+            )
             req_fresh = max(1, int(plan_c["fresh_points"]))
             c_pts = select_or_synthesize_disjoint_confirm_points(
                 predeclared_confirm_points=target.confirm_points,
                 training_prefix_rows=frozen_prefix,
                 required_fresh_count=req_fresh,
                 feature_bounds=target.feature_bounds,
+                verified_box=target_vbox,
             )
             if len(c_pts) < req_fresh:
-                break
-            cf_rows = _acquire_points(c_pts, phase="recall_confirm")
+                continue
+            if isinstance(nd_vbox, dict) and nd_vbox and not all(
+                is_point_inside_verified_box(pt, nd_vbox, role_map=locked_rmap) for pt in c_pts
+            ):
+                continue
+            cf_rows = _acquire_points(
+                c_pts,
+                phase="recall_confirm",
+                enforced_vbox=(nd_vbox if isinstance(nd_vbox, dict) else None),
+                enforced_role_map=locked_rmap,
+            )
             max_overlap = max(max_overlap, _ov_cnt(cf_rows, frozen_prefix))
             cf_ev = evaluate_isolated_python_model(
                 work_dir, best_c["model_relpath"], cf_rows, isolated_prefix_rows=frozen_prefix
@@ -1896,53 +1963,70 @@ def run_m4_3_channel_bound_continual_study(
                 )
                 oos_records[a_name].append(orec)
 
-    # Controlled Onset Fork Sub-Comparison: Noiseless (`sigma = 0.0`) vs Bounded Instrument Noise (`sigma = 0.0020`)!
+    # Controlled Onset Fork Sub-Comparison: Noiseless (`sigma = 0.0`) vs Gaussian Sensor Noise (`sigma = 0.0020`) across ALL passed seeds!
     fork_regime_comparison: dict[str, Any] = {}
-    for reg_lbl, sig_val in (("noiseless_sigma_0", 0.0), ("bounded_instrument_sigma_0_0020", 0.0020)):
-        t_reg, _ = build_m4_3_target_suite(seed=seeds[0], onset_pilot_noise_std=sig_val)
-        onset_slice = [x for x in t_reg if x.mechanism_family.startswith("OnsetWalk_")]
+    fork_execution_receipts: list[dict[str, Any]] = []
+    for reg_lbl, sig_val in (("noiseless_sigma_0", 0.0), ("gaussian_sensor_sigma_0_0020", 0.0020)):
         h_recs, min_recs, dev_recs = [], [], []
         f_h_sub = deepcopy(post_s2_snapshot)
         ix_h_sub = HippoRAGWormholeIndex(f_h_sub, damping_alpha=0.65, wormhole_equivalence_pooling=True, scale_aware=True)
-        for ot_x in onset_slice:
-            h_recs.append(evaluate_m4_3_target_under_arm(
-                ot_x,
-                arm_name="Hegel_PPR",
-                seed=seeds[0],
-                work_dir=work_root / "fork_sub" / reg_lbl / "hegel" / ot_x.target_id,
-                forest=f_h_sub,
-                index=ix_h_sub,
-                ordinary_history_specs=None,
-                fallback_pool_specs=built["ordinary_history_forward"],
-            ))
-            min_recs.append(evaluate_m4_3_target_under_arm(
-                ot_x,
-                arm_name="BestPilotRMSE",
-                seed=seeds[0],
-                work_dir=work_root / "fork_sub" / reg_lbl / "min_rmse" / ot_x.target_id,
-                forest=None,
-                index=None,
-                ordinary_history_specs=built["ordinary_history_forward"],
-                fallback_pool_specs=built["ordinary_history_forward"],
-                selection_policy="min_pilot_rmse",
-            ))
-            dev_recs.append(evaluate_m4_3_target_under_arm(
-                ot_x,
-                arm_name="StratifiedDevFirstAcceptable",
-                seed=seeds[0],
-                work_dir=work_root / "fork_sub" / reg_lbl / "dev_order" / ot_x.target_id,
-                forest=None,
-                index=None,
-                ordinary_history_specs=built["ordinary_history_stratified_dev_6fam"],
-                fallback_pool_specs=built["ordinary_history_forward"],
-            ))
+        for fk_idx, fk_seed in enumerate(seeds):
+            t_reg, _ = build_m4_3_target_suite(seed=fk_seed, onset_pilot_noise_std=sig_val)
+            onset_slice = [x for x in t_reg if x.mechanism_family.startswith("OnsetWalk_")]
+            for ot_x in onset_slice:
+                hr = evaluate_m4_3_target_under_arm(
+                    ot_x,
+                    arm_name="Hegel_PPR",
+                    seed=fk_seed,
+                    work_dir=work_root / "fork_sub" / reg_lbl / f"seed_{fk_idx}" / "hegel" / ot_x.target_id,
+                    forest=f_h_sub,
+                    index=ix_h_sub,
+                    ordinary_history_specs=None,
+                    fallback_pool_specs=built["ordinary_history_forward"],
+                )
+                mr = evaluate_m4_3_target_under_arm(
+                    ot_x,
+                    arm_name="BestPilotRMSE",
+                    seed=fk_seed,
+                    work_dir=work_root / "fork_sub" / reg_lbl / f"seed_{fk_idx}" / "min_rmse" / ot_x.target_id,
+                    forest=None,
+                    index=None,
+                    ordinary_history_specs=built["ordinary_history_forward"],
+                    fallback_pool_specs=built["ordinary_history_forward"],
+                    selection_policy="min_pilot_rmse",
+                )
+                dr = evaluate_m4_3_target_under_arm(
+                    ot_x,
+                    arm_name="StratifiedDevFirstAcceptable",
+                    seed=fk_seed,
+                    work_dir=work_root / "fork_sub" / reg_lbl / f"seed_{fk_idx}" / "dev_order" / ot_x.target_id,
+                    forest=None,
+                    index=None,
+                    ordinary_history_specs=built["ordinary_history_stratified_dev_6fam"],
+                    fallback_pool_specs=built["ordinary_history_forward"],
+                )
+                h_recs.append(hr)
+                min_recs.append(mr)
+                dev_recs.append(dr)
+                for rec_item in (hr, mr, dr):
+                    fork_execution_receipts.append({**rec_item, "noise_regime": reg_lbl, "pilot_noise_std": sig_val})
         fork_regime_comparison[reg_lbl] = {
+            "noise_distribution": ("noiseless" if sig_val == 0.0 else "gaussian_untruncated"),
             "pilot_noise_std": sig_val,
-            "onset_target_count": len(onset_slice),
+            "onset_target_count": len(h_recs),
+            "Hegel_PPR_strict_pass_rate": round(mean(1.0 if r["strict_pass"] else 0.0 for r in h_recs), 4),
+            "Hegel_PPR_false_confirmation_rate": round(mean(1.0 if r["false_confirmation"] else 0.0 for r in h_recs), 4),
+            "Hegel_PPR_max_overlap": max(int(r["prefix_confirm_overlap_count"]) for r in h_recs),
             "Hegel_PPR_mean_meas": round(mean(r["cost"]["measurement_cost"] for r in h_recs), 4),
             "Hegel_PPR_mean_composite": round(mean(r["cost"]["composite_cost"] for r in h_recs), 4),
+            "BestPilotRMSE_strict_pass_rate": round(mean(1.0 if r["strict_pass"] else 0.0 for r in min_recs), 4),
+            "BestPilotRMSE_false_confirmation_rate": round(mean(1.0 if r["false_confirmation"] else 0.0 for r in min_recs), 4),
+            "BestPilotRMSE_max_overlap": max(int(r["prefix_confirm_overlap_count"]) for r in min_recs),
             "BestPilotRMSE_mean_meas": round(mean(r["cost"]["measurement_cost"] for r in min_recs), 4),
             "BestPilotRMSE_mean_composite": round(mean(r["cost"]["composite_cost"] for r in min_recs), 4),
+            "StratifiedDev_strict_pass_rate": round(mean(1.0 if r["strict_pass"] else 0.0 for r in dev_recs), 4),
+            "StratifiedDev_false_confirmation_rate": round(mean(1.0 if r["false_confirmation"] else 0.0 for r in dev_recs), 4),
+            "StratifiedDev_max_overlap": max(int(r["prefix_confirm_overlap_count"]) for r in dev_recs),
             "StratifiedDev_mean_meas": round(mean(r["cost"]["measurement_cost"] for r in dev_recs), 4),
             "StratifiedDev_mean_composite": round(mean(r["cost"]["composite_cost"] for r in dev_recs), 4),
         }
@@ -2072,4 +2156,5 @@ def run_m4_3_channel_bound_continual_study(
             "stage2_pi_s_reverified_certificate": built["stage2_pi_s_reverified_certificate"],
         },
         "execution_receipts": all_receipts,
+        "fork_execution_receipts": fork_execution_receipts,
     }

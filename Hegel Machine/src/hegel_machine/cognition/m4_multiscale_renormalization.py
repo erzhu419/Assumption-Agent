@@ -1055,7 +1055,7 @@ def _estimate_affine_lens_for_spec(
     rows_f = [r["features"] for r in rows]
     ys = [float(r["target"]) for r in rows]
 
-    sign_cands = [sign] if len(role_order) == 1 else [sign, -sign]
+    sign_cands = [sign, -sign]
     best_cost = float("inf")
     best_sign = sign
     best_off = float(y_med)
@@ -1520,7 +1520,10 @@ def evaluate_m4_target_under_arm(
                     chosen_model_rel = best_rec["model_relpath"]
                     non_direct_walk_win = bool(matched_rc.get("reached_only_by_graph_walk"))
             else:
-                # Confirmation falsified coarse parent! Retain paid `c0_rows` across ALL downstream branches!
+                # Confirmation falsified coarse parent! Retain paid `c0_rows` across ALL downstream branches & per-channel!
+                paid_confirm_by_channel: dict[str, list[dict[str, Any]]] = {"coarse_macro": [], "micro_fine": []}
+                if c0_rows:
+                    paid_confirm_by_channel.setdefault(confirm_channel, []).extend(c0_rows)
                 if confirm_channel == selected_channel:
                     frozen_prefix = [*frozen_prefix, *c0_rows]
                 updated_prefix = [*pilot_rows, *c0_rows] if confirm_channel == selected_channel else list(c0_rows)
@@ -1557,6 +1560,7 @@ def evaluate_m4_target_under_arm(
                             )
                             if len(c1_pts) == req_fresh_1:
                                 c1_rows = lab.acquire_channel(c1_pts, channel=confirm_channel, phase="confirm_1_child")
+                                paid_confirm_by_channel.setdefault(confirm_channel, []).extend(c1_rows)
                                 c1_eval = evaluate_isolated_python_model(
                                     work_dir,
                                     best_child["model_relpath"],
@@ -1627,10 +1631,15 @@ def evaluate_m4_target_under_arm(
 
     # --- Step 4: Compositional / Full-History Fallback Synthesis When Recall Not Confirmed ---
     if not confirmed_ok:
-        # If ScaleBlind failed on coarse_macro due to fast-mode breakdown, it must re-acquire micro_fine pilot!
+        # If ScaleBlind failed on coarse_macro due to fast-mode breakdown, re-acquire micro_fine pilot AND
+        # merge ALL already-paid `micro_fine` confirmation rows so they are retained & never re-purchased!
         if selected_channel == "coarse_macro" and confirm_channel == "micro_fine":
             micro_pilot = lab.acquire_channel(target.pilot_points, channel="micro_fine", phase="escalated_micro_reacquire")
-            frozen_prefix = micro_pilot
+            merged_micro = list(micro_pilot)
+            for pr in locals().get("paid_confirm_by_channel", {}).get("micro_fine", ()):
+                if not any(coords_approx_equal(pr["features"], mr["features"]) for mr in merged_micro):
+                    merged_micro.append(pr)
+            frozen_prefix = merged_micro
         # If safe low-flow pilot has not yet probed high-flow regime, acquire stress probe before full synthesis
         max_f0 = max(float(r["features"][lab.feature_names[0]]) for r in frozen_prefix)
         f0_hi = lab.feature_bounds[lab.feature_names[0]][1]

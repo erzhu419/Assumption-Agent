@@ -266,6 +266,7 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
     tolerance: float = 0.045,
     slaving_window_tolerance: float = 0.045,
     window_drift_tolerance: float = 0.06,
+    artifact_relpath: str | None = None,
 ) -> dict[str, Any]:
     """Certify regional ``Pi_s`` Schur coarse-graining on RK4 trajectories (`fine_trajectory` & window drift wired!).
 
@@ -466,7 +467,7 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
         "window_drift_tolerance": float(window_drift_tolerance),
         "confirmed_instance_digest": inst_digest,
         "projection_records": projection_records,
-        "artifact_path": str((work_dir / "authored_method.json").resolve()),
+        "artifact_path": str(artifact_relpath) if artifact_relpath else str((work_dir / "authored_method.json").resolve()),
         "cost": cal_meter.snapshot(),
     }
     return certificate
@@ -561,24 +562,48 @@ class ForestScopeDispatcher:
                 rejection_reasons.append({"node_id": nid, "reason": "outside_verified_scale_box"})
                 continue
 
-            act = nd["claim_contract"]["conclusion_or_action"]
+            merged_target_feats = {**features, **target_metadata}
+            # Pre-check scope/branch eligibility first so disjunctive OR branches select their own bound action!
+            pre_auth = authorize_abstraction_use(
+                requested_tier="bounded_trial",
+                task_view={
+                    "goal_kind": nd["task_view"]["goal_kind"],
+                    "tolerance": nd["claim_contract"]["tolerance"],
+                },
+                target_features=merged_target_feats,
+                claim_contract=nd["claim_contract"],
+                scale_map=nd.get("scale_map"),
+            )
+            if not pre_auth["granted"]:
+                rejection_reasons.append({"node_id": nid, "reason": pre_auth["reason"]})
+                continue
+
+            act = pre_auth.get("selected_action") or nd["claim_contract"]["conclusion_or_action"]
             art_path_raw = act.get("authored_artifact_path")
             fine_mode = act.get("fine_ode_direct_mode") is True
 
             loaded_art: dict[str, Any] | None = None
+            fitted_params_sha: str | None = None
+            confirmed_inst_dig: str | None = None
             if fine_mode:
                 ode_p = dict(act.get("ode_params") or DEFAULT_PI_S_ODE_PARAMS)
                 model_sha = hashlib.sha256(json.dumps(ode_p, sort_keys=True).encode("utf-8")).hexdigest()
                 conf_dig = f"host_solver_{model_sha[:12]}"
+                confirmed_inst_dig = f"host_ode_instance_{model_sha[:32]}"
                 provenance_tier = "host_trusted_exact_solver"
             else:
                 if not art_path_raw:
                     rejection_reasons.append({"node_id": nid, "reason": "missing_authored_artifact"})
                     continue
+                expected_inst = str(act.get("confirmed_instance_digest") or "").strip()
+                if not expected_inst:
+                    rejection_reasons.append({"node_id": nid, "reason": "missing_expected_instance_digest"})
+                    continue
+                resolved_art_path = self.forest.resolve_artifact_path(art_path_raw)
                 loaded_art = load_verified_authored_method(
-                    Path(str(art_path_raw)),
+                    Path(str(resolved_art_path)),
                     expected_ast_digest=str(act.get("ast_skeleton_digest", "")) or None,
-                    expected_instance_digest=str(act.get("confirmed_instance_digest", "")) or None,
+                    expected_instance_digest=expected_inst,
                     require_external_manifest=True,
                     verify_frozen_only=True,
                 )
@@ -586,10 +611,11 @@ class ForestScopeDispatcher:
                     rejection_reasons.append({"node_id": nid, "reason": "artifact_verification_failed"})
                     continue
                 model_sha = str(loaded_art["model_sha256"])
+                fitted_params_sha = str(loaded_art.get("fitted_params_sha256", "")) or None
+                confirmed_inst_dig = str(loaded_art["confirmed_instance_digest"])
                 conf_dig = str(loaded_art["confirmation_digest"])
                 provenance_tier = "host_confirmed_discovered_instance"
 
-            merged_target_feats = {**features, **target_metadata}
             auth = authorize_abstraction_use(
                 requested_tier="local_solver_guidance",
                 task_view={
@@ -643,9 +669,13 @@ class ForestScopeDispatcher:
                 "status": "dispatched_ok",
                 "selected_node_id": nid,
                 "selected_version": int(nd["version"]),
+                "selected_branch": auth.get("selected_branch"),
                 "provenance_tier": provenance_tier,
                 "escalated_from_coarse_node": escalated_from_coarse,
-                "artifact_sha256": model_sha,
+                "model_source_sha256": model_sha,
+                "fitted_params_sha256": fitted_params_sha,
+                "confirmed_instance_digest": confirmed_inst_dig,
+                "artifact_sha256": confirmed_inst_dig or model_sha,
                 "confirmation_digest": conf_dig,
                 "authorized_tier": auth["granted_tier"],
                 "fit_called": fit_called,
@@ -796,10 +826,30 @@ def _run_metered_atomic_calibration(
     }
 
 
+def _make_verified_instance_action(
+    *,
+    operator_tag: str,
+    operator_spec: dict[str, Any],
+    artifact_dict: dict[str, Any],
+    artifact_relpath: str,
+) -> dict[str, Any]:
+    """Construct a complete, location-independent instance-anchored node action dictionary."""
+    return {
+        "operator_tag": operator_tag,
+        "operator_spec": deepcopy(operator_spec),
+        "role_names": [str(r) for r in artifact_dict.get("role_names", ())],
+        "ast_skeleton_digest": str(artifact_dict["ast_skeleton_digest"]),
+        "model_source_sha256": str(artifact_dict["model_sha256"]),
+        "fitted_params_sha256": str(artifact_dict["fitted_params_sha256"]),
+        "confirmed_instance_digest": str(artifact_dict["confirmed_instance_digest"]),
+        "authored_artifact_path": str(artifact_relpath),
+    }
+
+
 def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]:
     """Execute Stage 0 (metered atomic + Pi_s) -> Stage 1 (5 composed discoveries) -> Stage 2 (lifecycle)."""
     work_root.mkdir(parents=True, exist_ok=True)
-    forest = PhilosophicalForest()
+    forest = PhilosophicalForest(artifact_root=str(work_root.resolve()))
     tv_open = TaskView("open_workspace_mechanism_prediction", "rmse_original_scale", 0.05)
 
     # -------------------------------------------------------------------------
@@ -881,12 +931,15 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
 
     # Regional executable `Pi_s` certification (initially calibrated on generous horizon `[1.6, 5.2]`,
     # then tightened in Stage 2 after empirical short-horizon quench probe!)
+    pi_s_cert_init_relpath = "persisted_authored_workspaces/stage0_metered_sources/stage0_pi_s_schur/authored_method.json"
     pi_s_cert_init = certify_regional_pi_s_closure_with_trajectory_projection(
         s0_dir / "stage0_pi_s_schur",
         u_bounds=(0.4, 3.0),
         t_bounds=(2.2, 5.2),
         tolerance=0.045,
+        artifact_relpath=pi_s_cert_init_relpath,
     )
+    pi_s_init_art = json.loads((s0_dir / "stage0_pi_s_schur" / "authored_method.json").read_text(encoding="utf-8"))
 
     def _std_prog_steps(op_tag: str, *, arity: int = 2, fresh_pts: int = 1) -> list[dict[str, Any]]:
         return [
@@ -915,12 +968,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_stage0_monod_2d",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 2}],
-            conclusion_or_action={
-                "operator_tag": "op_atomic_monod_2d",
-                "operator_spec": deepcopy(sp_monod_2d),
-                "ast_skeleton_digest": cal_monod["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_monod["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_atomic_monod_2d",
+                operator_spec=sp_monod_2d,
+                artifact_dict=cal_monod["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage0_monod_2d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.05,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -942,12 +995,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_bridge_carrier",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 2}],
-            conclusion_or_action={
-                "operator_tag": "op_atomic_monod_2d",
-                "operator_spec": deepcopy(sp_monod_2d),
-                "ast_skeleton_digest": cal_monod["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_monod["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_atomic_monod_2d",
+                operator_spec=sp_monod_2d,
+                artifact_dict=cal_monod["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage0_monod_2d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.05,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -991,18 +1044,18 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_stage0_murray_1d",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 1}],
-            conclusion_or_action={
-                "operator_tag": "op_atomic_murray_1d",
-                "operator_spec": deepcopy(sp_murray_1d),
-                "ast_skeleton_digest": cal_murray["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_murray["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_atomic_murray_1d",
+                operator_spec=sp_murray_1d,
+                artifact_dict=cal_murray["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage0_murray_1d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.055,
             evidence_status="SUPPORTED_IN_SCOPE",
             permission_tier="local_solver_guidance",
         ),
-        probe_signatures=["sig:pos_arity_1", "sig:neg_arity_1", "sig:cue_vascular_tree"],
+        probe_signatures=["sig:pos_arity_1", "sig:neg_arity_1", "sig:cue_vascular_tree", "sig:cue_vascular_ceiling_onset"],
         program_steps=_std_prog_steps("op_atomic_murray_1d", arity=1),
         source_cluster_ids=["cluster_vascular"],
     )
@@ -1018,12 +1071,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_hydro_micro_pore",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 1}],
-            conclusion_or_action={
-                "operator_tag": "op_atomic_murray_1d",
-                "operator_spec": deepcopy(sp_murray_1d),
-                "ast_skeleton_digest": cal_murray["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_murray["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_atomic_murray_1d",
+                operator_spec=sp_murray_1d,
+                artifact_dict=cal_murray["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage0_murray_1d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.055,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1037,7 +1090,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         fine_node_id="hydro_micro_pore_1d",
         coarse_node_id="stage0_murray_1d",
         scale_map=forest.nodes["stage0_murray_1d"]["scale_map"],
-        empirical_closure_certificate={"certified": True, "max_closure_defect": 0.012, "tolerance": 0.04},
+        empirical_closure_certificate={
+            "certified": True,
+            "max_closure_defect": 0.012,
+            "tolerance": 0.04,
+            "confirmed_instance_digest": cal_murray["artifact"]["confirmed_instance_digest"],
+        },
     )
 
     # Disjoint-domain bridge partner for 2D Vascular Branch Shunt Onset
@@ -1051,12 +1109,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_bridge_arbor",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 2}],
-            conclusion_or_action={
-                "operator_tag": "op_atomic_exp_relax_2d",
-                "operator_spec": deepcopy(sp_exp_2d),
-                "ast_skeleton_digest": cal_exp["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_exp["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_atomic_exp_relax_2d",
+                operator_spec=sp_exp_2d,
+                artifact_dict=cal_exp["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage0_exp_relax_2d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.05,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1135,18 +1193,16 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
                 {"field": "active_arity", "op": "==", "value": 2},
                 {"field": "modality", "op": "==", "value": "thermal"},
             ],
-            conclusion_or_action={
-                "operator_tag": "op_meso_schur_pi_s",
-                "operator_spec": apply_structural_combinator(
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_meso_schur_pi_s",
+                operator_spec=apply_structural_combinator(
                     make_atomic_operator_spec("exp_relax_2d"),
                     "additive_secondary_shunt",
                     secondary_role=0,
                 ),
-                "ast_skeleton_digest": json.loads(
-                    Path(pi_s_cert_init["artifact_path"]).read_text(encoding="utf-8")
-                )["ast_skeleton_digest"],
-                "authored_artifact_path": pi_s_cert_init["artifact_path"],
-            },
+                artifact_dict=pi_s_init_art,
+                artifact_relpath=pi_s_cert_init_relpath,
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.05,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1381,8 +1437,8 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         assert ep["strict_pass"] is True, f"Stage 1 discovery {name} failed: {ep}"
 
     # Register Stage-1 composed mechanisms into the SAME `PhilosophicalForest`!
-    def _art_path(sub_name: str) -> str:
-        return str((s1_dir / sub_name / "authored_method.json").resolve())
+    def _art_relpath(sub_name: str) -> str:
+        return f"persisted_authored_workspaces/persisted_stage1_authored_workspaces/{sub_name}/authored_method.json"
 
     forest.register_node(
         node_id="stage1_W1_haldane_shunt",
@@ -1397,12 +1453,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
                 {"field": "active_arity", "op": "==", "value": 2},
                 {"field": "haldane_turnover_shunt_regime", "op": "==", "value": True},
             ],
-            conclusion_or_action={
-                "operator_tag": "op_composed_haldane_shunt_2d",
-                "operator_spec": deepcopy(w1_ep["authored_artifact"]["operator_spec"]),
-                "ast_skeleton_digest": w1_ep["authored_artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": _art_path("stage1_W1_haldane_shunt"),
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_composed_haldane_shunt_2d",
+                operator_spec=w1_ep["authored_artifact"]["operator_spec"],
+                artifact_dict=w1_ep["authored_artifact"],
+                artifact_relpath=_art_relpath("stage1_W1_haldane_shunt"),
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.055,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1432,12 +1488,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
                 {"field": "active_arity", "op": "==", "value": 2},
                 {"field": "oscillatory_secular_shunt_regime", "op": "==", "value": True},
             ],
-            conclusion_or_action={
-                "operator_tag": "op_composed_osc_shunt_4p_2d",
-                "operator_spec": deepcopy(w2_ep["authored_artifact"]["operator_spec"]),
-                "ast_skeleton_digest": w2_ep["authored_artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": _art_path("stage1_W2_osc_shunt_4p"),
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_composed_osc_shunt_4p_2d",
+                operator_spec=w2_ep["authored_artifact"]["operator_spec"],
+                artifact_dict=w2_ep["authored_artifact"],
+                artifact_relpath=_art_relpath("stage1_W2_osc_shunt_4p"),
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.06,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1461,12 +1517,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
                 {"field": "active_arity", "op": "==", "value": 1},
                 {"field": "high_flow_ceiling_regime", "op": "==", "value": True},
             ],
-            conclusion_or_action={
-                "operator_tag": "op_composed_murray_capped_1d",
-                "operator_spec": deepcopy(w3_ep["authored_artifact"]["operator_spec"]),
-                "ast_skeleton_digest": w3_ep["authored_artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": _art_path("stage1_W3_murray_capped"),
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_composed_murray_capped_1d",
+                operator_spec=w3_ep["authored_artifact"]["operator_spec"],
+                artifact_dict=w3_ep["authored_artifact"],
+                artifact_relpath=_art_relpath("stage1_W3_murray_capped"),
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.055,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1499,12 +1555,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
                 {"field": "haldane_turnover_shunt_regime", "op": "==", "value": False},
                 {"field": "secondary_bleed_active", "op": "==", "value": True},
             ],
-            conclusion_or_action={
-                "operator_tag": "op_composed_monod_shunt_2d",
-                "operator_spec": deepcopy(w4_ep["authored_artifact"]["operator_spec"]),
-                "ast_skeleton_digest": w4_ep["authored_artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": _art_path("stage1_W4_monod_shunt"),
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_composed_monod_shunt_2d",
+                operator_spec=w4_ep["authored_artifact"]["operator_spec"],
+                artifact_dict=w4_ep["authored_artifact"],
+                artifact_relpath=_art_relpath("stage1_W4_monod_shunt"),
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.045,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1533,12 +1589,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_vascular_2d_hub",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 2}],
-            conclusion_or_action={
-                "operator_tag": "op_atomic_exp_relax_2d",
-                "operator_spec": deepcopy(sp_exp_2d),
-                "ast_skeleton_digest": cal_exp["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_exp["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_atomic_exp_relax_2d",
+                operator_spec=sp_exp_2d,
+                artifact_dict=cal_exp["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage0_exp_relax_2d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.05,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1570,12 +1626,12 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
                 {"field": "active_arity", "op": "==", "value": 2},
                 {"field": "haldane_turnover_shunt_regime", "op": "==", "value": False},
             ],
-            conclusion_or_action={
-                "operator_tag": "op_composed_murray_shunt_2d",
-                "operator_spec": deepcopy(w5_ep["authored_artifact"]["operator_spec"]),
-                "ast_skeleton_digest": w5_ep["authored_artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": _art_path("stage1_W5_murray_shunt"),
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_composed_murray_shunt_2d",
+                operator_spec=w5_ep["authored_artifact"]["operator_spec"],
+                artifact_dict=w5_ep["authored_artifact"],
+                artifact_relpath=_art_relpath("stage1_W5_murray_shunt"),
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.045,
             evidence_status="SUPPORTED_IN_SCOPE",
@@ -1615,18 +1671,27 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
             "claim_lure_cellular",
             "m4_open_compositional_ast",
             preconditions=[{"field": "active_arity", "op": "==", "value": 2}],
-            conclusion_or_action={
-                "operator_tag": "op_lure_variational_cellular_2d",
-                "operator_spec": deepcopy(sp_lure),
-                "ast_skeleton_digest": cal_lure["artifact"]["ast_skeleton_digest"],
-                "authored_artifact_path": cal_lure["artifact_path"],
-            },
+            conclusion_or_action=_make_verified_instance_action(
+                operator_tag="op_lure_variational_cellular_2d",
+                operator_spec=sp_lure,
+                artifact_dict=cal_lure["artifact"],
+                artifact_relpath="persisted_authored_workspaces/stage0_metered_sources/stage1_lure_cellular_2d/authored_method.json",
+            ),
             protocol_spec={"isolated_confirm": True},
             tolerance=0.05,
             evidence_status="SUPPORTED_IN_SCOPE",
             permission_tier="local_solver_guidance",
         ),
-        probe_signatures=["sig:pos_arity_2", "sig:neg_arity_2", "sig:cue_feed_reactor", "sig:cue_servo_transient"],
+        probe_signatures=[
+            "sig:pos_arity_2",
+            "sig:neg_arity_2",
+            "sig:sensor_pos",
+            "sig:sensor_neg",
+            "sig:two_channel_coupled",
+            "sig:cue_feed_reactor",
+            "sig:cue_pore_collapse",
+            "sig:cue_servo_transient",
+        ],
         program_steps=_std_prog_steps("op_lure_variational_cellular_2d"),
         source_cluster_ids=["cluster_lure"],
     )
@@ -1848,23 +1913,26 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
     )
     assert rejected_unclosed_reval["accepted"] is False
 
+    pi_s_reverified_relpath = "persisted_authored_workspaces/stage2_lifecycle/stage2_pi_s_reverified/authored_method.json"
     pi_s_cert_reverified = certify_regional_pi_s_closure_with_trajectory_projection(
         s2_dir / "stage2_pi_s_reverified",
         u_bounds=(0.4, 3.0),
         t_bounds=(2.4, 5.2),
         tolerance=0.045,
+        artifact_relpath=pi_s_reverified_relpath,
     )
-    reverified_art_json = json.loads(Path(pi_s_cert_reverified["artifact_path"]).read_text(encoding="utf-8"))
+    reverified_art_json = json.loads((s2_dir / "stage2_pi_s_reverified" / "authored_method.json").read_text(encoding="utf-8"))
     upd_pi_cc = deepcopy(forest.nodes["ode_meso_schur_pi_thermal"]["claim_contract"])
-    upd_pi_cc["conclusion_or_action"]["authored_artifact_path"] = pi_s_cert_reverified["artifact_path"]
-    upd_pi_cc["conclusion_or_action"]["ast_skeleton_digest"] = reverified_art_json["ast_skeleton_digest"]
-    upd_pi_cc["conclusion_or_action"]["confirmed_instance_digest"] = reverified_art_json["confirmed_instance_digest"]
+    new_pi_act = _make_verified_instance_action(
+        operator_tag="op_meso_schur_pi_s",
+        operator_spec=upd_pi_cc["conclusion_or_action"]["operator_spec"],
+        artifact_dict=reverified_art_json,
+        artifact_relpath=pi_s_reverified_relpath,
+    )
+    upd_pi_cc["conclusion_or_action"] = deepcopy(new_pi_act)
     for br in upd_pi_cc.get("disjunctive_branches", ()):
         if isinstance(br, dict) and isinstance(br.get("conclusion_or_action"), dict):
-            br["conclusion_or_action"]["authored_artifact_path"] = pi_s_cert_reverified["artifact_path"]
-            br["conclusion_or_action"]["ast_skeleton_digest"] = reverified_art_json["ast_skeleton_digest"]
-            br["conclusion_or_action"]["confirmed_instance_digest"] = reverified_art_json["confirmed_instance_digest"]
-    forest.nodes["ode_meso_schur_pi_thermal"]["claim_contract"] = upd_pi_cc
+            br["conclusion_or_action"] = deepcopy(new_pi_act)
 
     revised_closed_sm = ScaleMap(
         coarse_graining_op="schur_adiabatic_pi_s",
@@ -1889,6 +1957,7 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         witness_episode_id="stage2_pi_s_reverified",
         closure_certificate=pi_s_cert_reverified,
         updated_scale_map=revised_closed_sm,
+        updated_claim_contract=upd_pi_cc,
         reason="reverified_adiabatic_box_T_ge_2_4",
     )
     assert certified_reval["accepted"] is True and certified_reval["rebound_coarse_graining_edges"] == 1
@@ -2407,55 +2476,101 @@ def build_m4_2_target_suite(seed: int = 20_261_120) -> tuple[list[UnifiedTargetS
 # Part 7. Unified Stage-3 Arm Evaluator + Full Execution Receipts
 # ============================================================================
 
-def _find_valid_canonical_role_map_for_box(
+def _extract_canonical_box_roles(
+    node: dict[str, Any],
+    *,
+    artifact_root: str | Path | None = None,
+) -> list[str]:
+    sm = node.get("scale_map") or {}
+    vbox = (sm.get("window_or_partition") or {}).get("verified_input_box") or {}
+    vbox_keys = [str(k) for k in vbox.keys()]
+    act = (node.get("claim_contract") or {}).get("conclusion_or_action") or {}
+    if isinstance(act.get("role_names"), list) and act["role_names"]:
+        return [str(r) for r in act["role_names"]]
+    art_path = act.get("authored_artifact_path")
+    if art_path:
+        art_p = Path(str(art_path))
+        if not art_p.is_absolute() and artifact_root is not None:
+            cand_p = (Path(str(artifact_root)) / art_p).resolve()
+            if not cand_p.exists() and art_p.parts and art_p.parts[0] == "persisted_authored_workspaces":
+                cand_p = (Path(str(artifact_root)) / Path(*art_p.parts[1:])).resolve()
+            art_p = cand_p
+        if art_p.is_file():
+            try:
+                raw_art = json.loads(art_p.read_text(encoding="utf-8"))
+                if isinstance(raw_art.get("role_names"), list):
+                    return [str(r) for r in raw_art["role_names"]]
+            except Exception:
+                pass
+    return vbox_keys
+
+
+def _role_order_from_canonical_role_map(canon_roles: list[str], role_map: dict[str, str]) -> list[str]:
+    """Invert ``target_feature -> canonical_role`` bijection into ``compile_operator_spec_to_python`` ``role_names``."""
+    inv = {str(cr): str(tf) for tf, cr in role_map.items()}
+    return [inv[str(cr)] for cr in canon_roles]
+
+
+def _find_all_valid_canonical_role_maps_for_box(
     target_feature_names: tuple[str, ...],
     node: dict[str, Any],
     points_to_check: list[dict[str, float]],
-) -> tuple[bool, dict[str, str] | None]:
-    """Resolve a canonical coordinate bijection (`target_feature -> certified_box_axis`) before checking bounds.
+    *,
+    artifact_root: str | Path | None = None,
+) -> tuple[bool, list[dict[str, str]], list[str]]:
+    """Return ``(has_no_box_or_valid, valid_role_maps, canon_roles)``.
 
-    Never skips missing axes (`fail-closed`):
-      - If ``node`` has no ``verified_input_box``, returns ``(True, None)``.
-      - Otherwise tests candidate bijections from ``target_feature_names`` onto the node's canonical
-        ``role_names`` (from its verified artifact or ``verified_input_box`` keys). Returns ``(True, role_map)``
-        if a bijection maps EVERY point in ``points_to_check`` inside ``verified_input_box``; else ``(False, None)``.
+    CRITICAL INVARIANT:
+      - If ``node`` has no ``verified_input_box``, returns ``(True, [], [])``.
+      - When ``set(target_feature_names) == set(canon_roles)`` (canonical physical coordinate names are
+        explicitly declared on the task, e.g. ``('u_drive', 'T_horizon')``), ONLY the identity map
+        ``{k: k}`` is permitted — axes can NEVER be swapped to sneak out-of-box points into ``verified_input_box``!
+      - When ``target_feature_names`` are anonymous/surface-renamed, returns all bijections that map
+        EVERY point in ``points_to_check`` inside ``verified_input_box``.
     """
     sm = node.get("scale_map") or {}
     vbox = (sm.get("window_or_partition") or {}).get("verified_input_box")
     if not isinstance(vbox, dict) or not vbox:
-        return True, None
+        return True, [], []
 
-    vbox_keys = list(vbox.keys())
-    act = (node.get("claim_contract") or {}).get("conclusion_or_action") or {}
-    art_path = act.get("authored_artifact_path")
-    canon_roles: list[str] = []
-    if art_path and Path(str(art_path)).is_file():
-        try:
-            raw_art = json.loads(Path(str(art_path)).read_text(encoding="utf-8"))
-            if isinstance(raw_art.get("role_names"), list):
-                canon_roles = [str(r) for r in raw_art["role_names"]]
-        except Exception:
-            canon_roles = []
-    if not canon_roles:
-        canon_roles = vbox_keys
-
+    vbox_keys = [str(k) for k in vbox.keys()]
+    canon_roles = _extract_canonical_box_roles(node, artifact_root=artifact_root)
     if len(target_feature_names) != len(canon_roles) or not set(vbox_keys).issubset(set(canon_roles)):
-        return False, None
+        return False, [], canon_roles
 
     from itertools import permutations
 
-    candidate_maps: list[dict[str, str]] = []
     if set(target_feature_names) == set(canon_roles):
-        candidate_maps.append({k: k for k in target_feature_names})
-    for perm in permutations(canon_roles):
-        rmap = {tf: cr for tf, cr in zip(target_feature_names, perm)}
-        if rmap not in candidate_maps:
-            candidate_maps.append(rmap)
+        candidate_maps = [{str(k): str(k) for k in target_feature_names}]
+    else:
+        candidate_maps = []
+        for perm in permutations(canon_roles):
+            rmap = {str(tf): str(cr) for tf, cr in zip(target_feature_names, perm)}
+            if rmap not in candidate_maps:
+                candidate_maps.append(rmap)
 
-    for rmap in candidate_maps:
-        if all(is_point_inside_verified_box(pt, vbox, role_map=rmap) for pt in points_to_check):
-            return True, rmap
-    return False, None
+    valid_maps = [
+        rmap
+        for rmap in candidate_maps
+        if all(is_point_inside_verified_box(pt, vbox, role_map=rmap) for pt in points_to_check)
+    ]
+    return bool(valid_maps), valid_maps, canon_roles
+
+
+def _find_valid_canonical_role_map_for_box(
+    target_feature_names: tuple[str, ...],
+    node: dict[str, Any],
+    points_to_check: list[dict[str, float]],
+    *,
+    artifact_root: str | Path | None = None,
+) -> tuple[bool, dict[str, str] | None]:
+    """Resolve a canonical coordinate bijection (`target_feature -> certified_box_axis`) before checking bounds."""
+    ok, valid_maps, _ = _find_all_valid_canonical_role_maps_for_box(
+        target_feature_names, node, points_to_check, artifact_root=artifact_root
+    )
+    if not ok:
+        return False, None
+    return True, (valid_maps[0] if valid_maps else None)
 
 
 def _build_stage0_open_atomic_bases(arity: int) -> list[dict[str, Any]]:
@@ -2607,11 +2722,11 @@ def evaluate_m4_2_target_under_arm(
             # Coarse `meso` reduction on `Pi_s` requires a live non-stale coarse_graining_edge for THIS node!
             if is_pi_s_target and nd_scale == "meso" and not forest.fine_scale_children_of(nd["node_id"]):
                 continue
-            v_spec = _load_node_verified_operator_spec(nd)
+            v_spec = _load_node_verified_operator_spec(nd, artifact_root=forest.artifact_root)
             if v_spec is None:
                 continue
-            in_box, cand_role_map = _find_valid_canonical_role_map_for_box(
-                target.feature_names, nd, [*target.pilot_points, *target.confirm_points]
+            in_box, valid_rmaps, canon_roles = _find_all_valid_canonical_role_maps_for_box(
+                target.feature_names, nd, [*target.pilot_points, *target.confirm_points], artifact_root=forest.artifact_root
             )
             if not in_box:
                 continue
@@ -2627,7 +2742,9 @@ def evaluate_m4_2_target_under_arm(
                 cand_copy = dict(cand)
                 cand_copy["_verified_spec"] = v_spec
                 cand_copy["_exec_plan"] = plan
-                cand_copy["_canonical_role_map"] = cand_role_map
+                cand_copy["_valid_role_maps"] = valid_rmaps
+                cand_copy["_canon_roles"] = canon_roles
+                cand_copy["_canonical_role_map"] = valid_rmaps[0] if valid_rmaps else None
                 auth_cands.append(cand_copy)
 
         # Try top authorized recalled candidates sequentially (retaining all paid rows & enforcing 0 overlap!)
@@ -2644,6 +2761,13 @@ def evaluate_m4_2_target_under_arm(
                 selected_channel = "micro_fine"
                 lab.cost_per_obs = 8.0
 
+            valid_rmaps_c = c_cand.get("_valid_role_maps") or []
+            canon_roles_c = c_cand.get("_canon_roles") or []
+            allowed_orders_c = (
+                [_role_order_from_canonical_role_map(canon_roles_c, rm) for rm in valid_rmaps_c]
+                if valid_rmaps_c
+                else None
+            )
             best_c, ev_c = _autonomous_fit_candidate_specs(
                 work_dir,
                 specs_to_try=[(c_tag, c_cand["_verified_spec"])],
@@ -2651,21 +2775,37 @@ def evaluate_m4_2_target_under_arm(
                 training_rows=frozen_prefix,
                 tolerance=target.tolerance,
                 calibrate_lens=bool(plan_c["calibrate_lens"]),
+                allowed_role_orders=allowed_orders_c,
             )
             total_evaluated += ev_c
             unmetered_eval_candidates += ev_c
             if best_c is None or best_c["train_rmse"] > target.tolerance:
                 continue
 
+            locked_rmap = c_cand.get("_canonical_role_map")
+            if valid_rmaps_c and best_c.get("role_order"):
+                for rm in valid_rmaps_c:
+                    if _role_order_from_canonical_role_map(canon_roles_c, rm) == list(best_c["role_order"]):
+                        locked_rmap = rm
+                        break
+            c_cand["_canonical_role_map"] = locked_rmap
+
+            nd_vbox = ((nd.get("scale_map") or {}).get("window_or_partition") or {}).get("verified_input_box")
+            target_vbox = (
+                {tf: nd_vbox[locked_rmap[tf]] for tf in target.feature_names}
+                if isinstance(nd_vbox, dict) and nd_vbox and locked_rmap
+                else None
+            )
             req_fresh = max(1, int(plan_c["fresh_points"]))
             c_pts = select_or_synthesize_disjoint_confirm_points(
                 predeclared_confirm_points=target.confirm_points,
                 training_prefix_rows=frozen_prefix,
                 required_fresh_count=req_fresh,
                 feature_bounds=target.feature_bounds,
+                verified_box=target_vbox,
             )
             if len(c_pts) < req_fresh:
-                break
+                continue
             cf_obs = lab.acquire(c_pts, workspace=None, phase="recall_confirm") or []
             cf_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf_obs]
             max_prefix_confirm_overlap = max(max_prefix_confirm_overlap, _count_overlap(cf_rows, frozen_prefix))

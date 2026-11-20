@@ -68,8 +68,10 @@ def _build_same_schema_wormhole_components(
             seen_wids.add(wid)
             na, nb = wh["node_a_id"], wh["node_b_id"]
             if na in active_nodes and nb in active_nodes:
-                sa_tag = active_nodes[na]["claim_contract"]["conclusion_or_action"].get("schema_tag")
-                sb_tag = active_nodes[nb]["claim_contract"]["conclusion_or_action"].get("schema_tag")
+                act_a = active_nodes[na]["claim_contract"]["conclusion_or_action"]
+                act_b = active_nodes[nb]["claim_contract"]["conclusion_or_action"]
+                sa_tag = act_a.get("schema_tag") or act_a.get("ast_skeleton_digest")
+                sb_tag = act_b.get("schema_tag") or act_b.get("ast_skeleton_digest")
                 if sa_tag and sa_tag == sb_tag:
                     same_schema_adj[na].append(nb)
                     same_schema_adj[nb].append(na)
@@ -156,16 +158,28 @@ class HippoRAGWormholeIndex:
         max_ppr_iterations: int = 50,
         convergence_tol: float = 1e-9,
     ) -> None:
-        t0 = time.perf_counter()
+        self._forest_ref = forest
         self.allow_horizontal_wormholes = bool(allow_horizontal_wormholes)
         self.wormhole_equivalence_pooling = bool(wormhole_equivalence_pooling)
         self.include_coarse_graining_edges = bool(include_coarse_graining_edges)
         self.scale_aware = bool(scale_aware)
         self.damping_alpha = float(damping_alpha)
         self.specificity_exponent = float(specificity_exponent)
+        self._self_loop_weight = float(self_loop_weight)
+        self._refined_sink_self_weight = float(refined_sink_self_weight)
+        self._vertical_up_weight = float(vertical_up_weight)
+        self._vertical_down_weight = float(vertical_down_weight)
+        self._coarse_up_weight = float(coarse_up_weight)
+        self._fine_down_weight = float(fine_down_weight)
+        self._wormhole_base_weight = float(wormhole_base_weight)
         self.max_ppr_iterations = int(max_ppr_iterations)
         self.convergence_tol = float(convergence_tol)
+        self.refresh_count: int = 0
+        self._indexed_forest_state: tuple[Any, ...] = ()
+        self._build_from_forest(forest)
 
+    def _build_from_forest(self, forest: PhilosophicalForest) -> None:
+        t0 = time.perf_counter()
         self.active_nodes: dict[str, dict[str, Any]] = {}
         for nid, node in sorted(forest.nodes.items()):
             if node["utility_ledger"].get("archived_low_utility"):
@@ -215,8 +229,8 @@ class HippoRAGWormholeIndex:
                     v_edge["stronger_version"] == self.active_nodes[sa]["version"]
                     and v_edge["weaker_version"] == self.active_nodes[wa]["version"]
                 ):
-                    _add_directed(wa, sa, float(vertical_up_weight))
-                    _add_directed(sa, wa, float(vertical_down_weight))
+                    _add_directed(wa, sa, self._vertical_up_weight)
+                    _add_directed(sa, wa, self._vertical_down_weight)
                     refined_children.add(sa)
                     parents_with_children.add(wa)
                     self.graph_adj_nodes[sa].append((wa, None))
@@ -235,8 +249,8 @@ class HippoRAGWormholeIndex:
                         cg_edge["fine_version"] == self.active_nodes[fa]["version"]
                         and cg_edge["coarse_version"] == self.active_nodes[ca]["version"]
                     ):
-                        _add_directed(fa, ca, float(coarse_up_weight))
-                        _add_directed(ca, fa, float(fine_down_weight))
+                        _add_directed(fa, ca, self._coarse_up_weight)
+                        _add_directed(ca, fa, self._fine_down_weight)
                         self.graph_adj_nodes[fa].append((ca, None))
                         self.graph_adj_nodes[ca].append((fa, None))
                         n_coarse_edges += 1
@@ -244,9 +258,9 @@ class HippoRAGWormholeIndex:
         # 2. Self-retention weights (higher on terminal witness-refined nodes so escalated mass concentrates)
         for nid in self.node_ids:
             if nid in refined_children and nid not in parents_with_children:
-                _add_directed(nid, nid, float(refined_sink_self_weight))
+                _add_directed(nid, nid, self._refined_sink_self_weight)
             else:
-                _add_directed(nid, nid, float(self_loop_weight))
+                _add_directed(nid, nid, self._self_loop_weight)
 
         # 3. Cross-tree horizontal wormhole edges (toggled off in VerticalPPR ablation!)
         n_wh_edges = 0
@@ -261,7 +275,7 @@ class HippoRAGWormholeIndex:
                     na, nb = wh["node_a_id"], wh["node_b_id"]
                     if na in self.active_nodes and nb in self.active_nodes:
                         hop_err = max(0.0, float(wh.get("hop_error_budget", 0.02)))
-                        w_wh = float(wormhole_base_weight) / (1.0 + 8.0 * hop_err)
+                        w_wh = self._wormhole_base_weight / (1.0 + 8.0 * hop_err)
                         _add_directed(na, nb, w_wh)
                         _add_directed(nb, na, w_wh)
                         self.graph_adj_nodes[na].append((nb, wh))
@@ -297,6 +311,16 @@ class HippoRAGWormholeIndex:
         }
         total_edges = n_obs_edges + n_vert_edges + n_coarse_edges + n_wh_edges
         self.index_build_compute_cost = round(0.35 * (len(self.sig_to_nodes) + n_verts) + 0.15 * total_edges, 4)
+        self._indexed_forest_state = forest.forest_state_signature()
+
+    def ensure_fresh(self) -> float:
+        """Invalidate and refresh index whenever the underlying ``PhilosophicalForest`` was mutated."""
+        cur_state = self._forest_ref.forest_state_signature()
+        if cur_state == self._indexed_forest_state:
+            return 0.0
+        self._build_from_forest(self._forest_ref)
+        self.refresh_count += 1
+        return float(self.index_build_compute_cost)
 
     def _shortest_wormhole_path_from_direct_hits(
         self,
@@ -346,6 +370,7 @@ class HippoRAGWormholeIndex:
     ) -> dict[str, Any]:
         """Run specificity-weighted Personalized PageRank and return Top-K Tier-1 candidates."""
         t0 = time.perf_counter()
+        refresh_cost = self.ensure_fresh()
         valid_sigs = [
             s for s in validate_observable_query_signatures(observed_signatures)
             if s in self.sig_to_nodes
@@ -357,7 +382,9 @@ class HippoRAGWormholeIndex:
                 "iterations": 0,
                 "stationary_mass_sum": 0.0,
                 "non_direct_walk_recalled_count": 0,
-                "query_compute_cost": 1.0,
+                "query_compute_cost": round(1.0 + refresh_cost, 4),
+                "index_refreshed": refresh_cost > 0.0,
+                "index_refresh_compute_cost": refresh_cost,
                 "query_wall_seconds": time.perf_counter() - t0,
                 "seed_specificity_weights": {},
             }
@@ -460,13 +487,15 @@ class HippoRAGWormholeIndex:
                 break
 
         non_direct_walk_count = sum(1 for c in deduped if c.get("reached_only_by_graph_walk"))
-        q_compute = round(1.4 + 0.025 * len(self.active_nodes) + 0.03 * iters, 4)
+        q_compute = round(1.4 + 0.025 * len(self.active_nodes) + 0.03 * iters + refresh_cost, 4)
         return {
             "candidates": deduped,
             "iterations": iters,
             "stationary_mass_sum": round(sum(p), 8),
             "non_direct_walk_recalled_count": non_direct_walk_count,
             "query_compute_cost": q_compute,
+            "index_refreshed": refresh_cost > 0.0,
+            "index_refresh_compute_cost": refresh_cost,
             "query_wall_seconds": time.perf_counter() - t0,
             "seed_specificity_weights": seed_weights,
         }
@@ -491,12 +520,17 @@ class FlatEqualMetadataIndex:
     ) -> None:
         if mode not in {"bm25", "idf_cosine"}:
             raise ValueError(f"Unsupported FlatEqualMetadataIndex mode: {mode}")
-        t0 = time.perf_counter()
+        self._forest_ref = forest
         self.mode = mode
         self.wormhole_equivalence_pooling = bool(wormhole_equivalence_pooling)
         self.k1 = float(k1)
         self.b = float(b)
+        self.refresh_count: int = 0
+        self._indexed_forest_state: tuple[Any, ...] = ()
+        self._build_from_forest(forest)
 
+    def _build_from_forest(self, forest: PhilosophicalForest) -> None:
+        t0 = time.perf_counter()
         adj_wh, _ = _extract_node_incident_metadata(forest)
         self.records: list[dict[str, Any]] = []
         active_nodes_map: dict[str, dict[str, Any]] = {}
@@ -546,6 +580,15 @@ class FlatEqualMetadataIndex:
         self.avg_dl = (sum(len(r["sigs"]) for r in self.records) / n_docs) if self.records else 1.0
         self.build_wall_seconds = time.perf_counter() - t0
         self.index_build_compute_cost = round(0.20 * len(self.records), 4)
+        self._indexed_forest_state = forest.forest_state_signature()
+
+    def ensure_fresh(self) -> float:
+        cur_state = self._forest_ref.forest_state_signature()
+        if cur_state == self._indexed_forest_state:
+            return 0.0
+        self._build_from_forest(self._forest_ref)
+        self.refresh_count += 1
+        return float(self.index_build_compute_cost)
 
     def retrieve(
         self,
@@ -555,6 +598,7 @@ class FlatEqualMetadataIndex:
         top_k: int = 5,
     ) -> dict[str, Any]:
         t0 = time.perf_counter()
+        refresh_cost = self.ensure_fresh()
         q_sigs = validate_observable_query_signatures(observed_signatures)
         q_set = set(q_sigs)
         req_arity = task_view.get("active_arity")
@@ -626,10 +670,12 @@ class FlatEqualMetadataIndex:
             if len(deduped) >= top_k:
                 break
 
-        q_compute = round(1.0 + 0.08 * len(self.records), 4)
+        q_compute = round(1.0 + 0.08 * len(self.records) + refresh_cost, 4)
         return {
             "candidates": deduped,
             "non_direct_walk_recalled_count": 0,
             "query_compute_cost": q_compute,
+            "index_refreshed": refresh_cost > 0.0,
+            "index_refresh_compute_cost": refresh_cost,
             "query_wall_seconds": time.perf_counter() - t0,
         }

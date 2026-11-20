@@ -664,7 +664,7 @@ def fidelity_compress_nodes(
 class PhilosophicalForest:
     """Forest of Local Conditional Implication Trees + Horizontal Mid-Layer Wormholes."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, artifact_root: str | None = None) -> None:
         self.nodes: dict[str, dict[str, Any]] = {}
         self.node_history: dict[str, list[dict[str, Any]]] = {}
         self.local_implication_edges: list[dict[str, Any]] = []
@@ -674,6 +674,75 @@ class PhilosophicalForest:
         self.conflict_relations: list[dict[str, Any]] = []
         self.raw_episode_archive: list[dict[str, Any]] = []
         self.questions: dict[str, dict[str, Any]] = {}
+        self.artifact_root: str | None = str(artifact_root) if artifact_root is not None else None
+        self.mutation_epoch: int = 0
+
+    def resolve_artifact_path(self, raw_path_or_locator: Any) -> Any:
+        """Resolve a bundle-relative logical artifact locator against ``self.artifact_root`` without mutating contracts."""
+        if not raw_path_or_locator:
+            return None
+        from pathlib import Path as _Path
+        p = _Path(str(raw_path_or_locator))
+        if p.is_absolute():
+            return p
+        if self.artifact_root:
+            root_p = _Path(self.artifact_root)
+            cand = (root_p / p).resolve()
+            if cand.exists():
+                return cand
+            parts = p.parts
+            if parts and parts[0] == "persisted_authored_workspaces" and len(parts) > 1:
+                alt = (root_p / _Path(*parts[1:])).resolve()
+                if alt.exists():
+                    return alt
+            return cand
+        return p.resolve()
+
+    def forest_state_signature(self) -> tuple[Any, ...]:
+        """Compute lightweight structural/version token so live indices detect any node/edge/archive mutation."""
+        node_toks = tuple(
+            (
+                nid,
+                int(nd.get("version", 1)),
+                str(nd.get("semantic_digest", "")),
+                bool((nd.get("utility_ledger") or {}).get("archived_low_utility", False)),
+                str((nd.get("claim_contract") or {}).get("evidence_status", "")),
+                tuple(nd.get("probe_signatures", ())),
+            )
+            for nid, nd in sorted(self.nodes.items())
+        )
+        wh_toks = tuple(
+            (
+                wid,
+                int(wh.get("version", 1)),
+                int(wh.get("node_a_version", 1)),
+                int(wh.get("node_b_version", 1)),
+                bool(wh.get("stale_endpoint_revision", False)),
+            )
+            for wid, wh in sorted(self.horizontal_wormhole_edges.items())
+        )
+        ie_toks = tuple(
+            (
+                ie.get("stronger_node_id"),
+                int(ie.get("stronger_version", 1)),
+                ie.get("weaker_node_id"),
+                int(ie.get("weaker_version", 1)),
+                bool(ie.get("stale_endpoint_revision", False)),
+            )
+            for ie in self.local_implication_edges
+        )
+        ce_toks = tuple(
+            (
+                ce.get("fine_node_id"),
+                int(ce.get("fine_version", 1)),
+                ce.get("coarse_node_id"),
+                int(ce.get("coarse_version", 1)),
+                bool(ce.get("stale_endpoint_revision", False)),
+                str(ce.get("closure_certificate_digest", "")),
+            )
+            for ce in self.coarse_graining_edges
+        )
+        return (int(self.mutation_epoch), node_toks, wh_toks, ie_toks, ce_toks)
 
     def record_raw_episode(self, episode: dict[str, Any]) -> None:
         self.raw_episode_archive.append(deepcopy(episode))
@@ -752,6 +821,7 @@ class PhilosophicalForest:
             ),
         }
         self.nodes[node_id] = node
+        self.mutation_epoch += 1
         return deepcopy(node)
 
     def add_local_implication_edge(
@@ -848,17 +918,26 @@ class PhilosophicalForest:
         if self._can_reach_coarse_graining(coarse_node_id, fine_node_id):
             raise ValueError("Cycle detected in coarse_graining_edges")
         sm = scale_map.to_dict() if isinstance(scale_map, ScaleMap) else deepcopy(scale_map)
+        cert_copy = deepcopy(empirical_closure_certificate)
+        cert_digest = hashlib.sha256(
+            json.dumps(cert_copy, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
+        c_act = (coarse.get("claim_contract") or {}).get("conclusion_or_action") or {}
+        c_inst = c_act.get("confirmed_instance_digest") or cert_copy.get("confirmed_instance_digest")
         edge = {
             "fine_node_id": fine_node_id,
             "fine_version": fine["version"],
             "coarse_node_id": coarse_node_id,
             "coarse_version": coarse["version"],
             "scale_map": sm,
-            "empirical_closure_certificate": deepcopy(empirical_closure_certificate),
+            "empirical_closure_certificate": cert_copy,
+            "closure_certificate_digest": cert_digest,
+            **({"confirmed_instance_digest": str(c_inst)} if c_inst else {}),
             "evidence_status": evidence_status,
             "stale_endpoint_revision": False,
         }
         self.coarse_graining_edges.append(edge)
+        self.mutation_epoch += 1
         return deepcopy(edge)
 
     def fine_scale_children_of(self, coarse_node_id: str) -> list[dict[str, Any]]:
@@ -1142,12 +1221,15 @@ class PhilosophicalForest:
         witness_episode_id: str,
         closure_certificate: dict[str, Any],
         updated_scale_map: dict[str, Any] | None = None,
+        updated_claim_contract: dict[str, Any] | None = None,
         reason: str = "",
     ) -> dict[str, Any]:
         """Revalidate incident vertical / coarse-graining edges ONLY when an empirical closure certificate holds!
 
         Rejects label-only revalidation, unverified certificates (`certified != True`), out-of-tolerance
-        defects, `closure_scope == 'not_closed'`, or unverified discarded variables.
+        defects, `closure_scope == 'not_closed'`, unverified discarded variables, wider requested boxes,
+        or mismatched `confirmed_instance_digest` between node/branches and `closure_certificate`.
+        Commits `updated_claim_contract` + `updated_scale_map` + edge rebinding ATOMICALLY only on pass!
         """
         if not isinstance(closure_certificate, dict) or closure_certificate.get("certified") is not True:
             return {
@@ -1199,6 +1281,31 @@ class PhilosophicalForest:
                 "rebound_coarse_graining_edges": 0,
             }
 
+        target_cc = updated_claim_contract if updated_claim_contract is not None else self.nodes[node_id].get("claim_contract")
+        target_act = (target_cc or {}).get("conclusion_or_action") or {}
+        node_inst = target_act.get("confirmed_instance_digest")
+        cert_inst = closure_certificate.get("confirmed_instance_digest")
+        if node_inst is not None or cert_inst is not None:
+            if not node_inst or not cert_inst or str(node_inst) != str(cert_inst):
+                return {
+                    "accepted": False,
+                    "reason": "certificate_instance_digest_mismatch",
+                    "node_confirmed_instance_digest": node_inst,
+                    "certificate_confirmed_instance_digest": cert_inst,
+                    "rebound_coarse_graining_edges": 0,
+                }
+            for br in (target_cc or {}).get("disjunctive_branches", ()):
+                if isinstance(br, dict) and isinstance(br.get("conclusion_or_action"), dict):
+                    br_inst = br["conclusion_or_action"].get("confirmed_instance_digest")
+                    if br_inst is not None and str(br_inst) != str(cert_inst):
+                        return {
+                            "accepted": False,
+                            "reason": "branch_certificate_instance_digest_mismatch",
+                            "branch_confirmed_instance_digest": br_inst,
+                            "certificate_confirmed_instance_digest": cert_inst,
+                            "rebound_coarse_graining_edges": 0,
+                        }
+
         target_sm = updated_scale_map if updated_scale_map is not None else self.nodes[node_id].get("scale_map")
         if not isinstance(target_sm, dict) or target_sm.get("closure_scope") in {None, "", "not_closed"}:
             return {
@@ -1214,7 +1321,7 @@ class PhilosophicalForest:
             if not isinstance(cert_box, dict) or not cert_box or not isinstance(req_box, dict) or not req_box:
                 return {
                     "accepted": False,
-                    "reason": "missing_or_ mismatched_verified_input_box".replace(" ", ""),
+                    "reason": "missing_or_mismatched_verified_input_box",
                     "rebound_coarse_graining_edges": 0,
                 }
             for axis_k, c_bnds in cert_box.items():
@@ -1259,12 +1366,13 @@ class PhilosophicalForest:
                 "reason": "proposed_discarded_variables_not_verified",
                 "rebound_coarse_graining_edges": 0,
             }
-        if updated_scale_map is not None:
+        if updated_scale_map is not None or updated_claim_contract is not None:
             self.empirical_revise_node(
                 node_id,
                 witness_episode_id=witness_episode_id,
                 cause="protocol_or_scope_mismatch",
                 updated_scale_map=updated_scale_map,
+                updated_claim_contract=updated_claim_contract,
             )
         reb = self.revalidate_vertical_edges_after_revision(
             node_id, witness_episode_id=witness_episode_id, reason=reason or "certified_closure_revalidation"
@@ -1282,6 +1390,7 @@ class PhilosophicalForest:
                 c_act = (self.nodes.get(c_nid, {}).get("claim_contract") or {}).get("conclusion_or_action") or {}
                 if c_act.get("confirmed_instance_digest"):
                     ce["confirmed_instance_digest"] = c_act["confirmed_instance_digest"]
+        self.mutation_epoch += 1
         return {
             "accepted": True,
             "closure_certificate_digest": cert_digest,
@@ -1414,6 +1523,8 @@ class PhilosophicalForest:
         led["total_overhead"] += float(overhead_cost)
         # Minton utility problem guard: demote persistently net-negative nodes after >= 3 trials
         if led["trials"] >= 3 and (led["total_savings"] - led["total_overhead"]) < -2.0:
+            if not led.get("archived_low_utility"):
+                self.mutation_epoch += 1
             led["archived_low_utility"] = True
 
     def compress_compatible_nodes(

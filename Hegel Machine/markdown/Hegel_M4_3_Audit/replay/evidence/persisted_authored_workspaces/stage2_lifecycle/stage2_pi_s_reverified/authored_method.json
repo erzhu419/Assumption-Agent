@@ -1,0 +1,154 @@
+{
+  "analytical_schur_params": {
+    "gamma_eff": 0.75965517,
+    "steady_gain_eff": 2.26724921
+  },
+  "ast_skeleton_digest": "6d5ef97d822d21",
+  "authored_model_source": "import math\n\n_SCHEMA_FAMILY_TAG = 'atomic_exp_relax_2d__comb_shunt'\n_CORE_LAW_EXPR = \"(((_PARAMS['p0'] * f['u_drive']) * (1 - math.exp(-f['T_horizon'] / _PARAMS['p1']))) + (_PARAMS['p2'] * f['u_drive']))\"\n_PARAMS = {'p0': 1.5, 'p1': 1.2, 'p2': 0.6}\n\ndef fit(observations):\n    if not observations:\n        return\n    rows_f = [r['features'] for r in observations]\n    ys = [(float(r['target']) - (0)) / ((1) * (1)) for r in observations]\n    lbs = [0.0001, 0.05, -80.0]\n    ubs = [200.0, 50.0, 80.0]\n    m_p = len(lbs)\n    def _res(p):\n        out = []\n        for f, y in zip(rows_f, ys):\n            out.append(((((p[0] * f['u_drive']) * (1 - math.exp(-f['T_horizon'] / p[1]))) + (p[2] * f['u_drive']))) - y)\n        return out\n    def _loss(p):\n        rv = _res(p)\n        return sum(e * e for e in rv)\n    def _lm(x_start):\n        p = [max(lbs[i], min(ubs[i], float(x_start[i]))) for i in range(m_p)]\n        cur = _loss(p)\n        lam = 1e-3\n        for _ in range(28):\n            if cur <= 1e-13:\n                break\n            r0 = _res(p)\n            jac = []\n            for j in range(m_p):\n                h = max(1e-6, 1e-5 * abs(p[j]))\n                pj = min(ubs[j], p[j] + h)\n                actual_h = pj - p[j]\n                if abs(actual_h) < 1e-9:\n                    pj = max(lbs[j], p[j] - h)\n                    actual_h = pj - p[j]\n                p_pert = list(p)\n                p_pert[j] = pj\n                rp = _res(p_pert)\n                jac.append([(rp[k] - r0[k]) / actual_h for k in range(len(r0))])\n            jtj = [[(lam if a == b else 0.0) + sum(jac[a][k] * jac[b][k] for k in range(len(r0))) for b in range(m_p)] for a in range(m_p)]\n            jtr = [-sum(jac[a][k] * r0[k] for k in range(len(r0))) for a in range(m_p)]\n            aug = [jtj[a] + [jtr[a]] for a in range(m_p)]\n            ok = True\n            for col in range(m_p):\n                piv = max(range(col, m_p), key=lambda r_i: abs(aug[r_i][col]))\n                aug[col], aug[piv] = aug[piv], aug[col]\n                if abs(aug[col][col]) <= 1e-15:\n                    ok = False\n                    break\n                inv_d = 1.0 / aug[col][col]\n                for c2 in range(col, m_p + 1):\n                    aug[col][c2] *= inv_d\n                for r_i in range(m_p):\n                    if r_i != col and abs(aug[r_i][col]) > 0.0:\n                        fac = aug[r_i][col]\n                        for c2 in range(col, m_p + 1):\n                            aug[r_i][c2] -= fac * aug[col][c2]\n            if not ok:\n                lam *= 10.0\n                continue\n            dp = [aug[a][m_p] for a in range(m_p)]\n            cand = [max(lbs[i], min(ubs[i], p[i] + dp[i])) for i in range(m_p)]\n            c_loss = _loss(cand)\n            if c_loss < cur:\n                impr = cur - c_loss\n                p, cur = cand, c_loss\n                lam = max(1e-7, lam * 0.35)\n                if impr < 1e-12:\n                    break\n            else:\n                lam = min(1e6, lam * 6.0)\n        for step in (0.15, 0.03, 0.005):\n            for j in range(m_p):\n                for sgn in (-1.0, 1.0):\n                    cand = list(p)\n                    cand[j] = max(lbs[j], min(ubs[j], p[j] + sgn * step * max(0.5, abs(p[j]))))\n                    cl = _loss(cand)\n                    if cl < cur:\n                        p, cur = cand, cl\n        return cur, p\n    starts = [[1.5, 1.2, 0.6]]\n    if ys:\n        if False and m_p >= 2:\n            s_emp = list(starts[0])\n            s_emp[-1] = max(lbs[-1], min(ubs[-1], max(ys)))\n            starts.insert(0, s_emp)\n    best_cost, best_p = None, list(starts[0])\n    for st in starts:\n        c_val, c_p = _lm(st)\n        if best_cost is None or c_val < best_cost:\n            best_cost, best_p = c_val, c_p\n            if best_cost <= 1e-10:\n                break\n    _PARAMS['p0'] = float(best_p[0])\n    _PARAMS['p1'] = float(best_p[1])\n    _PARAMS['p2'] = float(best_p[2])\n\ndef predict(row):\n    f = row['features']\n    latent = (((_PARAMS['p0'] * f['u_drive']) * (1 - math.exp(-f['T_horizon'] / _PARAMS['p1']))) + (_PARAMS['p2'] * f['u_drive']))\n    return 0 + (1) * (1) * latent\n",
+  "canonical_ast_dump": "BinOp(left=BinOp(left=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Mult(), right=Name(id='ROLE_0', ctx=Load())), op=Mult(), right=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Sub(), right=Call(func=Name(id='FN_exp', ctx=Load()), args=[BinOp(left=UnaryOp(op=USub(), operand=Name(id='ROLE_1', ctx=Load())), op=Div(), right=Name(id='POS_NUM', ctx=Load()))], keywords=[]))), op=Add(), right=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Mult(), right=Name(id='ROLE_0', ctx=Load())))",
+  "confirm_rmse": 0.005484,
+  "confirmation_digest": "f5162430791feae7",
+  "confirmed_instance_digest": "93ea7eeee687a9d73a529e4cb7b741ad0da9994761749970cd17be98d812c06e",
+  "confirmed_ok": true,
+  "fitted_params": {
+    "p0": 1.5872498385413583,
+    "p1": 1.3163863677683025,
+    "p2": 0.6799993258799031
+  },
+  "fitted_params_sha256": "a0c4e7caadb698c2898e0ac80ecaffb015b3788440da63202431355defcbf86f",
+  "host_confirmation_bundle": {
+    "ast_skeleton_digest": "6d5ef97d822d21",
+    "confirm_rows": [
+      {
+        "features": {
+          "T_horizon": 5.2,
+          "u_drive": 3.0
+        },
+        "target": 6.715564044449758
+      }
+    ],
+    "confirm_rows_sha256": "f5162430791feae7bee77dd083454bc516e3c928de6d94f53d1294da73a21529",
+    "confirmed_instance_digest": "93ea7eeee687a9d73a529e4cb7b741ad0da9994761749970cd17be98d812c06e",
+    "confirmed_ok": true,
+    "fitted_params_sha256": "a0c4e7caadb698c2898e0ac80ecaffb015b3788440da63202431355defcbf86f",
+    "model_sha256": "cb60ac7aebce0696fac124c553f1d82e45ce1c23b8f404ee9476863807c3e466",
+    "observed_confirm_rmse": 0.00548355,
+    "task_id": "stage0_pi_s_regional_certification",
+    "tolerance": 0.045,
+    "training_prefix_rows": [
+      {
+        "features": {
+          "T_horizon": 2.4,
+          "u_drive": 0.4
+        },
+        "target": 0.8043554105309741
+      },
+      {
+        "features": {
+          "T_horizon": 2.4,
+          "u_drive": 3.0
+        },
+        "target": 6.0326655789823045
+      },
+      {
+        "features": {
+          "T_horizon": 3.38,
+          "u_drive": 2.0900000000000003
+        },
+        "target": 4.484054267933548
+      },
+      {
+        "features": {
+          "T_horizon": 4.359999999999999,
+          "u_drive": 1.3099999999999998
+        },
+        "target": 2.89432752436817
+      },
+      {
+        "features": {
+          "T_horizon": 5.2,
+          "u_drive": 0.4
+        },
+        "target": 0.8946774063562567
+      }
+    ],
+    "training_prefix_sha256": "587460b3bfe256c654bacb6505d8abe0540602216fc040aac5a797f24d81dc9a"
+  },
+  "model_sha256": "cb60ac7aebce0696fac124c553f1d82e45ce1c23b8f404ee9476863807c3e466",
+  "operator_spec": {
+    "arity": 2,
+    "family_hint": "atomic_exp_relax_2d__comb_shunt",
+    "left": {
+      "arity": 2,
+      "family_hint": "atomic_exp_relax_2d",
+      "left": {
+        "left": {
+          "idx": 0,
+          "init": 1.5,
+          "lb": 0.0001,
+          "op": "param",
+          "ub": 200.0
+        },
+        "op": "mul",
+        "right": {
+          "op": "var",
+          "role": 0
+        }
+      },
+      "op": "mul",
+      "right": {
+        "left": {
+          "op": "const",
+          "val": 1.0
+        },
+        "op": "sub",
+        "right": {
+          "den": {
+            "idx": 1,
+            "init": 1.2,
+            "lb": 0.05,
+            "op": "param",
+            "ub": 50.0
+          },
+          "num": {
+            "op": "var",
+            "role": 1
+          },
+          "op": "exp_neg_div"
+        }
+      }
+    },
+    "op": "add",
+    "right": {
+      "left": {
+        "idx": 2,
+        "init": 0.6,
+        "lb": -80.0,
+        "op": "param",
+        "ub": 80.0
+      },
+      "op": "mul",
+      "right": {
+        "op": "var",
+        "role": 0
+      }
+    }
+  },
+  "role_names": [
+    "u_drive",
+    "T_horizon"
+  ],
+  "skeleton_status": "VERIFIED_PURE_AST",
+  "surface_domain": "multiscale_coupled_ode",
+  "task_id": "stage0_pi_s_regional_certification",
+  "verified_input_box": {
+    "T_horizon": [
+      2.4,
+      5.2
+    ],
+    "u_drive": [
+      0.4,
+      3.0
+    ]
+  }
+}

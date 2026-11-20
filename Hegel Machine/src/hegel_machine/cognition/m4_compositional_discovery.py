@@ -796,14 +796,15 @@ class OpenCompositionalCodeProvider:
 
         residual_above_tol = float(parsed.get("residual_rmse", 999.0)) > self.tolerance
         round2_2d_unresolved = bool(self._diag_rounds >= 2 and residual_above_tol and len(self.role_names) >= 2)
-        if parsed.get("high_drive_turnover_drop") or round2_2d_unresolved:
+        round2_1d_unresolved = bool(self._diag_rounds >= 2 and residual_above_tol and len(self.role_names) == 1)
+        if parsed.get("high_drive_turnover_drop") or round2_2d_unresolved or round2_1d_unresolved:
             inh = apply_structural_combinator(michaelis_base, "denom_quadratic_inhibition")
             if len(self.role_names) >= 2 and (parsed.get("secondary_active") or round2_2d_unresolved):
                 inh_shunt = apply_structural_combinator(inh, "additive_secondary_shunt", secondary_role=1)
                 newly_composed.append(inh_shunt)
             newly_composed.append(inh)
 
-        if parsed.get("kink_plateau_ceiling"):
+        if parsed.get("kink_plateau_ceiling") or round2_1d_unresolved:
             if self._best_base_spec.get("op") != "min2":
                 newly_composed.append(
                     apply_structural_combinator(self._best_base_spec, "variational_ceiling_cap_1d")
@@ -1383,8 +1384,14 @@ def load_verified_authored_method(
 
     # Verify real confirmation provenance (`host_confirmation_bundle` + isolated confirmation replay!)
     bundle = loaded.get("host_confirmation_bundle")
-    if bundle is None and not require_external_manifest:
+    if (
+        bundle is None
+        and not require_external_manifest
+        and not verify_frozen_only
+        and expected_instance_digest is None
+    ):
         # Backward-compatible verification for intact pre-V17.4 workspace directories on disk
+        # (NEVER entered when `verify_frozen_only=True` or `expected_instance_digest` is requested!)
         legacy_obs_path = art_path.parent / "confirmed_training_observations.json"
         legacy_py_path = art_path.parent / "authored_model.py"
         if (
@@ -1414,6 +1421,7 @@ def load_verified_authored_method(
         if l_rep.get("returncode") != 0 or not math.isfinite(float(l_rep["rmse"])) or float(l_rep["rmse"]) > 0.05:
             _VERIFIED_AUTHORED_CACHE[cache_key] = None
             return None
+        loaded["_verification_mode"] = "legacy_isolated_refit"
         _VERIFIED_AUTHORED_CACHE[cache_key] = deepcopy(loaded)
         return loaded
 
