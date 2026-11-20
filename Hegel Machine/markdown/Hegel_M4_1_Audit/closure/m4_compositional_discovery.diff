@@ -1,0 +1,255 @@
+diff --git a/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py b/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py
+index 278cd36..a894fa0 100644
+--- a/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py	
++++ b/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py	
+@@ -62,6 +62,16 @@ def evaluate_isolated_python_model(
+     Sandbox ``observations.json`` and ``model_observations.json`` contain STRICTLY ``isolated_prefix_rows``,
+     never ``eval_rows`` (confirmation or heldout).
+     """
++    raw_model_path = Path(model_relpath)
++    if raw_model_path.is_absolute():
++        ws_root = workspace_dir.resolve()
++        try:
++            safe_relpath = raw_model_path.resolve().relative_to(ws_root).as_posix()
++        except ValueError as exc:
++            raise ValueError(f"Model path escapes workspace boundary: {model_relpath}") from exc
++    else:
++        safe_relpath = model_relpath
++
+     prefix_obs = [
+         Observation(features={k: float(v) for k, v in r["features"].items()}, target=float(r["target"]), history=())
+         for r in isolated_prefix_rows
+@@ -82,7 +92,7 @@ def evaluate_isolated_python_model(
+         (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+         res = evaluate_python_model(
+             sandbox,
+-            model_relpath,
++            safe_relpath,
+             eval_obs,
+             timeout_seconds=12.0,
+             risk_quantile=0.5,
+@@ -201,24 +211,43 @@ def make_atomic_operator_spec(kind: str, *, arity: int = 1) -> dict[str, Any]:
+     raise ValueError(f"Unsupported atomic operator kind: {kind}")
+ 
+ 
++def _iter_child_exprs(node: dict[str, Any]):
++    """Yield every child ExprNode dictionary (any dict child carrying an ``'op'`` string)."""
++    for k, val in node.items():
++        if k == "multi_start_param":
++            continue
++        if isinstance(val, dict) and isinstance(val.get("op"), str):
++            yield val
++        elif isinstance(val, (list, tuple)):
++            for item in val:
++                if isinstance(item, dict) and isinstance(item.get("op"), str):
++                    yield item
++
++
+ def _max_param_idx(node: dict[str, Any]) -> int:
+     if node.get("op") == "param":
+         return int(node["idx"])
+     best = -1
+-    for k in ("left", "right", "arg", "base", "num", "den", "a", "b"):
+-        if isinstance(node.get(k), dict):
+-            best = max(best, _max_param_idx(node[k]))
++    for child in _iter_child_exprs(node):
++        best = max(best, _max_param_idx(child))
+     return best
+ 
+ 
+-def _collect_params(node: dict[str, Any], out: dict[int, dict[str, float]]) -> None:
++def _collect_params(
++    node: dict[str, Any],
++    out: dict[int, dict[str, float]],
++    *,
++    strict_unique: bool = False,
++) -> None:
+     if node.get("op") == "param":
+         idx = int(node["idx"])
+-        out[idx] = {"lb": float(node["lb"]), "ub": float(node["ub"]), "init": float(node["init"])}
++        meta = {"lb": float(node["lb"]), "ub": float(node["ub"]), "init": float(node["init"])}
++        if strict_unique and idx in out:
++            raise ValueError(f"Parameter index collision detected on p{idx}: {out[idx]} vs {meta}")
++        out[idx] = meta
+         return
+-    for k in ("left", "right", "arg", "base", "num", "den", "a", "b"):
+-        if isinstance(node.get(k), dict):
+-            _collect_params(node[k], out)
++    for child in _iter_child_exprs(node):
++        _collect_params(child, out, strict_unique=strict_unique)
+ 
+ 
+ def apply_structural_combinator(
+@@ -275,7 +304,7 @@ def apply_structural_combinator(
+         }
+ 
+     if combinator == "additive_secondary_shunt":
+-        return {
++        out_shunt: dict[str, Any] = {
+             "op": "add",
+             "left": tree,
+             "right": {
+@@ -286,6 +315,9 @@ def apply_structural_combinator(
+             "family_hint": f"{prev_hint}__comb_shunt",
+             "arity": max(2, int(tree.get("arity", 1))),
+         }
++        if "multi_start_param" in tree:
++            out_shunt["multi_start_param"] = deepcopy(tree["multi_start_param"])
++        return out_shunt
+ 
+     if combinator == "oscillatory_damping_modulation":
+         # Walk tree to replace exp_neg_div(t, tau) with exp_neg_div(t, tau) * cos(w * t)
+@@ -385,27 +417,12 @@ def compile_operator_spec_to_python(
+ ) -> str:
+     """Compile an arbitrary composed ``ExprNode`` tree into a pure-predict + stateful-fit ``model.py``."""
+     params_meta: dict[int, dict[str, float]] = {}
+-    if int(operator_spec.get("op") == "param"):
+-        _collect_params(operator_spec, params_meta)
+-    else:
+-        _collect_params(operator_spec, params_meta)
+-    if operator_spec.get("op") == "mul" or True:
+-        # Also inspect cos_mul param if present
+-        def _walk_cos(n: dict[str, Any]) -> None:
+-            if n.get("op") == "cos_mul" and isinstance(n.get("param"), dict):
+-                p = n["param"]
+-                params_meta[int(p["idx"])] = {
+-                    "lb": float(p["lb"]),
+-                    "ub": float(p["ub"]),
+-                    "init": float(p["init"]),
+-                }
+-            for k in ("left", "right", "arg", "base", "num", "den", "a", "b", "var"):
+-                if isinstance(n.get(k), dict):
+-                    _walk_cos(n[k])
+-
+-        _walk_cos(operator_spec)
++    _collect_params(operator_spec, params_meta, strict_unique=True)
+ 
+     n_params = max(params_meta.keys()) + 1 if params_meta else 0
++    for req_i in range(n_params):
++        if req_i not in params_meta:
++            raise ValueError(f"Non-contiguous parameter index gap at p{req_i} in {sorted(params_meta)}")
+     lbs = [params_meta[i]["lb"] for i in range(n_params)]
+     ubs = [params_meta[i]["ub"] for i in range(n_params)]
+     inits = [params_meta[i]["init"] for i in range(n_params)]
+@@ -779,6 +796,10 @@ class OpenCompositionalCodeProvider:
+             newly_composed.append(inh)
+ 
+         if parsed.get("kink_plateau_ceiling"):
++            if self._best_base_spec.get("op") != "min2":
++                newly_composed.append(
++                    apply_structural_combinator(self._best_base_spec, "variational_ceiling_cap_1d")
++                )
+             cap_1d = apply_structural_combinator(michaelis_base, "variational_ceiling_cap_1d")
+             newly_composed.append(cap_1d)
+             if len(self.role_names) >= 2:
+@@ -794,6 +815,10 @@ class OpenCompositionalCodeProvider:
+ 
+         if parsed.get("oscillatory_overshoot") and relax_base is not None:
+             osc = apply_structural_combinator(relax_base, "oscillatory_damping_modulation")
++            if parsed.get("secondary_active") and len(self.role_names) >= 2:
++                sec_role = 2 if len(self.role_names) >= 3 else 1
++                osc_shunt = apply_structural_combinator(osc, "additive_secondary_shunt", secondary_role=sec_role)
++                newly_composed.append(osc_shunt)
+             newly_composed.append(osc)
+ 
+         if parsed.get("fast_transient_decay") and len(self.role_names) >= 2:
+@@ -981,6 +1006,7 @@ def run_compositional_code_agent_episode(
+     conf_rmse = float(conf_eval["rmse"])
+     confirmed_ok = bool(conf_eval["returncode"] == 0 and math.isfinite(conf_rmse) and conf_rmse <= tolerance)
+ 
++    conf_digest = hashlib.sha256(json.dumps(confirm_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+     best_spec = provider._best_overall[2] if provider._best_overall is not None else atomic_base_specs[0]
+     authored_artifact = {
+         "task_id": lab.task_id,
+@@ -991,6 +1017,8 @@ def run_compositional_code_agent_episode(
+         "canonical_ast_dump": ast_info["canonical_ast_dump"],
+         "skeleton_status": ast_info["skeleton_status"],
+         "model_sha256": ast_info["model_sha256"],
++        "authored_model_source": model_source,
++        "confirmation_digest": conf_digest,
+         "composed_history": deepcopy(provider.composed_history),
+         "diagnostic_report": deepcopy(provider.last_diagnostic_report),
+         "training_prefix_count": len(frozen_prefix_rows),
+@@ -1029,7 +1057,6 @@ def run_compositional_code_agent_episode(
+         Observation(features={k: float(v) for k, v in r["features"].items()}, target=float(r["target"]), history=())
+         for r in frozen_prefix_rows
+     ]
+-    conf_digest = hashlib.sha256(json.dumps(confirm_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+     frozen_sub = _freeze_confirmed_submission(
+         workspace_dir,
+         "model.py",
+@@ -1059,6 +1086,62 @@ def run_compositional_code_agent_episode(
+     }
+ 
+ 
++def load_verified_authored_method(art_path: Path) -> dict[str, Any] | None:
++    """Load a persisted ``authored_method.json`` ONLY when confirmation receipt, pure-AST digest, and model SHA256 match!
++
++    Rejects unverified metadata-only JSON or tampered ``operator_spec`` / ``authored_model_source`` payloads.
++    """
++    if not art_path.is_file():
++        return None
++    try:
++        loaded = json.loads(art_path.read_text(encoding="utf-8"))
++    except Exception:
++        return None
++    if not isinstance(loaded, dict):
++        return None
++    if loaded.get("confirmed_ok") is not True:
++        return None
++    if loaded.get("skeleton_status") != "VERIFIED_PURE_AST":
++        return None
++    op_spec = loaded.get("operator_spec")
++    role_names = loaded.get("role_names")
++    expected_digest = loaded.get("ast_skeleton_digest")
++    expected_sha = loaded.get("model_sha256")
++    model_src = loaded.get("authored_model_source")
++    conf_dig = loaded.get("confirmation_digest")
++    if (
++        not isinstance(op_spec, dict)
++        or not isinstance(role_names, list)
++        or not role_names
++        or not isinstance(expected_digest, str)
++        or not expected_digest
++        or not isinstance(expected_sha, str)
++        or not expected_sha
++        or not isinstance(model_src, str)
++        or not model_src
++        or not isinstance(conf_dig, str)
++        or not conf_dig
++    ):
++        return None
++    if hashlib.sha256(model_src.encode("utf-8")).hexdigest() != expected_sha:
++        return None
++    src_ast = canonicalize_python_model_ast(model_src)
++    if src_ast.get("skeleton_status") != "VERIFIED_PURE_AST" or src_ast.get("ast_skeleton_digest") != expected_digest:
++        return None
++    try:
++        recompiled = compile_operator_spec_to_python(
++            op_spec,
++            role_names=[str(r) for r in role_names],
++            lens={"sign": 1.0, "scale": 1.0, "offset": 0.0},
++        )
++    except Exception:
++        return None
++    recomp_ast = canonicalize_python_model_ast(recompiled)
++    if recomp_ast.get("skeleton_status") != "VERIFIED_PURE_AST" or recomp_ast.get("ast_skeleton_digest") != expected_digest:
++        return None
++    return loaded
++
++
+ # ============================================================================
+ # 4. Counterfactual Witness & Persisted Artifact Deletion/Restoration Suite
+ # ============================================================================
+@@ -1244,8 +1327,9 @@ def run_m4_compositional_discovery_suite(work_root: Path) -> dict[str, Any]:
+     def _run_target_with_optional_artifact(arm_name: str, art_path: Path | None) -> dict[str, Any]:
+         recalled_specs: list[dict[str, Any]] = []
+         if art_path is not None and art_path.is_file():
+-            loaded = json.loads(art_path.read_text(encoding="utf-8"))
+-            recalled_specs.append(loaded["operator_spec"])
++            loaded = load_verified_authored_method(art_path)
++            if loaded is not None:
++                recalled_specs.append(loaded["operator_spec"])
+         t_lab = _make_unseen_target_lab(arm_name)
+         return run_compositional_code_agent_episode(
+             lab=t_lab,

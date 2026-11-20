@@ -1,0 +1,290 @@
+diff --git a/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py b/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py
+index f232ef2..af51a97 100644
+--- a/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py	
++++ b/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py	
+@@ -234,9 +234,13 @@ def authorize_abstraction_use(
+         raise ValueError(f"Unsupported permission tier: {requested_tier}")
+ 
+     receipt_ok = _validate_evidence_receipt(evidence_receipt, claim_contract, task_view)
++    requires_strict_receipt = (
++        task_view.get("goal_kind") == "open_workspace_mechanism_prediction"
++        or str(claim_contract.get("family_plugin", "")).endswith("_ast")
++    )
+     if evidence_receipt is not None:
+         confirmed = bool(receipt_ok)
+-    elif task_view.get("goal_kind") == "open_workspace_mechanism_prediction" and task_view.get("target_id") is not None:
++    elif requires_strict_receipt:
+         confirmed = False
+     else:
+         confirmed = bool(heldout_confirmed)
+@@ -449,6 +453,11 @@ def compose_wormhole_chain(edges: list[dict[str, Any]], *, target_tolerance: flo
+     }
+ 
+ 
++def _extract_predictive_law_fingerprint(node: dict[str, Any]) -> Any:
++    act = (node.get("claim_contract") or {}).get("conclusion_or_action") or {}
++    return act.get("ast_skeleton_digest") or act.get("operator_tag") or act.get("family_id")
++
++
+ def fidelity_compress_nodes(
+     node_a: dict[str, Any],
+     node_b: dict[str, Any],
+@@ -476,16 +485,24 @@ def fidelity_compress_nodes(
+         deepcopy(node_b["claim_contract"]),
+     ]
+ 
++    act_a = (node_a.get("claim_contract") or {}).get("conclusion_or_action") or {}
++    act_b = (node_b.get("claim_contract") or {}).get("conclusion_or_action") or {}
++    law_a = act_a.get("ast_skeleton_digest") or act_a.get("operator_tag") or act_a.get("family_id")
++    law_b = act_b.get("ast_skeleton_digest") or act_b.get("operator_tag") or act_b.get("family_id")
++
+     lost_accepts, lost_rejects, false_new_rejects = [], [], []
+     conflicting_verdicts, unauthorized_promotions = [], []
+     for idx, q in enumerate(evaluation_queries):
+         res_a = evaluator_fn(node_a, q)  # 'ACC' | 'REJ' | 'UNK' (UNK = out of scope / undecided)
+         res_b = evaluator_fn(node_b, q)
+         res_m = evaluator_fn(merged_node, q)
+-        # 0a. Contradictory source nodes ({ACC, REJ}) CANNOT be fidelity-compressed!
++        # 0a. Contradictory source nodes ({ACC, REJ}) OR overlapping ACC with incompatible predictive laws CANNOT merge!
+         if {res_a, res_b} == {"ACC", "REJ"}:
+             conflicting_verdicts.append(idx)
+             continue
++        if res_a == "ACC" and res_b == "ACC" and law_a is not None and law_b is not None and law_a != law_b:
++            conflicting_verdicts.append(idx)
++            continue
+         # 0b. Merged node must NEVER promote {'UNK', 'UNK'} into 'ACC' or 'REJ'!
+         if res_a == "UNK" and res_b == "UNK" and res_m != "UNK":
+             unauthorized_promotions.append(idx)
+@@ -637,6 +654,7 @@ class PhilosophicalForest:
+             "preserved_contract": deepcopy(preserved_contract),
+             "scope": deepcopy(scope),
+             "evidence_status": evidence_status,
++            "stale_endpoint_revision": False,
+         }
+         self.local_implication_edges.append(edge)
+         return deepcopy(edge)
+@@ -662,6 +680,8 @@ class PhilosophicalForest:
+         cur_stronger_ver = self.nodes[node_id]["version"]
+         parents = []
+         for edge in self.local_implication_edges:
++            if edge.get("stale_endpoint_revision"):
++                continue
+             w_id = edge["weaker_node_id"]
+             if (edge["stronger_node_id"] == node_id
+                     and edge["stronger_version"] == cur_stronger_ver
+@@ -710,6 +730,7 @@ class PhilosophicalForest:
+             "scale_map": sm,
+             "empirical_closure_certificate": deepcopy(empirical_closure_certificate),
+             "evidence_status": evidence_status,
++            "stale_endpoint_revision": False,
+         }
+         self.coarse_graining_edges.append(edge)
+         return deepcopy(edge)
+@@ -721,6 +742,8 @@ class PhilosophicalForest:
+         cur_ver = self.nodes[coarse_node_id]["version"]
+         out = []
+         for edge in self.coarse_graining_edges:
++            if edge.get("stale_endpoint_revision"):
++                continue
+             f_id = edge["fine_node_id"]
+             if (
+                 edge["coarse_node_id"] == coarse_node_id
+@@ -738,6 +761,8 @@ class PhilosophicalForest:
+         cur_ver = self.nodes[fine_node_id]["version"]
+         out = []
+         for edge in self.coarse_graining_edges:
++            if edge.get("stale_endpoint_revision"):
++                continue
+             c_id = edge["coarse_node_id"]
+             if (
+                 edge["fine_node_id"] == fine_node_id
+@@ -910,13 +935,80 @@ class PhilosophicalForest:
+             "reinterpreted_counterexample_ids": list(reinterpreted_counterexample_ids or ()),
+         }
+         self.nodes[node_id] = updated
+-        # Mark incident horizontal wormholes stale until explicitly revalidated!
++        # Mark incident horizontal AND vertical (implication / coarse-graining) edges stale until revalidated!
+         for wh in self.horizontal_wormhole_edges.values():
+             if ((wh["node_a_id"] == node_id and wh["node_a_version"] != updated["version"]) or
+                     (wh["node_b_id"] == node_id and wh["node_b_version"] != updated["version"])):
+                 wh["stale_endpoint_revision"] = True
++        for ie in self.local_implication_edges:
++            if ((ie["stronger_node_id"] == node_id and ie["stronger_version"] != updated["version"]) or
++                    (ie["weaker_node_id"] == node_id and ie["weaker_version"] != updated["version"])):
++                ie["stale_endpoint_revision"] = True
++        scale_or_law_changed = (
++            updated_scale_map is not None
++            or updated_observation_map is not None
++            or cause in {"abstraction_closure_loss", "claim_refuted_or_unprofitable"}
++            or _extract_predictive_law_fingerprint(updated) != _extract_predictive_law_fingerprint(old)
++        )
++        for ce in self.coarse_graining_edges:
++            touches_fine = ce["fine_node_id"] == node_id and ce["fine_version"] != updated["version"]
++            touches_coarse = ce["coarse_node_id"] == node_id and ce["coarse_version"] != updated["version"]
++            if touches_fine or touches_coarse:
++                if scale_or_law_changed:
++                    ce["stale_endpoint_revision"] = True
++                else:
++                    if touches_fine:
++                        ce["fine_version"] = updated["version"]
++                    if touches_coarse:
++                        ce["coarse_version"] = updated["version"]
+         return deepcopy(updated)
+ 
++    def revalidate_vertical_edges_after_revision(
++        self,
++        node_id: str,
++        *,
++        witness_episode_id: str,
++        reason: str = "",
++    ) -> dict[str, Any]:
++        """Explicitly revalidate & rebind incident intra-tree implication and coarse-graining edges."""
++        live = self.nodes[node_id]
++        rebound_implication = 0
++        rebound_coarse = 0
++        for ie in self.local_implication_edges:
++            if ie["stronger_node_id"] == node_id or ie["weaker_node_id"] == node_id:
++                s_id, w_id = ie["stronger_node_id"], ie["weaker_node_id"]
++                if s_id in self.nodes and w_id in self.nodes:
++                    ie["stronger_version"] = self.nodes[s_id]["version"]
++                    ie["weaker_version"] = self.nodes[w_id]["version"]
++                    ie["stale_endpoint_revision"] = False
++                    ie.setdefault("revision_provenance", []).append({
++                        "episode_id": witness_episode_id,
++                        "revalidated_node_id": node_id,
++                        "node_version": live["version"],
++                        "reason": reason,
++                    })
++                    rebound_implication += 1
++        for ce in self.coarse_graining_edges:
++            if ce["fine_node_id"] == node_id or ce["coarse_node_id"] == node_id:
++                f_id, c_id = ce["fine_node_id"], ce["coarse_node_id"]
++                if f_id in self.nodes and c_id in self.nodes:
++                    ce["fine_version"] = self.nodes[f_id]["version"]
++                    ce["coarse_version"] = self.nodes[c_id]["version"]
++                    ce["stale_endpoint_revision"] = False
++                    ce.setdefault("revision_provenance", []).append({
++                        "episode_id": witness_episode_id,
++                        "revalidated_node_id": node_id,
++                        "node_version": live["version"],
++                        "reason": reason,
++                    })
++                    rebound_coarse += 1
++        return {
++            "node_id": node_id,
++            "live_version": live["version"],
++            "rebound_implication_edges": rebound_implication,
++            "rebound_coarse_graining_edges": rebound_coarse,
++        }
++
+     def recall_mid_layer_wormholes(
+         self,
+         observed_signatures: list[str],
+@@ -1053,7 +1145,7 @@ class PhilosophicalForest:
+         evaluation_queries: list[dict[str, Any]],
+         evaluator_fn,
+     ) -> dict[str, Any]:
+-        """Run zero-conflict, zero-false-rejection FidelityCompression and archive redundant duplicate."""
++        """Run zero-conflict, zero-false-rejection FidelityCompression and commit validated merged contract."""
+         if keeper_node_id not in self.nodes or redundant_node_id not in self.nodes:
+             return {"accepted": False, "reason": "missing_node"}
+         node_a = self.nodes[keeper_node_id]
+@@ -1063,35 +1155,86 @@ class PhilosophicalForest:
+         report = fidelity_compress_nodes(node_a, node_b, evaluation_queries, evaluator_fn)
+         if not report["accepted"]:
+             return report
+-        # Union observable signatures & provenance on keeper while preserving versioned history
++
++        validated_merged = report["merged_node"]
++        old_ver_a = node_a["version"]
++        old_ver_b = node_b["version"]
+         merged_sigs = list(dict.fromkeys([*node_a.get("probe_signatures", ()), *node_b.get("probe_signatures", ())]))
+-        node_a["probe_signatures"] = merged_sigs
+-        node_a["source_cluster_ids"] = list(
++        merged_clusters = list(
+             dict.fromkeys([*node_a.get("source_cluster_ids", ()), *node_b.get("source_cluster_ids", ())])
+         )
+-        node_a.setdefault("fidelity_merged_members", []).append({
++        prior_members = deepcopy(node_a.get("fidelity_merged_members", []))
++        prior_members.append({
+             "redundant_node_id": redundant_node_id,
+-            "redundant_version": node_b["version"],
++            "redundant_version": old_ver_b,
+             "query_count": len(evaluation_queries),
+         })
++
++        # Commit the exact validated merged claim_contract onto keeper via versioned registration!
++        committed = self.register_node(
++            node_id=keeper_node_id,
++            tree_id=node_a["tree_id"],
++            layer_role=node_a["layer_role"],
++            task_view=validated_merged["task_view"],
++            observation_map=validated_merged["observation_map"],
++            scale_map=validated_merged.get("scale_map"),
++            claim_contract=validated_merged["claim_contract"],
++            probe_signatures=merged_sigs,
++            program_steps=validated_merged.get("program_steps", []),
++            support_paths=node_a.get("support_paths"),
++            source_cluster_ids=merged_clusters,
++        )
++        self.nodes[keeper_node_id]["fidelity_merged_members"] = prior_members
++        new_ver = committed["version"]
++
++        # Post-commit verification: installed keeper MUST match validated merged_node on every query!
++        live_keeper = self.nodes[keeper_node_id]
++        for idx, q in enumerate(evaluation_queries):
++            if evaluator_fn(live_keeper, q) != evaluator_fn(validated_merged, q):
++                raise RuntimeError(f"Post-commit fidelity mismatch at query index {idx}")
++
+         node_b["utility_ledger"]["archived_low_utility"] = True
+         node_b["utility_ledger"]["archived_reason"] = "fidelity_compressed"
+         node_b["utility_ledger"]["merged_into_node_id"] = keeper_node_id
+-        # Rebind live wormholes from redundant_node_id to keeper_node_id when across distinct trees
++        node_b["utility_ledger"]["merged_into_version"] = new_ver
++
++        # Rebind live horizontal & vertical edges referencing keeper (old_ver_a) or redundant_node_id (old_ver_b)
+         for wid, wh in list(self.horizontal_wormhole_edges.items()):
+             if wh.get("stale_endpoint_revision"):
+                 continue
+-            if wh["node_a_id"] == redundant_node_id and wh["tree_b_id"] != node_a["tree_id"]:
++            if wh["node_a_id"] == keeper_node_id and wh["node_a_version"] == old_ver_a:
++                wh["node_a_version"] = new_ver
++            if wh["node_b_id"] == keeper_node_id and wh["node_b_version"] == old_ver_a:
++                wh["node_b_version"] = new_ver
++            if wh["node_a_id"] == redundant_node_id and wh["node_a_version"] == old_ver_b and wh["tree_b_id"] != live_keeper["tree_id"]:
+                 wh["node_a_id"] = keeper_node_id
+-                wh["node_a_version"] = node_a["version"]
+-                wh["tree_a_id"] = node_a["tree_id"]
+-            elif wh["node_b_id"] == redundant_node_id and wh["tree_a_id"] != node_a["tree_id"]:
++                wh["node_a_version"] = new_ver
++                wh["tree_a_id"] = live_keeper["tree_id"]
++            elif wh["node_b_id"] == redundant_node_id and wh["node_b_version"] == old_ver_b and wh["tree_a_id"] != live_keeper["tree_id"]:
+                 wh["node_b_id"] = keeper_node_id
+-                wh["node_b_version"] = node_a["version"]
+-                wh["tree_b_id"] = node_a["tree_id"]
++                wh["node_b_version"] = new_ver
++                wh["tree_b_id"] = live_keeper["tree_id"]
++
++        for ie in self.local_implication_edges:
++            if ie.get("stale_endpoint_revision"):
++                continue
++            if ie["stronger_node_id"] == keeper_node_id and ie["stronger_version"] == old_ver_a:
++                ie["stronger_version"] = new_ver
++            if ie["weaker_node_id"] == keeper_node_id and ie["weaker_version"] == old_ver_a:
++                ie["weaker_version"] = new_ver
++
++        for ce in self.coarse_graining_edges:
++            if ce.get("stale_endpoint_revision"):
++                continue
++            if ce["fine_node_id"] == keeper_node_id and ce["fine_version"] == old_ver_a:
++                ce["fine_version"] = new_ver
++            if ce["coarse_node_id"] == keeper_node_id and ce["coarse_version"] == old_ver_a:
++                ce["coarse_version"] = new_ver
++
+         return {
+             **report,
+             "keeper_node_id": keeper_node_id,
++            "keeper_committed_version": new_ver,
+             "archived_redundant_node_id": redundant_node_id,
+         }
+ 

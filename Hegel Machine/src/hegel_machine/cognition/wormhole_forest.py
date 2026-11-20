@@ -259,15 +259,22 @@ def authorize_abstraction_use(
         return _tier_name_from_rank(min(rank, declared_max_rank))
 
     reasons: list[str] = []
-    # Check explicit preconditions & ALIGN near-miss exclusions
-    preconditions = list(claim_contract.get("preconditions", ()))
+    # Check explicit preconditions (supporting disjunctive_branches OR-semantics!) & ALIGN exclusions
+    raw_branches = claim_contract.get("disjunctive_branches")
+    has_disjunctive_branches = isinstance(raw_branches, list) and len(raw_branches) > 0
+    align_inclusions: list[dict[str, Any]] = []
     exclusions: list[dict[str, Any]] = []
     if wormhole_edge is not None:
         align_conds = wormhole_edge.get("align_conditions", {})
-        preconditions.extend(align_conds.get("inclusion_predicates", ()))
+        align_inclusions.extend(align_conds.get("inclusion_predicates", ()))
+        source_precs = (
+            [r for br in raw_branches if isinstance(br, dict) for r in br.get("preconditions", ())]
+            if has_disjunctive_branches
+            else list(claim_contract.get("preconditions", ()))
+        )
         child_required = {
             (r.get("field"), r.get("op"), r.get("value"))
-            for r in claim_contract.get("preconditions", ())
+            for r in source_precs
             if isinstance(r, dict)
         }
         for ex_r in align_conds.get("exclusion_predicates", ()):
@@ -275,7 +282,28 @@ def authorize_abstraction_use(
                 continue
             exclusions.append(ex_r)
 
-    precond_results = [evaluate_predicate_rule(r, target_features) for r in preconditions]
+    if has_disjunctive_branches:
+        branch_verdicts: list[str] = []
+        for br in raw_branches:
+            br_precs = list(br.get("preconditions", ())) if isinstance(br, dict) else []
+            br_res = [evaluate_predicate_rule(r, target_features) for r in br_precs]
+            if "FALSE" in br_res:
+                branch_verdicts.append("FALSE")
+            elif "UNKNOWN" in br_res:
+                branch_verdicts.append("UNKNOWN")
+            else:
+                branch_verdicts.append("TRUE")
+        if "TRUE" in branch_verdicts:
+            branch_agg = "TRUE"
+        elif all(v == "FALSE" for v in branch_verdicts):
+            branch_agg = "FALSE"
+        else:
+            branch_agg = "UNKNOWN"
+        precond_results = [branch_agg, *[evaluate_predicate_rule(r, target_features) for r in align_inclusions]]
+    else:
+        preconditions = [*claim_contract.get("preconditions", ()), *align_inclusions]
+        precond_results = [evaluate_predicate_rule(r, target_features) for r in preconditions]
+
     excl_results = [evaluate_predicate_rule(r, target_features) for r in exclusions]
 
     if "FALSE" in precond_results:
@@ -463,6 +491,8 @@ def fidelity_compress_nodes(
     node_b: dict[str, Any],
     evaluation_queries: list[dict[str, Any]],
     evaluator_fn,
+    *,
+    disjunctive_scope: bool = False,
 ) -> dict[str, Any]:
     """Check aligned Acceptance, Rejection, Conflict, AND Unknown preservation before merging.
 
@@ -473,17 +503,43 @@ def fidelity_compress_nodes(
       4. Zero lost true rejections: Rej(A) U Rej(B) <= Rej(merged) when non-conflicting;
       5. Zero newly fabricated false rejections on valid cases.
     """
-    merged_preconditions = list({
-        json.dumps(p, sort_keys=True): deepcopy(p)
-        for p in [*node_a["claim_contract"]["preconditions"], *node_b["claim_contract"]["preconditions"]]
-    }.values())
+    has_existing_branches = bool(
+        node_a["claim_contract"].get("disjunctive_branches")
+        or node_b["claim_contract"].get("disjunctive_branches")
+    )
+    use_disjunctive = bool(disjunctive_scope or has_existing_branches)
+    branches_a = node_a["claim_contract"].get("disjunctive_branches") or [node_a["claim_contract"]]
+    branches_b = node_b["claim_contract"].get("disjunctive_branches") or [node_b["claim_contract"]]
+    flat_branches = [
+        {k: deepcopy(v) for k, v in br.items() if k != "disjunctive_branches"}
+        for br in [*branches_a, *branches_b]
+        if isinstance(br, dict)
+    ]
+    same_preconds = (
+        json.dumps(node_a["claim_contract"].get("preconditions", []), sort_keys=True)
+        == json.dumps(node_b["claim_contract"].get("preconditions", []), sort_keys=True)
+        and len(branches_a) == 1
+        and len(branches_b) == 1
+    )
     merged_node = deepcopy(node_a)
     merged_node["node_id"] = f"merged:{node_a['node_id']}+{node_b['node_id']}"
-    merged_node["claim_contract"]["preconditions"] = merged_preconditions
-    merged_node["claim_contract"]["disjunctive_branches"] = [
-        deepcopy(node_a["claim_contract"]),
-        deepcopy(node_b["claim_contract"]),
-    ]
+    if same_preconds and node_a["claim_contract"] == node_b["claim_contract"]:
+        merged_node["claim_contract"]["preconditions"] = deepcopy(node_a["claim_contract"].get("preconditions", []))
+    elif use_disjunctive:
+        # Top-level preconditions keep ONLY shared common invariants; branch-specific scopes live in disjunctive_branches!
+        set_b = {json.dumps(p, sort_keys=True) for p in node_b["claim_contract"].get("preconditions", ())}
+        common_preconditions = [
+            deepcopy(p)
+            for p in node_a["claim_contract"].get("preconditions", ())
+            if json.dumps(p, sort_keys=True) in set_b
+        ]
+        merged_node["claim_contract"]["preconditions"] = common_preconditions
+        merged_node["claim_contract"]["disjunctive_branches"] = flat_branches
+    else:
+        merged_node["claim_contract"]["preconditions"] = [
+            *deepcopy(node_a["claim_contract"].get("preconditions", [])),
+            *deepcopy(node_b["claim_contract"].get("preconditions", [])),
+        ]
 
     act_a = (node_a.get("claim_contract") or {}).get("conclusion_or_action") or {}
     act_b = (node_b.get("claim_contract") or {}).get("conclusion_or_action") or {}
@@ -1009,6 +1065,80 @@ class PhilosophicalForest:
             "rebound_coarse_graining_edges": rebound_coarse,
         }
 
+    def revalidate_vertical_edges_with_certificate(
+        self,
+        node_id: str,
+        *,
+        witness_episode_id: str,
+        closure_certificate: dict[str, Any],
+        updated_scale_map: dict[str, Any] | None = None,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Revalidate incident vertical / coarse-graining edges ONLY when an empirical closure certificate holds!
+
+        Rejects label-only revalidation, unverified certificates (`certified != True`), out-of-tolerance
+        defects, `closure_scope == 'not_closed'`, or unverified discarded variables.
+        """
+        if not isinstance(closure_certificate, dict) or closure_certificate.get("certified") is not True:
+            return {
+                "accepted": False,
+                "reason": "closure_certificate_not_certified",
+                "rebound_coarse_graining_edges": 0,
+            }
+        obs_defect = closure_certificate.get("max_closure_defect", closure_certificate.get("observed_max_error"))
+        tol = closure_certificate.get("tolerance")
+        if (
+            not isinstance(obs_defect, (int, float))
+            or not math.isfinite(float(obs_defect))
+            or float(obs_defect) < 0.0
+            or not isinstance(tol, (int, float))
+            or not math.isfinite(float(tol))
+            or float(tol) <= 0.0
+            or float(obs_defect) > float(tol) + 1e-12
+        ):
+            return {
+                "accepted": False,
+                "reason": "closure_defect_exceeds_tolerance_or_missing",
+                "rebound_coarse_graining_edges": 0,
+            }
+        target_sm = updated_scale_map if updated_scale_map is not None else self.nodes[node_id].get("scale_map")
+        if not isinstance(target_sm, dict) or target_sm.get("closure_scope") in {None, "", "not_closed"}:
+            return {
+                "accepted": False,
+                "reason": "scale_map_not_closed",
+                "rebound_coarse_graining_edges": 0,
+            }
+        proposed_disc = set(target_sm.get("proposed_discarded_variables", ()))
+        verified_disc = {
+            (item["variable"] if isinstance(item, dict) else str(item))
+            for item in target_sm.get("verified_discarded_in_scope", ())
+        }
+        if not proposed_disc.issubset(verified_disc):
+            return {
+                "accepted": False,
+                "reason": "proposed_discarded_variables_not_verified",
+                "rebound_coarse_graining_edges": 0,
+            }
+        if updated_scale_map is not None:
+            self.empirical_revise_node(
+                node_id,
+                witness_episode_id=witness_episode_id,
+                cause="protocol_or_scope_mismatch",
+                updated_scale_map=updated_scale_map,
+            )
+        reb = self.revalidate_vertical_edges_after_revision(
+            node_id, witness_episode_id=witness_episode_id, reason=reason or "certified_closure_revalidation"
+        )
+        for ce in self.coarse_graining_edges:
+            if ce["fine_node_id"] == node_id or ce["coarse_node_id"] == node_id:
+                ce["closure_certificate_digest"] = hashlib.sha256(
+                    json.dumps(closure_certificate, sort_keys=True).encode("utf-8")
+                ).hexdigest()[:16]
+        return {
+            "accepted": True,
+            **reb,
+        }
+
     def recall_mid_layer_wormholes(
         self,
         observed_signatures: list[str],
@@ -1152,7 +1282,9 @@ class PhilosophicalForest:
         node_b = self.nodes[redundant_node_id]
         if node_a["utility_ledger"].get("archived_low_utility") or node_b["utility_ledger"].get("archived_low_utility"):
             return {"accepted": False, "reason": "already_archived"}
-        report = fidelity_compress_nodes(node_a, node_b, evaluation_queries, evaluator_fn)
+        report = fidelity_compress_nodes(
+            node_a, node_b, evaluation_queries, evaluator_fn, disjunctive_scope=True
+        )
         if not report["accepted"]:
             return report
 

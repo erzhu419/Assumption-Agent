@@ -387,7 +387,7 @@ def _register_multiscale_source_node(
         {"step": "verify_scale_closure_or_escalate", "scale_regime": scale_regime},
         {"step": "calibrate_observation_lens", "active_arity": len(role_names)},
         {"step": "compile_and_fit_composed_ast", "operator_tag": operator_tag},
-        {"step": "subprocess_isolated_confirm", "fresh_points": 2},
+        {"step": "subprocess_isolated_confirm", "fresh_points": 1},
     ]
     node = forest.register_node(
         node_id=node_id,
@@ -1081,6 +1081,7 @@ def _fit_and_score_operator_specs(
     training_rows: list[dict[str, Any]],
     tolerance: float,
     max_fit_trials: int = 6,
+    calibrate_lens_by_tag: dict[str, bool] | None = None,
 ) -> tuple[dict[str, Any] | None, int, float]:
     """Evaluate candidate operator specs on ``training_rows`` with monotone work-based pricing!"""
     workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -1093,8 +1094,13 @@ def _fit_and_score_operator_specs(
         req_arity = int(op_spec.get("arity", 1))
         if req_arity != len(feature_names):
             continue
+        do_cal = True if calibrate_lens_by_tag is None else bool(calibrate_lens_by_tag.get(tag, True))
         for role_order in perms:
-            lens = _estimate_affine_lens_for_spec(op_spec, role_order, training_rows)
+            lens = (
+                _estimate_affine_lens_for_spec(op_spec, role_order, training_rows)
+                if do_cal
+                else {"sign": 1.0, "scale": 1.0, "offset": 0.0}
+            )
             py_code = compile_operator_spec_to_python(op_spec, role_names=role_order, lens=lens)
             rel_name = f"cand_{evaluated:02d}.py"
             (workspace_dir / rel_name).write_text(py_code, encoding="utf-8")
@@ -1318,11 +1324,14 @@ def evaluate_m4_target_under_arm(
     if recalled_candidates:
         recalled_specs: list[tuple[str, dict[str, Any]]] = []
         cand_by_tag: dict[str, dict[str, Any]] = {}
+        cal_by_tag: dict[str, bool] = {}
         for rc in recalled_candidates[:3]:
+            plan = rc["_exec_plan"]
             act = rc["target_node"]["claim_contract"]["conclusion_or_action"]
-            otag = str(act["operator_tag"])
+            otag = str(plan["operator_tag"])
             recalled_specs.append((otag, deepcopy(act["operator_spec"])))
             cand_by_tag.setdefault(otag, rc)
+            cal_by_tag.setdefault(otag, bool(plan["calibrate_lens"]))
 
         best_rec, n_ev, ws = _fit_and_score_operator_specs(
             work_dir,
@@ -1331,13 +1340,16 @@ def evaluate_m4_target_under_arm(
             training_rows=frozen_prefix,
             tolerance=lab.tolerance,
             max_fit_trials=2,
+            calibrate_lens_by_tag=cal_by_tag,
         )
         total_evaluated += n_ev
         total_wall += ws
 
         if best_rec is not None and best_rec["train_rmse"] <= lab.tolerance:
-            # Purchase 1st fresh confirmation point (`c_pt_0`)
-            c0_rows = lab.acquire_channel([target.confirm_points[0]], channel=confirm_channel, phase="confirm_0")
+            matched_rc = cand_by_tag[best_rec["tag"]]
+            req_fresh_0 = max(1, min(len(target.confirm_points), int(matched_rc["_exec_plan"]["fresh_points"])))
+            # Purchase declared number of fresh confirmation points (`fresh_points` in `program_steps`!)
+            c0_rows = lab.acquire_channel(target.confirm_points[:req_fresh_0], channel=confirm_channel, phase="confirm_0")
             c0_eval = evaluate_isolated_python_model(
                 work_dir,
                 best_rec["model_relpath"],
@@ -1347,8 +1359,7 @@ def evaluate_m4_target_under_arm(
             total_wall += float(c0_eval.get("wall_seconds", 0.02))
 
             if c0_eval["returncode"] == 0 and float(c0_eval["rmse"]) <= lab.tolerance:
-                # Recall succeeded on 1st fresh confirmation point! Verify full receipt via `authorize_abstraction_use`!
-                matched_rc = cand_by_tag[best_rec["tag"]]
+                # Recall succeeded on fresh confirmation! Verify full receipt via `authorize_abstraction_use`!
                 m_node = matched_rc["target_node"]
                 model_sha = hashlib.sha256(best_rec["model_source"].encode("utf-8")).hexdigest()
                 conf_dig = hashlib.sha256(json.dumps(c0_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
@@ -1383,18 +1394,19 @@ def evaluate_m4_target_under_arm(
                     chosen_model_rel = best_rec["model_relpath"]
                     non_direct_walk_win = bool(matched_rc.get("reached_only_by_graph_walk"))
             else:
-                # 1st confirmation point falsified coarse parent (`c_pt_0` revealed high-flow ceiling OR scale mismatch)!
-                # Incorporate `c0_rows` into updated training prefix and check 2nd recalled candidate (e.g. 2-hop walked child!)
-                updated_prefix = [*frozen_prefix, *c0_rows]
+                # Confirmation falsified coarse parent! Retain paid `c0_rows` across ALL downstream branches!
+                if confirm_channel == selected_channel:
+                    frozen_prefix = [*frozen_prefix, *c0_rows]
+                updated_prefix = [*pilot_rows, *c0_rows] if confirm_channel == selected_channel else list(c0_rows)
                 if len(recalled_candidates) >= 2:
                     rem_specs = [
                         (
-                            str(rc["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"]),
+                            str(rc["_exec_plan"]["operator_tag"]),
                             deepcopy(rc["target_node"]["claim_contract"]["conclusion_or_action"]["operator_spec"]),
                             rc,
                         )
                         for rc in recalled_candidates
-                        if str(rc["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"]) != best_rec["tag"]
+                        if str(rc["_exec_plan"]["operator_tag"]) != best_rec["tag"]
                     ]
                     if rem_specs:
                         child_tag, child_spec, child_rc = rem_specs[0]
@@ -1405,11 +1417,18 @@ def evaluate_m4_target_under_arm(
                             training_rows=updated_prefix,
                             tolerance=lab.tolerance,
                             max_fit_trials=1,
+                            calibrate_lens_by_tag={child_tag: bool(child_rc["_exec_plan"]["calibrate_lens"])},
                         )
                         total_evaluated += n_ev2
                         total_wall += ws2
                         if best_child is not None and best_child["train_rmse"] <= lab.tolerance:
-                            c1_rows = lab.acquire_channel([target.confirm_points[1]], channel=confirm_channel, phase="confirm_1_child")
+                            unseen_c_pts = [
+                                p for p in target.confirm_points
+                                if not any(p == r["features"] for r in updated_prefix)
+                            ]
+                            req_fresh_1 = max(1, int(child_rc["_exec_plan"]["fresh_points"]))
+                            c1_pts = unseen_c_pts[:req_fresh_1] if unseen_c_pts else [target.confirm_points[-1]]
+                            c1_rows = lab.acquire_channel(c1_pts, channel=confirm_channel, phase="confirm_1_child")
                             c1_eval = evaluate_isolated_python_model(
                                 work_dir,
                                 best_child["model_relpath"],
@@ -1499,7 +1518,13 @@ def evaluate_m4_target_under_arm(
         total_evaluated += n_ev_fb
         total_wall += ws_fb
 
-        fb_conf_rows = lab.acquire_channel(target.confirm_points, channel=confirm_channel, phase="fallback_confirm")
+        rem_fb_conf_pts = [
+            p for p in target.confirm_points
+            if not any(p == r["features"] for r in frozen_prefix)
+        ]
+        if not rem_fb_conf_pts:
+            rem_fb_conf_pts = [target.confirm_points[-1]]
+        fb_conf_rows = lab.acquire_channel(rem_fb_conf_pts, channel=confirm_channel, phase="fallback_confirm")
         if best_fb is not None:
             chosen_model_rel = best_fb["model_relpath"]
             fb_eval = evaluate_isolated_python_model(

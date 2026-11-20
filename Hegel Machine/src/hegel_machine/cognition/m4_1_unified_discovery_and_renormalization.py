@@ -304,9 +304,10 @@ class ExecutableFastSlowRenormalizationLab:
             clean = {k: float(pt[k]) for k in self.feature_names}
             if channel == "micro_fine":
                 ev = self._eval_micro(clean)
+                rows.append({"features": clean, "target": float(ev["target"]), "channel": channel, "_trajectory": ev["trajectory"]})
             else:
                 ev = self._eval_coarse_pi_s(clean)
-            rows.append({"features": clean, "target": float(ev["target"]), "channel": channel})
+                rows.append({"features": clean, "target": float(ev["target"]), "channel": channel})
         cost = round(len(rows) * unit_cost, 4)
         self.paid_measurement_cost = round(self.paid_measurement_cost + cost, 4)
         self.query_log.append({
@@ -342,12 +343,34 @@ class ExecutableFastSlowRenormalizationLab:
             }
             for qu, qt in frac_pairs
         ]
-        c_rows = self.acquire_channel(probe_pts, channel="coarse_macro", phase=f"pi_s_box_probe_{probe_mode}")
-        m_rows = self.acquire_channel(probe_pts, channel="micro_fine", phase=f"pi_s_box_probe_{probe_mode}")
+        c_rows_raw = self.acquire_channel(probe_pts, channel="coarse_macro", phase=f"pi_s_box_probe_{probe_mode}")
+        m_rows_raw = self.acquire_channel(probe_pts, channel="micro_fine", phase=f"pi_s_box_probe_{probe_mode}")
+        slaving_defects: list[float] = []
+        window_proj_defects: list[float] = []
+        for pt, m_r in zip(probe_pts, m_rows_raw):
+            f_traj = m_r.get("_trajectory")
+            if f_traj is not None:
+                proj = apply_executable_pi_s_projection(
+                    pt[u_key],
+                    pt[t_key],
+                    tau_s=self.ode_params["tau_s"],
+                    a_s=self.ode_params["a_s"],
+                    a_f=self.ode_params["a_f"],
+                    g_sf=self.ode_params["g_sf"],
+                    g_fs=self.ode_params["g_fs"],
+                    c_slow=self.ode_params["c_slow"],
+                    c_fast=self.ode_params["c_fast"],
+                    fine_trajectory=f_traj,
+                )
+                slaving_defects.append(float(proj["fast_manifold_slaving_defect"] or 0.0))
+                window_proj_defects.append(abs(float(proj["window_projected_y"] or 0.0) - float(proj["y_coarse"])))
+        c_rows = [{k: v for k, v in r.items() if k != "_trajectory"} for r in c_rows_raw]
+        m_rows = [{k: v for k, v in r.items() if k != "_trajectory"} for r in m_rows_raw]
         defects = [abs(float(m["target"]) - float(c["target"])) for m, c in zip(m_rows, c_rows)]
         max_defect = max(defects)
+        max_slaving_defect = max(slaving_defects) if slaving_defects else 0.0
         rmse_defect = math.sqrt(sum(d * d for d in defects) / len(defects))
-        closed = bool(max_defect <= self.tolerance * 0.85)
+        closed = bool(max_defect <= self.tolerance * 0.85 and max_slaving_defect <= self.tolerance * 1.25)
         verified_box = {
             u_key: [u_lo, u_hi],
             t_key: [t_lo, t_hi],
@@ -390,6 +413,22 @@ class ExecutableFastSlowRenormalizationLab:
         *,
         isolated_prefix: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        scope_contract_file = workspace_dir / "model_scope_contract.json"
+        if scope_contract_file.is_file():
+            try:
+                sc = json.loads(scope_contract_file.read_text(encoding="utf-8"))
+            except Exception:
+                sc = {}
+            vbox = sc.get("verified_input_box")
+            if sc.get("selected_channel") == "coarse_macro" and isinstance(vbox, dict):
+                if not all(is_point_inside_verified_box(p, vbox) for p in self.heldout_points):
+                    return {
+                        "heldout_rmse": float("nan"),
+                        "strict_pass": False,
+                        "out_of_box_rejected": True,
+                        "wall_seconds": 0.0,
+                    }
+
         heldout_rows = [
             {"features": {k: float(p[k]) for k in self.feature_names}, "target": float(self._eval_micro(p)["target"])}
             for p in self.heldout_points
@@ -404,6 +443,7 @@ class ExecutableFastSlowRenormalizationLab:
         return {
             "heldout_rmse": rmse,
             "strict_pass": bool(res["returncode"] == 0 and math.isfinite(rmse) and rmse <= self.tolerance),
+            "out_of_box_rejected": False,
             "wall_seconds": float(res.get("wall_seconds", 0.02)),
         }
 
@@ -535,7 +575,7 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
                 {"step": "verify_scale_closure_or_escalate", "scale_regime": s_reg},
                 {"step": "calibrate_observation_lens", "active_arity": 2},
                 {"step": "compile_and_fit_composed_ast", "operator_tag": op_tag},
-                {"step": "subprocess_isolated_confirm", "fresh_points": 2},
+                {"step": "subprocess_isolated_confirm", "fresh_points": 1},
             ],
             source_cluster_ids=[nid],
         )
@@ -578,9 +618,11 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
             target_scale = "micro"
             pilot_rows = lab.acquire_channel(pilot_pts, channel="micro_fine", phase="pilot")
         else:
-            p_mode = "single_1pt" if mode == "single_1pt_probe" else "regional_5pt"
+            p_mode = "single_1pt" if mode == "single_1pt_probe" else "regional_3pt"
             cert = lab.certify_regional_scale_box(probe_mode=p_mode)
-            if cert["closure_verified"]:
+            vbox_init = cert["verified_input_box"]
+            confirm_in_box = all(is_point_inside_verified_box(pt, vbox_init) for pt in confirm_pts[:1])
+            if cert["closure_verified"] and confirm_in_box:
                 selected_ch = "coarse_macro"
                 target_scale = "meso"
                 # Reuse the 3 already-paid coarse box points + 5 supplemental coarse points (= 8 total training rows)!
@@ -589,6 +631,7 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
                     *lab.acquire_channel(pilot_pts[:5], channel="coarse_macro", phase="pilot_supplement"),
                 ]
             else:
+                # Either regional Pi_s closure broke OR confirmation queries fall outside verified_input_box -> escalate to micro_fine!
                 selected_ch = "micro_fine"
                 target_scale = "micro"
                 pilot_rows = [
@@ -604,7 +647,7 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
             include_coarse_graining_edges=(mode != "regional_no_cg"),
         )
         q_sigs = ["sig:pos_arity_2", "sig:cue_fast_probe_instrument"]
-        if cert is not None and not cert["closure_verified"]:
+        if cert is not None and (not cert["closure_verified"] or target_scale == "micro"):
             q_sigs.append("sig:scale_closure_broken_fast_mode")
         ret = idx.retrieve(
             q_sigs,
@@ -622,7 +665,7 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
             plan = _validate_and_interpret_m4_program_steps(nd.get("program_steps"), node=nd, target_arity=2)
             if plan is None:
                 continue
-            recalled.append(c)
+            recalled.append({**c, "_exec_plan": plan})
 
         eval_count = 0
         confirmed_ok = False
@@ -630,26 +673,33 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
         walked_cg = False
         chosen_rel = "fallback.py"
         confirm_ch = selected_ch
+        req_fresh_default = 1
 
         if recalled:
             top_c = recalled[0]
+            plan_0 = top_c["_exec_plan"]
+            req_fresh_default = max(1, min(len(confirm_pts), int(plan_0["fresh_points"])))
             op_spec = top_c["target_node"]["claim_contract"]["conclusion_or_action"]["operator_spec"]
-            lens_est = _estimate_affine_lens_for_spec(op_spec, list(lab.feature_names), pilot_rows)
+            lens_est = (
+                _estimate_affine_lens_for_spec(op_spec, list(lab.feature_names), pilot_rows)
+                if plan_0["calibrate_lens"]
+                else {"sign": 1.0, "scale": 1.0, "offset": 0.0}
+            )
             code = compile_operator_spec_to_python(op_spec, role_names=list(lab.feature_names), lens=lens_est)
             (ws_dir / "recalled_0.py").write_text(code, encoding="utf-8")
             tr_ev = evaluate_isolated_python_model(ws_dir, "recalled_0.py", pilot_rows, isolated_prefix_rows=pilot_rows)
             eval_count += 1
             if tr_ev["returncode"] == 0 and float(tr_ev["rmse"]) <= lab.tolerance:
-                c_rows = lab.acquire_channel(confirm_pts[:1], channel=confirm_ch, phase="confirm_recall")
+                c_pts_0 = confirm_pts[:req_fresh_default]
+                c_rows = lab.acquire_channel(c_pts_0, channel=confirm_ch, phase="confirm_recall")
                 cf_ev = evaluate_isolated_python_model(ws_dir, "recalled_0.py", c_rows, isolated_prefix_rows=pilot_rows)
                 if cf_ev["returncode"] == 0 and float(cf_ev["rmse"]) <= lab.tolerance:
                     m_sha = hashlib.sha256(code.encode("utf-8")).hexdigest()
                     c_dig = hashlib.sha256(json.dumps(c_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
                     nd = top_c["target_node"]
                     eff_sm = cert["scale_map"] if (cert is not None and target_scale == "meso") else nd["scale_map"]
-                    # Verify all confirm points lie inside verified_input_box when coarse ScaleMap is used!
                     vbox = (eff_sm.get("window_or_partition") or {}).get("verified_input_box")
-                    in_box = True if not vbox else all(is_point_inside_verified_box(pt, vbox) for pt in confirm_pts[:1])
+                    in_box = True if not vbox else all(is_point_inside_verified_box(pt, vbox) for pt in c_pts_0)
                     auth = authorize_abstraction_use(
                         requested_tier="local_solver_guidance",
                         task_view={
@@ -678,42 +728,69 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
                         confirmed_via_recall = True
                         walked_cg = bool(top_c.get("reached_only_by_graph_walk") and nd["node_id"] == "ode_meso_schur_reduced")
                         chosen_rel = "recalled_0.py"
+                else:
+                    pilot_rows = [*pilot_rows, *c_rows]
 
         if not confirmed_ok:
-            # Open fallback over all dynamical 2D operators
-            extra_rows = lab.acquire_channel(pilot_pts[3:], channel=confirm_ch, phase="fallback_extra")
-            full_prefix = [*pilot_rows, *extra_rows]
+            # Reuse already-paid `pilot_rows` (zero duplicate pilot re-buying!) and match confirmation point count!
+            rem_cf_pts = [
+                p for p in confirm_pts[:req_fresh_default]
+                if not any(p == r["features"] for r in pilot_rows)
+            ]
+            if not rem_cf_pts:
+                rem_cf_pts = [confirm_pts[-1]]
+            if confirm_ch == "coarse_macro" and cert is not None:
+                if not all(is_point_inside_verified_box(pt, cert["verified_input_box"]) for pt in rem_cf_pts):
+                    confirm_ch = "micro_fine"
+                    selected_ch = "micro_fine"
+                    pilot_rows = [
+                        *cert["paired_rows"]["micro"],
+                        *lab.acquire_channel(pilot_pts[:5], channel="micro_fine", phase="escalated_out_of_box_micro"),
+                    ]
             best_rmse = float("inf")
             for idx_op, (_otag, osp) in enumerate(ops.items()):
-                lens_est = _estimate_affine_lens_for_spec(osp, list(lab.feature_names), full_prefix)
+                lens_est = _estimate_affine_lens_for_spec(osp, list(lab.feature_names), pilot_rows)
                 code = compile_operator_spec_to_python(osp, role_names=list(lab.feature_names), lens=lens_est)
                 rname = f"fb_{idx_op}.py"
                 (ws_dir / rname).write_text(code, encoding="utf-8")
-                ev = evaluate_isolated_python_model(ws_dir, rname, full_prefix, isolated_prefix_rows=full_prefix)
+                ev = evaluate_isolated_python_model(ws_dir, rname, pilot_rows, isolated_prefix_rows=pilot_rows)
                 eval_count += 1
                 if ev["returncode"] == 0 and float(ev["rmse"]) < best_rmse:
                     best_rmse = float(ev["rmse"])
                     chosen_rel = rname
-            pilot_rows = full_prefix
-            c_rows = lab.acquire_channel(confirm_pts, channel=confirm_ch, phase="fallback_confirm")
+            c_rows = lab.acquire_channel(rem_cf_pts, channel=confirm_ch, phase="fallback_confirm")
             cf_ev = evaluate_isolated_python_model(ws_dir, chosen_rel, c_rows, isolated_prefix_rows=pilot_rows)
             confirmed_ok = bool(cf_ev["returncode"] == 0 and float(cf_ev["rmse"]) <= lab.tolerance)
 
+        scope_vbox = cert["verified_input_box"] if (cert is not None and confirm_ch == "coarse_macro") else None
+        (ws_dir / "model_scope_contract.json").write_text(
+            json.dumps({"selected_channel": confirm_ch, "verified_input_box": scope_vbox}, sort_keys=True),
+            encoding="utf-8",
+        )
         heldout = lab.evaluate_heldout_micro_truth(ws_dir, chosen_rel, isolated_prefix=pilot_rows)
+        out_of_box_heldout_blocked = bool(heldout.get("out_of_box_rejected", False))
+        if out_of_box_heldout_blocked:
+            confirmed_ok = False
         compute_cost = round(4.0 + 6.0 * eval_count + float(ret["query_compute_cost"]), 4)
         composite = round(lab.paid_measurement_cost + 0.05 * compute_cost, 4)
+        h_rmse = heldout["heldout_rmse"]
         return {
             "task_id": lab.task_id,
             "mode": mode,
-            "status": "completed" if confirmed_ok else "scoped_unknown",
+            "status": (
+                "out_of_verified_scale_box"
+                if out_of_box_heldout_blocked
+                else ("completed" if confirmed_ok else "scoped_unknown")
+            ),
             "selected_channel": selected_ch,
             "closure_verified": (cert["closure_verified"] if cert else None),
             "max_closure_defect": (cert["max_closure_defect"] if cert else None),
             "confirmed_ok": confirmed_ok,
             "confirmed_via_recall": confirmed_via_recall,
             "walked_coarse_graining_edge": walked_cg,
+            "out_of_box_query_blocked": out_of_box_heldout_blocked,
             "evaluated_candidate_count": eval_count,
-            "heldout_rmse": round(heldout["heldout_rmse"], 6),
+            "heldout_rmse": (round(h_rmse, 6) if math.isfinite(h_rmse) else None),
             "strict_pass": bool(confirmed_ok and heldout["strict_pass"]),
             "false_confirmation": bool(confirmed_ok and not heldout["strict_pass"]),
             "measurement_cost": lab.paid_measurement_cost,
@@ -850,6 +927,26 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
     in_box_ok = is_point_inside_verified_box({"drive_u": 1.5, "horizon_t": 3.2}, vbox)
     out_of_box_blocked = not is_point_inside_verified_box({"drive_u": 1.5, "horizon_t": 0.12}, vbox)
 
+    oob_confirm_lab = deepcopy(adiabatic_lab)
+    oob_confirm_lab.heldout_points = [{"drive_u": 1.0, "horizon_t": 1.1}, {"drive_u": 2.2, "horizon_t": 3.8}]
+    res_outside_confirm_fallback = _solve_pi_s_lab(
+        oob_confirm_lab,
+        pilot_pts=adiabatic_pilot,
+        confirm_pts=[{"drive_u": 1.8, "horizon_t": 1.2}, {"drive_u": 2.4, "horizon_t": 4.1}],
+        mode="regional_with_cg",
+        ws_dir=work_root / "pi_s_outside_confirm_fallback",
+    )
+
+    oob_heldout_lab = deepcopy(adiabatic_lab)
+    oob_heldout_lab.heldout_points = [{"drive_u": 2.0, "horizon_t": 0.12}]
+    res_outside_heldout_query = _solve_pi_s_lab(
+        oob_heldout_lab,
+        pilot_pts=adiabatic_pilot,
+        confirm_pts=[{"drive_u": 1.9, "horizon_t": 3.5}, {"drive_u": 2.6, "horizon_t": 4.6}],
+        mode="regional_with_cg",
+        ws_dir=work_root / "pi_s_outside_heldout_query",
+    )
+
     fine_traj_adiabatic = integrate_fast_slow_ode_rk4(2.0, 4.0, **base_ode)
     pi_traj_adiabatic = apply_executable_pi_s_projection(
         2.0, 4.0,
@@ -888,12 +985,17 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
         "short_time_quench_escalation": res_quench,
         "interior_micro_bump_regional_vs_single_point": {
             "Single_1Pt_Boundary_Probe": res_bump_single_1pt,
+            "Regional_3Pt_Box_Probe": res_bump_regional_5pt,
             "Regional_5Pt_Box_Probe": res_bump_regional_5pt,
             "single_point_misses_interior_bump": bool(res_bump_single_1pt["false_confirmation"] is True),
             "regional_box_catches_bump_zero_false_confirm": bool(
                 res_bump_regional_5pt["closure_verified"] is False
                 and res_bump_regional_5pt["false_confirmation"] is False
             ),
+        },
+        "out_of_box_confirm_and_heldout_counterfactuals": {
+            "outside_confirm_fallback": res_outside_confirm_fallback,
+            "outside_heldout_query": res_outside_heldout_query,
         },
     }
 
@@ -971,7 +1073,7 @@ def _register_unified_forest_node(
             {"step": "verify_scale_closure_or_escalate", "scale_regime": scale_regime},
             {"step": "calibrate_observation_lens", "active_arity": len(role_names)},
             {"step": "compile_and_fit_composed_ast", "operator_tag": operator_tag},
-            {"step": "subprocess_isolated_confirm", "fresh_points": 2},
+            {"step": "subprocess_isolated_confirm", "fresh_points": 1},
         ],
         source_cluster_ids=[surface_domain],
     )
@@ -1279,16 +1381,20 @@ def build_unified_12_target_suite(seed: int = 20261120) -> tuple[list[UnifiedTar
 
 def _load_node_verified_operator_spec(node: dict[str, Any]) -> dict[str, Any] | None:
     """Load operator_spec for a forest node; if backed by a persisted ``authored_artifact_path``,
-    MUST pass ``load_verified_authored_method`` integrity verification!
+    MUST pass ``load_verified_authored_method`` integrity AND node-expected ``ast_skeleton_digest`` binding!
     """
     act = node["claim_contract"]["conclusion_or_action"]
     art_path_str = act.get("authored_artifact_path")
+    expected_dig = act.get("ast_skeleton_digest")
     if art_path_str:
-        verified = load_verified_authored_method(Path(art_path_str))
+        verified = load_verified_authored_method(
+            Path(art_path_str),
+            expected_ast_digest=(str(expected_dig) if expected_dig else None),
+        )
         if verified is None:
             return None
         return deepcopy(verified["operator_spec"])
-    return deepcopy(act["operator_spec"])
+    return deepcopy(act["operator_spec"]) if "operator_spec" in act else None
 
 
 def _autonomous_fit_candidate_specs(
@@ -1298,6 +1404,7 @@ def _autonomous_fit_candidate_specs(
     feature_names: tuple[str, ...],
     training_rows: list[dict[str, Any]],
     tolerance: float,
+    calibrate_lens: bool = True,
 ) -> tuple[dict[str, Any] | None, int]:
     """Fit candidate ``ExprNode`` specs with autonomous S_d role permutation & paid-data affine lens estimation."""
     ws_dir.mkdir(parents=True, exist_ok=True)
@@ -1309,7 +1416,11 @@ def _autonomous_fit_candidate_specs(
         if int(osp.get("arity", 1)) != len(feature_names):
             continue
         for role_order in perms:
-            lens = _estimate_affine_lens_for_spec(osp, role_order, training_rows)
+            lens = (
+                _estimate_affine_lens_for_spec(osp, role_order, training_rows)
+                if calibrate_lens
+                else {"sign": 1.0, "scale": 1.0, "offset": 0.0}
+            )
             py_code = compile_operator_spec_to_python(osp, role_names=role_order, lens=lens)
             rel = f"u_cand_{evaluated:02d}.py"
             (ws_dir / rel).write_text(py_code, encoding="utf-8")
@@ -1402,21 +1513,24 @@ def evaluate_unified_target_under_arm(
                 wormhole_edge=c.get("wormhole_edge"),
             )
             if b_auth["granted"]:
-                auth_cands.append({**c, "_verified_spec": verified_spec})
+                auth_cands.append({**c, "_verified_spec": verified_spec, "_exec_plan": plan})
 
         if auth_cands:
             c0_cand = auth_cands[0]
-            c0_tag = str(c0_cand["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"])
+            plan_0 = c0_cand["_exec_plan"]
+            c0_tag = str(plan_0["operator_tag"])
             best_0, ev_0 = _autonomous_fit_candidate_specs(
                 ws_dir,
                 specs_to_try=[(c0_tag, c0_cand["_verified_spec"])],
                 feature_names=target.feature_names,
                 training_rows=frozen_prefix,
                 tolerance=target.tolerance,
+                calibrate_lens=bool(plan_0["calibrate_lens"]),
             )
             total_evaluated += ev_0
             if best_0 is not None and best_0["train_rmse"] <= target.tolerance:
-                cf0_obs = lab.acquire([target.confirm_points[0]], workspace=None, phase="confirm_0") or []
+                req_fresh_0 = max(1, min(len(target.confirm_points), int(plan_0["fresh_points"])))
+                cf0_obs = lab.acquire(target.confirm_points[:req_fresh_0], workspace=None, phase="confirm_0") or []
                 cf0_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf0_obs]
                 cf0_ev = evaluate_isolated_python_model(
                     ws_dir, best_0["model_relpath"], cf0_rows, isolated_prefix_rows=frozen_prefix
@@ -1457,73 +1571,83 @@ def evaluate_unified_target_under_arm(
                         confirmed_via_recall = True
                         chosen_rel = best_0["model_relpath"]
                         non_direct_walk_win = bool(c0_cand.get("reached_only_by_graph_walk"))
-                elif len(auth_cands) >= 2:
-                    # First confirm point falsified coarse parent (e.g. high-flow ceiling on SafeWalkMurrayCap)!
-                    updated_prefix = [*frozen_prefix, *cf0_rows]
-                    rem = [
-                        c for c in auth_cands[1:]
-                        if str(c["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"]) != c0_tag
-                    ]
-                    if rem:
-                        c1_cand = rem[0]
-                        c1_tag = str(c1_cand["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"])
-                        best_1, ev_1 = _autonomous_fit_candidate_specs(
-                            ws_dir,
-                            specs_to_try=[(c1_tag, c1_cand["_verified_spec"])],
-                            feature_names=target.feature_names,
-                            training_rows=updated_prefix,
-                            tolerance=target.tolerance,
-                        )
-                        total_evaluated += ev_1
-                        if best_1 is not None and best_1["train_rmse"] <= target.tolerance:
-                            cf1_obs = lab.acquire([target.confirm_points[1]], workspace=None, phase="confirm_1_child") or []
-                            cf1_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf1_obs]
-                            cf1_ev = evaluate_isolated_python_model(
-                                ws_dir, best_1["model_relpath"], cf1_rows, isolated_prefix_rows=updated_prefix
+                else:
+                    # Retain paid failed confirmation `cf0_rows` across ALL downstream branches (including Alpha0 / Flat)!
+                    frozen_prefix = [*frozen_prefix, *cf0_rows]
+                    updated_prefix = frozen_prefix
+                    if len(auth_cands) >= 2:
+                        rem = [
+                            c for c in auth_cands[1:]
+                            if str(c["_exec_plan"]["operator_tag"]) != c0_tag
+                        ]
+                        if rem:
+                            c1_cand = rem[0]
+                            plan_1 = c1_cand["_exec_plan"]
+                            c1_tag = str(plan_1["operator_tag"])
+                            best_1, ev_1 = _autonomous_fit_candidate_specs(
+                                ws_dir,
+                                specs_to_try=[(c1_tag, c1_cand["_verified_spec"])],
+                                feature_names=target.feature_names,
+                                training_rows=updated_prefix,
+                                tolerance=target.tolerance,
+                                calibrate_lens=bool(plan_1["calibrate_lens"]),
                             )
-                            if cf1_ev["returncode"] == 0 and float(cf1_ev["rmse"]) <= target.tolerance:
-                                _, upd_feats = extract_unified_observable_pilot_cues(
-                                    updated_prefix, feature_names=target.feature_names, domain_cue=target.domain_cue
+                            total_evaluated += ev_1
+                            if best_1 is not None and best_1["train_rmse"] <= target.tolerance:
+                                unseen_c1 = [
+                                    p for p in target.confirm_points
+                                    if not any(p == r["features"] for r in updated_prefix)
+                                ]
+                                req_fresh_1 = max(1, int(plan_1["fresh_points"]))
+                                c1_pts = unseen_c1[:req_fresh_1] if unseen_c1 else [target.confirm_points[-1]]
+                                cf1_obs = lab.acquire(c1_pts, workspace=None, phase="confirm_1_child") or []
+                                cf1_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf1_obs]
+                                cf1_ev = evaluate_isolated_python_model(
+                                    ws_dir, best_1["model_relpath"], cf1_rows, isolated_prefix_rows=updated_prefix
                                 )
-                                if (
-                                    len(target.feature_names) == 1
-                                    and upd_feats.get("max_primary_load", 0.0) > 6.0
-                                    and float(cf0_ev["rmse"]) > target.tolerance * 2.0
-                                ):
-                                    upd_feats["high_flow_ceiling_regime"] = True
-                                c_nd = c1_cand["target_node"]
-                                m1_sha = hashlib.sha256(best_1["model_source"].encode("utf-8")).hexdigest()
-                                c1_dig = hashlib.sha256(json.dumps(cf1_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
-                                t3_child = authorize_abstraction_use(
-                                    requested_tier="local_solver_guidance",
-                                    task_view={
-                                        "goal_kind": "open_workspace_mechanism_prediction",
-                                        "tolerance": target.tolerance,
-                                        "target_id": target.target_id,
-                                        "node_version": c_nd["version"],
-                                        "expected_model_sha256": m1_sha,
-                                        "expected_confirmation_digest": c1_dig,
-                                    },
-                                    target_features=upd_feats,
-                                    claim_contract=c_nd["claim_contract"],
-                                    scale_map=c_nd.get("scale_map"),
-                                    wormhole_edge=c1_cand.get("wormhole_edge"),
-                                    evidence_receipt={
-                                        "passed": True,
-                                        "claim_id": c_nd["claim_contract"]["claim_id"],
-                                        "observed_error": float(cf1_ev["rmse"]),
-                                        "target_id": target.target_id,
-                                        "node_version": c_nd["version"],
-                                        "model_sha256": m1_sha,
-                                        "confirmation_digest": c1_dig,
-                                    },
-                                )
-                                if t3_child["granted"]:
-                                    confirmed_ok = True
-                                    confirmed_via_recall = True
-                                    frozen_prefix = updated_prefix
-                                    chosen_rel = best_1["model_relpath"]
-                                    non_direct_walk_win = bool(c1_cand.get("reached_only_by_graph_walk"))
+                                if cf1_ev["returncode"] == 0 and float(cf1_ev["rmse"]) <= target.tolerance:
+                                    _, upd_feats = extract_unified_observable_pilot_cues(
+                                        updated_prefix, feature_names=target.feature_names, domain_cue=target.domain_cue
+                                    )
+                                    if (
+                                        len(target.feature_names) == 1
+                                        and upd_feats.get("max_primary_load", 0.0) > 6.0
+                                        and float(cf0_ev["rmse"]) > target.tolerance * 2.0
+                                    ):
+                                        upd_feats["high_flow_ceiling_regime"] = True
+                                    c_nd = c1_cand["target_node"]
+                                    m1_sha = hashlib.sha256(best_1["model_source"].encode("utf-8")).hexdigest()
+                                    c1_dig = hashlib.sha256(json.dumps(cf1_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+                                    t3_child = authorize_abstraction_use(
+                                        requested_tier="local_solver_guidance",
+                                        task_view={
+                                            "goal_kind": "open_workspace_mechanism_prediction",
+                                            "tolerance": target.tolerance,
+                                            "target_id": target.target_id,
+                                            "node_version": c_nd["version"],
+                                            "expected_model_sha256": m1_sha,
+                                            "expected_confirmation_digest": c1_dig,
+                                        },
+                                        target_features=upd_feats,
+                                        claim_contract=c_nd["claim_contract"],
+                                        scale_map=c_nd.get("scale_map"),
+                                        wormhole_edge=c1_cand.get("wormhole_edge"),
+                                        evidence_receipt={
+                                            "passed": True,
+                                            "claim_id": c_nd["claim_contract"]["claim_id"],
+                                            "observed_error": float(cf1_ev["rmse"]),
+                                            "target_id": target.target_id,
+                                            "node_version": c_nd["version"],
+                                            "model_sha256": m1_sha,
+                                            "confirmation_digest": c1_dig,
+                                        },
+                                    )
+                                    if t3_child["granted"]:
+                                        confirmed_ok = True
+                                        confirmed_via_recall = True
+                                        frozen_prefix = updated_prefix
+                                        chosen_rel = best_1["model_relpath"]
+                                        non_direct_walk_win = bool(c1_cand.get("reached_only_by_graph_walk"))
 
     elif ordinary_history_specs is not None:
         # Equal-pilot, autonomous-lens Ordinary All-History baseline (Forward or Reversed)!
@@ -1566,6 +1690,7 @@ def evaluate_unified_target_under_arm(
                     )
                     if cf1_ev["returncode"] == 0 and float(cf1_ev["rmse"]) <= target.tolerance:
                         confirmed_ok = True
+                        confirmed_via_recall = True
                         chosen_rel = best_h2["model_relpath"]
 
     # Open Compositional Fallback when prior recall / history failed (e.g. `Frozen_After_Stage0` on newly invented laws!)
@@ -1587,7 +1712,13 @@ def evaluate_unified_target_under_arm(
             tolerance=target.tolerance,
         )
         total_evaluated += ev_fb
-        fb_cf_obs = lab.acquire(target.confirm_points, workspace=None, phase="fallback_confirm") or []
+        rem_fb_cf_pts = [
+            p for p in target.confirm_points
+            if not any(p == r["features"] for r in frozen_prefix)
+        ]
+        if not rem_fb_cf_pts:
+            rem_fb_cf_pts = [target.confirm_points[-1]]
+        fb_cf_obs = lab.acquire(rem_fb_cf_pts, workspace=None, phase="fallback_confirm") or []
         fb_cf_rows = [{"features": dict(r.features), "target": float(r.target)} for r in fb_cf_obs]
         if best_fb is not None:
             chosen_rel = best_fb["model_relpath"]

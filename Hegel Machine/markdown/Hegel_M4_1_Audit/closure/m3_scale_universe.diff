@@ -1,0 +1,42 @@
+diff --git a/Hegel Machine/src/hegel_machine/cognition/m3_scale_universe.py b/Hegel Machine/src/hegel_machine/cognition/m3_scale_universe.py
+index b59da4b..179db43 100644
+--- a/Hegel Machine/src/hegel_machine/cognition/m3_scale_universe.py	
++++ b/Hegel Machine/src/hegel_machine/cognition/m3_scale_universe.py	
+@@ -1673,6 +1673,10 @@ class M3ForestResearcher:
+             idx = HippoRAGWormholeIndex(
+                 self.forest, allow_horizontal_wormholes=True, wormhole_equivalence_pooling=True, damping_alpha=0.0
+             )
++        elif self.retrieval_mode == "hipporag_alpha0_nopool":
++            idx = HippoRAGWormholeIndex(
++                self.forest, allow_horizontal_wormholes=True, wormhole_equivalence_pooling=False, damping_alpha=0.0
++            )
+         elif self.retrieval_mode == "hipporag_walk_nopool":
+             idx = HippoRAGWormholeIndex(
+                 self.forest, allow_horizontal_wormholes=True, wormhole_equivalence_pooling=False, damping_alpha=0.80
+@@ -2396,15 +2400,18 @@ class M3ForestResearcher:
+                 obs_err = vr["rmse"] if not vr.get("execution_error") else float("inf")
+                 if not math.isfinite(obs_err) or obs_err > tol:
+                     wrong_trials += 1
+-                    # If an earlier coarse candidate failed at high-load confirm, update empirical high-load flags from acquired rows!
++                    # If an earlier coarse candidate failed at high-load confirm, update ONLY the single observable regime flag matching this onset class!
+                     if lab.task_view.get("pilot_regime") == "safe_low_load":
+-                        feat_info = {
+-                            **feat_info,
+-                            "high_corner_ceiling_detected": True,
+-                            "transient_overshoot_detected": True,
+-                            "high_substrate_turnover_detected": True,
+-                            "high_load_rollover_detected": True,
+-                        }
++                        updated_flag: dict[str, Any] = {}
++                        if active_ar == 1:
++                            updated_flag["high_load_rollover_detected"] = True
++                        elif bool(feat_info.get("symmetric_roles", False)):
++                            updated_flag["high_corner_ceiling_detected"] = True
++                        elif "sig:low_regime_shunt_onset" in sigs:
++                            updated_flag["high_substrate_turnover_detected"] = True
++                        elif "sig:low_regime_charging_onset" in sigs:
++                            updated_flag["transient_overshoot_detected"] = True
++                        feat_info = {**feat_info, **updated_flag}
+                     continue
+ 
+                 cand_sha = hashlib.sha256((workspace / cand_rel).read_bytes()).hexdigest()

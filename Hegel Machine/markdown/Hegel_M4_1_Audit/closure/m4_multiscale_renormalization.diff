@@ -1,0 +1,294 @@
+diff --git a/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py b/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py
+index 2571070..9ae06c3 100644
+--- a/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py	
++++ b/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py	
+@@ -122,21 +122,38 @@ class MultiScaleWorkspaceTaskLab:
+         })
+         return rows
+ 
+-    def run_active_scale_closure_probe(self, boundary_point: dict[str, float]) -> dict[str, Any]:
+-        """Paid 1-point paired micro-vs-coarse probe testing whether coarse-graining Pi_s is closed!"""
+-        c_row = self.acquire_channel([boundary_point], channel="coarse_macro", phase="scale_closure_probe")[0]
+-        m_row = self.acquire_channel([boundary_point], channel="micro_fine", phase="scale_closure_probe")[0]
+-        defect = abs(float(m_row["target"]) - float(c_row["target"]))
+-        closed = bool(defect <= self.tolerance * 0.85)
++    def run_active_scale_closure_probe(
++        self,
++        boundary_point: dict[str, float],
++        *,
++        extra_boundary_points: list[dict[str, float]] | None = None,
++    ) -> dict[str, Any]:
++        """Paid paired micro-vs-coarse probe testing whether coarse-graining Pi_s is closed over probed points!"""
++        probe_pts = [dict(boundary_point), *(dict(p) for p in (extra_boundary_points or ()))]
++        c_rows = self.acquire_channel(probe_pts, channel="coarse_macro", phase="scale_closure_probe")
++        m_rows = self.acquire_channel(probe_pts, channel="micro_fine", phase="scale_closure_probe")
++        defects = [
++            abs(float(mr["target"]) - float(cr["target"]))
++            for mr, cr in zip(m_rows, c_rows)
++        ]
++        max_defect = max(defects)
++        closed = bool(max_defect <= self.tolerance * 0.85)
++        verified_box = {
++            k: [min(float(p[k]) for p in probe_pts), max(float(p[k]) for p in probe_pts)]
++            for k in self.feature_names
++        }
+         return {
+             "boundary_point": dict(boundary_point),
+-            "coarse_value": round(float(c_row["target"]), 6),
+-            "micro_value": round(float(m_row["target"]), 6),
+-            "closure_defect": round(defect, 6),
++            "probed_points": probe_pts,
++            "verified_input_box": verified_box,
++            "coarse_value": round(float(c_rows[0]["target"]), 6),
++            "micro_value": round(float(m_rows[0]["target"]), 6),
++            "closure_defect": round(max_defect, 6),
++            "pointwise_defects": [round(d, 6) for d in defects],
+             "closure_verified": closed,
+             "closure_scope": "steady_state_only" if closed else "not_closed",
+-            "evidence_ref": f"scale_probe:{self.task_id}:{hashlib.sha256(json.dumps(boundary_point, sort_keys=True).encode()).hexdigest()[:8]}",
+-            "paired_rows": {"coarse": c_row, "micro": m_row},
++            "evidence_ref": f"scale_probe:{self.task_id}:{hashlib.sha256(json.dumps(probe_pts, sort_keys=True).encode()).hexdigest()[:8]}",
++            "paired_rows": {"coarse": c_rows[0], "micro": m_rows[0], "all_coarse": c_rows, "all_micro": m_rows},
+         }
+ 
+     def evaluate_heldout_micro_truth(
+@@ -1017,32 +1034,43 @@ def _estimate_affine_lens_for_spec(
+         sign = 1.0 if b0 >= 0 else -1.0
+ 
+     params_meta: dict[int, dict[str, float]] = {}
+-    _collect_params(op_spec, params_meta)
+-
+-    def _walk_cos_local(n: dict[str, Any]) -> None:
+-        if n.get("op") == "cos_mul" and isinstance(n.get("param"), dict):
+-            pm = n["param"]
+-            params_meta[int(pm["idx"])] = {"lb": float(pm["lb"]), "ub": float(pm["ub"]), "init": float(pm["init"])}
+-        for k in ("left", "right", "arg", "base", "num", "den", "a", "b", "var"):
+-            if isinstance(n.get(k), dict):
+-                _walk_cos_local(n[k])
+-
+-    _walk_cos_local(op_spec)
++    _collect_params(op_spec, params_meta, strict_unique=True)
+     n_p = max(params_meta.keys()) + 1 if params_meta else 0
+     lbs = [-200.0, *[params_meta[i]["lb"] for i in range(n_p)]]
+     ubs = [200.0, *[params_meta[i]["ub"] for i in range(n_p)]]
+     y_med = sum(float(r["target"]) for r in rows) / max(1, len(rows))
+-    x0 = [y_med, *[params_meta[i]["init"] for i in range(n_p)]]
++    base_x0 = [y_med, *[params_meta[i]["init"] for i in range(n_p)]]
++    starts = [base_x0]
++    ms = op_spec.get("multi_start_param")
++    if isinstance(ms, dict) and int(ms["idx"]) < n_p:
++        ms_i = int(ms["idx"]) + 1  # shifted by +1 due to q[0] = offset
++        starts = []
++        for gv in ms["grid"]:
++            sv = list(base_x0)
++            sv[ms_i] = float(gv)
++            starts.append(sv)
++
+     vec_expr = _emit_expr(op_spec, role_order, param_mode="vec")
+     fn_core = eval(f"lambda f, p: ({vec_expr})", {"math": math, "min": min, "max": max})
+     rows_f = [r["features"] for r in rows]
+     ys = [float(r["target"]) for r in rows]
+-    sol = least_squares(
+-        lambda q: [(q[0] + sign * fn_core(f, q[1:])) - y for f, y in zip(rows_f, ys)],
+-        x0=x0,
+-        bounds=(lbs, ubs),
+-    )
+-    return {"sign": sign, "scale": 1.0, "offset": float(sol.x[0])}
++
++    sign_cands = [sign] if len(role_order) == 1 else [sign, -sign]
++    best_cost = float("inf")
++    best_sign = sign
++    best_off = float(y_med)
++    for s_cand in sign_cands:
++        for st_x0 in starts:
++            sol = least_squares(
++                lambda q, sc=s_cand: [(q[0] + sc * fn_core(f, q[1:])) - y for f, y in zip(rows_f, ys)],
++                x0=st_x0,
++                bounds=(lbs, ubs),
++            )
++            if float(sol.cost) < best_cost:
++                best_cost = float(sol.cost)
++                best_sign = s_cand
++                best_off = float(sol.x[0])
++    return {"sign": best_sign, "scale": 1.0, "offset": best_off}
+ 
+ 
+ def _fit_and_score_operator_specs(
+@@ -1096,6 +1124,66 @@ def _fit_and_score_operator_specs(
+     return best_cand, evaluated, wall_s
+ 
+ 
++_SUPPORTED_M4_PROGRAM_STEPS = frozenset({
++    "verify_scale_closure_or_escalate",
++    "calibrate_observation_lens",
++    "compile_and_fit_composed_ast",
++    "subprocess_isolated_confirm",
++})
++
++
++def _validate_and_interpret_m4_program_steps(
++    program_steps: Any,
++    *,
++    node: dict[str, Any],
++    target_arity: int,
++) -> dict[str, Any] | None:
++    """Validate and interpret declarative ``program_steps`` on an M4 ``PhilosophicalForest`` node.
++
++    Rejects empty lists, unknown opcodes, missing mandatory compilation/confirmation steps,
++    mismatched ``operator_tag`` / ``active_arity``, or non-positive ``fresh_points``.
++    """
++    if not isinstance(program_steps, list) or not program_steps:
++        return None
++    step_map: dict[str, dict[str, Any]] = {}
++    for entry in program_steps:
++        if not isinstance(entry, dict):
++            return None
++        op_name = entry.get("step")
++        if not isinstance(op_name, str) or op_name not in _SUPPORTED_M4_PROGRAM_STEPS:
++            return None
++        if op_name in step_map:
++            return None
++        step_map[op_name] = entry
++
++    if "compile_and_fit_composed_ast" not in step_map or "subprocess_isolated_confirm" not in step_map:
++        return None
++
++    act = node.get("claim_contract", {}).get("conclusion_or_action", {})
++    expected_tag = str(act.get("operator_tag", ""))
++    comp_step = step_map["compile_and_fit_composed_ast"]
++    step_tag = comp_step.get("operator_tag")
++    if not isinstance(step_tag, str) or not step_tag or (expected_tag and step_tag != expected_tag):
++        return None
++
++    if "calibrate_observation_lens" in step_map:
++        cal_ar = step_map["calibrate_observation_lens"].get("active_arity")
++        if not isinstance(cal_ar, int) or isinstance(cal_ar, bool) or cal_ar != target_arity:
++            return None
++
++    conf_step = step_map["subprocess_isolated_confirm"]
++    fresh_pts = conf_step.get("fresh_points", 1)
++    if not isinstance(fresh_pts, int) or isinstance(fresh_pts, bool) or fresh_pts < 1:
++        return None
++
++    return {
++        "operator_tag": step_tag,
++        "calibrate_lens": "calibrate_observation_lens" in step_map,
++        "verify_scale_closure": "verify_scale_closure_or_escalate" in step_map,
++        "fresh_points": fresh_pts,
++    }
++
++
+ def evaluate_m4_target_under_arm(
+     target: MultiScaleTargetSpec,
+     *,
+@@ -1196,8 +1284,13 @@ def evaluate_m4_target_under_arm(
+         if admit:
+             for c in raw_cands:
+                 node = c["target_node"]
+-                # Interpret `node["program_steps"]`!
+-                if not node.get("program_steps"):
++                # Validate & interpret `node["program_steps"]`! Unknown or malformed opcodes are rejected!
++                exec_plan = _validate_and_interpret_m4_program_steps(
++                    node.get("program_steps"),
++                    node=node,
++                    target_arity=len(lab.feature_names),
++                )
++                if exec_plan is None:
+                     continue
+                 auth = authorize_abstraction_use(
+                     requested_tier="bounded_trial",
+@@ -1208,7 +1301,8 @@ def evaluate_m4_target_under_arm(
+                     wormhole_edge=c.get("wormhole_edge"),
+                 )
+                 if auth["granted"]:
+-                    recalled_candidates.append(c)
++                    c_with_plan = {**c, "_exec_plan": exec_plan}
++                    recalled_candidates.append(c_with_plan)
+ 
+     # --- Step 3: Fit Recalled Candidates & Prefix-Isolated Fresh Confirmation ---
+     confirmed_ok = False
+@@ -1324,11 +1418,58 @@ def evaluate_m4_target_under_arm(
+                             )
+                             total_wall += float(c1_eval.get("wall_seconds", 0.02))
+                             if c1_eval["returncode"] == 0 and float(c1_eval["rmse"]) <= lab.tolerance:
+-                                confirmed_ok = True
+-                                confirmed_via_recall = True
+-                                frozen_prefix = updated_prefix
+-                                chosen_model_rel = best_child["model_relpath"]
+-                                non_direct_walk_win = bool(child_rc.get("reached_only_by_graph_walk"))
++                                # Recompute empirical regime features strictly from measured `updated_prefix` (`pilot + c0_rows`)!
++                                _, updated_obs_feats = extract_multiscale_pilot_signatures(
++                                    updated_prefix,
++                                    feature_names=lab.feature_names,
++                                    scale_probe=scale_probe_info,
++                                    domain_cue=(
++                                        f"cue_{target.domain_cue}"
++                                        if not target.domain_cue.startswith("cue_")
++                                        else target.domain_cue
++                                    ),
++                                )
++                                if (
++                                    len(lab.feature_names) == 1
++                                    and updated_obs_feats.get("max_primary_load", 0.0) > 6.5
++                                    and float(c0_eval["rmse"]) > lab.tolerance * 2.0
++                                ):
++                                    updated_obs_feats["high_flow_ceiling_regime"] = True
++
++                                c_node = child_rc["target_node"]
++                                c_model_sha = hashlib.sha256(best_child["model_source"].encode("utf-8")).hexdigest()
++                                c_conf_dig = hashlib.sha256(json.dumps(c1_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
++                                child_receipt = {
++                                    "passed": True,
++                                    "claim_id": c_node["claim_contract"]["claim_id"],
++                                    "observed_error": float(c1_eval["rmse"]),
++                                    "target_id": target.target_id,
++                                    "node_version": c_node["version"],
++                                    "model_sha256": c_model_sha,
++                                    "confirmation_digest": c_conf_dig,
++                                }
++                                child_tier3_auth = authorize_abstraction_use(
++                                    requested_tier="local_solver_guidance",
++                                    task_view={
++                                        "goal_kind": "open_workspace_mechanism_prediction",
++                                        "tolerance": lab.tolerance,
++                                        "target_id": target.target_id,
++                                        "node_version": c_node["version"],
++                                        "expected_model_sha256": c_model_sha,
++                                        "expected_confirmation_digest": c_conf_dig,
++                                    },
++                                    target_features=updated_obs_feats,
++                                    claim_contract=c_node["claim_contract"],
++                                    scale_map=c_node.get("scale_map"),
++                                    wormhole_edge=child_rc.get("wormhole_edge"),
++                                    evidence_receipt=child_receipt,
++                                )
++                                if child_tier3_auth["granted"]:
++                                    confirmed_ok = True
++                                    confirmed_via_recall = True
++                                    frozen_prefix = updated_prefix
++                                    chosen_model_rel = best_child["model_relpath"]
++                                    non_direct_walk_win = bool(child_rc.get("reached_only_by_graph_walk"))
+ 
+     # --- Step 4: Compositional / Full-History Fallback Synthesis When Recall Not Confirmed ---
+     if not confirmed_ok:
+@@ -1545,7 +1686,7 @@ def run_m4_continual_lifecycle_stream(work_root: Path) -> dict[str, Any]:
+                     cause="protocol_or_scope_mismatch",
+                     updated_claim_contract=old_cc,
+                 )
+-                # Verify incident wormholes were marked stale, then revalidate compatible ones!
++                # Verify incident wormholes & vertical edges were marked stale, then revalidate compatible ones!
+                 for wid, wh in list(forest_full.horizontal_wormhole_edges.items()):
+                     if wh.get("stale_endpoint_revision"):
+                         forest_full.revalidate_wormhole_after_revision(
+@@ -1553,6 +1694,11 @@ def run_m4_continual_lifecycle_stream(work_root: Path) -> dict[str, Any]:
+                             witness_episode_id=ep_id,
+                             reason="verified_pure_ast_and_scope_preserved_at_stage_revision",
+                         )
++                forest_full.revalidate_vertical_edges_after_revision(
++                    target_nid,
++                    witness_episode_id=ep_id,
++                    reason="verified_coarse_graining_and_implication_preserved_at_stage_revision",
++                )
+ 
+         # Build indices for current stage
+         idx_full = HippoRAGWormholeIndex(forest_full, damping_alpha=0.65, wormhole_equivalence_pooling=True, scale_aware=True)

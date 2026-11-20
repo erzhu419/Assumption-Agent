@@ -124,6 +124,18 @@ def test_v17_3_m31_and_author_audit_boundary_closures(tmp_path: Path) -> None:
     assert load_verified_authored_method(meta_only_file) is None
 
     valid_art_file = tmp_path / "valid_art.json"
+    ns_4p: dict[str, object] = {}
+    exec(compile(compiled_4p, "<test_4p>", "exec"), ns_4p)
+    p_rows_4p = [
+        {"features": {"u": u_v, "t": t_v}, "target": float(ns_4p["predict"]({"features": {"u": u_v, "t": t_v}}))}  # type: ignore[index,operator]
+        for u_v, t_v in ((1.0, 0.2), (1.5, 0.8), (2.0, 1.6), (1.8, 2.8))
+    ]
+    c_rows_4p = [
+        {"features": {"u": 1.6, "t": 1.2}, "target": float(ns_4p["predict"]({"features": {"u": 1.6, "t": 1.2}}))}  # type: ignore[index,operator]
+    ]
+    c_sha_4p = json.dumps(c_rows_4p, sort_keys=True).encode("utf-8")
+    p_sha_4p = json.dumps(p_rows_4p, sort_keys=True).encode("utf-8")
+    import hashlib as _hl
     valid_payload = {
         "operator_spec": osc_shunt,
         "role_names": ["u", "t"],
@@ -131,7 +143,19 @@ def test_v17_3_m31_and_author_audit_boundary_closures(tmp_path: Path) -> None:
         "skeleton_status": "VERIFIED_PURE_AST",
         "model_sha256": ast_4p["model_sha256"],
         "authored_model_source": compiled_4p,
-        "confirmation_digest": "abcd1234ef567890",
+        "confirmation_digest": _hl.sha256(c_sha_4p).hexdigest()[:16],
+        "host_confirmation_bundle": {
+            "task_id": "test_4p",
+            "model_sha256": ast_4p["model_sha256"],
+            "ast_skeleton_digest": ast_4p["ast_skeleton_digest"],
+            "training_prefix_rows": p_rows_4p,
+            "training_prefix_sha256": _hl.sha256(p_sha_4p).hexdigest(),
+            "confirm_rows": c_rows_4p,
+            "confirm_rows_sha256": _hl.sha256(c_sha_4p).hexdigest(),
+            "observed_confirm_rmse": 0.0,
+            "tolerance": 0.05,
+            "confirmed_ok": True,
+        },
         "confirmed_ok": True,
     }
     valid_art_file.write_text(json.dumps(valid_payload), encoding="utf-8")

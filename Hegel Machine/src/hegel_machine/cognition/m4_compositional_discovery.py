@@ -62,15 +62,17 @@ def evaluate_isolated_python_model(
     Sandbox ``observations.json`` and ``model_observations.json`` contain STRICTLY ``isolated_prefix_rows``,
     never ``eval_rows`` (confirmation or heldout).
     """
+    ws_root = workspace_dir.resolve()
     raw_model_path = Path(model_relpath)
-    if raw_model_path.is_absolute():
-        ws_root = workspace_dir.resolve()
-        try:
-            safe_relpath = raw_model_path.resolve().relative_to(ws_root).as_posix()
-        except ValueError as exc:
-            raise ValueError(f"Model path escapes workspace boundary: {model_relpath}") from exc
-    else:
-        safe_relpath = model_relpath
+    resolved_target = (
+        raw_model_path.resolve()
+        if raw_model_path.is_absolute()
+        else (ws_root / raw_model_path).resolve()
+    )
+    try:
+        safe_relpath = resolved_target.relative_to(ws_root).as_posix()
+    except ValueError as exc:
+        raise ValueError(f"Model path escapes workspace boundary: {model_relpath}") from exc
 
     prefix_obs = [
         Observation(features={k: float(v) for k, v in r["features"].items()}, target=float(r["target"]), history=())
@@ -1007,6 +1009,46 @@ def run_compositional_code_agent_episode(
     confirmed_ok = bool(conf_eval["returncode"] == 0 and math.isfinite(conf_rmse) and conf_rmse <= tolerance)
 
     conf_digest = hashlib.sha256(json.dumps(confirm_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    prefix_sha = hashlib.sha256(json.dumps(frozen_prefix_rows, sort_keys=True).encode("utf-8")).hexdigest()
+    confirm_sha = hashlib.sha256(json.dumps(confirm_rows, sort_keys=True).encode("utf-8")).hexdigest()
+
+    # Extract exact fitted parameter snapshot (`_PARAMS`) so historical instances can predict WITHOUT re-calling `fit()`!
+    fitted_params_snapshot: dict[str, float] = {}
+    if ast_info["skeleton_status"] == "VERIFIED_PURE_AST":
+        ns_fit: dict[str, Any] = {}
+        exec(compile(model_source, "<hegel_freeze_params>", "exec"), ns_fit)
+        if callable(ns_fit.get("fit")):
+            ns_fit["fit"](deepcopy(frozen_prefix_rows))
+        if isinstance(ns_fit.get("_PARAMS"), dict):
+            fitted_params_snapshot = {str(k): float(v) for k, v in ns_fit["_PARAMS"].items()}
+
+    host_confirmation_bundle = {
+        "task_id": lab.task_id,
+        "model_sha256": ast_info["model_sha256"],
+        "ast_skeleton_digest": ast_info["ast_skeleton_digest"],
+        "training_prefix_rows": deepcopy(frozen_prefix_rows),
+        "training_prefix_sha256": prefix_sha,
+        "confirm_rows": deepcopy(confirm_rows),
+        "confirm_rows_sha256": confirm_sha,
+        "observed_confirm_rmse": round(conf_rmse, 8),
+        "tolerance": float(tolerance),
+        "confirmed_ok": confirmed_ok,
+    }
+    (workspace_dir / "confirmed_observations.json").write_text(
+        json.dumps(confirm_rows, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    (workspace_dir / "confirmed_fitted_params.json").write_text(
+        json.dumps(fitted_params_snapshot, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    (workspace_dir / "confirmed_manifest.json").write_text(
+        json.dumps(
+            {k: v for k, v in host_confirmation_bundle.items() if k not in {"training_prefix_rows", "confirm_rows"}},
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
     best_spec = provider._best_overall[2] if provider._best_overall is not None else atomic_base_specs[0]
     authored_artifact = {
         "task_id": lab.task_id,
@@ -1018,8 +1060,12 @@ def run_compositional_code_agent_episode(
         "skeleton_status": ast_info["skeleton_status"],
         "model_sha256": ast_info["model_sha256"],
         "authored_model_source": model_source,
+        "fitted_params": fitted_params_snapshot,
         "confirmation_digest": conf_digest,
+        "host_confirmation_bundle": host_confirmation_bundle,
         "composed_history": deepcopy(provider.composed_history),
+        "diagnostic_rounds": int(provider._diag_rounds),
+        "composed_candidate_count": len(provider.composed_history),
         "diagnostic_report": deepcopy(provider.last_diagnostic_report),
         "training_prefix_count": len(frozen_prefix_rows),
         "confirmed_ok": confirmed_ok,
@@ -1086,17 +1132,71 @@ def run_compositional_code_agent_episode(
     }
 
 
-def load_verified_authored_method(art_path: Path) -> dict[str, Any] | None:
-    """Load a persisted ``authored_method.json`` ONLY when confirmation receipt, pure-AST digest, and model SHA256 match!
+def predict_with_frozen_instance(
+    authored_artifact: dict[str, Any],
+    points: list[dict[str, float]],
+) -> dict[str, Any]:
+    """Execute ``predict(row)`` using the persisted ``fitted_params`` snapshot with ZERO ``fit()`` call!"""
+    model_src = str(authored_artifact["authored_model_source"])
+    ast_info = canonicalize_python_model_ast(model_src)
+    if ast_info.get("skeleton_status") != "VERIFIED_PURE_AST":
+        raise ValueError("Refusing to execute unverified model source")
+    fitted_params = dict(authored_artifact.get("fitted_params") or {})
+    ns: dict[str, Any] = {}
+    exec(compile(model_src, "<hegel_frozen_instance>", "exec"), ns)
+    # Remove `fit` from namespace to prove structurally that zero refitting can occur!
+    ns.pop("fit", None)
+    if isinstance(ns.get("_PARAMS"), dict) and fitted_params:
+        for k, v in fitted_params.items():
+            ns["_PARAMS"][k] = float(v)
+    preds = [float(ns["predict"]({"features": dict(pt)})) for pt in points]
+    return {
+        "predictions": preds,
+        "fit_called": False,
+        "used_fitted_params": deepcopy(ns.get("_PARAMS", {})),
+    }
 
-    Rejects unverified metadata-only JSON or tampered ``operator_spec`` / ``authored_model_source`` payloads.
+
+_VERIFIED_AUTHORED_CACHE: dict[tuple[str, str, str, str, bool], dict[str, Any] | None] = {}
+
+
+def load_verified_authored_method(
+    art_path: Path,
+    *,
+    expected_ast_digest: str | None = None,
+    require_external_manifest: bool = False,
+) -> dict[str, Any] | None:
+    """Load a persisted ``authored_method.json`` ONLY when confirmation provenance, pure-AST digest,
+    node-expected digest, and isolated confirmation re-evaluation all match!
+
+    Rejects:
+      - unverified metadata-only JSON;
+      - tampered ``operator_spec`` or ``authored_model_source``;
+      - self-consistent JSON fabricated without real ``confirm_rows`` / ``host_confirmation_bundle``;
+      - valid artifacts belonging to a DIFFERENT node (`expected_ast_digest` mismatch).
     """
     if not art_path.is_file():
         return None
     try:
-        loaded = json.loads(art_path.read_text(encoding="utf-8"))
+        art_bytes = art_path.read_bytes()
+        loaded = json.loads(art_bytes.decode("utf-8"))
     except Exception:
         return None
+    art_sha = hashlib.sha256(art_bytes).hexdigest()
+    ext_manifest_p = art_path.parent / "confirmed_manifest.json"
+    ext_sha = hashlib.sha256(ext_manifest_p.read_bytes()).hexdigest() if ext_manifest_p.is_file() else ""
+    leg_obs_p = art_path.parent / "confirmed_training_observations.json"
+    leg_obs_sha = hashlib.sha256(leg_obs_p.read_bytes()).hexdigest() if leg_obs_p.is_file() else ""
+    leg_py_p = art_path.parent / "authored_model.py"
+    leg_py_sha = hashlib.sha256(leg_py_p.read_bytes()).hexdigest() if leg_py_p.is_file() else ""
+    cache_key = (art_sha, ext_sha, leg_obs_sha, leg_py_sha, bool(require_external_manifest))
+    if cache_key in _VERIFIED_AUTHORED_CACHE:
+        cached = _VERIFIED_AUTHORED_CACHE[cache_key]
+        if cached is None:
+            return None
+        if expected_ast_digest is not None and cached.get("ast_skeleton_digest") != expected_ast_digest:
+            return None
+        return deepcopy(cached)
     if not isinstance(loaded, dict):
         return None
     if loaded.get("confirmed_ok") is not True:
@@ -1123,6 +1223,8 @@ def load_verified_authored_method(art_path: Path) -> dict[str, Any] | None:
         or not conf_dig
     ):
         return None
+    if expected_ast_digest is not None and expected_digest != expected_ast_digest:
+        return None
     if hashlib.sha256(model_src.encode("utf-8")).hexdigest() != expected_sha:
         return None
     src_ast = canonicalize_python_model_ast(model_src)
@@ -1139,6 +1241,101 @@ def load_verified_authored_method(art_path: Path) -> dict[str, Any] | None:
     recomp_ast = canonicalize_python_model_ast(recompiled)
     if recomp_ast.get("skeleton_status") != "VERIFIED_PURE_AST" or recomp_ast.get("ast_skeleton_digest") != expected_digest:
         return None
+
+    # Verify real confirmation provenance (`host_confirmation_bundle` + isolated confirmation replay!)
+    bundle = loaded.get("host_confirmation_bundle")
+    if bundle is None and not require_external_manifest:
+        # Backward-compatible verification for intact pre-V17.4 workspace directories on disk
+        legacy_obs_path = art_path.parent / "confirmed_training_observations.json"
+        legacy_py_path = art_path.parent / "authored_model.py"
+        if (
+            len(conf_dig) != 16
+            or not all(ch in "0123456789abcdef" for ch in conf_dig)
+            or not legacy_obs_path.is_file()
+            or not legacy_py_path.is_file()
+        ):
+            return None
+        try:
+            legacy_rows = json.loads(legacy_obs_path.read_text(encoding="utf-8"))
+            legacy_src = legacy_py_path.read_text(encoding="utf-8")
+        except Exception:
+            return None
+        if (
+            not isinstance(legacy_rows, list)
+            or len(legacy_rows) < 2
+            or hashlib.sha256(legacy_src.encode("utf-8")).hexdigest() != expected_sha
+        ):
+            return None
+        with TemporaryDirectory(prefix="hegel-verify-legacy-art-") as tmp_lv:
+            lv_ws = Path(tmp_lv)
+            (lv_ws / "verify_model.py").write_text(model_src, encoding="utf-8")
+            l_rep = evaluate_isolated_python_model(
+                lv_ws, "verify_model.py", legacy_rows, isolated_prefix_rows=legacy_rows
+            )
+        if l_rep.get("returncode") != 0 or not math.isfinite(float(l_rep["rmse"])) or float(l_rep["rmse"]) > 0.05:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        _VERIFIED_AUTHORED_CACHE[cache_key] = deepcopy(loaded)
+        return loaded
+
+    if not isinstance(bundle, dict) or bundle.get("confirmed_ok") is not True:
+        return None
+    c_rows = bundle.get("confirm_rows")
+    p_rows = bundle.get("training_prefix_rows")
+    tol = bundle.get("tolerance")
+    obs_rmse = bundle.get("observed_confirm_rmse")
+    if (
+        not isinstance(c_rows, list)
+        or len(c_rows) < 1
+        or not isinstance(p_rows, list)
+        or not isinstance(tol, (int, float))
+        or float(tol) <= 0.0
+        or not isinstance(obs_rmse, (int, float))
+    ):
+        return None
+    expected_conf_sha = hashlib.sha256(json.dumps(c_rows, sort_keys=True).encode("utf-8")).hexdigest()
+    expected_pref_sha = hashlib.sha256(json.dumps(p_rows, sort_keys=True).encode("utf-8")).hexdigest()
+    if (
+        conf_dig != expected_conf_sha[:16]
+        or bundle.get("confirm_rows_sha256") != expected_conf_sha
+        or bundle.get("training_prefix_sha256") != expected_pref_sha
+        or bundle.get("model_sha256") != expected_sha
+        or bundle.get("ast_skeleton_digest") != expected_digest
+    ):
+        return None
+
+    ext_manifest_path = art_path.parent / "confirmed_manifest.json"
+    if require_external_manifest and not ext_manifest_path.is_file():
+        return None
+    if ext_manifest_path.is_file():
+        try:
+            ext_m = json.loads(ext_manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        if (
+            ext_m.get("confirmed_ok") is not True
+            or ext_m.get("model_sha256") != expected_sha
+            or ext_m.get("ast_skeleton_digest") != expected_digest
+            or ext_m.get("confirm_rows_sha256") != expected_conf_sha
+            or ext_m.get("training_prefix_sha256") != expected_pref_sha
+        ):
+            return None
+
+    with TemporaryDirectory(prefix="hegel-verify-art-") as tmp_v:
+        v_ws = Path(tmp_v)
+        (v_ws / "verify_model.py").write_text(model_src, encoding="utf-8")
+        replay = evaluate_isolated_python_model(
+            v_ws, "verify_model.py", c_rows, isolated_prefix_rows=p_rows
+        )
+    if (
+        replay.get("returncode") != 0
+        or not math.isfinite(float(replay["rmse"]))
+        or float(replay["rmse"]) > float(tol) + 1e-9
+        or abs(float(replay["rmse"]) - float(obs_rmse)) > 1e-4
+    ):
+        _VERIFIED_AUTHORED_CACHE[cache_key] = None
+        return None
+    _VERIFIED_AUTHORED_CACHE[cache_key] = deepcopy(loaded)
     return loaded
 
 

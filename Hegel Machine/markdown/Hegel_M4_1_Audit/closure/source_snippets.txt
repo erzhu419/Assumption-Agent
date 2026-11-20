@@ -1,0 +1,1193 @@
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/open_workspace_wormhole.py
+LINES: 214-286
+214:     """Parse ``model.py`` source, inline pure ``predict(row)`` dataflow, verify annotations, & hash skeleton!"""
+215:     model_sha256 = hashlib.sha256(model_source.encode("utf-8")).hexdigest()
+216:     tree = ast.parse(model_source)
+217: 
+218:     annot_expr: ast.AST | None = None
+219:     explicit_schema_tag: str | None = None
+220:     predict_fn: ast.FunctionDef | None = None
+221:     predict_count = 0
+222:     fit_count = 0
+223:     module_impure = False
+224:     module_consts: dict[str, ast.AST] = {}
+225:     param_dicts: set[str] = {"_PARAMS", "PARAMS"}
+226:     shadowed_names: set[str] = set()
+227:     allowed_math_imports = {"exp", "log", "sqrt", "sin", "cos", "tanh"}
+228: 
+229:     for node in tree.body:
+230:         if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+231:             continue
+232:         elif isinstance(node, ast.Import):
+233:             for alias in node.names:
+234:                 if alias.name == "math" and (alias.asname is None or alias.asname == "math"):
+235:                     continue
+236:                 shadowed_names.add(alias.asname or alias.name.split(".")[0])
+237:         elif isinstance(node, ast.ImportFrom):
+238:             for alias in node.names:
+239:                 bound_name = alias.asname or alias.name
+240:                 if node.module == "math" and alias.name in allowed_math_imports and bound_name == alias.name:
+241:                     continue
+242:                 shadowed_names.add(bound_name)
+243:         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+244:             if isinstance(node, ast.FunctionDef) and node.name == "predict":
+245:                 predict_count += 1
+246:                 if predict_count == 1:
+247:                     predict_fn = node
+248:                 else:
+249:                     module_impure = True
+250:                     shadowed_names.add("predict")
+251:             elif isinstance(node, ast.FunctionDef) and node.name == "fit":
+252:                 fit_count += 1
+253:                 if fit_count > 1:
+254:                     module_impure = True
+255:             else:
+256:                 shadowed_names.add(node.name)
+257:         elif isinstance(node, ast.Assign):
+258:             if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+259:                 # Reject attribute/subscript/tuple mutations such as `math.exp = ...`!
+260:                 module_impure = True
+261:                 continue
+262:             tname = node.targets[0].id
+263:             if tname == "_CORE_LAW_EXPR" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+264:                 annot_expr = ast.parse(node.value.value, mode="eval").body
+265:             elif tname == "_SCHEMA_FAMILY_TAG" and isinstance(node.value, ast.Constant):
+266:                 explicit_schema_tag = str(node.value.value)
+267:             elif tname == "_LENS" and isinstance(node.value, ast.Dict):
+268:                 continue
+269:             elif _SkeletonNormalizer.eval_numeric_literal(node.value) is not None:
+270:                 module_consts[tname] = deepcopy(node.value)
+271:                 if tname in _SkeletonNormalizer._ALLOWED_CALLS or tname == "math":
+272:                     shadowed_names.add(tname)
+273:             elif isinstance(node.value, ast.Dict):
+274:                 if tname not in param_dicts:
+275:                     module_consts[tname] = deepcopy(node.value)
+276:                     shadowed_names.add(tname)
+277:             else:
+278:                 shadowed_names.add(tname)
+279:         elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+280:             target_node = node.target
+281:             if isinstance(target_node, ast.Name):
+282:                 shadowed_names.add(target_node.id)
+283:             else:
+284:                 module_impure = True
+285:         else:
+286:             module_impure = True
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/open_workspace_wormhole.py
+LINES: 911-946
+911:         else:
+912:             eval_ids = {id(r) for r in rows}
+913:             isolated_prefix = [r for r in lab.observations if id(r) not in eval_ids]
+914:     else:
+915:         isolated_prefix = list(training_prefix)
+916: 
+917:     ws_root = workspace.resolve()
+918:     cand_path = Path(model_rel_path)
+919:     resolved_model = cand_path.resolve() if cand_path.is_absolute() else (ws_root / cand_path).resolve()
+920:     try:
+921:         safe_rel_model = resolved_model.relative_to(ws_root).as_posix()
+922:     except ValueError:
+923:         return {
+924:             "execution_error": True,
+925:             "outcome_status": "EXECUTION_ERROR",
+926:             "returncode": 1,
+927:             "stderr": f"model_rel_path escapes workspace root: {model_rel_path}",
+928:         }
+929: 
+930:     with TemporaryDirectory(prefix="hegel-confirm-sandbox-") as tmp_dir:
+931:         sandbox = Path(tmp_dir) / "ws"
+932:         shutil.copytree(
+933:             workspace,
+934:             sandbox,
+935:             ignore=shutil.ignore_patterns("observations.json", "model_observations.json", "__pycache__", "*.pyc"),
+936:         )
+937:         prefix_payload = json.dumps([asdict(r) for r in isolated_prefix], ensure_ascii=False)
+938:         (sandbox / "observations.json").write_text(prefix_payload, encoding="utf-8")
+939:         (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+940:         res = evaluate_python_model(
+941:             sandbox,
+942:             safe_rel_model,
+943:             rows,
+944:             timeout_seconds=12.0,
+945:             risk_quantile=0.5,
+946:             training_observations=isolated_prefix,
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/open_workspace_labs.py
+LINES: 215-264
+215: def _normalize_workspace_relative_model_path(workspace: Path, model_rel_path: str) -> str | None:
+216:     """Resolve ``model_rel_path`` strictly inside ``workspace`` and return a relative POSIX path."""
+217:     ws_root = workspace.resolve()
+218:     cand = Path(model_rel_path)
+219:     full = cand.resolve() if cand.is_absolute() else (ws_root / cand).resolve()
+220:     try:
+221:         rel = full.relative_to(ws_root)
+222:     except ValueError:
+223:         return None
+224:     if not full.is_file():
+225:         return None
+226:     return rel.as_posix()
+227: 
+228: 
+229: def _evaluate_workspace_submission(
+230:     workspace: Path,
+231:     model_rel_path: str | None,
+232:     paid_observations: list[Observation],
+233:     heldout_eval_rows: list[Observation],
+234:     rmse_tolerance: float,
+235:     *,
+236:     submission_status: str = "completed",
+237: ) -> dict[str, Any]:
+238:     """Closed read-only benchmark evaluator executing ``workspace / model_rel_path`` in subprocess!"""
+239:     safe_rel = _normalize_workspace_relative_model_path(workspace, model_rel_path) if model_rel_path else None
+240:     if submission_status != "completed" or not safe_rel:
+241:         return {
+242:             "strict_pass": False,
+243:             "false_confirmation": False,
+244:             "reason": "unconfirmed_or_missing_submitted_model_file",
+245:             "submission_status": submission_status,
+246:             "rmse": None,
+247:         }
+248:     training_obs = _load_verified_confirmed_prefix(workspace, paid_observations)
+249:     with TemporaryDirectory(prefix="hegel-eval-sandbox-") as tmp_dir:
+250:         sandbox = Path(tmp_dir) / "ws"
+251:         shutil.copytree(
+252:             workspace,
+253:             sandbox,
+254:             ignore=shutil.ignore_patterns("observations.json", "model_observations.json", "__pycache__", "*.pyc"),
+255:         )
+256:         prefix_payload = json.dumps([asdict(r) for r in training_obs], ensure_ascii=False)
+257:         (sandbox / "observations.json").write_text(prefix_payload, encoding="utf-8")
+258:         (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+259:         eval_res = evaluate_python_model(
+260:             sandbox,
+261:             safe_rel,
+262:             heldout_eval_rows,
+263:             timeout_seconds=15.0,
+264:             risk_quantile=0.5,
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m3_scale_universe.py
+LINES: 2390-2423
+2390:                     idx_variant=confirm_purchases,
+2391:                     role_order=(t_fit.get("role_order") or role_order),
+2392:                     symmetric_roles=bool(feat_info.get("symmetric_roles", False)),
+2393:                 )
+2394:                 c_rows = lab.acquire([c_pt], workspace=None, phase="confirm")
+2395:                 if not c_rows:
+2396:                     break
+2397:                 confirm_purchases += 1
+2398:                 vr = validate_workspace_model_on_rows(workspace, cand_rel, c_rows, lab, training_prefix=fit_prefix)
+2399:                 lab.sync_workspace_files(workspace)
+2400:                 obs_err = vr["rmse"] if not vr.get("execution_error") else float("inf")
+2401:                 if not math.isfinite(obs_err) or obs_err > tol:
+2402:                     wrong_trials += 1
+2403:                     # If an earlier coarse candidate failed at high-load confirm, update ONLY the single observable regime flag matching this onset class!
+2404:                     if lab.task_view.get("pilot_regime") == "safe_low_load":
+2405:                         updated_flag: dict[str, Any] = {}
+2406:                         if active_ar == 1:
+2407:                             updated_flag["high_load_rollover_detected"] = True
+2408:                         elif bool(feat_info.get("symmetric_roles", False)):
+2409:                             updated_flag["high_corner_ceiling_detected"] = True
+2410:                         elif "sig:low_regime_shunt_onset" in sigs:
+2411:                             updated_flag["high_substrate_turnover_detected"] = True
+2412:                         elif "sig:low_regime_charging_onset" in sigs:
+2413:                             updated_flag["transient_overshoot_detected"] = True
+2414:                         feat_info = {**feat_info, **updated_flag}
+2415:                     continue
+2416: 
+2417:                 cand_sha = hashlib.sha256((workspace / cand_rel).read_bytes()).hexdigest()
+2418:                 conf_dig = vr.get("confirmation_digest") or hashlib.sha256(
+2419:                     json.dumps([asdict(r) for r in c_rows], sort_keys=True).encode("utf-8")
+2420:                 ).hexdigest()[:16]
+2421:                 receipt = {
+2422:                     "target_id": name,
+2423:                     "claim_id": node["claim_contract"]["claim_id"],
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py
+LINES: 52-96
+52: 
+53: def evaluate_isolated_python_model(
+54:     workspace_dir: Path,
+55:     model_relpath: str,
+56:     eval_rows: list[dict[str, Any]],
+57:     *,
+58:     isolated_prefix_rows: list[dict[str, Any]],
+59: ) -> dict[str, Any]:
+60:     """Run ``code_agent.evaluate_python_model`` in a clean TemporaryDirectory sandbox (`F11` safe!).
+61: 
+62:     Sandbox ``observations.json`` and ``model_observations.json`` contain STRICTLY ``isolated_prefix_rows``,
+63:     never ``eval_rows`` (confirmation or heldout).
+64:     """
+65:     raw_model_path = Path(model_relpath)
+66:     if raw_model_path.is_absolute():
+67:         ws_root = workspace_dir.resolve()
+68:         try:
+69:             safe_relpath = raw_model_path.resolve().relative_to(ws_root).as_posix()
+70:         except ValueError as exc:
+71:             raise ValueError(f"Model path escapes workspace boundary: {model_relpath}") from exc
+72:     else:
+73:         safe_relpath = model_relpath
+74: 
+75:     prefix_obs = [
+76:         Observation(features={k: float(v) for k, v in r["features"].items()}, target=float(r["target"]), history=())
+77:         for r in isolated_prefix_rows
+78:     ]
+79:     eval_obs = [
+80:         Observation(features={k: float(v) for k, v in r["features"].items()}, target=float(r["target"]), history=())
+81:         for r in eval_rows
+82:     ]
+83:     with TemporaryDirectory(prefix="hegel-m4-sandbox-") as tmp_dir:
+84:         sandbox = Path(tmp_dir) / "ws"
+85:         shutil.copytree(
+86:             workspace_dir,
+87:             sandbox,
+88:             ignore=shutil.ignore_patterns("observations.json", "model_observations.json", "__pycache__", "*.pyc"),
+89:         )
+90:         prefix_payload = json.dumps([asdict(r) for r in prefix_obs], ensure_ascii=False)
+91:         (sandbox / "observations.json").write_text(prefix_payload, encoding="utf-8")
+92:         (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+93:         res = evaluate_python_model(
+94:             sandbox,
+95:             safe_relpath,
+96:             eval_obs,
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py
+LINES: 213-250
+213: 
+214: def _iter_child_exprs(node: dict[str, Any]):
+215:     """Yield every child ExprNode dictionary (any dict child carrying an ``'op'`` string)."""
+216:     for k, val in node.items():
+217:         if k == "multi_start_param":
+218:             continue
+219:         if isinstance(val, dict) and isinstance(val.get("op"), str):
+220:             yield val
+221:         elif isinstance(val, (list, tuple)):
+222:             for item in val:
+223:                 if isinstance(item, dict) and isinstance(item.get("op"), str):
+224:                     yield item
+225: 
+226: 
+227: def _max_param_idx(node: dict[str, Any]) -> int:
+228:     if node.get("op") == "param":
+229:         return int(node["idx"])
+230:     best = -1
+231:     for child in _iter_child_exprs(node):
+232:         best = max(best, _max_param_idx(child))
+233:     return best
+234: 
+235: 
+236: def _collect_params(
+237:     node: dict[str, Any],
+238:     out: dict[int, dict[str, float]],
+239:     *,
+240:     strict_unique: bool = False,
+241: ) -> None:
+242:     if node.get("op") == "param":
+243:         idx = int(node["idx"])
+244:         meta = {"lb": float(node["lb"]), "ub": float(node["ub"]), "init": float(node["init"])}
+245:         if strict_unique and idx in out:
+246:             raise ValueError(f"Parameter index collision detected on p{idx}: {out[idx]} vs {meta}")
+247:         out[idx] = meta
+248:         return
+249:     for child in _iter_child_exprs(node):
+250:         _collect_params(child, out, strict_unique=strict_unique)
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py
+LINES: 417-443
+417: ) -> str:
+418:     """Compile an arbitrary composed ``ExprNode`` tree into a pure-predict + stateful-fit ``model.py``."""
+419:     params_meta: dict[int, dict[str, float]] = {}
+420:     _collect_params(operator_spec, params_meta, strict_unique=True)
+421: 
+422:     n_params = max(params_meta.keys()) + 1 if params_meta else 0
+423:     for req_i in range(n_params):
+424:         if req_i not in params_meta:
+425:             raise ValueError(f"Non-contiguous parameter index gap at p{req_i} in {sorted(params_meta)}")
+426:     lbs = [params_meta[i]["lb"] for i in range(n_params)]
+427:     ubs = [params_meta[i]["ub"] for i in range(n_params)]
+428:     inits = [params_meta[i]["init"] for i in range(n_params)]
+429:     init_dict_str = ", ".join(f"'p{i}': {inits[i]:.8g}" for i in range(n_params))
+430: 
+431:     sign = float(lens.get("sign", 1.0))
+432:     scale = max(1e-9, float(lens.get("scale", 1.0)))
+433:     offset = float(lens.get("offset", 0.0))
+434: 
+435:     core_dict_expr = _emit_expr(operator_spec, role_names, param_mode="dict")
+436:     core_vec_expr = _emit_expr(operator_spec, role_names, param_mode="vec")
+437:     fam_tag = str(operator_spec.get("family_hint", "composed_expr"))
+438: 
+439:     ms_info = operator_spec.get("multi_start_param")
+440:     starts_list: list[list[float]] = [list(inits)]
+441:     if isinstance(ms_info, dict) and int(ms_info["idx"]) < n_params:
+442:         ms_idx = int(ms_info["idx"])
+443:         starts_list = []
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py
+LINES: 1006-1033
+1006:     conf_rmse = float(conf_eval["rmse"])
+1007:     confirmed_ok = bool(conf_eval["returncode"] == 0 and math.isfinite(conf_rmse) and conf_rmse <= tolerance)
+1008: 
+1009:     conf_digest = hashlib.sha256(json.dumps(confirm_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+1010:     best_spec = provider._best_overall[2] if provider._best_overall is not None else atomic_base_specs[0]
+1011:     authored_artifact = {
+1012:         "task_id": lab.task_id,
+1013:         "surface_domain": lab.surface_domain,
+1014:         "operator_spec": deepcopy(best_spec),
+1015:         "role_names": list(role_names),
+1016:         "ast_skeleton_digest": ast_info["ast_skeleton_digest"],
+1017:         "canonical_ast_dump": ast_info["canonical_ast_dump"],
+1018:         "skeleton_status": ast_info["skeleton_status"],
+1019:         "model_sha256": ast_info["model_sha256"],
+1020:         "authored_model_source": model_source,
+1021:         "confirmation_digest": conf_digest,
+1022:         "composed_history": deepcopy(provider.composed_history),
+1023:         "diagnostic_report": deepcopy(provider.last_diagnostic_report),
+1024:         "training_prefix_count": len(frozen_prefix_rows),
+1025:         "confirmed_ok": confirmed_ok,
+1026:         "confirm_rmse": round(conf_rmse, 6),
+1027:     }
+1028:     (workspace_dir / "authored_method.json").write_text(
+1029:         json.dumps(authored_artifact, indent=2, sort_keys=True), encoding="utf-8"
+1030:     )
+1031:     (workspace_dir / "authored_model.py").write_text(model_source, encoding="utf-8")
+1032: 
+1033:     heldout_eval = evaluate_isolated_python_model(
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_compositional_discovery.py
+LINES: 1089-1144
+1089: def load_verified_authored_method(art_path: Path) -> dict[str, Any] | None:
+1090:     """Load a persisted ``authored_method.json`` ONLY when confirmation receipt, pure-AST digest, and model SHA256 match!
+1091: 
+1092:     Rejects unverified metadata-only JSON or tampered ``operator_spec`` / ``authored_model_source`` payloads.
+1093:     """
+1094:     if not art_path.is_file():
+1095:         return None
+1096:     try:
+1097:         loaded = json.loads(art_path.read_text(encoding="utf-8"))
+1098:     except Exception:
+1099:         return None
+1100:     if not isinstance(loaded, dict):
+1101:         return None
+1102:     if loaded.get("confirmed_ok") is not True:
+1103:         return None
+1104:     if loaded.get("skeleton_status") != "VERIFIED_PURE_AST":
+1105:         return None
+1106:     op_spec = loaded.get("operator_spec")
+1107:     role_names = loaded.get("role_names")
+1108:     expected_digest = loaded.get("ast_skeleton_digest")
+1109:     expected_sha = loaded.get("model_sha256")
+1110:     model_src = loaded.get("authored_model_source")
+1111:     conf_dig = loaded.get("confirmation_digest")
+1112:     if (
+1113:         not isinstance(op_spec, dict)
+1114:         or not isinstance(role_names, list)
+1115:         or not role_names
+1116:         or not isinstance(expected_digest, str)
+1117:         or not expected_digest
+1118:         or not isinstance(expected_sha, str)
+1119:         or not expected_sha
+1120:         or not isinstance(model_src, str)
+1121:         or not model_src
+1122:         or not isinstance(conf_dig, str)
+1123:         or not conf_dig
+1124:     ):
+1125:         return None
+1126:     if hashlib.sha256(model_src.encode("utf-8")).hexdigest() != expected_sha:
+1127:         return None
+1128:     src_ast = canonicalize_python_model_ast(model_src)
+1129:     if src_ast.get("skeleton_status") != "VERIFIED_PURE_AST" or src_ast.get("ast_skeleton_digest") != expected_digest:
+1130:         return None
+1131:     try:
+1132:         recompiled = compile_operator_spec_to_python(
+1133:             op_spec,
+1134:             role_names=[str(r) for r in role_names],
+1135:             lens={"sign": 1.0, "scale": 1.0, "offset": 0.0},
+1136:         )
+1137:     except Exception:
+1138:         return None
+1139:     recomp_ast = canonicalize_python_model_ast(recompiled)
+1140:     if recomp_ast.get("skeleton_status") != "VERIFIED_PURE_AST" or recomp_ast.get("ast_skeleton_digest") != expected_digest:
+1141:         return None
+1142:     return loaded
+1143: 
+1144: 
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py
+LINES: 1127-1185
+1127: _SUPPORTED_M4_PROGRAM_STEPS = frozenset({
+1128:     "verify_scale_closure_or_escalate",
+1129:     "calibrate_observation_lens",
+1130:     "compile_and_fit_composed_ast",
+1131:     "subprocess_isolated_confirm",
+1132: })
+1133: 
+1134: 
+1135: def _validate_and_interpret_m4_program_steps(
+1136:     program_steps: Any,
+1137:     *,
+1138:     node: dict[str, Any],
+1139:     target_arity: int,
+1140: ) -> dict[str, Any] | None:
+1141:     """Validate and interpret declarative ``program_steps`` on an M4 ``PhilosophicalForest`` node.
+1142: 
+1143:     Rejects empty lists, unknown opcodes, missing mandatory compilation/confirmation steps,
+1144:     mismatched ``operator_tag`` / ``active_arity``, or non-positive ``fresh_points``.
+1145:     """
+1146:     if not isinstance(program_steps, list) or not program_steps:
+1147:         return None
+1148:     step_map: dict[str, dict[str, Any]] = {}
+1149:     for entry in program_steps:
+1150:         if not isinstance(entry, dict):
+1151:             return None
+1152:         op_name = entry.get("step")
+1153:         if not isinstance(op_name, str) or op_name not in _SUPPORTED_M4_PROGRAM_STEPS:
+1154:             return None
+1155:         if op_name in step_map:
+1156:             return None
+1157:         step_map[op_name] = entry
+1158: 
+1159:     if "compile_and_fit_composed_ast" not in step_map or "subprocess_isolated_confirm" not in step_map:
+1160:         return None
+1161: 
+1162:     act = node.get("claim_contract", {}).get("conclusion_or_action", {})
+1163:     expected_tag = str(act.get("operator_tag", ""))
+1164:     comp_step = step_map["compile_and_fit_composed_ast"]
+1165:     step_tag = comp_step.get("operator_tag")
+1166:     if not isinstance(step_tag, str) or not step_tag or (expected_tag and step_tag != expected_tag):
+1167:         return None
+1168: 
+1169:     if "calibrate_observation_lens" in step_map:
+1170:         cal_ar = step_map["calibrate_observation_lens"].get("active_arity")
+1171:         if not isinstance(cal_ar, int) or isinstance(cal_ar, bool) or cal_ar != target_arity:
+1172:             return None
+1173: 
+1174:     conf_step = step_map["subprocess_isolated_confirm"]
+1175:     fresh_pts = conf_step.get("fresh_points", 1)
+1176:     if not isinstance(fresh_pts, int) or isinstance(fresh_pts, bool) or fresh_pts < 1:
+1177:         return None
+1178: 
+1179:     return {
+1180:         "operator_tag": step_tag,
+1181:         "calibrate_lens": "calibrate_observation_lens" in step_map,
+1182:         "verify_scale_closure": "verify_scale_closure_or_escalate" in step_map,
+1183:         "fresh_points": fresh_pts,
+1184:     }
+1185: 
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py
+LINES: 1284-1306
+1284:         if admit:
+1285:             for c in raw_cands:
+1286:                 node = c["target_node"]
+1287:                 # Validate & interpret `node["program_steps"]`! Unknown or malformed opcodes are rejected!
+1288:                 exec_plan = _validate_and_interpret_m4_program_steps(
+1289:                     node.get("program_steps"),
+1290:                     node=node,
+1291:                     target_arity=len(lab.feature_names),
+1292:                 )
+1293:                 if exec_plan is None:
+1294:                     continue
+1295:                 auth = authorize_abstraction_use(
+1296:                     requested_tier="bounded_trial",
+1297:                     task_view={**tv_query, "target_id": target.target_id, "node_version": node["version"]},
+1298:                     target_features=obs_feats,
+1299:                     claim_contract=node["claim_contract"],
+1300:                     scale_map=node.get("scale_map"),
+1301:                     wormhole_edge=c.get("wormhole_edge"),
+1302:                 )
+1303:                 if auth["granted"]:
+1304:                     c_with_plan = {**c, "_exec_plan": exec_plan}
+1305:                     recalled_candidates.append(c_with_plan)
+1306: 
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py
+LINES: 1320-1400
+1320:         cand_by_tag: dict[str, dict[str, Any]] = {}
+1321:         for rc in recalled_candidates[:3]:
+1322:             act = rc["target_node"]["claim_contract"]["conclusion_or_action"]
+1323:             otag = str(act["operator_tag"])
+1324:             recalled_specs.append((otag, deepcopy(act["operator_spec"])))
+1325:             cand_by_tag.setdefault(otag, rc)
+1326: 
+1327:         best_rec, n_ev, ws = _fit_and_score_operator_specs(
+1328:             work_dir,
+1329:             specs_to_try=recalled_specs[:2],
+1330:             feature_names=lab.feature_names,
+1331:             training_rows=frozen_prefix,
+1332:             tolerance=lab.tolerance,
+1333:             max_fit_trials=2,
+1334:         )
+1335:         total_evaluated += n_ev
+1336:         total_wall += ws
+1337: 
+1338:         if best_rec is not None and best_rec["train_rmse"] <= lab.tolerance:
+1339:             # Purchase 1st fresh confirmation point (`c_pt_0`)
+1340:             c0_rows = lab.acquire_channel([target.confirm_points[0]], channel=confirm_channel, phase="confirm_0")
+1341:             c0_eval = evaluate_isolated_python_model(
+1342:                 work_dir,
+1343:                 best_rec["model_relpath"],
+1344:                 c0_rows,
+1345:                 isolated_prefix_rows=frozen_prefix,
+1346:             )
+1347:             total_wall += float(c0_eval.get("wall_seconds", 0.02))
+1348: 
+1349:             if c0_eval["returncode"] == 0 and float(c0_eval["rmse"]) <= lab.tolerance:
+1350:                 # Recall succeeded on 1st fresh confirmation point! Verify full receipt via `authorize_abstraction_use`!
+1351:                 matched_rc = cand_by_tag[best_rec["tag"]]
+1352:                 m_node = matched_rc["target_node"]
+1353:                 model_sha = hashlib.sha256(best_rec["model_source"].encode("utf-8")).hexdigest()
+1354:                 conf_dig = hashlib.sha256(json.dumps(c0_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+1355:                 receipt = {
+1356:                     "passed": True,
+1357:                     "claim_id": m_node["claim_contract"]["claim_id"],
+1358:                     "observed_error": float(c0_eval["rmse"]),
+1359:                     "target_id": target.target_id,
+1360:                     "node_version": m_node["version"],
+1361:                     "model_sha256": model_sha,
+1362:                     "confirmation_digest": conf_dig,
+1363:                 }
+1364:                 tier3_auth = authorize_abstraction_use(
+1365:                     requested_tier="local_solver_guidance",
+1366:                     task_view={
+1367:                         "goal_kind": "open_workspace_mechanism_prediction",
+1368:                         "tolerance": lab.tolerance,
+1369:                         "target_id": target.target_id,
+1370:                         "node_version": m_node["version"],
+1371:                         "expected_model_sha256": model_sha,
+1372:                         "expected_confirmation_digest": conf_dig,
+1373:                     },
+1374:                     target_features={**obs_feats, "high_flow_ceiling_regime": obs_feats.get("high_flow_ceiling_regime", False)},
+1375:                     claim_contract=m_node["claim_contract"],
+1376:                     scale_map=m_node.get("scale_map"),
+1377:                     wormhole_edge=matched_rc.get("wormhole_edge"),
+1378:                     evidence_receipt=receipt,
+1379:                 )
+1380:                 if tier3_auth["granted"]:
+1381:                     confirmed_ok = True
+1382:                     confirmed_via_recall = True
+1383:                     chosen_model_rel = best_rec["model_relpath"]
+1384:                     non_direct_walk_win = bool(matched_rc.get("reached_only_by_graph_walk"))
+1385:             else:
+1386:                 # 1st confirmation point falsified coarse parent (`c_pt_0` revealed high-flow ceiling OR scale mismatch)!
+1387:                 # Incorporate `c0_rows` into updated training prefix and check 2nd recalled candidate (e.g. 2-hop walked child!)
+1388:                 updated_prefix = [*frozen_prefix, *c0_rows]
+1389:                 if len(recalled_candidates) >= 2:
+1390:                     rem_specs = [
+1391:                         (
+1392:                             str(rc["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"]),
+1393:                             deepcopy(rc["target_node"]["claim_contract"]["conclusion_or_action"]["operator_spec"]),
+1394:                             rc,
+1395:                         )
+1396:                         for rc in recalled_candidates
+1397:                         if str(rc["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"]) != best_rec["tag"]
+1398:                     ]
+1399:                     if rem_specs:
+1400:                         child_tag, child_spec, child_rc = rem_specs[0]
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_multiscale_renormalization.py
+LINES: 1418-1476
+1418:                             )
+1419:                             total_wall += float(c1_eval.get("wall_seconds", 0.02))
+1420:                             if c1_eval["returncode"] == 0 and float(c1_eval["rmse"]) <= lab.tolerance:
+1421:                                 # Recompute empirical regime features strictly from measured `updated_prefix` (`pilot + c0_rows`)!
+1422:                                 _, updated_obs_feats = extract_multiscale_pilot_signatures(
+1423:                                     updated_prefix,
+1424:                                     feature_names=lab.feature_names,
+1425:                                     scale_probe=scale_probe_info,
+1426:                                     domain_cue=(
+1427:                                         f"cue_{target.domain_cue}"
+1428:                                         if not target.domain_cue.startswith("cue_")
+1429:                                         else target.domain_cue
+1430:                                     ),
+1431:                                 )
+1432:                                 if (
+1433:                                     len(lab.feature_names) == 1
+1434:                                     and updated_obs_feats.get("max_primary_load", 0.0) > 6.5
+1435:                                     and float(c0_eval["rmse"]) > lab.tolerance * 2.0
+1436:                                 ):
+1437:                                     updated_obs_feats["high_flow_ceiling_regime"] = True
+1438: 
+1439:                                 c_node = child_rc["target_node"]
+1440:                                 c_model_sha = hashlib.sha256(best_child["model_source"].encode("utf-8")).hexdigest()
+1441:                                 c_conf_dig = hashlib.sha256(json.dumps(c1_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+1442:                                 child_receipt = {
+1443:                                     "passed": True,
+1444:                                     "claim_id": c_node["claim_contract"]["claim_id"],
+1445:                                     "observed_error": float(c1_eval["rmse"]),
+1446:                                     "target_id": target.target_id,
+1447:                                     "node_version": c_node["version"],
+1448:                                     "model_sha256": c_model_sha,
+1449:                                     "confirmation_digest": c_conf_dig,
+1450:                                 }
+1451:                                 child_tier3_auth = authorize_abstraction_use(
+1452:                                     requested_tier="local_solver_guidance",
+1453:                                     task_view={
+1454:                                         "goal_kind": "open_workspace_mechanism_prediction",
+1455:                                         "tolerance": lab.tolerance,
+1456:                                         "target_id": target.target_id,
+1457:                                         "node_version": c_node["version"],
+1458:                                         "expected_model_sha256": c_model_sha,
+1459:                                         "expected_confirmation_digest": c_conf_dig,
+1460:                                     },
+1461:                                     target_features=updated_obs_feats,
+1462:                                     claim_contract=c_node["claim_contract"],
+1463:                                     scale_map=c_node.get("scale_map"),
+1464:                                     wormhole_edge=child_rc.get("wormhole_edge"),
+1465:                                     evidence_receipt=child_receipt,
+1466:                                 )
+1467:                                 if child_tier3_auth["granted"]:
+1468:                                     confirmed_ok = True
+1469:                                     confirmed_via_recall = True
+1470:                                     frozen_prefix = updated_prefix
+1471:                                     chosen_model_rel = best_child["model_relpath"]
+1472:                                     non_direct_walk_win = bool(child_rc.get("reached_only_by_graph_walk"))
+1473: 
+1474:     # --- Step 4: Compositional / Full-History Fallback Synthesis When Recall Not Confirmed ---
+1475:     if not confirmed_ok:
+1476:         # If ScaleBlind failed on coarse_macro due to fast-mode breakdown, it must re-acquire micro_fine pilot!
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_1_unified_discovery_and_renormalization.py
+LINES: 619-677
+619:             nd_scale = (nd.get("scale_map") or {}).get("window_or_partition", {}).get("scale_regime")
+620:             if nd_scale != target_scale:
+621:                 continue
+622:             plan = _validate_and_interpret_m4_program_steps(nd.get("program_steps"), node=nd, target_arity=2)
+623:             if plan is None:
+624:                 continue
+625:             recalled.append(c)
+626: 
+627:         eval_count = 0
+628:         confirmed_ok = False
+629:         confirmed_via_recall = False
+630:         walked_cg = False
+631:         chosen_rel = "fallback.py"
+632:         confirm_ch = selected_ch
+633: 
+634:         if recalled:
+635:             top_c = recalled[0]
+636:             op_spec = top_c["target_node"]["claim_contract"]["conclusion_or_action"]["operator_spec"]
+637:             lens_est = _estimate_affine_lens_for_spec(op_spec, list(lab.feature_names), pilot_rows)
+638:             code = compile_operator_spec_to_python(op_spec, role_names=list(lab.feature_names), lens=lens_est)
+639:             (ws_dir / "recalled_0.py").write_text(code, encoding="utf-8")
+640:             tr_ev = evaluate_isolated_python_model(ws_dir, "recalled_0.py", pilot_rows, isolated_prefix_rows=pilot_rows)
+641:             eval_count += 1
+642:             if tr_ev["returncode"] == 0 and float(tr_ev["rmse"]) <= lab.tolerance:
+643:                 c_rows = lab.acquire_channel(confirm_pts[:1], channel=confirm_ch, phase="confirm_recall")
+644:                 cf_ev = evaluate_isolated_python_model(ws_dir, "recalled_0.py", c_rows, isolated_prefix_rows=pilot_rows)
+645:                 if cf_ev["returncode"] == 0 and float(cf_ev["rmse"]) <= lab.tolerance:
+646:                     m_sha = hashlib.sha256(code.encode("utf-8")).hexdigest()
+647:                     c_dig = hashlib.sha256(json.dumps(c_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+648:                     nd = top_c["target_node"]
+649:                     eff_sm = cert["scale_map"] if (cert is not None and target_scale == "meso") else nd["scale_map"]
+650:                     # Verify all confirm points lie inside verified_input_box when coarse ScaleMap is used!
+651:                     vbox = (eff_sm.get("window_or_partition") or {}).get("verified_input_box")
+652:                     in_box = True if not vbox else all(is_point_inside_verified_box(pt, vbox) for pt in confirm_pts[:1])
+653:                     auth = authorize_abstraction_use(
+654:                         requested_tier="local_solver_guidance",
+655:                         task_view={
+656:                             "goal_kind": "open_workspace_mechanism_prediction",
+657:                             "tolerance": lab.tolerance,
+658:                             "target_id": lab.task_id,
+659:                             "node_version": nd["version"],
+660:                             "expected_model_sha256": m_sha,
+661:                             "expected_confirmation_digest": c_dig,
+662:                         },
+663:                         target_features={"active_arity": 2},
+664:                         claim_contract=nd["claim_contract"],
+665:                         scale_map=eff_sm,
+666:                         evidence_receipt={
+667:                             "passed": True,
+668:                             "claim_id": nd["claim_contract"]["claim_id"],
+669:                             "observed_error": float(cf_ev["rmse"]),
+670:                             "target_id": lab.task_id,
+671:                             "node_version": nd["version"],
+672:                             "model_sha256": m_sha,
+673:                             "confirmation_digest": c_dig,
+674:                         },
+675:                     )
+676:                     if auth["granted"] and in_box:
+677:                         confirmed_ok = True
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_1_unified_discovery_and_renormalization.py
+LINES: 1280-1292
+1280: def _load_node_verified_operator_spec(node: dict[str, Any]) -> dict[str, Any] | None:
+1281:     """Load operator_spec for a forest node; if backed by a persisted ``authored_artifact_path``,
+1282:     MUST pass ``load_verified_authored_method`` integrity verification!
+1283:     """
+1284:     act = node["claim_contract"]["conclusion_or_action"]
+1285:     art_path_str = act.get("authored_artifact_path")
+1286:     if art_path_str:
+1287:         verified = load_verified_authored_method(Path(art_path_str))
+1288:         if verified is None:
+1289:             return None
+1290:         return deepcopy(verified["operator_spec"])
+1291:     return deepcopy(act["operator_spec"])
+1292: 
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_1_unified_discovery_and_renormalization.py
+LINES: 1385-1456
+1385:         auth_cands: list[dict[str, Any]] = []
+1386:         for c in ret.get("candidates", ()):
+1387:             nd = c["target_node"]
+1388:             plan = _validate_and_interpret_m4_program_steps(
+1389:                 nd.get("program_steps"), node=nd, target_arity=len(target.feature_names)
+1390:             )
+1391:             if plan is None:
+1392:                 continue
+1393:             verified_spec = _load_node_verified_operator_spec(nd)
+1394:             if verified_spec is None:
+1395:                 continue
+1396:             b_auth = authorize_abstraction_use(
+1397:                 requested_tier="bounded_trial",
+1398:                 task_view={**tv_q, "target_id": target.target_id, "node_version": nd["version"]},
+1399:                 target_features=obs_feats,
+1400:                 claim_contract=nd["claim_contract"],
+1401:                 scale_map=nd.get("scale_map"),
+1402:                 wormhole_edge=c.get("wormhole_edge"),
+1403:             )
+1404:             if b_auth["granted"]:
+1405:                 auth_cands.append({**c, "_verified_spec": verified_spec})
+1406: 
+1407:         if auth_cands:
+1408:             c0_cand = auth_cands[0]
+1409:             c0_tag = str(c0_cand["target_node"]["claim_contract"]["conclusion_or_action"]["operator_tag"])
+1410:             best_0, ev_0 = _autonomous_fit_candidate_specs(
+1411:                 ws_dir,
+1412:                 specs_to_try=[(c0_tag, c0_cand["_verified_spec"])],
+1413:                 feature_names=target.feature_names,
+1414:                 training_rows=frozen_prefix,
+1415:                 tolerance=target.tolerance,
+1416:             )
+1417:             total_evaluated += ev_0
+1418:             if best_0 is not None and best_0["train_rmse"] <= target.tolerance:
+1419:                 cf0_obs = lab.acquire([target.confirm_points[0]], workspace=None, phase="confirm_0") or []
+1420:                 cf0_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf0_obs]
+1421:                 cf0_ev = evaluate_isolated_python_model(
+1422:                     ws_dir, best_0["model_relpath"], cf0_rows, isolated_prefix_rows=frozen_prefix
+1423:                 )
+1424:                 if cf0_ev["returncode"] == 0 and float(cf0_ev["rmse"]) <= target.tolerance:
+1425:                     nd = c0_cand["target_node"]
+1426:                     m_sha = hashlib.sha256(best_0["model_source"].encode("utf-8")).hexdigest()
+1427:                     c_dig = hashlib.sha256(json.dumps(cf0_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+1428:                     t3 = authorize_abstraction_use(
+1429:                         requested_tier="local_solver_guidance",
+1430:                         task_view={
+1431:                             "goal_kind": "open_workspace_mechanism_prediction",
+1432:                             "tolerance": target.tolerance,
+1433:                             "target_id": target.target_id,
+1434:                             "node_version": nd["version"],
+1435:                             "expected_model_sha256": m_sha,
+1436:                             "expected_confirmation_digest": c_dig,
+1437:                         },
+1438:                         target_features={
+1439:                             **obs_feats,
+1440:                             "high_flow_ceiling_regime": obs_feats.get("high_flow_ceiling_regime", False),
+1441:                         },
+1442:                         claim_contract=nd["claim_contract"],
+1443:                         scale_map=nd.get("scale_map"),
+1444:                         wormhole_edge=c0_cand.get("wormhole_edge"),
+1445:                         evidence_receipt={
+1446:                             "passed": True,
+1447:                             "claim_id": nd["claim_contract"]["claim_id"],
+1448:                             "observed_error": float(cf0_ev["rmse"]),
+1449:                             "target_id": target.target_id,
+1450:                             "node_version": nd["version"],
+1451:                             "model_sha256": m_sha,
+1452:                             "confirmation_digest": c_dig,
+1453:                         },
+1454:                     )
+1455:                     if t3["granted"]:
+1456:                         confirmed_ok = True
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/m4_1_unified_discovery_and_renormalization.py
+LINES: 1892-1921
+1892: 
+1893:     def _comp_eval(node: dict[str, Any], q: dict[str, Any]) -> str:
+1894:         req_ar = int(node["observation_map"]["parameter_semantics"]["active_arity"])
+1895:         if q.get("active_arity") != req_ar:
+1896:             return "UNK"
+1897:         cc = node["claim_contract"]
+1898:         branches = cc.get("disjunctive_branches") or [cc]
+1899:         branch_verdicts = []
+1900:         for br in branches:
+1901:             v_br = "ACC"
+1902:             for pre in br.get("preconditions", ()):
+1903:                 fk = pre["field"]
+1904:                 if fk not in q:
+1905:                     v_br = "UNK"
+1906:                     break
+1907:                 ok = (q[fk] == pre["value"]) if pre.get("op", "==") == "==" else (q[fk] != pre["value"])
+1908:                 if not ok:
+1909:                     v_br = "REJ"
+1910:                     break
+1911:             branch_verdicts.append(v_br)
+1912:         if "ACC" in branch_verdicts:
+1913:             return "ACC"
+1914:         if "REJ" in branch_verdicts and "UNK" not in branch_verdicts:
+1915:             return "REJ"
+1916:         return "UNK"
+1917: 
+1918:     # Register 3 compatible duplicates and compress them online
+1919:     compressed_count = 0
+1920:     for dup_id, keeper_id, s_reg, otag, osp, rnames, sigs, precs in [
+1921:         ("s2_dup_haldane", "s1_child_haldane_shunt", "meso", "op_composed_haldane_shunt_2d", w1_ver["operator_spec"], ["s", "b"], ["sig:witness_haldane_shunt_2d", "sig:cue_fermentor_dup"], [{"field": "haldane_turnover_shunt_regime", "op": "==", "value": True}]),
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py
+LINES: 234-248
+234:         raise ValueError(f"Unsupported permission tier: {requested_tier}")
+235: 
+236:     receipt_ok = _validate_evidence_receipt(evidence_receipt, claim_contract, task_view)
+237:     requires_strict_receipt = (
+238:         task_view.get("goal_kind") == "open_workspace_mechanism_prediction"
+239:         or str(claim_contract.get("family_plugin", "")).endswith("_ast")
+240:     )
+241:     if evidence_receipt is not None:
+242:         confirmed = bool(receipt_ok)
+243:     elif requires_strict_receipt:
+244:         confirmed = False
+245:     else:
+246:         confirmed = bool(heldout_confirmed)
+247: 
+248:     # Compute declared permission ceiling from ClaimContract & HorizontalWormholeEdge
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py
+LINES: 263-290
+263:     preconditions = list(claim_contract.get("preconditions", ()))
+264:     exclusions: list[dict[str, Any]] = []
+265:     if wormhole_edge is not None:
+266:         align_conds = wormhole_edge.get("align_conditions", {})
+267:         preconditions.extend(align_conds.get("inclusion_predicates", ()))
+268:         child_required = {
+269:             (r.get("field"), r.get("op"), r.get("value"))
+270:             for r in claim_contract.get("preconditions", ())
+271:             if isinstance(r, dict)
+272:         }
+273:         for ex_r in align_conds.get("exclusion_predicates", ()):
+274:             if isinstance(ex_r, dict) and (ex_r.get("field"), ex_r.get("op"), ex_r.get("value")) in child_required:
+275:                 continue
+276:             exclusions.append(ex_r)
+277: 
+278:     precond_results = [evaluate_predicate_rule(r, target_features) for r in preconditions]
+279:     excl_results = [evaluate_predicate_rule(r, target_features) for r in exclusions]
+280: 
+281:     if "FALSE" in precond_results:
+282:         return {
+283:             "granted": False,
+284:             "granted_tier": None,
+285:             "requested_tier": requested_tier,
+286:             "reason": "precondition_violated",
+287:             "precondition_results": precond_results,
+288:         }
+289:     if "TRUE" in excl_results:
+290:         return {
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py
+LINES: 453-518
+453:     }
+454: 
+455: 
+456: def _extract_predictive_law_fingerprint(node: dict[str, Any]) -> Any:
+457:     act = (node.get("claim_contract") or {}).get("conclusion_or_action") or {}
+458:     return act.get("ast_skeleton_digest") or act.get("operator_tag") or act.get("family_id")
+459: 
+460: 
+461: def fidelity_compress_nodes(
+462:     node_a: dict[str, Any],
+463:     node_b: dict[str, Any],
+464:     evaluation_queries: list[dict[str, Any]],
+465:     evaluator_fn,
+466: ) -> dict[str, Any]:
+467:     """Check aligned Acceptance, Rejection, Conflict, AND Unknown preservation before merging.
+468: 
+469:     Fidelity compression requires:
+470:       1. Zero direct conflicts: {res_a, res_b} != {'ACC', 'REJ'} on any query;
+471:       2. Zero unauthorized promotions from {'UNK', 'UNK'} to 'ACC' or 'REJ';
+472:       3. Zero lost accepted cases: Acc(A) U Acc(B) <= Acc(merged) when non-conflicting;
+473:       4. Zero lost true rejections: Rej(A) U Rej(B) <= Rej(merged) when non-conflicting;
+474:       5. Zero newly fabricated false rejections on valid cases.
+475:     """
+476:     merged_preconditions = list({
+477:         json.dumps(p, sort_keys=True): deepcopy(p)
+478:         for p in [*node_a["claim_contract"]["preconditions"], *node_b["claim_contract"]["preconditions"]]
+479:     }.values())
+480:     merged_node = deepcopy(node_a)
+481:     merged_node["node_id"] = f"merged:{node_a['node_id']}+{node_b['node_id']}"
+482:     merged_node["claim_contract"]["preconditions"] = merged_preconditions
+483:     merged_node["claim_contract"]["disjunctive_branches"] = [
+484:         deepcopy(node_a["claim_contract"]),
+485:         deepcopy(node_b["claim_contract"]),
+486:     ]
+487: 
+488:     act_a = (node_a.get("claim_contract") or {}).get("conclusion_or_action") or {}
+489:     act_b = (node_b.get("claim_contract") or {}).get("conclusion_or_action") or {}
+490:     law_a = act_a.get("ast_skeleton_digest") or act_a.get("operator_tag") or act_a.get("family_id")
+491:     law_b = act_b.get("ast_skeleton_digest") or act_b.get("operator_tag") or act_b.get("family_id")
+492: 
+493:     lost_accepts, lost_rejects, false_new_rejects = [], [], []
+494:     conflicting_verdicts, unauthorized_promotions = [], []
+495:     for idx, q in enumerate(evaluation_queries):
+496:         res_a = evaluator_fn(node_a, q)  # 'ACC' | 'REJ' | 'UNK' (UNK = out of scope / undecided)
+497:         res_b = evaluator_fn(node_b, q)
+498:         res_m = evaluator_fn(merged_node, q)
+499:         # 0a. Contradictory source nodes ({ACC, REJ}) OR overlapping ACC with incompatible predictive laws CANNOT merge!
+500:         if {res_a, res_b} == {"ACC", "REJ"}:
+501:             conflicting_verdicts.append(idx)
+502:             continue
+503:         if res_a == "ACC" and res_b == "ACC" and law_a is not None and law_b is not None and law_a != law_b:
+504:             conflicting_verdicts.append(idx)
+505:             continue
+506:         # 0b. Merged node must NEVER promote {'UNK', 'UNK'} into 'ACC' or 'REJ'!
+507:         if res_a == "UNK" and res_b == "UNK" and res_m != "UNK":
+508:             unauthorized_promotions.append(idx)
+509:         # 1. Any query accepted by an applicable branch (without a genuine empirical REJ) must stay ACC
+510:         if ("ACC" in {res_a, res_b}) and ("REJ" not in {res_a, res_b}) and res_m != "ACC":
+511:             lost_accepts.append(idx)
+512:         # 2. Any genuine empirical rejection must be preserved
+513:         if ("REJ" in {res_a, res_b}) and res_m != "REJ":
+514:             lost_rejects.append(idx)
+515:         # 3. Merged rule must NEVER fabricate a new REJ where neither branch rejected
+516:         if res_m == "REJ" and ("REJ" not in {res_a, res_b}):
+517:             false_new_rejects.append(idx)
+518: 
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py
+LINES: 935-1020
+935:             "reinterpreted_counterexample_ids": list(reinterpreted_counterexample_ids or ()),
+936:         }
+937:         self.nodes[node_id] = updated
+938:         # Mark incident horizontal AND vertical (implication / coarse-graining) edges stale until revalidated!
+939:         for wh in self.horizontal_wormhole_edges.values():
+940:             if ((wh["node_a_id"] == node_id and wh["node_a_version"] != updated["version"]) or
+941:                     (wh["node_b_id"] == node_id and wh["node_b_version"] != updated["version"])):
+942:                 wh["stale_endpoint_revision"] = True
+943:         for ie in self.local_implication_edges:
+944:             if ((ie["stronger_node_id"] == node_id and ie["stronger_version"] != updated["version"]) or
+945:                     (ie["weaker_node_id"] == node_id and ie["weaker_version"] != updated["version"])):
+946:                 ie["stale_endpoint_revision"] = True
+947:         scale_or_law_changed = (
+948:             updated_scale_map is not None
+949:             or updated_observation_map is not None
+950:             or cause in {"abstraction_closure_loss", "claim_refuted_or_unprofitable"}
+951:             or _extract_predictive_law_fingerprint(updated) != _extract_predictive_law_fingerprint(old)
+952:         )
+953:         for ce in self.coarse_graining_edges:
+954:             touches_fine = ce["fine_node_id"] == node_id and ce["fine_version"] != updated["version"]
+955:             touches_coarse = ce["coarse_node_id"] == node_id and ce["coarse_version"] != updated["version"]
+956:             if touches_fine or touches_coarse:
+957:                 if scale_or_law_changed:
+958:                     ce["stale_endpoint_revision"] = True
+959:                 else:
+960:                     if touches_fine:
+961:                         ce["fine_version"] = updated["version"]
+962:                     if touches_coarse:
+963:                         ce["coarse_version"] = updated["version"]
+964:         return deepcopy(updated)
+965: 
+966:     def revalidate_vertical_edges_after_revision(
+967:         self,
+968:         node_id: str,
+969:         *,
+970:         witness_episode_id: str,
+971:         reason: str = "",
+972:     ) -> dict[str, Any]:
+973:         """Explicitly revalidate & rebind incident intra-tree implication and coarse-graining edges."""
+974:         live = self.nodes[node_id]
+975:         rebound_implication = 0
+976:         rebound_coarse = 0
+977:         for ie in self.local_implication_edges:
+978:             if ie["stronger_node_id"] == node_id or ie["weaker_node_id"] == node_id:
+979:                 s_id, w_id = ie["stronger_node_id"], ie["weaker_node_id"]
+980:                 if s_id in self.nodes and w_id in self.nodes:
+981:                     ie["stronger_version"] = self.nodes[s_id]["version"]
+982:                     ie["weaker_version"] = self.nodes[w_id]["version"]
+983:                     ie["stale_endpoint_revision"] = False
+984:                     ie.setdefault("revision_provenance", []).append({
+985:                         "episode_id": witness_episode_id,
+986:                         "revalidated_node_id": node_id,
+987:                         "node_version": live["version"],
+988:                         "reason": reason,
+989:                     })
+990:                     rebound_implication += 1
+991:         for ce in self.coarse_graining_edges:
+992:             if ce["fine_node_id"] == node_id or ce["coarse_node_id"] == node_id:
+993:                 f_id, c_id = ce["fine_node_id"], ce["coarse_node_id"]
+994:                 if f_id in self.nodes and c_id in self.nodes:
+995:                     ce["fine_version"] = self.nodes[f_id]["version"]
+996:                     ce["coarse_version"] = self.nodes[c_id]["version"]
+997:                     ce["stale_endpoint_revision"] = False
+998:                     ce.setdefault("revision_provenance", []).append({
+999:                         "episode_id": witness_episode_id,
+1000:                         "revalidated_node_id": node_id,
+1001:                         "node_version": live["version"],
+1002:                         "reason": reason,
+1003:                     })
+1004:                     rebound_coarse += 1
+1005:         return {
+1006:             "node_id": node_id,
+1007:             "live_version": live["version"],
+1008:             "rebound_implication_edges": rebound_implication,
+1009:             "rebound_coarse_graining_edges": rebound_coarse,
+1010:         }
+1011: 
+1012:     def recall_mid_layer_wormholes(
+1013:         self,
+1014:         observed_signatures: list[str],
+1015:         *,
+1016:         task_view: dict[str, Any],
+1017:         allow_horizontal_wormholes: bool = True,
+1018:     ) -> list[dict[str, Any]]:
+1019:         """Recall candidate intermediate nodes & live-version horizontal wormholes by ProbeSignatures."""
+1020:         sig_set = set(observed_signatures)
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/wormhole_forest.py
+LINES: 1150-1255
+1150:             return {"accepted": False, "reason": "missing_node"}
+1151:         node_a = self.nodes[keeper_node_id]
+1152:         node_b = self.nodes[redundant_node_id]
+1153:         if node_a["utility_ledger"].get("archived_low_utility") or node_b["utility_ledger"].get("archived_low_utility"):
+1154:             return {"accepted": False, "reason": "already_archived"}
+1155:         report = fidelity_compress_nodes(node_a, node_b, evaluation_queries, evaluator_fn)
+1156:         if not report["accepted"]:
+1157:             return report
+1158: 
+1159:         validated_merged = report["merged_node"]
+1160:         old_ver_a = node_a["version"]
+1161:         old_ver_b = node_b["version"]
+1162:         merged_sigs = list(dict.fromkeys([*node_a.get("probe_signatures", ()), *node_b.get("probe_signatures", ())]))
+1163:         merged_clusters = list(
+1164:             dict.fromkeys([*node_a.get("source_cluster_ids", ()), *node_b.get("source_cluster_ids", ())])
+1165:         )
+1166:         prior_members = deepcopy(node_a.get("fidelity_merged_members", []))
+1167:         prior_members.append({
+1168:             "redundant_node_id": redundant_node_id,
+1169:             "redundant_version": old_ver_b,
+1170:             "query_count": len(evaluation_queries),
+1171:         })
+1172: 
+1173:         # Commit the exact validated merged claim_contract onto keeper via versioned registration!
+1174:         committed = self.register_node(
+1175:             node_id=keeper_node_id,
+1176:             tree_id=node_a["tree_id"],
+1177:             layer_role=node_a["layer_role"],
+1178:             task_view=validated_merged["task_view"],
+1179:             observation_map=validated_merged["observation_map"],
+1180:             scale_map=validated_merged.get("scale_map"),
+1181:             claim_contract=validated_merged["claim_contract"],
+1182:             probe_signatures=merged_sigs,
+1183:             program_steps=validated_merged.get("program_steps", []),
+1184:             support_paths=node_a.get("support_paths"),
+1185:             source_cluster_ids=merged_clusters,
+1186:         )
+1187:         self.nodes[keeper_node_id]["fidelity_merged_members"] = prior_members
+1188:         new_ver = committed["version"]
+1189: 
+1190:         # Post-commit verification: installed keeper MUST match validated merged_node on every query!
+1191:         live_keeper = self.nodes[keeper_node_id]
+1192:         for idx, q in enumerate(evaluation_queries):
+1193:             if evaluator_fn(live_keeper, q) != evaluator_fn(validated_merged, q):
+1194:                 raise RuntimeError(f"Post-commit fidelity mismatch at query index {idx}")
+1195: 
+1196:         node_b["utility_ledger"]["archived_low_utility"] = True
+1197:         node_b["utility_ledger"]["archived_reason"] = "fidelity_compressed"
+1198:         node_b["utility_ledger"]["merged_into_node_id"] = keeper_node_id
+1199:         node_b["utility_ledger"]["merged_into_version"] = new_ver
+1200: 
+1201:         # Rebind live horizontal & vertical edges referencing keeper (old_ver_a) or redundant_node_id (old_ver_b)
+1202:         for wid, wh in list(self.horizontal_wormhole_edges.items()):
+1203:             if wh.get("stale_endpoint_revision"):
+1204:                 continue
+1205:             if wh["node_a_id"] == keeper_node_id and wh["node_a_version"] == old_ver_a:
+1206:                 wh["node_a_version"] = new_ver
+1207:             if wh["node_b_id"] == keeper_node_id and wh["node_b_version"] == old_ver_a:
+1208:                 wh["node_b_version"] = new_ver
+1209:             if wh["node_a_id"] == redundant_node_id and wh["node_a_version"] == old_ver_b and wh["tree_b_id"] != live_keeper["tree_id"]:
+1210:                 wh["node_a_id"] = keeper_node_id
+1211:                 wh["node_a_version"] = new_ver
+1212:                 wh["tree_a_id"] = live_keeper["tree_id"]
+1213:             elif wh["node_b_id"] == redundant_node_id and wh["node_b_version"] == old_ver_b and wh["tree_a_id"] != live_keeper["tree_id"]:
+1214:                 wh["node_b_id"] = keeper_node_id
+1215:                 wh["node_b_version"] = new_ver
+1216:                 wh["tree_b_id"] = live_keeper["tree_id"]
+1217: 
+1218:         for ie in self.local_implication_edges:
+1219:             if ie.get("stale_endpoint_revision"):
+1220:                 continue
+1221:             if ie["stronger_node_id"] == keeper_node_id and ie["stronger_version"] == old_ver_a:
+1222:                 ie["stronger_version"] = new_ver
+1223:             if ie["weaker_node_id"] == keeper_node_id and ie["weaker_version"] == old_ver_a:
+1224:                 ie["weaker_version"] = new_ver
+1225: 
+1226:         for ce in self.coarse_graining_edges:
+1227:             if ce.get("stale_endpoint_revision"):
+1228:                 continue
+1229:             if ce["fine_node_id"] == keeper_node_id and ce["fine_version"] == old_ver_a:
+1230:                 ce["fine_version"] = new_ver
+1231:             if ce["coarse_node_id"] == keeper_node_id and ce["coarse_version"] == old_ver_a:
+1232:                 ce["coarse_version"] = new_ver
+1233: 
+1234:         return {
+1235:             **report,
+1236:             "keeper_node_id": keeper_node_id,
+1237:             "keeper_committed_version": new_ver,
+1238:             "archived_redundant_node_id": redundant_node_id,
+1239:         }
+1240: 
+1241: 
+1242: class TwoStageWormholeGate:
+1243:     """SATzilla Stage-0 presolver + Stage-1 paired same-state cost gate + uncovered exploration arm."""
+1244: 
+1245:     def __init__(
+1246:         self,
+1247:         *,
+1248:         margin: float = 0.5,
+1249:         probe_budget_fraction_cap: float = 0.25,
+1250:         uncovered_exploration_budget_calls: int = 2,
+1251:     ) -> None:
+1252:         self.margin = float(margin)
+1253:         self.probe_budget_fraction_cap = float(probe_budget_fraction_cap)
+1254:         self.uncovered_exploration_budget_calls = int(uncovered_exploration_budget_calls)
+1255:         self.exploration_uses_by_signature: dict[str, int] = {}
+
+FILE: /workspace/scratch/3f14ad2da0ed/repo_m41_99b1fdfeb/Hegel Machine/src/hegel_machine/cognition/hipporag_wormhole_index.py
+LINES: 206-246
+206:         }
+207: 
+208:         # 1. Intra-tree vertical implication / sublation edges (`parent -> stronger_child`)
+209:         for v_edge in forest.local_implication_edges:
+210:             if v_edge.get("stale_endpoint_revision"):
+211:                 continue
+212:             sa, wa = v_edge["stronger_node_id"], v_edge["weaker_node_id"]
+213:             if sa in self.active_nodes and wa in self.active_nodes:
+214:                 if (
+215:                     v_edge["stronger_version"] == self.active_nodes[sa]["version"]
+216:                     and v_edge["weaker_version"] == self.active_nodes[wa]["version"]
+217:                 ):
+218:                     _add_directed(wa, sa, float(vertical_up_weight))
+219:                     _add_directed(sa, wa, float(vertical_down_weight))
+220:                     refined_children.add(sa)
+221:                     parents_with_children.add(wa)
+222:                     self.graph_adj_nodes[sa].append((wa, None))
+223:                     self.graph_adj_nodes[wa].append((sa, None))
+224:                     n_vert_edges += 1
+225: 
+226:         # 1b. Intra-tree multi-scale coarse-graining edges (`fine -> coarse` via Pi_s & reverse escalation)
+227:         n_coarse_edges = 0
+228:         if self.include_coarse_graining_edges:
+229:             for cg_edge in getattr(forest, "coarse_graining_edges", ()):
+230:                 if cg_edge.get("stale_endpoint_revision"):
+231:                     continue
+232:                 fa, ca = cg_edge["fine_node_id"], cg_edge["coarse_node_id"]
+233:                 if fa in self.active_nodes and ca in self.active_nodes:
+234:                     if (
+235:                         cg_edge["fine_version"] == self.active_nodes[fa]["version"]
+236:                         and cg_edge["coarse_version"] == self.active_nodes[ca]["version"]
+237:                     ):
+238:                         _add_directed(fa, ca, float(coarse_up_weight))
+239:                         _add_directed(ca, fa, float(fine_down_weight))
+240:                         self.graph_adj_nodes[fa].append((ca, None))
+241:                         self.graph_adj_nodes[ca].append((fa, None))
+242:                         n_coarse_edges += 1
+243: 
+244:         # 2. Self-retention weights (higher on terminal witness-refined nodes so escalated mass concentrates)
+245:         for nid in self.node_ids:
+246:             if nid in refined_children and nid not in parents_with_children:

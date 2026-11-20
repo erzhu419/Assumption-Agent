@@ -1,0 +1,104 @@
+diff --git a/Hegel Machine/src/hegel_machine/cognition/open_workspace_wormhole.py b/Hegel Machine/src/hegel_machine/cognition/open_workspace_wormhole.py
+index 8480a17..9a0af6b 100644
+--- a/Hegel Machine/src/hegel_machine/cognition/open_workspace_wormhole.py	
++++ b/Hegel Machine/src/hegel_machine/cognition/open_workspace_wormhole.py	
+@@ -218,13 +218,18 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
+     annot_expr: ast.AST | None = None
+     explicit_schema_tag: str | None = None
+     predict_fn: ast.FunctionDef | None = None
++    predict_count = 0
++    fit_count = 0
++    module_impure = False
+     module_consts: dict[str, ast.AST] = {}
+     param_dicts: set[str] = {"_PARAMS", "PARAMS"}
+     shadowed_names: set[str] = set()
+     allowed_math_imports = {"exp", "log", "sqrt", "sin", "cos", "tanh"}
+ 
+     for node in tree.body:
+-        if isinstance(node, ast.Import):
++        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
++            continue
++        elif isinstance(node, ast.Import):
+             for alias in node.names:
+                 if alias.name == "math" and (alias.asname is None or alias.asname == "math"):
+                     continue
+@@ -236,13 +241,24 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
+                     continue
+                 shadowed_names.add(bound_name)
+         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+-            if isinstance(node, ast.FunctionDef) and node.name == "predict" and predict_fn is None:
+-                predict_fn = node
+-            elif node.name not in {"fit"}:
+-                shadowed_names.add(node.name)
+-            elif predict_fn is not None and node.name == "predict":
++            if isinstance(node, ast.FunctionDef) and node.name == "predict":
++                predict_count += 1
++                if predict_count == 1:
++                    predict_fn = node
++                else:
++                    module_impure = True
++                    shadowed_names.add("predict")
++            elif isinstance(node, ast.FunctionDef) and node.name == "fit":
++                fit_count += 1
++                if fit_count > 1:
++                    module_impure = True
++            else:
+                 shadowed_names.add(node.name)
+-        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
++        elif isinstance(node, ast.Assign):
++            if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
++                # Reject attribute/subscript/tuple mutations such as `math.exp = ...`!
++                module_impure = True
++                continue
+             tname = node.targets[0].id
+             if tname == "_CORE_LAW_EXPR" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                 annot_expr = ast.parse(node.value.value, mode="eval").body
+@@ -264,6 +280,10 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
+             target_node = node.target
+             if isinstance(target_node, ast.Name):
+                 shadowed_names.add(target_node.id)
++            else:
++                module_impure = True
++        else:
++            module_impure = True
+ 
+     class _EnvInliner(ast.NodeTransformer):
+         def __init__(self, env: dict[str, ast.AST], row_arg: str, feat_aliases: set[str]) -> None:
+@@ -342,7 +362,7 @@ def canonicalize_python_model_ast(model_source: str) -> dict[str, Any]:
+ 
+     predict_core: ast.AST | None = None
+     feat_aliases: set[str] = {"f", "features"}
+-    impure_predict = False
++    impure_predict = bool(module_impure)
+     row_arg = "row"
+ 
+     if predict_fn is not None:
+@@ -894,6 +914,19 @@ def validate_workspace_model_on_rows(
+     else:
+         isolated_prefix = list(training_prefix)
+ 
++    ws_root = workspace.resolve()
++    cand_path = Path(model_rel_path)
++    resolved_model = cand_path.resolve() if cand_path.is_absolute() else (ws_root / cand_path).resolve()
++    try:
++        safe_rel_model = resolved_model.relative_to(ws_root).as_posix()
++    except ValueError:
++        return {
++            "execution_error": True,
++            "outcome_status": "EXECUTION_ERROR",
++            "returncode": 1,
++            "stderr": f"model_rel_path escapes workspace root: {model_rel_path}",
++        }
++
+     with TemporaryDirectory(prefix="hegel-confirm-sandbox-") as tmp_dir:
+         sandbox = Path(tmp_dir) / "ws"
+         shutil.copytree(
+@@ -906,7 +939,7 @@ def validate_workspace_model_on_rows(
+         (sandbox / "model_observations.json").write_text(prefix_payload, encoding="utf-8")
+         res = evaluate_python_model(
+             sandbox,
+-            model_rel_path,
++            safe_rel_model,
+             rows,
+             timeout_seconds=12.0,
+             risk_quantile=0.5,
