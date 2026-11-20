@@ -76,12 +76,18 @@ class ObservationMap:
     parameter_semantics: dict[str, str] = field(default_factory=dict)
     noise_std_estimate: float = 0.0
     clipping_ceiling: float | None = None
+    temporal_readout_mode: str | None = None  # 'present_snapshot' | 'before_after_contrast' | 'history_conditioned_horizon'
+    causal_cutoff_policy: str | None = None  # 'strict_prefix_le_t0' | 'retrospective_offline_only'
     display_label: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         out = asdict(self)
         if not out["display_label"]:
             out.pop("display_label")
+        if out.get("temporal_readout_mode") is None:
+            out.pop("temporal_readout_mode", None)
+        if out.get("causal_cutoff_policy") is None:
+            out.pop("causal_cutoff_policy", None)
         return out
 
 
@@ -94,9 +100,17 @@ class ScaleMap:
     proposed_discarded_variables: list[str] = field(default_factory=list)
     verified_discarded_in_scope: list[dict[str, Any]] = field(default_factory=list)
     error_budget: float | None = None
+    temporal_horizon_class: str | None = None  # 'instantaneous' | 'fast_transient' | 'meso_adaptation' | 'slow_structural'
+    temporal_parameters: dict[str, Any] | None = None  # sampling_dt, intrinsic_taus, extraction_window_w, forecast_horizon_H, reset_protocol
+    regime_partition_op: dict[str, Any] | None = None
+    folding_output_kind: str | None = None  # 'effective_constant' | 'reduced_slow_ode' | 'memory_kernel' | 'augmented_latent_state'
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        out = asdict(self)
+        for opt_k in ("temporal_horizon_class", "temporal_parameters", "regime_partition_op", "folding_output_kind"):
+            if out.get(opt_k) is None:
+                out.pop(opt_k, None)
+        return out
 
 
 @dataclass
@@ -411,6 +425,54 @@ def authorize_abstraction_use(
             "exclusion_results": excl_results,
         }
 
+    # Gray-zone scope guard: between max_supported and min_refuted is UNKNOWN_GRAY_ZONE (never blind midpoint!)
+    raw_gray_zones = (
+        selected_branch.get("gray_zone_bounds", ())
+        if (selected_branch is not None and "gray_zone_bounds" in selected_branch)
+        else claim_contract.get("gray_zone_bounds", ())
+    )
+    active_gray_zones: list[dict[str, Any]] = []
+    for gz in raw_gray_zones or ():
+        if not isinstance(gz, dict):
+            continue
+        gz_field = gz.get("field")
+        if not gz_field or gz_field not in target_features or target_features[gz_field] is None:
+            continue
+        raw_v = target_features[gz_field]
+        if not isinstance(raw_v, (int, float)) or isinstance(raw_v, bool) or not math.isfinite(float(raw_v)):
+            continue
+        v_num = float(raw_v)
+        max_sup = float(gz["max_supported"])
+        min_ref = float(gz["min_refuted"])
+        if v_num >= min_ref - 1e-12:
+            return {
+                "granted": False,
+                "granted_tier": None,
+                "requested_tier": requested_tier,
+                "reason": "gray_zone_refuted_bound_exceeded",
+                "field": gz_field,
+                "value": v_num,
+                "min_refuted": min_ref,
+            }
+        if v_num > max_sup + 1e-12:
+            active_gray_zones.append({
+                "field": gz_field,
+                "value": v_num,
+                "max_supported": max_sup,
+                "min_refuted": min_ref,
+                "gray_zone_status": "UNKNOWN_GRAY_ZONE",
+            })
+    if active_gray_zones and PERMISSION_ORDER[requested_tier] >= PERMISSION_ORDER["local_solver_guidance"]:
+        return {
+            "granted": False,
+            "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
+            "requested_tier": requested_tier,
+            "reason": "coordinate_in_uncertified_gray_zone_requires_boundary_probe",
+            "gray_zone_status": "UNKNOWN_GRAY_ZONE",
+            "gray_zones": active_gray_zones,
+            **branch_meta,
+        }
+
     # Check ScaleMap closure & discarded variable verification for tiers >= local_solver_guidance
     if scale_map is not None and PERMISSION_ORDER[requested_tier] >= PERMISSION_ORDER["local_solver_guidance"]:
         goal = task_view.get("goal_kind", "")
@@ -719,6 +781,8 @@ class PhilosophicalForest:
         self.coarse_graining_edges: list[dict[str, Any]] = []
         self.horizontal_wormhole_edges: dict[str, dict[str, Any]] = {}
         self.wormhole_history: dict[str, list[dict[str, Any]]] = {}
+        self.shared_base_subtrees: dict[str, dict[str, Any]] = {}
+        self.shared_base_subtree_history: dict[str, list[dict[str, Any]]] = {}
         self.conflict_relations: list[dict[str, Any]] = []
         self.raw_episode_archive: list[dict[str, Any]] = []
         self.questions: dict[str, dict[str, Any]] = {}
@@ -790,6 +854,17 @@ class PhilosophicalForest:
             )
             for ce in self.coarse_graining_edges
         )
+        if self.shared_base_subtrees:
+            sub_toks = tuple(
+                (
+                    sid,
+                    int(sb.get("version", 1)),
+                    str(sb.get("subtree_digest", "")),
+                    bool(sb.get("stale_endpoint_revision", False)),
+                )
+                for sid, sb in sorted(self.shared_base_subtrees.items())
+            )
+            return (int(self.mutation_epoch), node_toks, wh_toks, ie_toks, ce_toks, sub_toks)
         return (int(self.mutation_epoch), node_toks, wh_toks, ie_toks, ce_toks)
 
     def record_raw_episode(self, episode: dict[str, Any]) -> None:
@@ -1690,6 +1765,104 @@ class PhilosophicalForest:
             "archived_redundant_node_id": redundant_node_id,
         }
 
+    def register_shared_base_subtree(
+        self,
+        *,
+        subtree_id: str,
+        shared_nodes: list[dict[str, Any]],
+        shared_relations: list[dict[str, Any]],
+        role_and_scale_schema: dict[str, Any],
+        open_completion_slots: list[dict[str, Any]],
+        supporting_sources: list[dict[str, Any]],
+        probe_signatures: list[str] | None = None,
+        permission_tier: str = "bounded_trial",
+    ) -> dict[str, Any]:
+        """Register a versioned ``SharedBaseSubtreePrior`` with stability check & order-invariant diversity."""
+        if permission_tier not in PERMISSION_ORDER:
+            raise ValueError(f"Invalid permission_tier: {permission_tier}")
+        if not shared_nodes:
+            raise ValueError("SharedBaseSubtreePrior requires at least one shared structural node")
+
+        # Reject unverified single-shot ephemeral noise spikes while allowing verified fast-normalized dynamics!
+        for sn in shared_nodes:
+            if sn.get("is_unverified_ephemeral_spike") is True or sn.get("mechanism_stability_verified") is False:
+                raise ValueError(
+                    f"Unverified ephemeral fluctuation cannot anchor SharedBaseSubtreePrior: {sn.get('slot_id')}"
+                )
+
+        diversity = compute_order_invariant_source_diversity(supporting_sources)
+        existing = self.shared_base_subtrees.get(subtree_id)
+        version = 1 if existing is None else int(existing["version"]) + 1
+        if existing is not None:
+            self.shared_base_subtree_history.setdefault(subtree_id, []).append(deepcopy(existing))
+
+        # Deduplicate evidence dependency IDs so re-encoded duplicate conditions never inflate prior weight
+        unique_evidence_ids: list[str] = []
+        for sn in shared_nodes:
+            for eid in sn.get("evidence_dependency_ids", ()):
+                if str(eid) not in unique_evidence_ids:
+                    unique_evidence_ids.append(str(eid))
+
+        core_payload = {
+            "subtree_id": subtree_id,
+            "shared_nodes": deepcopy(shared_nodes),
+            "shared_relations": deepcopy(shared_relations),
+            "role_and_scale_schema": deepcopy(role_and_scale_schema),
+            "open_completion_slots": deepcopy(open_completion_slots),
+            "permission_tier": permission_tier,
+        }
+        sub_digest = canonical_digest(core_payload)
+        record = {
+            **core_payload,
+            "version": version,
+            "subtree_digest": sub_digest,
+            "probe_signatures": list(probe_signatures or ()),
+            "supporting_sources": deepcopy(supporting_sources),
+            "diversity_metrics": diversity,
+            "unique_evidence_dependency_ids": unique_evidence_ids,
+            "stale_endpoint_revision": False,
+        }
+        self.shared_base_subtrees[subtree_id] = record
+        self.mutation_epoch += 1
+        return deepcopy(record)
+
+    def revise_shared_base_subtree(
+        self,
+        subtree_id: str,
+        *,
+        witness_episode_id: str,
+        cause: str,
+        updated_shared_nodes: list[dict[str, Any]] | None = None,
+        updated_shared_relations: list[dict[str, Any]] | None = None,
+        updated_open_completion_slots: list[dict[str, Any]] | None = None,
+        updated_supporting_sources: list[dict[str, Any]] | None = None,
+        updated_permission_tier: str | None = None,
+    ) -> dict[str, Any]:
+        """Attribution-gated revision of minimal affected subgraph or open completion branches."""
+        if cause not in DIAGNOSIS_CAUSES:
+            raise ValueError(f"Unknown diagnosis cause: {cause}")
+        cur = self.shared_base_subtrees[subtree_id]
+        updated = self.register_shared_base_subtree(
+            subtree_id=subtree_id,
+            shared_nodes=deepcopy(updated_shared_nodes if updated_shared_nodes is not None else cur["shared_nodes"]),
+            shared_relations=deepcopy(
+                updated_shared_relations if updated_shared_relations is not None else cur["shared_relations"]
+            ),
+            role_and_scale_schema=deepcopy(cur["role_and_scale_schema"]),
+            open_completion_slots=deepcopy(
+                updated_open_completion_slots if updated_open_completion_slots is not None else cur["open_completion_slots"]
+            ),
+            supporting_sources=deepcopy(
+                updated_supporting_sources if updated_supporting_sources is not None else cur["supporting_sources"]
+            ),
+            probe_signatures=list(cur.get("probe_signatures", ())),
+            permission_tier=updated_permission_tier or cur["permission_tier"],
+        )
+        updated["last_revision_witness"] = witness_episode_id
+        updated["last_revision_cause"] = cause
+        self.shared_base_subtrees[subtree_id] = updated
+        return deepcopy(updated)
+
 
 class TwoStageWormholeGate:
     """SATzilla Stage-0 presolver + Stage-1 paired same-state cost gate + uncovered exploration arm."""
@@ -1779,3 +1952,421 @@ class TwoStageWormholeGate:
             "margin": self.margin,
             "sample_count": n,
         }
+
+
+# ============================================================================
+# M5 Core Contracts: Generalized Causal P/N/F Regimes & Shared Base-Subtree Priors
+# ============================================================================
+
+
+def extract_causal_temporal_regimes(
+    trajectory: list[dict[str, Any]],
+    *,
+    t0: float,
+    extraction_window_w: float,
+    intrinsic_taus: tuple[float, ...] | list[float] = (1.0,),
+    forecast_horizon_H: float = 1.0,
+    state_keys: tuple[str, ...] | list[str] | None = None,
+    allow_retrospective: bool = False,
+    requested_state_cutoff: float | None = None,
+) -> dict[str, Any]:
+    """Extract scale-relative generalized ``(Past P_tau, Present N_tau, Future F_tau,H)`` regimes.
+
+    Enforces strict causal cutoff ``<= t0`` for online state estimation so future samples
+    (e.g. centered windows or post-t0 peaks) can never leak into online ``(P_tau, N_tau)``.
+    Supports irregular timestamps ``dt_k`` and exponential memory convolution summaries.
+    """
+    eff_cutoff = float(t0 if requested_state_cutoff is None else requested_state_cutoff)
+    if not allow_retrospective and eff_cutoff > float(t0) + 1e-12:
+        return {
+            "ok": False,
+            "reason": "future_information_leakage_past_t0",
+            "t0": float(t0),
+            "requested_state_cutoff": eff_cutoff,
+        }
+    if not trajectory:
+        return {"ok": False, "reason": "empty_trajectory", "t0": float(t0)}
+
+    if not allow_retrospective:
+        for row in trajectory:
+            if row.get("force_include_in_present") and float(row["t"]) > float(t0) + 1e-12:
+                return {
+                    "ok": False,
+                    "reason": "future_information_leakage_past_t0",
+                    "leaked_timestamp": float(row["t"]),
+                    "t0": float(t0),
+                }
+
+    sorted_rows = sorted(trajectory, key=lambda r: float(r["t"]))
+    prefix = [r for r in sorted_rows if float(r["t"]) <= float(t0) + 1e-12]
+    if not prefix:
+        return {"ok": False, "reason": "no_observations_at_or_before_t0", "t0": float(t0)}
+
+    inferred_keys = (
+        list(state_keys)
+        if state_keys is not None
+        else sorted(
+            k for k, v in prefix[-1].items()
+            if k not in {"t", "force_include_in_present", "phase_tag"}
+            and isinstance(v, (int, float))
+            and not isinstance(v, bool)
+        )
+    )
+    dts = [float(prefix[i]["t"]) - float(prefix[i - 1]["t"]) for i in range(1, len(prefix))]
+    win_start_t = float(t0) - max(0.0, float(extraction_window_w))
+    pre_rows = [r for r in prefix if float(r["t"]) < win_start_t - 1e-12]
+    win_rows = [r for r in prefix if float(r["t"]) >= win_start_t - 1e-12]
+    if not win_rows:
+        win_rows = [prefix[-1]]
+
+    # Exponential memory convolution summaries over `<= t0` (irregular trapezoidal integration)
+    t_latest = float(prefix[-1]["t"])
+    memory_kernels: dict[str, dict[str, float]] = {}
+    for tau_raw in intrinsic_taus:
+        tau_v = max(1e-6, float(tau_raw))
+        tau_lbl = f"tau_{tau_v:.6g}"
+        ker_by_key: dict[str, float] = {}
+        for k in inferred_keys:
+            if len(prefix) == 1:
+                ker_by_key[k] = float(prefix[0][k]) * min(tau_v, max(1e-3, float(extraction_window_w)))
+            else:
+                acc = 0.0
+                for idx in range(1, len(prefix)):
+                    t_a, t_b = float(prefix[idx - 1]["t"]), float(prefix[idx]["t"])
+                    dt_seg = max(0.0, t_b - t_a)
+                    w_a = math.exp(-max(0.0, t_latest - t_a) / tau_v) * float(prefix[idx - 1][k])
+                    w_b = math.exp(-max(0.0, t_latest - t_b) / tau_v) * float(prefix[idx][k])
+                    acc += 0.5 * (w_a + w_b) * dt_seg
+                ker_by_key[k] = acc / tau_v
+        memory_kernels[tau_lbl] = ker_by_key
+
+    pre_baseline = {
+        k: (mean(float(r[k]) for r in pre_rows) if pre_rows else float(prefix[0][k]))
+        for k in inferred_keys
+    }
+    instant_now = {k: float(prefix[-1][k]) for k in inferred_keys}
+    win_anchor = win_rows[0] if len(win_rows) >= 2 else (pre_rows[-1] if pre_rows else prefix[0])
+    dt_span = max(1e-9, float(prefix[-1]["t"]) - float(win_anchor["t"]))
+    transition_rates = {
+        k: ((float(prefix[-1][k]) - float(win_anchor[k])) / dt_span if len(prefix) >= 2 else 0.0)
+        for k in inferred_keys
+    }
+    before_after_deltas = {
+        k: float(prefix[-1][k]) - float(pre_baseline[k])
+        for k in inferred_keys
+    }
+
+    future_regime = None
+    if allow_retrospective:
+        fut_rows = [
+            r for r in sorted_rows
+            if float(t0) < float(r["t"]) <= float(t0) + float(forecast_horizon_H) + 1e-12
+        ]
+        if fut_rows:
+            future_regime = {
+                "horizon_end_state": {k: float(fut_rows[-1][k]) for k in inferred_keys},
+                "horizon_mean": {k: mean(float(r[k]) for r in fut_rows) for k in inferred_keys},
+                "sample_count": len(fut_rows),
+            }
+
+    return {
+        "ok": True,
+        "causal_cutoff_t0": float(t0),
+        "mode": "retrospective_offline_folding" if allow_retrospective else "strict_causal_online_prefix",
+        "temporal_parameters": {
+            "observed_sampling_dts": dts,
+            "is_irregular_sampling": (max(dts) - min(dts) > 1e-6) if len(dts) >= 2 else False,
+            "intrinsic_taus": [float(x) for x in intrinsic_taus],
+            "extraction_window_w": float(extraction_window_w),
+            "forecast_horizon_H": float(forecast_horizon_H),
+        },
+        "past_regime": {
+            "pre_window_baseline": pre_baseline,
+            "initial_observed_state": {k: float(prefix[0][k]) for k in inferred_keys},
+            "memory_kernels": memory_kernels,
+            "prefix_sample_count": len(prefix),
+        },
+        "present_regime": {
+            "instant_state": instant_now,
+            "window_mean": {k: mean(float(r[k]) for r in win_rows) for k in inferred_keys},
+            "transition_rate": transition_rates,
+            "before_after_delta": before_after_deltas,
+            "latest_timestamp": t_latest,
+        },
+        "future_regime": future_regime,
+    }
+
+
+def _invert_spd_matrix(matrix: list[list[float]]) -> list[list[float]]:
+    """Pure-stdlib Gauss-Jordan inverse with partial pivoting for small SPD Gram matrices."""
+    n = len(matrix)
+    aug = [
+        [float(matrix[i][j]) for j in range(n)] + [1.0 if i == j else 0.0 for j in range(n)]
+        for i in range(n)
+    ]
+    for col in range(n):
+        piv = max(range(col, n), key=lambda r: abs(aug[r][col]))
+        if abs(aug[piv][col]) < 1e-12:
+            raise ValueError("Singular matrix in _invert_spd_matrix")
+        if piv != col:
+            aug[col], aug[piv] = aug[piv], aug[col]
+        diag = aug[col][col]
+        for j in range(2 * n):
+            aug[col][j] /= diag
+        for r in range(n):
+            if r == col:
+                continue
+            factor = aug[r][col]
+            if factor != 0.0:
+                for j in range(2 * n):
+                    aug[r][j] -= factor * aug[col][j]
+    return [row[n:] for row in aug]
+
+
+def compute_order_invariant_source_diversity(
+    sources: list[dict[str, Any]],
+    *,
+    ridge_gamma: float = 0.25,
+) -> dict[str, Any]:
+    """Compute set-level, permutation-invariant, lineage-deduplicated source diversity ``D_eff^set``.
+
+    1. Deduplicates sources sharing ``provenance_lineage_id`` so surface renamings of one
+       underlying trajectory never fabricate extra independent support.
+    2. Canonically sorts unique lineages and evaluates normalized Gram effective rank:
+       ``D_eff^set = (1 + gamma) * tr(K (K + gamma I)^{-1})``, which equals ``1.0`` for any
+       single lineage, ``L`` for ``L`` orthogonal lineages, and is 100% invariant to insertion order!
+    """
+    if not sources:
+        return {
+            "raw_source_count": 0,
+            "independent_lineage_count": 0,
+            "d_eff_set": 0.0,
+            "unique_lineage_ids": [],
+            "order_invariant": True,
+        }
+    gamma = max(1e-6, float(ridge_gamma))
+    by_lineage: dict[str, dict[str, Any]] = {}
+    for idx, src in enumerate(sources):
+        lin_id = str(src.get("provenance_lineage_id") or src.get("source_id") or f"src_{idx}")
+        cues = set(str(x) for x in src.get("surface_cues", ()))
+        pair_sims = dict(src.get("pairwise_surface_sim") or {})
+        qual = float(src.get("within_source_evidence_quality", 1.0))
+        if lin_id not in by_lineage:
+            by_lineage[lin_id] = {
+                "lineage_id": lin_id,
+                "surface_cues": set(cues),
+                "pairwise_surface_sim": dict(pair_sims),
+                "within_source_evidence_quality": qual,
+            }
+        else:
+            # Same lineage under another surface skin: do NOT add a new lineage; merge known pair sims conservatively
+            by_lineage[lin_id]["surface_cues"].update(cues)
+            for k_sim, v_sim in pair_sims.items():
+                by_lineage[lin_id]["pairwise_surface_sim"][k_sim] = max(
+                    float(v_sim),
+                    float(by_lineage[lin_id]["pairwise_surface_sim"].get(k_sim, 0.0)),
+                )
+            by_lineage[lin_id]["within_source_evidence_quality"] = max(
+                qual, by_lineage[lin_id]["within_source_evidence_quality"]
+            )
+
+    ordered_lin_ids = sorted(by_lineage.keys())
+    m = len(ordered_lin_ids)
+    gram: list[list[float]] = [[0.0] * m for _ in range(m)]
+    for i in range(m):
+        gram[i][i] = 1.0
+        li = by_lineage[ordered_lin_ids[i]]
+        for j in range(i + 1, m):
+            lj = by_lineage[ordered_lin_ids[j]]
+            id_i, id_j = ordered_lin_ids[i], ordered_lin_ids[j]
+            if id_j in li["pairwise_surface_sim"] or id_i in lj["pairwise_surface_sim"]:
+                vals = []
+                if id_j in li["pairwise_surface_sim"]:
+                    vals.append(float(li["pairwise_surface_sim"][id_j]))
+                if id_i in lj["pairwise_surface_sim"]:
+                    vals.append(float(lj["pairwise_surface_sim"][id_i]))
+                sim_ij = max(0.0, min(1.0, mean(vals)))
+            elif li["surface_cues"] or lj["surface_cues"]:
+                union_n = len(li["surface_cues"] | lj["surface_cues"])
+                sim_ij = (len(li["surface_cues"] & lj["surface_cues"]) / union_n) if union_n > 0 else 0.0
+            else:
+                sim_ij = 0.0
+            gram[i][j] = sim_ij
+            gram[j][i] = sim_ij
+
+    reg = [[gram[i][j] + (gamma if i == j else 0.0) for j in range(m)] for i in range(m)]
+    inv_reg = _invert_spd_matrix(reg)
+    # tr(K * (K + gamma I)^{-1})
+    trace_val = 0.0
+    for i in range(m):
+        for k in range(m):
+            trace_val += gram[i][k] * inv_reg[k][i]
+    d_eff = round((1.0 + gamma) * trace_val, 10)
+    mean_qual = mean(by_lineage[lid]["within_source_evidence_quality"] for lid in ordered_lin_ids)
+    return {
+        "raw_source_count": len(sources),
+        "independent_lineage_count": m,
+        "d_eff_set": d_eff,
+        "mean_within_source_quality": round(mean_qual, 6),
+        "unique_lineage_ids": ordered_lin_ids,
+        "order_invariant": True,
+    }
+
+
+def validate_consistent_joint_subtree_binding(
+    subtree_record: dict[str, Any],
+    candidate_binding: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify consistent joint role, readout, temporal anchor, and relation bindings across ``T_base``.
+
+    Catches disconnected local-edge stitching (e.g. ``u->z`` mapped to ``a->b`` while ``z->y``
+    maps to ``c->d`` with ``b != c``), supports both ``causal_flow`` and ``requires_premise_and``
+    conjunctive conditions, and deduplicates ``evidence_dependency_ids`` to prevent vote inflation.
+    """
+    node_role_bindings: dict[str, str] = dict(candidate_binding.get("role_bindings") or {})
+    edge_endpoint_bindings: list[dict[str, Any]] = list(candidate_binding.get("edge_bindings") or ())
+    temporal_scale_ratio = float(candidate_binding.get("normalized_tau_ratio", 1.0))
+    if not math.isfinite(temporal_scale_ratio) or temporal_scale_ratio <= 0.0:
+        return {"valid": False, "reason": "invalid_temporal_scale_ratio"}
+
+    # Check consistency across edge-level bindings (`source_slot -> target_var` must agree on shared slots!)
+    inferred_from_edges: dict[str, str] = {}
+    for eb in edge_endpoint_bindings:
+        for side_slot, side_target in (
+            (eb.get("from_slot"), eb.get("target_from")),
+            (eb.get("to_slot"), eb.get("target_to")),
+        ):
+            if side_slot is None or side_target is None:
+                continue
+            s_key, t_val = str(side_slot), str(side_target)
+            if s_key in inferred_from_edges and inferred_from_edges[s_key] != t_val:
+                return {
+                    "valid": False,
+                    "reason": "inconsistent_intermediate_role_binding",
+                    "conflicting_slot": s_key,
+                    "first_target": inferred_from_edges[s_key],
+                    "second_target": t_val,
+                }
+            if s_key in node_role_bindings and str(node_role_bindings[s_key]) != t_val:
+                return {
+                    "valid": False,
+                    "reason": "edge_node_role_binding_conflict",
+                    "conflicting_slot": s_key,
+                    "node_binding": str(node_role_bindings[s_key]),
+                    "edge_binding": t_val,
+                }
+            inferred_from_edges[s_key] = t_val
+
+    merged_roles = {**inferred_from_edges, **{str(k): str(v) for k, v in node_role_bindings.items()}}
+    required_slots = list((subtree_record.get("role_and_scale_schema") or {}).get("required_role_slots", ()))
+    missing_slots = [s for s in required_slots if s not in merged_roles]
+    if missing_slots:
+        return {"valid": False, "reason": "missing_required_subtree_roles", "missing_slots": missing_slots}
+
+    # Prevent non-injective collapse of distinct causal roles onto the same target variable unless explicitly allowed
+    if not (subtree_record.get("role_and_scale_schema") or {}).get("allow_role_aliasing", False):
+        seen_targets: dict[str, str] = {}
+        for s_slot in required_slots:
+            t_var = merged_roles[s_slot]
+            if t_var in seen_targets and seen_targets[t_var] != s_slot:
+                return {
+                    "valid": False,
+                    "reason": "distinct_roles_collapsed_to_same_target_channel",
+                    "target_channel": t_var,
+                    "slots": [seen_targets[t_var], s_slot],
+                }
+            seen_targets[t_var] = s_slot
+
+    # Evaluate matched shared nodes and deduplicate evidence dependencies (preventing duplicate re-encoding boost!)
+    matched_condition_ids: list[str] = []
+    unique_evidence_ids: set[str] = set()
+    satisfied_nodes = set(str(x) for x in candidate_binding.get("satisfied_shared_node_ids", ()))
+    for sn in subtree_record.get("shared_nodes", ()):
+        sn_id = str(sn.get("slot_id"))
+        if not satisfied_nodes or sn_id in satisfied_nodes:
+            matched_condition_ids.append(sn_id)
+            for eid in sn.get("evidence_dependency_ids", (sn_id,)):
+                unique_evidence_ids.add(str(eid))
+
+    # Validate typed relations (`causal_flow`, `local_implies`, `requires_premise_and`, `coarse_grains_to`)
+    active_relations: list[dict[str, Any]] = []
+    for rel in subtree_record.get("shared_relations", ()):
+        rtype = str(rel.get("relation_type", "local_implies"))
+        if rtype == "requires_premise_and":
+            req_ants = [str(a) for a in rel.get("antecedents", ())]
+            if all(a in matched_condition_ids for a in req_ants):
+                active_relations.append(deepcopy(rel))
+        else:
+            u_s, v_s = str(rel.get("from_slot", "")), str(rel.get("to_slot", ""))
+            if (not u_s or u_s in matched_condition_ids or u_s in merged_roles) and (
+                not v_s or v_s in matched_condition_ids or v_s in merged_roles
+            ):
+                active_relations.append(deepcopy(rel))
+
+    return {
+        "valid": True,
+        "reason": "consistent_joint_subtree_binding",
+        "merged_role_bindings": merged_roles,
+        "matched_condition_ids": matched_condition_ids,
+        "independent_evidence_count": len(unique_evidence_ids),
+        "active_relation_count": len(active_relations),
+        "normalized_tau_ratio": temporal_scale_ratio,
+    }
+
+
+def build_warm_start_parameter_prior(
+    dimensionless_source_estimates: list[dict[str, float]],
+    *,
+    diversity_metrics: dict[str, Any],
+    hard_domain_bounds: dict[str, tuple[float, float]],
+) -> dict[str, Any]:
+    """Construct dimensionless soft warm-start box while preserving a wide-domain fallback branch!
+
+    Separates structural transfer from parameter pooling:
+    - If ``independent_lineage_count < 2`` or ``d_eff_set < 1.35``: transfers skeleton ONLY
+      (``warm_start_box = None``), avoiding single-source numeric overfitting.
+    - If ``>= 2`` independent lineages support the shared skeleton: builds an empirical soft
+      warm-start box accounting for between-domain spread ``sigma_between``, AND explicitly
+      retains ``wide_fallback_box = hard_domain_bounds`` so high-heterogeneity targets never fail!
+    """
+    n_lin = int(diversity_metrics.get("independent_lineage_count", 0))
+    d_eff = float(diversity_metrics.get("d_eff_set", 0.0))
+    wide_box = {k: (float(v[0]), float(v[1])) for k, v in hard_domain_bounds.items()}
+    if n_lin < 2 or d_eff < 1.35 or len(dimensionless_source_estimates) < 2:
+        return {
+            "mode": "skeleton_only_no_parameter_shrinkage",
+            "warm_start_box": None,
+            "wide_fallback_box": wide_box,
+            "retain_wide_fallback": True,
+            "hard_pruning_allowed": False,
+            "requires_target_confirmation": True,
+        }
+
+    safety_mult = math.sqrt(1.0 + 2.0 / max(1.0, d_eff))
+    warm_box: dict[str, tuple[float, float]] = {}
+    between_spread: dict[str, float] = {}
+    for p_name, (lo_h, hi_h) in wide_box.items():
+        vals = [float(est[p_name]) for est in dimensionless_source_estimates if p_name in est]
+        if len(vals) < 2:
+            warm_box[p_name] = (lo_h, hi_h)
+            between_spread[p_name] = hi_h - lo_h
+            continue
+        mu = mean(vals)
+        # Sample std across sources (`ddof=1`) + floor proportional to domain span so zero-spread pair never collapses to a point!
+        sample_sd = math.sqrt(sum((x - mu) ** 2 for x in vals) / max(1, len(vals) - 1))
+        min_floor = 0.05 * (hi_h - lo_h)
+        half_w = max(min_floor, 1.75 * safety_mult * sample_sd)
+        w_lo = max(lo_h, mu - half_w)
+        w_hi = min(hi_h, mu + half_w)
+        warm_box[p_name] = (round(w_lo, 6), round(w_hi, 6))
+        between_spread[p_name] = round(sample_sd, 6)
+
+    return {
+        "mode": "soft_dimensionless_warm_start_with_wide_fallback",
+        "warm_start_box": warm_box,
+        "wide_fallback_box": wide_box,
+        "estimated_sigma_between": between_spread,
+        "retain_wide_fallback": True,
+        "hard_pruning_allowed": False,
+        "requires_target_confirmation": True,
+    }

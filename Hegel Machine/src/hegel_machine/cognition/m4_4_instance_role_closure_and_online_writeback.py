@@ -121,7 +121,7 @@ from .wormhole_forest import (
 
 def serialize_location_independent_forest(forest: PhilosophicalForest) -> dict[str, Any]:
     """Serialize ``PhilosophicalForest`` without rewriting any contract or certificate fields!"""
-    return {
+    out = {
         "nodes": deepcopy(forest.nodes),
         "node_history": deepcopy(forest.node_history),
         "local_implication_edges": deepcopy(forest.local_implication_edges),
@@ -133,6 +133,10 @@ def serialize_location_independent_forest(forest: PhilosophicalForest) -> dict[s
         "questions": deepcopy(forest.questions),
         "raw_episode_archive": deepcopy(forest.raw_episode_archive),
     }
+    if getattr(forest, "shared_base_subtrees", None):
+        out["shared_base_subtrees"] = deepcopy(forest.shared_base_subtrees)
+        out["shared_base_subtree_history"] = deepcopy(getattr(forest, "shared_base_subtree_history", {}))
+    return out
 
 
 def load_location_independent_forest(snapshot_path: Path, bundle_root: Path) -> PhilosophicalForest:
@@ -149,6 +153,8 @@ def load_location_independent_forest(snapshot_path: Path, bundle_root: Path) -> 
     f.mutation_epoch = int(data.get("mutation_epoch", 0))
     f.questions = data.get("questions", {})
     f.raw_episode_archive = data.get("raw_episode_archive", [])
+    f.shared_base_subtrees = data.get("shared_base_subtrees", {})
+    f.shared_base_subtree_history = data.get("shared_base_subtree_history", {})
     return f
 
 
@@ -227,7 +233,25 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
                     **id_meta,
                 })
 
-    return {
+    subtrees = (
+        getattr(forest_dict_or_obj, "shared_base_subtrees", {})
+        if isinstance(forest_dict_or_obj, PhilosophicalForest)
+        else forest_dict_or_obj.get("shared_base_subtrees", {})
+    )
+    subtree_mismatches: list[dict[str, Any]] = []
+    for sid, sb in sorted((subtrees or {}).items()):
+        comp_sub = canonical_digest({
+            "subtree_id": sb["subtree_id"],
+            "shared_nodes": sb["shared_nodes"],
+            "shared_relations": sb["shared_relations"],
+            "role_and_scale_schema": sb["role_and_scale_schema"],
+            "open_completion_slots": sb["open_completion_slots"],
+            "permission_tier": sb["permission_tier"],
+        })
+        if comp_sub != sb.get("subtree_digest"):
+            subtree_mismatches.append({"subtree_id": sid, "recorded": sb.get("subtree_digest"), "computed": comp_sub})
+
+    out_report = {
         "node_count": len(nodes),
         "artifact_node_count": artifact_node_count,
         "missing_expected_instance_nodes": missing_inst_nodes,
@@ -240,6 +264,11 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
         "edge_certificate_instance_mismatch_count": len(edge_inst_mismatches),
         "edge_certificate_instance_mismatches": edge_inst_mismatches,
     }
+    if subtrees:
+        out_report["shared_base_subtree_count"] = len(subtrees)
+        out_report["subtree_digest_mismatch_count"] = len(subtree_mismatches)
+        out_report["subtree_digest_mismatches"] = subtree_mismatches
+    return out_report
 
 
 # ============================================================================

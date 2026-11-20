@@ -1,0 +1,105 @@
+{
+  "commit": "e2b0fa97af3c05e878a1c7c165ee19ad0c213d2b",
+  "procedure": "Two direct dispatch_predict calls after cold-load of committed post_m5 snapshot; no fit or measurement.",
+  "source_node": "stage1_W4_monod_shunt",
+  "saved_source_parameters": [
+    9.0,
+    1.6,
+    0.72
+  ],
+  "s02_target_parameters": [
+    7.2,
+    1.85,
+    0.58
+  ],
+  "saved_preconditions": [
+    {
+      "field": "active_arity",
+      "op": "==",
+      "value": 2
+    },
+    {
+      "field": "haldane_turnover_shunt_regime",
+      "op": "==",
+      "value": false
+    },
+    {
+      "field": "secondary_bleed_active",
+      "op": "==",
+      "value": true
+    },
+    {
+      "field": "b",
+      "op": "<=",
+      "value": 1.85
+    }
+  ],
+  "s02_tolerance": 0.05,
+  "results": [
+    {
+      "features": {
+        "s": 4.0,
+        "b": 1.4
+      },
+      "actual_dispatch_receipt_against_original_source_oracle": {
+        "query_id": "audit_cold_source_W4_b_1.40",
+        "status": "dispatched_ok",
+        "selected_node_id": "stage1_W4_monod_shunt",
+        "selected_version": 2,
+        "selected_branch": null,
+        "provenance_tier": "host_confirmed_discovered_instance",
+        "escalated_from_coarse_node": null,
+        "model_source_sha256": "5f4c7ce737524cfd63ebb68e2ac02f1499d3aa047b5aad62d30879c12cb76caf",
+        "fitted_params_sha256": "caac420cd7aa32f9ac083bb4a4f53aba016ba141c6adcaa4db4845527ee363ef",
+        "confirmed_instance_digest": "fdf20ca13c317f1c3aa4b95334242f7e285921668f4632328206e80fe74c7819",
+        "artifact_sha256": "fdf20ca13c317f1c3aa4b95334242f7e285921668f4632328206e80fe74c7819",
+        "confirmation_digest": "439db6eb9d48c8ad",
+        "authorized_tier": "local_solver_guidance",
+        "fit_called": false,
+        "cold_loader_fit_called": false,
+        "prediction": 7.43657151,
+        "ground_truth": 7.43657143,
+        "abs_error": 8e-08,
+        "within_tolerance": true
+      },
+      "original_source_oracle": 7.436571428571429,
+      "s02_target_oracle_from_committed_callable": 5.735076923076924,
+      "s02_base_without_surge": 5.735076923076924,
+      "s02_omitted_surge_term": 0.0,
+      "frozen_source_prediction_minus_s02_target": 1.7014945869230766
+    },
+    {
+      "features": {
+        "s": 4.0,
+        "b": 1.8
+      },
+      "actual_dispatch_receipt_against_original_source_oracle": {
+        "query_id": "audit_cold_source_W4_b_1.80",
+        "status": "dispatched_ok",
+        "selected_node_id": "stage1_W4_monod_shunt",
+        "selected_version": 2,
+        "selected_branch": null,
+        "provenance_tier": "host_confirmed_discovered_instance",
+        "escalated_from_coarse_node": null,
+        "model_source_sha256": "5f4c7ce737524cfd63ebb68e2ac02f1499d3aa047b5aad62d30879c12cb76caf",
+        "fitted_params_sha256": "caac420cd7aa32f9ac083bb4a4f53aba016ba141c6adcaa4db4845527ee363ef",
+        "confirmed_instance_digest": "fdf20ca13c317f1c3aa4b95334242f7e285921668f4632328206e80fe74c7819",
+        "artifact_sha256": "fdf20ca13c317f1c3aa4b95334242f7e285921668f4632328206e80fe74c7819",
+        "confirmation_digest": "439db6eb9d48c8ad",
+        "authorized_tier": "local_solver_guidance",
+        "fit_called": false,
+        "cold_loader_fit_called": false,
+        "prediction": 7.72457152,
+        "ground_truth": 7.72457143,
+        "abs_error": 9e-08,
+        "within_tolerance": true
+      },
+      "original_source_oracle": 7.724571428571429,
+      "s02_target_oracle_from_committed_callable": 6.123326923076924,
+      "s02_base_without_surge": 5.967076923076924,
+      "s02_omitted_surge_term": 0.15625,
+      "frozen_source_prediction_minus_s02_target": 1.6012445969230757
+    }
+  ],
+  "interpretation": "This confirms that the actual frozen dispatcher authorizes both b=1.40 and b=1.80 with the original source instance. The S02 target is a differently parameterized instance and its fitted target bundle is not persisted here. Therefore source-vs-S02 numeric discrepancies are not evidence of a new midpoint-specific runtime failure. The S02 omitted-term calculation independently shows that b<=1.85 is not a valid certified bound for the S02 base family at tolerance 0.05; at b=1.80 its unmodeled surge is 0.15625. This is an analytic scope counterexample, not a replayed target false confirmation."
+}
