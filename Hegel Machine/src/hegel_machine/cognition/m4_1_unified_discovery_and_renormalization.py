@@ -66,6 +66,7 @@ from .m4_multiscale_renormalization import (
     _infer_role_permutations,
     _ols_slopes_2d,
     _validate_and_interpret_m4_program_steps,
+    select_or_synthesize_disjoint_confirm_points,
 )
 from .open_workspace_wormhole import canonicalize_python_model_ast
 from .wormhole_forest import (
@@ -207,11 +208,25 @@ def apply_executable_pi_s_projection(
     }
 
 
-def is_point_inside_verified_box(point: dict[str, float], verified_box: dict[str, list[float]]) -> bool:
+def is_point_inside_verified_box(
+    point: dict[str, float],
+    verified_box: dict[str, list[float]],
+    *,
+    role_map: dict[str, str] | None = None,
+) -> bool:
+    """Fail-closed regional box check.
+
+    When ``role_map`` (`query_feature -> canonical_box_axis`) is provided, maps ``point`` into the
+    certificate's canonical coordinate axes before checking bounds. Missing axes ALWAYS fail closed (`False`).
+    """
+    if role_map is not None:
+        mapped_point = {str(role_map[qk]): float(qv) for qk, qv in point.items() if qk in role_map}
+    else:
+        mapped_point = point
     for k, bounds in verified_box.items():
-        if k not in point:
+        if k not in mapped_point:
             return False
-        val = float(point[k])
+        val = float(mapped_point[k])
         lo, hi = float(bounds[0]), float(bounds[1])
         if val < lo - 1e-9 or val > hi + 1e-9:
             return False
@@ -678,7 +693,7 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
         if recalled:
             top_c = recalled[0]
             plan_0 = top_c["_exec_plan"]
-            req_fresh_default = max(1, min(len(confirm_pts), int(plan_0["fresh_points"])))
+            req_fresh_default = max(1, int(plan_0["fresh_points"]))
             op_spec = top_c["target_node"]["claim_contract"]["conclusion_or_action"]["operator_spec"]
             lens_est = (
                 _estimate_affine_lens_for_spec(op_spec, list(lab.feature_names), pilot_rows)
@@ -690,9 +705,19 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
             tr_ev = evaluate_isolated_python_model(ws_dir, "recalled_0.py", pilot_rows, isolated_prefix_rows=pilot_rows)
             eval_count += 1
             if tr_ev["returncode"] == 0 and float(tr_ev["rmse"]) <= lab.tolerance:
-                c_pts_0 = confirm_pts[:req_fresh_default]
-                c_rows = lab.acquire_channel(c_pts_0, channel=confirm_ch, phase="confirm_recall")
-                cf_ev = evaluate_isolated_python_model(ws_dir, "recalled_0.py", c_rows, isolated_prefix_rows=pilot_rows)
+                c_pts_0 = select_or_synthesize_disjoint_confirm_points(
+                    predeclared_confirm_points=confirm_pts,
+                    training_prefix_rows=pilot_rows,
+                    required_fresh_count=req_fresh_default,
+                    feature_bounds=lab.declared_box,
+                    verified_box=(cert["verified_input_box"] if (cert is not None and confirm_ch == "coarse_macro") else None),
+                )
+                c_rows = lab.acquire_channel(c_pts_0, channel=confirm_ch, phase="confirm_recall") if c_pts_0 else []
+                cf_ev = (
+                    evaluate_isolated_python_model(ws_dir, "recalled_0.py", c_rows, isolated_prefix_rows=pilot_rows)
+                    if len(c_rows) == req_fresh_default
+                    else {"returncode": 1, "rmse": float("inf")}
+                )
                 if cf_ev["returncode"] == 0 and float(cf_ev["rmse"]) <= lab.tolerance:
                     m_sha = hashlib.sha256(code.encode("utf-8")).hexdigest()
                     c_dig = hashlib.sha256(json.dumps(c_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
@@ -733,20 +758,22 @@ def run_executable_pi_s_renormalization_suite(work_root: Path) -> dict[str, Any]
 
         if not confirmed_ok:
             # Reuse already-paid `pilot_rows` (zero duplicate pilot re-buying!) and match confirmation point count!
-            rem_cf_pts = [
-                p for p in confirm_pts[:req_fresh_default]
-                if not any(p == r["features"] for r in pilot_rows)
-            ]
-            if not rem_cf_pts:
-                rem_cf_pts = [confirm_pts[-1]]
             if confirm_ch == "coarse_macro" and cert is not None:
-                if not all(is_point_inside_verified_box(pt, cert["verified_input_box"]) for pt in rem_cf_pts):
+                raw_check_pts = [p for p in confirm_pts[:req_fresh_default] if not any(p == r["features"] for r in pilot_rows)]
+                if not raw_check_pts or not all(is_point_inside_verified_box(pt, cert["verified_input_box"]) for pt in raw_check_pts):
                     confirm_ch = "micro_fine"
                     selected_ch = "micro_fine"
                     pilot_rows = [
                         *cert["paired_rows"]["micro"],
                         *lab.acquire_channel(pilot_pts[:5], channel="micro_fine", phase="escalated_out_of_box_micro"),
                     ]
+            rem_cf_pts = select_or_synthesize_disjoint_confirm_points(
+                predeclared_confirm_points=confirm_pts,
+                training_prefix_rows=pilot_rows,
+                required_fresh_count=req_fresh_default,
+                feature_bounds=lab.declared_box,
+                verified_box=(cert["verified_input_box"] if (cert is not None and confirm_ch == "coarse_macro") else None),
+            )
             best_rmse = float("inf")
             for idx_op, (_otag, osp) in enumerate(ops.items()):
                 lens_est = _estimate_affine_lens_for_spec(osp, list(lab.feature_names), pilot_rows)
@@ -1594,16 +1621,21 @@ def evaluate_unified_target_under_arm(
                             )
                             total_evaluated += ev_1
                             if best_1 is not None and best_1["train_rmse"] <= target.tolerance:
-                                unseen_c1 = [
-                                    p for p in target.confirm_points
-                                    if not any(p == r["features"] for r in updated_prefix)
-                                ]
                                 req_fresh_1 = max(1, int(plan_1["fresh_points"]))
-                                c1_pts = unseen_c1[:req_fresh_1] if unseen_c1 else [target.confirm_points[-1]]
-                                cf1_obs = lab.acquire(c1_pts, workspace=None, phase="confirm_1_child") or []
-                                cf1_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf1_obs]
-                                cf1_ev = evaluate_isolated_python_model(
-                                    ws_dir, best_1["model_relpath"], cf1_rows, isolated_prefix_rows=updated_prefix
+                                c1_pts = select_or_synthesize_disjoint_confirm_points(
+                                    predeclared_confirm_points=target.confirm_points,
+                                    training_prefix_rows=updated_prefix,
+                                    required_fresh_count=req_fresh_1,
+                                    feature_bounds=target.feature_bounds,
+                                )
+                                cf1_obs = lab.acquire(c1_pts, workspace=None, phase="confirm_1_child") if c1_pts else []
+                                cf1_rows = [{"features": dict(r.features), "target": float(r.target)} for r in (cf1_obs or [])]
+                                cf1_ev = (
+                                    evaluate_isolated_python_model(
+                                        ws_dir, best_1["model_relpath"], cf1_rows, isolated_prefix_rows=updated_prefix
+                                    )
+                                    if len(cf1_rows) == req_fresh_1
+                                    else {"returncode": 1, "rmse": float("inf")}
                                 )
                                 if cf1_ev["returncode"] == 0 and float(cf1_ev["rmse"]) <= target.tolerance:
                                     _, upd_feats = extract_unified_observable_pilot_cues(
@@ -1692,6 +1724,8 @@ def evaluate_unified_target_under_arm(
                         confirmed_ok = True
                         confirmed_via_recall = True
                         chosen_rel = best_h2["model_relpath"]
+                    else:
+                        frozen_prefix = [*frozen_prefix, *cf1_rows]
 
     # Open Compositional Fallback when prior recall / history failed (e.g. `Frozen_After_Stage0` on newly invented laws!)
     if not confirmed_ok:
@@ -1712,15 +1746,15 @@ def evaluate_unified_target_under_arm(
             tolerance=target.tolerance,
         )
         total_evaluated += ev_fb
-        rem_fb_cf_pts = [
-            p for p in target.confirm_points
-            if not any(p == r["features"] for r in frozen_prefix)
-        ]
-        if not rem_fb_cf_pts:
-            rem_fb_cf_pts = [target.confirm_points[-1]]
-        fb_cf_obs = lab.acquire(rem_fb_cf_pts, workspace=None, phase="fallback_confirm") or []
-        fb_cf_rows = [{"features": dict(r.features), "target": float(r.target)} for r in fb_cf_obs]
-        if best_fb is not None:
+        rem_fb_cf_pts = select_or_synthesize_disjoint_confirm_points(
+            predeclared_confirm_points=target.confirm_points,
+            training_prefix_rows=frozen_prefix,
+            required_fresh_count=1,
+            feature_bounds=target.feature_bounds,
+        )
+        fb_cf_obs = lab.acquire(rem_fb_cf_pts, workspace=None, phase="fallback_confirm") if rem_fb_cf_pts else []
+        fb_cf_rows = [{"features": dict(r.features), "target": float(r.target)} for r in (fb_cf_obs or [])]
+        if best_fb is not None and fb_cf_rows:
             chosen_rel = best_fb["model_relpath"]
             fb_ev = evaluate_isolated_python_model(ws_dir, chosen_rel, fb_cf_rows, isolated_prefix_rows=frozen_prefix)
             if fb_ev["returncode"] == 0 and float(fb_ev["rmse"]) <= target.tolerance:

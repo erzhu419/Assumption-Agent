@@ -732,9 +732,13 @@ class OpenCompositionalCodeProvider:
         prior_operator_specs: list[dict[str, Any]] | None = None,
         fallback_query_batches: list[list[dict[str, float]]] | None = None,
         tolerance: float = 0.04,
+        lens_calibrator_fn: Callable[[dict[str, Any], list[str]], dict[str, float]] | None = None,
     ) -> None:
         self.role_names = list(role_names)
         self.lens = dict(lens)
+        self._lens_calibrator_fn = lens_calibrator_fn
+        self._last_compiled_lens: dict[str, float] = dict(lens)
+        self._best_base_lens: dict[str, float] = dict(lens)
         self.initial_query_batches = list(initial_query_batches)
         self.fallback_query_batches = list(fallback_query_batches or [])
         self.tolerance = float(tolerance)
@@ -790,9 +794,11 @@ class OpenCompositionalCodeProvider:
         )
         linear_1d = make_atomic_operator_spec("linear_1d")
 
-        if parsed.get("high_drive_turnover_drop"):
+        residual_above_tol = float(parsed.get("residual_rmse", 999.0)) > self.tolerance
+        round2_2d_unresolved = bool(self._diag_rounds >= 2 and residual_above_tol and len(self.role_names) >= 2)
+        if parsed.get("high_drive_turnover_drop") or round2_2d_unresolved:
             inh = apply_structural_combinator(michaelis_base, "denom_quadratic_inhibition")
-            if parsed.get("secondary_active") and len(self.role_names) >= 2:
+            if len(self.role_names) >= 2 and (parsed.get("secondary_active") or round2_2d_unresolved):
                 inh_shunt = apply_structural_combinator(inh, "additive_secondary_shunt", secondary_role=1)
                 newly_composed.append(inh_shunt)
             newly_composed.append(inh)
@@ -802,22 +808,30 @@ class OpenCompositionalCodeProvider:
                 newly_composed.append(
                     apply_structural_combinator(self._best_base_spec, "variational_ceiling_cap_1d")
                 )
+            for base_sp in self.active_specs:
+                if base_sp.get("op") != "min2" and base_sp.get("family_hint", "").startswith("atomic_"):
+                    newly_composed.append(apply_structural_combinator(base_sp, "variational_ceiling_cap_1d"))
             cap_1d = apply_structural_combinator(michaelis_base, "variational_ceiling_cap_1d")
             newly_composed.append(cap_1d)
             if len(self.role_names) >= 2:
                 cap_2d = apply_structural_combinator(michaelis_base, "variational_channel_cap_2d", secondary_role=1)
                 newly_composed.append(cap_2d)
 
-        if parsed.get("secondary_active") and len(self.role_names) >= 2:
+        if (parsed.get("secondary_active") or round2_2d_unresolved) and len(self.role_names) >= 2:
             shunt_on_best = apply_structural_combinator(self._best_base_spec, "additive_secondary_shunt", secondary_role=1)
             newly_composed.append(shunt_on_best)
             if self._best_base_spec.get("op") != "div":
                 shunt_on_mic = apply_structural_combinator(michaelis_base, "additive_secondary_shunt", secondary_role=1)
                 newly_composed.append(shunt_on_mic)
+            for base_sp in self.active_specs:
+                if base_sp.get("family_hint") == "atomic_murray_2_3":
+                    newly_composed.append(apply_structural_combinator(base_sp, "additive_secondary_shunt", secondary_role=1))
+            if relax_base is not None:
+                newly_composed.append(apply_structural_combinator(relax_base, "additive_secondary_shunt", secondary_role=0))
 
-        if parsed.get("oscillatory_overshoot") and relax_base is not None:
+        if (parsed.get("oscillatory_overshoot") or (residual_above_tol and relax_base is not None and self._diag_rounds >= 2)) and relax_base is not None:
             osc = apply_structural_combinator(relax_base, "oscillatory_damping_modulation")
-            if parsed.get("secondary_active") and len(self.role_names) >= 2:
+            if len(self.role_names) >= 2:
                 sec_role = 2 if len(self.role_names) >= 3 else 1
                 osc_shunt = apply_structural_combinator(osc, "additive_secondary_shunt", secondary_role=sec_role)
                 newly_composed.append(osc_shunt)
@@ -870,13 +884,14 @@ class OpenCompositionalCodeProvider:
             last_fb = events[-1].get("feedback") or {}
             mse = last_fb.get("mse")
             cur_spec = self.active_specs[self._c_idx]
-            cur_code = compile_operator_spec_to_python(cur_spec, role_names=self.role_names, lens=self.lens)
+            cur_code = compile_operator_spec_to_python(cur_spec, role_names=self.role_names, lens=self._last_compiled_lens)
             self.evaluated_candidate_count += 1
             if isinstance(mse, (int, float)) and math.isfinite(float(mse)):
                 f_mse = float(mse)
                 if f_mse < self._best_base_mse:
                     self._best_base_mse = f_mse
                     self._best_base_spec = deepcopy(cur_spec)
+                    self._best_base_lens = dict(self._last_compiled_lens)
                 if self._best_overall is None or f_mse < self._best_overall[0]:
                     self._best_overall = (f_mse, cur_code, deepcopy(cur_spec))
                 if math.sqrt(max(0.0, f_mse)) <= self.tolerance:
@@ -890,10 +905,15 @@ class OpenCompositionalCodeProvider:
         if self._c_idx >= len(self.active_specs) and self._diag_rounds < 2:
             self._ran_diag = True
             self._diag_rounds += 1
-            best_base_code = compile_operator_spec_to_python(self._best_base_spec, role_names=self.role_names, lens=self.lens)
+            diag_lens = (
+                self._lens_calibrator_fn(self._best_base_spec, self.role_names)
+                if self._lens_calibrator_fn is not None
+                else self._best_base_lens
+            )
+            best_base_code = compile_operator_spec_to_python(self._best_base_spec, role_names=self.role_names, lens=diag_lens)
             diag_src = (
                 f"open('model.py', 'w', encoding='utf-8').write({best_base_code!r})\n"
-                + build_compositional_diagnostic_script(role_names=self.role_names, lens=self.lens)
+                + build_compositional_diagnostic_script(role_names=self.role_names, lens=diag_lens)
             )
             return {"action": "run", "arguments": {"code": diag_src, "channels": ["primary"]}, "usage": usage}
 
@@ -909,7 +929,13 @@ class OpenCompositionalCodeProvider:
             if events and events[-1].get("action") == "write" and self._phase == "post_eval":
                 return {"action": "evaluate", "arguments": {"model": "model.py", "channels": ["primary"]}, "usage": usage}
             spec = self.active_specs[self._c_idx]
-            code = compile_operator_spec_to_python(spec, role_names=self.role_names, lens=self.lens)
+            cand_lens = (
+                self._lens_calibrator_fn(spec, self.role_names)
+                if self._lens_calibrator_fn is not None
+                else self.lens
+            )
+            self._last_compiled_lens = dict(cand_lens)
+            code = compile_operator_spec_to_python(spec, role_names=self.role_names, lens=cand_lens)
             self._phase = "post_eval"
             return {"action": "write", "arguments": {"path": "model.py", "code": code}, "usage": usage}
 
@@ -947,7 +973,7 @@ def _make_open_lab(
 def run_compositional_code_agent_episode(
     *,
     lab: OpenWorkspaceTaskLab,
-    heldout_rows: list[dict[str, Any]],
+    heldout_rows: list[dict[str, Any]] | None = None,
     tolerance: float,
     workspace_dir: Path,
     role_names: list[str],
@@ -957,22 +983,68 @@ def run_compositional_code_agent_episode(
     fallback_query_batches: list[list[dict[str, float]]] | None = None,
     confirm_points: list[dict[str, float]],
     lens_hint: dict[str, float] | None = None,
+    lens_calibrator_fn: Callable[[dict[str, Any], list[str]], dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Execute a full ``CodeAgent`` episode + prefix-isolated fresh confirmation & artifact persistence!"""
     if workspace_dir.exists():
         shutil.rmtree(workspace_dir)
     workspace_dir.mkdir(parents=True, exist_ok=True)
+    prepaid_obs = list(lab.observations)
+    eff_initial_batches = list(initial_query_batches)
+    if prepaid_obs:
+        eff_initial_batches = [[dict(r.features) for r in prepaid_obs], *eff_initial_batches]
 
     lens = dict(lens_hint) if lens_hint is not None else {"sign": 1.0, "scale": 1.0, "offset": 0.0}
-    adapter = OpenWorkspaceCodeLabAdapter(lab)
+    base_adapter = OpenWorkspaceCodeLabAdapter(lab)
+
+    class _PrepaidAwareAdapter:
+        def __init__(self, inner: OpenWorkspaceCodeLabAdapter, prepaid: list[Observation]) -> None:
+            self._inner = inner
+            self.channels = inner.channels
+            self.spec = inner.spec
+            self._remaining_prepaid = list(prepaid)
+
+        def acquire(self, probe: Any, channels: tuple[str, ...] = ()) -> Any:
+            seq = [dict(pt) for pt in probe.sequence]
+            reused: list[Observation] = []
+            fresh_seq: list[dict[str, float]] = []
+            for pt in seq:
+                match_idx = next(
+                    (
+                        idx_p
+                        for idx_p, po in enumerate(self._remaining_prepaid)
+                        if set(po.features.keys()) == set(pt.keys())
+                        and all(abs(float(po.features[k]) - float(pt[k])) <= 1e-9 for k in pt)
+                    ),
+                    None,
+                )
+                if match_idx is not None:
+                    reused.append(self._remaining_prepaid.pop(match_idx))
+                else:
+                    fresh_seq.append(pt)
+            if fresh_seq:
+                fresh_rows = self._inner.lab.acquire(fresh_seq, workspace=None, phase="code_agent_query") or []
+            else:
+                fresh_rows = []
+            all_obs = [*reused, *fresh_rows]
+            # Return exact same batch structure expected by `CodeAgent`
+            from .open_python_revision import _LabAcquireBatch
+            return _LabAcquireBatch(
+                observations=all_obs,
+                measurement_cost=len(fresh_rows) * self._inner.lab.cost_per_obs,
+                transitions=[],
+            )
+
+    adapter = _PrepaidAwareAdapter(base_adapter, prepaid_obs) if prepaid_obs else base_adapter
     provider = OpenCompositionalCodeProvider(
         role_names=role_names,
         lens=lens,
-        initial_query_batches=initial_query_batches,
+        initial_query_batches=eff_initial_batches,
         atomic_base_specs=atomic_base_specs,
         prior_operator_specs=prior_operator_specs,
         fallback_query_batches=fallback_query_batches,
         tolerance=tolerance,
+        lens_calibrator_fn=lens_calibrator_fn,
     )
     agent = CodeAgent(
         provider,
@@ -1013,19 +1085,28 @@ def run_compositional_code_agent_episode(
     confirm_sha = hashlib.sha256(json.dumps(confirm_rows, sort_keys=True).encode("utf-8")).hexdigest()
 
     # Extract exact fitted parameter snapshot (`_PARAMS`) so historical instances can predict WITHOUT re-calling `fit()`!
-    fitted_params_snapshot: dict[str, float] = {}
+    raw_fitted_params: dict[str, float] = {}
     if ast_info["skeleton_status"] == "VERIFIED_PURE_AST":
         ns_fit: dict[str, Any] = {}
         exec(compile(model_source, "<hegel_freeze_params>", "exec"), ns_fit)
         if callable(ns_fit.get("fit")):
             ns_fit["fit"](deepcopy(frozen_prefix_rows))
         if isinstance(ns_fit.get("_PARAMS"), dict):
-            fitted_params_snapshot = {str(k): float(v) for k, v in ns_fit["_PARAMS"].items()}
+            raw_fitted_params = {str(k): float(v) for k, v in ns_fit["_PARAMS"].items()}
+    fitted_params_snapshot, fitted_params_sha256 = canonicalize_fitted_params_snapshot(raw_fitted_params)
+    confirmed_instance_digest = compute_confirmed_instance_digest(
+        model_sha256=ast_info["model_sha256"],
+        ast_skeleton_digest=ast_info["ast_skeleton_digest"],
+        fitted_params_sha256=fitted_params_sha256,
+        role_names=list(role_names),
+    )
 
     host_confirmation_bundle = {
         "task_id": lab.task_id,
         "model_sha256": ast_info["model_sha256"],
         "ast_skeleton_digest": ast_info["ast_skeleton_digest"],
+        "fitted_params_sha256": fitted_params_sha256,
+        "confirmed_instance_digest": confirmed_instance_digest,
         "training_prefix_rows": deepcopy(frozen_prefix_rows),
         "training_prefix_sha256": prefix_sha,
         "confirm_rows": deepcopy(confirm_rows),
@@ -1061,6 +1142,8 @@ def run_compositional_code_agent_episode(
         "model_sha256": ast_info["model_sha256"],
         "authored_model_source": model_source,
         "fitted_params": fitted_params_snapshot,
+        "fitted_params_sha256": fitted_params_sha256,
+        "confirmed_instance_digest": confirmed_instance_digest,
         "confirmation_digest": conf_digest,
         "host_confirmation_bundle": host_confirmation_bundle,
         "composed_history": deepcopy(provider.composed_history),
@@ -1076,14 +1159,20 @@ def run_compositional_code_agent_episode(
     )
     (workspace_dir / "authored_model.py").write_text(model_source, encoding="utf-8")
 
-    heldout_eval = evaluate_isolated_python_model(
-        workspace_dir,
-        "model.py",
-        heldout_rows,
-        isolated_prefix_rows=frozen_prefix_rows,
-    )
-    heldout_rmse = float(heldout_eval["rmse"])
-    heldout_pass = bool(heldout_eval["returncode"] == 0 and math.isfinite(heldout_rmse) and heldout_rmse <= tolerance)
+    if heldout_rows is not None and len(heldout_rows) > 0:
+        heldout_eval = evaluate_isolated_python_model(
+            workspace_dir,
+            "model.py",
+            heldout_rows,
+            isolated_prefix_rows=frozen_prefix_rows,
+        )
+        heldout_rmse = float(heldout_eval["rmse"])
+        heldout_pass = bool(heldout_eval["returncode"] == 0 and math.isfinite(heldout_rmse) and heldout_rmse <= tolerance)
+        heldout_wall = float(heldout_eval.get("wall_seconds", 0.02))
+    else:
+        heldout_rmse = float("nan")
+        heldout_pass = confirmed_ok
+        heldout_wall = 0.0
 
     # Monotone work-based compute pricing: base + per candidate evaluated + per diagnostic round
     compute_cost = round(
@@ -1094,7 +1183,7 @@ def run_compositional_code_agent_episode(
     cost_snap = {
         **lab.meter.snapshot(),
         "wall_clock_seconds": round(
-            float(conf_eval.get("wall_seconds", 0.02)) + float(heldout_eval.get("wall_seconds", 0.02)),
+            float(conf_eval.get("wall_seconds", 0.02)) + heldout_wall,
             4,
         ),
     }
@@ -1132,6 +1221,37 @@ def run_compositional_code_agent_episode(
     }
 
 
+def canonicalize_fitted_params_snapshot(params: dict[str, Any] | None) -> tuple[dict[str, float], str]:
+    """Validate and canonicalize a persisted ``_PARAMS`` dictionary and compute its SHA-256 digest."""
+    if not isinstance(params, dict):
+        raise ValueError("fitted_params must be a dictionary")
+    canon: dict[str, float] = {}
+    for k in sorted(params.keys()):
+        val = params[k]
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(float(val)):
+            raise ValueError(f"Non-finite or invalid fitted parameter {k!r}: {val!r}")
+        canon[str(k)] = float(val)
+    dig = hashlib.sha256(json.dumps(canon, sort_keys=True).encode("utf-8")).hexdigest()
+    return canon, dig
+
+
+def compute_confirmed_instance_digest(
+    *,
+    model_sha256: str,
+    ast_skeleton_digest: str,
+    fitted_params_sha256: str,
+    role_names: Sequence[str],
+) -> str:
+    """Bind source code, AST skeleton, frozen parameter snapshot, and canonical role names into one instance identity."""
+    payload = {
+        "model_sha256": str(model_sha256),
+        "ast_skeleton_digest": str(ast_skeleton_digest),
+        "fitted_params_sha256": str(fitted_params_sha256),
+        "role_names": [str(r) for r in role_names],
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def predict_with_frozen_instance(
     authored_artifact: dict[str, Any],
     points: list[dict[str, float]],
@@ -1141,39 +1261,46 @@ def predict_with_frozen_instance(
     ast_info = canonicalize_python_model_ast(model_src)
     if ast_info.get("skeleton_status") != "VERIFIED_PURE_AST":
         raise ValueError("Refusing to execute unverified model source")
-    fitted_params = dict(authored_artifact.get("fitted_params") or {})
+    raw_params = authored_artifact.get("fitted_params")
+    if not isinstance(raw_params, dict) or not raw_params:
+        raise ValueError("predict_with_frozen_instance requires a non-empty fitted_params snapshot")
+    fitted_params, params_sha = canonicalize_fitted_params_snapshot(raw_params)
     ns: dict[str, Any] = {}
     exec(compile(model_src, "<hegel_frozen_instance>", "exec"), ns)
     # Remove `fit` from namespace to prove structurally that zero refitting can occur!
     ns.pop("fit", None)
-    if isinstance(ns.get("_PARAMS"), dict) and fitted_params:
-        for k, v in fitted_params.items():
-            ns["_PARAMS"][k] = float(v)
+    if not isinstance(ns.get("_PARAMS"), dict) or set(fitted_params.keys()) != set(ns["_PARAMS"].keys()):
+        raise ValueError("Persisted fitted_params keys do not match model _PARAMS schema")
+    for k, v in fitted_params.items():
+        ns["_PARAMS"][k] = float(v)
     preds = [float(ns["predict"]({"features": dict(pt)})) for pt in points]
     return {
         "predictions": preds,
         "fit_called": False,
         "used_fitted_params": deepcopy(ns.get("_PARAMS", {})),
+        "fitted_params_sha256": params_sha,
     }
 
 
-_VERIFIED_AUTHORED_CACHE: dict[tuple[str, str, str, str, bool], dict[str, Any] | None] = {}
+_VERIFIED_AUTHORED_CACHE: dict[tuple[str, str, str, str, str, bool, bool], dict[str, Any] | None] = {}
 
 
 def load_verified_authored_method(
     art_path: Path,
     *,
     expected_ast_digest: str | None = None,
+    expected_instance_digest: str | None = None,
     require_external_manifest: bool = False,
+    verify_frozen_only: bool = False,
 ) -> dict[str, Any] | None:
     """Load a persisted ``authored_method.json`` ONLY when confirmation provenance, pure-AST digest,
-    node-expected digest, and isolated confirmation re-evaluation all match!
+    node-expected digest, persisted ``fitted_params`` snapshot, and confirmation accuracy all match!
 
     Rejects:
       - unverified metadata-only JSON;
-      - tampered ``operator_spec`` or ``authored_model_source``;
+      - tampered ``operator_spec``, ``authored_model_source``, or ``fitted_params`` (`p0 * 3` etc.);
       - self-consistent JSON fabricated without real ``confirm_rows`` / ``host_confirmation_bundle``;
-      - valid artifacts belonging to a DIFFERENT node (`expected_ast_digest` mismatch).
+      - valid artifacts belonging to a DIFFERENT node/instance (`expected_ast_digest` / `expected_instance_digest` mismatch).
     """
     if not art_path.is_file():
         return None
@@ -1185,16 +1312,28 @@ def load_verified_authored_method(
     art_sha = hashlib.sha256(art_bytes).hexdigest()
     ext_manifest_p = art_path.parent / "confirmed_manifest.json"
     ext_sha = hashlib.sha256(ext_manifest_p.read_bytes()).hexdigest() if ext_manifest_p.is_file() else ""
+    ext_params_p = art_path.parent / "confirmed_fitted_params.json"
+    ext_params_sha = hashlib.sha256(ext_params_p.read_bytes()).hexdigest() if ext_params_p.is_file() else ""
     leg_obs_p = art_path.parent / "confirmed_training_observations.json"
     leg_obs_sha = hashlib.sha256(leg_obs_p.read_bytes()).hexdigest() if leg_obs_p.is_file() else ""
     leg_py_p = art_path.parent / "authored_model.py"
     leg_py_sha = hashlib.sha256(leg_py_p.read_bytes()).hexdigest() if leg_py_p.is_file() else ""
-    cache_key = (art_sha, ext_sha, leg_obs_sha, leg_py_sha, bool(require_external_manifest))
+    cache_key = (
+        art_sha,
+        ext_sha,
+        ext_params_sha,
+        leg_obs_sha,
+        leg_py_sha,
+        bool(require_external_manifest),
+        bool(verify_frozen_only),
+    )
     if cache_key in _VERIFIED_AUTHORED_CACHE:
         cached = _VERIFIED_AUTHORED_CACHE[cache_key]
         if cached is None:
             return None
         if expected_ast_digest is not None and cached.get("ast_skeleton_digest") != expected_ast_digest:
+            return None
+        if expected_instance_digest is not None and cached.get("confirmed_instance_digest") != expected_instance_digest:
             return None
         return deepcopy(cached)
     if not isinstance(loaded, dict):
@@ -1305,6 +1444,7 @@ def load_verified_authored_method(
         return None
 
     ext_manifest_path = art_path.parent / "confirmed_manifest.json"
+    ext_m: dict[str, Any] | None = None
     if require_external_manifest and not ext_manifest_path.is_file():
         return None
     if ext_manifest_path.is_file():
@@ -1313,13 +1453,89 @@ def load_verified_authored_method(
         except Exception:
             return None
         if (
-            ext_m.get("confirmed_ok") is not True
+            not isinstance(ext_m, dict)
+            or ext_m.get("confirmed_ok") is not True
             or ext_m.get("model_sha256") != expected_sha
             or ext_m.get("ast_skeleton_digest") != expected_digest
             or ext_m.get("confirm_rows_sha256") != expected_conf_sha
             or ext_m.get("training_prefix_sha256") != expected_pref_sha
         ):
             return None
+
+    # Verify persisted frozen parameter snapshot (`fitted_params`) against external files, manifest & confirm_rows!
+    must_verify_frozen_params = bool(
+        require_external_manifest
+        or verify_frozen_only
+        or ("fitted_params" in loaded)
+        or ext_params_p.is_file()
+        or (expected_instance_digest is not None)
+    )
+    if must_verify_frozen_params:
+        raw_fp = loaded.get("fitted_params")
+        if not isinstance(raw_fp, dict) or not raw_fp:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        try:
+            canon_fp, art_params_sha = canonicalize_fitted_params_snapshot(raw_fp)
+        except Exception:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        if require_external_manifest and not ext_params_p.is_file():
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        if ext_params_p.is_file():
+            try:
+                ext_fp_raw = json.loads(ext_params_p.read_text(encoding="utf-8"))
+                _, ext_params_file_sha = canonicalize_fitted_params_snapshot(ext_fp_raw)
+            except Exception:
+                _VERIFIED_AUTHORED_CACHE[cache_key] = None
+                return None
+            if ext_params_file_sha != art_params_sha:
+                _VERIFIED_AUTHORED_CACHE[cache_key] = None
+                return None
+        if bundle.get("fitted_params_sha256") is not None and bundle.get("fitted_params_sha256") != art_params_sha:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        if ext_m is not None and ext_m.get("fitted_params_sha256") is not None and ext_m.get("fitted_params_sha256") != art_params_sha:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        inst_dig = compute_confirmed_instance_digest(
+            model_sha256=expected_sha,
+            ast_skeleton_digest=expected_digest,
+            fitted_params_sha256=art_params_sha,
+            role_names=role_names,
+        )
+        if bundle.get("confirmed_instance_digest") is not None and bundle.get("confirmed_instance_digest") != inst_dig:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        if ext_m is not None and ext_m.get("confirmed_instance_digest") is not None and ext_m.get("confirmed_instance_digest") != inst_dig:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        if expected_instance_digest is not None and inst_dig != expected_instance_digest:
+            return None
+        try:
+            fr_eval = predict_with_frozen_instance(loaded, [dict(r["features"]) for r in c_rows])
+            fr_preds = fr_eval["predictions"]
+            frozen_rmse = math.sqrt(
+                sum((float(pr) - float(r["target"])) ** 2 for pr, r in zip(fr_preds, c_rows)) / len(c_rows)
+            )
+        except Exception:
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        if (
+            not math.isfinite(frozen_rmse)
+            or frozen_rmse > float(tol) + 1e-9
+            or abs(frozen_rmse - float(obs_rmse)) > 1e-4
+        ):
+            _VERIFIED_AUTHORED_CACHE[cache_key] = None
+            return None
+        loaded["fitted_params"] = canon_fp
+        loaded["fitted_params_sha256"] = art_params_sha
+        loaded["confirmed_instance_digest"] = inst_dig
+        if verify_frozen_only:
+            loaded["_verification_mode"] = "frozen_instance_zero_fit"
+            _VERIFIED_AUTHORED_CACHE[cache_key] = deepcopy(loaded)
+            return loaded
 
     with TemporaryDirectory(prefix="hegel-verify-art-") as tmp_v:
         v_ws = Path(tmp_v)
@@ -1335,6 +1551,7 @@ def load_verified_authored_method(
     ):
         _VERIFIED_AUTHORED_CACHE[cache_key] = None
         return None
+    loaded["_verification_mode"] = "isolated_refit_and_frozen_instance" if must_verify_frozen_params else "isolated_refit"
     _VERIFIED_AUTHORED_CACHE[cache_key] = deepcopy(loaded)
     return loaded
 

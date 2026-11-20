@@ -251,17 +251,13 @@ def authorize_abstraction_use(
         declared_max_rank = min(declared_max_rank, PERMISSION_ORDER[claim_contract["permission_tier"]])
     if wormhole_edge is not None and wormhole_edge.get("permission_tier") in PERMISSION_ORDER:
         declared_max_rank = min(declared_max_rank, PERMISSION_ORDER[wormhole_edge["permission_tier"]])
-    if receipt_ok and evidence_receipt.get("upgrade_to_tier") in PERMISSION_ORDER:
-        upgrade_cap = PERMISSION_ORDER["validated_pruning"] if implication_verified else PERMISSION_ORDER["local_solver_guidance"]
-        declared_max_rank = max(declared_max_rank, min(upgrade_cap, PERMISSION_ORDER[evidence_receipt["upgrade_to_tier"]]))
-
-    def cap_tier(rank: int) -> str:
-        return _tier_name_from_rank(min(rank, declared_max_rank))
 
     reasons: list[str] = []
-    # Check explicit preconditions (supporting disjunctive_branches OR-semantics!) & ALIGN exclusions
+    # Check explicit preconditions (supporting disjunctive_branches OR-semantics + per-branch permission/action!)
     raw_branches = claim_contract.get("disjunctive_branches")
     has_disjunctive_branches = isinstance(raw_branches, list) and len(raw_branches) > 0
+    selected_branch: dict[str, Any] | None = None
+    effective_evidence_status = claim_contract.get("evidence_status")
     align_inclusions: list[dict[str, Any]] = []
     exclusions: list[dict[str, Any]] = []
     if wormhole_edge is not None:
@@ -283,26 +279,76 @@ def authorize_abstraction_use(
             exclusions.append(ex_r)
 
     if has_disjunctive_branches:
+        common_precs = list(claim_contract.get("preconditions", ()))
         branch_verdicts: list[str] = []
+        true_branches: list[dict[str, Any]] = []
+        unknown_branches: list[dict[str, Any]] = []
         for br in raw_branches:
-            br_precs = list(br.get("preconditions", ())) if isinstance(br, dict) else []
+            if not isinstance(br, dict):
+                branch_verdicts.append("FALSE")
+                continue
+            br_precs = [*common_precs, *list(br.get("preconditions", ()))]
             br_res = [evaluate_predicate_rule(r, target_features) for r in br_precs]
             if "FALSE" in br_res:
                 branch_verdicts.append("FALSE")
             elif "UNKNOWN" in br_res:
                 branch_verdicts.append("UNKNOWN")
+                unknown_branches.append(br)
             else:
                 branch_verdicts.append("TRUE")
-        if "TRUE" in branch_verdicts:
+                true_branches.append(br)
+        if true_branches:
             branch_agg = "TRUE"
+            selected_branch = max(
+                true_branches,
+                key=lambda b: PERMISSION_ORDER.get(
+                    str(b.get("permission_tier", claim_contract.get("permission_tier", "validated_pruning"))),
+                    declared_max_rank,
+                ),
+            )
         elif all(v == "FALSE" for v in branch_verdicts):
             branch_agg = "FALSE"
         else:
             branch_agg = "UNKNOWN"
+            if unknown_branches:
+                selected_branch = max(
+                    unknown_branches,
+                    key=lambda b: PERMISSION_ORDER.get(
+                        str(b.get("permission_tier", claim_contract.get("permission_tier", "validated_pruning"))),
+                        declared_max_rank,
+                    ),
+                )
+        if selected_branch is not None:
+            br_tier = selected_branch.get("permission_tier")
+            if br_tier in PERMISSION_ORDER:
+                declared_max_rank = min(declared_max_rank, PERMISSION_ORDER[br_tier])
+            if "evidence_status" in selected_branch:
+                effective_evidence_status = selected_branch.get("evidence_status")
         precond_results = [branch_agg, *[evaluate_predicate_rule(r, target_features) for r in align_inclusions]]
     else:
         preconditions = [*claim_contract.get("preconditions", ()), *align_inclusions]
         precond_results = [evaluate_predicate_rule(r, target_features) for r in preconditions]
+
+    if receipt_ok and evidence_receipt.get("upgrade_to_tier") in PERMISSION_ORDER:
+        upgrade_cap = PERMISSION_ORDER["validated_pruning"] if implication_verified else PERMISSION_ORDER["local_solver_guidance"]
+        declared_max_rank = max(declared_max_rank, min(upgrade_cap, PERMISSION_ORDER[evidence_receipt["upgrade_to_tier"]]))
+
+    def cap_tier(rank: int) -> str:
+        return _tier_name_from_rank(min(rank, declared_max_rank))
+
+    selected_action = deepcopy(
+        selected_branch.get("conclusion_or_action")
+        if (selected_branch is not None and "conclusion_or_action" in selected_branch)
+        else claim_contract.get("conclusion_or_action")
+    )
+    branch_meta = (
+        {
+            "selected_branch": deepcopy(selected_branch),
+            "selected_action": selected_action,
+        }
+        if selected_branch is not None
+        else {"selected_action": selected_action}
+    )
 
     excl_results = [evaluate_predicate_rule(r, target_features) for r in exclusions]
 
@@ -376,7 +422,7 @@ def authorize_abstraction_use(
             }
 
     if requested_tier == "retrieve_candidate":
-        return {"granted": True, "granted_tier": "retrieve_candidate", "requested_tier": requested_tier, "reason": "signature_recall_allowed"}
+        return {"granted": True, "granted_tier": "retrieve_candidate", "requested_tier": requested_tier, "reason": "signature_recall_allowed", **branch_meta}
 
     # For tiers >= bounded_trial, check declared permission ceiling unless upgraded by receipt
     if PERMISSION_ORDER[requested_tier] > declared_max_rank:
@@ -394,12 +440,13 @@ def authorize_abstraction_use(
             "requested_tier": requested_tier,
             "reason": reason,
             "declared_max_tier": _tier_name_from_rank(declared_max_rank),
+            **branch_meta,
         }
 
     if requested_tier == "bounded_trial":
         if not trial_budget_ok:
             return {"granted": False, "granted_tier": "retrieve_candidate", "requested_tier": requested_tier, "reason": "trial_budget_exceeded"}
-        return {"granted": True, "granted_tier": "bounded_trial", "requested_tier": requested_tier, "reason": "bounded_trial_authorized"}
+        return {"granted": True, "granted_tier": "bounded_trial", "requested_tier": requested_tier, "reason": "bounded_trial_authorized", **branch_meta}
 
     if "UNKNOWN" in precond_results:
         return {
@@ -418,7 +465,7 @@ def authorize_abstraction_use(
         }
 
     if requested_tier == "local_solver_guidance":
-        if claim_contract.get("evidence_status") not in {"SUPPORTED_IN_SCOPE", "derived"}:
+        if effective_evidence_status not in {"SUPPORTED_IN_SCOPE", "derived"}:
             return {
                 "granted": False,
                 "granted_tier": cap_tier(PERMISSION_ORDER["bounded_trial"] if trial_budget_ok else 1),
@@ -432,17 +479,17 @@ def authorize_abstraction_use(
                 "requested_tier": requested_tier,
                 "reason": "heldout_target_point_confirmation_required",
             }
-        return {"granted": True, "granted_tier": "local_solver_guidance", "requested_tier": requested_tier, "reason": "in_scope_alignment_and_heldout_confirmed"}
+        return {"granted": True, "granted_tier": "local_solver_guidance", "requested_tier": requested_tier, "reason": "in_scope_alignment_and_heldout_confirmed", **branch_meta}
 
     # validated_pruning
-    if not (implication_verified and confirmed and claim_contract.get("evidence_status") == "SUPPORTED_IN_SCOPE"):
+    if not (implication_verified and confirmed and effective_evidence_status == "SUPPORTED_IN_SCOPE"):
         return {
             "granted": False,
             "granted_tier": cap_tier(PERMISSION_ORDER["local_solver_guidance"] if confirmed else PERMISSION_ORDER["bounded_trial"]),
             "requested_tier": requested_tier,
             "reason": "validated_pruning_requires_verified_implication_and_in_scope_support",
         }
-    return {"granted": True, "granted_tier": "validated_pruning", "requested_tier": requested_tier, "reason": "verified_implication_pruning_authorized"}
+    return {"granted": True, "granted_tier": "validated_pruning", "requested_tier": requested_tier, "reason": "verified_implication_pruning_authorized", **branch_meta}
 
 
 def compose_wormhole_chain(edges: list[dict[str, Any]], *, target_tolerance: float) -> dict[str, Any]:
@@ -545,6 +592,29 @@ def fidelity_compress_nodes(
     act_b = (node_b.get("claim_contract") or {}).get("conclusion_or_action") or {}
     law_a = act_a.get("ast_skeleton_digest") or act_a.get("operator_tag") or act_a.get("family_id")
     law_b = act_b.get("ast_skeleton_digest") or act_b.get("operator_tag") or act_b.get("family_id")
+
+    if use_disjunctive:
+        # Disjunctive scope compression requires homogeneous predictive law / action semantics;
+        # heterogeneous predictive laws cannot silently share keeper A's top-level action!
+        if law_a is not None and law_b is not None and law_a != law_b:
+            return {
+                "kind": "FidelityCompression",
+                "accepted": False,
+                "reason": "heterogeneous_conclusion_or_action_cannot_scope_merge",
+                "merged_node": None,
+                "lost_accept_indices": [],
+                "lost_reject_indices": [],
+                "false_new_reject_indices": [],
+                "conflicting_verdict_indices": list(range(len(evaluation_queries))),
+                "unauthorized_unknown_promotion_indices": [],
+            }
+        # Set top-level ceiling to max across branches while each branch in `disjunctive_branches`
+        # enforces its own declared `permission_tier` inside `authorize_abstraction_use`!
+        max_branch_rank = max(
+            (PERMISSION_ORDER.get(str(br.get("permission_tier", "")), 1) for br in flat_branches),
+            default=PERMISSION_ORDER.get(str(merged_node["claim_contract"].get("permission_tier", "")), 1),
+        )
+        merged_node["claim_contract"]["permission_tier"] = _tier_name_from_rank(max_branch_rank)
 
     lost_accepts, lost_rejects, false_new_rejects = [], [], []
     conflicting_verdicts, unauthorized_promotions = [], []
@@ -1101,6 +1171,34 @@ class PhilosophicalForest:
                 "reason": "closure_defect_exceeds_tolerance_or_missing",
                 "rebound_coarse_graining_edges": 0,
             }
+        # Check trajectory slaving defect & window projection drift when declared on certificate
+        slav_def = closure_certificate.get("max_trajectory_slaving_defect")
+        slav_tol = closure_certificate.get("slaving_tolerance", tol)
+        if slav_def is not None and (
+            not isinstance(slav_def, (int, float))
+            or not math.isfinite(float(slav_def))
+            or float(slav_def) < 0.0
+            or float(slav_def) > float(slav_tol) + 1e-12
+        ):
+            return {
+                "accepted": False,
+                "reason": "trajectory_slaving_defect_exceeds_tolerance",
+                "rebound_coarse_graining_edges": 0,
+            }
+        win_drift = closure_certificate.get("max_window_projection_drift")
+        win_tol = closure_certificate.get("window_drift_tolerance")
+        if win_drift is not None and win_tol is not None and (
+            not isinstance(win_drift, (int, float))
+            or not math.isfinite(float(win_drift))
+            or float(win_drift) < 0.0
+            or float(win_drift) > float(win_tol) + 1e-12
+        ):
+            return {
+                "accepted": False,
+                "reason": "window_projection_drift_exceeds_tolerance",
+                "rebound_coarse_graining_edges": 0,
+            }
+
         target_sm = updated_scale_map if updated_scale_map is not None else self.nodes[node_id].get("scale_map")
         if not isinstance(target_sm, dict) or target_sm.get("closure_scope") in {None, "", "not_closed"}:
             return {
@@ -1108,6 +1206,48 @@ class PhilosophicalForest:
                 "reason": "scale_map_not_closed",
                 "rebound_coarse_graining_edges": 0,
             }
+
+        # Enforce strict regional box containment: narrow-domain certificate CANNOT authorize a wider ScaleMap box!
+        cert_box = closure_certificate.get("verified_input_box")
+        req_box = (target_sm.get("window_or_partition") or {}).get("verified_input_box")
+        if cert_box is not None or req_box is not None:
+            if not isinstance(cert_box, dict) or not cert_box or not isinstance(req_box, dict) or not req_box:
+                return {
+                    "accepted": False,
+                    "reason": "missing_or_ mismatched_verified_input_box".replace(" ", ""),
+                    "rebound_coarse_graining_edges": 0,
+                }
+            for axis_k, c_bnds in cert_box.items():
+                if axis_k not in req_box:
+                    return {
+                        "accepted": False,
+                        "reason": f"certified_axis_dropped_from_scale_map:{axis_k}",
+                        "rebound_coarse_graining_edges": 0,
+                    }
+                r_bnds = req_box[axis_k]
+                if (
+                    not isinstance(c_bnds, (list, tuple))
+                    or len(c_bnds) != 2
+                    or not isinstance(r_bnds, (list, tuple))
+                    or len(r_bnds) != 2
+                ):
+                    return {
+                        "accepted": False,
+                        "reason": f"malformed_box_bounds:{axis_k}",
+                        "rebound_coarse_graining_edges": 0,
+                    }
+                c_lo, c_hi = float(c_bnds[0]), float(c_bnds[1])
+                r_lo, r_hi = float(r_bnds[0]), float(r_bnds[1])
+                if r_lo > r_hi or r_lo < c_lo - 1e-9 or r_hi > c_hi + 1e-9:
+                    return {
+                        "accepted": False,
+                        "reason": "requested_scale_box_exceeds_certified_box",
+                        "axis": axis_k,
+                        "certified_bounds": [c_lo, c_hi],
+                        "requested_bounds": [r_lo, r_hi],
+                        "rebound_coarse_graining_edges": 0,
+                    }
+
         proposed_disc = set(target_sm.get("proposed_discarded_variables", ()))
         verified_disc = {
             (item["variable"] if isinstance(item, dict) else str(item))
@@ -1129,13 +1269,22 @@ class PhilosophicalForest:
         reb = self.revalidate_vertical_edges_after_revision(
             node_id, witness_episode_id=witness_episode_id, reason=reason or "certified_closure_revalidation"
         )
+        cert_digest = hashlib.sha256(
+            json.dumps(closure_certificate, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
         for ce in self.coarse_graining_edges:
             if ce["fine_node_id"] == node_id or ce["coarse_node_id"] == node_id:
-                ce["closure_certificate_digest"] = hashlib.sha256(
-                    json.dumps(closure_certificate, sort_keys=True).encode("utf-8")
-                ).hexdigest()[:16]
+                c_nid = ce["coarse_node_id"]
+                if c_nid in self.nodes and self.nodes[c_nid].get("scale_map") is not None:
+                    ce["scale_map"] = deepcopy(self.nodes[c_nid]["scale_map"])
+                ce["empirical_closure_certificate"] = deepcopy(closure_certificate)
+                ce["closure_certificate_digest"] = cert_digest
+                c_act = (self.nodes.get(c_nid, {}).get("claim_contract") or {}).get("conclusion_or_action") or {}
+                if c_act.get("confirmed_instance_digest"):
+                    ce["confirmed_instance_digest"] = c_act["confirmed_instance_digest"]
         return {
             "accepted": True,
+            "closure_certificate_digest": cert_digest,
             **reb,
         }
 

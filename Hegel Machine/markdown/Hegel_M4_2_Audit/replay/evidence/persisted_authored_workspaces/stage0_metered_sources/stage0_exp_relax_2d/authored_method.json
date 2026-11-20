@@ -1,0 +1,109 @@
+{
+  "ast_skeleton_digest": "93eb2681b9bb12",
+  "authored_model_source": "import math\n\n_SCHEMA_FAMILY_TAG = 'atomic_exp_relax_2d'\n_CORE_LAW_EXPR = \"((_PARAMS['p0'] * f['u']) * (1 - math.exp(-f['t'] / _PARAMS['p1'])))\"\n_PARAMS = {'p0': 1.5, 'p1': 1.2}\n\ndef fit(observations):\n    if not observations:\n        return\n    rows_f = [r['features'] for r in observations]\n    ys = [(float(r['target']) - (0)) / ((1) * (1)) for r in observations]\n    lbs = [0.0001, 0.05]\n    ubs = [200.0, 50.0]\n    m_p = len(lbs)\n    def _res(p):\n        out = []\n        for f, y in zip(rows_f, ys):\n            out.append((((p[0] * f['u']) * (1 - math.exp(-f['t'] / p[1])))) - y)\n        return out\n    def _loss(p):\n        rv = _res(p)\n        return sum(e * e for e in rv)\n    def _lm(x_start):\n        p = [max(lbs[i], min(ubs[i], float(x_start[i]))) for i in range(m_p)]\n        cur = _loss(p)\n        lam = 1e-3\n        for _ in range(28):\n            if cur <= 1e-13:\n                break\n            r0 = _res(p)\n            jac = []\n            for j in range(m_p):\n                h = max(1e-6, 1e-5 * abs(p[j]))\n                pj = min(ubs[j], p[j] + h)\n                actual_h = pj - p[j]\n                if abs(actual_h) < 1e-9:\n                    pj = max(lbs[j], p[j] - h)\n                    actual_h = pj - p[j]\n                p_pert = list(p)\n                p_pert[j] = pj\n                rp = _res(p_pert)\n                jac.append([(rp[k] - r0[k]) / actual_h for k in range(len(r0))])\n            jtj = [[(lam if a == b else 0.0) + sum(jac[a][k] * jac[b][k] for k in range(len(r0))) for b in range(m_p)] for a in range(m_p)]\n            jtr = [-sum(jac[a][k] * r0[k] for k in range(len(r0))) for a in range(m_p)]\n            aug = [jtj[a] + [jtr[a]] for a in range(m_p)]\n            ok = True\n            for col in range(m_p):\n                piv = max(range(col, m_p), key=lambda r_i: abs(aug[r_i][col]))\n                aug[col], aug[piv] = aug[piv], aug[col]\n                if abs(aug[col][col]) <= 1e-15:\n                    ok = False\n                    break\n                inv_d = 1.0 / aug[col][col]\n                for c2 in range(col, m_p + 1):\n                    aug[col][c2] *= inv_d\n                for r_i in range(m_p):\n                    if r_i != col and abs(aug[r_i][col]) > 0.0:\n                        fac = aug[r_i][col]\n                        for c2 in range(col, m_p + 1):\n                            aug[r_i][c2] -= fac * aug[col][c2]\n            if not ok:\n                lam *= 10.0\n                continue\n            dp = [aug[a][m_p] for a in range(m_p)]\n            cand = [max(lbs[i], min(ubs[i], p[i] + dp[i])) for i in range(m_p)]\n            c_loss = _loss(cand)\n            if c_loss < cur:\n                impr = cur - c_loss\n                p, cur = cand, c_loss\n                lam = max(1e-7, lam * 0.35)\n                if impr < 1e-12:\n                    break\n            else:\n                lam = min(1e6, lam * 6.0)\n        for step in (0.15, 0.03, 0.005):\n            for j in range(m_p):\n                for sgn in (-1.0, 1.0):\n                    cand = list(p)\n                    cand[j] = max(lbs[j], min(ubs[j], p[j] + sgn * step * max(0.5, abs(p[j]))))\n                    cl = _loss(cand)\n                    if cl < cur:\n                        p, cur = cand, cl\n        return cur, p\n    starts = [[1.5, 1.2]]\n    if ys:\n        if False and m_p >= 2:\n            s_emp = list(starts[0])\n            s_emp[-1] = max(lbs[-1], min(ubs[-1], max(ys)))\n            starts.insert(0, s_emp)\n    best_cost, best_p = None, list(starts[0])\n    for st in starts:\n        c_val, c_p = _lm(st)\n        if best_cost is None or c_val < best_cost:\n            best_cost, best_p = c_val, c_p\n            if best_cost <= 1e-10:\n                break\n    _PARAMS['p0'] = float(best_p[0])\n    _PARAMS['p1'] = float(best_p[1])\n\ndef predict(row):\n    f = row['features']\n    latent = ((_PARAMS['p0'] * f['u']) * (1 - math.exp(-f['t'] / _PARAMS['p1'])))\n    return 0 + (1) * (1) * latent\n",
+  "canonical_ast_dump": "BinOp(left=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Mult(), right=Name(id='ROLE_0', ctx=Load())), op=Mult(), right=BinOp(left=Name(id='POS_NUM', ctx=Load()), op=Sub(), right=Call(func=Name(id='FN_exp', ctx=Load()), args=[BinOp(left=UnaryOp(op=USub(), operand=Name(id='ROLE_1', ctx=Load())), op=Div(), right=Name(id='POS_NUM', ctx=Load()))], keywords=[])))",
+  "confirm_rmse": 0.0,
+  "confirmation_digest": "89a30256d1a05347",
+  "confirmed_ok": true,
+  "fitted_params": {
+    "p0": 1.8999999999927009,
+    "p1": 1.0999999999789738
+  },
+  "host_confirmation_bundle": {
+    "ast_skeleton_digest": "93eb2681b9bb12",
+    "confirm_rows": [
+      {
+        "features": {
+          "t": 2.0,
+          "u": 1.8
+        },
+        "target": 2.8648635097580795
+      }
+    ],
+    "confirm_rows_sha256": "89a30256d1a053474e0a46333d4e80e72f140ff65557b27cb6a2d24a6726e6c9",
+    "confirmed_ok": true,
+    "model_sha256": "574a7f69cfcf2c1501f0b6415c52357723df078a62430443ba8c1b2b8814f393",
+    "observed_confirm_rmse": 0.0,
+    "task_id": "stage0_exp_relax_2d",
+    "tolerance": 0.04,
+    "training_prefix_rows": [
+      {
+        "features": {
+          "t": 0.4,
+          "u": 0.8
+        },
+        "target": 0.46338122883370436
+      },
+      {
+        "features": {
+          "t": 1.2,
+          "u": 1.5
+        },
+        "target": 1.8926537034683868
+      },
+      {
+        "features": {
+          "t": 2.5,
+          "u": 2.2
+        },
+        "target": 3.7493312415298257
+      },
+      {
+        "features": {
+          "t": 4.0,
+          "u": 2.8
+        },
+        "target": 5.179828742067132
+      }
+    ],
+    "training_prefix_sha256": "ddbba8f1c8ffffccc4448aced5f2f93e76bd4ad858d38d220cd535e430c44c28"
+  },
+  "model_sha256": "574a7f69cfcf2c1501f0b6415c52357723df078a62430443ba8c1b2b8814f393",
+  "operator_spec": {
+    "arity": 2,
+    "family_hint": "atomic_exp_relax_2d",
+    "left": {
+      "left": {
+        "idx": 0,
+        "init": 1.5,
+        "lb": 0.0001,
+        "op": "param",
+        "ub": 200.0
+      },
+      "op": "mul",
+      "right": {
+        "op": "var",
+        "role": 0
+      }
+    },
+    "op": "mul",
+    "right": {
+      "left": {
+        "op": "const",
+        "val": 1.0
+      },
+      "op": "sub",
+      "right": {
+        "den": {
+          "idx": 1,
+          "init": 1.2,
+          "lb": 0.05,
+          "op": "param",
+          "ub": 50.0
+        },
+        "num": {
+          "op": "var",
+          "role": 1
+        },
+        "op": "exp_neg_div"
+      }
+    }
+  },
+  "role_names": [
+    "u",
+    "t"
+  ],
+  "skeleton_status": "VERIFIED_PURE_AST",
+  "surface_domain": "servo_relaxation",
+  "task_id": "stage0_exp_relax_2d"
+}

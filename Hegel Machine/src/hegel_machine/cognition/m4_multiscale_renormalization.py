@@ -1138,20 +1138,117 @@ _SUPPORTED_M4_PROGRAM_STEPS = frozenset({
 })
 
 
+_M4_PROGRAM_STEP_STAGE_ORDER = {
+    "verify_scale_closure_or_escalate": 0,
+    "calibrate_observation_lens": 1,
+    "compile_and_fit_composed_ast": 2,
+    "subprocess_isolated_confirm": 3,
+}
+
+_M4_PROGRAM_STEP_ALLOWED_KEYS = {
+    "verify_scale_closure_or_escalate": {"step", "scale_regime"},
+    "calibrate_observation_lens": {"step", "active_arity"},
+    "compile_and_fit_composed_ast": {"step", "operator_tag"},
+    "subprocess_isolated_confirm": {"step", "fresh_points"},
+}
+
+
+def coords_approx_equal(pt_a: dict[str, Any], pt_b: dict[str, Any], *, tol: float = 1e-9) -> bool:
+    """Strict coordinate dictionary equality check with floating-point tolerance."""
+    if set(pt_a.keys()) != set(pt_b.keys()):
+        return False
+    return all(abs(float(pt_a[k]) - float(pt_b[k])) <= tol for k in pt_a)
+
+
+def select_or_synthesize_disjoint_confirm_points(
+    *,
+    predeclared_confirm_points: list[dict[str, float]] | tuple[dict[str, float], ...],
+    training_prefix_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    required_fresh_count: int,
+    feature_bounds: dict[str, tuple[float, float] | list[float]],
+    verified_box: dict[str, tuple[float, float] | list[float]] | None = None,
+) -> list[dict[str, float]]:
+    """Select ``required_fresh_count`` unseen confirmation points strictly disjoint from ``training_prefix_rows``.
+
+    Never silently truncates below ``required_fresh_count`` and NEVER reuses any coordinate already in
+    ``training_prefix_rows``. When ``predeclared_confirm_points`` has fewer unseen points than requested,
+    synthesizes deterministic golden-ratio interior probe coordinates within ``feature_bounds`` (intersected
+    with ``verified_box`` when provided). Returns ``[]`` if valid bounds cannot supply ``required_fresh_count``
+    distinct unseen points.
+    """
+    req = max(1, int(required_fresh_count))
+    prefix_pts = [dict(r["features"]) for r in training_prefix_rows if isinstance(r, dict) and "features" in r]
+    eff_bounds: dict[str, tuple[float, float]] = {}
+    for k, bnds in feature_bounds.items():
+        lo, hi = float(bnds[0]), float(bnds[1])
+        if verified_box is not None and k in verified_box:
+            lo = max(lo, float(verified_box[k][0]))
+            hi = min(hi, float(verified_box[k][1]))
+        if lo > hi - 1e-7:
+            return []
+        eff_bounds[k] = (lo, hi)
+
+    def _in_eff_bounds(pt: dict[str, Any]) -> bool:
+        for k, (lo, hi) in eff_bounds.items():
+            if k not in pt:
+                return False
+            v = float(pt[k])
+            if v < lo - 1e-9 or v > hi + 1e-9:
+                return False
+        return True
+
+    chosen: list[dict[str, float]] = []
+    for raw_pt in predeclared_confirm_points:
+        cand_pt = {str(k): float(v) for k, v in raw_pt.items()}
+        if not _in_eff_bounds(cand_pt):
+            continue
+        if any(coords_approx_equal(cand_pt, pp) for pp in prefix_pts):
+            continue
+        if any(coords_approx_equal(cand_pt, cp) for cp in chosen):
+            continue
+        chosen.append(cand_pt)
+        if len(chosen) >= req:
+            return chosen
+
+    # Deterministic golden-ratio Halton-like interior synthesis for remaining fresh points
+    primes = (0.6180339887498949, 0.7548776662466927, 0.5698402909980532, 0.4301597090019468)
+    f_keys = list(eff_bounds.keys())
+    attempt = 1
+    while len(chosen) < req and attempt <= 128:
+        synth_pt: dict[str, float] = {}
+        for d_idx, fk in enumerate(f_keys):
+            lo, hi = eff_bounds[fk]
+            frac = 0.08 + ((0.5731 + attempt * primes[d_idx % len(primes)]) % 0.84)
+            synth_pt[fk] = round(lo + frac * (hi - lo), 5)
+        attempt += 1
+        if any(coords_approx_equal(synth_pt, pp) for pp in prefix_pts):
+            continue
+        if any(coords_approx_equal(synth_pt, cp) for cp in chosen):
+            continue
+        chosen.append(synth_pt)
+
+    return chosen if len(chosen) == req else []
+
+
 def _validate_and_interpret_m4_program_steps(
     program_steps: Any,
     *,
     node: dict[str, Any],
     target_arity: int,
 ) -> dict[str, Any] | None:
-    """Validate and interpret declarative ``program_steps`` on an M4 ``PhilosophicalForest`` node.
+    """Validate and interpret ordered declarative ``program_steps`` on an M4 ``PhilosophicalForest`` node.
 
-    Rejects empty lists, unknown opcodes, missing mandatory compilation/confirmation steps,
-    mismatched ``operator_tag`` / ``active_arity``, or non-positive ``fresh_points``.
+    Enforces:
+      - non-empty list of supported opcodes with no duplicate steps and no unknown keys;
+      - strict causal stage ordering:
+        ``verify_scale_closure_or_escalate`` -> ``calibrate_observation_lens``
+        -> ``compile_and_fit_composed_ast`` -> ``subprocess_isolated_confirm``;
+      - matching ``scale_regime``, ``active_arity``, ``operator_tag``, and positive integer ``fresh_points``.
     """
     if not isinstance(program_steps, list) or not program_steps:
         return None
     step_map: dict[str, dict[str, Any]] = {}
+    last_stage_rank = -1
     for entry in program_steps:
         if not isinstance(entry, dict):
             return None
@@ -1160,10 +1257,28 @@ def _validate_and_interpret_m4_program_steps(
             return None
         if op_name in step_map:
             return None
+        allowed_keys = _M4_PROGRAM_STEP_ALLOWED_KEYS[op_name]
+        if not set(entry.keys()).issubset(allowed_keys):
+            return None
+        cur_rank = _M4_PROGRAM_STEP_STAGE_ORDER[op_name]
+        if cur_rank <= last_stage_rank:
+            return None
+        last_stage_rank = cur_rank
         step_map[op_name] = entry
 
     if "compile_and_fit_composed_ast" not in step_map or "subprocess_isolated_confirm" not in step_map:
         return None
+
+    declared_scale: str | None = None
+    if "verify_scale_closure_or_escalate" in step_map:
+        s_reg = step_map["verify_scale_closure_or_escalate"].get("scale_regime")
+        if s_reg is not None:
+            if not isinstance(s_reg, str) or s_reg not in {"micro", "meso", "macro"}:
+                return None
+            node_scale = ((node.get("scale_map") or {}).get("window_or_partition") or {}).get("scale_regime")
+            if node_scale is not None and s_reg != node_scale:
+                return None
+            declared_scale = s_reg
 
     act = node.get("claim_contract", {}).get("conclusion_or_action", {})
     expected_tag = str(act.get("operator_tag", ""))
@@ -1186,6 +1301,7 @@ def _validate_and_interpret_m4_program_steps(
         "operator_tag": step_tag,
         "calibrate_lens": "calibrate_observation_lens" in step_map,
         "verify_scale_closure": "verify_scale_closure_or_escalate" in step_map,
+        "declared_scale_regime": declared_scale,
         "fresh_points": fresh_pts,
     }
 
@@ -1347,16 +1463,26 @@ def evaluate_m4_target_under_arm(
 
         if best_rec is not None and best_rec["train_rmse"] <= lab.tolerance:
             matched_rc = cand_by_tag[best_rec["tag"]]
-            req_fresh_0 = max(1, min(len(target.confirm_points), int(matched_rc["_exec_plan"]["fresh_points"])))
-            # Purchase declared number of fresh confirmation points (`fresh_points` in `program_steps`!)
-            c0_rows = lab.acquire_channel(target.confirm_points[:req_fresh_0], channel=confirm_channel, phase="confirm_0")
-            c0_eval = evaluate_isolated_python_model(
-                work_dir,
-                best_rec["model_relpath"],
-                c0_rows,
-                isolated_prefix_rows=frozen_prefix,
+            req_fresh_0 = max(1, int(matched_rc["_exec_plan"]["fresh_points"]))
+            c0_pts = select_or_synthesize_disjoint_confirm_points(
+                predeclared_confirm_points=target.confirm_points,
+                training_prefix_rows=frozen_prefix,
+                required_fresh_count=req_fresh_0,
+                feature_bounds=lab.feature_bounds,
             )
-            total_wall += float(c0_eval.get("wall_seconds", 0.02))
+            if len(c0_pts) == req_fresh_0:
+                # Purchase full declared number of fresh disjoint confirmation points (`fresh_points` in `program_steps`!)
+                c0_rows = lab.acquire_channel(c0_pts, channel=confirm_channel, phase="confirm_0")
+                c0_eval = evaluate_isolated_python_model(
+                    work_dir,
+                    best_rec["model_relpath"],
+                    c0_rows,
+                    isolated_prefix_rows=frozen_prefix,
+                )
+                total_wall += float(c0_eval.get("wall_seconds", 0.02))
+            else:
+                c0_rows = []
+                c0_eval = {"returncode": 1, "rmse": float("inf"), "wall_seconds": 0.0}
 
             if c0_eval["returncode"] == 0 and float(c0_eval["rmse"]) <= lab.tolerance:
                 # Recall succeeded on fresh confirmation! Verify full receipt via `authorize_abstraction_use`!
@@ -1422,20 +1548,25 @@ def evaluate_m4_target_under_arm(
                         total_evaluated += n_ev2
                         total_wall += ws2
                         if best_child is not None and best_child["train_rmse"] <= lab.tolerance:
-                            unseen_c_pts = [
-                                p for p in target.confirm_points
-                                if not any(p == r["features"] for r in updated_prefix)
-                            ]
                             req_fresh_1 = max(1, int(child_rc["_exec_plan"]["fresh_points"]))
-                            c1_pts = unseen_c_pts[:req_fresh_1] if unseen_c_pts else [target.confirm_points[-1]]
-                            c1_rows = lab.acquire_channel(c1_pts, channel=confirm_channel, phase="confirm_1_child")
-                            c1_eval = evaluate_isolated_python_model(
-                                work_dir,
-                                best_child["model_relpath"],
-                                c1_rows,
-                                isolated_prefix_rows=updated_prefix,
+                            c1_pts = select_or_synthesize_disjoint_confirm_points(
+                                predeclared_confirm_points=target.confirm_points,
+                                training_prefix_rows=updated_prefix,
+                                required_fresh_count=req_fresh_1,
+                                feature_bounds=lab.feature_bounds,
                             )
-                            total_wall += float(c1_eval.get("wall_seconds", 0.02))
+                            if len(c1_pts) == req_fresh_1:
+                                c1_rows = lab.acquire_channel(c1_pts, channel=confirm_channel, phase="confirm_1_child")
+                                c1_eval = evaluate_isolated_python_model(
+                                    work_dir,
+                                    best_child["model_relpath"],
+                                    c1_rows,
+                                    isolated_prefix_rows=updated_prefix,
+                                )
+                                total_wall += float(c1_eval.get("wall_seconds", 0.02))
+                            else:
+                                c1_rows = []
+                                c1_eval = {"returncode": 1, "rmse": float("inf"), "wall_seconds": 0.0}
                             if c1_eval["returncode"] == 0 and float(c1_eval["rmse"]) <= lab.tolerance:
                                 # Recompute empirical regime features strictly from measured `updated_prefix` (`pilot + c0_rows`)!
                                 _, updated_obs_feats = extract_multiscale_pilot_signatures(
@@ -1489,6 +1620,10 @@ def evaluate_m4_target_under_arm(
                                     frozen_prefix = updated_prefix
                                     chosen_model_rel = best_child["model_relpath"]
                                     non_direct_walk_win = bool(child_rc.get("reached_only_by_graph_walk"))
+                                elif confirm_channel == selected_channel and c1_rows:
+                                    frozen_prefix = [*updated_prefix, *c1_rows]
+                            elif confirm_channel == selected_channel and c1_rows:
+                                frozen_prefix = [*updated_prefix, *c1_rows]
 
     # --- Step 4: Compositional / Full-History Fallback Synthesis When Recall Not Confirmed ---
     if not confirmed_ok:
@@ -1518,14 +1653,18 @@ def evaluate_m4_target_under_arm(
         total_evaluated += n_ev_fb
         total_wall += ws_fb
 
-        rem_fb_conf_pts = [
-            p for p in target.confirm_points
-            if not any(p == r["features"] for r in frozen_prefix)
-        ]
-        if not rem_fb_conf_pts:
-            rem_fb_conf_pts = [target.confirm_points[-1]]
-        fb_conf_rows = lab.acquire_channel(rem_fb_conf_pts, channel=confirm_channel, phase="fallback_confirm")
-        if best_fb is not None:
+        rem_fb_conf_pts = select_or_synthesize_disjoint_confirm_points(
+            predeclared_confirm_points=target.confirm_points,
+            training_prefix_rows=frozen_prefix,
+            required_fresh_count=1,
+            feature_bounds=lab.feature_bounds,
+        )
+        fb_conf_rows = (
+            lab.acquire_channel(rem_fb_conf_pts, channel=confirm_channel, phase="fallback_confirm")
+            if rem_fb_conf_pts
+            else []
+        )
+        if best_fb is not None and fb_conf_rows:
             chosen_model_rel = best_fb["model_relpath"]
             fb_eval = evaluate_isolated_python_model(
                 work_dir,

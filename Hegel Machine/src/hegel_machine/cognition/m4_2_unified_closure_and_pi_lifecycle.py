@@ -55,10 +55,13 @@ from .m4_1_unified_discovery_and_renormalization import (
     apply_executable_pi_s_projection,
     extract_unified_observable_pilot_cues,
     integrate_fast_slow_ode_rk4,
+    is_point_inside_verified_box,
 )
 from .m4_compositional_discovery import (
     apply_structural_combinator,
+    canonicalize_fitted_params_snapshot,
     compile_operator_spec_to_python,
+    compute_confirmed_instance_digest,
     evaluate_isolated_python_model,
     load_verified_authored_method,
     make_atomic_operator_spec,
@@ -67,7 +70,11 @@ from .m4_compositional_discovery import (
 )
 from .m4_multiscale_renormalization import (
     MultiScaleWorkspaceTaskLab,
+    _estimate_affine_lens_for_spec,
+    _infer_role_permutations,
     _validate_and_interpret_m4_program_steps,
+    coords_approx_equal,
+    select_or_synthesize_disjoint_confirm_points,
 )
 from .models import Observation
 from .open_workspace_labs import OpenWorkspaceTaskLab
@@ -258,13 +265,15 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
     calibration_grid: list[tuple[float, float]] | None = None,
     tolerance: float = 0.045,
     slaving_window_tolerance: float = 0.045,
+    window_drift_tolerance: float = 0.06,
 ) -> dict[str, Any]:
-    """Certify regional ``Pi_s`` Schur coarse-graining on RK4 trajectories (`fine_trajectory` wired!).
+    """Certify regional ``Pi_s`` Schur coarse-graining on RK4 trajectories (`fine_trajectory` & window drift wired!).
 
     Explicitly executes ``apply_executable_pi_s_projection(..., fine_trajectory=fine_traj)``
-    on every calibration trajectory, checking BOTH:
+    on every calibration trajectory, checking ALL THREE:
       1. Endpoint macroscopic closure defect ``|y_micro(T) - y_coarse(Pi_s; T)| <= tolerance``;
-      2. Empirical trajectory slaving defect ``fast_manifold_slaving_defect <= slaving_window_tolerance``.
+      2. Empirical trajectory slaving defect ``fast_manifold_slaving_defect <= slaving_window_tolerance``;
+      3. Late-window quasi-stationary projection drift ``|window_projected_y - y_coarse(Pi_s; T)| <= window_drift_tolerance``.
     Meters all fine & coarse acquisitions honestly through ``MultiScaleWorkspaceTaskLab``.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -300,6 +309,7 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
 
     endpoint_defects: list[float] = []
     slaving_defects: list[float] = []
+    window_drifts: list[float] = []
     traj_projections_run = 0
     projection_records: list[dict[str, Any]] = []
 
@@ -322,8 +332,10 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
         endpoint_defects.append(end_def)
 
         win_proj_y = float(proj["window_projected_y"] or 0.0)
+        win_drift = abs(win_proj_y - float(c_row["target"]))
         slav_def = float(proj["fast_manifold_slaving_defect"] or 0.0)
         slaving_defects.append(slav_def)
+        window_drifts.append(win_drift)
 
         projection_records.append({
             "u_drive": float(u_v),
@@ -332,12 +344,18 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
             "coarse_y": round(float(c_row["target"]), 6),
             "endpoint_defect": round(end_def, 6),
             "window_projected_y": round(win_proj_y, 6),
+            "window_projection_drift": round(win_drift, 6),
             "trajectory_slaving_defect": round(slav_def, 6),
         })
 
     max_end_defect = max(endpoint_defects) if endpoint_defects else 999.0
     max_slav_defect = max(slaving_defects) if slaving_defects else 999.0
-    certified = bool(max_end_defect <= tolerance and max_slav_defect <= slaving_window_tolerance)
+    max_win_drift = max(window_drifts) if window_drifts else 999.0
+    certified = bool(
+        max_end_defect <= tolerance
+        and max_slav_defect <= slaving_window_tolerance
+        and max_win_drift <= window_drift_tolerance
+    )
 
     verified_box = {
         "u_drive": [float(u_bounds[0]), float(u_bounds[1])],
@@ -360,11 +378,19 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
     ast_info = canonicalize_python_model_ast(coarse_src)
     c_rows_json = [{"features": dict(r["features"]), "target": float(r["target"])} for r in fine_obs[-1:]]
     p_rows_json = [{"features": dict(r["features"]), "target": float(r["target"])} for r in coarse_obs[:-1]]
-    # Fit `_PARAMS` on coarse calibration rows so `predict_with_frozen_instance` is exact!
+    # Fit `_PARAMS` on `p_rows_json` (exact confirmation prefix!) so `predict_with_frozen_instance` matches `conf_ev`!
     ns_chk: dict[str, Any] = {}
     exec(compile(coarse_src, "<pi_s_coarse>", "exec"), ns_chk)
-    ns_chk["fit"]([{"features": dict(r["features"]), "target": float(r["target"])} for r in coarse_obs])
-    fitted_from_cal = {str(k): float(v) for k, v in ns_chk["_PARAMS"].items()}
+    ns_chk["fit"](deepcopy(p_rows_json))
+    fitted_from_cal, fitted_params_sha = canonicalize_fitted_params_snapshot(
+        {str(k): float(v) for k, v in ns_chk["_PARAMS"].items()}
+    )
+    inst_digest = compute_confirmed_instance_digest(
+        model_sha256=ast_info["model_sha256"],
+        ast_skeleton_digest=ast_info["ast_skeleton_digest"],
+        fitted_params_sha256=fitted_params_sha,
+        role_names=["u_drive", "T_horizon"],
+    )
 
     conf_sha = hashlib.sha256(json.dumps(c_rows_json, sort_keys=True).encode("utf-8")).hexdigest()
     pref_sha = hashlib.sha256(json.dumps(p_rows_json, sort_keys=True).encode("utf-8")).hexdigest()
@@ -375,6 +401,8 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
         "task_id": "stage0_pi_s_regional_certification",
         "model_sha256": ast_info["model_sha256"],
         "ast_skeleton_digest": ast_info["ast_skeleton_digest"],
+        "fitted_params_sha256": fitted_params_sha,
+        "confirmed_instance_digest": inst_digest,
         "training_prefix_rows": p_rows_json,
         "training_prefix_sha256": pref_sha,
         "confirm_rows": c_rows_json,
@@ -394,6 +422,8 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
         "model_sha256": ast_info["model_sha256"],
         "authored_model_source": coarse_src,
         "fitted_params": fitted_from_cal,
+        "fitted_params_sha256": fitted_params_sha,
+        "confirmed_instance_digest": inst_digest,
         "analytical_schur_params": fitted_schur_params,
         "confirmation_digest": conf_sha[:16],
         "host_confirmation_bundle": bundle,
@@ -402,12 +432,24 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
         "confirm_rmse": round(float(conf_ev["rmse"]), 6),
     }
     (work_dir / "authored_method.json").write_text(json.dumps(pi_artifact, indent=2, sort_keys=True), encoding="utf-8")
+    (work_dir / "confirmed_fitted_params.json").write_text(
+        json.dumps(fitted_from_cal, indent=2, sort_keys=True), encoding="utf-8"
+    )
     (work_dir / "confirmed_manifest.json").write_text(
         json.dumps({k: v for k, v in bundle.items() if k not in {"training_prefix_rows", "confirm_rows"}}, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     (work_dir / "model_scope_contract.json").write_text(
-        json.dumps({"verified_input_box": verified_box, "closure_scope": "regional_adiabatic_box"}, indent=2, sort_keys=True),
+        json.dumps(
+            {
+                "verified_input_box": verified_box,
+                "canonical_roles": ["u_drive", "T_horizon"],
+                "confirmed_instance_digest": inst_digest,
+                "closure_scope": "regional_adiabatic_box",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
 
@@ -416,9 +458,13 @@ def certify_regional_pi_s_closure_with_trajectory_projection(
         "verified_input_box": verified_box,
         "max_closure_defect": round(max_end_defect, 6),
         "max_trajectory_slaving_defect": round(max_slav_defect, 6),
+        "max_window_projection_drift": round(max_win_drift, 6),
         "projections_with_fine_trajectory": traj_projections_run,
         "tolerance": float(tolerance),
         "slaving_window_tolerance": float(slaving_window_tolerance),
+        "slaving_tolerance": float(slaving_window_tolerance),
+        "window_drift_tolerance": float(window_drift_tolerance),
+        "confirmed_instance_digest": inst_digest,
         "projection_records": projection_records,
         "artifact_path": str((work_dir / "authored_method.json").resolve()),
         "cost": cal_meter.snapshot(),
@@ -448,14 +494,26 @@ class ForestScopeDispatcher:
         self.dispatch_receipts: list[dict[str, Any]] = []
 
     @staticmethod
-    def _point_in_box(features: dict[str, float], box: dict[str, Any] | None) -> bool:
+    def _point_in_box(
+        features: dict[str, float],
+        box: dict[str, Any] | None,
+        *,
+        role_map: dict[str, str] | None = None,
+    ) -> bool:
+        """Fail-closed regional box check: missing certified coordinate keys ALWAYS return ``False``!"""
         if not isinstance(box, dict) or not box:
             return True
+        mapped = (
+            {str(role_map[qk]): float(qv) for qk, qv in features.items() if qk in role_map}
+            if role_map is not None
+            else features
+        )
         for k, bounds in box.items():
-            if k in features and isinstance(bounds, (list, tuple)) and len(bounds) == 2:
-                val = float(features[k])
-                if val < float(bounds[0]) - 1e-9 or val > float(bounds[1]) + 1e-9:
-                    return False
+            if k not in mapped or not isinstance(bounds, (list, tuple)) or len(bounds) != 2:
+                return False
+            val = float(mapped[k])
+            if val < float(bounds[0]) - 1e-9 or val > float(bounds[1]) + 1e-9:
+                return False
         return True
 
     def dispatch_predict(
@@ -466,6 +524,7 @@ class ForestScopeDispatcher:
         features: dict[str, float],
         target_metadata: dict[str, Any],
         ground_truth: float | None = None,
+        role_map: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Dispatch a single query to the unique authorized live node in ``candidate_tree_id`` with zero ``fit()``."""
         active_nodes = [
@@ -473,19 +532,32 @@ class ForestScopeDispatcher:
             if nd["tree_id"] == candidate_tree_id
             and not nd["utility_ledger"].get("archived_low_utility")
         ]
-        # Prefer coarse / specialized leaf nodes first; fall back to fine / parent if box or precondition rejects!
+        # Prefer coarse / specialized leaf nodes first; fall back to fine / parent ONLY along live coarse_graining_edges!
         role_priority = {"leaf": 0, "mid": 1, "root": 2}
         active_nodes.sort(key=lambda nd: (role_priority.get(nd["layer_role"], 1), -int(nd["version"]), nd["node_id"]))
 
         escalated_from_coarse: str | None = None
+        allowed_fine_escalation_nids: set[str] | None = None
         rejection_reasons: list[dict[str, Any]] = []
 
         for nd in active_nodes:
             nid = nd["node_id"]
             sm = nd.get("scale_map") or {}
+            nd_scale = (sm.get("window_or_partition") or {}).get("scale_regime")
+            if escalated_from_coarse is not None and nd_scale == "micro":
+                if allowed_fine_escalation_nids is None or nid not in allowed_fine_escalation_nids:
+                    rejection_reasons.append({
+                        "node_id": nid,
+                        "reason": "escalation_blocked_missing_live_coarse_graining_edge",
+                        "coarse_node_id": escalated_from_coarse,
+                    })
+                    continue
+
             vbox = (sm.get("window_or_partition") or {}).get("verified_input_box")
-            if vbox and not self._point_in_box(features, vbox):
+            if vbox and not self._point_in_box(features, vbox, role_map=role_map):
                 escalated_from_coarse = nid
+                live_fine = self.forest.fine_scale_children_of(nid)
+                allowed_fine_escalation_nids = {fn["node_id"] for fn in live_fine}
                 rejection_reasons.append({"node_id": nid, "reason": "outside_verified_scale_box"})
                 continue
 
@@ -494,22 +566,28 @@ class ForestScopeDispatcher:
             fine_mode = act.get("fine_ode_direct_mode") is True
 
             loaded_art: dict[str, Any] | None = None
-            model_sha = "fine_ode_rk4_exact"
-            conf_dig = "fine_ode_cal_0001"
-            if not fine_mode:
+            if fine_mode:
+                ode_p = dict(act.get("ode_params") or DEFAULT_PI_S_ODE_PARAMS)
+                model_sha = hashlib.sha256(json.dumps(ode_p, sort_keys=True).encode("utf-8")).hexdigest()
+                conf_dig = f"host_solver_{model_sha[:12]}"
+                provenance_tier = "host_trusted_exact_solver"
+            else:
                 if not art_path_raw:
                     rejection_reasons.append({"node_id": nid, "reason": "missing_authored_artifact"})
                     continue
                 loaded_art = load_verified_authored_method(
                     Path(str(art_path_raw)),
                     expected_ast_digest=str(act.get("ast_skeleton_digest", "")) or None,
+                    expected_instance_digest=str(act.get("confirmed_instance_digest", "")) or None,
                     require_external_manifest=True,
+                    verify_frozen_only=True,
                 )
                 if loaded_art is None:
                     rejection_reasons.append({"node_id": nid, "reason": "artifact_verification_failed"})
                     continue
                 model_sha = str(loaded_art["model_sha256"])
                 conf_dig = str(loaded_art["confirmation_digest"])
+                provenance_tier = "host_confirmed_discovered_instance"
 
             merged_target_feats = {**features, **target_metadata}
             auth = authorize_abstraction_use(
@@ -540,17 +618,22 @@ class ForestScopeDispatcher:
                 continue
 
             # Execute ZERO-FIT prediction!
+            mapped_feats = (
+                {str(role_map[qk]): float(qv) for qk, qv in features.items() if qk in role_map}
+                if role_map is not None
+                else features
+            )
             if fine_mode:
                 ode_p = dict(act.get("ode_params") or DEFAULT_PI_S_ODE_PARAMS)
                 pred_val = float(
                     _eval_pi_s_fine_scalar(
-                        float(features["u_drive"]), float(features["T_horizon"]), ode_p
+                        float(mapped_feats["u_drive"]), float(mapped_feats["T_horizon"]), ode_p
                     )["y_micro"]
                 )
                 fit_called = False
             else:
                 assert loaded_art is not None
-                frozen_out = predict_with_frozen_instance(loaded_art, [features])
+                frozen_out = predict_with_frozen_instance(loaded_art, [mapped_feats])
                 pred_val = float(frozen_out["predictions"][0])
                 fit_called = bool(frozen_out["fit_called"])
 
@@ -560,11 +643,13 @@ class ForestScopeDispatcher:
                 "status": "dispatched_ok",
                 "selected_node_id": nid,
                 "selected_version": int(nd["version"]),
+                "provenance_tier": provenance_tier,
                 "escalated_from_coarse_node": escalated_from_coarse,
                 "artifact_sha256": model_sha,
                 "confirmation_digest": conf_dig,
                 "authorized_tier": auth["granted_tier"],
                 "fit_called": fit_called,
+                "cold_loader_fit_called": False,
                 "prediction": round(pred_val, 8),
                 "ground_truth": round(float(ground_truth), 8) if ground_truth is not None else None,
                 "abs_error": round(float(abs_err), 8) if abs_err is not None else None,
@@ -573,13 +658,19 @@ class ForestScopeDispatcher:
             self.dispatch_receipts.append(rec)
             return rec
 
+        denied_status = (
+            "escalation_blocked_missing_coarse_edge"
+            if any(r.get("reason") == "escalation_blocked_missing_live_coarse_graining_edge" for r in rejection_reasons)
+            else "scope_unauthorized"
+        )
         rec_denied = {
             "query_id": query_id,
-            "status": "scope_unauthorized",
+            "status": denied_status,
             "selected_node_id": None,
             "selected_version": None,
             "escalated_from_coarse_node": escalated_from_coarse,
             "fit_called": False,
+            "cold_loader_fit_called": False,
             "prediction": None,
             "ground_truth": round(float(ground_truth), 8) if ground_truth is not None else None,
             "abs_error": None,
@@ -642,8 +733,16 @@ def _run_metered_atomic_calibration(
     exec(compile(src_code, "<stage0_fit>", "exec"), ns_f)
     if callable(ns_f.get("fit")):
         ns_f["fit"](deepcopy(p_rows))
-    fitted_params = {str(k): float(v) for k, v in (ns_f.get("_PARAMS") or {}).items()}
+    fitted_params, fitted_params_sha = canonicalize_fitted_params_snapshot(
+        {str(k): float(v) for k, v in (ns_f.get("_PARAMS") or {}).items()}
+    )
     ast_info = canonicalize_python_model_ast(src_code)
+    inst_digest = compute_confirmed_instance_digest(
+        model_sha256=ast_info["model_sha256"],
+        ast_skeleton_digest=ast_info["ast_skeleton_digest"],
+        fitted_params_sha256=fitted_params_sha,
+        role_names=list(role_names),
+    )
     conf_sha = hashlib.sha256(json.dumps(c_rows, sort_keys=True).encode("utf-8")).hexdigest()
     pref_sha = hashlib.sha256(json.dumps(p_rows, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -651,6 +750,8 @@ def _run_metered_atomic_calibration(
         "task_id": task_id,
         "model_sha256": ast_info["model_sha256"],
         "ast_skeleton_digest": ast_info["ast_skeleton_digest"],
+        "fitted_params_sha256": fitted_params_sha,
+        "confirmed_instance_digest": inst_digest,
         "training_prefix_rows": p_rows,
         "training_prefix_sha256": pref_sha,
         "confirm_rows": c_rows,
@@ -670,12 +771,17 @@ def _run_metered_atomic_calibration(
         "model_sha256": ast_info["model_sha256"],
         "authored_model_source": src_code,
         "fitted_params": fitted_params,
+        "fitted_params_sha256": fitted_params_sha,
+        "confirmed_instance_digest": inst_digest,
         "confirmation_digest": conf_sha[:16],
         "host_confirmation_bundle": bundle,
         "confirmed_ok": confirmed_ok,
         "confirm_rmse": round(float(cf_ev["rmse"]), 6),
     }
     (ws_dir / "authored_method.json").write_text(json.dumps(art, indent=2, sort_keys=True), encoding="utf-8")
+    (ws_dir / "confirmed_fitted_params.json").write_text(
+        json.dumps(fitted_params, indent=2, sort_keys=True), encoding="utf-8"
+    )
     (ws_dir / "confirmed_manifest.json").write_text(
         json.dumps({k: v for k, v in bundle.items() if k not in {"training_prefix_rows", "confirm_rows"}}, indent=2, sort_keys=True),
         encoding="utf-8",
@@ -980,7 +1086,10 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         claim_contract=ClaimContract(
             "claim_ode_micro_2mode",
             "m4_open_compositional_ast",
-            preconditions=[{"field": "active_arity", "op": "==", "value": 2}],
+            preconditions=[
+                {"field": "active_arity", "op": "==", "value": 2},
+                {"field": "modality", "op": "==", "value": "thermal"},
+            ],
             conclusion_or_action={
                 "operator_tag": "op_micro_2mode_rk4",
                 "fine_ode_direct_mode": True,
@@ -1081,6 +1190,9 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         program_steps=_std_prog_steps("op_meso_schur_pi_s"),
         source_cluster_ids=["cluster_multiscale_hyd"],
     )
+
+    # Capture EXACT Stage-0 boundary snapshot (all 8 nodes, 2 coarse edges, 1 wormhole edge!)
+    forest_after_stage0 = deepcopy(forest)
 
     stage0_total_meas = round(
         sum(float(x["cost"]["measurement_cost"]) for x in stage0_logs)
@@ -1591,6 +1703,39 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
     )
     assert comp_report["accepted"] is True
 
+    # Formally revise `ode_micro_2mode_node` to the matching `thermal | hydraulic` OR-contract in Stage 2
+    # (bumping version & semantic_digest cleanly so `Act 3` dispatcher verification is 100% read-only!)
+    micro_rev_cc = deepcopy(forest.nodes["ode_micro_2mode_node"]["claim_contract"])
+    micro_rev_cc["preconditions"] = [{"field": "active_arity", "op": "==", "value": 2}]
+    micro_rev_cc["disjunctive_branches"] = [
+        {
+            "claim_id": "claim_ode_micro_2mode_thermal",
+            "preconditions": [
+                {"field": "active_arity", "op": "==", "value": 2},
+                {"field": "modality", "op": "==", "value": "thermal"},
+            ],
+            "permission_tier": "local_solver_guidance",
+            "evidence_status": "SUPPORTED_IN_SCOPE",
+            "conclusion_or_action": deepcopy(micro_rev_cc["conclusion_or_action"]),
+        },
+        {
+            "claim_id": "claim_ode_micro_2mode_hydraulic",
+            "preconditions": [
+                {"field": "active_arity", "op": "==", "value": 2},
+                {"field": "modality", "op": "==", "value": "hydraulic"},
+            ],
+            "permission_tier": "local_solver_guidance",
+            "evidence_status": "SUPPORTED_IN_SCOPE",
+            "conclusion_or_action": deepcopy(micro_rev_cc["conclusion_or_action"]),
+        },
+    ]
+    forest.empirical_revise_node(
+        "ode_micro_2mode_node",
+        witness_episode_id="stage2_micro_modality_alignment",
+        cause="protocol_or_scope_mismatch",
+        updated_claim_contract=micro_rev_cc,
+    )
+
     # Verify with REAL `authorize_abstraction_use` on `'thermal'`, `'hydraulic'`, and `'optical'`!
     merged_pi_node = forest.nodes["ode_meso_schur_pi_thermal"]
     real_auth_after_compression = {}
@@ -1709,6 +1854,18 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         t_bounds=(2.4, 5.2),
         tolerance=0.045,
     )
+    reverified_art_json = json.loads(Path(pi_s_cert_reverified["artifact_path"]).read_text(encoding="utf-8"))
+    upd_pi_cc = deepcopy(forest.nodes["ode_meso_schur_pi_thermal"]["claim_contract"])
+    upd_pi_cc["conclusion_or_action"]["authored_artifact_path"] = pi_s_cert_reverified["artifact_path"]
+    upd_pi_cc["conclusion_or_action"]["ast_skeleton_digest"] = reverified_art_json["ast_skeleton_digest"]
+    upd_pi_cc["conclusion_or_action"]["confirmed_instance_digest"] = reverified_art_json["confirmed_instance_digest"]
+    for br in upd_pi_cc.get("disjunctive_branches", ()):
+        if isinstance(br, dict) and isinstance(br.get("conclusion_or_action"), dict):
+            br["conclusion_or_action"]["authored_artifact_path"] = pi_s_cert_reverified["artifact_path"]
+            br["conclusion_or_action"]["ast_skeleton_digest"] = reverified_art_json["ast_skeleton_digest"]
+            br["conclusion_or_action"]["confirmed_instance_digest"] = reverified_art_json["confirmed_instance_digest"]
+    forest.nodes["ode_meso_schur_pi_thermal"]["claim_contract"] = upd_pi_cc
+
     revised_closed_sm = ScaleMap(
         coarse_graining_op="schur_adiabatic_pi_s",
         window_or_partition={
@@ -1752,33 +1909,38 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
         ("op_composed_murray_shunt_2d", deepcopy(w5_ep["authored_artifact"]["operator_spec"])),
     ]
 
-    # 2E. Disjoint DEV Static-Order Freezing (`Ordinary_DevFrozenOrder` — ZERO TEST PEEKING!)
+    # 2E. Disjoint Stratified 5-Family DEV Static-Order Freezing (`Ordinary_DevFrozenOrder` — ZERO TEST PEEKING!)
     dev_targets, _ = build_m4_2_target_suite(seed=99_112_026)  # Disjoint DEV seed!
+    # Stratify 2 targets per family across all 5 families (`0,1`, `4,5`, `8,9`, `12,13`, `16,17` = 10 DEV targets!)
+    stratified_dev_targets = [dev_targets[i] for i in (0, 1, 4, 5, 8, 9, 12, 13, 16, 17)]
     dev_wins_by_tag: dict[str, int] = {tag: 0 for tag, _ in ordinary_history_forward}
     dev_order_meter = CostMeter(obs_budget=500, meas_budget=5000.0, compute_budget=15000.0)
-    for d_idx, dt in enumerate(dev_targets[:10]):
+    for dt in stratified_dev_targets:
         d_ws = s2_dir / "dev_static_order_tune" / dt.target_id
         p_rows = [{"features": dict(pt), "target": float(dt.oracle_fn(pt))} for pt in dt.pilot_points]
         c0_rows = [{"features": dict(dt.confirm_points[0]), "target": float(dt.oracle_fn(dt.confirm_points[0]))}]
+        d_unit = 8.0 if dt.mechanism_family == "PiS_Adiabatic_CrossDomain_2D" else 4.0
         dev_order_meter.charge(
             "dev_tune_obs",
             obs=len(p_rows) + 1,
-            meas=5.0 * (len(p_rows) + 1),
-            compute=3.0,
+            meas=d_unit * (len(p_rows) + 1),
+            compute=2.5,
         )
         same_ar = [(t, sp) for t, sp in ordinary_history_forward if int(sp.get("arity", 1)) == len(dt.feature_names)]
         for tag, sp in same_ar:
-            b_cand, _ = _autonomous_fit_candidate_specs(
+            b_cand, ev_cnt = _autonomous_fit_candidate_specs(
                 d_ws / tag,
                 specs_to_try=[(tag, sp)],
                 feature_names=dt.feature_names,
                 training_rows=p_rows,
                 tolerance=dt.tolerance,
             )
+            dev_order_meter.charge("dev_cand_fit", compute=round(6.0 * ev_cnt, 4))
             if b_cand is not None and b_cand["train_rmse"] <= dt.tolerance:
                 cf_e = evaluate_isolated_python_model(
                     d_ws / tag, b_cand["model_relpath"], c0_rows, isolated_prefix_rows=p_rows
                 )
+                dev_order_meter.charge("dev_cand_confirm_eval", compute=1.5)
                 if cf_e["returncode"] == 0 and float(cf_e["rmse"]) <= dt.tolerance:
                     dev_wins_by_tag[tag] = dev_wins_by_tag.get(tag, 0) + 1
 
@@ -1809,7 +1971,9 @@ def build_and_evolve_m4_2_cross_pillar_forest(work_root: Path) -> dict[str, Any]
     live_idx = HippoRAGWormholeIndex(forest, damping_alpha=0.65, wormhole_equivalence_pooling=True, scale_aware=True)
     return {
         "forest": forest,
+        "forest_after_stage0": forest_after_stage0,
         "forest_before_stage2_maintenance": forest_before_stage2_maintenance,
+        "stage2_pi_s_reverified_certificate": pi_s_cert_reverified,
         "stage0": {
             "episodes": stage0_logs,
             "pi_s_initial_certificate": pi_s_cert_init,
@@ -1971,17 +2135,8 @@ def run_interleaved_zero_fit_dispatcher_stream(forest: PhilosophicalForest) -> d
         },
     ]
 
-    # Note: for Q10 (`modality == 'optical'` inside adiabatic box), `ode_micro_2mode_node` only checks `active_arity == 2`
-    # unless `tree_multiscale_pi_s` requires `modality in {'thermal', 'hydraulic'}`; restrict `ode_micro_2mode_node`
-    # to physical fluid/thermal modalities so `'optical'` is genuinely unauthorized across the entire tree!
-    forest.nodes["ode_micro_2mode_node"]["claim_contract"]["disjunctive_branches"] = [
-        {"preconditions": [{"field": "active_arity", "op": "==", "value": 2}, {"field": "modality", "op": "==", "value": "thermal"}]},
-        {"preconditions": [{"field": "active_arity", "op": "==", "value": 2}, {"field": "modality", "op": "==", "value": "hydraulic"}]},
-    ]
-    forest.nodes["ode_micro_2mode_node"]["claim_contract"]["preconditions"] = [
-        {"field": "active_arity", "op": "==", "value": 2}
-    ]
-
+    # `run_interleaved_zero_fit_dispatcher_stream` is strictly READ-ONLY on `forest`
+    # (`ode_micro_2mode_node` already carries its formal Stage-2 `thermal | hydraulic` OR-contract)!
     results: list[dict[str, Any]] = []
     for item in stream:
         rec = dispatcher.dispatch_predict(
@@ -2252,6 +2407,74 @@ def build_m4_2_target_suite(seed: int = 20_261_120) -> tuple[list[UnifiedTargetS
 # Part 7. Unified Stage-3 Arm Evaluator + Full Execution Receipts
 # ============================================================================
 
+def _find_valid_canonical_role_map_for_box(
+    target_feature_names: tuple[str, ...],
+    node: dict[str, Any],
+    points_to_check: list[dict[str, float]],
+) -> tuple[bool, dict[str, str] | None]:
+    """Resolve a canonical coordinate bijection (`target_feature -> certified_box_axis`) before checking bounds.
+
+    Never skips missing axes (`fail-closed`):
+      - If ``node`` has no ``verified_input_box``, returns ``(True, None)``.
+      - Otherwise tests candidate bijections from ``target_feature_names`` onto the node's canonical
+        ``role_names`` (from its verified artifact or ``verified_input_box`` keys). Returns ``(True, role_map)``
+        if a bijection maps EVERY point in ``points_to_check`` inside ``verified_input_box``; else ``(False, None)``.
+    """
+    sm = node.get("scale_map") or {}
+    vbox = (sm.get("window_or_partition") or {}).get("verified_input_box")
+    if not isinstance(vbox, dict) or not vbox:
+        return True, None
+
+    vbox_keys = list(vbox.keys())
+    act = (node.get("claim_contract") or {}).get("conclusion_or_action") or {}
+    art_path = act.get("authored_artifact_path")
+    canon_roles: list[str] = []
+    if art_path and Path(str(art_path)).is_file():
+        try:
+            raw_art = json.loads(Path(str(art_path)).read_text(encoding="utf-8"))
+            if isinstance(raw_art.get("role_names"), list):
+                canon_roles = [str(r) for r in raw_art["role_names"]]
+        except Exception:
+            canon_roles = []
+    if not canon_roles:
+        canon_roles = vbox_keys
+
+    if len(target_feature_names) != len(canon_roles) or not set(vbox_keys).issubset(set(canon_roles)):
+        return False, None
+
+    from itertools import permutations
+
+    candidate_maps: list[dict[str, str]] = []
+    if set(target_feature_names) == set(canon_roles):
+        candidate_maps.append({k: k for k in target_feature_names})
+    for perm in permutations(canon_roles):
+        rmap = {tf: cr for tf, cr in zip(target_feature_names, perm)}
+        if rmap not in candidate_maps:
+            candidate_maps.append(rmap)
+
+    for rmap in candidate_maps:
+        if all(is_point_inside_verified_box(pt, vbox, role_map=rmap) for pt in points_to_check):
+            return True, rmap
+    return False, None
+
+
+def _build_stage0_open_atomic_bases(arity: int) -> list[dict[str, Any]]:
+    """Return strictly Stage-0 atomic operator primitives for genuine ``CodeAgent`` open rediscovery."""
+    if arity == 1:
+        return [
+            make_atomic_operator_spec("linear_1d"),
+            make_atomic_operator_spec("michaelis_1d", arity=1),
+            make_atomic_operator_spec("murray_power_2_3_1d"),
+        ]
+    murray_2d = deepcopy(make_atomic_operator_spec("murray_power_2_3_1d"))
+    murray_2d["arity"] = arity
+    return [
+        make_atomic_operator_spec("michaelis_1d", arity=arity),
+        murray_2d,
+        make_atomic_operator_spec("exp_relax_2d"),
+    ]
+
+
 def evaluate_m4_2_target_under_arm(
     target: UnifiedTargetSpec,
     *,
@@ -2264,21 +2487,56 @@ def evaluate_m4_2_target_under_arm(
     fallback_pool_specs: list[tuple[str, dict[str, Any]]],
     open_code_agent_fallback: bool = False,
 ) -> dict[str, Any]:
-    """Evaluate a single ``M4.2`` target with full paid-evidence retention, program_steps execution,
-    certified ``Pi_s`` scale-box gating, and complete execution provenance receipts!
+    """Evaluate a single ``M4.2`` target with channel-bound multi-scale pricing, canonical role-mapped
+    ``Pi_s`` scale-box gating (including final continuation queries!), fresh disjoint confirmation
+    (`prefix_confirm_overlap_count == 0`), metered retrieval compute, and genuine ``CodeAgent`` open rediscovery!
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     is_pi_s_target = target.mechanism_family == "PiS_Adiabatic_CrossDomain_2D"
-    # On multiscale `Pi_s` targets, macro coarse channel costs `4.0`/obs if a certified coarse_graining_edge
-    # authorizes meso reduction; otherwise micro fine channel costs `8.0`/obs!
-    has_certified_cg_recall = bool(
-        is_pi_s_target
-        and forest is not None
-        and any(not ce.get("stale_endpoint_revision") for ce in forest.coarse_graining_edges)
-        and isinstance(index, HippoRAGWormholeIndex)
-        and index.damping_alpha > 0.0
-    )
-    obs_unit_cost = 4.0 if (not is_pi_s_target or has_certified_cg_recall) else 8.0
+    meter = CostMeter(obs_budget=64, meas_budget=800.0, compute_budget=5000.0)
+
+    # Channel-bound pricing: on multiscale `Pi_s` targets, `coarse_macro` (`4.0`/obs) is ONLY granted if
+    # retrieval actually reaches an authorized `meso` node backed by ITS OWN live non-stale `coarse_graining_edge`
+    # and in-box pilot coordinates; otherwise observations execute on `micro_fine` (`8.0`/obs)!
+    selected_channel = "macro_single" if not is_pi_s_target else "micro_fine"
+    authorizing_coarse_node_id: str | None = None
+    if is_pi_s_target and forest is not None and index is not None:
+        pre_ret = index.retrieve(
+            [f"sig:{target.domain_cue}", f"sig:pos_arity_{len(target.feature_names)}"],
+            task_view={
+                "goal_kind": "open_workspace_mechanism_prediction",
+                "tolerance": target.tolerance,
+                "active_arity": len(target.feature_names),
+                "target_scale_regime": target.scale_regime,
+            },
+            top_k=8,
+        )
+        meter.charge("scale_channel_precheck_retrieval", compute=round(float(pre_ret.get("query_compute_cost", 0.0)), 4))
+        for pc in pre_ret["candidates"]:
+            p_nd = pc["target_node"]
+            p_sm = p_nd.get("scale_map") or {}
+            if (p_sm.get("window_or_partition") or {}).get("scale_regime") != "meso":
+                continue
+            # Require a live, non-stale coarse_graining_edge specifically into THIS coarse node!
+            if not forest.fine_scale_children_of(p_nd["node_id"]):
+                continue
+            in_p_box, _ = _find_valid_canonical_role_map_for_box(target.feature_names, p_nd, list(target.pilot_points))
+            if not in_p_box:
+                continue
+            p_gate = authorize_abstraction_use(
+                requested_tier="bounded_trial",
+                task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
+                target_features={"active_arity": len(target.feature_names), "modality": "hydraulic"},
+                claim_contract=p_nd["claim_contract"],
+                scale_map=p_sm,
+                wormhole_edge=pc.get("wormhole_edge"),
+            )
+            if p_gate["granted"]:
+                selected_channel = "coarse_macro"
+                authorizing_coarse_node_id = str(p_nd["node_id"])
+                break
+
+    obs_unit_cost = 4.0 if selected_channel in {"macro_single", "coarse_macro"} else 8.0
 
     lab = OpenWorkspaceTaskLab(
         task_id=target.target_id,
@@ -2287,7 +2545,7 @@ def evaluate_m4_2_target_under_arm(
         feature_bounds=target.feature_bounds,
         cost_per_obs=obs_unit_cost,
         task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
-        meter=CostMeter(obs_budget=48, meas_budget=600.0, compute_budget=3000.0),
+        meter=meter,
         private_oracle_fn=target.oracle_fn,
     )
 
@@ -2306,13 +2564,22 @@ def evaluate_m4_2_target_under_arm(
     confirmed_via_recall = False
     non_direct_walk_win = False
     total_evaluated = 0
+    unmetered_eval_candidates = 0
     selected_node_id: str | None = None
     selected_version: int | None = None
     selected_model_sha256: str | None = None
     selected_conf_digest: str | None = None
+    confirmed_vbox: dict[str, Any] | None = None
+    confirmed_role_map: dict[str, str] | None = None
+    max_prefix_confirm_overlap = 0
     refuted_tags: set[str] = set()
 
-    # 1. Forest-governed recall (`Hegel`, `NoMaintenance`, `Alpha0`, `Flat_BM25`)
+    def _count_overlap(q_rows: list[dict[str, Any]], pref_rows: list[dict[str, Any]]) -> int:
+        return sum(
+            1 for qr in q_rows if any(coords_approx_equal(qr["features"], pr["features"]) for pr in pref_rows)
+        )
+
+    # 1. Forest-governed recall (`Hegel`, `NoMaintenance`, `Alpha0`, `Flat_BM25`, `Frozen`)
     if forest is not None and index is not None:
         ret = index.retrieve(
             pilot_sigs,
@@ -2320,10 +2587,11 @@ def evaluate_m4_2_target_under_arm(
                 "goal_kind": "open_workspace_mechanism_prediction",
                 "tolerance": target.tolerance,
                 "active_arity": len(target.feature_names),
-                "scale_regime": target.scale_regime,
+                "target_scale_regime": target.scale_regime,
             },
             top_k=8,
         )
+        lab.meter.charge("forest_retrieval_query", compute=round(float(ret.get("query_compute_cost", 0.0)), 4))
         auth_cands: list[dict[str, Any]] = []
         for cand in ret["candidates"]:
             nd = cand["target_node"]
@@ -2334,22 +2602,19 @@ def evaluate_m4_2_target_under_arm(
             )
             if plan is None:
                 continue
+            sm = nd.get("scale_map") or {}
+            nd_scale = (sm.get("window_or_partition") or {}).get("scale_regime")
+            # Coarse `meso` reduction on `Pi_s` requires a live non-stale coarse_graining_edge for THIS node!
+            if is_pi_s_target and nd_scale == "meso" and not forest.fine_scale_children_of(nd["node_id"]):
+                continue
             v_spec = _load_node_verified_operator_spec(nd)
             if v_spec is None:
                 continue
-            sm = nd.get("scale_map") or {}
-            vbox = (sm.get("window_or_partition") or {}).get("verified_input_box")
-            if isinstance(vbox, dict) and vbox:
-                in_box = all(
-                    all(
-                        float(vbox[k][0]) - 1e-9 <= float(pt[k]) <= float(vbox[k][1]) + 1e-9
-                        for k in vbox
-                        if k in pt
-                    )
-                    for pt in [*target.pilot_points, *target.confirm_points]
-                )
-                if not in_box:
-                    continue
+            in_box, cand_role_map = _find_valid_canonical_role_map_for_box(
+                target.feature_names, nd, [*target.pilot_points, *target.confirm_points]
+            )
+            if not in_box:
+                continue
             gate = authorize_abstraction_use(
                 requested_tier="bounded_trial",
                 task_view={"goal_kind": "open_workspace_mechanism_prediction", "tolerance": target.tolerance},
@@ -2362,9 +2627,10 @@ def evaluate_m4_2_target_under_arm(
                 cand_copy = dict(cand)
                 cand_copy["_verified_spec"] = v_spec
                 cand_copy["_exec_plan"] = plan
+                cand_copy["_canonical_role_map"] = cand_role_map
                 auth_cands.append(cand_copy)
 
-        # Try top authorized recalled candidates sequentially (at most 2 confirm rounds; retain all paid rows!)
+        # Try top authorized recalled candidates sequentially (retaining all paid rows & enforcing 0 overlap!)
         tried_tags: set[str] = set()
         for c_cand in auth_cands:
             plan_c = c_cand["_exec_plan"]
@@ -2372,6 +2638,12 @@ def evaluate_m4_2_target_under_arm(
             if c_tag in tried_tags:
                 continue
             tried_tags.add(c_tag)
+            nd = c_cand["target_node"]
+            nd_scale = ((nd.get("scale_map") or {}).get("window_or_partition") or {}).get("scale_regime")
+            if is_pi_s_target and nd_scale != "meso" and selected_channel == "coarse_macro":
+                selected_channel = "micro_fine"
+                lab.cost_per_obs = 8.0
+
             best_c, ev_c = _autonomous_fit_candidate_specs(
                 work_dir,
                 specs_to_try=[(c_tag, c_cand["_verified_spec"])],
@@ -2381,24 +2653,26 @@ def evaluate_m4_2_target_under_arm(
                 calibrate_lens=bool(plan_c["calibrate_lens"]),
             )
             total_evaluated += ev_c
+            unmetered_eval_candidates += ev_c
             if best_c is None or best_c["train_rmse"] > target.tolerance:
                 continue
 
-            unseen_pts = [
-                p for p in target.confirm_points
-                if not any(p == r["features"] for r in frozen_prefix)
-            ]
-            if not unseen_pts:
-                break
             req_fresh = max(1, int(plan_c["fresh_points"]))
-            c_pts = unseen_pts[:req_fresh]
+            c_pts = select_or_synthesize_disjoint_confirm_points(
+                predeclared_confirm_points=target.confirm_points,
+                training_prefix_rows=frozen_prefix,
+                required_fresh_count=req_fresh,
+                feature_bounds=target.feature_bounds,
+            )
+            if len(c_pts) < req_fresh:
+                break
             cf_obs = lab.acquire(c_pts, workspace=None, phase="recall_confirm") or []
             cf_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf_obs]
+            max_prefix_confirm_overlap = max(max_prefix_confirm_overlap, _count_overlap(cf_rows, frozen_prefix))
             cf_ev = evaluate_isolated_python_model(
                 work_dir, best_c["model_relpath"], cf_rows, isolated_prefix_rows=frozen_prefix
             )
             if cf_ev["returncode"] == 0 and float(cf_ev["rmse"]) <= target.tolerance:
-                nd = c_cand["target_node"]
                 m_sha = hashlib.sha256(best_c["model_source"].encode("utf-8")).hexdigest()
                 c_dig = hashlib.sha256(json.dumps(cf_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
                 t3 = authorize_abstraction_use(
@@ -2434,6 +2708,8 @@ def evaluate_m4_2_target_under_arm(
                     selected_version = int(nd["version"])
                     selected_model_sha256 = m_sha
                     selected_conf_digest = c_dig
+                    confirmed_vbox = deepcopy(((nd.get("scale_map") or {}).get("window_or_partition") or {}).get("verified_input_box"))
+                    confirmed_role_map = deepcopy(c_cand.get("_canonical_role_map"))
                     break
             # Retain paid failed confirmation rows for ALL downstream candidates & fallback!
             refuted_tags.add(c_tag)
@@ -2450,9 +2726,17 @@ def evaluate_m4_2_target_under_arm(
             tolerance=target.tolerance,
         )
         total_evaluated += ev_h
+        unmetered_eval_candidates += ev_h
         if best_h is not None and best_h["train_rmse"] <= target.tolerance:
-            cf0_obs = lab.acquire([target.confirm_points[0]], workspace=None, phase="ordinary_confirm_0") or []
-            cf0_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf0_obs]
+            cf0_pts = select_or_synthesize_disjoint_confirm_points(
+                predeclared_confirm_points=target.confirm_points,
+                training_prefix_rows=frozen_prefix,
+                required_fresh_count=1,
+                feature_bounds=target.feature_bounds,
+            )
+            cf0_obs = lab.acquire(cf0_pts, workspace=None, phase="ordinary_confirm_0") if cf0_pts else []
+            cf0_rows = [{"features": dict(r.features), "target": float(r.target)} for r in (cf0_obs or [])]
+            max_prefix_confirm_overlap = max(max_prefix_confirm_overlap, _count_overlap(cf0_rows, frozen_prefix))
             cf0_ev = evaluate_isolated_python_model(
                 work_dir, best_h["model_relpath"], cf0_rows, isolated_prefix_rows=frozen_prefix
             )
@@ -2475,9 +2759,17 @@ def evaluate_m4_2_target_under_arm(
                     tolerance=target.tolerance,
                 )
                 total_evaluated += ev_h2
+                unmetered_eval_candidates += ev_h2
                 if best_h2 is not None and best_h2["train_rmse"] <= target.tolerance:
-                    cf1_obs = lab.acquire([target.confirm_points[1]], workspace=None, phase="ordinary_confirm_1") or []
-                    cf1_rows = [{"features": dict(r.features), "target": float(r.target)} for r in cf1_obs]
+                    cf1_pts = select_or_synthesize_disjoint_confirm_points(
+                        predeclared_confirm_points=target.confirm_points,
+                        training_prefix_rows=frozen_prefix,
+                        required_fresh_count=1,
+                        feature_bounds=target.feature_bounds,
+                    )
+                    cf1_obs = lab.acquire(cf1_pts, workspace=None, phase="ordinary_confirm_1") if cf1_pts else []
+                    cf1_rows = [{"features": dict(r.features), "target": float(r.target)} for r in (cf1_obs or [])]
+                    max_prefix_confirm_overlap = max(max_prefix_confirm_overlap, _count_overlap(cf1_rows, frozen_prefix))
                     cf1_ev = evaluate_isolated_python_model(
                         work_dir, best_h2["model_relpath"], cf1_rows, isolated_prefix_rows=frozen_prefix
                     )
@@ -2492,8 +2784,13 @@ def evaluate_m4_2_target_under_arm(
                         refuted_tags.add(str(best_h2["tag"]))
                         frozen_prefix = [*frozen_prefix, *cf1_rows]
 
-    # 3. Fallback when recall / history did not confirm (e.g. `Frozen_After_Stage0` on newly discovered mechanisms!)
+    # 3. Fallback when recall / history did not confirm (escalate out-of-box coarse channel to micro_fine!)
     if not confirmed_ok:
+        if is_pi_s_target and selected_channel == "coarse_macro":
+            # Coarse recall did not confirm (e.g. out-of-box confirm or missing edge) -> escalate channel to micro_fine!
+            selected_channel = "micro_fine"
+            lab.cost_per_obs = 8.0
+
         # If onset pilot had only low primary drive (`<= 2.0` when upper bound `>= 9.0`), acquire 2 high-drive stress probes!
         f0 = target.feature_names[0]
         max_f0 = max(float(r["features"][f0]) for r in frozen_prefix)
@@ -2507,39 +2804,125 @@ def evaluate_m4_2_target_under_arm(
             st_obs = lab.acquire(st_pts, workspace=None, phase="stress_probe") or []
             frozen_prefix = [*frozen_prefix, *[{"features": dict(r.features), "target": float(r.target)} for r in st_obs]]
 
-        if open_code_agent_fallback and not target.is_out_of_scope:
-            # Genuine open compositional synthesis cost (`CodeAgent` diagnostic + combinator composition rounds!)
-            lab.meter.charge("open_compositional_rediscovery_diag", obs=1, meas=obs_unit_cost, compute=24.0)
+        if open_code_agent_fallback:
+            # GENUINE `CodeAgent` open compositional discovery episode (zero synthetic meter charges!)
+            raw_perms = [list(p) for p in _infer_role_permutations(target.feature_names)]
+            atomic_bases = _build_stage0_open_atomic_bases(len(target.feature_names))
+            for p_idx, ordered_roles in enumerate(raw_perms):
+                lens_est = _estimate_affine_lens_for_spec(atomic_bases[0], ordered_roles, frozen_prefix)
+                diag_pts = (
+                    select_or_synthesize_disjoint_confirm_points(
+                        predeclared_confirm_points=[],
+                        training_prefix_rows=frozen_prefix,
+                        required_fresh_count=1,
+                        feature_bounds=target.feature_bounds,
+                    )
+                    if p_idx == 0
+                    else []
+                )
+                post_diag_prefix = [*frozen_prefix, *[{"features": dict(p), "target": 0.0} for p in diag_pts]]
+                ep_cf_pts = select_or_synthesize_disjoint_confirm_points(
+                    predeclared_confirm_points=target.confirm_points,
+                    training_prefix_rows=post_diag_prefix,
+                    required_fresh_count=1,
+                    feature_bounds=target.feature_bounds,
+                )
+                if not ep_cf_pts:
+                    break
+                ep_ws = work_dir / f"open_code_agent_ep_{p_idx}"
+                ep_res = run_compositional_code_agent_episode(
+                    lab=lab,
+                    heldout_rows=None,
+                    tolerance=target.tolerance,
+                    workspace_dir=ep_ws,
+                    role_names=ordered_roles,
+                    initial_query_batches=([diag_pts] if diag_pts else []),
+                    atomic_base_specs=atomic_bases,
+                    confirm_points=ep_cf_pts,
+                    lens_hint=lens_est,
+                    lens_calibrator_fn=lambda sp_obj, r_ord: _estimate_affine_lens_for_spec(
+                        sp_obj,
+                        r_ord,
+                        [{"features": dict(o.features), "target": float(o.target)} for o in lab.observations] or frozen_prefix,
+                    ),
+                )
+                total_evaluated += int(ep_res["evaluated_candidate_count"])
+                ep_bundle = ep_res["authored_artifact"]["host_confirmation_bundle"]
+                max_prefix_confirm_overlap = max(
+                    max_prefix_confirm_overlap,
+                    _count_overlap(ep_bundle["confirm_rows"], ep_bundle["training_prefix_rows"]),
+                )
+                frozen_prefix = deepcopy(ep_res["training_prefix_rows"])
+                if ep_res["confirmed_ok"]:
+                    confirmed_ok = True
+                    chosen_rel = "open_discovered.py"
+                    (work_dir / chosen_rel).write_text(ep_res["authored_artifact"]["authored_model_source"], encoding="utf-8")
+                    selected_node_id = f"open_code_agent:{ep_res['authored_artifact']['operator_spec'].get('family_hint', 'composed')}"
+                    selected_model_sha256 = str(ep_res["authored_artifact"]["model_sha256"])
+                    selected_conf_digest = str(ep_res["authored_artifact"]["confirmation_digest"])
+                    break
+                frozen_prefix = [*frozen_prefix, *deepcopy(ep_bundle["confirm_rows"])]
+                from .models import Observation
+                lab.observations = [
+                    Observation(features=dict(r["features"]), target=float(r["target"]), history=())
+                    for r in frozen_prefix
+                ]
 
-        same_ar_fb = [
-            (t, sp) for t, sp in fallback_pool_specs
-            if int(sp.get("arity", 1)) == len(target.feature_names) and t not in refuted_tags
-        ]
-        best_fb, ev_fb = _autonomous_fit_candidate_specs(
-            work_dir,
-            specs_to_try=same_ar_fb,
-            feature_names=target.feature_names,
-            training_rows=frozen_prefix,
-            tolerance=target.tolerance,
-        )
-        total_evaluated += ev_fb
-        rem_cf_pts = [p for p in target.confirm_points if not any(p == r["features"] for r in frozen_prefix)]
-        if not rem_cf_pts:
-            rem_cf_pts = [target.confirm_points[-1]]
-        fb_obs = lab.acquire(rem_cf_pts[:1], workspace=None, phase="fallback_confirm") or []
-        fb_rows = [{"features": dict(r.features), "target": float(r.target)} for r in fb_obs]
-        if best_fb is not None:
-            fb_ev = evaluate_isolated_python_model(
-                work_dir, best_fb["model_relpath"], fb_rows, isolated_prefix_rows=frozen_prefix
+        if not confirmed_ok and not open_code_agent_fallback:
+            same_ar_fb = [
+                (t, sp) for t, sp in fallback_pool_specs
+                if int(sp.get("arity", 1)) == len(target.feature_names) and t not in refuted_tags
+            ]
+            best_fb, ev_fb = _autonomous_fit_candidate_specs(
+                work_dir,
+                specs_to_try=same_ar_fb,
+                feature_names=target.feature_names,
+                training_rows=frozen_prefix,
+                tolerance=target.tolerance,
             )
-            if fb_ev["returncode"] == 0 and float(fb_ev["rmse"]) <= target.tolerance:
-                confirmed_ok = True
-                chosen_rel = best_fb["model_relpath"]
-                selected_node_id = f"fallback:{best_fb['tag']}"
-                selected_model_sha256 = hashlib.sha256(best_fb["model_source"].encode("utf-8")).hexdigest()
-                selected_conf_digest = hashlib.sha256(json.dumps(fb_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+            total_evaluated += ev_fb
+            unmetered_eval_candidates += ev_fb
+            rem_cf_pts = select_or_synthesize_disjoint_confirm_points(
+                predeclared_confirm_points=target.confirm_points,
+                training_prefix_rows=frozen_prefix,
+                required_fresh_count=1,
+                feature_bounds=target.feature_bounds,
+            )
+            fb_obs = lab.acquire(rem_cf_pts, workspace=None, phase="fallback_confirm") if rem_cf_pts else []
+            fb_rows = [{"features": dict(r.features), "target": float(r.target)} for r in (fb_obs or [])]
+            max_prefix_confirm_overlap = max(max_prefix_confirm_overlap, _count_overlap(fb_rows, frozen_prefix))
+            if best_fb is not None and float(best_fb["train_rmse"]) <= target.tolerance and fb_rows:
+                fb_ev = evaluate_isolated_python_model(
+                    work_dir, best_fb["model_relpath"], fb_rows, isolated_prefix_rows=frozen_prefix
+                )
+                if fb_ev["returncode"] == 0 and float(fb_ev["rmse"]) <= target.tolerance:
+                    confirmed_ok = True
+                    chosen_rel = best_fb["model_relpath"]
+                    selected_node_id = f"fallback:{best_fb['tag']}"
+                    selected_model_sha256 = hashlib.sha256(best_fb["model_source"].encode("utf-8")).hexdigest()
+                    selected_conf_digest = hashlib.sha256(json.dumps(fb_rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
-    lab.meter.charge("target_synth_compute", compute=round(2.5 + 6.0 * total_evaluated, 4))
+    if unmetered_eval_candidates > 0 or not open_code_agent_fallback:
+        lab.meter.charge("target_synth_compute", compute=round(2.5 + 6.0 * unmetered_eval_candidates, 4))
+
+    # Persist & enforce `model_scope_contract.json` BEFORE final/continuation queries (`heldout_points`)!
+    scope_contract = {
+        "selected_channel": selected_channel,
+        "authorizing_coarse_node_id": authorizing_coarse_node_id,
+        "verified_input_box": confirmed_vbox,
+        "canonical_role_map": confirmed_role_map,
+    }
+    (work_dir / "model_scope_contract.json").write_text(
+        json.dumps(scope_contract, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    out_of_box_query_blocked = False
+    if confirmed_ok and isinstance(confirmed_vbox, dict) and confirmed_vbox:
+        if not all(
+            is_point_inside_verified_box(pt, confirmed_vbox, role_map=confirmed_role_map)
+            for pt in target.heldout_points
+        ):
+            out_of_box_query_blocked = True
+            confirmed_ok = False
 
     heldout_rows = [{"features": dict(pt), "target": float(target.oracle_fn(pt))} for pt in target.heldout_points]
     if confirmed_ok and chosen_rel is not None:
@@ -2559,7 +2942,14 @@ def evaluate_m4_2_target_under_arm(
         "mechanism_family": target.mechanism_family,
         "is_out_of_scope": target.is_out_of_scope,
         "arm": arm_name,
-        "status": "completed" if confirmed_ok else "scoped_unknown",
+        "status": (
+            "out_of_verified_scale_box"
+            if out_of_box_query_blocked
+            else ("completed" if confirmed_ok else "scoped_unknown")
+        ),
+        "selected_channel": selected_channel,
+        "out_of_box_query_blocked": out_of_box_query_blocked,
+        "prefix_confirm_overlap_count": max_prefix_confirm_overlap,
         "confirmed_ok": confirmed_ok,
         "confirmed_via_recall": confirmed_via_recall,
         "non_direct_walk_win": non_direct_walk_win,
@@ -2597,10 +2987,8 @@ def run_m4_2_unified_cross_pillar_study(
     # Act 3: Run interleaved zero-`fit()` `ForestScopeDispatcher` (`R3` Tier 1 + Tier 3!)
     dispatcher_report = run_interleaved_zero_fit_dispatcher_stream(deepcopy(post_stage2_forest_snapshot))
 
-    # Build Stage-0 frozen forest (ONLY Stage-0 atomic nodes, before Stage-1 discoveries!)
-    frozen_stage0_forest = PhilosophicalForest()
-    for nid in ("stage0_monod_2d", "stage0_murray_1d", "hydro_micro_pore_1d", "ode_micro_2mode_node"):
-        frozen_stage0_forest.nodes[nid] = deepcopy(unmaintained_forest_snapshot.nodes[nid])
+    # Use EXACT runtime Stage-0 boundary snapshot (all 8 nodes, 2 coarse edges, 1 wormhole edge!)
+    frozen_stage0_forest = deepcopy(built["forest_after_stage0"])
 
     arm_names = (
         "Hegel_Unified_Continual_Forest",
@@ -2646,6 +3034,11 @@ def run_m4_2_unified_cross_pillar_study(
 
         for t in targets:
             for a_name, (f_obj, idx_obj, ord_hist, open_fb) in arm_configs.items():
+                fb_specs = (
+                    built["stage0_atomic_specs"]
+                    if a_name == "Frozen_After_Stage0_OpenRediscovery"
+                    else built["ordinary_history_forward"]
+                )
                 rec = evaluate_m4_2_target_under_arm(
                     t,
                     arm_name=a_name,
@@ -2654,13 +3047,18 @@ def run_m4_2_unified_cross_pillar_study(
                     forest=f_obj,
                     index=idx_obj,
                     ordinary_history_specs=ord_hist,
-                    fallback_pool_specs=built["ordinary_history_forward"],
+                    fallback_pool_specs=fb_specs,
                     open_code_agent_fallback=open_fb,
                 )
                 in_scope_records[a_name].append(rec)
 
         for ot in oos_targets:
             for a_name, (f_obj, idx_obj, ord_hist, open_fb) in arm_configs.items():
+                fb_specs = (
+                    built["stage0_atomic_specs"]
+                    if a_name == "Frozen_After_Stage0_OpenRediscovery"
+                    else built["ordinary_history_forward"]
+                )
                 orec = evaluate_m4_2_target_under_arm(
                     ot,
                     arm_name=a_name,
@@ -2669,7 +3067,7 @@ def run_m4_2_unified_cross_pillar_study(
                     forest=f_obj,
                     index=idx_obj,
                     ordinary_history_specs=ord_hist,
-                    fallback_pool_specs=built["ordinary_history_forward"],
+                    fallback_pool_specs=fb_specs,
                     open_code_agent_fallback=open_fb,
                 )
                 oos_records[a_name].append(orec)

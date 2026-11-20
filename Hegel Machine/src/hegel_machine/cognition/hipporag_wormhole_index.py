@@ -403,7 +403,7 @@ class HippoRAGWormholeIndex:
         direct_hit_nids = {nid for s in valid_sigs for nid in self.sig_to_nodes.get(s, ())}
         goal = task_view.get("goal_kind")
         req_arity = task_view.get("active_arity")
-        req_scale = task_view.get("target_scale_regime")
+        req_scale = task_view.get("target_scale_regime") or task_view.get("scale_regime")
 
         scored_nodes: list[dict[str, Any]] = []
         for nid, node in self.active_nodes.items():
