@@ -1,0 +1,45 @@
+{
+  "task_id": "W2R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_2",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_M6_dist_03",
+    "node_C04_Root_Vitality_Main",
+    "node_synth_composite_59ecb527",
+    "node_C04_Depth1_NeuroDose",
+    "node_C04_Depth2_IndoorSpaceSigmoid",
+    "node_C04_Depth3_BiomechImpactPenalty"
+  ],
+  "violated_root_ids": [
+    "node_C04_Root_Vitality_Main"
+  ],
+  "observed_signatures": [
+    "sig:c04_root_vitality_goal"
+  ],
+  "warmstart_candidates_evaluated": 2,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _features(row):\n    indoor = float(row['u_indoor'])\n    space = 1.0 / (1.0 + math.exp(6.0 * (float(row['a_foot']) - 1.5)))\n    dose = float(row['u_outdoor']) * float(row['p_weather']) + indoor * space\n    impact = (indoor * float(row['impact_idx'])) ** 2\n    return dose, impact\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    dose, impact = np.asarray([_features(row) for row in rows], dtype=float).T\n    y = np.asarray([row['y'] for row in rows], dtype=float)\n\n    def residual(params):\n        gain, half_sat, penalty = params\n        return gain * dose / (half_sat + dose) - penalty * impact - y\n\n    gain, half_sat, penalty = least_squares(\n        residual, x0=[8.0, 0.8, 0.6],\n        bounds=([0.0, 1e-8, 0.0], [np.inf, np.inf, np.inf])\n    ).x\n\n    def predict(row) -> float:\n        d, i = _features(row)\n        return float(gain * d / (half_sat + d) - penalty * i)\n\n    return predict",
+  "purchased_probes": [],
+  "decision_count": 7,
+  "measurement_cost": 12.0,
+  "compute_cost": 18.107,
+  "composite_cost": 12.90535,
+  "prompt_tokens": 19714,
+  "cached_tokens": 13440,
+  "completion_tokens": 778,
+  "total_tokens": 20492,
+  "effective_billed_tokens": 10412,
+  "wall_ms": 23923.65,
+  "forest_snapshot_sha16": "af60705c91202a54",
+  "max_turns": 5
+}

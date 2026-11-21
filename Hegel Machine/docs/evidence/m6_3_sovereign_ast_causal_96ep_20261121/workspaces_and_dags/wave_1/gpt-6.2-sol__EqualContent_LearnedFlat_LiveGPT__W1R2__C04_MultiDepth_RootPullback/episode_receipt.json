@@ -1,0 +1,41 @@
+{
+  "task_id": "W1R2__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C04_Root_Vitality_Main",
+    "node_M6_dist_03"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c04_root_vitality_goal"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_outdoor', 'u_indoor', 'p_weather', 'a_foot', 'impact_idx')\n\ndef _eval(x, spec, par, ref, base):\n    outdoor, u, weather, area, impact = x.T\n    response, gate, up, qp, placement = spec\n    b, c, threshold, sharp, penalty = par[:5]\n    h = np.maximum(area - threshold, 0.0)\n    if gate == 'hinge':\n        indoor = c * u * np.maximum(1.0 - sharp * h, 0.0)\n    elif gate == 'exp':\n        indoor = c * u * np.exp(-sharp * h)\n    elif gate == 'sigmoid':\n        indoor = c * u / (1.0 + np.exp(np.clip(sharp * (area - threshold), -60.0, 60.0)))\n    else:\n        indoor = np.maximum(c * u - sharp * h, 0.0)\n    cost = penalty * np.power(u, up) * np.power(impact, qp)\n    if placement == 'area_loss':\n        cost *= 1.0 + par[5] * h\n    dose = outdoor * weather + indoor\n    if placement == 'dose_loss':\n        dose = outdoor * weather + np.maximum(indoor - cost, 0.0)\n    def gain(z):\n        if response == 'exp':\n            return -np.expm1(-b * z)\n        if response == 'log':\n            return np.log1p(b * z)\n        if response == 'rational':\n            return z / (1.0 + b * z)\n        return np.tanh(b * z)\n    value = base * gain(dose) / gain(ref)\n    return value if placement == 'dose_loss' else value - cost\n\ndef fit(train_rows):\n    x = np.array([[float(row[key]) for key in _KEYS] for row in train_rows])\n    y = np.array([float(row['y']) for row in train_rows])\n    anchor = (x[:, 1] == 0) & (x[:, 4] == 0)\n    ref = float(np.mean(x[anchor, 0] * x[anchor, 2]))\n    base = float(np.mean(y[anchor]))\n    low = np.array([0.03, 0.05, 0.70, 0.05, 0.0])\n    high = np.array([4.0, 4.0, 2.15, 22.0, 20.0])\n    candidates = []\n    def solve(spec, start, extra=False):\n        lo = np.r_[low, 0.0] if extra else low\n        hi = np.r_[high, 12.0] if extra else high\n        def resid(par):\n            return _eval(x, spec, par, ref, base) - y\n        res = least_squares(resid, np.clip(start, lo + 1e-8, hi - 1e-8), bounds=(lo, hi), max_nfev=160)\n        rmse = math.sqrt(float(np.mean(res.fun ** 2)))\n        complexity = 1.0 * extra + 0.35 * (spec[3] == 3.0) + 0.20 * (spec[4] == 'dose_loss')\n        score = math.log(max(rmse, 1.5e-7)) + complexity\n        candidates.append((score, rmse, spec, res.x))\n    for response in ('exp', 'log', 'rational', 'tanh'):\n        for gate in ('hinge', 'exp', 'sigmoid', 'dose_cap'):\n            for up, qp in ((0., 1.), (0., 2.), (1., 1.), (1., 2.), (1., 3.), (2., 2.)):\n                start = [0.8, 1.0, 1.25 if gate != 'sigmoid' else 1.65, 1.4 if gate != 'sigmoid' else 6., 1.5]\n                solve((response, gate, up, qp, 'output_loss'), start)\n    ranked = sorted(candidates, key=lambda item: item[0])\n    if ranked[0][1] > 1e-6:\n        for _, _, spec, par in ranked[:8]:\n            response, gate, up, qp, _ = spec\n            solve((response, gate, up, qp, 'area_loss'), np.r_[par, 0.2], True)\n            solve((response, gate, up, qp, 'dose_loss'), np.r_[par[:4], min(1.5, par[4])])\n    _, _, spec, par = min(candidates, key=lambda item: item[0])\n    def predict(row) -> float:\n        values = np.array([[float(row[key]) for key in _KEYS]])\n        return float(_eval(values, spec, par, ref, base)[0])\n    return predict\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.5,
+  "compute_cost": 56.932,
+  "composite_cost": 17.3466,
+  "prompt_tokens": 60827,
+  "cached_tokens": 23040,
+  "completion_tokens": 6185,
+  "total_tokens": 67012,
+  "effective_billed_tokens": 49732,
+  "wall_ms": 347725.05,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

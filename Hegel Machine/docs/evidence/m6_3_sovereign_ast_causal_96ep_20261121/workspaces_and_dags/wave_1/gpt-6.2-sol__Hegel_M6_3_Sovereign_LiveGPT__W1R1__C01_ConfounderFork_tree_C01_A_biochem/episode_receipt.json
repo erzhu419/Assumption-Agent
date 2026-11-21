@@ -1,0 +1,44 @@
+{
+  "task_id": "W1R1__C01_ConfounderFork_tree_C01_A_biochem",
+  "wave": "wave_1",
+  "subfamily": "C01_ConfounderFork_RetroactiveImmunity",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C01_TreeA_prime_electro",
+    "node_C01_TreeA_indicator",
+    "node_C01_TreeF_doubleprime_catalysis",
+    "node_C05_TreeG_orth_direct"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c01_treeA_indicator",
+    "sig:hill_saturation_flux"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    z2 = np.square(np.array([float(r['z_2']) for r in rows]))\n    u = np.array([float(r['u_ctrl']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n\n    def residual(p):\n        vmax, k, c = p\n        return vmax * z2 / (k + z2) - c * u - y\n\n    vmax, k, c = least_squares(residual, [8.65, 1.24, 0.30], bounds=([0.0, 1e-9, 0.0], [np.inf, np.inf, np.inf])).x\n\n    def predict(row) -> float:\n        s = math.pow(float(row['z_2']), 2)\n        return float(vmax * s / (k + s) - c * float(row['u_ctrl']))\n\n    return predict\n",
+  "purchased_probes": [
+    "probe_do_blanket_disambig"
+  ],
+  "decision_count": 8,
+  "measurement_cost": 15.5,
+  "compute_cost": 42.637,
+  "composite_cost": 17.63185,
+  "prompt_tokens": 46260,
+  "cached_tokens": 17024,
+  "completion_tokens": 1935,
+  "total_tokens": 48195,
+  "effective_billed_tokens": 35427,
+  "wall_ms": 59197.19,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

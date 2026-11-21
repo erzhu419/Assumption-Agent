@@ -1,0 +1,42 @@
+{
+  "task_id": "W2R2__C05_ColliderShielded_DirectX",
+  "wave": "wave_2",
+  "subfamily": "C05_ColliderShielded_NegativeControl",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C05_TreeG_orth_direct",
+    "node_M6_dist_03",
+    "node_M6_dist_02",
+    "node_M6_dist_04"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c05_treeG_orth_direct",
+    "sig:monotone_hyperbolic"
+  ],
+  "warmstart_candidates_evaluated": 1,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n_params = np.array([1.0, 1.0], dtype=float)\n\ndef fit(train_rows):\n    global _params\n    x = np.array([float(r['x_ind']) for r in train_rows], dtype=float)\n    u = np.array([float(r['u_ctrl']) for r in train_rows], dtype=float)\n    y = np.array([float(r['y']) for r in train_rows], dtype=float)\n    h = x / (1.1 + x)\n    result = least_squares(lambda p: p[0] * h + p[1] * u - y, _params, loss='linear')\n    _params = result.x\n    return predict\n\ndef predict(row):\n    x = float(row['x_ind'])\n    u = float(row['u_ctrl'])\n    return float(_params[0] * x / (1.1 + x) + _params[1] * u)",
+  "purchased_probes": [],
+  "decision_count": 6,
+  "measurement_cost": 12.0,
+  "compute_cost": 14.01,
+  "composite_cost": 12.7005,
+  "prompt_tokens": 12132,
+  "cached_tokens": 8320,
+  "completion_tokens": 418,
+  "total_tokens": 12550,
+  "effective_billed_tokens": 6310,
+  "wall_ms": 14053.19,
+  "forest_snapshot_sha16": "5ea51bd9729917c4",
+  "max_turns": 5
+}

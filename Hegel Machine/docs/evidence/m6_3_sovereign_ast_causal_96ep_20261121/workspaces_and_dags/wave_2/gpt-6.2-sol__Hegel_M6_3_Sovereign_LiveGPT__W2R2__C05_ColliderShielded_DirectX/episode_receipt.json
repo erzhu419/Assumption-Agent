@@ -1,0 +1,42 @@
+{
+  "task_id": "W2R2__C05_ColliderShielded_DirectX",
+  "wave": "wave_2",
+  "subfamily": "C05_ColliderShielded_NegativeControl",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C01_TreeA_prime_electro",
+    "node_C05_TreeG_orth_direct",
+    "node_C01_TreeF_doubleprime_catalysis",
+    "node_C01_TreeA_indicator"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c05_treeG_orth_direct",
+    "sig:monotone_hyperbolic"
+  ],
+  "warmstart_candidates_evaluated": 4,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    x = float(row['x_ind'])\n    return x / (1.1 + x), float(row['u_ctrl'])\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    design = np.asarray([_features(row) for row in rows], dtype=float)\n    target = np.asarray([row['y'] for row in rows], dtype=float)\n    _params = least_squares(lambda p: design @ p - target, [8.0, 0.4]).x\n    return predict\n\ndef predict(row) -> float:\n    saturation, control = _features(row)\n    vmax, c_ctrl = _params\n    return math.fsum((vmax * saturation, c_ctrl * control))",
+  "purchased_probes": [],
+  "decision_count": 6,
+  "measurement_cost": 12.0,
+  "compute_cost": 18.823,
+  "composite_cost": 12.94115,
+  "prompt_tokens": 20893,
+  "cached_tokens": 13440,
+  "completion_tokens": 675,
+  "total_tokens": 21568,
+  "effective_billed_tokens": 11488,
+  "wall_ms": 20249.09,
+  "forest_snapshot_sha16": "af60705c91202a54",
+  "max_turns": 5
+}

@@ -1,0 +1,41 @@
+{
+  "task_id": "W2R1__C02_MediatorReAnchor_tree_C02_M2_ferment",
+  "wave": "wave_2",
+  "subfamily": "C02_MediatorDecomposition_WormholeReAnchor",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C02_TreeM2_analog",
+    "node_C02_TreeM1_surface",
+    "node_M6_dist_01"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c02_treeM2_ferment",
+    "sig:surface_acidity_proxy"
+  ],
+  "warmstart_candidates_evaluated": 2,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    m = np.array([float(r['m_2']) for r in train_rows])\n    raw = np.sqrt(np.array([float(r['u_raw']) for r in train_rows]))\n    y = np.array([float(r['y']) for r in train_rows])\n\n    def residual(p):\n        vmax, km, c_raw = p\n        return vmax * m / (km + m) + c_raw * raw - y\n\n    vmax, km, c_raw = least_squares(\n        residual, [7.4, 1.32, 0.28],\n        bounds=([0.0, 1e-8, -np.inf], [np.inf, np.inf, np.inf])\n    ).x\n\n    def fitted_predict(row):\n        mediator = float(row['m_2'])\n        return float(vmax * mediator / (km + mediator) + c_raw * math.sqrt(float(row['u_raw'])))\n\n    global _fitted_predict\n    _fitted_predict = fitted_predict\n    return fitted_predict\n\n\ndef predict(row) -> float:\n    return _fitted_predict(row)\n",
+  "purchased_probes": [],
+  "decision_count": 6,
+  "measurement_cost": 12.0,
+  "compute_cost": 26.378,
+  "composite_cost": 13.3189,
+  "prompt_tokens": 18718,
+  "cached_tokens": 0,
+  "completion_tokens": 625,
+  "total_tokens": 19343,
+  "effective_billed_tokens": 19343,
+  "wall_ms": 19786.14,
+  "forest_snapshot_sha16": "af60705c91202a54",
+  "max_turns": 5
+}

@@ -1,0 +1,46 @@
+{
+  "task_id": "W1R2__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "module_state_predict",
+  "recalled_node_ids": [
+    "node_M6_dist_03",
+    "node_C04_Depth1_NeuroDose",
+    "node_C04_Root_Vitality_Main",
+    "node_C04_Depth3_BiomechImpactPenalty",
+    "node_C04_Depth2_IndoorSpaceSigmoid"
+  ],
+  "violated_root_ids": [
+    "node_C04_Root_Vitality_Main"
+  ],
+  "observed_signatures": [
+    "sig:c04_root_vitality_goal"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _components(row):\n    indoor = float(row['u_indoor'])\n    space_fraction = 1.0 / (1.0 + math.exp(6.0 * (float(row['a_foot']) - 1.5)))\n    dose = float(row['u_outdoor']) * float(row['p_weather']) + indoor * space_fraction\n    impact_sq = (indoor * float(row['impact_idx'])) ** 2\n    return dose, impact_sq\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    dose, impact_sq = np.asarray([_components(row) for row in rows], dtype=float).T\n    y = np.asarray([row['y'] for row in rows], dtype=float)\n\n    def residual(params):\n        gain, half_dose, impact_cost = params\n        return gain * dose / (half_dose + dose) - impact_cost * impact_sq - y\n\n    _params = least_squares(residual, [8.0, 1.5, 0.6], bounds=([0.0, 1e-8, 0.0], np.inf)).x\n\ndef predict(row) -> float:\n    gain, half_dose, impact_cost = _params\n    dose, impact_sq = _components(row)\n    return float(gain * dose / (half_dose + dose) - impact_cost * impact_sq)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 9,
+  "measurement_cost": 14.5,
+  "compute_cost": 29.562,
+  "composite_cost": 15.9781,
+  "prompt_tokens": 36106,
+  "cached_tokens": 20736,
+  "completion_tokens": 1318,
+  "total_tokens": 37424,
+  "effective_billed_tokens": 21872,
+  "wall_ms": 45554.64,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

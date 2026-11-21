@@ -41,6 +41,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from time import monotonic, sleep
 from typing import Any
 
@@ -934,11 +935,10 @@ class CodexSubscriptionClient:
             "-c", "features.memories=false",
             "-c", "features.multi_agent=false",
             "-c", f'model_reasoning_effort={json.dumps(self.reasoning_effort)}',
-            "--enable", "code_mode_host",
             "--enable", "skip_host_skill_discovery",
         ]
         for feat in (
-            "shell_tool", "unified_exec", "apps", "browser_use",
+            "code_mode", "code_mode_host", "shell_tool", "unified_exec", "apps", "browser_use",
             "computer_use", "skill_search", "view_image", "sleep_tool", "tool_suggest",
         ):
             cmd.extend(("--disable", feat))
@@ -948,6 +948,7 @@ class CodexSubscriptionClient:
 
         t0 = monotonic()
         proc = None
+        timeout_retries = 0
         for attempt_idx in range(4):
             try:
                 proc = subprocess.run(
@@ -966,6 +967,10 @@ class CodexSubscriptionClient:
                     continue
                 raise
             except subprocess.TimeoutExpired:
+                timeout_retries += 1
+                if attempt_idx < 2:
+                    sleep((4.0, 10.0)[attempt_idx] + random.uniform(0.5, 2.5))
+                    continue
                 return {
                     "ok": False,
                     "wall_ms": round((monotonic() - t0) * 1000.0, 2),
@@ -973,7 +978,8 @@ class CodexSubscriptionClient:
                     "prompt_tokens": 0,
                     "cached_tokens": 0,
                     "completion_tokens": 0,
-                    "error": f"codex_subscription_timeout_{self.timeout_seconds}s",
+                    "timeout_retries": timeout_retries,
+                    "error": f"codex_subscription_timeout_{self.timeout_seconds}s_after_{timeout_retries}_attempts",
                 }
             if proc.returncode == 0 and resp_wsl.is_file():
                 break
@@ -1115,43 +1121,89 @@ def _execute_authored_python_in_isolated_subprocess(
     )
 
     runner_code = (
-        "import importlib.util, json, math, sys\n"
+        "import copy, inspect, json, math, os, sys, types\n"
         "from pathlib import Path\n"
-        "m_path, p_path = Path(sys.argv[1]), Path(sys.argv[2])\n"
+        "import numpy, scipy, scipy.optimize\n"
+        "m_path, p_path, sandbox_root = Path(sys.argv[1]), Path(sys.argv[2]), os.path.realpath(sys.argv[3])\n"
+        "m_src = m_path.read_text(encoding='utf-8')\n"
         "data = json.loads(p_path.read_text(encoding='utf-8'))\n"
-        "spec = importlib.util.spec_from_file_location('gpt_authored_model', m_path)\n"
-        "mod = importlib.util.module_from_spec(spec)\n"
-        "spec.loader.exec_module(mod)\n"
-        "if hasattr(mod, 'fit'):\n"
-        "    mod.fit(data['train_rows'])\n"
-        "tr_p = [float(mod.predict({k: v for k, v in r.items() if k != 'y'})) for r in data['train_rows']]\n"
-        "cf_p = [float(mod.predict(r)) for r in data['confirm_inputs']]\n"
-        "ho_p = [float(mod.predict(r)) for r in data['heldout_inputs']]\n"
+        "allowed_prefixes = (\n"
+        "    sandbox_root, '/usr/', '/lib/', '/lib64/', '/etc/ld.so',\n"
+        "    '/proc/cpuinfo', '/proc/meminfo', '/dev/null', '/dev/urandom',\n"
+        "    os.path.realpath(os.path.expanduser('~/.local/lib/python')),\n"
+        ")\n"
+        "for sp in list(sys.path):\n"
+        "    rp = os.path.realpath(sp) if sp else sandbox_root\n"
+        "    if not rp.startswith(allowed_prefixes):\n"
+        "        sys.path.remove(sp)\n"
+        "def _audit_guard(event, args):\n"
+        "    if event in ('subprocess.Popen', 'os.system', 'os.exec', 'os.spawn', 'socket.connect', 'socket.bind'):\n"
+        "        raise PermissionError(f'Hermetic sandbox blocked {event}')\n"
+        "    if event in ('open', 'os.listdir', 'os.scandir') and args:\n"
+        "        p0 = args[0]\n"
+        "        if isinstance(p0, (str, bytes, os.PathLike)):\n"
+        "            ps = os.fsdecode(p0)\n"
+        "            rp = os.path.realpath(ps)\n"
+        "            if not rp.startswith(allowed_prefixes):\n"
+        "                raise PermissionError(f'Hermetic sandbox blocked filesystem access: {ps}')\n"
+        "sys.addaudithook(_audit_guard)\n"
+        "mod = types.ModuleType('gpt_authored_model')\n"
+        "mod.__file__ = os.path.join(sandbox_root, 'model.py')\n"
+        "exec(compile(m_src, mod.__file__, 'exec'), mod.__dict__)\n"
+        "fit_ret = mod.fit(copy.deepcopy(data['train_rows'])) if hasattr(mod, 'fit') else None\n"
+        "abi_mode = 'module_state_predict'\n"
+        "if callable(fit_ret):\n"
+        "    pred_fn = fit_ret\n"
+        "    abi_mode = 'fit_returned_callable'\n"
+        "elif hasattr(mod, 'predict'):\n"
+        "    sig = inspect.signature(mod.predict)\n"
+        "    req_p = [\n"
+        "        p for p in sig.parameters.values()\n"
+        "        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) and p.default is p.empty\n"
+        "    ]\n"
+        "    if len(req_p) >= 2 and fit_ret is not None:\n"
+        "        pred_fn = lambda row, _st=fit_ret: mod.predict(row, _st)\n"
+        "        abi_mode = 'predict_row_and_fit_state'\n"
+        "    else:\n"
+        "        pred_fn = mod.predict\n"
+        "else:\n"
+        "    raise AttributeError('Authored module defines neither callable fit() return nor predict(row)')\n"
+        "tr_p = [float(pred_fn({k: v for k, v in r.items() if k != 'y'})) for r in data['train_rows']]\n"
+        "cf_p = [float(pred_fn(dict(r))) for r in data['confirm_inputs']]\n"
+        "ho_p = [float(pred_fn(dict(r))) for r in data['heldout_inputs']]\n"
         "if not all(math.isfinite(x) for x in [*tr_p, *cf_p, *ho_p]):\n"
         "    raise ValueError('Non-finite prediction returned')\n"
-        "print(json.dumps({'ok': True, 'train_preds': tr_p, 'confirm_preds': cf_p, 'heldout_preds': ho_p}))\n"
+        "print(json.dumps({'ok': True, 'abi_mode': abi_mode, 'train_preds': tr_p, 'confirm_preds': cf_p, 'heldout_preds': ho_p}))\n"
     )
     t0 = monotonic()
-    try:
-        proc = subprocess.run(
-            [sys.executable, "-B", "-c", runner_code, str(model_file), str(payload_file)],
-            env={
-                "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PATH": os.environ.get("PATH", ""),
-            },
-            capture_output=True,
-            text=True,
-            timeout=25,
-        )
-    except subprocess.TimeoutExpired:
-        return {
-            "ok": False,
-            "model_path": str(model_file),
-            "model_sha256": model_sha,
-            "exec_wall_ms": round((monotonic() - t0) * 1000.0, 2),
-            "error": "Python subprocess timed out (>25s); avoid brute-force grid loops and use fast vectorized least_squares / RK4.",
-        }
+    with tempfile.TemporaryDirectory(prefix="hegel_hermetic_eval_") as tmp_sbx:
+        sbx_p = Path(tmp_sbx)
+        sbx_model = sbx_p / "model.py"
+        sbx_payload = sbx_p / "payload.json"
+        shutil.copy2(model_file, sbx_model)
+        shutil.copy2(payload_file, sbx_payload)
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-B", "-c", runner_code, str(sbx_model), str(sbx_payload), str(sbx_p)],
+                cwd=str(sbx_p),
+                env={
+                    "PYTHONPATH": "",
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                    "HOME": os.environ.get("HOME", "/tmp"),
+                    "PATH": os.environ.get("PATH", ""),
+                },
+                capture_output=True,
+                text=True,
+                timeout=25,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "ok": False,
+                "model_path": str(model_file),
+                "model_sha256": model_sha,
+                "exec_wall_ms": round((monotonic() - t0) * 1000.0, 2),
+                "error": "Python subprocess timed out (>25s); avoid brute-force grid loops and use fast vectorized least_squares / RK4.",
+            }
     exec_ms = round((monotonic() - t0) * 1000.0, 2)
     if proc.returncode != 0:
         return {
@@ -1167,6 +1219,7 @@ def _execute_authored_python_in_isolated_subprocess(
     ho_rmse = _rmse(out["heldout_preds"], [r["y"] for r in heldout_rows])
     return {
         "ok": True,
+        "abi_mode": str(out.get("abi_mode", "module_state_predict")),
         "model_path": str(model_file),
         "model_sha256": model_sha,
         "exec_wall_ms": exec_ms,

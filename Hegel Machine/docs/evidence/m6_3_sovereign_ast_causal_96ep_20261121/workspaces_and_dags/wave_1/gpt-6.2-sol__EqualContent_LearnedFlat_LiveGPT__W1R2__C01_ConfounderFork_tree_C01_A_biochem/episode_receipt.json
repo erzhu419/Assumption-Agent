@@ -1,0 +1,44 @@
+{
+  "task_id": "W1R2__C01_ConfounderFork_tree_C01_A_biochem",
+  "wave": "wave_1",
+  "subfamily": "C01_ConfounderFork_RetroactiveImmunity",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C01_TreeA_indicator",
+    "node_M6_dist_01",
+    "node_C01_TreeF_doubleprime_catalysis",
+    "node_M6_dist_04"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c01_treeA_indicator",
+    "sig:hill_saturation_flux"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    z, u, y = np.array([(r['z_2'], r['u_ctrl'], r['y']) for r in train_rows], dtype=float).T\n    q = np.square(z)\n    result = least_squares(\n        lambda p: p[0] * q / (p[1] + q) - p[2] * u - y,\n        x0=[8.02, 1.44, 0.22],\n        bounds=([0.0, 1e-9, 0.0], [np.inf, np.inf, np.inf]),\n    )\n    vmax, k_half, c_ctrl = map(float, result.x)\n\n    def predict(row) -> float:\n        q = math.pow(float(row['z_2']), 2)\n        return vmax * q / (k_half + q) - c_ctrl * float(row['u_ctrl'])\n\n    return predict\n",
+  "purchased_probes": [
+    "probe_do_blanket_disambig"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 15.5,
+  "compute_cost": 35.087,
+  "composite_cost": 17.25435,
+  "prompt_tokens": 50149,
+  "cached_tokens": 32512,
+  "completion_tokens": 2122,
+  "total_tokens": 52271,
+  "effective_billed_tokens": 27887,
+  "wall_ms": 64389.35,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

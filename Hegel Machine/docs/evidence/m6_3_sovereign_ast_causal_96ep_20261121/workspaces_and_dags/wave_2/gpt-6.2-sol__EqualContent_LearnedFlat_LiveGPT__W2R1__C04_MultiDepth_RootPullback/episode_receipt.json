@@ -1,0 +1,41 @@
+{
+  "task_id": "W2R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_2",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "module_state_predict",
+  "recalled_node_ids": [
+    "node_C04_Root_Vitality_Main",
+    "node_M6_dist_03"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c04_root_vitality_goal"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    return (float(row['u_outdoor']) * float(row['p_weather']),\n            float(row['u_indoor']), float(row['a_foot']),\n            float(row['impact_idx']))\n\ndef _law(params, x):\n    amplitude, half_saturation, steepness, midpoint, loss = params\n    outdoor, indoor, footprint, impact = x\n    gate = 0.5 * (1.0 - math.tanh(0.5 * steepness * (footprint - midpoint)))\n    effort = outdoor + indoor * gate\n    return amplitude * effort / (half_saturation + effort) - loss * (indoor * impact)**2\n\ndef fit(train_rows):\n    global _params\n    samples = [(_features(row), float(row['y'])) for row in train_rows]\n    def residuals(params):\n        return np.array([_law(params, x) - y for x, y in samples])\n    _params = least_squares(residuals, [9.205, 1.447, 6.0, 1.5, 0.473],\n                           bounds=([0, 1e-8, 0, 0, 0], np.inf)).x\n\ndef predict(row) -> float:\n    return float(_law(_params, _features(row)))",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.5,
+  "compute_cost": 78.893,
+  "composite_cost": 18.44465,
+  "prompt_tokens": 183311,
+  "cached_tokens": 153472,
+  "completion_tokens": 3486,
+  "total_tokens": 186797,
+  "effective_billed_tokens": 71693,
+  "wall_ms": 130512.88,
+  "forest_snapshot_sha16": "c7dcf0e6e759a913",
+  "max_turns": 5
+}

@@ -1,0 +1,41 @@
+{
+  "task_id": "W2R1__C03_ColliderBerkson_tree_C03_S2_alloy",
+  "wave": "wave_2",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "module_state_predict",
+  "recalled_node_ids": [
+    "node_C03_TreeS2_alloy",
+    "node_C03_TreeS1_selected",
+    "node_M6_dist_02"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c03_treeS2_alloy",
+    "sig:survivorship_archive"
+  ],
+  "warmstart_candidates_evaluated": 2,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_coef = None\n\ndef _features(row):\n    u1 = float(row['u_1'])\n    u2 = float(row['u_2'])\n    return math.log1p(u1), u2 / (1.0 + u2)\n\ndef fit(train_rows):\n    global _coef\n    rows = list(train_rows)\n    X = np.asarray([_features(row) for row in rows], dtype=float)\n    y = np.asarray([float(row['y']) for row in rows], dtype=float)\n    _coef = least_squares(lambda a: X @ a - y, np.zeros(2), jac=lambda a: X).x\n\ndef predict(row) -> float:\n    f1, f2 = _features(row)\n    return float(_coef[0] * f1 + _coef[1] * f2)\n",
+  "purchased_probes": [],
+  "decision_count": 6,
+  "measurement_cost": 12.0,
+  "compute_cost": 15.937,
+  "composite_cost": 12.79685,
+  "prompt_tokens": 13331,
+  "cached_tokens": 6528,
+  "completion_tokens": 467,
+  "total_tokens": 13798,
+  "effective_billed_tokens": 8902,
+  "wall_ms": 15585.56,
+  "forest_snapshot_sha16": "af60705c91202a54",
+  "max_turns": 5
+}

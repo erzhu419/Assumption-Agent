@@ -1,0 +1,42 @@
+{
+  "task_id": "W1R2__C05_ColliderShielded_DirectX",
+  "wave": "wave_1",
+  "subfamily": "C05_ColliderShielded_NegativeControl",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C01_TreeA_prime_electro",
+    "node_C05_TreeG_orth_direct",
+    "node_C01_TreeF_doubleprime_catalysis",
+    "node_C01_TreeA_indicator"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c05_treeG_orth_direct",
+    "sig:monotone_hyperbolic"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    x = np.array([float(r['x_ind']) for r in train_rows])\n    u = np.array([float(r['u_ctrl']) for r in train_rows])\n    y = np.array([float(r['y']) for r in train_rows])\n    def pred(p):\n        vmax, c = p\n        return vmax * x / (1.1 + x) + c * u\n    res = least_squares(lambda p: pred(p) - y, x0=[5.0, 0.5])\n    _params = tuple(float(v) for v in res.x)\n    return lambda row: float(_params[0] * float(row['x_ind']) / (1.1 + float(row['x_ind'])) + _params[1] * float(row['u_ctrl']))\n\ndef predict(row):\n    if _params is None:\n        raise RuntimeError('fit must be called first')\n    return float(_params[0] * float(row['x_ind']) / (1.1 + float(row['x_ind'])) + _params[1] * float(row['u_ctrl']))",
+  "purchased_probes": [],
+  "decision_count": 5,
+  "measurement_cost": 12.0,
+  "compute_cost": 12.03,
+  "composite_cost": 12.6015,
+  "prompt_tokens": 10972,
+  "cached_tokens": 8320,
+  "completion_tokens": 488,
+  "total_tokens": 11460,
+  "effective_billed_tokens": 5220,
+  "wall_ms": 15651.76,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

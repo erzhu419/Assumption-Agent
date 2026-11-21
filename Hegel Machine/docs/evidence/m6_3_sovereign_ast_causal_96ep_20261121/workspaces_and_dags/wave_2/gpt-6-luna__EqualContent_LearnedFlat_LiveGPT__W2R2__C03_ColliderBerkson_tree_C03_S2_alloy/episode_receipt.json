@@ -1,0 +1,41 @@
+{
+  "task_id": "W2R2__C03_ColliderBerkson_tree_C03_S2_alloy",
+  "wave": "wave_2",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C03_TreeS2_alloy",
+    "node_M6_dist_02",
+    "node_C03_TreeS1_selected"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c03_treeS2_alloy",
+    "sig:survivorship_archive"
+  ],
+  "warmstart_candidates_evaluated": 1,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = (3.0, 4.0)\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    X = np.array([[math.log1p(float(r['u_1'])), float(r['u_2']) / (1.0 + float(r['u_2']))] for r in rows], dtype=float)\n    y = np.array([float(r['y']) for r in rows], dtype=float)\n    res = least_squares(lambda p: X @ p - y, x0=np.array([3.0, 4.0]))\n    _PARAMS = tuple(float(v) for v in res.x)\n    return predict\n\ndef predict(row):\n    a1, a2 = _PARAMS\n    u1 = float(row['u_1'])\n    u2 = float(row['u_2'])\n    return a1 * math.log1p(u1) + a2 * u2 / (1.0 + u2)",
+  "purchased_probes": [],
+  "decision_count": 6,
+  "measurement_cost": 12.0,
+  "compute_cost": 15.599,
+  "composite_cost": 12.77995,
+  "prompt_tokens": 16285,
+  "cached_tokens": 12416,
+  "completion_tokens": 926,
+  "total_tokens": 17211,
+  "effective_billed_tokens": 7899,
+  "wall_ms": 24482.4,
+  "forest_snapshot_sha16": "5ea51bd9729917c4",
+  "max_turns": 5
+}

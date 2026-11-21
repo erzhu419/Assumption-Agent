@@ -1,0 +1,43 @@
+{
+  "task_id": "W1R1__C03_ColliderBerkson_tree_C03_S1_catalog",
+  "wave": "wave_1",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C03_TreeS1_selected",
+    "node_C03_TreeS2_alloy",
+    "node_M6_dist_02"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c03_treeS1_catalog",
+    "sig:survivorship_archive"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = (3.0, 4.0)\n\ndef fit(train_rows):\n    global _PARAMS\n    # Fit the additive log response to u_1 and saturating response to u_2.\n    # Use unselected rows, which identify the target full-population regime.\n    rows = [r for r in train_rows if r.get('s_selected') == 0]\n    if not rows:\n        rows = list(train_rows)\n    X = np.array([[math.log1p(float(r['u_1'])), float(r['u_2'])/(1.0+float(r['u_2']))] for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    res = least_squares(lambda p: X @ p - y, x0=np.array([3.0, 4.0]))\n    _PARAMS = tuple(float(v) for v in res.x)\n    return predict\n\ndef predict(row):\n    a1, a2 = _PARAMS\n    u1 = float(row['u_1'])\n    u2 = float(row['u_2'])\n    return a1 * math.log1p(u1) + a2 * u2 / (1.0 + u2)",
+  "purchased_probes": [
+    "probe_unselected_S0_regime"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 15.0,
+  "compute_cost": 28.765,
+  "composite_cost": 16.43825,
+  "prompt_tokens": 37666,
+  "cached_tokens": 23552,
+  "completion_tokens": 1563,
+  "total_tokens": 39229,
+  "effective_billed_tokens": 21565,
+  "wall_ms": 42643.79,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

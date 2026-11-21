@@ -1,0 +1,42 @@
+{
+  "task_id": "W1R2__C05_ColliderShielded_DirectX",
+  "wave": "wave_1",
+  "subfamily": "C05_ColliderShielded_NegativeControl",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 1,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C05_TreeG_orth_direct",
+    "node_M6_dist_03",
+    "node_M6_dist_02",
+    "node_M6_dist_04"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c05_treeG_orth_direct",
+    "sig:monotone_hyperbolic"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    x = np.asarray([float(row['x_ind']) for row in rows])\n    u = np.asarray([float(row['u_ctrl']) for row in rows])\n    y = np.asarray([float(row['y']) for row in rows])\n    design = np.column_stack((x / (1.1 + x), u))\n    vmax, c_ctrl = least_squares(lambda p: design @ p - y, [1.0, 0.0], jac=lambda p: design).x\n\n    def predict(row) -> float:\n        x = float(row['x_ind'])\n        u = float(row['u_ctrl'])\n        return math.fsum((vmax * (x / (1.1 + x)), c_ctrl * u))\n\n    return predict",
+  "purchased_probes": [],
+  "decision_count": 5,
+  "measurement_cost": 12.0,
+  "compute_cost": 27.893,
+  "composite_cost": 13.39465,
+  "prompt_tokens": 48173,
+  "cached_tokens": 38272,
+  "completion_tokens": 1224,
+  "total_tokens": 49397,
+  "effective_billed_tokens": 20693,
+  "wall_ms": 36444.17,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

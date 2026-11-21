@@ -1,0 +1,43 @@
+{
+  "task_id": "W2R1__C02_MediatorReAnchor_tree_C02_M2_ferment",
+  "wave": "wave_2",
+  "subfamily": "C02_MediatorDecomposition_WormholeReAnchor",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 4,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C02_TreeM2_analog",
+    "node_C02_TreeM1_surface",
+    "node_M6_dist_01"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c02_treeM2_ferment",
+    "sig:surface_acidity_proxy"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    m = np.array([float(r['m_2']) for r in train_rows], dtype=float)\n    u = np.array([float(r['u_raw']) for r in train_rows], dtype=float)\n    t = np.array([float(r['t_proc']) for r in train_rows], dtype=float)\n    y = np.array([float(r['y']) for r in train_rows], dtype=float)\n    def pred(p):\n        vmax, km, c_raw, thermal = p\n        return vmax * m / (km + m) + c_raw * np.sqrt(np.maximum(u, 0.0)) + thermal * t\n    res = least_squares(lambda p: pred(p) - y, x0=np.array([5.0, 0.8, 1.0, 0.0]), bounds=([0.0, 1e-8, -10.0, -20.0], [20.0, 20.0, 10.0, 20.0]))\n    _params = tuple(float(v) for v in res.x)\n    return predict\n\ndef predict(row):\n    vmax, km, c_raw, thermal = _params\n    m = float(row['m_2'])\n    u = float(row['u_raw'])\n    t = float(row['t_proc'])\n    return float(vmax * m / (km + m) + c_raw * math.sqrt(max(u, 0.0)) + thermal * t)",
+  "purchased_probes": [
+    "probe_passive_cold_batch"
+  ],
+  "decision_count": 10,
+  "measurement_cost": 16.25,
+  "compute_cost": 56.038,
+  "composite_cost": 19.0519,
+  "prompt_tokens": 98462,
+  "cached_tokens": 73344,
+  "completion_tokens": 3049,
+  "total_tokens": 101511,
+  "effective_billed_tokens": 46503,
+  "wall_ms": 85972.97,
+  "forest_snapshot_sha16": "370b0e964fc2cf57",
+  "max_turns": 5
+}

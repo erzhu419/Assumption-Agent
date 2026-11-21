@@ -1,0 +1,44 @@
+{
+  "task_id": "W1R2__C01_ConfounderFork_tree_C01_A_biochem",
+  "wave": "wave_1",
+  "subfamily": "C01_ConfounderFork_RetroactiveImmunity",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_C01_TreeA_prime_electro",
+    "node_C01_TreeA_indicator",
+    "node_C01_TreeF_doubleprime_catalysis",
+    "node_C05_TreeG_orth_direct"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c01_treeA_indicator",
+    "sig:hill_saturation_flux"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    z2_sq = np.array([float(row['z_2']) ** 2 for row in train_rows])\n    u = np.array([float(row['u_ctrl']) for row in train_rows])\n    y = np.array([float(row['y']) for row in train_rows])\n\n    def residual(p):\n        vmax, k, c = p\n        return vmax * z2_sq / (k + z2_sq) - c * u - y\n\n    vmax, k, c = least_squares(residual, [8.02, 1.44, 0.22], bounds=([0.0, 1e-12, 0.0], math.inf)).x\n\n    def predict(row) -> float:\n        s = float(row['z_2']) ** 2\n        return float(vmax * s / (k + s) - c * float(row['u_ctrl']))\n\n    return predict\n",
+  "purchased_probes": [
+    "probe_do_blanket_disambig"
+  ],
+  "decision_count": 8,
+  "measurement_cost": 15.5,
+  "compute_cost": 64.512,
+  "composite_cost": 18.7256,
+  "prompt_tokens": 83596,
+  "cached_tokens": 39296,
+  "completion_tokens": 3178,
+  "total_tokens": 86774,
+  "effective_billed_tokens": 57302,
+  "wall_ms": 100714.29,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

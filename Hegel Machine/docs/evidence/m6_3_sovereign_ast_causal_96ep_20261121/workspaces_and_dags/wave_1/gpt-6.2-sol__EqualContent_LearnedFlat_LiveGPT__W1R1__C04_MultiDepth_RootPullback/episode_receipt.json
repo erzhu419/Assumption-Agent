@@ -1,0 +1,41 @@
+{
+  "task_id": "W1R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "EqualContent_LearnedFlat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "module_state_predict",
+  "recalled_node_ids": [
+    "node_C04_Root_Vitality_Main",
+    "node_M6_dist_03"
+  ],
+  "violated_root_ids": [],
+  "observed_signatures": [
+    "sig:c04_root_vitality_goal"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_outdoor', 'u_indoor', 'p_weather', 'a_foot', 'impact_idx')\n_params = None\n\n\ndef _law(params, x):\n    ceiling, half_sat, indoor_gain, midpoint, steepness, impact_cost = params\n    outdoor, indoor, weather, footprint, impact = x\n    gate = 1.0 / (1.0 + np.exp(np.clip(steepness * (footprint - midpoint), -60.0, 60.0)))\n    effort = outdoor * weather + indoor_gain * gate * indoor\n    return ceiling * effort / (half_sat + effort) - impact_cost * (indoor * impact) ** 2\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    x = np.array([[float(r[k]) for k in _KEYS] for r in rows]).T\n    y = np.array([float(r['y']) for r in rows])\n    _params = least_squares(\n        lambda p: _law(p, x) - y,\n        [8.24, 0.872, 0.98, 1.54, 6.0, 0.5],\n        bounds=([0.01, 0.001, 0.01, 0.0, 0.01, 0.0],\n                [50.0, 20.0, 10.0, 4.0, 30.0, 10.0]),\n    ).x\n\n\ndef predict(row) -> float:\n    return float(_law(_params, [float(row[k]) for k in _KEYS]))\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.5,
+  "compute_cost": 56.035,
+  "composite_cost": 17.30175,
+  "prompt_tokens": 84254,
+  "cached_tokens": 56320,
+  "completion_tokens": 6821,
+  "total_tokens": 91075,
+  "effective_billed_tokens": 48835,
+  "wall_ms": 362847.53,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

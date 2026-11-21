@@ -1,0 +1,46 @@
+{
+  "task_id": "W1R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Hegel_M6_3_Sovereign_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "provider_errors": 0,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "abi_mode": "fit_returned_callable",
+  "recalled_node_ids": [
+    "node_M6_dist_03",
+    "node_C04_Depth1_NeuroDose",
+    "node_C04_Root_Vitality_Main",
+    "node_C04_Depth3_BiomechImpactPenalty",
+    "node_C04_Depth2_IndoorSpaceSigmoid"
+  ],
+  "violated_root_ids": [
+    "node_C04_Root_Vitality_Main"
+  ],
+  "observed_signatures": [
+    "sig:c04_root_vitality_goal"
+  ],
+  "warmstart_candidates_evaluated": 0,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    indoor = float(row['u_indoor'])\n    outdoor = float(row['u_outdoor'])\n    weather = float(row['p_weather'])\n    footprint = float(row['a_foot'])\n    impact = float(row['impact_idx'])\n    space_factor = 1.0 / (1.0 + math.exp(6.0 * (footprint - 1.5)))\n    effective_dose = outdoor * weather + indoor * space_factor\n    impact_load = (indoor * impact) ** 2\n    return effective_dose, impact_load\n\ndef fit(train_rows):\n    global _params\n    xs = [_features(r) for r in train_rows]\n    ys = np.asarray([float(r['y']) for r in train_rows], dtype=float)\n    def residual(theta):\n        g_root, k_e, c_imp = theta\n        return np.asarray([g_root * e / (k_e + e) - c_imp * loss for e, loss in xs]) - ys\n    result = least_squares(residual, x0=np.array([8.0, 1.0, 1.0]), bounds=([1e-8, 1e-8, 0.0], [100.0, 100.0, 100.0]))\n    _params = result.x\n    return predict\n\ndef predict(row):\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    e, loss = _features(row)\n    g_root, k_e, c_imp = _params\n    return float(g_root * e / (k_e + e) - c_imp * loss)",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 9,
+  "measurement_cost": 14.5,
+  "compute_cost": 21.235,
+  "composite_cost": 15.56175,
+  "prompt_tokens": 23377,
+  "cached_tokens": 14592,
+  "completion_tokens": 1112,
+  "total_tokens": 24489,
+  "effective_billed_tokens": 13545,
+  "wall_ms": 31968.83,
+  "forest_snapshot_sha16": "620a8a980f048deb",
+  "max_turns": 5
+}

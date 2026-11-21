@@ -91,6 +91,11 @@ class FrontierBenchmarkTask:
     verifier_image_tag: str | None = None
     declared_artifacts: tuple[str, ...] = ()
     verifier_timeout_sec: int = 240
+    agent_cpus: int = 4
+    agent_memory_mb: int = 6144
+    verifier_cpus: int = 4
+    verifier_memory_mb: int = 6144
+    verifier_network_mode: str = "none"
     biomystery_data_dir: Path | None = None
     biomystery_answer_rubric: str | None = None
     biomystery_allowed_domains: tuple[str, ...] = ()
@@ -238,6 +243,46 @@ def _parse_task_toml_artifacts(toml_text: str) -> tuple[str, ...]:
     return tuple(re.findall(r'"([^"]+)"', m.group(1)))
 
 
+def _parse_task_toml_resources(toml_text: str, fallback_v_timeout: int) -> dict[str, Any]:
+    """Extract official Harbor `[verifier]`, `[verifier.environment]`, and `[environment]` specs from `task.toml`."""
+    sections: dict[str, str] = {}
+    cur_sec = "root"
+    buf: list[str] = []
+    for ln in toml_text.splitlines():
+        s = ln.strip()
+        if s.startswith("[") and s.endswith("]") and not s.startswith("[["):
+            sections[cur_sec] = "\n".join(buf)
+            cur_sec = s[1:-1].strip()
+            buf = []
+        else:
+            buf.append(ln)
+    sections[cur_sec] = "\n".join(buf)
+
+    def _int_val(sec: str, key: str, default: int) -> int:
+        m = re.search(rf"^\s*{re.escape(key)}\s*=\s*([0-9]+(?:\.[0-9]+)?)", sections.get(sec, ""), flags=re.M)
+        return int(float(m.group(1))) if m else default
+
+    def _str_val(sec: str, key: str, default: str) -> str:
+        m = re.search(rf'^\s*{re.escape(key)}\s*=\s*"([^"]+)"', sections.get(sec, ""), flags=re.M)
+        return m.group(1).strip() if m else default
+
+    v_timeout = _int_val("verifier", "timeout_sec", fallback_v_timeout)
+    a_cpus = _int_val("environment", "cpus", 4)
+    a_mem = max(4096, _int_val("environment", "memory_mb", 6144))
+    v_cpus = _int_val("verifier.environment", "cpus", a_cpus)
+    v_mem = _int_val("verifier.environment", "memory_mb", max(6144, a_mem))
+    v_net_raw = _str_val("verifier.environment", "network_mode", "no-network")
+    v_net = "none" if v_net_raw in ("no-network", "none") else "bridge"
+    return {
+        "verifier_timeout_sec": v_timeout,
+        "agent_cpus": a_cpus,
+        "agent_memory_mb": a_mem,
+        "verifier_cpus": v_cpus,
+        "verifier_memory_mb": v_mem,
+        "verifier_network_mode": v_net,
+    }
+
+
 def _load_biomystery_preview_rows() -> dict[str, dict[str, Any]]:
     """Load cached Anthropic/BioMysteryBench-preview rows offline-first without leaking rubrics to agents."""
     hf_cache = BIOMYSTERY_ROOT / ".hf-cache"
@@ -285,6 +330,7 @@ def load_frontier_scout_20_tasks() -> dict[str, list[FrontierBenchmarkTask]]:
         instr = (tdir / "instruction.md").read_text(encoding="utf-8")
         raw_toml = (tdir / "task.toml").read_text(encoding="utf-8")
         arts = _parse_task_toml_artifacts(raw_toml)
+        res_spec = _parse_task_toml_resources(raw_toml, v_timeout)
         waves[wave].append(
             FrontierBenchmarkTask(
                 task_id=f"tb__{short_name}",
@@ -297,7 +343,7 @@ def load_frontier_scout_20_tasks() -> dict[str, list[FrontierBenchmarkTask]]:
                 agent_image_tag=f"tb_sci_{short_name}:v01",
                 verifier_image_tag=f"tb_sci_verifier_{short_name}:v01",
                 declared_artifacts=arts,
-                verifier_timeout_sec=v_timeout,
+                **res_spec,
             )
         )
 
@@ -614,51 +660,114 @@ def consolidate_wave1_into_m6_forest(
     assert active_mech is True and collider_blocked is True
 
     events: list[dict[str, Any]] = []
-    for ep in wave1_m6_summaries:
+    # Canonical deterministic sort -> 100% invariant to ThreadPoolExecutor completion order (`FR07` Fix)
+    sorted_summaries = sorted(
+        wave1_m6_summaries,
+        key=lambda e: (str(e.get("task_id") or ""), str(e.get("short_name") or "")),
+    )
+
+    for ep in sorted_summaries:
         fam = str(ep.get("wormhole_family") or "")
         t_short = str(ep.get("short_name") or ep.get("task_id") or "")
         passed = bool(ep.get("strict_pass"))
         f_tax = str(ep.get("failure_taxonomy") or "")
         nogoods = list(ep.get("nogoods_recorded") or [])
 
-        if not nogoods and passed:
+        valid_ngs = [ng for ng in nogoods if ng.get("assumption_refuted")]
+        shell_only_ngs = [ng for ng in valid_ngs if str(ng.get("nogood_rung") or "") == "RUNG_1_SHELL_OR_ENV_QUIRK"]
+        causal_ngs = [ng for ng in valid_ngs if str(ng.get("nogood_rung") or "") != "RUNG_1_SHELL_OR_ENV_QUIRK"]
+
+        # Map actual lesson epistemic source onto `meta_dag` for per-item Bayes-Ball authorization (`M6-09` & `FR06` Fix!)
+        if valid_ngs and not causal_ngs:
+            epistemic_src_var = "NumericalDiscretization"
+        else:
+            epistemic_src_var = "LatentPhysicsMechanism"
+
+        item_d_separated = is_d_separated_dag(
+            meta_dag, {epistemic_src_var}, {"OutOfDistributionGeneralization"}, conditioned_vars=set()
+        )
+
+        direct_nids = sorted(nid for nid, nd in archive.items() if nd.get("family_tag") == fam)
+
+        if item_d_separated:
+            # RUNG_1 shell/env quirks are collider-shielded from cross-tree causal propagation!
+            shell_txt = "; ".join(
+                f"[RUNG_1_OP_HYGIENE] `{ng.get('assumption_refuted', '')[:90]}` -> `{ng.get('sublated_pivot', '')[:110]}`"
+                for ng in shell_only_ngs[:2]
+            )
+            for d_nid in direct_nids:
+                op_bucket = archive[d_nid].setdefault("local_operational_quirks", [])
+                if shell_txt and shell_txt not in op_bucket and len(op_bucket) < 4:
+                    op_bucket.append(shell_txt)
+            events.append(
+                {
+                    "source_task": t_short,
+                    "wormhole_family": fam,
+                    "source_passed": passed,
+                    "nogood_count": len(nogoods),
+                    "epistemic_dag_source": epistemic_src_var,
+                    "bayes_ball_cross_tree_blocked": True,
+                    "offered_nodes": direct_nids,
+                    "updated_nodes": [],
+                    "rejected_nodes": [{"node_id": "cross_tree_wormholes", "reason": "d_separated_RUNG_1_shell_quirk"}],
+                    "lesson": shell_txt,
+                }
+            )
+            continue
+
+        if not causal_ngs and passed:
             lesson = (
-                f"[Wave-1 Verified Transfer from `{t_short}` (PASSED)]: Full root-contract pullback & empirical "
-                f"self-verification succeeded in `{fam}`; preserve independent edge-case/clean-subprocess check before commit."
+                f"[Wave-1 Verified Mechanism Invariant from `{t_short}` (PASSED)]: Full root-contract & real-data "
+                f"cross-slice check succeeded in `{fam}`; preserve non-tautological leave-one-slice-out verification."
             )
         else:
             rung_rank = {
                 "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM": 0,
                 "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY": 1,
                 "NONE": 2,
-                "RUNG_1_SHELL_OR_ENV_QUIRK": 3,
             }
             ranked_ngs = sorted(
-                [ng for ng in nogoods if ng.get("assumption_refuted")],
+                causal_ngs,
                 key=lambda ng: rung_rank.get(str(ng.get("nogood_rung") or "NONE"), 2),
             )
             ng_snippets = [
-                f"[{ng.get('nogood_rung', 'EMPIRICAL')}] Refuted `{ng.get('assumption_refuted', '')[:110]}` -> Pivot `{ng.get('sublated_pivot', '')[:130]}`"
+                f"[{ng.get('nogood_rung', 'EMPIRICAL')}] Refuted `{ng.get('assumption_refuted', '')[:120]}` "
+                f"(witness: `{ng.get('empirical_witness', '')[:80]}`) -> Pivot `{ng.get('sublated_pivot', '')[:140]}`"
                 for ng in ranked_ngs[:2]
             ]
             ng_txt = "; ".join(ng_snippets) if ng_snippets else "Unverified edge-regime assumption"
-            status_tag = "PASSED_AFTER_PIVOT" if passed else f"FAILED({f_tax})"
-            lesson = f"[Wave-1 Empirical Sublation from `{t_short}` ({status_tag})]: {ng_txt}"
+            status_tag = "PASSED_AFTER_PIVOT" if passed else f"SOURCE_GRADER_FEEDBACK({f_tax})"
+            lesson = f"[Wave-1 Causal Sublation from `{t_short}` ({status_tag})]: {ng_txt}"
 
-        # Attach to matching family nodes + 1-hop wormhole neighbors
-        direct_nids = [nid for nid, nd in archive.items() if nd.get("family_tag") == fam]
+        # Per-wormhole signature-overlap authorization (`FR06` Fix)
         propagated_nids: set[str] = set(direct_nids)
+        rejected_wh: list[dict[str, str]] = []
         for nid in direct_nids:
+            src_sigs = set(archive[nid].get("signatures") or [])
             for wh in forest.horizontal_wormhole_edges.values():
                 if wh["node_a_id"] == nid:
-                    propagated_nids.add(wh["node_b_id"])
+                    nb = wh["node_b_id"]
                 elif wh["node_b_id"] == nid:
-                    propagated_nids.add(wh["node_a_id"])
+                    nb = wh["node_a_id"]
+                else:
+                    continue
+                wh_sigs = set(wh.get("probe_signature_refs") or [])
+                dst_sigs = set(archive.get(nb, {}).get("signatures") or [])
+                if wh_sigs & (src_sigs | dst_sigs):
+                    propagated_nids.add(nb)
+                else:
+                    rejected_wh.append({"node_id": nb, "reason": "no_wormhole_signature_overlap"})
 
+        actually_updated: list[str] = []
         for target_nid in sorted(propagated_nids):
             bucket = archive[target_nid]["wave1_consolidated_nogoods"]
-            if lesson not in bucket and len(bucket) < 4:
+            if lesson in bucket:
+                continue
+            if len(bucket) < 6:
                 bucket.append(lesson)
+                actually_updated.append(target_nid)
+            else:
+                rejected_wh.append({"node_id": target_nid, "reason": "bucket_capacity_reached"})
 
         events.append(
             {
@@ -666,7 +775,11 @@ def consolidate_wave1_into_m6_forest(
                 "wormhole_family": fam,
                 "source_passed": passed,
                 "nogood_count": len(nogoods),
-                "updated_nodes": sorted(propagated_nids),
+                "epistemic_dag_source": epistemic_src_var,
+                "bayes_ball_cross_tree_blocked": False,
+                "offered_nodes": sorted(propagated_nids),
+                "updated_nodes": actually_updated,
+                "rejected_nodes": rejected_wh,
                 "lesson": lesson,
             }
         )
@@ -1003,6 +1116,7 @@ class FrontierCodexClient(CodexSubscriptionClient):
 
         t0 = monotonic()
         proc = None
+        timeout_retries = 0
         for attempt_idx in range(4):
             try:
                 proc = subprocess.run(
@@ -1021,6 +1135,10 @@ class FrontierCodexClient(CodexSubscriptionClient):
                     continue
                 raise
             except subprocess.TimeoutExpired:
+                timeout_retries += 1
+                if attempt_idx < 2:
+                    sleep((4.0, 10.0)[attempt_idx] + random.uniform(0.5, 2.5))
+                    continue
                 return {
                     "ok": False,
                     "wall_ms": round((monotonic() - t0) * 1000.0, 2),
@@ -1028,7 +1146,8 @@ class FrontierCodexClient(CodexSubscriptionClient):
                     "prompt_tokens": 0,
                     "cached_tokens": 0,
                     "completion_tokens": 0,
-                    "error": f"codex_subscription_timeout_{self.timeout_seconds}s",
+                    "timeout_retries": timeout_retries,
+                    "error": f"codex_subscription_timeout_{self.timeout_seconds}s_after_{timeout_retries}_attempts",
                 }
             if proc.returncode == 0 and resp_wsl.is_file():
                 break
@@ -1138,15 +1257,23 @@ _SNAPSHOT_PY = (
 )
 
 
-def start_detached_container(image_tag: str, *, memory_limit: str = "6g", cpus: str = "4") -> str:
+def start_detached_container(
+    image_tag: str,
+    *,
+    memory_limit: str = "6g",
+    cpus: str = "4",
+    network_mode: str | None = None,
+) -> str:
+    cmd = [
+        "docker", "run", "-d", "--rm",
+        f"--memory={memory_limit}",
+        f"--cpus={cpus}",
+    ]
+    if network_mode == "none":
+        cmd.extend(["--network", "none"])
+    cmd.extend([image_tag, "sleep", "10800"])
     proc = subprocess.run(
-        [
-            "docker", "run", "-d", "--rm",
-            f"--memory={memory_limit}",
-            f"--cpus={cpus}",
-            image_tag,
-            "sleep", "7200",
-        ],
+        cmd,
         capture_output=True,
         text=True,
         check=True,
@@ -1259,15 +1386,20 @@ def save_submitted_artifacts_snapshot(
     declared_artifacts: tuple[str, ...],
     dest_dir: Path,
     *,
-    max_file_bytes: int = 262_144,
+    max_file_bytes: int = 524_288,
 ) -> list[str]:
-    """Copy small text/code/csv/json artifacts (`<= 256 KB`) from `<agent_cid>` into `04_submitted_artifacts_snapshot/`."""
+    """Copy text/code/csv/json artifacts (`<= 512 KB`) from `<agent_cid>` into `04_submitted_artifacts_snapshot/`.
+
+    FR01 Fix: Preserves original basename & suffix when `art` is a single declared file (avoiding `art_0` suffix loss!).
+    """
     saved: list[str] = []
     dest_dir.mkdir(parents=True, exist_ok=True)
+    allowed_exts = {".py", ".json", ".csv", ".tsv", ".md", ".txt", ".yaml", ".yml", ".toml", ".sh"}
     with tempfile.TemporaryDirectory(prefix="hegel_art_snap_") as tmp_s:
         tmp_p = Path(tmp_s)
         for idx, art in enumerate(declared_artifacts):
-            stage_t = tmp_p / f"art_{idx}"
+            orig_name = Path(art.rstrip("/")).name or f"art_{idx}"
+            stage_t = tmp_p / f"art_{idx}__{orig_name}"
             cp = subprocess.run(
                 ["docker", "cp", f"{agent_cid}:{art}", str(stage_t)],
                 capture_output=True,
@@ -1275,18 +1407,98 @@ def save_submitted_artifacts_snapshot(
             )
             if cp.returncode != 0 or not stage_t.exists():
                 continue
-            files_to_check = [stage_t] if stage_t.is_file() else [f for f in stage_t.rglob("*") if f.is_file()]
-            for fp in files_to_check:
+            if stage_t.is_file():
                 try:
-                    sz = fp.stat().st_size
-                    if sz <= max_file_bytes and fp.suffix.lower() in {".py", ".json", ".csv", ".tsv", ".md", ".txt", ".yaml", ".toml"}:
-                        rel_name = fp.name if stage_t.is_file() else f"{Path(art.rstrip('/')).name}__{fp.relative_to(stage_t).as_posix().replace('/', '__')}"
-                        out_fp = dest_dir / rel_name
-                        shutil.copy2(fp, out_fp)
-                        saved.append(rel_name)
+                    sz = stage_t.stat().st_size
+                    ext = Path(orig_name).suffix.lower()
+                    if sz <= max_file_bytes and (ext in allowed_exts or ext == ""):
+                        out_fp = dest_dir / orig_name
+                        shutil.copy2(stage_t, out_fp)
+                        saved.append(orig_name)
                 except OSError:
                     pass
+            else:
+                for fp in stage_t.rglob("*"):
+                    if not fp.is_file():
+                        continue
+                    try:
+                        sz = fp.stat().st_size
+                        if sz <= max_file_bytes and fp.suffix.lower() in allowed_exts:
+                            rel_name = f"{orig_name}__{fp.relative_to(stage_t).as_posix().replace('/', '__')}"
+                            out_fp = dest_dir / rel_name
+                            shutil.copy2(fp, out_fp)
+                            saved.append(rel_name)
+                    except OSError:
+                        pass
     return sorted(saved)
+
+
+def compute_declared_artifacts_digest(cid: str, declared_artifacts: tuple[str, ...]) -> str:
+    """Compute canonical SHA-256 over all files inside `declared_artifacts` (`''` if any declared artifact is missing/empty)."""
+    if not declared_artifacts:
+        return ""
+    py_chk = (
+        "import hashlib, json, os, sys\n"
+        "arts = json.loads(sys.argv[1])\n"
+        "h = hashlib.sha256()\n"
+        "for a in arts:\n"
+        "    if os.path.isfile(a):\n"
+        "        b = open(a, 'rb').read()\n"
+        "        if not b: print(''); sys.exit(0)\n"
+        "        h.update(a.encode() + b'\\0' + hashlib.sha256(b).digest())\n"
+        "    elif os.path.isdir(a):\n"
+        "        files = []\n"
+        "        for dp, _, fns in os.walk(a):\n"
+        "            if '__pycache__' in dp: continue\n"
+        "            for fn in sorted(fns):\n"
+        "                if fn.endswith('.pyc'): continue\n"
+        "                files.append(os.path.join(dp, fn))\n"
+        "        if not files: print(''); sys.exit(0)\n"
+        "        for fp in sorted(files):\n"
+        "            b = open(fp, 'rb').read()\n"
+        "            h.update(fp.encode() + b'\\0' + hashlib.sha256(b).digest())\n"
+        "    else:\n"
+        "        print(''); sys.exit(0)\n"
+        "print(h.hexdigest())\n"
+    )
+    proc = subprocess.run(
+        ["docker", "exec", cid, "python3", "-c", py_chk, json.dumps(list(declared_artifacts))],
+        capture_output=True, text=True, timeout=15,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def archive_candidate_version_in_container(
+    cid: str,
+    declared_artifacts: tuple[str, ...],
+    version_idx: int,
+    digest: str,
+) -> str:
+    """Snapshot current `declared_artifacts` into `/tmp/.hegel_candidate_archive/v{version_idx}_{digest[:8]}` inside container."""
+    snap_dir = f"/tmp/.hegel_candidate_archive/v{version_idx:02d}_{digest[:8]}"
+    cmds = [f"mkdir -p {json.dumps(snap_dir)}"]
+    for idx, art in enumerate(declared_artifacts):
+        bname = Path(art.rstrip("/")).name or f"art_{idx}"
+        cmds.append(f"cp -a {json.dumps(art)} {json.dumps(snap_dir + '/' + bname)} 2>/dev/null || true")
+    subprocess.run(["docker", "exec", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, timeout=20)
+    return snap_dir
+
+
+def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[str, ...]) -> bool:
+    """FR04 Fix: Trivial commands (`true`, `ls`, `echo`, `pwd`) CANNOT clear candidate verification debt!"""
+    s = cmd_str.strip()
+    if not s or s in {"true", ":", "pwd", "ls"}:
+        return False
+    low = s.lower()
+    exec_tokens = ("python", "pytest", "bash ", "sh ", "Rscript", "julia", "./")
+    if not any(tok.lower() in low for tok in exec_tokens):
+        return False
+    if not declared_artifacts:
+        return True
+    # Must either invoke python/pytest or reference at least one declared artifact root/basename
+    art_tokens = [Path(a.rstrip("/")).name.lower() for a in declared_artifacts if Path(a.rstrip("/")).name]
+    art_roots = [a.rstrip("/").lower() for a in declared_artifacts]
+    return ("pytest" in low) or any(t in low for t in [*art_tokens, *art_roots])
 
 
 def classify_tb_failure_taxonomy(
@@ -1340,7 +1552,12 @@ def run_tb_separate_verifier(
     verifier_cid: str | None = None
     t0 = monotonic()
     try:
-        verifier_cid = start_detached_container(task.verifier_image_tag, memory_limit="6g", cpus="4")
+        verifier_cid = start_detached_container(
+            task.verifier_image_tag,
+            memory_limit=f"{task.verifier_memory_mb}m",
+            cpus=str(task.verifier_cpus),
+            network_mode=task.verifier_network_mode,
+        )
         with tempfile.TemporaryDirectory(prefix="hegel_harbor_verify_") as tmp_s:
             tmp_p = Path(tmp_s)
             for idx, art in enumerate(task.declared_artifacts):
@@ -1566,9 +1783,15 @@ def _build_system_and_initial_brief(
     max_turns: int,
     cmd_timeout_sec: int,
 ) -> tuple[str, dict[str, Any]]:
-    is_m6 = arm in {"Hegel_M6_Frontier_LiveGPT", "Hegel_M6_1_Frontier_LiveGPT", "Hegel_M6_2_Frontier_LiveGPT"}
+    is_m6 = arm in {
+        "Hegel_M6_Frontier_LiveGPT",
+        "Hegel_M6_1_Frontier_LiveGPT",
+        "Hegel_M6_2_Frontier_LiveGPT",
+        "Hegel_M6_3_Frontier_LiveGPT",
+    }
     is_m6_1 = arm == "Hegel_M6_1_Frontier_LiveGPT"
     is_m6_2 = arm == "Hegel_M6_2_Frontier_LiveGPT"
+    is_m6_3 = arm == "Hegel_M6_3_Frontier_LiveGPT"
     is_bm = task.benchmark == "BioMysteryBench-Preview"
 
     common_env_rules = (
@@ -1605,6 +1828,47 @@ def _build_system_and_initial_brief(
             "scientific_domain": task.scientific_domain,
             "max_turns": max_turns,
             "container_initial_snapshot": env_boot_info,
+            "task_instruction": task.instruction_text,
+        }
+        return sys_prompt, init_payload
+
+    if is_m6_3:
+        sys_prompt = (
+            "You are `Hegel-M6.3`, a sovereign dialectical causal, multi-scale & incumbent-archived scientific discovery agent.\n"
+            + common_env_rules
+            + "HEGEL-M6.3 SOVEREIGN CAUSAL & ANTI-TAUTOLOGY PROTOCOL:\n"
+            "1. SPARSE CAUSAL `nogood_update` (`RUNG_2` ALGEBRAIC COMPLETENESS BEFORE `RUNG_3` MECHANISM PIVOT):\n"
+            "   - Reserve `has_new_nogood=true` strictly for genuine empirical falsifications (NEVER routine shell/inspection steps!).\n"
+            "   - Check `RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY` first: verify exact conservation laws, pairwise differences `(x_i - c*x_j)`, "
+            "rational quotients `P(x)/(1 + a*Q(x)^2)`, sign/unit/coordinate conventions, and tight dual bounds/subtree pruning before resorting to heuristic surrogates!\n"
+            "2. ANTI-TAUTOLOGY REAL-DATA CROSS-SLICE VALIDATION (NEVER TRUST SELF-GENERATED SIMULATORS ALONE):\n"
+            "   - Testing your inverse solver solely on synthetic data generated by your own assumed forward model creates tautological confirmation bias!\n"
+            "   - Validate primarily on REAL provided measurements via leave-one-sensor-out / split-pair / cross-cohort / multi-horizon holdout consistency, "
+            "plus an independent perturbed-physics mismatch check!\n"
+            "3. DECOUPLED LATENT ESTIMATION vs READOUT / CLASSIFICATION / CERTIFICATE BOUNDARIES:\n"
+            "   - Audit EVERY deliverable metric independently: separate continuous trajectory/state fit from discrete outlier classification precision/recall "
+            "(using normalized innovation covariance); audit experimental stage-transition boundaries (e.g. ramp-end vs hold-end vs unloading) across ALL samples "
+            "before tuning minor secondary terms; and when observation residuals are near-zero across multiple parameters, select the minimax-robust solution for transfer!\n"
+            "4. HOST-ARCHIVED INCUMBENT RATCHET & CANDIDATE-HASH VERIFICATION:\n"
+            "   - Our host automatically snapshots every modified target artifact into `/tmp/.hegel_candidate_archive/vXX_<sha8>` (visible in `hegel_m6_live_state`). "
+            "Explore bold multi-scale structures freely in `/tmp`, promote to target paths ONLY when real-data worst-slice metrics improve, and restore an earlier "
+            "archived version immediately if a late edit degrades any real-data slice! Run a clean-process Python verification on the final target artifact before `submit_completed_task`.\n"
+            "Return a single valid JSON object matching the Hegel-M6.2/M6.3 lean schema."
+        )
+        init_payload = {
+            "task_id": task.task_id,
+            "benchmark": task.benchmark,
+            "scientific_domain": task.scientific_domain,
+            "max_turns": max_turns,
+            "container_initial_snapshot": env_boot_info,
+            "recalled_wormhole_methodology_and_wave1_sublations": [
+                {
+                    "node_id": n["node_id"],
+                    "principle": n["methodology_principle"],
+                    "wave1_consolidated_nogoods": n.get("wave1_consolidated_nogoods", []),
+                }
+                for n in recalled_m6_notes
+            ],
             "task_instruction": task.instruction_text,
         }
         return sys_prompt, init_payload
@@ -1799,10 +2063,23 @@ def run_frontier_episode(
     reasoning_effort: str = "medium",
 ) -> dict[str, Any]:
     """Execute one containerized multi-step frontier scientific episode and persist full forensic post-mortem logs."""
-    assert arm in {"Bare_ReAct_LiveGPT", "Hegel_M6_Frontier_LiveGPT", "Hegel_M6_1_Frontier_LiveGPT", "Hegel_M6_2_Frontier_LiveGPT"}
-    is_m6 = arm in {"Hegel_M6_Frontier_LiveGPT", "Hegel_M6_1_Frontier_LiveGPT", "Hegel_M6_2_Frontier_LiveGPT"}
+    assert arm in {
+        "Bare_ReAct_LiveGPT",
+        "Hegel_M6_Frontier_LiveGPT",
+        "Hegel_M6_1_Frontier_LiveGPT",
+        "Hegel_M6_2_Frontier_LiveGPT",
+        "Hegel_M6_3_Frontier_LiveGPT",
+    }
+    is_m6 = arm in {
+        "Hegel_M6_Frontier_LiveGPT",
+        "Hegel_M6_1_Frontier_LiveGPT",
+        "Hegel_M6_2_Frontier_LiveGPT",
+        "Hegel_M6_3_Frontier_LiveGPT",
+    }
     is_m6_1 = arm == "Hegel_M6_1_Frontier_LiveGPT"
     is_m6_2 = arm == "Hegel_M6_2_Frontier_LiveGPT"
+    is_m6_3 = arm == "Hegel_M6_3_Frontier_LiveGPT"
+    is_lean_m6 = is_m6_2 or is_m6_3
     is_bm = task.benchmark == "BioMysteryBench-Preview"
 
     episode_out_dir.mkdir(parents=True, exist_ok=True)
@@ -1817,14 +2094,18 @@ def run_frontier_episode(
         codex_info=codex_info,
         model=model,
         reasoning_effort=reasoning_effort,
-        timeout_seconds=240,
+        timeout_seconds=360,
     )
     stage_subdir = f"{run_id}__{model}__{arm}__{task.task_id}".replace(":", "_")
 
     agent_cid: str | None = None
     ep_t0 = monotonic()
     try:
-        agent_cid = start_detached_container(task.agent_image_tag, memory_limit="6g", cpus="4")
+        agent_cid = start_detached_container(
+            task.agent_image_tag,
+            memory_limit=f"{task.agent_memory_mb}m",
+            cpus=str(task.agent_cpus),
+        )
         if is_bm and task.biomystery_data_dir and task.biomystery_data_dir.is_dir():
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/workspace/data", "/workspace/scratch"], capture_output=True, timeout=15)
             subprocess.run(["docker", "cp", f"{task.biomystery_data_dir}/.", f"{agent_cid}:/workspace/data/"], capture_output=True, timeout=45)
@@ -1838,6 +2119,7 @@ def run_frontier_episode(
         )
         env_boot_info = boot_probe["stdout"][:2500]
         prev_fs = snapshot_container_files(agent_cid)
+        initial_art_digest = compute_declared_artifacts_digest(agent_cid, task.declared_artifacts) if not is_bm else ""
 
         last_parent = ledger.record_decision(
             decision_type="D0_EPISODE_INIT_AND_CONTAINER_BOOT",
@@ -1848,11 +2130,17 @@ def run_frontier_episode(
                 "wave": task.wave,
                 "agent_image_tag": task.agent_image_tag,
                 "declared_artifacts": list(task.declared_artifacts),
+                "verifier_resources": {
+                    "cpus": task.verifier_cpus,
+                    "memory_mb": task.verifier_memory_mb,
+                    "timeout_sec": task.verifier_timeout_sec,
+                    "network_mode": task.verifier_network_mode,
+                },
             },
             candidates_evaluated=[{"arm": arm, "max_turns": max_turns, "cmd_timeout_sec": cmd_timeout_sec}],
             chosen_option={"container_booted": True, "initial_tracked_files": len(prev_fs)},
             rejection_reasons={},
-            rationale_summary="Boot isolated Docker sandbox container with zero access to `/tests` or `answer_rubric`.",
+            rationale_summary="Boot isolated Docker sandbox container with official task.toml resource bindings and zero access to `/tests` or `answer_rubric`.",
             wall_ms_delta=boot_probe["wall_ms"],
         )
 
@@ -1865,7 +2153,6 @@ def run_frontier_episode(
                 top_k=3,
             )
             rec_ids = [c["node_id"] for c in rec.get("candidates", ())]
-            # Also pull 1-hop wormhole neighbors for multi-scale methodological context
             expanded_ids: list[str] = list(rec_ids)
             for nid in rec_ids:
                 for wh in forest.horizontal_wormhole_edges.values():
@@ -1900,20 +2187,24 @@ def run_frontier_episode(
         nogoods_recorded: list[dict[str, Any]] = []
         latest_checklist: list[dict[str, Any]] = []
         latest_hyp_chain: list[dict[str, Any]] = []
+        host_candidate_archive: list[dict[str, Any]] = []
 
         pullback_gate_triggered = False
         stress_challenge_gate_triggered = False
         incumbent_checkpoint_alerts_fired = 0
         latest_m6_2_metric_note = ""
+        current_candidate_sha256 = initial_art_digest
+        verified_candidate_sha256 = ""
         artifacts_modified_since_last_verify = True
+        llm_infra_retries = 0
         ended_by_finish = False
         submitted_final_answer = ""
         returned_model_seen = model
         turns_used = 0
 
-        for turn_idx in range(1, max_turns + 1):
+        turn_idx = 1
+        while turn_idx <= max_turns:
             turns_used = turn_idx
-            # Assemble conversation turns with clean recent-full / older-compacted observations
             convo_turns: list[dict[str, Any]] = [
                 {"role": "user", "content": json.dumps(init_payload, ensure_ascii=False)}
             ]
@@ -1941,15 +2232,20 @@ def run_frontier_episode(
                     "CRITICAL BUDGET ALERT: Nearly out of steps! Finalize saved output files / verify quickly and return `submit_completed_task`."
                 )
             if is_m6:
-                if is_m6_2:
-                    m6_state = {
+                if is_lean_m6:
+                    m6_state: dict[str, Any] = {
                         "active_structural_nogoods": nogoods_recorded[-5:],
                         "latest_hypothesis_and_metric": latest_m6_2_metric_note,
                     }
+                    if is_m6_3 and not is_bm:
+                        m6_state["current_candidate_sha256"] = current_candidate_sha256[:16] if current_candidate_sha256 else "MISSING"
+                        m6_state["candidate_hash_verified"] = bool(current_candidate_sha256 and current_candidate_sha256 == verified_candidate_sha256)
+                        if host_candidate_archive:
+                            m6_state["host_candidate_archive_versions"] = host_candidate_archive[-4:]
                     if len(nogoods_recorded) >= 5:
                         m6_state["monotone_ratchet_guard"] = (
-                            f"MONOTONE RATCHET ACTIVE ({len(nogoods_recorded)} structural Nogoods recorded): Do NOT discard a simpler, "
-                            "well-calibrated estimator for a higher-variance complex model unless worst-slice stress error strictly improves!"
+                            f"MONOTONE RATCHET ACTIVE ({len(nogoods_recorded)} structural Nogoods recorded): Do NOT overwrite a working "
+                            "real-data incumbent with a higher-variance ansatz unless real-data worst-slice metrics strictly improve!"
                         )
                     if (not is_bm) and task.declared_artifacts and (max_turns - turn_idx <= 3):
                         late_chk = check_declared_artifacts_in_container(agent_cid, task.declared_artifacts)
@@ -1995,7 +2291,7 @@ def run_frontier_episode(
 
             active_schema = (
                 HEGEL_M6_2_FRONTIER_DECISION_SCHEMA
-                if is_m6_2
+                if is_lean_m6
                 else (HEGEL_M6_FRONTIER_DECISION_SCHEMA if is_m6 else BARE_REACT_DECISION_SCHEMA)
             )
             llm_res = client.call_structured(
@@ -2005,20 +2301,24 @@ def run_frontier_episode(
                 stage_subdir=stage_subdir,
             )
             if not llm_res.get("ok"):
+                llm_infra_retries += 1
                 last_parent = ledger.record_decision(
                     decision_type=f"D_TURN_{turn_idx:02d}_LLM_ERROR",
                     parent_decision_id=last_parent,
-                    evidence_inputs={"turn_idx": turn_idx},
+                    evidence_inputs={"turn_idx": turn_idx, "llm_infra_retries": llm_infra_retries},
                     candidates_evaluated=[],
                     chosen_option={"error": llm_res.get("error")},
                     rejection_reasons={},
-                    rationale_summary=f"LLM call failed on turn {turn_idx}: {llm_res.get('error')}",
+                    rationale_summary=f"LLM call failed on turn {turn_idx}: {llm_res.get('error')} (retry #{llm_infra_retries})",
                     prompt_tokens_delta=int(llm_res.get("prompt_tokens", 0)),
                     cached_tokens_delta=int(llm_res.get("cached_tokens", 0)),
                     completion_tokens_delta=int(llm_res.get("completion_tokens", 0)),
                     wall_ms_delta=float(llm_res.get("wall_ms", 0.0)),
                 )
-                turn_logs.append({"turn_idx": turn_idx, "action_type": "llm_error", "rationale": str(llm_res.get("error"))})
+                turn_logs.append({"turn_idx": turn_idx, "action_type": "llm_error_retry", "rationale": str(llm_res.get("error"))})
+                if llm_infra_retries <= 2:
+                    sleep(5.0 * llm_infra_retries)
+                    continue
                 break
 
             returned_model_seen = str(llm_res.get("returned_model") or model)
@@ -2030,7 +2330,7 @@ def run_frontier_episode(
             alts = list(parsed.get("considered_alternatives") or [])
 
             if is_m6:
-                if is_m6_2:
+                if is_lean_m6:
                     latest_m6_2_metric_note = str(parsed.get("active_hypothesis_and_worst_slice_metric") or "")
                 else:
                     latest_checklist = list(parsed.get("root_contract_checklist") or [])
@@ -2047,6 +2347,8 @@ def run_frontier_episode(
                             "sublated_pivot": ng_upd.get("sublated_pivot"),
                         }
                     )
+                    if len(nogoods_recorded) > 8 and is_lean_m6:
+                        nogoods_recorded = nogoods_recorded[-8:]
             else:
                 ng_upd = None
 
@@ -2069,8 +2371,9 @@ def run_frontier_episode(
                 wall_ms_delta=float(llm_res["wall_ms"]),
                 extra_artifacts=(
                     {
-                        "root_contract_checklist": latest_checklist,
-                        "nested_hypothesis_chain": latest_hyp_chain,
+                        "active_hypothesis_and_worst_slice_metric": latest_m6_2_metric_note if is_lean_m6 else None,
+                        "root_contract_checklist": latest_checklist if not is_lean_m6 else None,
+                        "nested_hypothesis_chain": latest_hyp_chain if not is_lean_m6 else None,
                         "nogood_update": ng_upd,
                     }
                     if is_m6
@@ -2086,24 +2389,28 @@ def run_frontier_episode(
                 "considered_alternatives": alts,
                 "bash_command": bash_cmd,
                 "final_answer": fin_ans,
-                "root_contract_checklist": latest_checklist if is_m6 else None,
-                "nested_hypothesis_chain": latest_hyp_chain if is_m6 else None,
+                "active_hypothesis_and_worst_slice_metric": latest_m6_2_metric_note if is_lean_m6 else None,
+                "root_contract_checklist": latest_checklist if (is_m6 and not is_lean_m6) else None,
+                "nested_hypothesis_chain": latest_hyp_chain if (is_m6 and not is_lean_m6) else None,
                 "nogood_update": ng_upd,
             }
 
             if act_type == "submit_completed_task":
-                # 1. M6.2 Early-Stopping Adversarial Stress-Slice Ratchet Gate (prevents premature Turn 17-23 surrender when >= 5 turns remain!)
-                if is_m6_2 and (not is_bm) and (not stress_challenge_gate_triggered) and (max_turns - turn_idx >= 5):
+                # 1. Early-Stopping Non-Tautological Stress-Slice Gate (`M6.2` / `M6.3` when >= 6 turns remain and no exact optimality proof stated)
+                has_exact_cert = any(
+                    kw in (latest_m6_2_metric_note + " " + rationale).lower()
+                    for kw in ("u == l", "upper == lower", "gap=0", "exact optimality", "integer ground-state energy certified")
+                )
+                if is_lean_m6 and (not is_bm) and (not stress_challenge_gate_triggered) and (max_turns - turn_idx >= 6) and (not has_exact_cert):
                     art_chk_early = check_declared_artifacts_in_container(agent_cid, task.declared_artifacts)
                     stress_challenge_gate_triggered = True
                     stress_msg = (
-                        f"HEGEL-M6.2 EARLY-STOPPING STRESS-SLICE RATCHET (`{max_turns - turn_idx}` turns still available; "
-                        f"artifact status={art_chk_early['artifact_status']}): Packaging/import checks alone do NOT guarantee hidden "
-                        "out-of-distribution accuracy! Before locking early submission, run an adversarial worst-slice stress audit in `/tmp`: "
-                        "(a) test your saved artifact on the hardest sub-cohort / minority class / sparse-sensor geometry / grid-and-horizon transfer / "
-                        "off-manifold corner regime; (b) if ANY slice shows borderline accuracy/F1 (e.g. < 0.75) or error near tolerance, investigate "
-                        "the missing structural/batch/nuisance mechanism and overwrite the saved artifact ONLY if worst-slice validation strictly improves "
-                        "(Monotone Ratchet!); (c) once verified in a clean default-env process, call `submit_completed_task`."
+                        f"HEGEL-{('M6.3' if is_m6_3 else 'M6.2')} NON-TAUTOLOGICAL REAL-SLICE AUDIT GATE (`{max_turns - turn_idx}` turns remaining; "
+                        f"artifact status={art_chk_early['artifact_status']}): Before early lock, run ONE real-data cross-slice / decoupled-metric audit in `/tmp`: "
+                        "(a) verify leave-one-sensor-out / split-pair / cross-cohort / multi-horizon transfer on REAL provided measurements (NOT solely on your own "
+                        "synthetic forward simulator!); (b) audit secondary deliverables separately (outlier classification precision/recall, stage-transition "
+                        "readout boundaries, certificate leaf compactness); (c) overwrite target artifacts ONLY if real-data worst-slice strictly improves "
+                        "(or restore from `/tmp/.hegel_candidate_archive/` if a recent edit degraded any slice!), verify clean-process execution, and submit."
                     )
                     t_entry["pullback_gate_message"] = stress_msg
                     turn_logs.append(t_entry)
@@ -2111,10 +2418,10 @@ def run_frontier_episode(
                         decision_type="D_ADVERSARIAL_STRESS_CHALLENGE_GATE",
                         parent_decision_id=last_parent,
                         evidence_inputs={"turn_idx": turn_idx, "remaining_turns": max_turns - turn_idx},
-                        candidates_evaluated=[{"action": "enforce_worst_slice_stress_audit_before_early_stop"}],
+                        candidates_evaluated=[{"action": "enforce_real_data_cross_slice_audit_before_early_stop"}],
                         chosen_option={"intercepted": True},
-                        rejection_reasons={"premature_early_stop": f"{max_turns - turn_idx} turns unused without stress-slice ratchet"},
-                        rationale_summary="Intercept early submission when >= 5 turns remain to enforce worst-slice stress audit & monotone ratchet.",
+                        rejection_reasons={"premature_early_stop": f"{max_turns - turn_idx} turns unused without real-slice audit"},
+                        rationale_summary="Intercept early submission when >= 6 turns remain (unless exact certificate proved) to enforce non-tautological real-slice audit.",
                     )
                     assistant_decisions.append(parsed)
                     raw_exec_observations.append(
@@ -2126,30 +2433,32 @@ def run_frontier_episode(
                             "filesystem_diff": {"created": [], "modified": [], "deleted": []},
                         }
                     )
+                    turn_idx += 1
                     continue
 
-                # 2. Mechanical Root-Pullback Pre-Commit Gate (`Hegel_M6` family, at most once when turns remain!)
+                # 2. Candidate-Hash-Bound Root-Pullback Pre-Commit Gate (`FR04` Fix: requires substantive verification bound to current candidate SHA-256!)
                 if is_m6 and (not pullback_gate_triggered) and (turn_idx < max_turns):
                     gate_reasons: list[str] = []
                     if not is_bm:
                         art_chk = check_declared_artifacts_in_container(agent_cid, task.declared_artifacts)
-                        if not art_chk["all_present"]:
+                        cur_dig = compute_declared_artifacts_digest(agent_cid, task.declared_artifacts)
+                        if not art_chk["all_present"] or not cur_dig:
                             gate_reasons.append(f"Missing or empty declared artifacts: {art_chk['missing_or_empty']}")
-                        elif artifacts_modified_since_last_verify:
+                        elif artifacts_modified_since_last_verify or (cur_dig != verified_candidate_sha256):
                             gate_reasons.append(
-                                "Target files were written/modified without a subsequent independent verification command."
+                                f"Declared artifacts (`sha256={cur_dig[:12]}`) lack a substantive post-modification Python/script verification receipt (`true`/`ls` do not qualify!)."
                             )
                     else:
-                        unv = [c["requirement"] for c in latest_checklist if c.get("status") != "verified"]
-                        if unv:
-                            gate_reasons.append(f"Unverified root checklist items remain: {unv[:3]}")
+                        if not is_lean_m6:
+                            unv = [c["requirement"] for c in latest_checklist if c.get("status") != "verified"]
+                            if unv:
+                                gate_reasons.append(f"Unverified root checklist items remain: {unv[:3]}")
                     if gate_reasons:
                         pullback_gate_triggered = True
                         gate_msg = (
-                            "HEGEL-M6 ROOT-PULLBACK PRE-COMMIT GATE: Before locking `submit_completed_task`, emit ONE "
-                            f"`execute_in_remote_docker` verification command to resolve: {'; '.join(gate_reasons)}. "
-                            "Check exact file schema/callable contract, banned imports in a clean subprocess, finite values, "
-                            "or exact BioMystery answer string formatting against the raw data, then call `submit_completed_task`."
+                            "HEGEL-M6 CANDIDATE-HASH PRE-COMMIT GATE: Before locking `submit_completed_task`, emit ONE "
+                            f"`execute_in_remote_docker` Python/test verification command against your current target artifact(s) to resolve: {'; '.join(gate_reasons)}. "
+                            "Verify clean subprocess import/execution, no banned modules, finite outputs, and exact schema/shape, then call `submit_completed_task`."
                         )
                         t_entry["pullback_gate_message"] = gate_msg
                         turn_logs.append(t_entry)
@@ -2157,10 +2466,10 @@ def run_frontier_episode(
                             decision_type="D_PULLBACK_PRECOMMIT_GATE",
                             parent_decision_id=last_parent,
                             evidence_inputs={"gate_reasons": gate_reasons},
-                            candidates_evaluated=[{"action": "intercept_for_one_verification_turn"}],
+                            candidates_evaluated=[{"action": "intercept_for_candidate_hash_verification"}],
                             chosen_option={"intercepted": True},
-                            rejection_reasons={"premature_commit": "; ".join(gate_reasons)},
-                            rationale_summary="Intercept premature finish_task to enforce root-contract pullback verification.",
+                            rejection_reasons={"unverified_candidate_digest": "; ".join(gate_reasons)},
+                            rationale_summary="Intercept premature submit to enforce candidate-hash-bound verification receipt.",
                         )
                         assistant_decisions.append(parsed)
                         raw_exec_observations.append(
@@ -2172,6 +2481,7 @@ def run_frontier_episode(
                                 "filesystem_diff": {"created": [], "modified": [], "deleted": []},
                             }
                         )
+                        turn_idx += 1
                         continue
 
                 ended_by_finish = True
@@ -2179,24 +2489,48 @@ def run_frontier_episode(
                 turn_logs.append(t_entry)
                 break
 
-            # Execute `run_bash` inside `<agent_cid>`
+            # Execute `execute_in_remote_docker` inside `<agent_cid>`
             cmd_str = str(bash_cmd or "echo 'No command provided'")
             ex_res = exec_container_bash(agent_cid, cmd_str, timeout_sec=cmd_timeout_sec)
             cur_fs = snapshot_container_files(agent_cid)
             fdiff = compute_filesystem_diff(prev_fs, cur_fs)
             prev_fs = cur_fs
 
-            # Track whether declared artifacts were modified on this turn or verified cleanly without modifying them
+            # Update candidate SHA-256, host version archive (`/tmp/.hegel_candidate_archive`), and candidate-hash-bound verification status!
             touched_set = {x["path"] for x in fdiff["created"]} | {x["path"] for x in fdiff["modified"]}
-            if any(
+            art_touched = any(
                 tp == art.rstrip("/") or tp.startswith(art.rstrip("/") + "/")
                 for tp in touched_set
                 for art in task.declared_artifacts
-            ):
-                artifacts_modified_since_last_verify = True
-            elif ex_res["exit_code"] == 0:
-                artifacts_modified_since_last_verify = False
+            )
+            if not is_bm and task.declared_artifacts:
+                new_dig = compute_declared_artifacts_digest(agent_cid, task.declared_artifacts)
+                if new_dig and new_dig != current_candidate_sha256:
+                    current_candidate_sha256 = new_dig
+                    artifacts_modified_since_last_verify = True
+                    if is_m6_3 and new_dig != initial_art_digest:
+                        v_num = len(host_candidate_archive) + 1
+                        snap_p = archive_candidate_version_in_container(agent_cid, task.declared_artifacts, v_num, new_dig)
+                        host_candidate_archive.append(
+                            {
+                                "version": f"v{v_num:02d}",
+                                "turn": turn_idx,
+                                "sha256_12": new_dig[:12],
+                                "archive_path": snap_p,
+                                "metric_note": latest_m6_2_metric_note[:160],
+                            }
+                        )
+                elif art_touched:
+                    artifacts_modified_since_last_verify = True
+                elif (
+                    ex_res["exit_code"] == 0
+                    and current_candidate_sha256
+                    and is_substantive_verification_command(cmd_str, task.declared_artifacts)
+                ):
+                    artifacts_modified_since_last_verify = False
+                    verified_candidate_sha256 = current_candidate_sha256
 
+            t_entry["candidate_sha256"] = current_candidate_sha256[:16] if current_candidate_sha256 else None
             t_entry["exec_result"] = ex_res
             t_entry["filesystem_diff"] = fdiff
             turn_logs.append(t_entry)
@@ -2232,6 +2566,7 @@ def run_frontier_episode(
                     "filesystem_diff": fdiff,
                 }
             )
+            turn_idx += 1
 
         # Equal Step-Limit Final Answer Extraction for BioMysteryBench (matches official `bio-mystery-bench/harness/agent.py`!)
         if is_bm and (not submitted_final_answer.strip()):
