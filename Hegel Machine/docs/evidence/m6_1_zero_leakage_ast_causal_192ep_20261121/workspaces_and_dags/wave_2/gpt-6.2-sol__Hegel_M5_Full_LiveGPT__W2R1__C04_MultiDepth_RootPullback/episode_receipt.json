@@ -1,0 +1,29 @@
+{
+  "task_id": "W2R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_2",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Hegel_M5_Full_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_M6_dist_03",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    return (float(row['u_outdoor']) * float(row['p_weather']),\n            float(row['u_indoor']), float(row['a_foot']),\n            float(row['impact_idx']))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    outdoor, indoor, area, impact = np.array([_features(r) for r in rows]).T\n    y = np.array([float(r['y']) for r in rows])\n\n    def residual(params):\n        gain, half_dose, midpoint, steepness, loss = params\n        gate = np.exp(-np.logaddexp(0.0, steepness * (area - midpoint)))\n        dose = outdoor + indoor * gate\n        return gain * dose / (half_dose + dose) - loss * (indoor * impact)**2 - y\n\n    result = least_squares(residual, [9.205, 1.447, 1.5, 6.0, 0.473],\n                           bounds=([0.0, 1e-8, -np.inf, 0.0, 0.0], np.inf))\n    _params = tuple(map(float, result.x))\n    return _params\n\ndef predict(row) -> float:\n    outdoor, indoor, area, impact = _features(row)\n    gain, half_dose, midpoint, steepness, loss = _params\n    z = steepness * (area - midpoint)\n    t = math.exp(-abs(z))\n    gate = t / (1.0 + t) if z >= 0.0 else 1.0 / (1.0 + t)\n    dose = outdoor + indoor * gate\n    return float(gain * dose / (half_dose + dose) - loss * (indoor * impact)**2)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.5,
+  "compute_cost": 28.806,
+  "composite_cost": 15.9403,
+  "prompt_tokens": 55946,
+  "cached_tokens": 47360,
+  "completion_tokens": 1690,
+  "total_tokens": 57636,
+  "effective_billed_tokens": 22116,
+  "wall_ms": 52988.21
+}

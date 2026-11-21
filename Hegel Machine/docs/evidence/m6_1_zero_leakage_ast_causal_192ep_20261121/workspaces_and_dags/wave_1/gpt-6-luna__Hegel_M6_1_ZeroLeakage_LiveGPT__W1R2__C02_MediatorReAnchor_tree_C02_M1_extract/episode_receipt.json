@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C02_MediatorReAnchor_tree_C02_M1_extract",
+  "wave": "wave_1",
+  "subfamily": "C02_MediatorDecomposition_WormholeReAnchor",
+  "arm": "Hegel_M6_1_ZeroLeakage_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 3,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C02_TreeM1_surface",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    global _params\n    rows = train_rows\n    x = np.array([[float(r['m_2']), math.sqrt(max(0.0, float(r['u_raw'])))] for r in rows], dtype=float)\n    y = np.array([float(r['y']) for r in rows], dtype=float)\n    def residual(p):\n        vmax, km, c = p\n        pred = vmax * x[:, 0] / (km + x[:, 0]) + c * x[:, 1]\n        return pred - y\n    result = least_squares(residual, x0=[8.0, 1.0, 0.5], bounds=([0.0, 1e-8, -10.0], [100.0, 100.0, 10.0]))\n    _params = tuple(float(v) for v in result.x)\n    return _params\n\ndef predict(row):\n    vmax, km, c = _params\n    m2 = float(row['m_2'])\n    u = max(0.0, float(row['u_raw']))\n    return float(vmax * m2 / (km + m2) + c * math.sqrt(u))",
+  "purchased_probes": [
+    "probe_mediator_clamp_do_T"
+  ],
+  "decision_count": 9,
+  "measurement_cost": 15.5,
+  "compute_cost": 35.759,
+  "composite_cost": 17.28795,
+  "prompt_tokens": 48077,
+  "cached_tokens": 29184,
+  "completion_tokens": 2660,
+  "total_tokens": 50737,
+  "effective_billed_tokens": 28849,
+  "wall_ms": 134657.81
+}

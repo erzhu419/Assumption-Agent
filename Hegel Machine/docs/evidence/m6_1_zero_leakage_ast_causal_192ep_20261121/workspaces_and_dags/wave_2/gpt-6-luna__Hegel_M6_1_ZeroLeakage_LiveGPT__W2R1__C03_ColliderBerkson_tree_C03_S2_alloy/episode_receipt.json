@@ -1,0 +1,29 @@
+{
+  "task_id": "W2R1__C03_ColliderBerkson_tree_C03_S2_alloy",
+  "wave": "wave_2",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "Hegel_M6_1_ZeroLeakage_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C03_TreeS2_alloy",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = np.array([3.0, 3.0, 1.5], dtype=float)\n\ndef _predict_with(params, row):\n    a, b, k = params\n    u1 = float(row['u_1'])\n    u2 = float(row['u_2'])\n    return a * math.log1p(u1) + b * u2 / (k + u2)\n\ndef fit(train_rows):\n    global _PARAMS\n    x = np.array([[float(r['u_1']), float(r['u_2'])] for r in train_rows], dtype=float)\n    y = np.array([float(r['y']) for r in train_rows], dtype=float)\n\n    def residual(p):\n        a, b, k = p\n        return a * np.log1p(x[:, 0]) + b * x[:, 1] / (k + x[:, 1]) - y\n\n    result = least_squares(residual, _PARAMS,\n                           bounds=([-20.0, -20.0, 0.01], [20.0, 20.0, 50.0]))\n    _PARAMS = result.x\n    return _PARAMS\n\ndef predict(row):\n    return float(_predict_with(_PARAMS, row))",
+  "purchased_probes": [
+    "probe_selected_catalog_more"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.0,
+  "compute_cost": 24.154,
+  "composite_cost": 15.2077,
+  "prompt_tokens": 41236,
+  "cached_tokens": 33024,
+  "completion_tokens": 1176,
+  "total_tokens": 42412,
+  "effective_billed_tokens": 17644,
+  "wall_ms": 34897.7
+}

@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C01_ConfounderFork_tree_C01_A_biochem",
+  "wave": "wave_1",
+  "subfamily": "C01_ConfounderFork_RetroactiveImmunity",
+  "arm": "Strong_Ordinary_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": null,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    s2 = np.array([float(r['z_2']) ** 2 for r in train_rows])\n    u = np.array([float(r['u_ctrl']) for r in train_rows])\n    y = np.array([float(r['y']) for r in train_rows])\n\n    def residual(p):\n        vmax, k, c = p\n        return vmax * s2 / (k + s2) - c * u - y\n\n    _params = least_squares(residual, [8.0, 1.5, 0.2], bounds=([0.0, 1e-12, 0.0], np.inf)).x\n\ndef predict(row) -> float:\n    vmax, k, c = _params\n    s2 = math.pow(float(row['z_2']), 2)\n    return float(vmax * s2 / (k + s2) - c * float(row['u_ctrl']))\n",
+  "purchased_probes": [
+    "probe_do_blanket_disambig"
+  ],
+  "decision_count": 6,
+  "measurement_cost": 15.5,
+  "compute_cost": 49.457,
+  "composite_cost": 17.97285,
+  "prompt_tokens": 60265,
+  "cached_tokens": 20096,
+  "completion_tokens": 1264,
+  "total_tokens": 61529,
+  "effective_billed_tokens": 46457,
+  "wall_ms": 44928.63
+}

@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C03_ColliderBerkson_tree_C03_S1_catalog",
+  "wave": "wave_1",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "EqualAuth_Flat_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C03_TreeS1_selected",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(row):\n    u1 = float(row['u_1'])\n    u2 = float(row['u_2'])\n    return math.log1p(u1), u2 / (1.0 + u2)\n\n\ndef fit(train_rows):\n    X = np.array([_features(r) for r in train_rows], dtype=float)\n    y = np.array([float(r['y']) for r in train_rows], dtype=float)\n    result = least_squares(lambda p: X @ p - y, x0=np.array([3.0, 4.0]))\n    return result.x\n\n\ndef predict(row):\n    # Parameters are set by fit(train_rows) and stored on the function for a\n    # self-contained fit/predict interface.\n    p = getattr(predict, '_parameters', None)\n    if p is None:\n        raise RuntimeError('Call fit(train_rows) first')\n    x = np.asarray(_features(row), dtype=float)\n    return float(x @ p)\n\n\ndef _fit_and_store(train_rows):\n    p = fit(train_rows)\n    predict._parameters = p\n    return p\n\n# Make fit both return coefficients and initialize predict for the normal workflow.\n_original_fit = fit\ndef fit(train_rows):\n    p = _original_fit(train_rows)\n    predict._parameters = p\n    return p\n",
+  "purchased_probes": [
+    "probe_unselected_S0_regime"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 15.0,
+  "compute_cost": 20.552,
+  "composite_cost": 16.0276,
+  "prompt_tokens": 30057,
+  "cached_tokens": 24576,
+  "completion_tokens": 1727,
+  "total_tokens": 31784,
+  "effective_billed_tokens": 13352,
+  "wall_ms": 45660.3
+}

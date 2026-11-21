@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C02_MediatorReAnchor_tree_C02_M1_extract",
+  "wave": "wave_1",
+  "subfamily": "C02_MediatorDecomposition_WormholeReAnchor",
+  "arm": "Hegel_M5_Full_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 3,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C02_TreeM1_surface",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_P = None\n\ndef fit(train_rows):\n    global _P\n    m = np.array([float(r['m_2']) for r in train_rows])\n    u = np.array([float(r['u_raw']) for r in train_rows])\n    t = np.array([float(r['t_proc']) for r in train_rows])\n    y = np.array([float(r['y']) for r in train_rows])\n    def pred(p):\n        vmax, km, c_raw, beta_t = p\n        return vmax * m / (km + m) + c_raw * np.sqrt(u) + beta_t * t\n    res = least_squares(lambda p: pred(p) - y, x0=[8.0, 1.0, 1.0, 0.0], bounds=([0.0, 1e-8, -20.0, -20.0], [50.0, 50.0, 20.0, 20.0]))\n    _P = res.x\n    return _P\n\ndef predict(row):\n    if _P is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    vmax, km, c_raw, beta_t = _P\n    m2 = float(row['m_2'])\n    u = float(row['u_raw'])\n    t = float(row['t_proc'])\n    return float(vmax * m2 / (km + m2) + c_raw * math.sqrt(u) + beta_t * t)\n",
+  "purchased_probes": [
+    "probe_mediator_clamp_do_T"
+  ],
+  "decision_count": 9,
+  "measurement_cost": 15.5,
+  "compute_cost": 34.726,
+  "composite_cost": 17.2363,
+  "prompt_tokens": 42500,
+  "cached_tokens": 24576,
+  "completion_tokens": 2648,
+  "total_tokens": 45148,
+  "effective_billed_tokens": 26716,
+  "wall_ms": 70870.12
+}

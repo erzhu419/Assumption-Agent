@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Hegel_M6_1_ZeroLeakage_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 3,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_M6_dist_03",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _features(row):\n    uo = float(row['u_outdoor'])\n    ui = float(row['u_indoor'])\n    pw = float(row['p_weather'])\n    area = float(row['a_foot'])\n    impact = float(row['impact_idx'])\n    # Stable evaluation of the compact-apartment space sigmoid.\n    z = 6.0 * (area - 1.5)\n    indoor = ui / (1.0 + math.exp(max(-700.0, min(700.0, z))))\n    effective = uo * pw + indoor\n    penalty_basis = (ui * impact) ** 2\n    return effective, penalty_basis\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    X = np.asarray([_features(r) for r in rows], dtype=float)\n    y = np.asarray([float(r['y']) for r in rows], dtype=float)\n    def residual(theta):\n        gain, half_sat, impact_coeff = theta\n        return gain * X[:, 0] / (half_sat + X[:, 0]) - impact_coeff * X[:, 1] - y\n    result = least_squares(residual, x0=np.array([7.0, 1.0, 0.8]), bounds=([0.0, 1e-8, 0.0], [100.0, 100.0, 100.0]), max_nfev=20000)\n    _PARAMS = tuple(float(v) for v in result.x)\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    gain, half_sat, impact_coeff = _PARAMS\n    effective, penalty_basis = _features(row)\n    return float(gain * effective / (half_sat + effective) - impact_coeff * penalty_basis)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 11,
+  "measurement_cost": 14.5,
+  "compute_cost": 46.135,
+  "composite_cost": 16.80675,
+  "prompt_tokens": 64820,
+  "cached_tokens": 39680,
+  "completion_tokens": 1885,
+  "total_tokens": 66705,
+  "effective_billed_tokens": 36945,
+  "wall_ms": 59663.21
+}

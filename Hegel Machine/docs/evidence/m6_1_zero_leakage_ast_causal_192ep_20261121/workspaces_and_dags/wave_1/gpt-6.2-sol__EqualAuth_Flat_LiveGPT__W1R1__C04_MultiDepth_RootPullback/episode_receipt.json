@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "EqualAuth_Flat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 3,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C04_Root_Vitality_Main",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = np.array([8.255, 0.874, 6.0, 1.5, 0.47])\n\ndef _evaluate(row, params):\n    gain, half_sat, steepness, midpoint, impact_cost = params\n    indoor = float(row['u_indoor'])\n    x = steepness * (float(row['a_foot']) - midpoint)\n    if x >= 0:\n        exp_neg = math.exp(-x)\n        gate = exp_neg / (1.0 + exp_neg)\n    else:\n        gate = 1.0 / (1.0 + math.exp(x))\n    effort = float(row['p_weather']) * float(row['u_outdoor']) + indoor * gate\n    impact_dose = indoor * float(row['impact_idx'])\n    return gain * effort / (half_sat + effort) - impact_cost * impact_dose**2\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    target = np.array([float(row['y']) for row in rows])\n    def residuals(params):\n        return np.array([_evaluate(row, params) for row in rows]) - target\n    _params = least_squares(residuals, [8.255, 0.874, 6.0, 1.5, 0.47], bounds=([0.0, 1e-8, 0.0, -np.inf, 0.0], np.inf)).x\n\ndef predict(row) -> float:\n    return float(_evaluate(row, _params))",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 8,
+  "measurement_cost": 14.5,
+  "compute_cost": 101.774,
+  "composite_cost": 19.5887,
+  "prompt_tokens": 258806,
+  "cached_tokens": 226560,
+  "completion_tokens": 5688,
+  "total_tokens": 264494,
+  "effective_billed_tokens": 94574,
+  "wall_ms": 312389.58
+}

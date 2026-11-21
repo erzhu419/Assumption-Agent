@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C03_ColliderBerkson_tree_C03_S1_catalog",
+  "wave": "wave_1",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "Strong_Ordinary_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": null,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    X = np.array([[float(r['u_1']), float(r['u_2'])] for r in rows], dtype=float)\n    y = np.array([float(r['y']) for r in rows], dtype=float)\n\n    def predict_params(p, x):\n        b0, b1, b2, k = p\n        u1, u2 = x[:, 0], x[:, 1]\n        return b0 + b1 * np.log1p(u1) + b2 * u2 / (k + u2)\n\n    result = least_squares(\n        lambda p: predict_params(p, X) - y,\n        x0=np.array([0.0, 2.0, 4.0, 1.5]),\n        bounds=([-20.0, -20.0, -20.0, 0.05], [20.0, 20.0, 20.0, 20.0]),\n        max_nfev=20000,\n    )\n    fit.params_ = result.x\n    return fit\n\n\ndef predict(row):\n    b0, b1, b2, k = fit.params_\n    u1 = float(row['u_1'])\n    u2 = float(row['u_2'])\n    return float(b0 + b1 * math.log1p(u1) + b2 * u2 / (k + u2))",
+  "purchased_probes": [
+    "probe_unselected_S0_regime"
+  ],
+  "decision_count": 6,
+  "measurement_cost": 15.0,
+  "compute_cost": 32.261,
+  "composite_cost": 16.61305,
+  "prompt_tokens": 55525,
+  "cached_tokens": 36736,
+  "completion_tokens": 1288,
+  "total_tokens": 56813,
+  "effective_billed_tokens": 29261,
+  "wall_ms": 38163.97
+}

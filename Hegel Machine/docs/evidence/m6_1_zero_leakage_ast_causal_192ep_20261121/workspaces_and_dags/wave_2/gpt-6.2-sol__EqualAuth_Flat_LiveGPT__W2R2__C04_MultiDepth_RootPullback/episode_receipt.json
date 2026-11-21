@@ -1,0 +1,29 @@
+{
+  "task_id": "W2R2__C04_MultiDepth_RootPullback",
+  "wave": "wave_2",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "EqualAuth_Flat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C04_Root_Vitality_Main",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _law(row, params):\n    scale, half_sat, steepness, midpoint, loss = params\n    indoor = float(row['u_indoor'])\n    z = steepness * (float(row['a_foot']) - midpoint)\n    gate = math.exp(-float(np.logaddexp(0.0, z)))\n    effort = float(row['u_outdoor']) * float(row['p_weather']) + indoor * gate\n    return float(scale * effort / (half_sat + effort) - loss * (indoor * float(row['impact_idx'])) ** 2)\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    def residuals(params):\n        return np.array([_law(row, params) - float(row['y']) for row in rows])\n    _params = least_squares(residuals, [8.0, 1.0, 6.0, 1.5, 0.5], bounds=([0.0, 1e-8, 0.0, 0.0, 0.0], np.inf)).x\n\ndef predict(row) -> float:\n    return _law(row, _params)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.5,
+  "compute_cost": 74.363,
+  "composite_cost": 18.21815,
+  "prompt_tokens": 162992,
+  "cached_tokens": 133632,
+  "completion_tokens": 4395,
+  "total_tokens": 167387,
+  "effective_billed_tokens": 67163,
+  "wall_ms": 127822.41
+}

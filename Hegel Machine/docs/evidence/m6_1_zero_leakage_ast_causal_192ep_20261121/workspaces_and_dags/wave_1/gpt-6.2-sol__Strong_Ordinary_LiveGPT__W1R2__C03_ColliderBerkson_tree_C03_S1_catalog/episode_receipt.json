@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C03_ColliderBerkson_tree_C03_S1_catalog",
+  "wave": "wave_1",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "Strong_Ordinary_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": null,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_coef = None\n\ndef _features(row):\n    u2 = float(row['u_2'])\n    return (math.log1p(float(row['u_1'])), u2 / (1.0 + u2))\n\ndef fit(train_rows):\n    global _coef\n    rows = list(train_rows)\n    x = np.array([_features(row) for row in rows], dtype=float)\n    y = np.array([float(row['y']) for row in rows], dtype=float)\n    _coef = least_squares(lambda b: x @ b - y, np.zeros(2), jac=lambda b: x).x\n\ndef predict(row) -> float:\n    return float(_coef @ _features(row))\n",
+  "purchased_probes": [
+    "probe_unselected_S0_regime"
+  ],
+  "decision_count": 6,
+  "measurement_cost": 15.0,
+  "compute_cost": 26.251,
+  "composite_cost": 16.31255,
+  "prompt_tokens": 49521,
+  "cached_tokens": 36480,
+  "completion_tokens": 1090,
+  "total_tokens": 50611,
+  "effective_billed_tokens": 23251,
+  "wall_ms": 39721.92
+}

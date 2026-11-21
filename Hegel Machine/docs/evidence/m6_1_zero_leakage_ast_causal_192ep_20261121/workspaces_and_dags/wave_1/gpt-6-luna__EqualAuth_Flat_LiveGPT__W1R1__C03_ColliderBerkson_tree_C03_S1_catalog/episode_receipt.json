@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R1__C03_ColliderBerkson_tree_C03_S1_catalog",
+  "wave": "wave_1",
+  "subfamily": "C03_ColliderSelection_BerksonDebiasing",
+  "arm": "EqualAuth_Flat_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 5,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.017847,
+  "heldout_rmse": 0.047559,
+  "primary_recalled_node_id": "node_C03_TreeS1_selected",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    x = float(row['u_1'])\n    z = float(row['u_2'])\n    return np.array([1.0, math.log1p(x), math.log1p(z), x*z, x*x, z*z], dtype=float)\n\ndef fit(train_rows):\n    global _params\n    X = np.vstack([_features(r) for r in train_rows])\n    y = np.array([float(r['y']) for r in train_rows])\n    res = least_squares(lambda p: X @ p - y, np.zeros(X.shape[1]))\n    _params = res.x\n    return _params\n\ndef predict(row):\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) first.')\n    return float(_features(row) @ _params)",
+  "purchased_probes": [
+    "probe_unselected_S0_regime"
+  ],
+  "decision_count": 12,
+  "measurement_cost": 17.25,
+  "compute_cost": 57.055,
+  "composite_cost": 20.10275,
+  "prompt_tokens": 84502,
+  "cached_tokens": 58368,
+  "completion_tokens": 4629,
+  "total_tokens": 89131,
+  "effective_billed_tokens": 45355,
+  "wall_ms": 133871.32
+}

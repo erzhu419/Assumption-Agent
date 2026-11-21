@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R1__C02_MediatorReAnchor_tree_C02_M1_extract",
+  "wave": "wave_1",
+  "subfamily": "C02_MediatorDecomposition_WormholeReAnchor",
+  "arm": "Hegel_M6_1_ZeroLeakage_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C02_TreeM1_surface",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    def predict_with(p, row):\n        vmax, km, c_raw, d_thermal = p\n        m2 = max(0.0, float(row.get('m_2', 0.0)))\n        u = max(0.0, float(row.get('u_raw', 0.0)))\n        t = float(row.get('t_proc', 0.0))\n        return vmax * m2 / (km + m2 + 1e-12) + c_raw * math.sqrt(u) - d_thermal * t\n    def residual(p):\n        return np.array([predict_with(p, r) - float(r['y']) for r in rows])\n    starts = ([8.0, 1.0, 0.5, 1.0], [10.0, 2.0, 0.1, 2.0], [5.0, 0.5, 1.0, 0.5])\n    results = [least_squares(residual, x0, bounds=([0, 1e-5, -10, -20], [100, 100, 10, 20])) for x0 in starts]\n    _PARAMS = min(results, key=lambda r: float(np.dot(r.fun, r.fun))).x\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    vmax, km, c_raw, d_thermal = _PARAMS\n    m2 = max(0.0, float(row.get('m_2', 0.0)))\n    u = max(0.0, float(row.get('u_raw', 0.0)))\n    t = float(row.get('t_proc', 0.0))\n    return float(vmax * m2 / (km + m2 + 1e-12) + c_raw * math.sqrt(u) - d_thermal * t)\n",
+  "purchased_probes": [
+    "probe_mediator_clamp_do_T"
+  ],
+  "decision_count": 8,
+  "measurement_cost": 15.5,
+  "compute_cost": 34.098,
+  "composite_cost": 17.2049,
+  "prompt_tokens": 38218,
+  "cached_tokens": 17152,
+  "completion_tokens": 1834,
+  "total_tokens": 40052,
+  "effective_billed_tokens": 27188,
+  "wall_ms": 49705.04
+}

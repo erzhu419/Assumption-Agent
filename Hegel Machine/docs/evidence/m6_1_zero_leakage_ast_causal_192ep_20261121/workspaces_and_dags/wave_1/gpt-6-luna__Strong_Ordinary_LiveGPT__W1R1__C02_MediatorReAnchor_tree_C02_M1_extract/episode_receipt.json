@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R1__C02_MediatorReAnchor_tree_C02_M1_extract",
+  "wave": "wave_1",
+  "subfamily": "C02_MediatorDecomposition_WormholeReAnchor",
+  "arm": "Strong_Ordinary_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 3,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": null,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _predict_params(p, row):\n    vmax, k, c_raw, c_t = p\n    m = max(0.0, float(row.get('m_2', 0.0)))\n    u = max(0.0, float(row.get('u_raw', 0.0)))\n    t = float(row.get('t_proc', 0.0))\n    return vmax * m / (k + m + 1e-12) + c_raw * math.sqrt(u) - c_t * t\n\ndef fit(train_rows):\n    global _PARAMS\n    ys = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_predict_params(p, r) for r in train_rows]) - ys\n    result = least_squares(residual, x0=np.array([7.0, 1.0, 0.5, 0.5]), bounds=([0.0, 1e-6, -10.0, -10.0], [100.0, 100.0, 10.0, 10.0]))\n    _PARAMS = tuple(float(v) for v in result.x)\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_predict_params(_PARAMS, row))",
+  "purchased_probes": [
+    "probe_mediator_clamp_do_T"
+  ],
+  "decision_count": 8,
+  "measurement_cost": 15.5,
+  "compute_cost": 53.225,
+  "composite_cost": 18.16125,
+  "prompt_tokens": 85459,
+  "cached_tokens": 52352,
+  "completion_tokens": 2530,
+  "total_tokens": 87989,
+  "effective_billed_tokens": 48725,
+  "wall_ms": 72032.22
+}

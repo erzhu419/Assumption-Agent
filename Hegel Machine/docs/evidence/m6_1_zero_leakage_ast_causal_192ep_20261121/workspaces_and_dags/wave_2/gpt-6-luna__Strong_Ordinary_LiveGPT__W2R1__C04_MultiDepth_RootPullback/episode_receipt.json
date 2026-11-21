@@ -1,0 +1,29 @@
+{
+  "task_id": "W2R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_2",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Strong_Ordinary_LiveGPT",
+  "model": "gpt-6-luna",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": null,
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    outdoor = float(row['u_outdoor']) * float(row['p_weather'])\n    z = 6.0 * (float(row['a_foot']) - 1.5)\n    indoor = float(row['u_indoor']) / (1.0 + math.exp(max(-700.0, min(700.0, z))))\n    impact = (float(row['u_indoor']) * float(row['impact_idx'])) ** 2\n    return outdoor + indoor, impact\n\ndef fit(train_rows):\n    global _params\n    def residual(params):\n        g_root, k_e, c_imp = params\n        return np.asarray([\n            g_root * (dose / (k_e + dose)) - c_imp * impact - float(row['y'])\n            for row in train_rows\n            for dose, impact in [_features(row)]\n        ])\n    result = least_squares(residual, x0=[8.0, 1.0, 1.0], bounds=([0.0, 1e-8, 0.0], ([100.0, 100.0, 100.0])))\n    _params = result.x\n    return _params\n\ndef predict(row):\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    g_root, k_e, c_imp = _params\n    dose, impact = _features(row)\n    return float(g_root * dose / (k_e + dose) - c_imp * impact)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 6,
+  "measurement_cost": 14.5,
+  "compute_cost": 20.37,
+  "composite_cost": 15.5185,
+  "prompt_tokens": 29388,
+  "cached_tokens": 17408,
+  "completion_tokens": 1038,
+  "total_tokens": 30426,
+  "effective_billed_tokens": 17370,
+  "wall_ms": 31783.07
+}

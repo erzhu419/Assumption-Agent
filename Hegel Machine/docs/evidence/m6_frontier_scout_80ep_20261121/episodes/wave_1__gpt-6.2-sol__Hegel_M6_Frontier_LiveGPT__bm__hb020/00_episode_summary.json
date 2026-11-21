@@ -1,0 +1,67 @@
+{
+  "task_id": "bm__hb020",
+  "short_name": "hb020",
+  "benchmark": "BioMysteryBench-Preview",
+  "wave": "wave_1",
+  "scientific_domain": "Life Sciences / Macromolecular Structure (.cif)",
+  "wormhole_family": "fam_biomystery_structural_and_regulatory",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_Frontier_LiveGPT",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 10,
+  "max_turns": 14,
+  "pullback_gate_triggered": false,
+  "nogood_count": 4,
+  "nogoods_recorded": [
+    {
+      "turn_idx": 2,
+      "assumption_refuted": "Source annotations or unit-cell metadata can resolve the species directly.",
+      "empirical_witness": "All three source rows contain placeholder values, and cell lengths and space group are masked.",
+      "causal_blanket_diagnosis": "The anonymization removed direct identifiers and several archive lookup fields independently of the underlying structure.",
+      "sublated_pivot": "Parse the complete polymer and ligand profiles for a structure-level match."
+    },
+    {
+      "turn_idx": 3,
+      "assumption_refuted": "MMCIF2Dict can read the scrubbed file as provided.",
+      "empirical_witness": "The tokenizer raised ValueError: Missing closing semicolon.",
+      "causal_blanket_diagnosis": "A malformed multiline text field blocks whole-file tokenization without showing whether the separate monomer loop is damaged.",
+      "sublated_pivot": "Inspect the polymer, monomer, and ligand categories directly before attempting any file-wide repair."
+    },
+    {
+      "turn_idx": 4,
+      "assumption_refuted": "The standard entity polymer categories provide directly recoverable sequences.",
+      "empirical_witness": "Turn 3 found no _entity_poly or _entity_poly_seq headers but found the atom-site residue, chain, and entity columns.",
+      "causal_blanket_diagnosis": "The standard polymer sequence blocks are missing, but atom-site labels independently retain residues that were modeled.",
+      "sublated_pivot": "Recover modeled residues for every chain and look for a surviving sequence scheme to account for missing residues."
+    },
+    {
+      "turn_idx": 8,
+      "assumption_refuted": "At least one of the eight archive FASTAs exactly matches all three constructs and chain pairs.",
+      "empirical_witness": "No full match was found; 4CFE and 4CFF matched the E/F gamma construct only.",
+      "causal_blanket_diagnosis": "Whole-string equality conflated species identity with construct and sequence-representation differences. The gamma hits also show that the archive species label can be uppercase.",
+      "sublated_pivot": "Align the three chain-pair sequences to both closely related archive entries and compare their source labels case-insensitively."
+    }
+  ],
+  "recalled_node_ids": [
+    "node_F11_regulatory_motif_and_directional_pathway",
+    "node_F10_genomic_homology_and_full_cohort",
+    "node_F12_structural_cif_and_sandbox_hygiene"
+  ],
+  "saved_artifact_snapshots": [],
+  "submitted_final_answer": "Homo sapiens",
+  "decision_count": 22,
+  "prompt_tokens": 250849,
+  "cached_tokens": 55552,
+  "completion_tokens": 8056,
+  "total_tokens": 258905,
+  "effective_billed_tokens": 217241,
+  "wall_ms": 263085.63,
+  "provenance_verified": true,
+  "terminal_record_sha256": "1d53308dd5995feefbd809a56985598ec22cec6b7a0f406c6f51c9c1c4c7585f"
+}

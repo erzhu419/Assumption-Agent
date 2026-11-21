@@ -1,0 +1,29 @@
+{
+  "task_id": "W2R1__C04_MultiDepth_RootPullback",
+  "wave": "wave_2",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "EqualAuth_Flat_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 3,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_C04_Root_Vitality_Main",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = np.array([9.205, 1.447, 1.5, 6.0, 0.473])\n_fields = ('u_outdoor', 'u_indoor', 'p_weather', 'a_foot', 'impact_idx')\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    outdoor, indoor, weather, footprint, impact = np.array([[r[k] for k in _fields] for r in rows], dtype=float).T\n    target = np.array([r['y'] for r in rows], dtype=float)\n\n    def residual(params):\n        scale, half_sat, midpoint, slope, loss = params\n        gate = 1.0 / (1.0 + np.exp(np.clip(slope * (footprint - midpoint), -700, 700)))\n        effort = weather * outdoor + gate * indoor\n        return scale * effort / (half_sat + effort) - loss * (impact * indoor)**2 - target\n\n    _params = least_squares(residual, [9.205, 1.447, 1.5, 6.0, 0.473], bounds=([0, 1e-8, 0, 0, 0], np.inf)).x\n\n\ndef predict(row) -> float:\n    outdoor, indoor, weather, footprint, impact = (float(row[k]) for k in _fields)\n    scale, half_sat, midpoint, slope, loss = _params\n    z = max(-700.0, min(700.0, slope * (footprint - midpoint)))\n    effort = weather * outdoor + indoor / (1.0 + math.exp(z))\n    return float(scale * effort / (half_sat + effort) - loss * (impact * indoor)**2)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 8,
+  "measurement_cost": 14.5,
+  "compute_cost": 72.194,
+  "composite_cost": 18.1097,
+  "prompt_tokens": 121569,
+  "cached_tokens": 79488,
+  "completion_tokens": 3041,
+  "total_tokens": 124610,
+  "effective_billed_tokens": 64994,
+  "wall_ms": 240399.73
+}

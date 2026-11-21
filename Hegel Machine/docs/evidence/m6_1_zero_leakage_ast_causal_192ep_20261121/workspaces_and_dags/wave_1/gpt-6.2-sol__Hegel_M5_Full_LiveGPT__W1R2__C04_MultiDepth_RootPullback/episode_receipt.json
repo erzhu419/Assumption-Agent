@@ -1,0 +1,29 @@
+{
+  "task_id": "W1R2__C04_MultiDepth_RootPullback",
+  "wave": "wave_1",
+  "subfamily": "C04_WormholeFirst_MultiDepth_RootPullback",
+  "arm": "Hegel_M5_Full_LiveGPT",
+  "model": "gpt-6.2-sol",
+  "api_calls": 2,
+  "is_out_of_scope": false,
+  "status": "confirmed_ok",
+  "strict_pass": true,
+  "false_confirmation": false,
+  "confirm_rmse": 0.0,
+  "heldout_rmse": 0.0,
+  "primary_recalled_node_id": "node_M6_dist_03",
+  "winning_python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_FIELDS = ('u_outdoor', 'u_indoor', 'p_weather', 'a_foot', 'impact_idx')\n_params = None\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    outdoor, indoor, weather, footprint, impact = np.array(\n        [[r[key] for key in _FIELDS] for r in rows], dtype=float\n    ).T\n    observed = np.array([r['y'] for r in rows], dtype=float)\n\n    def residuals(params):\n        gain, half_dose, steepness, midpoint, loss = params\n        space = np.exp(-np.logaddexp(0.0, steepness * (footprint - midpoint)))\n        dose = outdoor * weather + indoor * space\n        return gain * dose / (half_dose + dose) - loss * (indoor * impact)**2 - observed\n\n    _params = least_squares(\n        residuals, [8.352, 1.528, 6.0, 1.5, 0.43],\n        bounds=([0.0, 1e-8, 0.0, 0.0, 0.0], np.inf),\n    ).x\n\n\ndef predict(row) -> float:\n    gain, half_dose, steepness, midpoint, loss = _params\n    outdoor, indoor, weather, footprint, impact = (float(row[key]) for key in _FIELDS)\n    z = steepness * (footprint - midpoint)\n    space = math.exp(-float(np.logaddexp(0.0, z)))\n    dose = outdoor * weather + indoor * space\n    return float(gain * dose / (half_dose + dose) - loss * (indoor * impact)**2)\n",
+  "purchased_probes": [
+    "probe_indoor_space_impact_sweep"
+  ],
+  "decision_count": 7,
+  "measurement_cost": 14.5,
+  "compute_cost": 52.077,
+  "composite_cost": 17.10385,
+  "prompt_tokens": 99622,
+  "cached_tokens": 77312,
+  "completion_tokens": 3749,
+  "total_tokens": 103371,
+  "effective_billed_tokens": 45387,
+  "wall_ms": 102016.27
+}
