@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "fd3127e61dc9509c",
+  "prompt_tokens": 19900,
+  "cached_tokens": 13184,
+  "completion_tokens": 673,
+  "task_context_chars": 15483,
+  "wall_ms": 18899.21,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The added long-horizon observations show delayed reversal while the pilot varies sink gradient. Fit the archived five-parameter sink-coupled adaptation law numerically and test it on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "Static sink-coupled siphon",
+        "rejected_reason": "The long-horizon observations reverse sign, which a static positive siphon cannot explain."
+      },
+      {
+        "option": "Coupled memory ODE",
+        "rejected_reason": "The archived sink-coupled dual-horizon mechanism directly matches the observed sink dependence and delayed reversal; an additional trajectory batch is unnecessary before confirmation."
+      },
+      {
+        "option": "Extra fine trajectory batch",
+        "rejected_reason": "Eight observations now span short and long horizons, providing data to fit the five-parameter adaptation model."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _values(rows):\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    return u, s, h\n\ndef _model(p, u, s, h):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    fast = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u) * (-np.expm1(-h / tau_fast))\n    slow = amp_adapt * u * (-np.expm1(-h / tau_slow))\n    return fast - slow\n\ndef fit(train_rows):\n    global _params\n    u, s, h = _values(train_rows)\n    y = np.array [r['y'] for r in train_rows]\n    y = np.asarray(y, dtype=float)\n    best = None\n    for start in ([5, 0.7, 0.5, 0.6, 10], [10, 0.7, 1, 1, 20], [4, 0.5, 0.2, 0.8, 5]):\n        result = least_squares(lambda p: _model(p, u, s, h) - y, start, bounds=([0, 0, 0.001, 0, 0.01], [1000, 1, 100, 100, 1000]), max_nfev=10000)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = best.x\n    return _params\n\ndef predict(row):\n    u, s, h = _values([row])\n    return float(_model(_params, u, s, h)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

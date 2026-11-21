@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "48dda551b504168b",
+  "prompt_tokens": 15061,
+  "cached_tokens": 8320,
+  "completion_tokens": 1002,
+  "task_context_chars": 15482,
+  "wall_ms": 24391.15,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five short-horizon observations are positive, while the added slow-horizon observations transition through positive to negative values, matching the dual-horizon endogenous-adaptation signature. Eight varied rows support numerical fitting of the four amplitude/timescale parameters; no further probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its long-horizon reversal resolves the key short-window ambiguity."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "These rows directly show the stated dual-horizon reversal and provide enough observations for its four parameters; an ODE batch is unnecessary."
+      },
+      {
+        "option": "static quadratic, Michaelis-Menten, or other H-independent laws",
+        "rejected_reason": "They cannot account for the observed sign reversal with horizon."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to the observed horizon-dependent reversal and explicitly not worth its cost."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    H = np.asarray([float(r['H']) for r in rows])\n    u = np.asarray([float(r['u_now']) for r in rows])\n    y = np.asarray([float(r['y']) for r in rows])\n\n    def predict_values(p):\n        amp_fast, tau_fast, amp_slow, tau_slow = p\n        return u * (amp_fast * (1.0 - np.exp(-H / tau_fast))\n                    - amp_slow * (1.0 - np.exp(-H / tau_slow)))\n\n    best = None\n    # Multi-start helps distinguish the fast and slow exponential timescales.\n    for start in ([1.0, 0.5, 0.5, 10.0], [1.0, 2.0, 0.5, 30.0], [2.0, 0.2, 1.0, 5.0]):\n        result = least_squares(\n            lambda p: predict_values(p) - y,\n            x0=np.asarray(start, dtype=float),\n            bounds=([0.0, 1e-4, 0.0, 1e-4], [100.0, 1e3, 100.0, 1e3]),\n            max_nfev=30000\n        )\n        if best is None or np.sum(result.fun ** 2) < np.sum(best.fun ** 2):\n            best = result\n    return best.x\n\ndef predict(row):\n    amp_fast, tau_fast, amp_slow, tau_slow = fit(_FIT_ROWS)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    return float(u * (amp_fast * (1.0 - math.exp(-H / tau_fast))\n                    - amp_slow * (1.0 - math.exp(-H / tau_slow))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

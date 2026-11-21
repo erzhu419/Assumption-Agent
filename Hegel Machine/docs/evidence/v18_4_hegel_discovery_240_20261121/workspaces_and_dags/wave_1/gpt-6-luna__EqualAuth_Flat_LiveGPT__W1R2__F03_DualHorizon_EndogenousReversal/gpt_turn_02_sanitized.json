@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "3415914a9c7b51f3",
+  "prompt_tokens": 14239,
+  "cached_tokens": 4864,
+  "completion_tokens": 930,
+  "task_context_chars": 5465,
+  "wall_ms": 22054.57,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Short-horizon responses are positive, while measurements extending to H=20.5 cross to negative values, matching the dual-horizon endogenous adaptation mechanism. Fit its four positive parameters numerically to all paid rows; no additional probe is warranted.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its long-horizon rows reveal the predicted sign reversal and constrain the slow component."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The observed short- and long-horizon data directly support the cited dual-horizon law; another batch is not needed before fitting."
+      },
+      {
+        "option": "Lotka–Volterra periodic harmonic",
+        "rejected_reason": "The pilot indicates endogenous adaptation and the long-horizon sign change is consistent with the dual-horizon mechanism; no oscillatory evidence supports a periodic model."
+      },
+      {
+        "option": "Ricker single-horizon dome map",
+        "rejected_reason": "It cannot account for the observed dependence on horizon, including the sign reversal."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    def pred(p):\n        af, ass, tf, ts = p\n        return u * (af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts)))\n    best = None\n    for p0 in ([2.0, 1.0, 0.5, 15.0], [3.0, 2.0, 1.0, 30.0], [1.5, 0.8, 0.3, 8.0], [4.0, 3.0, 2.0, 60.0]):\n        res = least_squares(lambda p: pred(p) - y, p0,\n            bounds=([0.0, 0.0, 0.01, 1.0], [20.0, 20.0, 5.0, 200.0]),\n            max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    return best.x\n\ndef predict(row):\n    p = fit([row])\n    af, ass, tf, ts = p\n    h = float(row['H'])\n    return float(row['u_now']) * (af * (1.0 - math.exp(-h / tf)) - ass * (1.0 - math.exp(-h / ts)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

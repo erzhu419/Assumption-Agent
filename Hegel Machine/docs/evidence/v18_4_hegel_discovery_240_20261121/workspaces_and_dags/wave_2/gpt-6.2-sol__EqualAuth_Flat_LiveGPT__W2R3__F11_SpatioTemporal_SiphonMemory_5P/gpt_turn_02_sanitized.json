@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "363ec2bc5b9a6494",
+  "prompt_tokens": 11858,
+  "cached_tokens": 0,
+  "completion_tokens": 1314,
+  "task_context_chars": 5438,
+  "wall_ms": 33541.21,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid rows support testing a coupled transient model: they vary initial state, memory, gradient, and horizon, with H = 0.46 inside the observed range. Fit all five parameters to the eight rows and submit the resulting RK4 forecast for fresh confirmation against the 0.045 RMSE tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Haldane substrate inhibition",
+        "rejected_reason": "An input-only saturation curve does not represent the observed gradient-dependent sink or coupled memory lag."
+      },
+      {
+        "option": "Cobb–Douglas power law",
+        "rejected_reason": "It gives the gradient a static effect but omits the initial state, memory, and forecast horizon."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch already brings the sample to eight rows, adds contrasts in initial state and memory, and brackets the target horizon. Fresh confirmation is more informative now."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_keys = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\ndef _evaluate(p, data):\n    a, b, tau, vmax, rho = p\n    u, x, z, s, h = data.T\n    un = u / 0.05\n    flux = vmax * (1.0 - rho * s / (1.0 + s)) * un / (1.2 + un)\n    A = np.array([[-a, b, 1.0], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    # Compose a power-of-two number of equal RK4 steps by repeated squaring.\n    size = np.max(np.abs(h)) * np.linalg.norm(A, ord=np.inf)\n    k = max(0, math.ceil(math.log2(max(1.0, size / 0.05))))\n    B = (h / (2 ** k))[:, None, None] * A\n    I = np.eye(3)\n    R = I + B @ (I + B @ (I / 2 + B @ (I / 6 + B / 24)))\n    for _ in range(k):\n        R = R @ R\n    return np.sum(R[:, 0, :] * np.column_stack((x, z, flux)), axis=1)\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = np.array([[r[key] for key in _keys] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    bounds = ([0, 0, 1e-4, 0, 0], [np.inf, np.inf, np.inf, np.inf, 1])\n    def residual(p):\n        return _evaluate(p, data) - y\n    results = [least_squares(residual, [1.0, 1.0, tau, 4.0, 0.5], bounds=bounds, x_scale='jac', max_nfev=500, ftol=1e-11, xtol=1e-11, gtol=1e-11) for tau in (0.05, 0.2, 0.6)]\n    _params = min(results, key=lambda r: r.cost).x\n\ndef predict(row) -> float:\n    data = np.array([[row[key] for key in _keys]], dtype=float)\n    return float(_evaluate(_params, data)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

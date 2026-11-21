@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "6145b0d86187df74",
+  "prompt_tokens": 14062,
+  "cached_tokens": 4992,
+  "completion_tokens": 1265,
+  "task_context_chars": 14267,
+  "wall_ms": 31506.82,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The endpoint-matched history gap and transient lag favor a coupled memory state. The eight paid trajectories span H = 0.36–0.55 and bracket the target H = 0.45. Fit all four parameters jointly, reconstructing the initial memory state from relative times in each irregular prefix, and submit the model for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired batch brings the sample to eight trajectories with rising, falling, and nearly steady drives. Fit the supported mechanism and seek fresh confirmation before buying another probe."
+      },
+      {
+        "option": "adiabatic snapshot balance",
+        "rejected_reason": "It predicts identical outcomes at matched current states, inputs, and horizons regardless of history, so it cannot explain the observed history gap."
+      },
+      {
+        "option": "single-mode Maxwell decay",
+        "rejected_reason": "A fixed amplitude times the signed input jump cannot account for the positive readouts observed after both upward and downward jumps."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_DT = 0.004\n_I = np.eye(3)\n_params = None\n\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    history = None\n    if z is None:\n        prefix = row['raw_prefix']\n        ages = float(prefix[-1]['t']) - np.array([r['t'] for r in prefix], dtype=float)\n        xs = np.array([r['x'] for r in prefix], dtype=float)\n        history = (ages, xs, ages[:-1] - ages[1:])\n    h = float(row['H'])\n    n = math.floor(h / _DT)\n    return float(row['x_now']), float(row['u_now']), z, history, n, h - n * _DT\n\n\ndef _matrix(p):\n    a, b, c, tau = p\n    return np.array([[-a, b, c], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n\n\ndef _rk4_step(matrix, dt):\n    q = dt * matrix\n    return _I + q @ (_I + q @ (_I / 2.0 + q @ (_I / 6.0 + q / 24.0)))\n\n\ndef _readout(row, tau, matrix, full_step):\n    x, u, z, history, n, rem = row\n    if z is None:\n        ages, xs, widths = history\n        weighted = np.exp(-ages / tau) * xs\n        z = 0.52 * (weighted[0] + np.dot(widths, weighted[:-1] + weighted[1:]) / (2.0 * tau))\n    # Augment the state with the constant drive, so identical RK4 steps can be composed by matrix powers.\n    state = np.linalg.matrix_power(full_step, n) @ np.array([x, z, u])\n    if rem > 0.0:\n        state = _rk4_step(matrix, rem) @ state\n    return float(state[0])\n\n\ndef fit(train_rows):\n    global _params\n    rows = [_prepare(row) for row in train_rows]\n    y = np.array([row['y'] for row in train_rows], dtype=float)\n\n    def residuals(p):\n        matrix = _matrix(p)\n        step = _rk4_step(matrix, _DT)\n        return np.array([_readout(row, p[3], matrix, step) for row in rows]) - y\n\n    bounds = ([0.0, 0.0, 0.0, 0.004], [np.inf, np.inf, np.inf, np.inf])\n    fits = [least_squares(residuals, [1.4, 0.8, 0.9, tau], bounds=bounds, x_scale='jac', max_nfev=350) for tau in (0.06, 0.18, 0.6)]\n    _params = min(fits, key=lambda result: result.cost).x\n    return _params\n\n\ndef predict(row) -> float:\n    matrix = _matrix(_params)\n    return _readout(_prepare(row), _params[3], matrix, _rk4_step(matrix, _DT))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

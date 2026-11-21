@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "b3e8ccfab78fe7ba",
+  "prompt_tokens": 32848,
+  "cached_tokens": 22272,
+  "completion_tokens": 2093,
+  "task_context_chars": 12721,
+  "wall_ms": 56366.7,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fitting the four coupled ODE parameters with the irregular-time exponential convolution gives a paid-row RMSE of about 0.000020. The measured horizons span 0.36–0.55 around the 0.45 target, so submit for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid rows already span rising and falling transients and bracket the target horizon; the coupled model fits them without a material residual."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "The input jump changes sign across rows while the response remains positive, inconsistent with a fixed gain multiplying the decaying jump."
+      },
+      {
+        "option": "Uncoupled Kelvin–Voigt creep",
+        "rejected_reason": "The proposed creep law ignores both the measured initial state and the history needed to explain the endpoint-matched gap."
+      }
+    ],
+    "hypothesis_name": "coupled_ode_irregular_exponential_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    x = float(row['x_now'])\n    z = row.get('mem_conv')\n    prefix = row.get('raw_prefix')\n    if z is not None:\n        memory = (float(z), None, None)\n    elif prefix:\n        times = np.array([p['t'] for p in prefix], dtype=float)\n        values = np.array([p['x'] for p in prefix], dtype=float)\n        memory = (0.52 * values[0], times[-1] - times, values)\n    else:\n        memory = (0.52 * x, None, None)\n    return x, float(row['u_now']), float(row['H']), memory\n\ndef _forecast(row, params):\n    a, b, c, tau = map(float, params)\n    x, u, horizon, (z, lag, values) = row\n    if lag is not None:\n        integrand = (0.52 / tau) * values * np.exp(-lag / tau)\n        z = z * math.exp(-lag[0] / tau) + 0.5 * float(np.dot(lag[:-1] - lag[1:], integrand[:-1] + integrand[1:]))\n    if horizon == 0:\n        return x\n    n = max(1, math.ceil(horizon / 0.004))\n    h = horizon / n\n    hh = h / 2\n    drive = c * u\n    inv_tau = 1 / tau\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) * inv_tau\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + hh*k1, z + hh*l1)\n        k3, l3 = rhs(x + hh*k2, z + hh*l2)\n        k4, l4 = rhs(x + h*k3, z + h*l3)\n        x += (h/6) * (k1 + 2*k2 + 2*k3 + k4)\n        z += (h/6) * (l1 + 2*l2 + 2*l3 + l4)\n    return float(x)\n\ndef fit(train_rows):\n    global _params\n    rows = [_prepare(row) for row in train_rows]\n    targets = np.array([row['y'] for row in train_rows], dtype=float)\n    def residual(params):\n        return np.array([_forecast(row, params) for row in rows]) - targets\n    result = least_squares(residual, [1.4, 1.0, 1.4, 0.3], bounds=([0, 0, 0, 0.015], [np.inf]*4), x_scale='jac')\n    _params = result.x\n\ndef predict(row):\n    return _forecast(_prepare(row), _params)"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

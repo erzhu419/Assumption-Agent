@@ -1,0 +1,32 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "0dd65881ce7ac75d",
+  "prompt_tokens": 27660,
+  "cached_tokens": 18560,
+  "completion_tokens": 2063,
+  "task_context_chars": 17484,
+  "wall_ms": 45225.46,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The observations combine sink inhibition with a smooth horizon-dependent reversal. The previous submitted variants failed confirmation, so this revision also tests sink-coupled and delayed slow responses. Fresh confirmation is needed to determine whether the selected fitted law meets the tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Additional trajectory probe",
+        "rejected_reason": "The eleven existing observations span short, intermediate and target-scale horizons; first test a revised coupled mechanism rather than repeat a paid measurement."
+      },
+      {
+        "option": "Pure dual-exponential response without a sink term",
+        "rejected_reason": "The pilot observations show substantial sink-gradient dependence."
+      },
+      {
+        "option": "Abstain as non-stationary",
+        "rejected_reason": "One failed confirmation does not refute all stationary smooth mechanisms, and there is no chaotic-oscillation signature."
+      }
+    ],
+    "hypothesis_name": "sink_modulated_siphon_with_slow_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_model = None\n\ndef fit(train_rows):\n    global _model\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    sink = s / (1.0 + s)\n    base = u / (1.2 + u)\n    best = None\n\n    # Compare additive and sink-coupled temporal responses, with and without\n    # a local square-root branch. All coefficients and time scales are fitted.\n    for branch in (False, True):\n        for coupling in ('u', 'base', 'sink_u', 'sink_base'):\n            for shape in ('dual', 'delayed'):\n                def design(logt, uu=u, ss=sink, bb=base, hh=h):\n                    t1, t2 = np.exp(logt)\n                    cols = [bb, -bb * ss]\n                    if branch:\n                        cols.append(np.sqrt(np.maximum(uu, 0.0)))\n                    factor = {'u': uu, 'base': bb, 'sink_u': uu * (1.0 - 0.7 * ss), 'sink_base': bb * (1.0 - 0.7 * ss)}[coupling]\n                    fast = -np.expm1(-hh / t1)\n                    if shape == 'dual':\n                        slow = -np.expm1(-hh / t2)\n                    else:\n                        slow = -np.expm1(-(hh / t2) ** 2)\n                    cols.extend([factor * fast, -factor * slow])\n                    return np.column_stack(cols)\n\n                def residual(logt):\n                    X = design(logt)\n                    coef = np.linalg.lstsq(X, y, rcond=None)[0]\n                    return X @ coef - y\n\n                for start in ((0.3, 10.0), (1.0, 15.0), (3.0, 20.0), (5.0, 8.0)):\n                    result = least_squares(residual, np.log(start), bounds=(np.log([0.03, 0.5]), np.log([50.0, 150.0])), max_nfev=1500)\n                    X = design(result.x)\n                    coef = np.linalg.lstsq(X, y, rcond=None)[0]\n                    rss = float(np.sum((X @ coef - y) ** 2))\n                    k = len(coef) + 2\n                    score = len(y) * math.log(max(rss / len(y), 1e-14)) + k * math.log(len(y))\n                    if best is None or score < best[0]:\n                        best = (score, branch, coupling, shape, np.exp(result.x), coef)\n    _model = best\n\ndef predict(row):\n    _, branch, coupling, shape, times, coef = _model\n    u = float(row['u_now'])\n    s = float(row['s_grad']) / (1.0 + float(row['s_grad']))\n    h = float(row['H'])\n    b = u / (1.2 + u)\n    factor = {'u': u, 'base': b, 'sink_u': u * (1.0 - 0.7 * s), 'sink_base': b * (1.0 - 0.7 * s)}[coupling]\n    terms = [b, -b * s]\n    if branch:\n        terms.append(math.sqrt(max(u, 0.0)))\n    terms.append(factor * (-math.expm1(-h / times[0])))\n    z = h / times[1]\n    terms.append(-factor * (-math.expm1(-z if shape == 'dual' else -z * z)))\n    return float(np.dot(coef, terms))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

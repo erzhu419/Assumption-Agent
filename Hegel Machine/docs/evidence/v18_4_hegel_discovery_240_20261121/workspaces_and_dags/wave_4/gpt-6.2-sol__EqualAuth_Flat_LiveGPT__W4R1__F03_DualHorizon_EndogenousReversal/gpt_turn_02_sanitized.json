@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "c4ea0d89e6c17338",
+  "prompt_tokens": 34043,
+  "cached_tokens": 29952,
+  "completion_tokens": 1127,
+  "task_context_chars": 5627,
+  "wall_ms": 33730.62,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid data show early positive gain and a reversal between H=7.59 and H=15.62. The four-parameter dual-exponential law fits all eight rows with training RMSE about 1.8e-8 and separates a fast rise (tau≈0.423) from slower, stronger adaptation (tau≈14.2). Submit it for fresh confirmation at the 0.045 tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Periodic harmonic model",
+        "rejected_reason": "A single frequency does not explain both the early curvature and the long-horizon response as well as the dual-exponential law."
+      },
+      {
+        "option": "Sink-coupled dual-horizon model",
+        "rejected_reason": "All observed gradients are zero, so the sink coefficient is unidentifiable. The simpler input-proportional law already fits all eight rows to rounding precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired probe already spans both sides of the reversal and reaches the target horizon; fresh confirmation is the next useful test."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _unpack(q):\n    a, b, fast, gap = np.exp(q)\n    return a, b, fast, fast + gap\n\ndef fit(train_rows):\n    global _params\n    u, h, y = np.asarray([[r['u_now'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    def residual(q):\n        a, b, fast, slow = _unpack(q)\n        return u * (-a * np.expm1(-h / fast) + b * np.expm1(-h / slow)) - y\n    q0 = np.log([1.5, 2.0, 0.5, max(1.0, 0.6 * h.max())])\n    result = least_squares(residual, q0, ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = _unpack(result.x)\n\ndef predict(row):\n    a, b, fast, slow = _params\n    h = float(row['H'])\n    return float(row['u_now']) * (-a * math.expm1(-h / fast) + b * math.expm1(-h / slow))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

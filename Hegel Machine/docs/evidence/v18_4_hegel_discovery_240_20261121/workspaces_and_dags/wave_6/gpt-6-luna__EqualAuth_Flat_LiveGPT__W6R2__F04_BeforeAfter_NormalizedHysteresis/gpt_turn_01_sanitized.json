@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "45aa1312ed7492da",
+  "prompt_tokens": 10795,
+  "cached_tokens": 8320,
+  "completion_tokens": 431,
+  "task_context_chars": 3373,
+  "wall_ms": 13567.21,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Rows are quantitatively consistent with the normalized before/after contrast plus an equilibrium term; no additional probe is needed. Model prediction uses numerical fitting of gain, relaxation time, and equilibrium coefficient.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Initial rows show a strongly direction-dependent step contrast, and the supplied verified normalized before/after mechanism directly explains the signatures; defer added measurement cost."
+      },
+      {
+        "option": "OU mean-reverting drift",
+        "rejected_reason": "The paired opposing step shifts are not explained by a stationary function of x_now and H alone."
+      },
+      {
+        "option": "Maxwell stress decay",
+        "rejected_reason": "Does not include the evidenced equilibrium/current-input term that the normalized hysteresis note allows."
+      }
+    ],
+    "hypothesis_name": "normalized_before_after_hysteresis",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _pred(row, p):\n    gain, tau, keq = p\n    scale = 0.004\n    un = row['u_now'] / scale\n    up = row['u_past'] / scale\n    return gain * (un - up) * math.exp(-row['H'] / tau) + keq * un\n\ndef fit(train_rows):\n    rows = train_rows\n    def residual(p):\n        return np.array([_pred(r, p) - r['y'] for r in rows])\n    result = least_squares(residual, x0=np.array([1.0, 0.5, 0.0]), bounds=([-100.0, 1e-6, -100.0], [100.0, 100.0, 100.0]))\n    p = result.x\n    return tuple(float(v) for v in p)\n\ndef predict(row):\n    return float(_pred(row, fit(_TRAIN_ROWS)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

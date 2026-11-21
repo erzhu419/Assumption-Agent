@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "643e6b1ca607c2e7",
+  "prompt_tokens": 81669,
+  "cached_tokens": 68608,
+  "completion_tokens": 3714,
+  "task_context_chars": 5355,
+  "wall_ms": 89936.02,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The seven paid rows, including both wide-gradient measurements, are reproduced to rounding precision by the hydraulic mechanism with a square-root branch. The fitted sink coefficient is approximately 0.914, outside the source range, so it is estimated from the target data rather than transferred. Submit for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Hydraulic sink without a branch, or with an affine branch",
+        "rejected_reason": "Both leave systematic curvature residuals; the square-root branch matches all seven observations to rounding precision."
+      },
+      {
+        "option": "Cobb–Douglas power law or Haldane substrate inhibition",
+        "rejected_reason": "The fitted Cobb–Douglas law misses the paid observations, and the Haldane law as given cannot explain the measured dependence on s_grad."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The wide-gradient probe already supplied the leverage needed to fit the three coefficients at the target horizon."
+      }
+    ],
+    "hypothesis_name": "hydraulic_sink_with_sqrt_branch",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.maximum(0.0, np.array([r['u_now'] for r in train_rows], dtype=float))\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    base = u / (1.2 + u)\n    sink = s / (1.0 + s)\n    branch = np.sqrt(u)\n    def residual(p):\n        vmax, rho, gain = p\n        return vmax * (1.0 - rho * sink) * base + gain * branch - y\n    _params = least_squares(residual, [8.0, 0.7, 0.3], bounds=([0.0, 0.0, 0.0], [np.inf, 1.0, np.inf])).x\n    return _params\n\ndef predict(row) -> float:\n    vmax, rho, gain = _params\n    u = max(0.0, float(row['u_now']))\n    s = float(row['s_grad'])\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u) + gain * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

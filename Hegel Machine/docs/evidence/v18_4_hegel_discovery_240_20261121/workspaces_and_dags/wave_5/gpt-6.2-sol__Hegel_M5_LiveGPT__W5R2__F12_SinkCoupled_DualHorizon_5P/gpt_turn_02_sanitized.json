@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "73f709978efa01e1",
+  "prompt_tokens": 17451,
+  "cached_tokens": 13440,
+  "completion_tokens": 945,
+  "task_context_chars": 7798,
+  "wall_ms": 42131.69,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five short-horizon rows constrain the fast response and its dependence on sink gradient. The three paid long-horizon rows show a positive response at H=8 and negative responses at H=15.5 and H=24, giving leverage to fit the opposing slow term near the H=22.5 target. Fit all five parameters to the eight observations and proceed to fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The paid probe already added observations at H=8, 15.5, and 24, covering the reversal and bracketing the forecast horizon. Fit and confirm before buying finer trajectories."
+      },
+      {
+        "option": "gradient-free dual-horizon model",
+        "rejected_reason": "With positive fast gain and slower adaptation, y/u cannot rise from H=0.27 to H=0.35 and then rise again from H=0.42 to H=0.48 after falling in between. Those changes instead track the alternating sink gradients."
+      },
+      {
+        "option": "single-timescale sink model",
+        "rejected_reason": "A positive sink-modulated gain with one saturating timescale cannot account for the negative long-horizon observations."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _inputs(row):\n    return tuple(float(row[k]) for k in ('u_now', 's_grad', 'H'))\n\n\ndef _evaluate(p, u, s, h):\n    vmax, rho, tau_fast, amp_adapt, gap = p\n    tau_slow = tau_fast + gap\n    gain = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    return gain * (-np.expm1(-h / tau_fast)) - amp_adapt * u * (-np.expm1(-h / tau_slow))\n\n\ndef fit(train_rows):\n    global _params\n    u, s, h = np.asarray([_inputs(row) for row in train_rows], dtype=float).T\n    y = np.asarray([row['y'] for row in train_rows], dtype=float)\n    bounds = ([0.0, 0.0, 1e-6, 0.0, 1e-6], [np.inf, 1.0, np.inf, np.inf, np.inf])\n    best = None\n    for fast, slow in ((0.3, 8.0), (0.12, 4.0), (0.65, 18.0)):\n        result = least_squares(lambda p: _evaluate(p, u, s, h) - y,\n                               [6.5, 0.7, fast, 1.5, slow-fast],\n                               bounds=bounds, x_scale='jac', max_nfev=1500)\n        if best is None or result.cost < best.cost:\n            best = result\n        if math.sqrt(2.0 * best.cost / y.size) < 1e-6:\n            break\n    _params = best.x\n    return _params\n\n\ndef predict(row):\n    return float(_evaluate(_params, *_inputs(row)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

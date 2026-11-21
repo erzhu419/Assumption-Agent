@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "1c72606f6eedda4d",
+  "prompt_tokens": 22650,
+  "cached_tokens": 19456,
+  "completion_tokens": 1152,
+  "task_context_chars": 3569,
+  "wall_ms": 33196.43,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilot spans both the cooperative onset and a broad sink-gradient range. The four-parameter Hill-2 law with competitive inhibition and linear bleed fits all five paid rows with RMSE approximately 1.9e-8. Submit it for fresh confirmation against the 0.045 tolerance without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The pilot already spans s_grad from 0.25 to 2.25, so the narrow-gradient trigger does not apply."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot is already at the target horizon, and the fitted response law does not require trajectory resolution."
+      },
+      {
+        "option": "Weibull saturation and Avrami kinetics",
+        "rejected_reason": "Positive Weibull saturation cannot explain the drop as u_now rises from 1.8 to 2.7, and Avrami kinetics based on H alone predicts a constant across these rows."
+      }
+    ],
+    "hypothesis_name": "hill2_competitive_sink_linear_bleed",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_tau = 1.0\n_params = None\n\ndef fit(train_rows):\n    global _params\n    data = np.asarray([(r['u_now'] / _tau, r['s_grad'], r['y']) for r in train_rows], dtype=float)\n    u, s, y = data.T\n    u2 = u * u\n\n    def residual(p):\n        vmax, k_half, alpha, leak = p\n        return vmax * u2 / (k_half + u2) / (1.0 + alpha * s) - leak * u - y\n\n    _params = least_squares(residual, [7.0, 0.8, 0.5, 0.1], bounds=([0.0, 1e-10, 0.0, 0.0], math.inf)).x\n    return _params\n\ndef predict(row):\n    vmax, k_half, alpha, leak = _params\n    u = row['u_now'] / _tau\n    u2 = u * u\n    return float(vmax * u2 / (k_half + u2) / (1.0 + alpha * row['s_grad']) - leak * u)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "c8a80828017b9bad",
+  "prompt_tokens": 37093,
+  "cached_tokens": 29440,
+  "completion_tokens": 1556,
+  "task_context_chars": 16705,
+  "wall_ms": 35094.5,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid observations show sink-gradient modulation and a smooth long-horizon sign reversal. Fit competing siphon-plus-adaptation variants numerically, with a complexity penalty, and submit the selected model for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Static sink-gradient siphon without adaptation",
+        "rejected_reason": "The long-horizon observations reverse sign, which a stationary positive siphon alone cannot explain."
+      },
+      {
+        "option": "Uncoupled dual-exponential adaptation",
+        "rejected_reason": "The pilot also shows substantial sink-gradient dependence, so a temporal term alone omits observed structure."
+      },
+      {
+        "option": "Additional trajectory probe",
+        "rejected_reason": "Eleven observations now span short, intermediate, and target-scale horizons; fit and fresh confirmation are the next informative steps."
+      }
+    ],
+    "hypothesis_name": "sink_siphon_with_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_model = None\n_params = None\n\ndef _value(row, p, variant):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    free_rho, sqrt_branch, multiplicative = variant\n    i = 0\n    vmax = p[i]; i += 1\n    rho = p[i] if free_rho else 0.7\n    i += int(free_rho)\n    c = p[i] if sqrt_branch else 0.0\n    i += int(sqrt_branch)\n    af, aslow, log_tf, log_gap = p[i:i+4]\n    tf = math.exp(log_tf)\n    ts = tf + math.exp(log_gap)\n    base = vmax * (1.0 - rho*s/(1.0+s)) * u/(1.2+u) + c*math.sqrt(max(u, 0.0))\n    temporal = af*(-math.expm1(-h/tf)) - aslow*(-math.expm1(-h/ts))\n    return base*(1.0+temporal) if multiplicative else base + u*temporal\n\ndef fit(train_rows):\n    global _model, _params\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    best = None\n    for free_rho in (False, True):\n        for sqrt_branch in (False, True):\n            for multiplicative in (False, True):\n                variant = (free_rho, sqrt_branch, multiplicative)\n                for tf, ts in ((0.5, 8.0), (2.0, 12.0), (5.0, 20.0), (0.1, 20.0)):\n                    p0 = [3.0] + ([0.7] if free_rho else []) + ([0.0] if sqrt_branch else []) + [1.0, 2.0, math.log(tf), math.log(ts-tf)]\n                    lo = [0.0] + ([0.0] if free_rho else []) + ([-10.0] if sqrt_branch else []) + [-20.0, -20.0, math.log(0.02), math.log(0.05)]\n                    hi = [30.0] + ([2.0] if free_rho else []) + ([10.0] if sqrt_branch else []) + [20.0, 20.0, math.log(50.0), math.log(200.0)]\n                    def residual(p):\n                        return np.array([_value(r, p, variant) for r in rows]) - y\n                    result = least_squares(residual, p0, bounds=(lo, hi), max_nfev=5000, ftol=1e-11, xtol=1e-11, gtol=1e-11)\n                    rss = float(np.dot(result.fun, result.fun))\n                    score = len(rows)*math.log(max(rss/len(rows), 1e-16)) + len(p0)*math.log(len(rows))\n                    if best is None or score < best[0]:\n                        best = (score, variant, result.x.copy())\n    _model, _params = best[1], best[2]\n\ndef predict(row):\n    return float(_value(row, _params, _model))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

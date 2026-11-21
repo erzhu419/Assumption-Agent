@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "2473fe5ea4405937",
+  "prompt_tokens": 24463,
+  "cached_tokens": 20480,
+  "completion_tokens": 1237,
+  "task_context_chars": 5640,
+  "wall_ms": 36081.24,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid probe shows that normalized gain falls from +0.144 at H = 8.57 to −0.510 at H = 17.64 and −0.760 at the target H = 24.5. A fast positive response opposed by slower, stronger adaptation fits all eight paid observations with training RMSE below 0.0001. Submit this law for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Five early measurements and three later measurements already constrain both timescales; the early and late data are jointly fit well below tolerance."
+      },
+      {
+        "option": "single-exponential gain",
+        "rejected_reason": "A fixed-sign gain cannot account for the positive early response and negative late response at positive input."
+      },
+      {
+        "option": "harmonic Lotka–Volterra response",
+        "rejected_reason": "With x_now = 0, the proposed harmonic model implies |y/u_now| ≤ 1 and ties the initial slope to the oscillation frequency. The low-frequency branch consistent with the observed reversal cannot generate the observed early gain, while high-frequency branches would require unsupported oscillations between measurements."
+      },
+      {
+        "option": "sink-coupled dual-horizon adaptation",
+        "rejected_reason": "The sink coefficient is unidentifiable because s_grad is zero throughout training, and input saturation is not needed to explain the measured responses."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    h, u, y = np.array([(r['H'], r['u_now'], r['y']) for r in train_rows], dtype=float).T\n\n    def residual(z):\n        a_fast, a_slow, tau_fast, gap = np.exp(z)\n        tau_slow = tau_fast + gap\n        return u * (-a_fast * np.expm1(-h / tau_fast) + a_slow * np.expm1(-h / tau_slow)) - y\n\n    result = least_squares(residual, np.log([1.5, 2.5, 0.4, 11.0]), ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    global _params\n    a_fast, a_slow, tau_fast, gap = np.exp(result.x)\n    _params = (a_fast, a_slow, tau_fast, tau_fast + gap)\n\ndef predict(row):\n    a_fast, a_slow, tau_fast, tau_slow = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (-a_fast * math.expm1(-h / tau_fast) + a_slow * math.expm1(-h / tau_slow)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

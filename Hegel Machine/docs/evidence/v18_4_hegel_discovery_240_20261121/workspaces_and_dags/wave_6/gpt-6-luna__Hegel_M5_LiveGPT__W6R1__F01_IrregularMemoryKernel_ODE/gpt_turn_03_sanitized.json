@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "3d4d23ca0210ea37",
+  "prompt_tokens": 16548,
+  "cached_tokens": 8320,
+  "completion_tokens": 1175,
+  "task_context_chars": 15507,
+  "wall_ms": 29726.93,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Use the eight paid trajectories to fit the verified four-parameter coupled memory ODE. The corrected implementation fits only from training rows, stores the fitted parameters for subsequent predictions, computes the memory state from irregular shifted-time prefix data, and integrates the forecast with RK4.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight rows satisfy the verified mechanism's stated minimum for fitting four parameters; no remaining mechanism ambiguity warrants another paid probe before confirmation."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is not relevant to identifying the supported history-conditioned ODE."
+      },
+      {
+        "option": "snapshot balance / Maxwell snapshot models",
+        "rejected_reason": "They do not account for the endpoint-matched history-gap signature and coupled transient lag."
+      }
+    ],
+    "hypothesis_name": "irregular_history_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _initial_z(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix') or []\n    if len(pref) < 2:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([float(p['t']) for p in pref], dtype=float)\n    xs = np.array([float(p['x']) for p in pref], dtype=float)\n    end = ts[-1]\n    conv = 0.0\n    for k in range(1, len(ts)):\n        dt = ts[k] - ts[k-1]\n        conv += 0.5 * (math.exp(-(end-ts[k-1])/tau)*xs[k-1] + math.exp(-(end-ts[k])/tau)*xs[k]) * dt / tau\n    return math.exp(-(end-ts[0])/tau) * 0.52 * xs[0] + 0.52 * conv\n\ndef _forecast(row, pars):\n    a, b, c, tau = [float(v) for v in pars]\n    x = float(row['x_now'])\n    z = _initial_z(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def deriv(xx, zz):\n        return (-a*xx + b*zz + c*u, (0.52*xx - zz)/tau)\n    for _ in range(n):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x+0.5*dt*k1x, z+0.5*dt*k1z)\n        k3x, k3z = deriv(x+0.5*dt*k2x, z+0.5*dt*k2z)\n        k4x, k4z = deriv(x+dt*k3x, z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6.0\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6.0\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    y = np.array([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.array([_forecast(r, p) for r in train_rows]) - y\n    result = least_squares(residual, x0=np.array([0.8, 0.35, 0.9, 0.25]), bounds=([0.001, 0.001, 0.001, 0.005], [5.0, 5.0, 5.0, 5.0]), max_nfev=3000)\n    _PARAMS = result.x\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    return float(_forecast(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

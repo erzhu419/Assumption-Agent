@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "d9b133ee1ff9ac41",
+  "prompt_tokens": 15083,
+  "cached_tokens": 8320,
+  "completion_tokens": 904,
+  "task_context_chars": 15574,
+  "wall_ms": 24068.66,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-horizon rows are positive while the acquired long-horizon rows become negative, including at the requested forecast horizon. This supports the supplied dual-horizon endogenous adaptation law. Fit its two positive amplitudes and two positive timescales numerically to all eight observations; no further probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; the three long-horizon measurements reveal the predicted transition from positive short-horizon response to negative long-horizon response."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The observed horizon-dependent sign reversal matches the supplied dual-horizon adaptation mechanism directly; additional trajectory rows and RK4 states are unnecessary for this four-parameter fit."
+      },
+      {
+        "option": "static or single-timescale smooth models",
+        "rejected_reason": "They do not explain the positive short-H and negative long-H observations in the recorded adaptation signature."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n_tau_scale = 1.0\n\ndef _model(row, p):\n    amp_fast, tau_fast, amp_slow, tau_slow = p\n    u = float(row['u_now']) / _tau_scale\n    h = float(row['H'])\n    return u * (amp_fast * (1.0 - math.exp(-h / tau_fast)) - amp_slow * (1.0 - math.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows])\n    def residual(logp):\n        p = np.exp(logp)\n        return np.asarray([_model(r, p) for r in rows]) - y\n    best = None\n    # Positive amplitudes and timescales; multi-start addresses nonlinear local minima.\n    for start in ([1.0, 0.3, 1.0, 10.0], [2.0, 1.0, 1.0, 20.0], [1.0, 0.1, 2.0, 5.0], [3.0, 2.0, 2.0, 30.0]):\n        result = least_squares(residual, np.log(start), bounds=(np.log([1e-8, 1e-5, 1e-8, 1e-4]), np.log([1e3, 1e3, 1e3, 1e4])), max_nfev=20000)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, np.exp(result.x))\n    _params = best[1]\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) first')\n    return float(_model(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "9a4ad91f7bbe285f",
+  "prompt_tokens": 14350,
+  "cached_tokens": 4864,
+  "completion_tokens": 1154,
+  "task_context_chars": 5829,
+  "wall_ms": 25572.19,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid rows meet the stated minimum for the five-parameter coupled siphon-memory ODE and span varied initial states, gradients, inputs, and horizons. Fit its parameters numerically and predict x(H) using RK4 with steps resolving tau_fast.",
+    "considered_alternatives": [
+      {
+        "option": "high_sgrad_regime_probe",
+        "rejected_reason": "The existing eight rows already span gradients through 2.2, including the avalanche threshold region; the required trajectory batch has also brought the ODE sample count to eight."
+      },
+      {
+        "option": "Static inland-hub / open-branch model",
+        "rejected_reason": "Pilot signatures report a coupled transient lag and fast pulse, while the supplied mechanism note specifies a dynamic memory ODE."
+      },
+      {
+        "option": "Supercritical avalanche siphon",
+        "rejected_reason": "No extra regime probe is needed because training already includes gradients above 1.4; the coupled transient signature better supports the lag ODE."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _simulate(row, p):\n    vmax, rho, a_slow, b_couple, tau_fast = p\n    x = float(row['x_now'])\n    z = float(row['mem_conv'])\n    H = float(row['H'])\n    u_n = float(row['u_now']) / 0.005\n    s = float(row['s_grad'])\n    J = vmax * (1.0 - rho * s / (1.0 + s)) * (u_n / (1.2 + u_n))\n    # Resolve the fast lag timescale with stable, sufficiently fine RK4 steps.\n    n = max(1, int(math.ceil(H / max(tau_fast / 5.0, 1e-7))))\n    dt = H / n\n    def deriv(state):\n        xx, zz = state\n        return np.array([-a_slow * xx + b_couple * zz + J,\n                         (0.52 * xx - zz) / tau_fast], dtype=float)\n    state = np.array([x, z], dtype=float)\n    for _ in range(n):\n        k1 = deriv(state)\n        k2 = deriv(state + 0.5 * dt * k1)\n        k3 = deriv(state + 0.5 * dt * k2)\n        k4 = deriv(state + dt * k3)\n        state = state + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)\n    return float(state[0])\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        return np.array([_simulate(r, p) for r in rows]) - y\n    lower = np.array([0.0, 0.0, 0.0, 0.0, 0.0002])\n    upper = np.array([20.0, 0.999, 10.0, 10.0, 0.05])\n    starts = [np.array([2.0, 0.3, 0.5, 0.5, 0.005]),\n              np.array([4.0, 0.5, 1.0, 1.0, 0.01])]\n    results = [least_squares(residual, np.minimum(np.maximum(p, lower+1e-9), upper-1e-9),\n                             bounds=(lower, upper), max_nfev=3000) for p in starts]\n    return min(results, key=lambda r: np.sum(r.fun**2)).x\n\ndef predict(row):\n    return _simulate(row, fit([dict(row, y=0.0)]))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "c3d23fd620d72963",
+  "prompt_tokens": 9688,
+  "cached_tokens": 4992,
+  "completion_tokens": 695,
+  "task_context_chars": 5453,
+  "wall_ms": 19712.76,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The normalized gain rises during the short pilot, then falls from 0.508 at H = 7.17 to −0.091 at H = 14.76 and −0.363 at the target H = 20.5. This supports a fast positive response opposed by slower negative adaptation. Fit all four parameters to the eight paid observations and submit for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Five early points and three later points already constrain the initial rise and slower decline, including the reversal and the response at the target horizon."
+      },
+      {
+        "option": "Lotka–Volterra harmonic model",
+        "rejected_reason": "With x_now = 0, its normalized gain is bounded by one, but the pilot gain at H = 0.48 is about 1.012. It also imposes recurring oscillations rather than a slow reversal."
+      },
+      {
+        "option": "Ricker dome map",
+        "rejected_reason": "The stated map is horizon-independent and cannot change sign across positive inputs."
+      }
+    ],
+    "hypothesis_name": "dual_exponential_adaptation_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h, u, y = np.asarray([(r['H'], r['u_now'], r['y']) for r in train_rows], dtype=float).T\n\n    def residual(p):\n        a_fast, a_slow, tau_fast, tau_gap = p\n        tau_slow = tau_fast + tau_gap\n        gain = -a_fast * np.expm1(-h / tau_fast) + a_slow * np.expm1(-h / tau_slow)\n        return u * gain - y\n\n    _params = least_squares(residual, [2.0, 3.0, 0.4, 10.0], bounds=(1e-8, np.inf), x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row) -> float:\n    a_fast, a_slow, tau_fast, tau_gap = _params\n    h = row['H']\n    gain = -a_fast * math.expm1(-h / tau_fast) + a_slow * math.expm1(-h / (tau_fast + tau_gap))\n    return float(row['u_now'] * gain)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

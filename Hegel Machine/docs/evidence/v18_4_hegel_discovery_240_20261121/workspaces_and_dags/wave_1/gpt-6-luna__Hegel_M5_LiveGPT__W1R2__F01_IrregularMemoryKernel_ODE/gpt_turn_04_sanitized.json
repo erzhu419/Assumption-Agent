@@ -1,0 +1,36 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f5b7cf2feb7b4dfb",
+  "prompt_tokens": 30050,
+  "cached_tokens": 19200,
+  "completion_tokens": 1046,
+  "task_context_chars": 16424,
+  "wall_ms": 24906.42,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The previous attempts failed because predict incorrectly expected parameters inside each input row. This implementation fits parameters numerically, retains them after fit, computes shifted irregular-prefix convolution for the initial memory state, and RK4-integrates the specified coupled ODE through each horizon for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Nine paid trajectories already meet the supplied minimum for fitting the four-parameter coupled-memory mechanism; extra measurement is unnecessary before testing confirmation."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired in the preceding turn, yielding nine trajectories."
+      },
+      {
+        "option": "Maxwell single-mode law",
+        "rejected_reason": "The endpoint-matched history gap and coupled transient lag support the history-conditioned coupled ODE instead of a snapshot-only stress-decay law."
+      },
+      {
+        "option": "snapshot balance / static linear model",
+        "rejected_reason": "These omit the observed history dependence and temporal transient."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_P = None\n\ndef _z0(row, tau):\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return float(row.get('mem_conv') or 0.52 * row['x_now'])\n    ts = np.array([p['t'] for p in pref], dtype=float)\n    xs = np.array([p['x'] for p in pref], dtype=float)\n    d = ts[-1] - ts[0]\n    conv = 0.0\n    for i in range(1, len(ts)):\n        a, b = ts[-1] - ts[i-1], ts[-1] - ts[i]\n        conv += 0.5 * (math.exp(-a/tau)*xs[i-1] + math.exp(-b/tau)*xs[i]) * (ts[i]-ts[i-1]) / tau\n    return math.exp(-d/tau) * 0.52 * xs[0] + 0.52 * conv\n\ndef _sim(row, p):\n    a, b, c, tau = p\n    x, z = float(row['x_now']), _z0(row, tau)\n    u, H = float(row['u_now']), float(row['H'])\n    n = max(1, int(math.ceil(H/0.004)))\n    h = H/n\n    def f(q):\n        xx, zz = q\n        return np.array([-a*xx + b*zz + c*u, (0.52*xx-zz)/tau])\n    for _ in range(n):\n        q = np.array([x,z])\n        k1=f(q); k2=f(q+h*k1/2); k3=f(q+h*k2/2); k4=f(q+h*k3)\n        q += h*(k1+2*k2+2*k3+k4)/6\n        x,z = q\n    return float(x)\n\ndef fit(train_rows):\n    global _P\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        return np.array([_sim(r,p) for r in train_rows])-y\n    result = least_squares(residual, [0.5, 0.3, 0.7, 0.2], bounds=([0.001,0.001,0.001,0.005],[5,5,5,5]), max_nfev=3000)\n    _P = result.x\n    return _P.copy()\n\ndef predict(row):\n    if _P is None:\n        raise ValueError('fit(train_rows) must be called first')\n    return _sim(row, _P)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

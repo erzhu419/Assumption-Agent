@@ -1,0 +1,36 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "cdefc6446e8d9b2c",
+  "prompt_tokens": 32249,
+  "cached_tokens": 29184,
+  "completion_tokens": 1204,
+  "task_context_chars": 3578,
+  "wall_ms": 41548.75,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilot signatures support cooperative onset and sink inhibition. Scaling input by 0.1, the Hill-2 inhibition law with linear bleed fits the five paid rows at RMSE approximately 1.6e-8. The data span the input and sink-gradient ranges at the target horizon, so submit the fitted law for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed sink-gradient span is 2.0, well above the 0.08 threshold for this probe, and the four-parameter model fits all five rows."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "All observations are already at the target horizon, and the stationary model leaves no material residual to investigate with finer trajectories."
+      },
+      {
+        "option": "Weibull cumulative hazard",
+        "rejected_reason": "A monotone input-only curve cannot explain the large reversals in response as input rises."
+      },
+      {
+        "option": "Avrami horizon-only kinetics",
+        "rejected_reason": "All five rows share the same horizon but have substantially different responses."
+      }
+    ],
+    "hypothesis_name": "scaled_hill2_competitive_inhibition",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float) / 0.1\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    u2 = np.square(u)\n\n    def residual(p):\n        vmax, k_half, alpha, leak = p\n        return vmax * u2 / (k_half + u2) / (1.0 + alpha * s) - leak * u - y\n\n    _params = least_squares(residual, [6.0, 1.0, 1.0, 0.1], bounds=([0.0, 1e-12, 0.0, 0.0], np.inf), ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row) -> float:\n    vmax, k_half, alpha, leak = _params\n    u = float(row['u_now']) / 0.1\n    u2 = math.pow(u, 2)\n    return float(vmax * u2 / (k_half + u2) / (1.0 + alpha * float(row['s_grad'])) - leak * u)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

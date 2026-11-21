@@ -1,0 +1,28 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "c4f4aee34d96c3bb",
+  "prompt_tokens": 9721,
+  "cached_tokens": 4864,
+  "completion_tokens": 541,
+  "task_context_chars": 6078,
+  "wall_ms": 14352.0,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fit all four parameters numerically using the pilot and slow-horizon observations, then test the resulting stationary dual-exponential law on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired probe already adds three discriminating medium and long horizons to the five pilot observations, making another measurement unnecessary before confirmation."
+      },
+      {
+        "option": "Lotka-Volterra harmonic and Ricker dome models",
+        "rejected_reason": "The verified dual-horizon mechanism directly explains the short-term gain and long-horizon reversal; the Ricker model has no horizon dependence, while the harmonic model lacks the observed adaptation mechanism."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h = np.asarray([r['H'] for r in train_rows], dtype=float)\n    u = np.asarray([r['u_now'] for r in train_rows], dtype=float)\n    y = np.asarray([r['y'] for r in train_rows], dtype=float)\n\n    def residual(p):\n        af, tf, ass, ts = np.exp(p)\n        return u * (af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts))) - y\n\n    best = None\n    for start in ([2, 0.7, 3, 8], [3, 1, 4, 15], [1, 0.3, 2, 5]):\n        result = least_squares(residual, np.log(start), bounds=(np.log([0.001, 0.01, 0.001, 0.1]), np.log([100, 100, 100, 1000])), max_nfev=3000)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = np.exp(best.x)\n\ndef predict(row):\n    af, tf, ass, ts = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

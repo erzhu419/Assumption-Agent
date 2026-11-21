@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "c6a4cb87a8aecf90",
+  "prompt_tokens": 10106,
+  "cached_tokens": 8960,
+  "completion_tokens": 1154,
+  "task_context_chars": 7197,
+  "wall_ms": 27049.78,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid long-horizon measurements resolve the key ambiguity left by short pilots: outputs change from positive at short H to negative by H=15.5–24.9. Fit the prescribed five-parameter sink-modulated fast/slow adaptation law directly to all eight rows; no further probe is warranted.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire extra_fine_trajectory_batch",
+        "rejected_reason": "The long-horizon probe has already supplied reversal-scale observations at H=8, 15.5, and 24.9, alongside short-horizon data; another batch is not needed to identify the stated mechanism."
+      },
+      {
+        "option": "Fit a present-snapshot harmonic or Ricker model",
+        "rejected_reason": "Both conflict with the observed horizon-dependent sign reversal; the supplied dual-horizon sink-coupled law directly accounts for it."
+      },
+      {
+        "option": "Abstain scoped unknown",
+        "rejected_reason": "The observations show a coherent smooth reversal consistent with the authorized mechanism rather than chaotic sign oscillation or evidence refuting stationary smooth models."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _value(row, p):\n    vmax, rho, amp_adapt, tau_fast, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base * (1.0 - math.exp(-h / tau_fast)) - amp_adapt * u * (1.0 - math.exp(-h / tau_slow))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows], dtype=float)\n    def residual(p):\n        return np.asarray([_value(r, p) for r in rows]) - y\n    lower = np.array([0.01, 0.0, 0.0, 0.01, 2.0])\n    upper = np.array([30.0, 0.99, 10.0, 5.0, 150.0])\n    best = None\n    for start in ([6.5, 0.7, 1.0, 0.5, 20.0], [5.0, 0.5, 1.0, 1.0, 15.0], [9.0, 0.75, 2.0, 0.2, 30.0], [4.0, 0.2, 0.5, 2.0, 10.0]):\n        result = least_squares(residual, np.asarray(start), bounds=(lower, upper), max_nfev=30000)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _params = best[1].copy()\n    return {'vmax': float(_params[0]), 'rho': float(_params[1]), 'amp_adapt': float(_params[2]), 'tau_fast': float(_params[3]), 'tau_slow': float(_params[4])}\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    return float(_value(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

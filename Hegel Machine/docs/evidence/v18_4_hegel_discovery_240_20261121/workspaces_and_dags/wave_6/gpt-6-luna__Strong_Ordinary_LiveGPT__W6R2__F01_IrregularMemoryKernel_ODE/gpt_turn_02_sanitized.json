@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "bde0a7fcd626d47b",
+  "prompt_tokens": 18746,
+  "cached_tokens": 8320,
+  "completion_tokens": 1331,
+  "task_context_chars": 22090,
+  "wall_ms": 31872.28,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight rows meet the supplied minimum for the verified two-state memory ODE. Fit its four parameters numerically, reconstruct the initial memory state from each raw history when mem_conv is absent, and integrate forward with RK4 at the prescribed step size.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All observed s_grad values are zero, but the endpoint-matched history-gap and transient-lag signatures directly support the memory ODE; branch-gradient mechanisms are not the leading ambiguity."
+      },
+      {
+        "option": "additional fine trajectory batch",
+        "rejected_reason": "The acquired batch brings the training set to eight rows, meeting the stated minimum for fitting the four-parameter coupled ODE."
+      },
+      {
+        "option": "stationary static or one-state models",
+        "rejected_reason": "They do not represent the observed dependence on pre-switch history and coupled transient lag."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _z0(row, tau):\n    hist = row.get('raw_prefix') or []\n    if not hist:\n        return 0.52 * float(row['x_now'])\n    z = 0.52 * float(hist[0]['x'])\n    t_prev = float(hist[0]['t'])\n    x_prev = float(hist[0]['x'])\n    for q in hist[1:]:\n        t1, x1 = float(q['t']), float(q['x'])\n        d = t1 - t_prev\n        n = max(1, int(math.ceil(d / 0.004)))\n        h = d / n\n        for i in range(n):\n            xa = x_prev + (x1 - x_prev) * i / n\n            xb = x_prev + (x1 - x_prev) * (i + 1) / n\n            xm = 0.5 * (xa + xb)\n            z += h * (0.52 * xm - z) / tau\n        t_prev, x_prev = t1, x1\n    return z\n\ndef _simulate(row, p):\n    a, b, c, tau = map(float, p)\n    x = float(row['x_now'])\n    z = float(row['mem_conv']) if row.get('mem_conv') is not None else _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    h = H / n\n    def f(xx, zz):\n        return (-a * xx + b * zz + c * u, (0.52 * xx - zz) / tau)\n    for _ in range(n):\n        k1x, k1z = f(x, z)\n        k2x, k2z = f(x + 0.5*h*k1x, z + 0.5*h*k1z)\n        k3x, k3z = f(x + 0.5*h*k2x, z + 0.5*h*k2z)\n        k4x, k4z = f(x + h*k3x, z + h*k3z)\n        x += h * (k1x + 2*k2x + 2*k3x + k4x) / 6.0\n        z += h * (k1z + 2*k2z + 2*k3z + k4z) / 6.0\n    return x\n\ndef fit(train_rows):\n    def residual(p):\n        return np.array([_simulate(r, p) - float(r['y']) for r in train_rows])\n    starts = [np.array([0.5, 0.5, 0.5, 0.1]), np.array([1.0, 0.2, 0.8, 0.2]), np.array([0.2, 1.0, 0.3, 0.05])]\n    best = None\n    for p0 in starts:\n        res = least_squares(residual, p0, bounds=([0.001, 0.001, 0.001, 0.005], [5.0, 5.0, 5.0, 2.0]), max_nfev=500)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    return best.x\n\ndef predict(row):\n    return float(_simulate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

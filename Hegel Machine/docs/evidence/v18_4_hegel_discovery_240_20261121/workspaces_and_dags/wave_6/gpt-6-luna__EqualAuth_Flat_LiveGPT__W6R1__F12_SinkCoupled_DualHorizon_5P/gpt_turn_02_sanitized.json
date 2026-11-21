@@ -1,0 +1,40 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "62a7c4df36602421",
+  "prompt_tokens": 15892,
+  "cached_tokens": 12416,
+  "completion_tokens": 956,
+  "task_context_chars": 5666,
+  "wall_ms": 23729.8,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The acquired horizon-spanning observations show positive short-window gains and negative outcomes at H=15.5 and 24.7, consistent with a slow endogenous adaptation term. Together with the sink-gradient signature, this supports the five-parameter sink-coupled dual-horizon law; fit all parameters numerically to the paid rows.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its three added long-horizon readings include negative outcomes, resolving the short-horizon ambiguity about slow adaptation."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The current eight rows span short and long horizons and are sufficient to numerically fit the five-parameter candidate without another paid batch."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to identifying the target law and explicitly not worth acquiring."
+      },
+      {
+        "option": "dual-horizon reversal model without sink-gradient modulation",
+        "rejected_reason": "Does not account for the observed sink-gradient signature across rows; the sink-coupled form incorporates it."
+      },
+      {
+        "option": "Lotka–Volterra harmonic model",
+        "rejected_reason": "The sink-gradient evidence and systematic short-positive/long-negative pattern support adaptation rather than an unsupported periodic mechanism."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _value(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    H = float(row['H'])\n    s = float(row['s_grad'])\n    u = float(row['u_now'])\n    return (vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n            * (1.0 - math.exp(-H / tau_fast))\n            - amp_adapt * u * (1.0 - math.exp(-H / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    y = np.asarray([float(r['y']) for r in train_rows], dtype=float)\n    def residual(p):\n        return np.asarray([_value(r, p) for r in train_rows]) - y\n    # Positive scales and bounded sink fraction; multistart limits local-fit sensitivity.\n    starts = [\n        [4.0, 0.4, 0.3, 0.15, 12.0],\n        [3.0, 0.6, 0.5, 0.2, 20.0],\n        [5.0, 0.2, 0.2, 0.1, 8.0],\n    ]\n    lo = [0.0, 0.0, 1e-5, 0.0, 1e-4]\n    hi = [20.0, 1.0, 100.0, 10.0, 1000.0]\n    fits = [least_squares(residual, x0, bounds=(lo, hi), max_nfev=20000) for x0 in starts]\n    _params = min(fits, key=lambda result: float(np.dot(result.fun, result.fun))).x\n    return _params.copy()\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_value(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

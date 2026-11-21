@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "68e7333c37c55ee8",
+  "prompt_tokens": 21623,
+  "cached_tokens": 10368,
+  "completion_tokens": 1368,
+  "task_context_chars": 8380,
+  "wall_ms": 38662.33,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid rows identify the fixed-horizon coefficients on x_now, mem_conv, and u_now as approximately 0.397, 0.283, and 0.494, with training RMSE below 3e-9 for that linear map. This supports submitting the coupled-memory RK4 model for fresh confirmation without another probe. The fast-timescale anchor selects one parameterization of the observed map; the single-horizon data do not identify all four physical parameters separately.",
+    "considered_alternatives": [
+      {
+        "option": "Snapshot balance without memory",
+        "rejected_reason": "It omits the independently supported contribution from the initial memory state."
+      },
+      {
+        "option": "Direct fixed-horizon regression",
+        "rejected_reason": "It captures the observed coefficients but does not encode the coupled transient mechanism."
+      },
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "A second horizon could help identify the individual rates, but it is not needed to identify the forecast at H = 0.6."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_rk4",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _weights(H, p):\n    a, b, c, tau = p\n    n = max(1, math.ceil(H / 0.004))\n    dt = H / n\n    # Advance the linear system on (x, z, u), with du/dt = 0.\n    D = dt * np.array([[-a, b, c], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    D2 = D @ D\n    step = np.eye(3) + D + D2 / 2.0 + (D2 @ D) / 6.0 + (D2 @ D2) / 24.0\n    return np.linalg.matrix_power(step, n)[0]\n\ndef _features(row):\n    return [row['x_now'], row['mem_conv'], row['u_now']]\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    X = np.array([_features(r) for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    horizons, group = np.unique([r['H'] for r in rows], return_inverse=True)\n    start = np.log([1.8, 2.2, 1.2, 0.18])\n    def residual(log_p):\n        p = np.exp(log_p)\n        W = np.array([_weights(float(H), p) for H in horizons])\n        error = np.sum(X * W[group], axis=1) - y\n        # At one horizon the rates are not separately identifiable.\n        if len(horizons) == 1:\n            return np.append(error, 0.01 * (log_p[3] - start[3]))\n        return error\n    result = least_squares(residual, start, bounds=(np.log([0.001, 0.001, 0.001, 0.015]), np.log([20.0, 30.0, 20.0, 1.0])), ftol=1e-11, xtol=1e-11, gtol=1e-11)\n    _params = np.exp(result.x)\n\ndef predict(row):\n    return float(_weights(float(row['H']), _params) @ _features(row))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

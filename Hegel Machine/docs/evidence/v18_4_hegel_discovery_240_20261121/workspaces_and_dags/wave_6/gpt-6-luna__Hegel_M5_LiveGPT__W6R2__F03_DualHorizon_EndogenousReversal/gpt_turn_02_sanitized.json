@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "b272cdbed0a8e42f",
+  "prompt_tokens": 16045,
+  "cached_tokens": 12416,
+  "completion_tokens": 727,
+  "task_context_chars": 6314,
+  "wall_ms": 19621.72,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Short-horizon rows show positive response, while added measurements at H=8.61, 17.71, and 24.6 reveal attenuation followed by negative response, supporting the verified dual-horizon adaptation law. The target horizon is directly measured; fit all four law parameters numerically.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire extra_fine_trajectory_batch",
+        "rejected_reason": "Rows span short horizons and the long-horizon regime, with a direct observation at target H=24.6; a more dense trajectory is unnecessary for the four-parameter dual-exponential mechanism."
+      },
+      {
+        "option": "Fit the 5-parameter sink-coupled dual-horizon model",
+        "rejected_reason": "Every observation has s_grad=0, so the sink coefficient is unidentifiable and irrelevant for these inputs; the supplied verified 4-parameter dual-horizon form matches observed sign reversal."
+      },
+      {
+        "option": "Abstain for unknown dynamics",
+        "rejected_reason": "Evidence is smooth and consistent with the verified endogenous reversal mechanism, not chaotic sign oscillation or refutation."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = train_rows\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    H = np.array([r['H'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    def pred(p):\n        af, ass, tf, ts = p\n        return u * (af * (1.0 - np.exp(-H / tf)) - ass * (1.0 - np.exp(-H / ts)))\n    def residual(p):\n        return pred(p) - y\n    best = None\n    for tf0, ts0 in [(0.2, 10.0), (0.5, 20.0), (1.0, 30.0), (0.1, 5.0)]:\n        p0 = [1.2, 1.5, tf0, ts0]\n        res = least_squares(residual, p0, bounds=([0.0, 0.0, 1e-4, 1e-4], [100.0, 100.0, 100.0, 1000.0]), max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    af, ass, tf, ts = best.x\n    return {'amp_fast': float(af), 'amp_slow': float(ass), 'tau_fast': float(tf), 'tau_slow': float(ts)}\n\ndef predict(row):\n    p = fit(globals().get('_train_rows', []))\n    H = float(row['H']); u = float(row['u_now'])\n    return u * (p['amp_fast'] * (1.0 - math.exp(-H / p['tau_fast'])) - p['amp_slow'] * (1.0 - math.exp(-H / p['tau_slow'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

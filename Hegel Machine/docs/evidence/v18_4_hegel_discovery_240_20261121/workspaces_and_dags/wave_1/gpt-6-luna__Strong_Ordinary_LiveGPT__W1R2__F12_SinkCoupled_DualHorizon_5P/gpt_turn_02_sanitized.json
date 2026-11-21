@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "40340886b7b163cf",
+  "prompt_tokens": 12520,
+  "cached_tokens": 4864,
+  "completion_tokens": 1150,
+  "task_context_chars": 14506,
+  "wall_ms": 26275.71,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The observations change from positive at short horizons to negative at H=15.5 and 24.9, matching the supplied dual-horizon endogenous-adaptation signature. Fit the four positive fast/slow amplitudes and timescales numerically; no high-frequency chaotic sign-oscillation signature is present.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch for the coupled memory ODE",
+        "rejected_reason": "That mechanism needs at least eight trajectory rows and has no direct support from the observed horizon-dependent sign reversal; the existing eight rows span short, intermediate, and long horizons."
+      },
+      {
+        "option": "Static sink-inhibited siphon or other stationary smooth mechanisms",
+        "rejected_reason": "They do not explain the sign reversal from positive short-horizon gains to negative outcomes at H=15.5 and H=24.9."
+      },
+      {
+        "option": "Additional probe",
+        "rejected_reason": "The paid data already include three informative intermediate/long-horizon points and five short-horizon points, sufficient to fit the four-parameter dual-horizon law; further measurements add cost without resolving a material ambiguity."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n\n    def residual(p):\n        af, tf, ass, ts = p\n        pred = u * (af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts)))\n        return pred - y\n\n    # Positive rates and ordered time scales identify the fast/slow components.\n    best = None\n    for start in ([1.0, 1.0, 1.5, 12.0], [2.0, 2.0, 2.5, 20.0], [0.8, 0.5, 1.0, 8.0], [3.0, 4.0, 3.5, 30.0]):\n        res = least_squares(residual, start,\n                            bounds=([0.0, 1e-4, 0.0, 1e-3], [20.0, 100.0, 20.0, 300.0]),\n                            max_nfev=20000)\n        if res.x[3] > res.x[1] and (best is None or np.sum(res.fun**2) < best[0]):\n            best = (np.sum(res.fun**2), res.x)\n    if best is None:\n        raise RuntimeError('Could not fit ordered dual-horizon adaptation parameters')\n    _params = tuple(float(v) for v in best[1])\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row)')\n    af, tf, ass, ts = _params\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (af * (-math.expm1(-h / tf)) - ass * (-math.expm1(-h / ts)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

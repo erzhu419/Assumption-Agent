@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "47f3fffa74a5bc8d",
+  "prompt_tokens": 16777,
+  "cached_tokens": 13440,
+  "completion_tokens": 843,
+  "task_context_chars": 5684,
+  "wall_ms": 27285.06,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilots are positive, and the acquired probe remains positive at H = 8.0 but is negative at H = 15.5 and 24.8. That pattern supports a fast, gradient-attenuated gain opposed by slower adaptation. Fit all five parameters to the eight paid rows and test the resulting law on fresh data.",
+    "considered_alternatives": [
+      {
+        "option": "Dual-horizon adaptation without gradient coupling",
+        "rejected_reason": "It can account for a sign reversal but omits the sink-gradient effect indicated by the pilot signatures and the lower responses at higher gradients."
+      },
+      {
+        "option": "Periodic Lotka–Volterra response",
+        "rejected_reason": "A single observed transition from positive to negative does not establish a cycle; the gradient dependence and horizon span favor testing the sink-coupled adaptation law first."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired measurements already span intermediate and long horizons, including one near H = 23.3. Fresh confirmation is the next test."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, h, y = np.asarray([[r['u_now'], r['s_grad'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    drive = u / (1.2 + u)\n    sink = s / (1.0 + s)\n\n    def residual(p):\n        vmax, rho, tau_fast, amp, gap = p\n        fast = -np.expm1(-h / tau_fast)\n        slow = -np.expm1(-h / (tau_fast + gap))\n        return vmax * (1.0 - rho * sink) * drive * fast - amp * u * slow - y\n\n    bounds = ([0.0, 0.0, 1e-6, 0.0, 1e-6], [np.inf, 1.0, np.inf, np.inf, np.inf])\n    starts = ([7.0, 0.6, 0.25, 2.0, 8.0], [10.0, 0.75, 0.6, 3.0, 20.0], [5.0, 0.4, 0.1, 1.5, 3.0])\n    best = min((least_squares(residual, p, bounds=bounds, x_scale='jac', max_nfev=1000) for p in starts), key=lambda result: result.cost)\n    _params = best.x\n\ndef predict(row) -> float:\n    vmax, rho, tau_fast, amp, gap = _params\n    u, s, h = (float(row[k]) for k in ('u_now', 's_grad', 'H'))\n    fast = -math.expm1(-h / tau_fast)\n    slow = -math.expm1(-h / (tau_fast + gap))\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) * fast - amp * u * slow)"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "62d8153b75ae5c20",
+  "prompt_tokens": 20649,
+  "cached_tokens": 9856,
+  "completion_tokens": 1743,
+  "task_context_chars": 6750,
+  "wall_ms": 42549.03,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Across eight rows at H=0.6, the linear readout of x_now, mem_conv, and u_now has training RMSE 2.6e-9. These rows identify three endpoint coefficients, not four independent ODE parameters. Fit the verified RK4 mechanism with a weak fast-timescale anchor to select one representative parameter set, then submit it for fresh confirmation at the requested horizon.",
+    "considered_alternatives": [
+      {
+        "option": "snapshot_balance",
+        "rejected_reason": "The best linear fit using only x_now and u_now has training RMSE 0.155, above the 0.045 tolerance."
+      },
+      {
+        "option": "fixed_horizon_linear_readout",
+        "rejected_reason": "It fits at H=0.6 but does not express the verified coupled dynamics or reconstruct missing memory from raw_prefix."
+      },
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "A second horizon could constrain the physical rates, but those rates are not separately needed to predict at H=0.6."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The existing rows already distinguish the history-dependent readout from the snapshot alternatives at the requested horizon."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_kernel_at_target_horizon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _memory(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    prefix = row['raw_prefix']\n    end = float(prefix[-1]['t'])\n    z = 0.52 * float(prefix[0]['x']) * math.exp((float(prefix[0]['t']) - end) / tau)\n    for left, right in zip(prefix, prefix[1:]):\n        t0, t1 = float(left['t']), float(right['t'])\n        f0 = float(left['x']) * math.exp((t0 - end) / tau)\n        f1 = float(right['x']) * math.exp((t1 - end) / tau)\n        z += (0.26 / tau) * (t1 - t0) * (f0 + f1)\n    return z\n\n\ndef _readout(p, horizon):\n    a, b, c, tau = p\n    # Augmented state (x, z, u), with u constant. This polynomial is one RK4 step.\n    generator = np.array([[-a, b, c], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    eye = np.eye(3)\n\n    def step(h):\n        q = h * generator\n        return eye + q @ (eye + q @ (eye / 2 + q @ (eye / 6 + q / 24)))\n\n    n = math.floor(horizon / 0.004)\n    transition = np.linalg.matrix_power(step(0.004), n)\n    remaining = horizon - n * 0.004\n    if remaining > 0.0:\n        transition = step(remaining) @ transition\n    return transition[0]\n\n\ndef _evaluate(row, p, readout):\n    return float(readout @ [float(row['x_now']), _memory(row, p[3]), float(row['u_now'])])\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    horizons = sorted({float(r['H']) for r in rows})\n    anchor_fast_scale = len(horizons) == 1 and all(r.get('mem_conv') is not None for r in rows)\n    targets = np.array([float(r['y']) for r in rows])\n\n    def residual(p):\n        readouts = {h: _readout(p, h) for h in horizons}\n        errors = np.array([_evaluate(r, p, readouts[float(r['H'])]) for r in rows]) - targets\n        if anchor_fast_scale:\n            return np.append(errors, 0.01 * (p[3] - 0.25))\n        return errors\n\n    result = least_squares(residual, [2.0, 2.0, 1.2, 0.25], bounds=([0.0, 0.0, 0.0, 0.02], [15.0, 20.0, 20.0, 5.0]), ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n\n\ndef predict(row) -> float:\n    return _evaluate(row, _params, _readout(_params, float(row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

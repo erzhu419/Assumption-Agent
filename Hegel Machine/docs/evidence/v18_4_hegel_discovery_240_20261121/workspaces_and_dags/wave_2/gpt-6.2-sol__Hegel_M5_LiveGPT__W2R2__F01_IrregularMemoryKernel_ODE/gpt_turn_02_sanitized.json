@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "948425a5f2be65eb",
+  "prompt_tokens": 28227,
+  "cached_tokens": 13952,
+  "completion_tokens": 1389,
+  "task_context_chars": 14293,
+  "wall_ms": 35884.36,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history gap and transient lag favor a latent memory state. Fit the four ODE parameters jointly on all eight trajectories, reconstructing missing memory from the irregular prefix using elapsed times so that the absolute timestamp cannot affect the forecast. Submit for fresh confirmation against the 0.045 RMSE tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Reduced slow ODE",
+        "rejected_reason": "It predicts identical forecasts for identical current states, inputs, and horizons, so it cannot explain the endpoint-matched history gap."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "A fixed amplitude times the input jump cannot explain positive outputs for both upward and downward switches."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The paid batch now provides eight trajectories with rising, falling, and small-step inputs at horizons bracketing the target. Fresh confirmation is the next useful test."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    H = float(row['H'])\n    n = max(1, math.ceil(H / 0.004))\n    z = row.get('mem_conv')\n    history = None\n    if z is None:\n        prefix = row['raw_prefix']\n        t = np.array([p['t'] for p in prefix], dtype=float)\n        x = np.array([p['x'] for p in prefix], dtype=float)\n        history = (t[-1] - t, np.diff(t), x)\n    return float(row['x_now']), float(row['u_now']), n, H / n, z, history\n\ndef _forecast(p, data):\n    a, b, c, tau = map(float, p)\n    x, u, n, h, z, history = data\n    if z is None:\n        lag, widths, hist_x = history\n        weights = np.exp(-lag / tau)\n        v = weights * hist_x\n        z = float(0.52 * (v[0] + np.dot(widths, v[:-1] + v[1:]) / (2.0 * tau)))\n    else:\n        z = float(z)\n    drive = c * u\n    inv_tau = 1.0 / tau\n    half = 0.5 * h\n    sixth = h / 6.0\n    def rhs(x, z):\n        return -a*x + b*z + drive, (0.52*x - z)*inv_tau\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + half*kx, z + half*kz)\n        mx, mz = rhs(x + half*lx, z + half*lz)\n        nx, nz = rhs(x + h*mx, z + h*mz)\n        x += sixth*(kx + 2.0*lx + 2.0*mx + nx)\n        z += sixth*(kz + 2.0*lz + 2.0*mz + nz)\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = [_prepare(row) for row in rows]\n    y = np.array([row['y'] for row in rows], dtype=float)\n    def residual(p):\n        return np.array([_forecast(p, d) for d in data]) - y\n    best = None\n    for tau0 in (0.08, 0.3, 1.0):\n        result = least_squares(residual, [1.7, 0.8, 1.0, tau0], bounds=([0.0, 0.0, 0.0, 0.015], [15.0, 15.0, 15.0, 10.0]), x_scale='jac', max_nfev=200)\n        if best is None or result.cost < best.cost:\n            best = result\n    _params = best.x\n    return _params\n\ndef predict(row):\n    return float(_forecast(_params, _prepare(row)))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

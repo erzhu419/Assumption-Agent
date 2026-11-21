@@ -1,0 +1,36 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "9a507fe31f0031e9",
+  "prompt_tokens": 120655,
+  "cached_tokens": 97664,
+  "completion_tokens": 4696,
+  "task_context_chars": 7395,
+  "wall_ms": 113865.95,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid rows show input saturation and gradient suppression. The fitted endpoint law captures both, with a training RMSE of about 0.0014 and leave-one-out RMSE of about 0.008 against the 0.045 tolerance. Submit it for fresh confirmation at H = 0.6; the data do not establish a law for other horizons.",
+    "considered_alternatives": [
+      {
+        "option": "Bilinear mass action or gradient-independent Beverton–Holt recruitment",
+        "rejected_reason": "Neither explains the large response shifts measured when the gradient changed at comparable input."
+      },
+      {
+        "option": "Separable rational saturation with a gradient multiplier",
+        "rejected_reason": "It fit reasonably well, but allowing the gradient load to vary with input reduced leave-one-out RMSE from about 0.011 to 0.008."
+      },
+      {
+        "option": "Coupled ODE",
+        "rejected_reason": "All paid observations are endpoints at H = 0.6, so separate kinetic rates are not identified."
+      },
+      {
+        "option": "Additional probe",
+        "rejected_reason": "Both targeted probes have already been acquired. The remaining nuisance probe does not test the input–gradient relationship."
+      }
+    ],
+    "hypothesis_name": "saturating_transfer_with_gradient_load",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _response(u, s, p):\n    a, b, c, k, e, h, j = p\n    quadratic = k * u * u\n    base = 1.0 + c * u + quadratic\n    load = e * s / (1.0 + h * s)\n    return u * (a + b * u) / (base + load * (1.0 + j * u + quadratic))\n\ndef fit(train_rows):\n    global _params\n    u, s, y = np.asarray([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float).T\n    result = least_squares(lambda p: _response(u, s, p) - y,\n                           [5.0, 3.5, 1.4, 0.6, 1.0, 0.2, 0.8],\n                           bounds=(0.0, np.inf), x_scale='jac')\n    _params = result.x\n\ndef predict(row) -> float:\n    return float(_response(float(row['u_now']), float(row['s_grad']), _params))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

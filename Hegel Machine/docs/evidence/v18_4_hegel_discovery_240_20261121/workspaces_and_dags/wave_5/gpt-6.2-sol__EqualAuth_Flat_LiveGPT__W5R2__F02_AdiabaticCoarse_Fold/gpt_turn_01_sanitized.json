@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "416a0d7a9f59b02c",
+  "prompt_tokens": 22432,
+  "cached_tokens": 19456,
+  "completion_tokens": 1020,
+  "task_context_chars": 3257,
+  "wall_ms": 29564.07,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At the target horizon the fast transient is damped, but the initial-state displacement still predicts a small correction to equilibrium. The two-parameter law gives pilot estimates k≈2.0944 and a≈1.268, with all five leave-one-out errors below 0.00003. Submit for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Static proportional equilibrium",
+        "rejected_reason": "Its pilot RMSE is about 0.011. Including the damped initial-state transient reduces that by more than two orders of magnitude with one extra parameter."
+      },
+      {
+        "option": "Zero-initial-state Kelvin–Voigt creep or Vogel–Fulcher–Tammann response",
+        "rejected_reason": "Neither accounts for the observed dependence on the initial-state displacement from equilibrium."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot already spans the target horizon and constrains both coarse parameters; resolving the fast trajectory is unnecessary for this forecast."
+      }
+    ],
+    "hypothesis_name": "coarse_adiabatic_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, x, h, y = np.array([[r['u_now'], r['x_now'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    def residual(p):\n        k, a = p\n        x_ss = k * u\n        return x_ss + (x - x_ss) * np.exp(-a * h) - y\n    k0 = float(np.dot(u, y) / np.dot(u, u))\n    _params = least_squares(residual, [max(k0, 1e-8), 1.0], bounds=(0.0, np.inf), gtol=1e-12).x\n\ndef predict(row) -> float:\n    k, a = _params\n    x_ss = k * row['u_now']\n    return float(x_ss + (row['x_now'] - x_ss) * math.exp(-a * row['H']))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

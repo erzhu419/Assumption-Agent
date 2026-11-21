@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "76a7402dfee93fef",
+  "prompt_tokens": 10916,
+  "cached_tokens": 8576,
+  "completion_tokens": 814,
+  "task_context_chars": 3361,
+  "wall_ms": 24988.68,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The zero-step row gives k_eq = 0.492. After subtracting that equilibrium term, dividing by the signed normalized step gives approximately 2.192, 1.855, 1.443, and 1.077 at H = 0.25, 0.45, 0.75, and 1.10. These values follow a common exponential decay for both step directions and bracket the target H = 0.65.",
+    "considered_alternatives": [
+      {
+        "option": "Pure contrast / single-mode Maxwell decay",
+        "rejected_reason": "It predicts zero when the step is zero, but the zero-step row has y = 0.738."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck mean reversion",
+        "rejected_reason": "A single equilibrium cannot produce both the rise from x_now = 0.1968 to y = 5.0286 and the fall from x_now = 1.23 to y = -3.2288."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The zero-step row identifies the equilibrium coefficient, and the four nonzero steps span distinct horizons on both sides of the target. More trajectories are not needed before confirmation."
+      }
+    ],
+    "hypothesis_name": "normalized_before_after_exponential_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_SCALE = 0.02\n_params = None\n\n\ndef fit(train_rows):\n    global _params\n    data = np.array([(r['u_now'] / _SCALE, r['u_past'] / _SCALE, r['H'], r['y']) for r in train_rows], dtype=float)\n    u_now, u_past, h, y = data.T\n    contrast = u_now - u_past\n\n    def residual(params):\n        gain, log_tau, k_eq = params\n        return gain * contrast * np.exp(-h / math.exp(log_tau)) + k_eq * u_now - y\n\n    _params = least_squares(residual, [1.0, math.log(float(np.median(h))), 1.0], bounds=([-np.inf, -20.0, -np.inf], [np.inf, 20.0, np.inf])).x\n\n\ndef predict(row) -> float:\n    gain, log_tau, k_eq = _params\n    contrast = (row['u_now'] - row['u_past']) / _SCALE\n    return float(gain * contrast * math.exp(-row['H'] / math.exp(log_tau)) + k_eq * row['u_now'] / _SCALE)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

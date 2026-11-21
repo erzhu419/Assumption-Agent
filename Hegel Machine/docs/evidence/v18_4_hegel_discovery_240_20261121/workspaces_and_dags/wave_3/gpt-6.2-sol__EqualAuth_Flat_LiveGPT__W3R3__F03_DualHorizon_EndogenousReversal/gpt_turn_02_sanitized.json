@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "ec0896d96788849e",
+  "prompt_tokens": 11929,
+  "cached_tokens": 8576,
+  "completion_tokens": 842,
+  "task_context_chars": 5632,
+  "wall_ms": 25841.34,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Gain per unit input rises across the short pilot, declines by H=6.72, and is negative at H=13.82 and H=19.2. A fast positive response opposed by slower adaptation explains that pattern. The eight rows span both timescales, so fit the four parameters jointly and submit for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Sink-coupled dual-horizon model",
+        "rejected_reason": "All paid rows have zero sink gradient, so the sink coefficient cannot be fitted. The input-linear model is the simpler supported candidate."
+      },
+      {
+        "option": "Periodic Lotka–Volterra harmonic",
+        "rejected_reason": "With zero initial state, its sine term cannot produce the observed gains above one after normalization by the current input."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The purchased probe already samples the decline, brackets the reversal, and measures the target horizon. Submit the four-parameter model for fresh confirmation before buying more data."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u, h, y = np.array([[r['u_now'], r['H'], r['y']] for r in rows], dtype=float).T\n\n    def residual(q):\n        a_fast, a_slow, tau_fast, gap = np.exp(q)\n        tau_slow = tau_fast + gap\n        return u * (-a_fast * np.expm1(-h / tau_fast) + a_slow * np.expm1(-h / tau_slow)) - y\n\n    best = None\n    best_error = np.inf\n    for start in ((2.5, 3.5, 0.6, 8.0), (1.5, 2.5, 0.3, 4.0), (4.0, 6.0, 1.2, 18.0)):\n        result = least_squares(residual, np.log(start), bounds=(-14.0, 14.0), ftol=1e-11, xtol=1e-11, gtol=1e-11, max_nfev=500)\n        error = float(np.dot(result.fun, result.fun))\n        if error < best_error:\n            best, best_error = result.x, error\n        if best_error <= len(y) * 1e-14:\n            break\n    a_fast, a_slow, tau_fast, gap = map(float, np.exp(best))\n    _params = (a_fast, a_slow, tau_fast, tau_fast + gap)\n\ndef predict(row) -> float:\n    a_fast, a_slow, tau_fast, tau_slow = _params\n    h = float(row['H'])\n    return float(row['u_now']) * (-a_fast * math.expm1(-h / tau_fast) + a_slow * math.expm1(-h / tau_slow))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

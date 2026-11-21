@@ -1,0 +1,28 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "a84898360679761d",
+  "prompt_tokens": 23117,
+  "cached_tokens": 12416,
+  "completion_tokens": 1288,
+  "task_context_chars": 23138,
+  "wall_ms": 30375.4,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The earlier confirmation failed because predict referenced an unset module-level parameter vector. This corrected self-contained model numerically fits the four ODE parameters, reconstructs initial memory from each irregular raw prefix when mem_conv is absent, and uses RK4 for the specified forward integration.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another probe",
+        "rejected_reason": "Eight rows now satisfy the supplied minimum for the four-parameter memory ODE; an additional paid measurement is not needed before testing the model."
+      },
+      {
+        "option": "Static or single-state relaxation models",
+        "rejected_reason": "Endpoint-matched history differences and coupled transient lag are direct evidence for history-dependent coupled memory dynamics."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    hist = row.get('raw_prefix') or []\n    if not hist:\n        return 0.52 * float(row['x_now'])\n    z = 0.52 * float(hist[0]['x'])\n    t_prev = float(hist[0]['t'])\n    x_prev = float(hist[0]['x'])\n    # Integrate tau_fast dz/dt = 0.52*x(t)-z with linearly interpolated x.\n    def deriv(zv, xv):\n        return (0.52 * xv - zv)\n    for item in hist[1:]:\n        t = float(item['t']); x = float(item['x'])\n        dt = t - t_prev\n        if dt > 0:\n            k1 = deriv(z, x_prev)\n            k2 = deriv(z + 0.5*dt*k1, 0.5*(x_prev+x))\n            k3 = deriv(z + 0.5*dt*k2, 0.5*(x_prev+x))\n            k4 = deriv(z + dt*k3, x)\n            z += dt*(k1 + 2*k2 + 2*k3 + k4)/6.0\n        t_prev, x_prev = t, x\n    return z\n\ndef _simulate(row, p):\n    a, b, c, tau = [float(v) for v in p]\n    x = float(row['x_now']); z = _z0(row); u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def f(xv, zv):\n        return (-a*xv + b*zv + c*u, (0.52*xv - zv)/tau)\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+dt*k1x/2,z+dt*k1z/2)\n        k3x,k3z=f(x+dt*k2x/2,z+dt*k2z/2)\n        k4x,k4z=f(x+dt*k3x,z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        return np.array([_simulate(r, p) for r in rows]) - y\n    best = None\n    for start in ([0.5,0.3,0.7,0.2], [1.0,0.5,1.0,0.1], [0.2,0.8,0.5,0.4]):\n        res = least_squares(residual, start, bounds=([1e-5,0.0,0.0,0.005],[5.0,5.0,5.0,2.0]), max_nfev=3000)\n        if best is None or np.dot(res.fun,res.fun) < np.dot(best.fun,best.fun):\n            best = res\n    _PARAMS = best.x\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_simulate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "91190b01c82bce41",
+  "prompt_tokens": 26076,
+  "cached_tokens": 20992,
+  "completion_tokens": 2027,
+  "task_context_chars": 7428,
+  "wall_ms": 50922.32,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A numerical fit using the coupled ODE’s analytic solution reproduces all eight paid endpoints with training RMSE about 2.4e-8. The submitted RK4 model refits all five parameters and is ready for fresh confirmation at the target horizon, H = 0.46, within the observed range of 0.38–0.60.",
+    "considered_alternatives": [
+      {
+        "option": "additional extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch already provides eight observations with contrasting initial pool and memory states, and the target horizon is inside the observed range."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not distinguish the memory relaxation, coupling, or gradient attenuation terms."
+      },
+      {
+        "option": "uncoupled Kelvin–Voigt creep or damped harmonic oscillator",
+        "rejected_reason": "Neither supplied readout uses the observed initial pool, memory state, or sink gradient."
+      }
+    ],
+    "hypothesis_name": "five_parameter_siphon_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\n\ndef _read(rows):\n    return np.asarray([[row[k] for k in _KEYS] for row in rows], dtype=float).T\n\n\ndef _evolve(data, p, n):\n    u, x, z, s, H = data\n    a, b, vmax, rho, tau = p\n    un = u / 0.05\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * un / (1.2 + un)\n    dt = H / n\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + 0.5 * dt * kx, z + 0.5 * dt * kz)\n        mx, mz = rhs(x + 0.5 * dt * lx, z + 0.5 * dt * lz)\n        nx, nz = rhs(x + dt * mx, z + dt * mz)\n        x = x + (dt / 6.0) * (kx + 2.0 * lx + 2.0 * mx + nx)\n        z = z + (dt / 6.0) * (kz + 2.0 * lz + 2.0 * mz + nz)\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _read(rows)\n    y = np.asarray([row['y'] for row in rows], dtype=float)\n    n = max(1, math.ceil(float(np.max(data[-1])) / 0.005))\n    result = least_squares(\n        lambda p: _evolve(data, p, n) - y,\n        x0=[1.5, 1.0, 6.5, 0.70, 0.5],\n        bounds=([0.0, 0.0, 0.0, 0.0, 0.01], [30.0, 30.0, np.inf, 1.0, np.inf]),\n        x_scale='jac', ftol=1e-10, xtol=1e-10, gtol=1e-10,\n    )\n    _params = result.x\n    return _params\n\n\ndef predict(row) -> float:\n    data = _read([row])\n    n = max(1, math.ceil(float(row['H']) / 0.005))\n    return float(_evolve(data, _params, n)[0])\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "5b44172b25b63816",
+  "prompt_tokens": 129699,
+  "cached_tokens": 121728,
+  "completion_tokens": 2766,
+  "task_context_chars": 3426,
+  "wall_ms": 76586.86,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The zero-step observation preserves x_now. Shifting the baseline in proportion to the input step leaves a signed transient whose magnitude per unit step decays exponentially with H. This law reproduces all five pilot observations to their reported precision and is ready for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Snapshot-only Ornstein–Uhlenbeck drift",
+        "rejected_reason": "A common equilibrium cannot explain the opposing shifts, which track the direction of the input step."
+      },
+      {
+        "option": "Single Maxwell exponential without a step-dependent baseline",
+        "rejected_reason": "The step-normalized residual is not a single exponential about x_now; adding a linear step-dependent baseline makes the exponential fit to rounding precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The four nonzero steps constrain the three fitted parameters across horizons that bracket the target, so fresh confirmation is more useful than another training batch."
+      }
+    ],
+    "hypothesis_name": "step_rebased_exponential_hysteresis",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    x, d, h, y = np.asarray([(r['x_now'], r['u_now'] - r['u_past'], r['H'], r['y']) for r in train_rows], dtype=float).T\n    def residual(p):\n        gain, amplitude, tau = p\n        return x + d * (gain - amplitude * np.exp(-h / tau)) - y\n    _params = least_squares(residual, [100.0, 600.0, 0.8], bounds=([-np.inf, 0.0, 1e-6], [np.inf, np.inf, np.inf]), x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row) -> float:\n    gain, amplitude, tau = _params\n    d = row['u_now'] - row['u_past']\n    return float(row['x_now'] + d * (gain - amplitude * math.exp(-row['H'] / tau)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

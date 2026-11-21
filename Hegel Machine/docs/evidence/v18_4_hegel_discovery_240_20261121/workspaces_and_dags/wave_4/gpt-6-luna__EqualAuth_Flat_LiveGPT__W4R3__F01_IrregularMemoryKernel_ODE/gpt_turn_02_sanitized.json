@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "7190ee82dd89f236",
+  "prompt_tokens": 15627,
+  "cached_tokens": 8320,
+  "completion_tokens": 1272,
+  "task_context_chars": 12707,
+  "wall_ms": 29921.64,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight training rows and their irregular raw histories support the supplied two-state memory ODE. The implementation reconstructs its initial memory state from the history, numerically integrates both history and forecast with RK4, and fits all four parameters by least squares; no additional probe is warranted.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Eight observations now exceed the supplied minimum for fitting the four-parameter coupled ODE; no unresolved identifiability need is evident."
+      },
+      {
+        "option": "Maxwell single-mode stress decay",
+        "rejected_reason": "Endpoint-matched history gaps and coupled transient lag are inconsistent with a law depending only on the endpoint displacement and horizon."
+      },
+      {
+        "option": "Kelvin-Voigt one-state creep",
+        "rejected_reason": "It omits history-dependent initialization and the observed coupled transient."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant high-variance auxiliary measurement; it does not resolve the target law."
+      }
+    ],
+    "hypothesis_name": "coupled_two_state_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row, tau):\n    pref = row.get('raw_prefix')\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([p['t'] for p in pref], dtype=float)\n    xs = np.array([p['x'] for p in pref], dtype=float)\n    z = 0.52 * xs[0]\n    for i in range(1, len(ts)):\n        dt = ts[i] - ts[i-1]\n        if dt <= 0: continue\n        # RK4 for dz/dt=(0.52*x(t)-z)/tau with linear x interpolation.\n        n = max(1, int(math.ceil(dt / 0.004)))\n        h = dt / n\n        x0, x1 = xs[i-1], xs[i]\n        for j in range(n):\n            xa = x0 + (x1-x0) * (j/n)\n            xb = x0 + (x1-x0) * ((j+1)/n)\n            xm = (xa+xb)/2\n            f = lambda zz, xx: (0.52*xx-zz)/tau\n            k1 = f(z, xa); k2 = f(z+h*k1/2, xm)\n            k3 = f(z+h*k2/2, xm); k4 = f(z+h*k3, xb)\n            z += h*(k1+2*k2+2*k3+k4)/6\n    return z\n\ndef _forecast(row, p):\n    a, b, c, tau = p\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H/0.004)))\n    h = H/n\n    def deriv(xv, zv):\n        return -a*xv+b*zv+c*float(row['u_now']), (0.52*xv-zv)/tau\n    for _ in range(n):\n        k1x,k1z=deriv(x,z)\n        k2x,k2z=deriv(x+h*k1x/2,z+h*k1z/2)\n        k3x,k3z=deriv(x+h*k2x/2,z+h*k2z/2)\n        k4x,k4z=deriv(x+h*k3x,z+h*k3z)\n        x += h*(k1x+2*k2x+2*k3x+k4x)/6\n        z += h*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        return np.array([_forecast(r,p) for r in train_rows])-y\n    result = least_squares(residual, x0=[0.5,0.5,0.5,1.0],\n                           bounds=([1e-5,1e-5,1e-5,0.02],[5.0,5.0,5.0,10.0]),\n                           max_nfev=3000)\n    _PARAMS = result.x\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_forecast(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

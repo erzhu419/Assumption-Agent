@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "6c9e463eb1a7decf",
+  "prompt_tokens": 19149,
+  "cached_tokens": 12416,
+  "completion_tokens": 762,
+  "task_context_chars": 15486,
+  "wall_ms": 20140.84,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-horizon outputs are positive while slow-horizon observations become strongly negative, directly discriminating for the supplied five-parameter sink-coupled dual-horizon adaptation law. Fit its five parameters numerically to all eight paid rows; additional probes are unnecessary.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The slow-horizon observations expose a pronounced negative reversal and match the supplied dual-horizon mechanism; the ODE requires additional trajectory data and is not the economical leading explanation."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Gradient already spans 0.25–2.15, so the sink dependence is meaningfully excited; no open-branch ambiguity is indicated."
+      },
+      {
+        "option": "static siphon or single-horizon saturation",
+        "rejected_reason": "Cannot explain the observed sign reversal from positive short-horizon outputs to negative outputs at H=15.5 and 24.7."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _predict_params(row, p):\n    vmax, rho, amp_adapt, tau_fast, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    H = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base * (1.0 - math.exp(-H / tau_fast)) - amp_adapt * u * (1.0 - math.exp(-H / tau_slow))\n\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows], dtype=float)\n    def residual(p):\n        return np.asarray([_predict_params(r, p) for r in rows]) - y\n    p0 = np.array([4.0, 0.7, 1.0, 1.0, 15.0], dtype=float)\n    lower = np.array([0.0, 0.0, 0.0, 1e-4, 0.1], dtype=float)\n    upper = np.array([100.0, 1.0, 100.0, 100.0, 500.0], dtype=float)\n    result = least_squares(residual, p0, bounds=(lower, upper), max_nfev=20000)\n    return result.x\n\n\ndef predict(row):\n    p = fit(row['train_rows']) if 'train_rows' in row else None\n    if p is None:\n        raise ValueError('predict requires fitted parameters; call fit(train_rows) first')\n    return float(_predict_params(row, p))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

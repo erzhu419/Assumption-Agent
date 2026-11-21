@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "2d9d8e0f2dfb2695",
+  "prompt_tokens": 76373,
+  "cached_tokens": 55424,
+  "completion_tokens": 2363,
+  "task_context_chars": 12543,
+  "wall_ms": 58207.87,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The endpoint-matched history gap and transient lag favor a latent state reconstructed from the irregular prefix. A numerical check of the coupled law with trapezoidal kernel integration gave a training RMSE of about 0.000004 across eight rows spanning H = 0.38–0.55. Submit the RK4 model for fresh confirmation at the target horizon of 0.46.",
+    "considered_alternatives": [
+      {
+        "option": "Endpoint-only relaxation",
+        "rejected_reason": "It cannot explain the observed history gap at matched endpoints."
+      },
+      {
+        "option": "Damped harmonic oscillator",
+        "rejected_reason": "The recalled oscillator depends only on the current input and horizon, so it cannot account for different outcomes from different prefixes at matched endpoints."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid rows already constrain the coupled fit near the target horizon; fresh confirmation is more useful than another training probe."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    intervals = ()\n    if z is None:\n        prefix = row['raw_prefix']\n        z = 0.52 * prefix[0]['x']\n        intervals = tuple((r['t'] - l['t'], l['x'], r['x']) for l, r in zip(prefix, prefix[1:]))\n    H = float(row['H'])\n    n = max(1, math.ceil(H / 0.004))\n    return float(row['x_now']), float(row['u_now']), float(z), intervals, n, H / n\n\ndef _forecast(p, data):\n    a, b, c, tau = map(float, p)\n    x, u, z, intervals, n, h = data\n    inv_tau = 1.0 / tau\n    for dt, xl, xr in intervals:\n        q = dt * inv_tau\n        decay = math.exp(-q)\n        z = decay * z + 0.26 * q * (decay * xl + xr)\n    drive = c * u\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) * inv_tau\n    hh = h / 2.0\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + hh * k1, z + hh * l1)\n        k3, l3 = rhs(x + hh * k2, z + hh * l2)\n        k4, l4 = rhs(x + h * k3, z + h * l3)\n        x += h / 6.0 * (k1 + 2.0 * (k2 + k3) + k4)\n        z += h / 6.0 * (l1 + 2.0 * (l2 + l3) + l4)\n    return float(x)\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = [_prepare(row) for row in rows]\n    targets = np.array([row['y'] for row in rows], dtype=float)\n    def residual(p):\n        return np.array([_forecast(p, d) for d in data]) - targets\n    result = least_squares(residual, [1.5, 0.8, 1.0, 0.6], bounds=([0.0, 0.0, 0.0, 0.01], [np.inf] * 4), x_scale='jac', ftol=1e-10, xtol=1e-10, gtol=1e-10)\n    _params = result.x\n    return _params\n\ndef predict(row) -> float:\n    return _forecast(_params, _prepare(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "82c87a79cf49db40",
+  "prompt_tokens": 34617,
+  "cached_tokens": 21248,
+  "completion_tokens": 2625,
+  "task_context_chars": 21036,
+  "wall_ms": 61218.4,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The endpoint-matched history gap and transient lag favor a separate memory state. Reconstructing it from the irregular prefixes and fitting the four coupled ODE parameters gave a training RMSE of about 0.000003 on eight rows spanning H = 0.36–0.55. Submit for fresh confirmation at the target horizon without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "One-state exponential relaxation",
+        "rejected_reason": "It cannot distinguish different histories at matched endpoints, as indicated by the pilot signature."
+      },
+      {
+        "option": "Literal trapezoidal quadrature of the exponential kernel",
+        "rejected_reason": "Integrating the kernel exactly against linearly interpolated samples gave a slightly lower training RMSE without adding parameters."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed ambiguity concerns temporal memory, not a static branch; the acquired trajectories already support fitting the coupled law."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    x = float(row['x_now'])\n    z = row.get('mem_conv')\n    prefix = row.get('raw_prefix')\n    if z is not None:\n        z, intervals = float(z), ()\n    elif prefix:\n        prefix = sorted(prefix, key=lambda point: point['t'])\n        z = 0.52 * prefix[0]['x']\n        intervals = tuple((right['t'] - left['t'], left['x'], right['x'] - left['x'])\n                          for left, right in zip(prefix, prefix[1:])\n                          if right['t'] > left['t'])\n    else:\n        z, intervals = 0.52 * x, ()\n    return x, float(row['u_now']), float(row['H']), z, intervals\n\n\ndef _forecast(prepared, params):\n    a, b, c, tau = map(float, params)\n    x, u, horizon, z, intervals = prepared\n    # Exact exponential convolution for linear interpolation on each interval.\n    for dt, x_left, dx in intervals:\n        q = dt / tau\n        weight = -math.expm1(-q)\n        ramp = (q * (0.5 - q / 6.0 + q * q / 24.0)\n                if q < 1e-4 else 1.0 - weight / q)\n        z = math.exp(-q) * z + 0.52 * (weight * x_left + ramp * dx)\n    if horizon == 0.0:\n        return x\n    n = math.ceil(horizon / min(0.004, 0.25 * tau))\n    h = horizon / n\n    drive = c * u\n    inv_tau = 1.0 / tau\n    for _ in range(n):\n        k1 = -a * x + b * z + drive\n        l1 = (0.52 * x - z) * inv_tau\n        k2 = k1 + 0.5 * h * (-a * k1 + b * l1)\n        l2 = l1 + 0.5 * h * (0.52 * k1 - l1) * inv_tau\n        k3 = k1 + 0.5 * h * (-a * k2 + b * l2)\n        l3 = l1 + 0.5 * h * (0.52 * k2 - l2) * inv_tau\n        k4 = k1 + h * (-a * k3 + b * l3)\n        l4 = l1 + h * (0.52 * k3 - l3) * inv_tau\n        x += h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)\n        z += h / 6.0 * (l1 + 2.0 * l2 + 2.0 * l3 + l4)\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = [_prepare(row) for row in train_rows]\n    targets = np.asarray([row['y'] for row in train_rows], dtype=float)\n\n    def residual(params):\n        return np.asarray([_forecast(row, params) for row in rows]) - targets\n\n    result = least_squares(residual, [2.0, 1.0, 1.0, 0.2],\n                           bounds=([0.0, 0.0, 0.0, 0.008], [np.inf] * 4),\n                           ftol=1e-10, xtol=1e-10, gtol=1e-10)\n    _params = result.x\n\n\ndef predict(row) -> float:\n    return float(_forecast(_prepare(row), _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

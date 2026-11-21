@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "4c2cf187e06ea634",
+  "prompt_tokens": 58345,
+  "cached_tokens": 49024,
+  "completion_tokens": 2362,
+  "task_context_chars": 14129,
+  "wall_ms": 59594.21,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The coupled ODE with a causal, time-shifted trapezoidal memory kernel fits the eight paid observations at about 0.000009 training RMSE. The fitted memory time constant is approximately 0.62 versus the target horizon of 0.45, so retaining the memory state is warranted. Submit for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Adiabatic snapshot model",
+        "rejected_reason": "It discards the observed history dependence, and the fitted memory time constant is comparable to the forecast horizon rather than much shorter."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "A signed input-step decay cannot explain the positive readouts after both upward and downward steps."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired trajectory batch gives eight rows spanning the target horizon, and the coupled model fits them closely enough to proceed directly to fresh confirmation."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    mem = row.get('mem_conv')\n    history = None\n    if mem is None:\n        prefix = row['raw_prefix']\n        end = float(prefix[-1]['t'])\n        age = np.array([end - float(p['t']) for p in prefix])\n        values = np.array([float(p['x']) for p in prefix])\n        history = (age, values, age[:-1] - age[1:])\n    return float(row['x_now']), float(row['u_now']), float(row['H']), mem, history\n\n\ndef _forecast(params, prepared):\n    a, b, c, tau = map(float, params)\n    x, u, horizon, mem, history = prepared\n    if mem is None:\n        age, values, intervals = history\n        weighted = np.exp(-age / tau) * values\n        z = 0.52 * (weighted[0] + np.dot(intervals, weighted[:-1] + weighted[1:]) / (2.0 * tau))\n    else:\n        z = float(mem)\n    drive = c * u\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    n = max(1, math.ceil(horizon / 0.004))\n    dt = horizon / n\n    half = 0.5 * dt\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + half * k1, z + half * l1)\n        k3, l3 = rhs(x + half * k2, z + half * l2)\n        k4, l4 = rhs(x + dt * k3, z + dt * l3)\n        x += dt / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)\n        z += dt / 6.0 * (l1 + 2.0 * l2 + 2.0 * l3 + l4)\n    return float(x)\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    prepared = [_prepare(row) for row in rows]\n    observed = np.array([float(row['y']) for row in rows])\n\n    def residual(params):\n        return np.array([_forecast(params, row) for row in prepared]) - observed\n\n    result = least_squares(residual, [1.5, 1.0, 1.0, 0.5], bounds=([0.0, 0.0, 0.0, 0.01], np.inf), x_scale='jac', gtol=1e-11)\n    _params = result.x\n    return _params\n\n\ndef predict(row):\n    return _forecast(_params, _prepare(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

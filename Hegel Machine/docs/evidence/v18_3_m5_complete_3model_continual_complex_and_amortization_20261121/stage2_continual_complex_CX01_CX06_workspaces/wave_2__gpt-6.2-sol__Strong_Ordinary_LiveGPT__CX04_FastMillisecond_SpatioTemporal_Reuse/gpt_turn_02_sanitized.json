@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "81603ddd5f96c200",
+  "prompt_tokens": 85186,
+  "cached_tokens": 50560,
+  "completion_tokens": 3080,
+  "task_context_chars": 9201,
+  "wall_ms": 76165.82,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The coupled gradient-siphon model reproduces the eight paid endpoints to rounding precision. The 0.005 scale normalizes the input; it is distinct from the fitted memory time constant. Submit the RK4 model for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Static gradient-attenuated siphon",
+        "rejected_reason": "It omits the initial state and memory, both of which enter the coupled law that matches all eight endpoints to rounding precision."
+      },
+      {
+        "option": "Adiabatic single-state model",
+        "rejected_reason": "The fitted memory time constant is about 0.52, comparable to the forecast horizon of 0.45, so the memory state cannot be assumed to equilibrate instantly."
+      },
+      {
+        "option": "Further extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch already supports the five-parameter fit at the target horizon; fresh confirmation is more informative than another training batch."
+      }
+    ],
+    "hypothesis_name": "normalized_siphon_coupled_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\ndef _rows(rows):\n    return np.asarray([[float(row[key]) for key in _KEYS] for row in rows], dtype=float)\n\ndef _forecast(p, data):\n    a, b, tau, vmax, rho = p\n    u, x, z, s, H = data.T\n    un = u / 0.005\n    source = vmax * (1.0 - rho * s / (1.0 + s)) * un / (1.2 + un)\n    n = max(1, math.ceil(float(np.max(H)) / min(0.01, 0.5 * tau)))\n    dt = H / n\n    def rates(x, z):\n        return -a * x + b * z + source, (0.52 * x - z) / tau\n    for _ in range(n):\n        kx, kz = rates(x, z)\n        lx, lz = rates(x + 0.5 * dt * kx, z + 0.5 * dt * kz)\n        mx, mz = rates(x + 0.5 * dt * lx, z + 0.5 * dt * lz)\n        nx, nz = rates(x + dt * mx, z + dt * mz)\n        x = x + dt * (kx + 2.0 * lx + 2.0 * mx + nx) / 6.0\n        z = z + dt * (kz + 2.0 * lz + 2.0 * mz + nz) / 6.0\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _rows(rows)\n    y = np.asarray([float(row['y']) for row in rows])\n    start = [1.5, 1.0, float(np.median(data[:, 4])), 6.0, 0.7]\n    result = least_squares(lambda p: _forecast(p, data) - y, start,\n                           bounds=([0, 0, 0.001, 0, 0], [np.inf, np.inf, np.inf, np.inf, 1]),\n                           x_scale='jac', ftol=1e-10, xtol=1e-10, gtol=1e-10)\n    _params = result.x\n    return _params\n\ndef predict(row):\n    return float(_forecast(_params, _rows([row]))[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

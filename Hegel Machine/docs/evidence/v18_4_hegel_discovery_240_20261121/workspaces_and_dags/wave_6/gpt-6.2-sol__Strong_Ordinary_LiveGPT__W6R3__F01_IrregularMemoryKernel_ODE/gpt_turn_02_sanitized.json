@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "b319d1417737346d",
+  "prompt_tokens": 48977,
+  "cached_tokens": 26880,
+  "completion_tokens": 2231,
+  "task_context_chars": 22242,
+  "wall_ms": 60850.08,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The endpoint-matched history gap favors a latent memory state reconstructed from the irregular prefix. The four-parameter ODE fits all eight paid rows with RMSE about 0.000007, and their horizons bracket the target H=0.45. Submit for fresh confirmation against the 0.045 tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Single-state adiabatic relaxation",
+        "rejected_reason": "It assigns identical forecasts to matched endpoints and cannot explain the observed history gap."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "It tests sink-gradient branches, not the memory lag supported by the prefix data."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch brought the total to eight rows, and fits from distinct initial time constants converged to the same solution."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_two_state_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n_I = np.eye(3)\n\n\ndef _prepare(row):\n    prefix = row.get('raw_prefix')\n    if prefix:\n        t = np.array([p['t'] for p in prefix], dtype=float)\n        xs = np.array([p['x'] for p in prefix], dtype=float)\n        history = (np.diff(t), xs)\n    else:\n        history = None\n    return float(row['u_now']), float(row['x_now']), float(row['H']), row.get('mem_conv'), history\n\n\ndef _forecast(p, data):\n    a, b, c, tau = p\n    u, x, H, z, history = data\n    if H == 0:\n        return x\n    if z is None:\n        if history is None:\n            z = 0.52 * x\n        else:\n            # Integrate the exponential kernel exactly on each linear segment.\n            intervals, xs = history\n            z = 0.52 * xs[0]\n            for dt, left, right in zip(intervals, xs[:-1], xs[1:]):\n                if dt == 0:\n                    continue\n                q = dt / tau\n                w = -math.expm1(-q)\n                z = (1 - w) * z + 0.52 * (w * left + (1 - w / q) * (right - left))\n    # With constant forcing, repeated RK4 steps are powers of one matrix.\n    n = max(1, math.ceil(H / 0.004))\n    B = (H / n) * np.array([[-a, b, c * u], [0.52 / tau, -1 / tau, 0.0], [0.0, 0.0, 0.0]])\n    step = _I + B @ (_I + B @ (_I / 2 + B @ (_I / 6 + B / 24)))\n    return float(np.linalg.matrix_power(step, n)[0] @ np.array([x, z, 1.0]))\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = [_prepare(row) for row in rows]\n    y = np.array([row['y'] for row in rows], dtype=float)\n    def residual(p):\n        return np.array([_forecast(p, item) for item in data]) - y\n    _params = least_squares(residual, [2.0, 1.4, 1.4, 0.5], bounds=([0.0, 0.0, 0.0, 0.02], [15.0, 15.0, 15.0, 5.0]), ftol=1e-11, xtol=1e-11, gtol=1e-11).x\n\n\ndef predict(row) -> float:\n    return _forecast(_params, _prepare(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

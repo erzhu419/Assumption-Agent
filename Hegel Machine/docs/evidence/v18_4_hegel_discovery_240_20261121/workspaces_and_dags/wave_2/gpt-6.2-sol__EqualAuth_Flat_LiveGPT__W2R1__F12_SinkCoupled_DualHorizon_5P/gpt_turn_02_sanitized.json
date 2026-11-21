@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "dbbb5f8136a83336",
+  "prompt_tokens": 24592,
+  "cached_tokens": 11904,
+  "completion_tokens": 1402,
+  "task_context_chars": 5696,
+  "wall_ms": 38708.66,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The probe stays positive at H = 8 and turns negative at H = 15.5 and 23.8, separating slow adaptation from the early positive gain. The five-parameter law fits all eight paid observations to rounding precision (training RMSE below 1e-7), with time scales of about 0.394 and 12.38. The target H = 22.3 lies within the sampled long-horizon range, so submit for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Dual-horizon adaptation without sink coupling",
+        "rejected_reason": "Can produce a sign reversal but omits the sink-gradient modulation that the five-parameter fit captures."
+      },
+      {
+        "option": "Lotka–Volterra harmonic model",
+        "rejected_reason": "The observations support a delayed reversal, not repeated cycles, and the harmonic model has no sink-gradient term."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired probe already spans the transition and samples near the target horizon; no unresolved ambiguity warrants another batch."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Does not constrain either time scale or the sink-gradient effect."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, h, y = np.asarray([[r['u_now'], r['s_grad'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    drive = u / (1.2 + u)\n    sink = s / (1.0 + s)\n\n    def residual(p):\n        vmax, rho, tau_fast, amp, gap = p\n        tau_slow = tau_fast + gap\n        fast = -np.expm1(-h / tau_fast)\n        slow = -np.expm1(-h / tau_slow)\n        return vmax * (1.0 - rho * sink) * drive * fast - amp * u * slow - y\n\n    _params = least_squares(\n        residual, [7.0, 0.6, 0.4, 1.5, 12.0],\n        bounds=([0.0, 0.0, 1e-6, 0.0, 1e-6], [np.inf, 1.0, np.inf, np.inf, np.inf]),\n        ftol=1e-12, xtol=1e-12, gtol=1e-12,\n    ).x\n\ndef predict(row):\n    vmax, rho, tau_fast, amp, gap = _params\n    u, s, h = (row[k] for k in ('u_now', 's_grad', 'H'))\n    fast = -math.expm1(-h / tau_fast)\n    slow = -math.expm1(-h / (tau_fast + gap))\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) * fast - amp * u * slow)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

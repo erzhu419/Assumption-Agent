@@ -1,0 +1,655 @@
+{
+  "episode_summary": {
+    "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+    "suite": "B_MultiScaleFold",
+    "subfamily": "B_memory_kernel_fold",
+    "arm": "EqualAuth_SingleNode_Wormhole_Only",
+    "is_out_of_scope": false,
+    "status": "confirmed_ok",
+    "selected_model_class": "M4_MoriZwanzigMemoryKernel",
+    "strict_pass": true,
+    "false_confirmation": false,
+    "evaluated_candidate_count": 3,
+    "total_nfev": 35,
+    "confirm_rmse": 0.001301,
+    "heldout_rmse": 0.000617,
+    "decision_count": 9,
+    "measurement_cost": 12.5,
+    "compute_cost": 19.335,
+    "composite_cost": 13.46675
+  },
+  "chain_verification": {
+    "valid": true,
+    "decision_count": 9,
+    "terminal_record_sha256": "6224cd180c3eb78af0370e745c73203d72efbb19f33b6a98a39d5419b18cd3ca",
+    "verified_measurement_cost": 12.5,
+    "verified_compute_cost": 19.335,
+    "verified_composite_cost": 13.46675,
+    "verified_total_tokens": 0
+  },
+  "decision_dag": [
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 1,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__001",
+      "parent_decision_id": null,
+      "prev_record_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "decision_type": "D0_TASK_ARRIVAL_AND_PILOT_ACQUISITION",
+      "evidence_inputs": {
+        "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+        "coarse_channel_available": true,
+        "observed_probe_signatures": [
+          "sig:slow_horizon_query",
+          "sig:coupled_transient_lag"
+        ],
+        "pilot_row_keys": [
+          [
+            1.45274,
+            1.97979,
+            1.13285,
+            -0.44348,
+            1.88335,
+            0.45
+          ],
+          [
+            3.38233,
+            2.60822,
+            -0.18526,
+            -0.50189,
+            1.19981,
+            0.45
+          ],
+          [
+            2.24726,
+            1.32342,
+            1.29597,
+            0.07015,
+            0.62651,
+            0.45
+          ],
+          [
+            2.34101,
+            0.62737,
+            0.18279,
+            -1.07927,
+            0.96765,
+            0.45
+          ],
+          [
+            2.33021,
+            3.12301,
+            -0.06315,
+            1.01209,
+            2.16448,
+            0.45
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "channel": "coarse_macro",
+          "unit_cost": 1.0,
+          "eligible": true
+        },
+        {
+          "channel": "standard_fine",
+          "unit_cost": 1.5,
+          "eligible": true
+        }
+      ],
+      "chosen_option": {
+        "selected_channel": "coarse_macro",
+        "acquired_rows": 5
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Acquire prefix-isolated initial pilot rows under authorized measurement channel.",
+      "cost_ledger_delta": {
+        "measurement_delta": 5.0,
+        "compute_delta": 0.0,
+        "composite_delta": 5.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 5.0,
+        "compute_cost": 0.0,
+        "composite_cost": 5.0,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "6b3e84e4595d796dcfd338ce810b6169ddfab27c6fc917b16192779f159b90d0"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 2,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__002",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__001",
+      "prev_record_sha256": "6b3e84e4595d796dcfd338ce810b6169ddfab27c6fc917b16192779f159b90d0",
+      "decision_type": "D1_CAUSAL_TEMPORAL_REGIME_EXTRACTION",
+      "evidence_inputs": {
+        "prefix_sample_count": 5,
+        "causal_cutoff_policy": "strict_prefix_le_t0"
+      },
+      "candidates_evaluated": [
+        {
+          "mode": "strict_causal_online_prefix",
+          "ok": true,
+          "future_regime_leaked": false
+        }
+      ],
+      "chosen_option": {
+        "causal_cutoff_t0": 0.4,
+        "past_present_extracted": true
+      },
+      "rejection_reasons": {
+        "centered_or_post_t0_window": "blocked_by_strict_online_causality"
+      },
+      "rationale_summary": "Extract (P_tau, N_tau) strictly from <= t0 prefix with zero future leakage.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.5,
+        "composite_delta": 0.025,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 5.0,
+        "compute_cost": 0.5,
+        "composite_cost": 5.025,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "5f1f5c70c02b13cd5d39c542016dc7061cba569f0cd5e6ab2bdd21a453f2064c"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 3,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__003",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__002",
+      "prev_record_sha256": "5f1f5c70c02b13cd5d39c542016dc7061cba569f0cd5e6ab2bdd21a453f2064c",
+      "decision_type": "D2_INDEX_RETRIEVAL_RANKING",
+      "evidence_inputs": {
+        "query_signatures": [
+          "sig:slow_horizon_query",
+          "sig:coupled_transient_lag"
+        ],
+        "index_kind": "HippoRAG_PPR"
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_memory_kernel_full",
+          "score": 0.570575
+        },
+        {
+          "node_id": "node_A_snapshot_balance",
+          "score": 0.267851
+        },
+        {
+          "node_id": "node_A_before_after_opposition",
+          "score": 0.161574
+        }
+      ],
+      "chosen_option": {
+        "top_k_node_ids": [
+          "node_A_memory_kernel_full",
+          "node_A_snapshot_balance",
+          "node_A_before_after_opposition"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Rank candidate forest nodes purely from observed sig:* pilot cues.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 1.645,
+        "composite_delta": 0.08225,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 5.0,
+        "compute_cost": 2.145,
+        "composite_cost": 5.10725,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "8ba59eb983c9cda0cf04f3ebc586c7344b29f4aa375925b3149757e6cd4a2ed8"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 4,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__004",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__003",
+      "prev_record_sha256": "8ba59eb983c9cda0cf04f3ebc586c7344b29f4aa375925b3149757e6cd4a2ed8",
+      "decision_type": "D3_FOUR_TIER_PERMISSION_AND_GRAYZONE_GATE",
+      "evidence_inputs": {
+        "observed_target_features": {
+          "has_history_or_lag_gap": true
+        }
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_memory_kernel_full",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        },
+        {
+          "node_id": "node_A_snapshot_balance",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        },
+        {
+          "node_id": "node_A_before_after_opposition",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        }
+      ],
+      "chosen_option": {
+        "authorized_ordered_model_queue": [
+          "M1_SnapshotLinear",
+          "M3_ReducedSlowODE",
+          "M4_MoriZwanzigMemoryKernel",
+          "M2_BeforeAfterOpposition"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Filter retrieved nodes through 4-tier preconditions & gray-zone bounds before fitting.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 5.0,
+        "compute_cost": 2.145,
+        "composite_cost": 5.10725,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "5340d15084423ebeaaf0d7150e08f9ce81d7d40c170f40b2dbb36bb4f8a82f33"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 5,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__005",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__004",
+      "prev_record_sha256": "5340d15084423ebeaaf0d7150e08f9ce81d7d40c170f40b2dbb36bb4f8a82f33",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M1_SnapshotLinear",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.43845,
+            0.88205,
+            -0.70039,
+            -0.32352,
+            0.95564,
+            0.45
+          ],
+          [
+            0.68901,
+            0.86709,
+            0.60317,
+            0.8598,
+            0.67856,
+            0.45
+          ],
+          [
+            1.60574,
+            2.87044,
+            -0.7767,
+            0.95188,
+            0.46617,
+            0.45
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M1_SnapshotLinear",
+          "nfev": 3,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.196674,
+          "confirm_rmse": 0.203426,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M1_SnapshotLinear": "confirm_rmse 0.20343 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M1_SnapshotLinear refuted on disjoint confirmation (RMSE=0.20343 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 3.0,
+        "compute_delta": 2.16,
+        "composite_delta": 3.108,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 8.0,
+        "compute_cost": 4.305,
+        "composite_cost": 8.21525,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "e9565b4a1bd3865ab72b7ebd0356db65cac3e141b16299f5dfb71064dc9e9846"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 6,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__006",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__005",
+      "prev_record_sha256": "e9565b4a1bd3865ab72b7ebd0356db65cac3e141b16299f5dfb71064dc9e9846",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M3_ReducedSlowODE",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.43845,
+            0.88205,
+            -0.70039,
+            -0.32352,
+            0.95564,
+            0.45
+          ],
+          [
+            0.68901,
+            0.86709,
+            0.60317,
+            0.8598,
+            0.67856,
+            0.45
+          ],
+          [
+            1.60574,
+            2.87044,
+            -0.7767,
+            0.95188,
+            0.46617,
+            0.45
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M3_ReducedSlowODE",
+          "nfev": 9,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.196674,
+          "confirm_rmse": 0.203426,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M3_ReducedSlowODE": "confirm_rmse 0.20343 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M3_ReducedSlowODE refuted on disjoint confirmation (RMSE=0.20343 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 3.98,
+        "composite_delta": 0.199,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 8.0,
+        "compute_cost": 8.285,
+        "composite_cost": 8.41425,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "e2778bc8f584328c5a11f77f96d1211f57987fe1656102be5c20efe3865e2f17"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 7,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__007",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__006",
+      "prev_record_sha256": "e2778bc8f584328c5a11f77f96d1211f57987fe1656102be5c20efe3865e2f17",
+      "decision_type": "D6_CEGAR_FINE_TRAJECTORY_ESCALATION",
+      "evidence_inputs": {
+        "escalated_to": "M4_MoriZwanzigMemoryKernel",
+        "prior_rows": 5
+      },
+      "candidates_evaluated": [
+        {
+          "action": "acquire_3_fine_rows_for_4param_identifiability",
+          "measurement_cost": 4.5
+        }
+      ],
+      "chosen_option": {
+        "new_train_row_count": 8
+      },
+      "rejection_reasons": {
+        "underdetermined_fit": "4_param_memory_kernel_requires_at_least_8_rows"
+      },
+      "rationale_summary": "Escalate along reverse coarse_grains_to edge and acquire 3 fine trajectories.",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 0.0,
+        "composite_delta": 4.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.5,
+        "compute_cost": 8.285,
+        "composite_cost": 12.91425,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "6b2fd878b2937884ef830fcf27b23bd2bdb3b2bbb778fd395f8896edca9f2d34"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 8,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__008",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__007",
+      "prev_record_sha256": "6b2fd878b2937884ef830fcf27b23bd2bdb3b2bbb778fd395f8896edca9f2d34",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M4_MoriZwanzigMemoryKernel",
+        "train_row_count": 8,
+        "confirm_row_keys": [
+          [
+            1.43845,
+            0.88205,
+            -0.70039,
+            -0.32352,
+            0.95564,
+            0.45
+          ],
+          [
+            0.68901,
+            0.86709,
+            0.60317,
+            0.8598,
+            0.67856,
+            0.45
+          ],
+          [
+            1.60574,
+            2.87044,
+            -0.7767,
+            0.95188,
+            0.46617,
+            0.45
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M4_MoriZwanzigMemoryKernel",
+          "nfev": 23,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.000862,
+          "confirm_rmse": 0.001301,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_ACCEPTED"
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Candidate M4_MoriZwanzigMemoryKernel passed disjoint confirmation (RMSE=0.00130 <= 0.045).",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 11.05,
+        "composite_delta": 0.5525,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.5,
+        "compute_cost": 19.335,
+        "composite_cost": 13.46675,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "ebf900242d88f052a4e76f6ad481fe5ca820a1ccdbaf5a19fba7a51efc55c06b"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_B03_MoriZwanzigMemoryFold1",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 9,
+      "decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__009",
+      "parent_decision_id": "dec__det_m5__S101_B03_MoriZwanzigMemoryFold1__EqualAuth_SingleNode_Wormhole_Only__008",
+      "prev_record_sha256": "ebf900242d88f052a4e76f6ad481fe5ca820a1ccdbaf5a19fba7a51efc55c06b",
+      "decision_type": "D9_TERMINAL_DECISION_AND_HELDOUT_AUDIT",
+      "evidence_inputs": {
+        "locked_model_class": "M4_MoriZwanzigMemoryKernel",
+        "heldout_row_count": 5,
+        "any_fit_after_confirm": false
+      },
+      "candidates_evaluated": [
+        {
+          "status": "confirmed_ok",
+          "heldout_rmse": 0.000617
+        }
+      ],
+      "chosen_option": {
+        "final_status": "confirmed_ok",
+        "selected_model_class": "M4_MoriZwanzigMemoryKernel",
+        "strict_pass": true
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Lock confirmed model with zero refit and audit on disjoint heldout set.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.5,
+        "compute_cost": 19.335,
+        "composite_cost": 13.46675,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "6224cd180c3eb78af0370e745c73203d72efbb19f33b6a98a39d5419b18cd3ca"
+    }
+  ]
+}

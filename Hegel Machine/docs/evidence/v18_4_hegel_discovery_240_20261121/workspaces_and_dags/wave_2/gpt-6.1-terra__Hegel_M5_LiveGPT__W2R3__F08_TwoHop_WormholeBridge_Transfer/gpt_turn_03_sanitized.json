@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "6854e5a3db9eee0d",
+  "prompt_tokens": 12623,
+  "cached_tokens": 8320,
+  "completion_tokens": 2156,
+  "task_context_chars": 7487,
+  "wall_ms": 45876.58,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The data show a smooth saturating supply response with gradient-dependent transfer. Fit competing compact rational response surfaces numerically and use fresh confirmation to test whether this fixed-horizon approximation meets tolerance. Temporal dependence remains unidentified.",
+    "considered_alternatives": [
+      {
+        "option": "Additional trajectory or open-branch probe",
+        "rejected_reason": "Both available discriminating probes have already been acquired; proceed to fresh confirmation rather than repurchasing them."
+      },
+      {
+        "option": "Linear Little's Law and hyperbolic queue",
+        "rejected_reason": "The observed supply response saturates and changes substantially with the gradient, unlike these proposed snapshot laws."
+      },
+      {
+        "option": "Coupled dynamical ODE",
+        "rejected_reason": "All observations have the same horizon and initial conditions, so its temporal parameters are not identifiable from these rows."
+      }
+    ],
+    "hypothesis_name": "saturating_two_branch_transfer",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_model = None\n\ndef fit(train_rows):\n    global _model\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n\n    # A two-branch saturating response; each branch may depend on both\n    # upstream supply and the downstream pull gradient.\n    def calc(p, u, s):\n        a, b, c, d, e, f = p\n        return a + b / (u + np.exp(c)) + d * (s - 1.0) / (u + np.exp(e) + np.exp(f) * s)\n\n    starts = [\n        [3.2, -3.3, 0.0, -2.0, 0.0, 0.0],\n        [3.2, -3.3, 0.0, -5.0, -1.0, 0.0],\n        [3.2, -3.3, 0.0, -2.0, 1.0, -1.0],\n    ]\n    best = min((least_squares(lambda p: calc(p, u, s) - y, p0, max_nfev=5000) for p0 in starts), key=lambda z: np.sum(z.fun ** 2))\n\n    # A rational surface provides an alternative if the separable two-branch\n    # form is not supported by the observations.\n    def rational(p, u, s):\n        a, b, c, d, e, f, g = p\n        den = u + np.exp(e) + (s - 1.0) * (f + g * u)\n        den = np.where(np.abs(den) < 1e-8, np.where(den < 0, -1e-8, 1e-8), den)\n        return (a * u + b + (s - 1.0) * (c * u + d)) / den\n\n    q0 = [3.2, -0.2, 0.0, 0.0, 0.0, 0.2, 0.1]\n    q = least_squares(lambda p: rational(p, u, s) - y, q0, max_nfev=5000)\n    if np.mean(q.fun ** 2) < 0.5 * np.mean(best.fun ** 2):\n        _model = ('rational', q.x)\n    else:\n        _model = ('branches', best.x)\n\ndef predict(row):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    kind, p = _model\n    if kind == 'branches':\n        a, b, c, d, e, f = p\n        return float(a + b / (u + np.exp(c)) + d * (s - 1.0) / (u + np.exp(e) + np.exp(f) * s))\n    a, b, c, d, e, f, g = p\n    den = u + np.exp(e) + (s - 1.0) * (f + g * u)\n    if abs(den) < 1e-8:\n        den = -1e-8 if den < 0 else 1e-8\n    return float((a * u + b + (s - 1.0) * (c * u + d)) / den)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

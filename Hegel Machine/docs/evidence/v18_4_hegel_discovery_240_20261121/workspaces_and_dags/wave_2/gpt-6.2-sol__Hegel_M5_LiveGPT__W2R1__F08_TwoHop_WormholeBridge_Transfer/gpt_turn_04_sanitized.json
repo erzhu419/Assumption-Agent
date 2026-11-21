@@ -1,0 +1,32 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "df08b3b6ecae3d3d",
+  "prompt_tokens": 87430,
+  "cached_tokens": 53760,
+  "completion_tokens": 3135,
+  "task_context_chars": 5808,
+  "wall_ms": 81428.01,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The fixed-gradient sweep identifies a saturating transfer minus a square-root loss. Attenuating the transfer by a saturating function of the gradient also matches both branch-probe observations. The combined law fits all seven paid rows to rounding precision and is ready for fresh confirmation at H = 0.6.",
+    "considered_alternatives": [
+      {
+        "option": "Gradient-independent Beverton–Holt recruitment",
+        "rejected_reason": "It cannot explain the low-gradient boost and high-gradient suppression observed by the branch probe."
+      },
+      {
+        "option": "Single reciprocal resistance law",
+        "rejected_reason": "Its residuals are systematic across the input sweep and its training RMSE exceeds tolerance."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The four-parameter law already matches all seven paid observations to rounding precision at the target horizon; fresh confirmation is the next informative test."
+      }
+    ],
+    "hypothesis_name": "two_hop_saturation_with_siphon_loss",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _law(u, s, root_u, p):\n    amplitude, half_sat, attenuation, loss = p\n    return amplitude * u / (half_sat + u) * (1.0 - attenuation * s / (1.0 + s)) - loss * root_u\n\n\ndef fit(train_rows):\n    global _params\n    u, s, y = np.array([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float).T\n    root_u = np.sqrt(u)\n    _params = least_squares(lambda p: _law(u, s, root_u, p) - y, [6.0, 1.0, 0.5, 0.3], bounds=([0.0, 1e-8, 0.0, 0.0], [np.inf, np.inf, 1.0, np.inf])).x\n\n\ndef predict(row) -> float:\n    u = float(row['u_now'])\n    return float(_law(u, float(row['s_grad']), math.sqrt(u), _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

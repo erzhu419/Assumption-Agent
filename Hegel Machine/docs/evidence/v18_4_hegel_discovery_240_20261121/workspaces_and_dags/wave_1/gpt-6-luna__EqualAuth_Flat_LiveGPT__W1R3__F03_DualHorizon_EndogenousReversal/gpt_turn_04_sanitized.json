@@ -1,0 +1,32 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "34781c7f571a6785",
+  "prompt_tokens": 13980,
+  "cached_tokens": 4864,
+  "completion_tokens": 1066,
+  "task_context_chars": 18282,
+  "wall_ms": 24184.7,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Short-H positive gain and multiple long-H negative gains support dual-horizon endogenous adaptation. The first numerical fit narrowly missed fresh-confirmation tolerance, so this version uses all 11 rows and multistart least squares over positive amplitudes and ordered timescales to reduce local-fit risk.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another slow_horizon_discriminating_probe",
+        "rejected_reason": "Existing data include multiple long-horizon observations, including the target horizon and clear sign reversal; the mechanism is identifiable enough to fit."
+      },
+      {
+        "option": "Coupled memory ODE",
+        "rejected_reason": "The supplied rows have x_now and mem_conv fixed at zero and show a response proportional to u_now across horizons, supporting the simpler horizon-response law; trajectory data now provide 11 rows."
+      },
+      {
+        "option": "Abstain as non-stationary",
+        "rejected_reason": "The observations show a smooth, reproducible horizon-dependent sign reversal, not chaotic high-frequency sign oscillations."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal_multistart",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _curve(H, p):\n    # Positive amplitudes and ordered positive time constants.\n    af, ass = np.exp(p[0]), np.exp(p[1])\n    tf = np.exp(p[2])\n    ts = tf + np.exp(p[3])\n    return af * (-np.expm1(-H / tf)) - ass * (-np.expm1(-H / ts))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    h = np.array([float(r['H']) for r in rows])\n    u = np.array([float(r['u_now']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    # The mechanism predicts y proportional to u; fit normalized gains to\n    # prevent the largest-u rows dominating the timescale estimate.\n    target = y / np.maximum(np.abs(u), 1e-8)\n    def residual(p):\n        return _curve(h, p) - target\n    best = None\n    # Multistart addresses the strong correlation between amplitudes and\n    # timescales over a broad horizon range.\n    for tf0 in (0.05, 0.2, 0.8, 2.0):\n        for ts0 in (4.0, 10.0, 25.0, 60.0):\n            if ts0 <= tf0:\n                continue\n            p0 = np.log([1.2, 1.0, tf0, ts0 - tf0])\n            result = least_squares(residual, p0, max_nfev=20000)\n            score = float(np.dot(result.fun, result.fun))\n            if best is None or score < best[0]:\n                best = (score, result.x)\n    _params = best[1]\n    return _params\n\ndef predict(row):\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(float(row['u_now']) * _curve(float(row['H']), _params))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

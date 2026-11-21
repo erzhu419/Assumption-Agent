@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "e7f2051aa54516a6",
+  "prompt_tokens": 10865,
+  "cached_tokens": 9728,
+  "completion_tokens": 1423,
+  "task_context_chars": 9289,
+  "wall_ms": 31254.65,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The measurements are positive at short H and negative at H=16–24, matching dual-horizon adaptation rather than stationary monotone alternatives. Across rows the sink gradient also varies, so fit a fifth sink-attenuation parameter jointly with the four temporal parameters.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; the added H=8,16,24 observations establish the positive-to-negative reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The observed long-H sign reversal directly supports the supplied dual-horizon mechanism; the ODE is unnecessary and would require a more complex fit."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is explicitly irrelevant to identifying this response law and should not be purchased."
+      }
+    ],
+    "hypothesis_name": "sink_modulated_dual_horizon_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows])\n    s = np.array([float(r['s_grad']) for r in rows])\n    H = np.array([float(r['H']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    q = s / (1.0 + s)\n\n    def pred(p):\n        af, tf, ass, ts, rho = p\n        temporal = af * (-np.expm1(-H / tf)) - ass * (-np.expm1(-H / ts))\n        return u * temporal * (1.0 - rho * q)\n\n    best = None\n    for start in ([1.0, 1.0, 1.0, 8.0, 0.5], [2.0, 1.0, 1.0, 12.0, 0.2], [1.0, 0.5, 0.5, 20.0, 0.7]):\n        result = least_squares(lambda p: pred(p) - y, x0=np.array(start, dtype=float),\n            bounds=([0.0, 1e-4, 0.0, 1e-4, -5.0], [20.0, 100.0, 20.0, 200.0, 5.0]),\n            max_nfev=20000)\n        if best is None or np.sum(result.fun ** 2) < np.sum(best.fun ** 2):\n            best = result\n    return best.x\n\ndef predict(row):\n    p = fit([row]) if False else _fitted_params\n    af, tf, ass, ts, rho = p\n    H = float(row['H'])\n    s = float(row['s_grad'])\n    temporal = af * (-math.expm1(-H / tf)) - ass * (-math.expm1(-H / ts))\n    return float(row['u_now']) * temporal * (1.0 - rho * s / (1.0 + s))\n\n_fitted_params = None\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

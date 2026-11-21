@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "e95ebb82afd90985",
+  "prompt_tokens": 15056,
+  "cached_tokens": 8320,
+  "completion_tokens": 804,
+  "task_context_chars": 15477,
+  "wall_ms": 20732.14,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Long-horizon observations show a clear reversal after positive short-horizon gains, matching the dual-horizon endogenous adaptation signature. Fit its four parameters numerically to all eight rows; the paid long-horizon probe resolves the key ambiguity without further measurements.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its long-horizon values establish the predicted sign reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "Observed reversal directly matches the provided dual-horizon law, and eight observations constrain its four parameters; no trajectory batch is needed."
+      },
+      {
+        "option": "static saturation, single-relaxation, or monotone response families",
+        "rejected_reason": "Cannot explain the observed positive short-horizon outputs followed by negative values at H=16.99 and 23.6."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Does not improve identification of this smooth horizon-dependent mechanism."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows])\n    H = np.array([float(r['H']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n\n    def predict_params(p):\n        amp_fast, tau_fast, amp_slow, tau_slow = p\n        return u * (amp_fast * (-np.expm1(-H / tau_fast)) - amp_slow * (-np.expm1(-H / tau_slow)))\n\n    def residual(p):\n        return predict_params(p) - y\n\n    best = None\n    for start in ([0.8, 0.3, 0.12, 12.0], [1.0, 0.5, 0.2, 20.0], [2.0, 0.2, 0.1, 8.0]):\n        result = least_squares(residual, start, bounds=([0.0, 1e-4, 0.0, 1e-4], [20.0, 100.0, 20.0, 200.0]), max_nfev=20000)\n        if best is None or np.sum(result.fun ** 2) < np.sum(best.fun ** 2):\n            best = result\n    return tuple(float(v) for v in best.x)\n\ndef predict(row):\n    # Parameters are supplied by the fitted model tuple from fit(train_rows).\n    amp_fast, tau_fast, amp_slow, tau_slow = row['_fit_params']\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (-math.expm1(-h / tau_fast)) - amp_slow * (-math.expm1(-h / tau_slow)))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

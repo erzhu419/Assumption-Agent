@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "61f51e72958e5843",
+  "prompt_tokens": 12542,
+  "cached_tokens": 8320,
+  "completion_tokens": 888,
+  "task_context_chars": 7171,
+  "wall_ms": 22984.02,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The ten observations span input and gradient at the target horizon. A fitted saturating rational response tests the bridge-like stationary mechanism on fresh data without claiming unidentified horizon dynamics.",
+    "considered_alternatives": [
+      {
+        "option": "M/M/1 queue blowup and linear Little's Law",
+        "rejected_reason": "The observed response saturates with input and varies nonlinearly with gradient, unlike either recalled alternative."
+      },
+      {
+        "option": "Coupled dynamic transfer model",
+        "rejected_reason": "All paid rows have the same horizon and initial state, so its dynamic parameters are not identifiable from these observations."
+      },
+      {
+        "option": "Additional fine trajectory probe",
+        "rejected_reason": "The available batch has already been acquired and supplied no variation in horizon or initial state; confirmation of the stationary response is the useful next test."
+      }
+    ],
+    "hypothesis_name": "saturating_two_input_rational_bridge",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _formula(p, u, s):\n    # Saturating supply response with a gradient-dependent transfer term.\n    a, b, c, d, e, f = p\n    return a + b*u/(np.exp(c)+u) + (d + e*u/(np.exp(c)+u))/(np.exp(f)+s)\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    best = None\n    for c in [-1.0, 0.0, 1.0]:\n        for f in [-1.0, 0.0, 1.0]:\n            p0 = [0.0, 3.0, c, 1.0, 0.0, f]\n            res = least_squares(lambda p: _formula(p, u, s)-y, p0,\n                                bounds=([-20,-20,-6,-20,-20,-6],\n                                        [20,20,6,20,20,6]),\n                                max_nfev=5000)\n            if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n                best = res\n    _params = best.x\n\ndef predict(row):\n    return float(_formula(_params, float(row['u_now']), float(row['s_grad'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

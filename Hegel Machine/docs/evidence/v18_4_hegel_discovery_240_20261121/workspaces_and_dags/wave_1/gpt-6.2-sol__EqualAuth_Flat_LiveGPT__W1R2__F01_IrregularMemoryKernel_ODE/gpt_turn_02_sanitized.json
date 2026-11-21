@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "5f03c2749edb3257",
+  "prompt_tokens": 28810,
+  "cached_tokens": 18432,
+  "completion_tokens": 2307,
+  "task_context_chars": 12780,
+  "wall_ms": 55595.97,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The coupled memory law explains both the history gap and transient lag. A numerical fit using trapezoidal reconstruction of the irregular prefixes gave paid-row RMSE of about 0.000007. The observed horizons bracket H=0.45, so fresh confirmation is more informative than another paid probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid trajectories span both directions of the input step and bracket the target horizon. The coupled model already fits closely enough to proceed to fresh confirmation."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch has already expanded the fit to eight trajectories; another batch is not warranted before confirmation."
+      },
+      {
+        "option": "Maxwell stress decay",
+        "rejected_reason": "It predicts opposite signs for upward and downward input steps, whereas both groups have positive targets."
+      },
+      {
+        "option": "Kelvin–Voigt creep",
+        "rejected_reason": "A law driven only by the current input and horizon cannot retain the observed dependence on trajectory history."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    if z is None:\n        prefix = row['raw_prefix']\n        t_end = float(prefix[-1]['t'])\n        t = np.array([float(p['t']) - t_end for p in prefix])\n        v = np.array([0.52 * float(p['x']) for p in prefix])\n        memory = (t, np.diff(t), v)\n    else:\n        memory = float(z)\n    return float(row['x_now']), float(row['u_now']), float(row['H']), memory\n\ndef _forecast(p, data):\n    a, b, c, tau = map(float, p)\n    x, u, horizon, z = data\n    if isinstance(z, tuple):\n        t, gaps, v = z\n        weighted = np.exp(t / tau) * v\n        z = float(weighted[0] + np.dot(gaps, weighted[:-1] + weighted[1:]) / (2.0 * tau))\n    n = max(1, math.ceil(horizon / min(0.004, tau / 4.0)))\n    h = horizon / n\n    drive = c * u\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + h * kx / 2, z + h * kz / 2)\n        mx, mz = rhs(x + h * lx / 2, z + h * lz / 2)\n        nx, nz = rhs(x + h * mx, z + h * mz)\n        x += h * (kx + 2 * lx + 2 * mx + nx) / 6\n        z += h * (kz + 2 * lz + 2 * mz + nz) / 6\n    return float(x)\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = [_prepare(row) for row in rows]\n    targets = np.array([float(row['y']) for row in rows])\n\n    def residual(p):\n        return np.array([_forecast(p, d) for d in data]) - targets\n\n    result = least_squares(residual, [1.0, 0.5, 1.0, 0.5], bounds=([0.0, 0.0, 0.0, 0.02], [np.inf] * 4), x_scale='jac', gtol=1e-12)\n    _params = result.x\n\ndef predict(row):\n    return _forecast(_params, _prepare(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

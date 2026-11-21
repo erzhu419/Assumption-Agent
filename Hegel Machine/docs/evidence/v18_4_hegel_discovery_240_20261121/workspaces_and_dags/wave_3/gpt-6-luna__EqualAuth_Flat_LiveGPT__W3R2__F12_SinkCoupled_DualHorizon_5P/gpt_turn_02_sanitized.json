@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "04e3febd82bc0fb6",
+  "prompt_tokens": 15896,
+  "cached_tokens": 12416,
+  "completion_tokens": 705,
+  "task_context_chars": 5708,
+  "wall_ms": 18666.54,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The long-horizon probe resolves the key ambiguity: observations progress from positive short-horizon gain to negative response near the target horizon. Fit the five parameters of the verified sink-coupled dual-horizon adaptation law numerically using all paid rows; no further probe is justified.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another slow-horizon or fine-trajectory probe",
+        "rejected_reason": "The purchased slow-horizon probe produced three added observations spanning H=8.0 to 23.9, including the predicted sign reversal; eight rows now support numerical fitting of the five-parameter mechanism."
+      },
+      {
+        "option": "Dual-horizon model without sink-gradient coupling",
+        "rejected_reason": "Observed variation with s_grad and the recalled verified sink-coupled mechanism support retaining the gradient factor."
+      },
+      {
+        "option": "Lotka–Volterra periodic harmonic model",
+        "rejected_reason": "It does not explain the characteristic short-positive to long-negative adaptation pattern as directly as the identified dual-horizon mechanism."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _predict_params(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    H = float(row['H'])\n    return (vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) * (1.0 - math.exp(-H / tau_fast))\n            - amp_adapt * u * (1.0 - math.exp(-H / tau_slow)))\n\ndef fit(train_rows):\n    y = np.asarray([float(r['y']) for r in train_rows], dtype=float)\n    def residual(p):\n        return np.asarray([_predict_params(r, p) for r in train_rows]) - y\n    p0 = np.array([4.0, 0.5, 0.5, 0.5, 12.0])\n    lower = np.array([0.0, 0.0, 1e-4, 0.0, 1e-3])\n    upper = np.array([30.0, 1.0, 30.0, 10.0, 200.0])\n    result = least_squares(residual, p0, bounds=(lower, upper), max_nfev=20000)\n    return result.x\n\ndef predict(row):\n    p = fit(train_rows)\n    return float(_predict_params(row, p))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

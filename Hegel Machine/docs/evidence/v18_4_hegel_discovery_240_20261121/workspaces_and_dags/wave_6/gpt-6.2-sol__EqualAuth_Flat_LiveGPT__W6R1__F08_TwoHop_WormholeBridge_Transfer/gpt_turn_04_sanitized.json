@@ -1,0 +1,36 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "7389e39192fdd19c",
+  "prompt_tokens": 78696,
+  "cached_tokens": 68224,
+  "completion_tokens": 3425,
+  "task_context_chars": 7497,
+  "wall_ms": 88659.81,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The crossed measurements show that transfer decreases with gradient and saturates with input. A gradient-attenuated rational term plus a second saturating term fits all ten paid rows with training RMSE about 0.0019. Submit it for fresh confirmation at H = 0.6 without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Input-only Beverton–Holt recruitment",
+        "rejected_reason": "It cannot explain why the low-gradient row at u_now = 2.1 exceeds the high-gradient row at u_now = 2.9."
+      },
+      {
+        "option": "Single gradient-dependent rational flux",
+        "rejected_reason": "A bilinear denominator left a training RMSE of about 0.067, above the confirmation tolerance."
+      },
+      {
+        "option": "Coupled ODE with independent horizon and initial-state effects",
+        "rejected_reason": "The acquired rows do not vary horizon or initial state, so those dynamics are not identifiable. The fitted law is scoped to the target horizon."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It would not help distinguish the transfer mechanisms."
+      }
+    ],
+    "hypothesis_name": "gradient_attenuated_two_component_flux",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n\n    def residual(p):\n        a, b, c, d, k = p\n        return a*u/((1+b*u)*(1+c*s)) - d*np.expm1(-k*u) - y\n\n    _params = least_squares(residual, [4.5, 0.8, 1.0, 1.0, 1.0], bounds=(0.0, np.inf)).x\n\ndef predict(row):\n    a, b, c, d, k = _params\n    u, s = float(row['u_now']), float(row['s_grad'])\n    return float(a*u/((1+b*u)*(1+c*s)) - d*math.expm1(-k*u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

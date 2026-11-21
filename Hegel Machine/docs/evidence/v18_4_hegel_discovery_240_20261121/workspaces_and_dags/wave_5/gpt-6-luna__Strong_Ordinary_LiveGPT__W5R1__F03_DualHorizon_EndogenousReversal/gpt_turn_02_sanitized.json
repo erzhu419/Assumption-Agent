@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "ccc30b7d88e38263",
+  "prompt_tokens": 15062,
+  "cached_tokens": 8320,
+  "completion_tokens": 752,
+  "task_context_chars": 15489,
+  "wall_ms": 20407.98,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Across the measured horizons, the response per unit u_now is initially positive and becomes negative by H=17.14–23.8. This directly supports the supplied dual-horizon adaptation law; the 8 measurements span both timescales and allow numerical estimation of its four parameters without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its three additional horizon measurements establish a sign reversal and complement the five short-horizon rows."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "No evidence for an ODE trajectory mechanism; the observed response follows the provided dual-horizon reversal signature, and the current 8 rows cover short and long horizons."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to distinguishing the observed horizon-dependent sign reversal and explicitly not worth purchasing."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    H = np.array([r['H'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def pred(p):\n        af, ass, tf, ts = p\n        return u * (af * (1.0 - np.exp(-H / tf)) - ass * (1.0 - np.exp(-H / ts)))\n    # Multiple scales help initialize the fast and slow time constants.\n    best = None\n    for tf0, ts0 in [(0.1, 10.0), (0.3, 20.0), (1.0, 8.0), (1.0, 30.0)]:\n        p0 = [1.0, 0.5, tf0, ts0]\n        res = least_squares(lambda p: pred(p) - y, p0,\n                            bounds=([0.0, 0.0, 1e-5, 1e-4], [20.0, 20.0, 10.0, 1e4]),\n                            max_nfev=20000)\n        err = float(np.sum(res.fun ** 2))\n        if best is None or err < best[0]:\n            best = (err, res.x)\n    return best[1]\n\ndef predict(row):\n    af, ass, tf, ts = fit(_TRAIN_ROWS)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    return u * (af * (1.0 - math.exp(-H / tf)) - ass * (1.0 - math.exp(-H / ts)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

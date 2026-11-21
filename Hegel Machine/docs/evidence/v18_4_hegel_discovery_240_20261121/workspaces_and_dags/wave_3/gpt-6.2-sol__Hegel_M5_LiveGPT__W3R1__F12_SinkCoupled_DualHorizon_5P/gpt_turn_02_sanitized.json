@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "e1ce6eacb9d67b52",
+  "prompt_tokens": 17444,
+  "cached_tokens": 13440,
+  "completion_tokens": 812,
+  "task_context_chars": 7754,
+  "wall_ms": 23504.11,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilot is positive through H=0.48, and the paid probe is positive at H=8 but negative at H=15.5 and H=22.6. The short windows constrain the fast sink-modulated drive, while the three longer windows constrain the slow opposing term near the target H=21.1. Fit all five parameters jointly and submit for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing eight rows span the initial rise and the long-horizon reversal, including two observations bracketing the target horizon. Submit for fresh confirmation before buying more measurements."
+      },
+      {
+        "option": "sink-free dual exponential",
+        "rejected_reason": "It can reverse sign but omits the sink-gradient suppression seen in the pilot and the saturating drive identified by the mechanism notes."
+      },
+      {
+        "option": "static siphon model",
+        "rejected_reason": "It has no horizon-dependent adaptation term to explain the observed late negative response."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _law(p, u, s, h):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    return -drive * np.expm1(-h / tau_fast) + amp_adapt * u * np.expm1(-h / tau_slow)\n\n\ndef fit(train_rows):\n    global _params\n    u, s, h, y = np.array([[r['u_now'], r['s_grad'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    def residual(p):\n        return _law(p, u, s, h) - y\n    bounds = ([0.0, 0.0, 1e-5, 0.0, 1e-5], [np.inf, 1.0, np.inf, np.inf, np.inf])\n    fits = [least_squares(residual, start, bounds=bounds, x_scale='jac', max_nfev=1000) for start in ([6.5, 0.7, 0.25, 1.5, 12.0], [8.0, 0.65, 0.5, 2.0, 25.0])]\n    _params = min(fits, key=lambda result: result.cost).x\n\n\ndef predict(row):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = _params\n    u, s, h = (float(row[k]) for k in ('u_now', 's_grad', 'H'))\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    return float(-drive * math.expm1(-h / tau_fast) + amp_adapt * u * math.expm1(-h / tau_slow))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

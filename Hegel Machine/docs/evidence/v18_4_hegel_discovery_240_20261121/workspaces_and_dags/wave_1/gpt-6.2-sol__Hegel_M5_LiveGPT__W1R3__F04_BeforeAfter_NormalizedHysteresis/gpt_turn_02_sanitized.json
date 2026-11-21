@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "f96023764acfedf7",
+  "prompt_tokens": 42808,
+  "cached_tokens": 29952,
+  "completion_tokens": 2181,
+  "task_context_chars": 5427,
+  "wall_ms": 57299.13,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives y = x_now. Across both step directions, a steady shift plus a decaying exponential explains the response per unit signed step to within the reported rounding. The paid rows span the target horizon, so no further measurement is needed before fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Snapshot-only Ornstein–Uhlenbeck mean",
+        "rejected_reason": "A common equilibrium cannot explain positive shifts from the lower snapshots and negative shifts from the higher snapshots that move farther away from each other."
+      },
+      {
+        "option": "Maxwell-style single exponential with no steady shift",
+        "rejected_reason": "The step-normalized response decays more slowly at later horizons; the no-offset fit leaves systematic residuals."
+      },
+      {
+        "option": "Two decaying exponentials",
+        "rejected_reason": "The second rate fits near zero, so a constant steady shift explains the observations without an extra rate parameter."
+      }
+    ],
+    "hypothesis_name": "normalized_step_exponential_with_steady_shift",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_scale = 0.004\n_params = None\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    step = np.array([(r['u_now'] - r['u_past']) / _scale for r in rows])\n    horizon = np.array([r['H'] for r in rows])\n    target = np.array([r['y'] - r['x_now'] for r in rows])\n\n    def residual(p):\n        steady, amplitude, rate = p\n        return step * (steady + amplitude * np.exp(-rate * horizon)) - target\n\n    _params = least_squares(residual, [0.5, 1.5, 1.0], bounds=([-np.inf, -np.inf, 0.0], [np.inf, np.inf, np.inf])).x\n\ndef predict(row):\n    steady, amplitude, rate = _params\n    step = (row['u_now'] - row['u_past']) / _scale\n    return float(row['x_now'] + step * (steady + amplitude * math.exp(-rate * row['H'])))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

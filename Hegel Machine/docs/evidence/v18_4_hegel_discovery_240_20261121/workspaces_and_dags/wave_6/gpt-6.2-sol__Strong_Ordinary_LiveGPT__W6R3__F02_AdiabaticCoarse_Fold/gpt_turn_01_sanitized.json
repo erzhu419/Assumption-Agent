@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "7fb053cc398eb9d9",
+  "prompt_tokens": 19027,
+  "cached_tokens": 13440,
+  "completion_tokens": 753,
+  "task_context_chars": 13277,
+  "wall_ms": 27258.4,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The forecasts lie near 2.39 times the current input, with small deviations toward the initial state. The paid horizons bracket 4.33, so the two-parameter relaxation law can proceed directly to fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Static proportional balance",
+        "rejected_reason": "It captures the dominant response, but the small deviations from equilibrium follow the direction of the initial-state displacement."
+      },
+      {
+        "option": "extra_fine_trajectory_batch for a coupled memory ODE",
+        "rejected_reason": "The pilot already spans the target horizon, where the fast transient is damped. The residuals do not warrant resolving a separate fast mode before confirmation."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not distinguish proportional equilibrium from residual initial-state relaxation."
+      }
+    ],
+    "hypothesis_name": "adiabatic_single_exponential_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, x, h, y = np.array([[r[k] for k in ('u_now', 'x_now', 'H', 'y')] for r in train_rows], dtype=float).T\n    gain0 = np.dot(u, y) / np.dot(u, u)\n    def residual(p):\n        eq = p[0] * u\n        return eq + (x - eq) * np.exp(-p[1] * h) - y\n    _params = least_squares(residual, [gain0, 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf])).x\n\ndef predict(row):\n    gain, rate = _params\n    eq = gain * row['u_now']\n    return float(eq + (row['x_now'] - eq) * math.exp(-rate * row['H']))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

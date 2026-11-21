@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "db15dc5faadd1ebc",
+  "prompt_tokens": 19131,
+  "cached_tokens": 12416,
+  "completion_tokens": 754,
+  "task_context_chars": 15481,
+  "wall_ms": 20790.43,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid data show an increasing short-horizon response and a clear transition to negative output at long horizons, matching the dual-horizon endogenous adaptation law. Eight rows provide enough information to numerically fit its four positive parameters; no additional probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; observed positive response at H=8.47 and negative responses by H=17.42 and 24.2 establish the predicted reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "That family requires trajectory-state variation and more rows; current H-varying outputs directly exhibit the supplied dual-horizon adaptation signature."
+      },
+      {
+        "option": "static quadratic or saturation models",
+        "rejected_reason": "Cannot explain strong sign reversal across horizons at comparable inputs."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows])\n    h = np.array([float(r['H']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n\n    def pred(p):\n        amp_fast, amp_slow, tau_fast, tau_slow = p\n        return u * (amp_fast * (-np.expm1(-h / tau_fast)) - amp_slow * (-np.expm1(-h / tau_slow)))\n\n    def residual(p):\n        return pred(p) - y\n\n    # Positive amplitudes and ordered timescales encode fast activation followed by slow reversal.\n    result = least_squares(\n        residual,\n        x0=np.array([1.2, 1.0, 0.25, 12.0]),\n        bounds=(np.array([0.0, 0.0, 1e-3, 1.0]), np.array([10.0, 10.0, 5.0, 200.0])),\n        max_nfev=50000,\n        xtol=1e-13,\n        ftol=1e-13,\n        gtol=1e-13,\n    )\n    return result.x\n\ndef predict(row):\n    amp_fast, amp_slow, tau_fast, tau_slow = fit(_fit_rows)\n    u = float(row['u_now'])\n    h = float(row['H'])\n    return float(u * (amp_fast * (-math.expm1(-h / tau_fast)) - amp_slow * (-math.expm1(-h / tau_slow))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

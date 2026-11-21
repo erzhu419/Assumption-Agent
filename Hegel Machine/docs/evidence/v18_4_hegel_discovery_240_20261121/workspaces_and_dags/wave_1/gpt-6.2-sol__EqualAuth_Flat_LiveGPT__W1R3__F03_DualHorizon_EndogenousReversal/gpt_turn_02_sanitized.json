@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "d443814c051f1eda",
+  "prompt_tokens": 9688,
+  "cached_tokens": 4992,
+  "completion_tokens": 775,
+  "task_context_chars": 5446,
+  "wall_ms": 20379.31,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The measured gain y/u_now rises from 0.506 to 1.014 in the pilot, then falls to 0.296, −0.340, and −0.592 at H = 8.47, 17.42, and 24.2. This supports a fast positive response opposed by a slower negative response. Fit all four parameters to the eight paid observations and proceed to fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Five early observations already constrain the rising response, and three later observations constrain the reversal and decay through the target horizon."
+      },
+      {
+        "option": "Lotka–Volterra harmonic",
+        "rejected_reason": "The measured gain rises rapidly and then declines over a much longer timescale; the data do not support a recurring oscillation."
+      },
+      {
+        "option": "Ricker dome map",
+        "rejected_reason": "With fixed parameters and positive input, this map cannot switch sign as the forecast horizon increases."
+      }
+    ],
+    "hypothesis_name": "dual_exponential_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _unpack(z):\n    a_fast, a_slow, tau_fast, gap = np.exp(z)\n    return a_fast, a_slow, tau_fast, tau_fast + gap\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n\n    def residual(z):\n        af, a_s, tf, ts = _unpack(z)\n        gain = -af * np.expm1(-h / tf) + a_s * np.expm1(-h / ts)\n        return u * gain - y\n\n    result = least_squares(residual, np.log([1.6, 3.0, 0.4, 14.0]), ftol=1e-11, xtol=1e-11, gtol=1e-11)\n    _params = _unpack(result.x)\n\ndef predict(row) -> float:\n    af, a_s, tf, ts = _params\n    h = float(row['H'])\n    gain = -af * math.expm1(-h / tf) + a_s * math.expm1(-h / ts)\n    return float(row['u_now'] * gain)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

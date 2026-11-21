@@ -1,0 +1,32 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "149b9ca31b92c101",
+  "prompt_tokens": 13986,
+  "cached_tokens": 4864,
+  "completion_tokens": 781,
+  "task_context_chars": 18182,
+  "wall_ms": 19046.98,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The archive identifies a nonlinear sink-coupled base, while the long-horizon measurements establish a slow reversal. Combining that base with a saturating negative adaptation term yields a five-parameter stationary mechanism to fit and test on fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Pure dual-exponential response with sink dependence",
+        "rejected_reason": "The prior submission was refuted on fresh confirmation; it may omit the independently supported nonlinear siphon base."
+      },
+      {
+        "option": "Static sink-coupled siphon alone",
+        "rejected_reason": "It cannot explain the observed change from positive to negative with horizon."
+      },
+      {
+        "option": "Additional trajectory or slow-horizon probe",
+        "rejected_reason": "Eleven observations now span short and long horizons and varied sink gradients, sufficient to fit and test this five-parameter candidate."
+      }
+    ],
+    "hypothesis_name": "siphon_base_with_slow_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _value(row, p):\n    vmax, rho, c_sqrt, slow_amp, slow_tau = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u) + c_sqrt * math.sqrt(u)\n    return base - slow_amp * u * (-math.expm1(-h / slow_tau))\n\ndef fit(train_rows):\n    global _params\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        return np.array([_value(r, p) for r in train_rows]) - y\n    best = None\n    for tau in (2.0, 8.0, 20.0, 60.0):\n        result = least_squares(residual, [4.0, 0.7, 0.3, 1.5, tau], bounds=([0.0, 0.0, -10.0, 0.0, 0.01], [100.0, 2.0, 10.0, 20.0, 1000.0]), max_nfev=5000)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_value(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

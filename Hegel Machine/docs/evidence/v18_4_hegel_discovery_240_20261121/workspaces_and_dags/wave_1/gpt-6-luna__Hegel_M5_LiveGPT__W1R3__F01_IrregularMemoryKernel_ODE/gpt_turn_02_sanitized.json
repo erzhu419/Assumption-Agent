@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "8a2fcd48b01fea2b",
+  "prompt_tokens": 13920,
+  "cached_tokens": 4864,
+  "completion_tokens": 1169,
+  "task_context_chars": 14080,
+  "wall_ms": 26488.27,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "After the fine trajectory batch there are eight paid rows for the four-parameter coupled memory ODE. The implementation computes the irregular-prefix initial memory using shifted elapsed times, then integrates the stipulated two-state dynamics with RK4 and fits all four parameters numerically.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed irregular-history memory signature and coupled transient lag directly support the authorized coupled ODE; eight trajectories now identify its four parameters."
+      },
+      {
+        "option": "Maxwell single-mode snapshot law",
+        "rejected_reason": "It omits the observed coupled transient/history dependence and is not the indicated mechanism."
+      },
+      {
+        "option": "Coarse adiabatic slow-ODE or static balance",
+        "rejected_reason": "The horizon and history-conditioned signatures argue against reducing the dynamics to a snapshot balance."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to identifying this mechanism and explicitly disallowed."
+      }
+    ],
+    "hypothesis_name": "irregular_history_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _initial_memory(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    ts = np.asarray([p['t'] for p in pref], dtype=float)\n    xs = np.asarray([p['x'] for p in pref], dtype=float)\n    tend = ts[-1]\n    total = math.exp(-(tend - ts[0]) / tau) * 0.52 * xs[0]\n    for k in range(1, len(ts)):\n        dt = ts[k] - ts[k-1]\n        q0 = math.exp(-(tend - ts[k-1]) / tau) * xs[k-1]\n        q1 = math.exp(-(tend - ts[k]) / tau) * xs[k]\n        total += 0.52 * 0.5 * (q0 + q1) * dt / tau\n    return total\n\ndef _simulate(row, pars):\n    a, b, c, tau = pars\n    x = float(row['x_now'])\n    z = _initial_memory(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    h = H / n\n    def f(x, z):\n        return -a*x + b*z + c*u, (0.52*x-z)/tau\n    for _ in range(n):\n        k1x,k1z = f(x,z)\n        k2x,k2z = f(x+0.5*h*k1x,z+0.5*h*k1z)\n        k3x,k3z = f(x+0.5*h*k2x,z+0.5*h*k2z)\n        k4x,k4z = f(x+h*k3x,z+h*k3z)\n        x += h*(k1x+2*k2x+2*k3x+k4x)/6.0\n        z += h*(k1z+2*k2z+2*k3z+k4z)/6.0\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    def residual(p):\n        return np.asarray([_simulate(r, p)-float(r['y']) for r in train_rows])\n    result = least_squares(residual, x0=np.array([0.8, 0.5, 0.8, 0.18]),\n                           bounds=([0.001, 0.001, 0.001, 0.005], [5.0, 5.0, 5.0, 5.0]),\n                           max_nfev=3000)\n    _PARAMS = result.x\n    return _PARAMS.copy()\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_simulate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

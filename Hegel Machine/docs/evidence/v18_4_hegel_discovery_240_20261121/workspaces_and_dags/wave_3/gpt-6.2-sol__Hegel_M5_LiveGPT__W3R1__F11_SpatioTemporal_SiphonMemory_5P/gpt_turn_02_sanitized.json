@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "bfebf11ca1d0d38f",
+  "prompt_tokens": 12537,
+  "cached_tokens": 8576,
+  "completion_tokens": 1177,
+  "task_context_chars": 7476,
+  "wall_ms": 30242.62,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The trajectory batch brings the training set to eight endpoints for five parameters and adds contrasting initial pool and memory states. The observed horizons span 0.38 to 0.60 and bracket the target of 0.46. Fit the coupled ODE and submit it for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Kelvin–Voigt creep or damped oscillator",
+        "rejected_reason": "Neither supplied model uses the initial pool, memory state, or sink gradient, so neither accounts for the observed gradient and coupled-transient signatures."
+      },
+      {
+        "option": "Open-branch or high-gradient probe",
+        "rejected_reason": "Neither probe is offered. The observed gradients span 0.25 to 2.2, below the documented supercritical threshold of 2.36, with no narrow-gradient ambiguity."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "The auxiliary measurement does not distinguish the proposed memory and siphon terms."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\n\ndef _evaluate(p, inputs):\n    a, b, vmax, rho, tau = p\n    u, x0, z0, s, horizon = inputs\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    n = max(1, math.ceil(float(np.max(horizon)) / 0.01))\n    h = horizon / n\n    x, z = x0.copy(), z0.copy()\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + 0.5 * h * kx, z + 0.5 * h * kz)\n        mx, mz = rhs(x + 0.5 * h * lx, z + 0.5 * h * lz)\n        nx, nz = rhs(x + h * mx, z + h * mz)\n        x += (h / 6.0) * (kx + 2.0 * lx + 2.0 * mx + nx)\n        z += (h / 6.0) * (kz + 2.0 * lz + 2.0 * mz + nz)\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    inputs = np.array([[r[k] for k in _KEYS] for r in rows], dtype=float).T\n    target = np.array([r['y'] for r in rows], dtype=float)\n\n    def residual(p):\n        return _evaluate(p, inputs) - target\n\n    best = None\n    for tau0 in (0.35, 0.1, 1.2):\n        result = least_squares(residual, [1.2, 0.8, 6.5, 0.70, tau0],\n                               bounds=([0, 0, 0, 0, 0.01], [np.inf, np.inf, np.inf, 1, np.inf]),\n                               x_scale='jac', ftol=1e-11, xtol=1e-11, gtol=1e-11,\n                               max_nfev=250)\n        if best is None or result.cost < best.cost:\n            best = result\n        if best.cost < 1e-11:\n            break\n    _params = best.x.copy()\n    return _params\n\n\ndef predict(row) -> float:\n    inputs = np.array([[row[k]] for k in _KEYS], dtype=float)\n    return float(_evaluate(_params, inputs)[0])\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

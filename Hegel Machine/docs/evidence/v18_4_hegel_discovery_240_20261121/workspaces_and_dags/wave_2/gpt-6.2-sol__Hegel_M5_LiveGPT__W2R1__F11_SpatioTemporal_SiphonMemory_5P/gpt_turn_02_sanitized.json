@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "6d48048681696598",
+  "prompt_tokens": 12516,
+  "cached_tokens": 8576,
+  "completion_tokens": 1254,
+  "task_context_chars": 7367,
+  "wall_ms": 32012.7,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid rows vary initial pool and memory states across low and high sink gradients, and their horizons bracket the target H=0.46. This supports fitting the five-parameter coupled ODE directly and submitting it for fresh confirmation without another measurement.",
+    "considered_alternatives": [
+      {
+        "option": "Kelvin–Voigt creep or damped harmonic oscillator",
+        "rejected_reason": "Neither candidate uses the measured initial pool, memory state, or sink gradient, so neither captures the observed coupled lag and gradient dependence."
+      },
+      {
+        "option": "Static square-root branch or threshold-avalanche siphon",
+        "rejected_reason": "The static branch omits the transient memory dynamics, and the measured gradients do not cross the stated avalanche threshold of 2.36."
+      },
+      {
+        "option": "Further probe acquisition",
+        "rejected_reason": "The trajectory batch already provides eight rows spanning the relevant gradients and forecast horizon. The remaining nuisance probe does not help identify the coupled law."
+      }
+    ],
+    "hypothesis_name": "coupled_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\n\ndef _inputs(rows):\n    return np.asarray([[float(row[k]) for k in _KEYS] for row in rows], dtype=float)\n\n\ndef _forecast(p, data):\n    a, b, vmax, rho, tau = p\n    u, x, z, s, horizon = data.T\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    steps = max(64, math.ceil(4.0 * np.max(np.abs(horizon)) * max(a, b, 1.0 / tau)))\n    dt = horizon / steps\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(steps):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + 0.5 * dt * k1, z + 0.5 * dt * l1)\n        k3, l3 = rhs(x + 0.5 * dt * k2, z + 0.5 * dt * l2)\n        k4, l4 = rhs(x + dt * k3, z + dt * l3)\n        x = x + dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0\n        z = z + dt * (l1 + 2.0 * l2 + 2.0 * l3 + l4) / 6.0\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _inputs(rows)\n    y = np.asarray([float(row['y']) for row in rows])\n    bounds = ([0.0, 0.0, 1.0, 0.05, 0.02], [20.0, 20.0, 15.0, 0.95, 20.0])\n    starts = [(1.0, 0.8, 6.5, 0.70, 0.45), (1.7, 1.5, 8.0, 0.70, 0.15), (0.6, 0.6, 5.0, 0.70, 1.5)]\n    best = None\n    for start in starts:\n        result = least_squares(lambda p: _forecast(p, data) - y, start, bounds=bounds, x_scale='jac', max_nfev=300, ftol=1e-11, xtol=1e-11, gtol=1e-11)\n        if best is None or result.cost < best.cost:\n            best = result\n        if result.cost < 1e-12:\n            break\n    _params = best.x\n    return _params\n\n\ndef predict(row) -> float:\n    return float(_forecast(_params, _inputs([row]))[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "4ca744c90d2df823",
+  "prompt_tokens": 34194,
+  "cached_tokens": 29952,
+  "completion_tokens": 1861,
+  "task_context_chars": 5393,
+  "wall_ms": 47709.61,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid rows span H = 0.38–0.60, bracketing the target H = 0.46. A closed-form check of the five-parameter ODE fits the paid rows to an RMSE below 1e-7, supporting submission of the numerically fitted RK4 model for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired. Its three rows vary the initial state, memory, and horizon; no further batch is needed before confirmation."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "The auxiliary measurement does not distinguish the candidate dynamics."
+      },
+      {
+        "option": "Haldane substrate inhibition",
+        "rejected_reason": "A forcing-only curve omits the initial state, memory, and gradient."
+      },
+      {
+        "option": "Cobb-Douglas power law",
+        "rejected_reason": "A static forcing–gradient law omits initial-state and memory dynamics and cannot represent horizon dependence."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\n\ndef _features(rows):\n    return np.array([[r[k] for k in _KEYS] for r in rows], dtype=float).T\n\n\ndef _forecast(p, features, steps):\n    a, b, tau, vmax, rho = p\n    u, x, z, s, horizon = features\n    un = u / 0.05\n    influx = vmax * (1.0 - rho * s / (1.0 + s)) * un / (1.2 + un)\n    dt = horizon / steps\n\n    def rhs(x, z):\n        return -a * x + b * z + influx, (0.52 * x - z) / tau\n\n    for _ in range(steps):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + 0.5 * dt * k1, z + 0.5 * dt * l1)\n        k3, l3 = rhs(x + 0.5 * dt * k2, z + 0.5 * dt * l2)\n        k4, l4 = rhs(x + dt * k3, z + dt * l3)\n        x = x + dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0\n        z = z + dt * (l1 + 2 * l2 + 2 * l3 + l4) / 6.0\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    features = _features(rows)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    steps = max(1, math.ceil(float(np.max(features[-1])) / 0.01))\n    result = least_squares(lambda p: _forecast(p, features, steps) - y,\n                           x0=[1.0, 1.0, 0.3, 4.0, 0.5],\n                           bounds=([0.0, 0.0, 0.01, 0.0, 0.0],\n                                   [np.inf, np.inf, np.inf, np.inf, 1.0]),\n                           x_scale='jac')\n    _params = result.x\n    return _params\n\n\ndef predict(row):\n    steps = max(1, math.ceil(float(row['H']) / 0.01))\n    return float(_forecast(_params, _features([row]), steps)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

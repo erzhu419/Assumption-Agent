@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "6965a4812a3b6ece",
+  "prompt_tokens": 10232,
+  "cached_tokens": 0,
+  "completion_tokens": 886,
+  "task_context_chars": 7137,
+  "wall_ms": 23092.38,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The response is positive through H = 8 and negative at H = 15.5 and 23. Together with the short-window data across sink gradients, these observations support fitting a sink-modulated fast gain and a slower opposing adaptation term. The target H = 21.5 lies within the measured long-horizon range.",
+    "considered_alternatives": [
+      {
+        "option": "Sink-free dual-exponential reversal",
+        "rejected_reason": "It can reverse sign but omits the sink-gradient dependence that the pilot rows sample across a wide range."
+      },
+      {
+        "option": "Static Ricker dome map",
+        "rejected_reason": "It has no horizon dependence and cannot represent the observed change from positive short-window response to negative long-window response."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The paid observations already span the fast rise and the slow reversal, with H = 15.5 and 23 bracketing the target. Fresh confirmation is more informative than another fit batch."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u, s, h, y = np.asarray([[r['u_now'], r['s_grad'], r['H'], r['y']] for r in rows], dtype=float).T\n    drive = u / (1.2 + u)\n    sink = s / (1.0 + s)\n\n    def residual(p):\n        vmax, rho, tau_fast, amp_adapt, gap = p\n        fast = -np.expm1(-h / tau_fast)\n        slow = -np.expm1(-h / (tau_fast + gap))\n        return vmax * (1.0 - rho * sink) * drive * fast - amp_adapt * u * slow - y\n\n    result = least_squares(residual, [6.5, 0.70, 0.25, 2.0, 15.0], bounds=([0.0, 0.0, 1e-6, 0.0, 1e-6], [np.inf, 1.0, np.inf, np.inf, np.inf]), x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n\n\ndef predict(row):\n    vmax, rho, tau_fast, amp_adapt, gap = _params\n    u, s, h = (float(row[k]) for k in ('u_now', 's_grad', 'H'))\n    fast = -math.expm1(-h / tau_fast)\n    slow = -math.expm1(-h / (tau_fast + gap))\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) * fast - amp_adapt * u * slow)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

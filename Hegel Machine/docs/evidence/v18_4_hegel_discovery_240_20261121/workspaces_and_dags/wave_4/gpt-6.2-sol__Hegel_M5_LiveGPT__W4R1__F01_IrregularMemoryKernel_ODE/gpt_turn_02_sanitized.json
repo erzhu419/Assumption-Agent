@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "fe617ed19e95cad6",
+  "prompt_tokens": 34003,
+  "cached_tokens": 24576,
+  "completion_tokens": 2357,
+  "task_context_chars": 14235,
+  "wall_ms": 58477.41,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history gap and transient lag favor a coupled memory state. Reconstruct that state from the irregular prefix using elapsed intervals, then forecast with the input held at u_now. A numerical fit on the eight paid rows gives a memory timescale near 0.50 and training RMSE near 9e-6. The timescale is comparable to the 0.45 forecast horizon, so retain the memory dynamics and submit for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Adiabatic snapshot balance",
+        "rejected_reason": "It forces histories with the same present state, input, and horizon to have the same forecast, contrary to the pilot history-gap signature."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "A fixed stress scale would predict opposite signs for upward and downward input steps, but both have positive observed outputs."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The pilot distinguishes the history-dependent branch, and the acquired batch supports fitting it at the target horizon."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the eight observed trajectories span both input-step directions and bracket the target horizon."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    memory = row.get('mem_conv')\n    history = None\n    if memory is None:\n        prefix = row['raw_prefix']\n        values = [float(p['x']) for p in prefix]\n        gaps = [float(q['t']) - float(p['t']) for p, q in zip(prefix, prefix[1:])]\n        history = (values[0], list(zip(gaps, values, values[1:])))\n    return float(row['x_now']), float(row['u_now']), float(row['H']), memory, history\n\n\ndef _rk4_matrix(A, h):\n    B = h * A\n    I = np.eye(3)\n    return I + B @ (I + B @ (I / 2 + B @ (I / 6 + B / 24)))\n\n\ndef _forecast(data, params):\n    x, u, H, z, history = data\n    a, b, c, tau = params\n    if z is None:\n        first, intervals = history\n        z = 0.52 * first\n        # Exact kernel integral when x is linear between consecutive samples.\n        for dt, left, right in intervals:\n            q = dt / tau\n            gain = -math.expm1(-q)\n            z = math.exp(-q) * z + 0.52 * (gain * left + (1 - gain / q) * (right - left))\n    # Augment the state with a constant 1 to include the held input in RK4.\n    A = np.array([[-a, b, c * u], [0.52 / tau, -1 / tau, 0.0], [0.0, 0.0, 0.0]])\n    dt = 0.004\n    n = int(H / dt)\n    state = np.linalg.matrix_power(_rk4_matrix(A, dt), n) @ np.array([x, float(z), 1.0])\n    remainder = H - n * dt\n    if remainder > 0:\n        state = _rk4_matrix(A, remainder) @ state\n    return float(state[0])\n\n\ndef fit(train_rows):\n    global _params\n    data = [_prepare(row) for row in train_rows]\n    targets = np.array([float(row['y']) for row in train_rows])\n\n    def residual(params):\n        return np.array([_forecast(d, params) for d in data]) - targets\n\n    result = least_squares(residual, [1.5, 1.0, 1.4, 0.5], bounds=([0, 0, 0, 0.02], [20, 20, 20, 10]), x_scale='jac', ftol=1e-11, xtol=1e-11, gtol=1e-11)\n    _params = result.x\n    return _params\n\n\ndef predict(row) -> float:\n    return _forecast(_prepare(row), _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

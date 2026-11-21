@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "afe02b53519422b1",
+  "prompt_tokens": 28864,
+  "cached_tokens": 22784,
+  "completion_tokens": 747,
+  "task_context_chars": 13277,
+  "wall_ms": 24716.04,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid horizons bracket the target H=4.21. A single exponential relaxation toward gain times u_now fits all five rows with gain about 2.1991 and decay rate about 1.4521, yielding training RMSE below 1e-6 against a 0.045 tolerance. Submit this model for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Static linear equilibrium",
+        "rejected_reason": "It captures the main trend but omits the small residual dependence on the initial state."
+      },
+      {
+        "option": "Coupled memory ODE via extra_fine_trajectory_batch",
+        "rejected_reason": "The two-parameter relaxation already explains the paid rows to rounding-scale accuracy at the target horizon; no unresolved transient warrants a fine-trajectory probe."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not discriminate the supported relaxation mechanism."
+      }
+    ],
+    "hypothesis_name": "adiabatic_single_rate_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, x, h, y = np.asarray([[r['u_now'], r['x_now'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    def residual(p):\n        gain, rate = p\n        return x * np.exp(-rate * h) - gain * u * np.expm1(-rate * h) - y\n    _params = least_squares(residual, [np.dot(u, y) / np.dot(u, u), 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf])).x\n\ndef predict(row):\n    gain, rate = _params\n    z = -rate * row['H']\n    return float(row['x_now'] * math.exp(z) - gain * row['u_now'] * math.expm1(z))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

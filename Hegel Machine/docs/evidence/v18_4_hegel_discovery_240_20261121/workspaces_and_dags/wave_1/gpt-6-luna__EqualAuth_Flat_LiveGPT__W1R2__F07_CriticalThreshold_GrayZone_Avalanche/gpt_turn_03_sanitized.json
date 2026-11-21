@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "b17f66685a10bfab",
+  "prompt_tokens": 9959,
+  "cached_tokens": 4864,
+  "completion_tokens": 1292,
+  "task_context_chars": 6812,
+  "wall_ms": 29101.97,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The initial observations rise and flatten, while the high-gradient observations fall from positive to negative as s_grad increases. Fit a saturating, gradient-suppressed baseline plus a numerically estimated quadratic loss activated beyond a fitted threshold; extra probes are deferred because these rows already span both sides of the transition.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another high_sgrad_regime_probe",
+        "rejected_reason": "The three added observations reveal a sharp gradient-associated downturn and sign reversal; existing eight rows support fitting an activated threshold loss without another measurement."
+      },
+      {
+        "option": "Fit only a smooth saturating or Haldane response",
+        "rejected_reason": "Those stationary monotone forms cannot explain the negative high-gradient response."
+      },
+      {
+        "option": "Abstain as non-stationary chaotic behavior",
+        "rejected_reason": "The sign change is large but occurs progressively with increasing gradient, not as observed high-frequency oscillation; a threshold branch remains plausible."
+      }
+    ],
+    "hypothesis_name": "gradient_threshold_hydraulic_avalanche",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([max(1e-8, float(r['u_now'])) for r in rows])\n    s = np.array([float(r['s_grad']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    # Saturating hydraulic baseline with gradient suppression, plus a\n    # quadratic avalanche loss activated above a fitted gradient threshold.\n    def pred(p, r):\n        vmax, rho, km, threshold, amp = p\n        un = max(1e-8, float(r['u_now']))\n        sg = float(r['s_grad'])\n        base = vmax * (1.0 - rho * sg / (1.0 + sg)) * un / (km + un)\n        loss = amp * max(0.0, sg - threshold) ** 2\n        return base - loss\n    def residual(p):\n        return np.array([pred(p, r) for r in rows]) - y\n    result = least_squares(residual, x0=[7.0, 0.65, 1.2, 2.5, 2.0],\n        bounds=([0.01, 0.0, 0.01, 0.0, 0.0], [30.0, 0.99, 20.0, 6.0, 30.0]),\n        max_nfev=20000)\n    predict._params = result.x\n    return result.x\n\ndef predict(row):\n    if not hasattr(predict, '_params'):\n        raise RuntimeError('Call fit(train_rows) before predict(row)')\n    vmax, rho, km, threshold, amp = predict._params\n    u = max(1e-8, float(row['u_now']))\n    s = float(row['s_grad'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * u / (km + u)\n    return float(base - amp * max(0.0, s - threshold) ** 2)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,28 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "9314c78eebc931d4",
+  "prompt_tokens": 15626,
+  "cached_tokens": 8320,
+  "completion_tokens": 935,
+  "task_context_chars": 12711,
+  "wall_ms": 23587.74,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The acquired batch brings the data to eight rows, and their varied step directions and horizons identify the four coupled memory-ODE parameters. Fit all four numerically and compute the latent initial memory state from the supplied irregularly sampled prefix; no further observation is presently needed.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Eight rows are now available, spanning varying inputs and horizons; this is enough to fit the recalled four-parameter coupled ODE without another paid probe."
+      },
+      {
+        "option": "Maxwell or Kelvin-Voigt models",
+        "rejected_reason": "The endpoint-matched history-gap and coupled-transient-lag signatures conflict with these simpler stationary single-mode laws."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([float(p['t']) for p in pref], dtype=float)\n    xs = np.array([float(p['x']) for p in pref], dtype=float)\n    ts = ts[-1] - ts\n    z = 0.52 * xs[0]\n    for i in range(1, len(ts)):\n        dt = ts[i-1] - ts[i]\n        e = math.exp(-dt / tau)\n        z = e*z + 0.52 * (xs[i-1] + xs[i]) * 0.5 * (1.0-e)\n    return z\n\ndef _pred(row, p):\n    a, b, c, tau = map(float, p)\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def f(x, z):\n        return -a*x + b*z + c*u, (0.52*x-z)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+dt*k1x/2,z+dt*k1z/2)\n        k3x,k3z=f(x+dt*k2x/2,z+dt*k2z/2)\n        k4x,k4z=f(x+dt*k3x,z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    def residual(p):\n        return np.array([_pred(r,p)-float(r['y']) for r in train_rows])\n    best = least_squares(residual, [0.3, 0.2, 0.5, 0.8], bounds=([0,0,0,0.03],[5,5,5,10]), max_nfev=3000)\n    return best.x\n\ndef predict(row):\n    return float(_pred(row, _MODEL_PARAMS))\n\n_MODEL_PARAMS = None\n\ndef _fit_predictor(train_rows):\n    global _MODEL_PARAMS\n    _MODEL_PARAMS = fit(train_rows)\n    return _MODEL_PARAMS\n\n# Prediction uses the parameters returned by fit(train_rows); bind them before use.\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

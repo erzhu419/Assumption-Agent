@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f55f34ba8116f1b0",
+  "prompt_tokens": 12503,
+  "cached_tokens": 8320,
+  "completion_tokens": 947,
+  "task_context_chars": 7792,
+  "wall_ms": 23204.34,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid long-horizon observations show the expected reversal from positive short-horizon output to negative output near H=15.5–21.5. The sink-coupled dual-horizon model is identifiable from the eight rows, and numerical least-squares fitting estimates all five parameters for forecasting at H=20.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire extra_fine_trajectory_batch",
+        "rejected_reason": "The slow-horizon probe added observations at H=8, 15.5, and 21.5, resolving the short-horizon ambiguity and furnishing data across the target range."
+      },
+      {
+        "option": "Fit the base smooth siphon without adaptation",
+        "rejected_reason": "It cannot account for the observed negative outputs at long horizons alongside positive short-horizon values."
+      },
+      {
+        "option": "Fit a dual-exponential reversal without sink coupling",
+        "rejected_reason": "The supplied mechanism evidence and varying s_grad observations support an explicit sink-gradient modulation in the positive fast component."
+      },
+      {
+        "option": "Fit a threshold-avalanche branch",
+        "rejected_reason": "The stated supercritical branch applies above s_grad=2.36; all observed rows are at or below 2.15."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _model(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    sink = 1.0 - rho * s / (1.0 + s)\n    drive = u / (1.2 + u)\n    return (vmax * sink * drive * (1.0 - math.exp(-h / tau_fast))\n            - amp_adapt * u * (1.0 - math.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    y = np.asarray([float(r['y']) for r in train_rows], dtype=float)\n    lower = np.array([0.01, 0.0, 1e-4, 0.0, 1e-4])\n    upper = np.array([30.0, 0.999, 100.0, 10.0, 500.0])\n    starts = [\n        np.array([6.0, 0.7, 1.0, 0.5, 10.0]),\n        np.array([5.0, 0.5, 0.5, 0.3, 20.0]),\n        np.array([8.0, 0.8, 2.0, 1.0, 30.0]),\n    ]\n    best = None\n    for x0 in starts:\n        result = least_squares(\n            lambda p: np.asarray([_model(r, p) for r in train_rows]) - y,\n            np.clip(x0, lower + 1e-8, upper - 1e-8),\n            bounds=(lower, upper), max_nfev=20000, x_scale='jac')\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = best.x\n    return _params.copy()\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    return float(_model(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "fa8d281bde9e1868",
+  "prompt_tokens": 19124,
+  "cached_tokens": 12416,
+  "completion_tokens": 593,
+  "task_context_chars": 15471,
+  "wall_ms": 18742.53,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Short-horizon observations are positive, while the paid slow-horizon batch crosses through near-zero and becomes negative, matching dual-horizon endogenous adaptation. Fit its four coefficients numerically; the long-horizon data resolve the reversal ambiguity.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The slow-horizon measurements show a clear negative reversal and the supplied signature explicitly identifies endogenous dual-horizon adaptation; extra ODE rows are unnecessary."
+      },
+      {
+        "option": "static quadratic or linear response",
+        "rejected_reason": "These cannot explain response changing from strongly positive at H<0.5 to near zero and then negative at longer H."
+      },
+      {
+        "option": "abstain_scoped_unknown",
+        "rejected_reason": "The response is smooth and consistent with a stationary dual-timescale adaptation law, not chaotic oscillations."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows])\n    h = np.array([float(r['H']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    def pred(p):\n        af, ass, tf, ts = p\n        return u * (af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts)))\n    best = None\n    for start in ([1.0, 1.0, .3, 15.0], [1.2, .8, .5, 25.0], [2.0, 1.0, 1.0, 12.0], [.8, .7, .2, 40.0]):\n        res = least_squares(lambda p: pred(p) - y, start, bounds=([0, 0, 1e-4, 1e-3], [20, 20, 100, 500]), max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    return best.x\n\ndef predict(row):\n    af, ass, tf, ts = fit(_TRAIN_ROWS)\n    h = float(row['H']); u = float(row['u_now'])\n    return u * (af * (-math.expm1(-h / tf)) - ass * (-math.expm1(-h / ts)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

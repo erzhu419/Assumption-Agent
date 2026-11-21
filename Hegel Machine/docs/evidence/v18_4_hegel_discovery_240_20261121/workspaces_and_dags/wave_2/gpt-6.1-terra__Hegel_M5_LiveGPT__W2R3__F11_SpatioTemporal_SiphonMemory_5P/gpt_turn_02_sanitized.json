@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "40a28c4789e4a0e8",
+  "prompt_tokens": 12371,
+  "cached_tokens": 8320,
+  "completion_tokens": 1020,
+  "task_context_chars": 7356,
+  "wall_ms": 26292.57,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fit all five parameters numerically to the eight paid observations using the verified two-state siphon-memory ODE, then test it on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "Additional trajectory probe",
+        "rejected_reason": "The acquired batch already supplies eight observations for the specified five-parameter mechanism."
+      },
+      {
+        "option": "Uncoupled creep or damped oscillator",
+        "rejected_reason": "These do not represent the observed coupled transient memory or the verified siphon-gradient mechanism."
+      },
+      {
+        "option": "High-gradient avalanche branch",
+        "rejected_reason": "The observed gradients are subcritical, and the high-gradient probe is not available."
+      }
+    ],
+    "hypothesis_name": "coupled_siphon_memory_ode",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _evaluate(rows, p):\n    a, b, vmax, rho, tau = p\n    u = np.array([r['u_now'] for r in rows], dtype=float) / 0.05\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    x = np.array([r['x_now'] for r in rows], dtype=float)\n    z = np.array([r['mem_conv'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float) / 160.0\n    j = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    def deriv(xv, zv):\n        return -a * xv + b * zv + j, (0.52 * xv - zv) / tau\n    for _ in range(160):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x + 0.5*h*k1x, z + 0.5*h*k1z)\n        k3x, k3z = deriv(x + 0.5*h*k2x, z + 0.5*h*k2z)\n        k4x, k4z = deriv(x + h*k3x, z + h*k3z)\n        x = x + h*(k1x + 2*k2x + 2*k3x + k4x)/6.0\n        z = z + h*(k1z + 2*k2z + 2*k3z + k4z)/6.0\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    bounds = ([0.0, 0.0, 0.0, 0.0, 0.005], [20.0, 20.0, 20.0, 1.0, 2.0])\n    best = None\n    for tau in (0.03, 0.1, 0.4):\n        result = least_squares(lambda p: _evaluate(rows, p) - y,\n                               [1.0, 1.0, 6.5, 0.7, tau],\n                               bounds=bounds, max_nfev=1500,\n                               ftol=1e-11, xtol=1e-11, gtol=1e-11)\n        if best is None or result.cost < best.cost:\n            best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_evaluate([row], _params)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

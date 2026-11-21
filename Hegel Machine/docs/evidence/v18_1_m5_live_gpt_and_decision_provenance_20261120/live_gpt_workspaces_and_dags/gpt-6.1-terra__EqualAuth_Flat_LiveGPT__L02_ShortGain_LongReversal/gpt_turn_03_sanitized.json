@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "71b46ea843ef7d83",
+  "prompt_tokens": 14189,
+  "cached_tokens": 11008,
+  "completion_tokens": 705,
+  "task_context_chars": 5152,
+  "wall_ms": 20575.64,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-window positive gain and measured long-horizon negative response agree with the recalled dual-exponential adaptation mechanism. Fit its four parameters numerically and test fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Monotone Arrhenius thermal rate",
+        "rejected_reason": "The negative observation at H = 20 contradicts a positive monotone response."
+      },
+      {
+        "option": "Another slow-horizon or fine-trajectory probe",
+        "rejected_reason": "The reversal has been observed and six rows are available to fit the four-parameter candidate; confirmation should be attempted before buying more measurements."
+      },
+      {
+        "option": "Nuisance high-variance auxiliary",
+        "rejected_reason": "It does not resolve the relevant horizon dependence."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _response(p, u, h):\n    af, slow, tf, ts = np.exp(p)\n    return u * (af * (-np.expm1(-h / tf)) - slow * (-np.expm1(-h / ts)))\n\ndef fit(train_rows):\n    global _params\n    u = np.array [r['u_now'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        return _response(p, u, h) - y\n    best = None\n    for tf in (0.2, 0.7, 1.5):\n        for ts in (3.0, 10.0, 25.0):\n            start = np.log([2.0, 2.0, tf, ts])\n            result = least_squares(residual, start, bounds=(np.log([0.001, 0.001, 0.01, 0.1]), np.log([100.0, 100.0, 100.0, 1000.0])), max_nfev=3000, ftol=1e-12, xtol=1e-12, gtol=1e-12)\n            if best is None or np.linalg.norm(result.fun) < np.linalg.norm(best.fun):\n                best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_response(_params, float(row['u_now']), float(row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

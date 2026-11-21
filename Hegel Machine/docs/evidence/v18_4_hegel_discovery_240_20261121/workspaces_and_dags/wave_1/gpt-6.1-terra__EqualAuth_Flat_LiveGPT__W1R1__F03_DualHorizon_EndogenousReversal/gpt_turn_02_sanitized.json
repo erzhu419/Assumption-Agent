@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "e4c3a9f59afc9db8",
+  "prompt_tokens": 9554,
+  "cached_tokens": 4864,
+  "completion_tokens": 536,
+  "task_context_chars": 5400,
+  "wall_ms": 13994.12,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The long-horizon observations confirm the predicted transition from positive to negative response. Fit all four parameters numerically and test the resulting law on fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its three long-horizon measurements establish the reversal and constrain the slow component."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The eight existing observations span short and long horizons and are sufficient to fit the four-parameter proposed law."
+      },
+      {
+        "option": "Lotka harmonic or Ricker dome",
+        "rejected_reason": "The observed horizon-dependent reversal and the verified adaptation mechanism favor the dual-exponential model; the Ricker law has no horizon dependence."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _response(h, p):\n    a, b, tf, ts = np.exp(p)\n    return a * (-np.expm1(-h / tf)) - b * (-np.expm1(-h / ts))\n\ndef fit(train_rows):\n    global _params\n    h = np.array [float(r['H']) for r in train_rows]\n    u = np.array([float(r['u_now']) for r in train_rows])\n    y = np.array([float(r['y']) for r in train_rows])\n    def residual(p):\n        return u * _response(h, p) - y\n    starts = [(2, 3, 0.5, 10), (3, 4, 1, 15), (2, 2, 0.2, 5), (5, 6, 2, 20)]\n    fits = [least_squares(residual, np.log(s), bounds=(np.log([1e-4, 1e-4, 1e-3, 0.01]), np.log([1e3, 1e3, 1e3, 1e4])), max_nfev=10000) for s in starts]\n    _params = min(fits, key=lambda f: np.dot(f.fun, f.fun)).x\n\ndef predict(row):\n    return float(float(row['u_now']) * _response(float(row['H']), _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

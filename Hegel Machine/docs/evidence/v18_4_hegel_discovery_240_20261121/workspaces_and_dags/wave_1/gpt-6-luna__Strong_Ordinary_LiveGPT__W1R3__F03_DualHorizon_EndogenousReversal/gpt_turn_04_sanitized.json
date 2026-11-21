@@ -1,0 +1,32 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "bc8e92b1c0587a9e",
+  "prompt_tokens": 13137,
+  "cached_tokens": 4864,
+  "completion_tokens": 735,
+  "task_context_chars": 16677,
+  "wall_ms": 17602.36,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Observed positive short-horizon responses and negative values at H=17.42 and 24.2 directly support the documented dual-horizon adaptation law. Fit its four parameters numerically to all eight paid rows; no further probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Eight rows include both horizons and multiple input levels; the supplied dual-horizon mechanism is identifiable enough to fit its four parameters."
+      },
+      {
+        "option": "Coupled two-state memory ODE",
+        "rejected_reason": "Current observations match the documented short-positive/long-negative dual-horizon reversal, and do not require hidden-state trajectory data."
+      },
+      {
+        "option": "Static quadratic or other H-independent response",
+        "rejected_reason": "Cannot explain the observed sign change across horizons."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_P = None\n\ndef _calc(row, p):\n    amp_fast, tau_fast, amp_slow, tau_slow = p\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (1.0 - np.exp(-h / tau_fast)) - amp_slow * (1.0 - np.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _P\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        return np.array([_calc(r, p) for r in rows]) - y\n    starts = [[1.0, 0.2, 0.5, 10.0], [1.0, 1.0, 0.5, 20.0], [2.0, 0.3, 1.0, 30.0]]\n    fits = [least_squares(residual, x0, bounds=([0, 1e-5, 0, 1e-5], [100, 1e4, 100, 1e4]), max_nfev=30000) for x0 in starts]\n    best = min(fits, key=lambda z: float(np.sum(z.fun ** 2)))\n    _P = best.x\n    return _P\n\ndef predict(row) -> float:\n    if _P is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_calc(row, _P))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

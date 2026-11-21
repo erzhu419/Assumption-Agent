@@ -1,0 +1,32 @@
+{
+  "turn": 6,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "68ffca4fbf84de98",
+  "prompt_tokens": 156445,
+  "cached_tokens": 125952,
+  "completion_tokens": 5181,
+  "task_context_chars": 7670,
+  "wall_ms": 130748.53,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At the target horizon H=0.6, a saturating input flux with a gradient-dependent diverted fraction and an additive square-root bypass fits all ten paid rows to rounding precision (training RMSE about 2e-8). The rows do not identify dependence on the inputs held fixed, so the submitted law is scoped to the observed regime and is ready for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Gradient-independent Beverton–Holt recruitment",
+        "rejected_reason": "It captures diminishing returns in the pilot but misses the shifts in transfer when the gradient changes."
+      },
+      {
+        "option": "Exponential gradient attenuation with the same square-root bypass",
+        "rejected_reason": "Its training RMSE is about 0.0084; saturating diversion fits at the precision of the reported observations with the same parameter count."
+      },
+      {
+        "option": "Additional paid trajectory measurements",
+        "rejected_reason": "The two acquired probes already vary the gradient enough to distinguish the response laws. Fresh confirmation is the next informative check."
+      }
+    ],
+    "hypothesis_name": "two_layer_siphon_with_saturating_diversion",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, y = np.asarray([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float).T\n    root = np.sqrt(u)\n\n    def residual(p):\n        gain, half_sat, diverted, grad_scale, bypass = p\n        load = grad_scale * s\n        return gain * u / (half_sat + u) * (1.0 - diverted * load / (1.0 + load)) + bypass * root - y\n\n    _params = least_squares(residual, [8.0, 1.0, 0.7, 1.0, 0.3], bounds=([0.0, 1e-8, 0.0, 0.0, 0.0], [np.inf, np.inf, 1.0, np.inf, np.inf]), ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row):\n    gain, half_sat, diverted, grad_scale, bypass = _params\n    u = float(row['u_now'])\n    load = grad_scale * float(row['s_grad'])\n    return float(gain * u / (half_sat + u) * (1.0 - diverted * load / (1.0 + load)) + bypass * math.sqrt(u))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

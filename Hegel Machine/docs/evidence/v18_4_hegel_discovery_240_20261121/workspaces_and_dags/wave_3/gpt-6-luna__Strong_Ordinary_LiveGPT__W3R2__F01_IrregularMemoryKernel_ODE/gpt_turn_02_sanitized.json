@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "099870fcc4d4d26c",
+  "prompt_tokens": 22818,
+  "cached_tokens": 12416,
+  "completion_tokens": 1175,
+  "task_context_chars": 22234,
+  "wall_ms": 27563.83,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid rows support the verified coupled 2-state memory ODE: history differences affect forecasts despite matched present inputs, and ten rows identify its four parameters. Fit numerically with least squares, reconstructing the latent initial memory from each archived prefix and integrating the forecast by RK4.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All current rows have s_grad=0 and signatures specifically support history-dependent transient dynamics; this probe targets sink-gradient branches and would not resolve the selected ODE parameters."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; ten rows now exceed the verified minimum of eight for the four-parameter memory-kernel ODE."
+      },
+      {
+        "option": "static/adabatic snapshot or before/after contrast models",
+        "rejected_reason": "Endpoint-matched history gaps and coupled transient-lag signature contradict a history-independent snapshot; coupled ODE is the supported mechanism."
+      },
+      {
+        "option": "dual-horizon adaptation",
+        "rejected_reason": "The supplied horizons are all short and the observations/signatures explicitly indicate coupled transient lag, not a slow-horizon reversal."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row, tau):\n    prefix = row.get('raw_prefix') or []\n    if len(prefix) < 2:\n        return 0.52 * float(row['x_now'])\n    ts = np.asarray([float(p['t']) for p in prefix], dtype=float)\n    xs = np.asarray([float(p['x']) for p in prefix], dtype=float)\n    ts = ts - ts[0]\n    z = 0.52 * xs[0]\n    for i in range(1, len(ts)):\n        dt = ts[i] - ts[i-1]\n        target0, target1 = 0.52 * xs[i-1], 0.52 * xs[i]\n        e = math.exp(-dt / tau)\n        slope = (target1 - target0) / dt if dt > 0 else 0.0\n        z = target1 - slope * tau + (z - target0 + slope * tau) * e\n    return z\n\ndef _simulate(row, pars):\n    a, b, c, tau = [float(v) for v in pars]\n    h = float(row['H'])\n    x = float(row['x_now'])\n    z = float(row['mem_conv']) if row.get('mem_conv') is not None else _z0(row, tau)\n    u = float(row['u_now'])\n    n = max(1, int(math.ceil(h / 0.004)))\n    dt = h / n\n    def f(xv, zv):\n        return -a*xv + b*zv + c*u, (0.52*xv - zv)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+dt*k1x/2,z+dt*k1z/2)\n        k3x,k3z=f(x+dt*k2x/2,z+dt*k2z/2)\n        k4x,k4z=f(x+dt*k3x,z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    def residual(p):\n        return np.asarray([_simulate(r,p)-float(r['y']) for r in train_rows])\n    best = None\n    for start in ([0.4,0.2,0.3,0.12], [0.8,0.1,0.5,0.2], [0.2,0.4,0.1,0.08]):\n        result = least_squares(residual, start, bounds=([0.001,0.0,0.0,0.005],[5.0,5.0,5.0,2.0]), max_nfev=3000)\n        if best is None or np.dot(result.fun,result.fun) < np.dot(best.fun,best.fun):\n            best = result\n    _PARAMS = best.x\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row)')\n    return float(_simulate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

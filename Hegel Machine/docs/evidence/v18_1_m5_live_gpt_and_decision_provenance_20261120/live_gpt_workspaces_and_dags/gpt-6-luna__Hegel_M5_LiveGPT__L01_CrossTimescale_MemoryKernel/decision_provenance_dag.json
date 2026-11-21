@@ -1,0 +1,717 @@
+{
+  "episode_summary": {
+    "task_id": "L01_CrossTimescale_MemoryKernel",
+    "suite": "A_TemporalMemory",
+    "subfamily": "A_history_conditioned_memory",
+    "arm": "Hegel_M5_LiveGPT",
+    "model": "gpt-6-luna",
+    "provider_backend": "openai_chatgpt_subscription_codex_cli",
+    "api_calls": 3,
+    "is_out_of_scope": false,
+    "status": "confirmed_ok",
+    "confirmed_hypothesis_name": "coupled_memory_ode_rk4",
+    "confirmed_model_sha256": "2659bebe80ee9fb1f0fc2d01dff1539be3d8c0be23ced0122ca0065a9ac71c42",
+    "strict_pass": true,
+    "false_confirmation": false,
+    "evaluated_candidate_count": 2,
+    "confirm_rmse": 0.0,
+    "heldout_rmse": 0.0,
+    "decision_count": 10,
+    "measurement_cost": 16.5,
+    "compute_cost": 30.87,
+    "composite_cost": 18.0435,
+    "prompt_tokens": 28649,
+    "cached_tokens": 9472,
+    "completion_tokens": 2010,
+    "total_tokens": 30659,
+    "effective_billed_tokens": 23555,
+    "wall_ms": 59410.82
+  },
+  "chain_verification": {
+    "valid": true,
+    "decision_count": 10,
+    "terminal_record_sha256": "d1200a5960ce6d22805fa6330cbe80a302317dd44f12d0c083c50d72b5731a4b",
+    "verified_measurement_cost": 16.5,
+    "verified_compute_cost": 30.87,
+    "verified_composite_cost": 18.0435,
+    "verified_total_tokens": 30659
+  },
+  "decision_dag": [
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 1,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__001",
+      "parent_decision_id": null,
+      "prev_record_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "decision_type": "D0_TASK_ARRIVAL_AND_PILOT_ACQUISITION",
+      "evidence_inputs": {
+        "task_id": "L01_CrossTimescale_MemoryKernel",
+        "pilot_row_keys": [
+          [
+            1.96506,
+            1.9355,
+            -0.15395,
+            -0.63156,
+            0.52118,
+            0.6
+          ],
+          [
+            3.46312,
+            0.80555,
+            -0.50537,
+            -0.82222,
+            0.67418,
+            0.6
+          ],
+          [
+            3.09774,
+            2.0145,
+            -0.45519,
+            0.34608,
+            0.83283,
+            0.6
+          ],
+          [
+            0.59513,
+            1.45183,
+            -0.03895,
+            0.89606,
+            1.03271,
+            0.6
+          ],
+          [
+            2.54545,
+            1.50463,
+            0.01091,
+            0.60724,
+            1.39887,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "channel": "coarse_macro",
+          "unit_cost": 1.0,
+          "eligible": false
+        },
+        {
+          "channel": "standard_fine",
+          "unit_cost": 1.5,
+          "eligible": true
+        }
+      ],
+      "chosen_option": {
+        "acquired_pilot_rows": 5,
+        "unit_row_m": 1.5
+      },
+      "rejection_reasons": {
+        "coarse_macro": "not_certified_or_not_slow_query"
+      },
+      "rationale_summary": "Acquire initial prefix-isolated pilot observations for Live GPT agent.",
+      "cost_ledger_delta": {
+        "measurement_delta": 7.5,
+        "compute_delta": 0.0,
+        "composite_delta": 7.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.0,
+        "composite_cost": 7.5,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "4fde64e2ac691933e36616964a1c5274e721a967a378c5f6c2b2692aab3a6267"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 2,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__002",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__001",
+      "prev_record_sha256": "4fde64e2ac691933e36616964a1c5274e721a967a378c5f6c2b2692aab3a6267",
+      "decision_type": "D2_INDEX_RETRIEVAL_RANKING",
+      "evidence_inputs": {
+        "query_signatures": [
+          "sig:endpoint_matched_history_gap",
+          "sig:coupled_transient_lag"
+        ],
+        "index": "HippoRAG_PPR_K15"
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_memory_kernel_full",
+          "score": 0.580761
+        },
+        {
+          "node_id": "node_A_snapshot_balance",
+          "score": 0.161043
+        },
+        {
+          "node_id": "node_H_damped_harmonic_osc",
+          "score": 0.155321
+        }
+      ],
+      "chosen_option": {
+        "recalled_top3_nodes": [
+          "node_A_memory_kernel_full",
+          "node_A_snapshot_balance",
+          "node_H_damped_harmonic_osc"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Retrieve Top-3 concepts from K=15 heterogeneous forest via HippoRAG_PPR.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 2.315,
+        "composite_delta": 0.11575,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 2.315,
+        "composite_cost": 7.61575,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "bc1474ed48f600cf1b3e269496bf89a33d01794e65389a56caaf6fd6813908e5"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 3,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__003",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__002",
+      "prev_record_sha256": "bc1474ed48f600cf1b3e269496bf89a33d01794e65389a56caaf6fd6813908e5",
+      "decision_type": "D3_FOUR_TIER_PERMISSION_AND_GRAYZONE_GATE",
+      "evidence_inputs": {
+        "observed_features": {
+          "has_history_or_lag_gap": true
+        }
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_memory_kernel_full",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        },
+        {
+          "node_id": "node_A_snapshot_balance",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        },
+        {
+          "node_id": "node_H_damped_harmonic_osc",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        }
+      ],
+      "chosen_option": {
+        "authorized_recalled_nodes": [
+          "node_A_memory_kernel_full",
+          "node_A_snapshot_balance",
+          "node_H_damped_harmonic_osc"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Check 4-tier preconditions & gray-zone scope on Top-3 recalled forest nodes.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 2.315,
+        "composite_cost": 7.61575,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "0fe99da5dc0d8fd52509eb95dbef07e7c15f70a7cb0a0809bf5ddd598b04e07d"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 4,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__004",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__003",
+      "prev_record_sha256": "0fe99da5dc0d8fd52509eb95dbef07e7c15f70a7cb0a0809bf5ddd598b04e07d",
+      "decision_type": "D6_LIVE_GPT_TOOL_DECISION",
+      "evidence_inputs": {
+        "turn": 1,
+        "prompt_sha256_prefix": "abf6083c5a5fc459",
+        "current_train_rows": 5,
+        "task_context_chars": 4243
+      },
+      "candidates_evaluated": [
+        {
+          "chosen_tool": "acquire_probe"
+        },
+        {
+          "alternative": "open_branch_discriminating_probe",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "slow_horizon_discriminating_probe",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "nuisance_high_var_aux",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "coupled 2-state memory ODE model",
+          "status": "deferred_or_rejected"
+        }
+      ],
+      "chosen_option": {
+        "tool_name": "acquire_probe",
+        "arguments_summary": {
+          "rationale": "The authorized mechanism note identifies a four-parameter coupled memory ODE and requires at least eight rows. Five paid rows leave genuine parameter identifiability ambiguity; the fine trajectory batch is the direct, non-nuisance path to enough data.",
+          "considered_alternatives": "<4 alts>",
+          "probe_id": "extra_fine_trajectory_batch"
+        }
+      },
+      "rejection_reasons": {
+        "open_branch_discriminating_probe": "It may discriminate mechanism class, but the authorized full coupled-memory ODE is explicitly underidentified with only five rows and requires at least eight.",
+        "slow_horizon_discriminating_probe": "All current rows already use the target horizon H=0.6; the evidence points to a coupled transient lag, so an additional horizon is less useful than enough trajectories to fit its four parameters.",
+        "nuisance_high_var_aux": "It is explicitly nuisance information and cannot resolve the target-law parameter ambiguity.",
+        "coupled 2-state memory ODE model": "Promising given both pilot signatures, but five observations are insufficient to fit its four parameters reliably and meet fresh-confirmation tolerance."
+      },
+      "rationale_summary": "The authorized mechanism note identifies a four-parameter coupled memory ODE and requires at least eight rows. Five paid rows leave genuine parameter identifiability ambiguity; the fine trajectory batch is the direct, non-nuisance path to enough data.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 5.683,
+        "composite_delta": 0.28415,
+        "prompt_tokens_delta": 8844,
+        "cached_tokens_delta": 4736,
+        "completion_tokens_delta": 391,
+        "wall_ms_delta": 16380.29
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 7.998,
+        "composite_cost": 7.8999,
+        "prompt_tokens": 8844,
+        "cached_tokens": 4736,
+        "completion_tokens": 391,
+        "wall_ms": 16380.29
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "32f7ff1d00109900c1f6a9f776489d9bd47f3b30aa87db76d373204d928c95c0"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 5,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__005",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__004",
+      "prev_record_sha256": "32f7ff1d00109900c1f6a9f776489d9bd47f3b30aa87db76d373204d928c95c0",
+      "decision_type": "D5B_PAID_PROBE_EXECUTION",
+      "evidence_inputs": {
+        "probe_id": "extra_fine_trajectory_batch"
+      },
+      "candidates_evaluated": [
+        {
+          "probe_id": "extra_fine_trajectory_batch",
+          "cost": 4.5
+        }
+      ],
+      "chosen_option": {
+        "added_rows": 3,
+        "new_row_keys": [
+          [
+            1.6722,
+            1.63295,
+            -0.68031,
+            -0.17263,
+            0.3359,
+            0.6
+          ],
+          [
+            1.98189,
+            3.35708,
+            1.02376,
+            -0.09016,
+            2.17337,
+            0.6
+          ],
+          [
+            2.37184,
+            1.36369,
+            -0.7924,
+            0.16689,
+            2.14718,
+            0.6
+          ]
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Execute extra_fine_trajectory_batch acquisition.",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 0.0,
+        "composite_delta": 4.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 7.998,
+        "composite_cost": 12.3999,
+        "prompt_tokens": 8844,
+        "cached_tokens": 4736,
+        "completion_tokens": 391,
+        "wall_ms": 16380.29
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "9e12e99defe9678c1adf094279e0fc9fe4ee2d1e8a4bfaef8b25086847d03c59"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 6,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__006",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__005",
+      "prev_record_sha256": "9e12e99defe9678c1adf094279e0fc9fe4ee2d1e8a4bfaef8b25086847d03c59",
+      "decision_type": "D6_LIVE_GPT_TOOL_DECISION",
+      "evidence_inputs": {
+        "turn": 2,
+        "prompt_sha256_prefix": "5af2fce4d503a11d",
+        "current_train_rows": 8,
+        "task_context_chars": 6332
+      },
+      "candidates_evaluated": [
+        {
+          "chosen_tool": "author_and_confirm_python_model"
+        },
+        {
+          "alternative": "slow_horizon_discriminating_probe",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "open_branch_discriminating_probe",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "extra_fine_trajectory_batch",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "snapshot or damped-oscillator model",
+          "status": "deferred_or_rejected"
+        }
+      ],
+      "chosen_option": {
+        "tool_name": "author_and_confirm_python_model",
+        "arguments_summary": {
+          "rationale": "The eight paid rows meet the verified four-parameter coupled-memory ODE minimum. Fit the target parameters numerically and predict with the specified RK4 state evolution; no further probe is required before confirmation.",
+          "considered_alternatives": "<4 alts>",
+          "hypothesis_name": "coupled_memory_ode_rk4",
+          "python_code": "<1279 chars python>"
+        }
+      },
+      "rejection_reasons": {
+        "slow_horizon_discriminating_probe": "The authorized coupled-ODE mechanism has reached its stated minimum of eight rows; a longer-horizon measurement is not needed to fit the four parameters.",
+        "open_branch_discriminating_probe": "The observed coupled-transient and history-gap signatures, plus the verified mechanism note, favor the memory ODE; spending on branch selection is less useful than fitting the now-sufficient batch.",
+        "extra_fine_trajectory_batch": "Eight rows are available, meeting the specified minimum; another batch is unnecessary before fitting and fresh confirmation.",
+        "snapshot or damped-oscillator model": "These alternatives do not represent the supplied history-conditioned coupled transient mechanism."
+      },
+      "rationale_summary": "The eight paid rows meet the verified four-parameter coupled-memory ODE minimum. Fit the target parameters numerically and predict with the specified RK4 state evolution; no further probe is required before confirmation.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 10.607,
+        "composite_delta": 0.53035,
+        "prompt_tokens_delta": 9754,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 853,
+        "wall_ms_delta": 22040.63
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 18.605,
+        "composite_cost": 12.93025,
+        "prompt_tokens": 18598,
+        "cached_tokens": 4736,
+        "completion_tokens": 1244,
+        "wall_ms": 38420.92
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "2291aaf66c9dbc111c611ed80b422d50f86866cae210b6d4b85ee9ac098c08cb"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 7,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__007",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__006",
+      "prev_record_sha256": "2291aaf66c9dbc111c611ed80b422d50f86866cae210b6d4b85ee9ac098c08cb",
+      "decision_type": "D7_PYTHON_SUBPROCESS_EXECUTION_ERROR",
+      "evidence_inputs": {
+        "hypothesis_name": "coupled_memory_ode_rk4",
+        "model_sha256": "5628f3f6c20cd74fa04a3bce574ff712dceebfb9c2327e9c6fb451b41ffc2e6f"
+      },
+      "candidates_evaluated": [
+        {
+          "hypothesis_name": "coupled_memory_ode_rk4",
+          "ok": false
+        }
+      ],
+      "chosen_option": {
+        "action": "return_traceback_to_gpt_for_repair"
+      },
+      "rejection_reasons": {
+        "coupled_memory_ode_rk4": "Traceback (most recent call last):\n  File \"<string>\", line 10, in <module>\n  File \"<string>\", line 10, in <listcomp>\n  File \"/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/docs/evidence/v18_1_m5_live_gpt_and_decision_provenance_2026"
+      },
+      "rationale_summary": "Isolated Python subprocess raised runtime/syntax error; feed stderr back to GPT.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 1.5,
+        "composite_delta": 0.075,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 802.13
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 20.105,
+        "composite_cost": 13.00525,
+        "prompt_tokens": 18598,
+        "cached_tokens": 4736,
+        "completion_tokens": 1244,
+        "wall_ms": 39223.05
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {
+        "model_path": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/docs/evidence/v18_1_m5_live_gpt_and_decision_provenance_20261120/live_gpt_workspaces_and_dags/gpt-6-luna__Hegel_M5_LiveGPT__L01_CrossTimescale_MemoryKernel/model_step_02.py"
+      },
+      "record_sha256": "5c212d3ac15d66c1a5ffc7e82acc8396f8e2975968b6401c7894ad06658d5301"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 8,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__008",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__007",
+      "prev_record_sha256": "5c212d3ac15d66c1a5ffc7e82acc8396f8e2975968b6401c7894ad06658d5301",
+      "decision_type": "D6_LIVE_GPT_TOOL_DECISION",
+      "evidence_inputs": {
+        "turn": 3,
+        "prompt_sha256_prefix": "f70827285d86f5e1",
+        "current_train_rows": 8,
+        "task_context_chars": 7366
+      },
+      "candidates_evaluated": [
+        {
+          "chosen_tool": "author_and_confirm_python_model"
+        },
+        {
+          "alternative": "slow_horizon_discriminating_probe",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "open_branch_discriminating_probe",
+          "status": "deferred_or_rejected"
+        },
+        {
+          "alternative": "snapshot balance or damped oscillator model",
+          "status": "deferred_or_rejected"
+        }
+      ],
+      "chosen_option": {
+        "tool_name": "author_and_confirm_python_model",
+        "arguments_summary": {
+          "rationale": "The prior confirmation error was an implementation scoping bug: the fitted parameter variable was undefined in predict. This version stores the least-squares fit in module scope and predicts by RK4 integration of the specified two-state memory ODE.",
+          "considered_alternatives": "<3 alts>",
+          "hypothesis_name": "coupled_memory_ode_rk4",
+          "python_code": "<1345 chars python>"
+        }
+      },
+      "rejection_reasons": {
+        "slow_horizon_discriminating_probe": "Eight rows already meet the supplied minimum for fitting the four-parameter coupled ODE; an additional horizon probe costs more and is not needed for the prescribed confirmation.",
+        "open_branch_discriminating_probe": "The authorized mechanism notes and the observed history-gap/coupled-transient signatures support the coupled-memory branch; no unresolved branch ambiguity remains.",
+        "snapshot balance or damped oscillator model": "These do not represent the supplied history-conditioned coupled transient mechanism."
+      },
+      "rationale_summary": "The prior confirmation error was an implementation scoping bug: the fitted parameter variable was undefined in predict. This version stores the least-squares fit in module scope and predicts by RK4 integration of the specified two-state memory ODE.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 7.265,
+        "composite_delta": 0.36325,
+        "prompt_tokens_delta": 10051,
+        "cached_tokens_delta": 4736,
+        "completion_tokens_delta": 766,
+        "wall_ms_delta": 19521.75
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 27.37,
+        "composite_cost": 13.3685,
+        "prompt_tokens": 28649,
+        "cached_tokens": 9472,
+        "completion_tokens": 2010,
+        "wall_ms": 58744.8
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {},
+      "record_sha256": "2ba630015a5d2a5eae62085cbba46321fbff21c38acf58b3d8e2ec9895366250"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 9,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__009",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__008",
+      "prev_record_sha256": "2ba630015a5d2a5eae62085cbba46321fbff21c38acf58b3d8e2ec9895366250",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "hypothesis_name": "coupled_memory_ode_rk4",
+        "model_sha256": "2659bebe80ee9fb1f0fc2d01dff1539be3d8c0be23ced0122ca0065a9ac71c42",
+        "train_rows": 8
+      },
+      "candidates_evaluated": [
+        {
+          "hypothesis_name": "coupled_memory_ode_rk4",
+          "train_rmse": 0.0,
+          "confirm_rmse": 0.0,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_ACCEPTED"
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "GPT-authored coupled_memory_ode_rk4 confirmed on disjoint points (confirm_rmse=0.000000).",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 3.5,
+        "composite_delta": 4.675,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 666.02
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 16.5,
+        "compute_cost": 30.87,
+        "composite_cost": 18.0435,
+        "prompt_tokens": 28649,
+        "cached_tokens": 9472,
+        "completion_tokens": 2010,
+        "wall_ms": 59410.82
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {
+        "model_path": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/docs/evidence/v18_1_m5_live_gpt_and_decision_provenance_20261120/live_gpt_workspaces_and_dags/gpt-6-luna__Hegel_M5_LiveGPT__L01_CrossTimescale_MemoryKernel/model_step_03.py"
+      },
+      "record_sha256": "d7bc4ea05e739a21c86a1bdb91988978f08420f4eb3f42f43f3bf8f921a99373"
+    },
+    {
+      "run_id": "live_sub__gpt-6-luna",
+      "model": "gpt-6-luna",
+      "provider_backend": "openai_chatgpt_subscription_codex_cli",
+      "task_id": "L01_CrossTimescale_MemoryKernel",
+      "arm": "Hegel_M5_LiveGPT",
+      "decision_seq": 10,
+      "decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__010",
+      "parent_decision_id": "dec__live_sub__gpt-6-luna__L01_CrossTimescale_MemoryKernel__Hegel_M5_LiveGPT__009",
+      "prev_record_sha256": "d7bc4ea05e739a21c86a1bdb91988978f08420f4eb3f42f43f3bf8f921a99373",
+      "decision_type": "D9_TERMINAL_DECISION_AND_HELDOUT_AUDIT",
+      "evidence_inputs": {
+        "locked_model_sha256": "2659bebe80ee9fb1f0fc2d01dff1539be3d8c0be23ced0122ca0065a9ac71c42",
+        "any_fit_after_confirm": false
+      },
+      "candidates_evaluated": [
+        {
+          "hypothesis_name": "coupled_memory_ode_rk4",
+          "heldout_rmse": 0.0
+        }
+      ],
+      "chosen_option": {
+        "final_status": "confirmed_ok",
+        "strict_pass": true
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Lock GPT-authored Python model and audit on unseen heldout rows.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 16.5,
+        "compute_cost": 30.87,
+        "composite_cost": 18.0435,
+        "prompt_tokens": 28649,
+        "cached_tokens": 9472,
+        "completion_tokens": 2010,
+        "wall_ms": 59410.82
+      },
+      "state_digest_after": null,
+      "extra_artifacts": {
+        "model_path": "/home/erzhu419/mine_code/Asumption Agent/Hegel Machine/docs/evidence/v18_1_m5_live_gpt_and_decision_provenance_20261120/live_gpt_workspaces_and_dags/gpt-6-luna__Hegel_M5_LiveGPT__L01_CrossTimescale_MemoryKernel/model_step_03.py"
+      },
+      "record_sha256": "d1200a5960ce6d22805fa6330cbe80a302317dd44f12d0c083c50d72b5731a4b"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "7f73130d12450ae5",
+  "prompt_tokens": 10962,
+  "cached_tokens": 8320,
+  "completion_tokens": 763,
+  "task_context_chars": 3963,
+  "wall_ms": 20443.78,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Use the verified cooperative Hill-2 binding law with competitive gradient-sink inhibition and linear bleed. Fit its four parameters numerically to the paid rows; tau_scale is 1.0, and the inhibition-gradient span removes the stated reason to buy an open-branch probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed s_grad span is 2.0, well above the source-note trigger of 0.08; the required variation is already present."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The verified mechanism is a present-snapshot algebraic law, not a long-horizon trajectory, and five rows span the input and inhibition dimensions for its four parameters."
+      },
+      {
+        "option": "Weibull cumulative-hazard saturation and Avrami kinetics",
+        "rejected_reason": "These disclosed alternatives do not account for the specified competitive inhibition dependence on s_grad; the authorized cooperative Hill-2 mechanism directly matches that signature."
+      }
+    ],
+    "hypothesis_name": "cooperative_hill2_sink_inhibition",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows], dtype=float)\n    s = np.array([float(r['s_grad']) for r in rows], dtype=float)\n    y = np.array([float(r['y']) for r in rows], dtype=float)\n    def predict_params(p, u_now, s_grad):\n        vmax, k_half, alpha_inh, c_leak = p\n        u_n = float(u_now)  # tau_scale = 1.0\n        return vmax * (u_n ** 2 / (k_half + u_n ** 2)) / (1.0 + alpha_inh * float(s_grad)) - c_leak * u_n\n    def residuals(p):\n        return np.array([predict_params(p, ui, si) for ui, si in zip(u, s)]) - y\n    result = least_squares(residuals, x0=np.array([4.0, 1.0, 0.5, 0.1]), bounds=(np.zeros(4), np.full(4, np.inf)))\n    return {'params': result.x}\n\ndef predict(row):\n    vmax, k_half, alpha_inh, c_leak = fit_params['params']\n    u_n = float(row['u_now'])  # tau_scale = 1.0\n    return float(vmax * (u_n ** 2 / (k_half + u_n ** 2)) / (1.0 + alpha_inh * float(row['s_grad'])) - c_leak * u_n)"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

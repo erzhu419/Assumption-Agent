@@ -1,0 +1,36 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "47f396cef9977fc4",
+  "prompt_tokens": 22680,
+  "cached_tokens": 17152,
+  "completion_tokens": 1031,
+  "task_context_chars": 3972,
+  "wall_ms": 29872.09,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The scaled Hill-2 law combines sigmoidal activation, sink inhibition, and linear bleed. A numerical pilot fit gives RMSE about 1.6e-8, so the existing data support submitting the model directly for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The existing sink-gradient span is 2.00, well above the 0.08 trigger, and the four-parameter law already fits the five observations."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The candidate is a snapshot law, and all five rows are already at the target horizon."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "This probe does not distinguish the candidate mechanisms."
+      },
+      {
+        "option": "Weibull saturation and Avrami kinetics",
+        "rejected_reason": "Input-only Weibull saturation cannot account for the observed declines as input rises, and horizon-only Avrami kinetics would predict the same value for all five rows."
+      }
+    ],
+    "hypothesis_name": "scaled_hill2_sink_inhibition",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nTAU = 0.1\n_params = None\n\ndef _law(p, u, s):\n    vmax, k_half, alpha, leak = p\n    u2 = u * u\n    return vmax * (u2 / (k_half + u2)) / (1.0 + alpha * s) - leak * u\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) / TAU for r in rows])\n    s = np.array([float(r['s_grad']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    result = least_squares(lambda p: _law(p, u, s) - y,\n                           [max(1.0, 2.0 * float(np.max(y))), 1.0, 0.5, 0.1],\n                           bounds=([0.0, math.ulp(1.0), 0.0, 0.0], np.inf),\n                           x_scale='jac')\n    _params = result.x\n    return _params\n\ndef predict(row):\n    return float(_law(_params, float(row['u_now']) / TAU, float(row['s_grad'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

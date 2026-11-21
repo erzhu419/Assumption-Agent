@@ -1,0 +1,446 @@
+{
+  "episode_summary": {
+    "task_id": "S101_A02_SnapshotLinear2",
+    "suite": "A_TemporalMemory",
+    "subfamily": "A_snapshot_only",
+    "arm": "EqualAuth_SingleNode_Wormhole_Only",
+    "is_out_of_scope": false,
+    "status": "confirmed_ok",
+    "selected_model_class": "M1_SnapshotLinear",
+    "strict_pass": true,
+    "false_confirmation": false,
+    "evaluated_candidate_count": 1,
+    "total_nfev": 4,
+    "confirm_rmse": 0.0,
+    "heldout_rmse": 0.0,
+    "decision_count": 6,
+    "measurement_cost": 12.0,
+    "compute_cost": 4.525,
+    "composite_cost": 12.22625
+  },
+  "chain_verification": {
+    "valid": true,
+    "decision_count": 6,
+    "terminal_record_sha256": "e6cf77d638e387fcd587d1470ea70ca6f1c9d0fadf2702cdd8d03dd635f55a05",
+    "verified_measurement_cost": 12.0,
+    "verified_compute_cost": 4.525,
+    "verified_composite_cost": 12.22625,
+    "verified_total_tokens": 0
+  },
+  "decision_dag": [
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A02_SnapshotLinear2",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 1,
+      "decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__001",
+      "parent_decision_id": null,
+      "prev_record_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "decision_type": "D0_TASK_ARRIVAL_AND_PILOT_ACQUISITION",
+      "evidence_inputs": {
+        "task_id": "S101_A02_SnapshotLinear2",
+        "coarse_channel_available": false,
+        "observed_probe_signatures": [
+          "sig:static_equilibrium_consistent",
+          "sig:zero_history_gap"
+        ],
+        "pilot_row_keys": [
+          [
+            2.50079,
+            2.67806,
+            0.71193,
+            -0.29843,
+            1.54258,
+            0.6
+          ],
+          [
+            0.63357,
+            2.29185,
+            0.40085,
+            -0.39963,
+            1.56801,
+            0.6
+          ],
+          [
+            1.01846,
+            2.9115,
+            0.15728,
+            -0.09922,
+            0.82894,
+            0.6
+          ],
+          [
+            0.36869,
+            0.58569,
+            1.3842,
+            0.52785,
+            1.10558,
+            0.6
+          ],
+          [
+            1.11455,
+            2.68333,
+            0.76284,
+            0.99183,
+            1.75777,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "channel": "coarse_macro",
+          "unit_cost": 1.0,
+          "eligible": false
+        },
+        {
+          "channel": "standard_fine",
+          "unit_cost": 1.5,
+          "eligible": true
+        }
+      ],
+      "chosen_option": {
+        "selected_channel": "standard_fine",
+        "acquired_rows": 5
+      },
+      "rejection_reasons": {
+        "coarse_macro": "no_certified_coarse_edge_or_not_slow_horizon_query"
+      },
+      "rationale_summary": "Acquire prefix-isolated initial pilot rows under authorized measurement channel.",
+      "cost_ledger_delta": {
+        "measurement_delta": 7.5,
+        "compute_delta": 0.0,
+        "composite_delta": 7.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.0,
+        "composite_cost": 7.5,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "2b90b36389137457ecb1d24c71d90292254eadb95a2b306682bdfe904cc352f6"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A02_SnapshotLinear2",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 2,
+      "decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__002",
+      "parent_decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__001",
+      "prev_record_sha256": "2b90b36389137457ecb1d24c71d90292254eadb95a2b306682bdfe904cc352f6",
+      "decision_type": "D1_CAUSAL_TEMPORAL_REGIME_EXTRACTION",
+      "evidence_inputs": {
+        "prefix_sample_count": 5,
+        "causal_cutoff_policy": "strict_prefix_le_t0"
+      },
+      "candidates_evaluated": [
+        {
+          "mode": "strict_causal_online_prefix",
+          "ok": true,
+          "future_regime_leaked": false
+        }
+      ],
+      "chosen_option": {
+        "causal_cutoff_t0": 0.4,
+        "past_present_extracted": true
+      },
+      "rejection_reasons": {
+        "centered_or_post_t0_window": "blocked_by_strict_online_causality"
+      },
+      "rationale_summary": "Extract (P_tau, N_tau) strictly from <= t0 prefix with zero future leakage.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.5,
+        "composite_delta": 0.025,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.5,
+        "composite_cost": 7.525,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "e3da4765ae6e6a04bb280ba78317615cedd178c5c15ccaaae11a27dc741c9cc7"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A02_SnapshotLinear2",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 3,
+      "decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__003",
+      "parent_decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__002",
+      "prev_record_sha256": "e3da4765ae6e6a04bb280ba78317615cedd178c5c15ccaaae11a27dc741c9cc7",
+      "decision_type": "D2_INDEX_RETRIEVAL_RANKING",
+      "evidence_inputs": {
+        "query_signatures": [
+          "sig:static_equilibrium_consistent",
+          "sig:zero_history_gap"
+        ],
+        "index_kind": "HippoRAG_PPR"
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_memory_kernel_full",
+          "score": 0.453598
+        },
+        {
+          "node_id": "node_A_snapshot_balance",
+          "score": 0.345047
+        },
+        {
+          "node_id": "node_A_before_after_opposition",
+          "score": 0.201355
+        }
+      ],
+      "chosen_option": {
+        "top_k_node_ids": [
+          "node_A_memory_kernel_full",
+          "node_A_snapshot_balance",
+          "node_A_before_after_opposition"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Rank candidate forest nodes purely from observed sig:* pilot cues.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 1.645,
+        "composite_delta": 0.08225,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 2.145,
+        "composite_cost": 7.60725,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "29e2bbf8876a39547c1fc6e30887d90952895c9bd9c3185ff6378ba3d8af3295"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A02_SnapshotLinear2",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 4,
+      "decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__004",
+      "parent_decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__003",
+      "prev_record_sha256": "29e2bbf8876a39547c1fc6e30887d90952895c9bd9c3185ff6378ba3d8af3295",
+      "decision_type": "D3_FOUR_TIER_PERMISSION_AND_GRAYZONE_GATE",
+      "evidence_inputs": {
+        "observed_target_features": {
+          "has_history_or_lag_gap": false
+        }
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_memory_kernel_full",
+          "granted": false,
+          "reason": "precondition_violated"
+        },
+        {
+          "node_id": "node_A_snapshot_balance",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        },
+        {
+          "node_id": "node_A_before_after_opposition",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        }
+      ],
+      "chosen_option": {
+        "authorized_ordered_model_queue": [
+          "M1_SnapshotLinear",
+          "M3_ReducedSlowODE",
+          "M2_BeforeAfterOpposition"
+        ]
+      },
+      "rejection_reasons": {
+        "node_A_memory_kernel_full": "precondition_violated"
+      },
+      "rationale_summary": "Filter retrieved nodes through 4-tier preconditions & gray-zone bounds before fitting.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 2.145,
+        "composite_cost": 7.60725,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "ee45f20b0919afdc4169061da7b3d6b860f602bd326e7d0e1756368557b385dc"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A02_SnapshotLinear2",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 5,
+      "decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__005",
+      "parent_decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__004",
+      "prev_record_sha256": "ee45f20b0919afdc4169061da7b3d6b860f602bd326e7d0e1756368557b385dc",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M1_SnapshotLinear",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            2.62633,
+            0.94179,
+            0.11772,
+            -0.5166,
+            0.71509,
+            0.6
+          ],
+          [
+            2.90765,
+            1.1762,
+            -0.58858,
+            -0.58885,
+            0.62496,
+            0.6
+          ],
+          [
+            2.68199,
+            0.97948,
+            0.49213,
+            0.36255,
+            2.00548,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M1_SnapshotLinear",
+          "nfev": 4,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.0,
+          "confirm_rmse": 0.0,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_ACCEPTED"
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Candidate M1_SnapshotLinear passed disjoint confirmation (RMSE=0.00000 <= 0.045).",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 2.38,
+        "composite_delta": 4.619,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 4.525,
+        "composite_cost": 12.22625,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "295981f6712e4d0e6a5bc46843cd35cf64b810b095de465d3cfd6ac0de4a9623"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A02_SnapshotLinear2",
+      "arm": "EqualAuth_SingleNode_Wormhole_Only",
+      "decision_seq": 6,
+      "decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__006",
+      "parent_decision_id": "dec__det_m5__S101_A02_SnapshotLinear2__EqualAuth_SingleNode_Wormhole_Only__005",
+      "prev_record_sha256": "295981f6712e4d0e6a5bc46843cd35cf64b810b095de465d3cfd6ac0de4a9623",
+      "decision_type": "D9_TERMINAL_DECISION_AND_HELDOUT_AUDIT",
+      "evidence_inputs": {
+        "locked_model_class": "M1_SnapshotLinear",
+        "heldout_row_count": 5,
+        "any_fit_after_confirm": false
+      },
+      "candidates_evaluated": [
+        {
+          "status": "confirmed_ok",
+          "heldout_rmse": 0.0
+        }
+      ],
+      "chosen_option": {
+        "final_status": "confirmed_ok",
+        "selected_model_class": "M1_SnapshotLinear",
+        "strict_pass": true
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Lock confirmed model with zero refit and audit on disjoint heldout set.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 4.525,
+        "composite_cost": 12.22625,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "e6cf77d638e387fcd587d1470ea70ca6f1c9d0fadf2702cdd8d03dd635f55a05"
+    }
+  ]
+}

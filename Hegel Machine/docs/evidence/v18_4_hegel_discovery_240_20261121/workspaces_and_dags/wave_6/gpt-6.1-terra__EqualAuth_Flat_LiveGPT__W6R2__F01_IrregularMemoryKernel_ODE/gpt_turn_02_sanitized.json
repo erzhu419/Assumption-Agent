@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "781ded196c2d797c",
+  "prompt_tokens": 15610,
+  "cached_tokens": 8320,
+  "completion_tokens": 1004,
+  "task_context_chars": 12476,
+  "wall_ms": 25722.45,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid trajectory batch supplies eight rows for numerical estimation of the four-parameter coupled ODE. Reconstructing the latent memory with the specified irregular-grid exponential kernel preserves the observed history dependence, and fresh confirmation can test the resulting forecasts.",
+    "considered_alternatives": [
+      {
+        "option": "Maxwell or Kelvin–Voigt single-state models",
+        "rejected_reason": "They omit the observed history-dependent coupled transient and conflict with the recalled coupled-memory mechanism."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Eight observations are now available for the specified four-parameter mechanism; an additional probe is not needed before confirmation."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is irrelevant to identifying the memory dynamics."
+      }
+    ],
+    "hypothesis_name": "coupled_irregular_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _forecast(row, p):\n    a, b, c, tau = p\n    if row.get('mem_conv') is not None:\n        z = float(row['mem_conv'])\n    else:\n        prefix = row['raw_prefix']\n        t_end = float(prefix[-1]['t'])\n        z = 0.52 * float(prefix[0]['x']) * math.exp(-(t_end - float(prefix[0]['t'])) / tau)\n        for left, right in zip(prefix[:-1], prefix[1:]):\n            t0, t1 = float(left['t']), float(right['t'])\n            f0 = 0.52 * float(left['x']) * math.exp(-(t_end - t0) / tau) / tau\n            f1 = 0.52 * float(right['x']) * math.exp(-(t_end - t1) / tau) / tau\n            z += 0.5 * (t1 - t0) * (f0 + f1)\n    x = float(row['x_now'])\n    u = float(row['u_now'])\n    horizon = float(row['H'])\n    n = max(1, int(math.ceil(horizon / 0.004)))\n    dt = horizon / n\n    def deriv(xv, zv):\n        return -a * xv + b * zv + c * u, (0.52 * xv - zv) / tau\n    for _ in range(n):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x + dt*k1x/2, z + dt*k1z/2)\n        k3x, k3z = deriv(x + dt*k2x/2, z + dt*k2z/2)\n        k4x, k4z = deriv(x + dt*k3x, z + dt*k3z)\n        x += dt * (k1x + 2*k2x + 2*k3x + k4x) / 6\n        z += dt * (k1z + 2*k2z + 2*k3z + k4z) / 6\n    return x\n\ndef fit(train_rows):\n    global _params\n    def residual(p):\n        return np.array([_forecast(row, p) - float(row['y']) for row in train_rows])\n    best = None\n    for start in ([1.5, 0.8, 1.0, 0.5], [1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 1.0, 0.2]):\n        result = least_squares(residual, start, bounds=([0.0, -10.0, 0.0, 0.03], [10.0, 10.0, 10.0, 10.0]), max_nfev=1200, xtol=1e-11, ftol=1e-11, gtol=1e-11)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = best.x\n    return _params\n\ndef predict(row):\n    return float(_forecast(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

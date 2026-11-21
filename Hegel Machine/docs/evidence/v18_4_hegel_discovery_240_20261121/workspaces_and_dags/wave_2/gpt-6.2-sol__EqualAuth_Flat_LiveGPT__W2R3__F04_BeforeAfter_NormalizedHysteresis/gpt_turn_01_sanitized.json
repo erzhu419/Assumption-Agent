@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "107f8785b32d072b",
+  "prompt_tokens": 15733,
+  "cached_tokens": 0,
+  "completion_tokens": 708,
+  "task_context_chars": 3367,
+  "wall_ms": 24587.41,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row fixes the equilibrium coefficient at 0.43. After subtracting that baseline and dividing by the normalized step, all four remaining rows follow the same negative exponential with a decay rate near 1.52. The pilot data therefore support submitting the three-parameter law for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Pure Maxwell exponential",
+        "rejected_reason": "It predicts zero for the no-step row, which has y = 0.645."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck mean reversion",
+        "rejected_reason": "A fixed equilibrium cannot explain both downward shifts from lower initial states and upward shifts from higher initial states under positive mean reversion."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The no-step row identifies the equilibrium coefficient, and four nonzero steps across horizons that bracket the forecast horizon constrain the transient gain and decay rate."
+      }
+    ],
+    "hypothesis_name": "normalized_before_after_hysteresis",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_SCALE = 0.004\n_params = None\n\ndef fit(train_rows):\n    global _params\n    data = np.array([[r['u_past'], r['u_now'], r['H'], r['y']] for r in train_rows], dtype=float)\n    past, now, horizon, target = data.T\n    now = now / _SCALE\n    step = now - past / _SCALE\n    def residual(p):\n        gain, rate, equilibrium = p\n        return gain * step * np.exp(-rate * horizon) + equilibrium * now - target\n    _params = least_squares(residual, [-1.0, 1.0, 0.5], bounds=([-np.inf, 0.0, -np.inf], [np.inf, np.inf, np.inf])).x\n\ndef predict(row) -> float:\n    gain, rate, equilibrium = _params\n    now = row['u_now'] / _SCALE\n    step = now - row['u_past'] / _SCALE\n    return float(gain * step * math.exp(-rate * row['H']) + equilibrium * now)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

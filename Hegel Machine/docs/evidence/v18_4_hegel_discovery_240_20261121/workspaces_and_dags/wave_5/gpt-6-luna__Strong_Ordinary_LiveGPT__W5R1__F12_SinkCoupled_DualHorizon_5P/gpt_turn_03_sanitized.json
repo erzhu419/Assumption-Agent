@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "74614dd813740c84",
+  "prompt_tokens": 15412,
+  "cached_tokens": 8320,
+  "completion_tokens": 1055,
+  "task_context_chars": 16702,
+  "wall_ms": 26254.61,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Short-horizon responses are positive, but the paid observations at H=15.5 and 21.5 are negative. Together with the varying sink gradients, this supports the sink-inhibited fast contribution minus slow adaptation term. Fit all five parameters numerically to the eight rows and use the fitted parameters in predict.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its long-horizon negative observations distinguish the adaptation law from short-horizon-only candidates."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled-memory ODE",
+        "rejected_reason": "The eight observations include clear horizon reversal and support the five-parameter dual-horizon law; another batch is not needed to fit that specified candidate."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is unrelated to the observed reversal and is explicitly a nuisance measurement."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _value(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    inhibition = 1.0 - rho * s / (1.0 + s)\n    base = vmax * inhibition * (u / (1.2 + u))\n    return base * (1.0 - math.exp(-h / tau_fast)) - amp_adapt * u * (1.0 - math.exp(-h / tau_slow))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows], dtype=float)\n    def residual(p):\n        return np.asarray([_value(r, p) for r in rows]) - y\n    lower = np.array([0.0, 0.0, 0.01, 0.0, 0.05])\n    upper = np.array([20.0, 1.0, 20.0, 5.0, 200.0])\n    starts = [\n        [3.0, 0.5, 0.3, 0.5, 8.0],\n        [4.0, 0.7, 1.0, 0.3, 15.0],\n        [2.0, 0.3, 0.1, 0.8, 5.0],\n        [5.0, 0.8, 2.0, 0.2, 30.0],\n    ]\n    best = None\n    for x0 in starts:\n        result = least_squares(residual, np.asarray(x0, dtype=float), bounds=(lower, upper), max_nfev=20000)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _params = np.asarray(best[1], dtype=float)\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_value(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

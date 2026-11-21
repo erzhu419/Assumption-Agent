@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "0a1ce750c1832bae",
+  "prompt_tokens": 12380,
+  "cached_tokens": 8320,
+  "completion_tokens": 831,
+  "task_context_chars": 7325,
+  "wall_ms": 21409.9,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The authorized mechanism specifies a five-parameter coupled siphon-memory ODE. The eight paid rows support numerical parameter fitting, and fresh confirmation will test its predictive accuracy.",
+    "considered_alternatives": [
+      {
+        "option": "Further trajectory probe",
+        "rejected_reason": "The acquired batch provides eight observations for the specified five-parameter mechanism, so another measurement is not currently justified."
+      },
+      {
+        "option": "Kelvin–Voigt or damped oscillator",
+        "rejected_reason": "These snapshot models omit the observed coupled memory and sink-gradient dependence."
+      },
+      {
+        "option": "Threshold-avalanche branch",
+        "rejected_reason": "The observed gradients are subcritical, and no high-gradient probe is offered."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not resolve the relevant mechanism."
+      }
+    ],
+    "hypothesis_name": "coupled_siphon_memory_ode",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _forecast(row, p):\n    a, b, vmax, rho, tau = p\n    u = float(row['u_now']) / 2.0\n    s = float(row['s_grad'])\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    state = np.array([float(row['x_now']), float(row['mem_conv'])], dtype=float)\n    H = float(row['H'])\n    n = max(32, int(np.ceil(abs(H) / 0.01)))\n    dt = H / n\n    def deriv(v):\n        x, z = v\n        return np.array([-a*x + b*z + drive, (0.52*x - z)/tau])\n    for _ in range(n):\n        k1 = deriv(state)\n        k2 = deriv(state + 0.5*dt*k1)\n        k3 = deriv(state + 0.5*dt*k2)\n        k4 = deriv(state + dt*k3)\n        state = state + (dt/6.0)*(k1 + 2*k2 + 2*k3 + k4)\n    return float(state[0])\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    def residual(p):\n        return np.array([_forecast(r, p) - float(r['y']) for r in rows])\n    bounds = ([0.0, 0.0, 0.0, 0.0, 0.05], [10.0, 10.0, 20.0, 1.0, 10.0])\n    starts = [[0.5, 0.5, 6.5, 0.7, t] for t in (0.15, 0.5, 2.0, 6.0)]\n    results = [least_squares(residual, p, bounds=bounds, max_nfev=1200, ftol=1e-12, xtol=1e-12, gtol=1e-12) for p in starts]\n    _params = min(results, key=lambda result: np.dot(result.fun, result.fun)).x\n\ndef predict(row):\n    return _forecast(row, _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

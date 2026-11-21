@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "9de029adb46ab89a",
+  "prompt_tokens": 16781,
+  "cached_tokens": 13184,
+  "completion_tokens": 649,
+  "task_context_chars": 6279,
+  "wall_ms": 19743.22,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilot shows positive short-horizon gain, while the acquired observations show a gradual reversal through the target horizon. Fit the four parameters numerically across all observations and test on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "Sink-coupled five-parameter adaptation",
+        "rejected_reason": "All observed s_grad values are zero, so its sink parameter is not identifiable; the direct dual-horizon mechanism is supported by the observed reversal."
+      },
+      {
+        "option": "Periodic Lotka–Volterra readout",
+        "rejected_reason": "The observed gradual slow reversal matches the authorized adaptation mechanism rather than requiring an oscillatory readout."
+      },
+      {
+        "option": "Extra fine trajectory batch",
+        "rejected_reason": "The slow-horizon probe supplies three additional horizons, including the target, making another measurement unnecessary before confirmation."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h = np.array [float(r['H']) for r in train_rows]\n    u = np.array([float(r['u_now']) for r in train_rows])\n    y = np.array([float(r['y']) for r in train_rows])\n\n    def residual(p):\n        af, tf, a_s, ts = p\n        return u * (af * (-np.expm1(-h / tf)) - a_s * (-np.expm1(-h / ts))) - y\n\n    candidates = []\n    for tf in (0.5, 1.0, 2.0):\n        for ts in (5.0, 15.0, 30.0):\n            result = least_squares(residual, [2.0, tf, 3.0, ts], bounds=([0.0, 0.01, 0.0, 0.1], [100.0, 100.0, 100.0, 1000.0]), max_nfev=5000, xtol=1e-12, ftol=1e-12, gtol=1e-12)\n            candidates.append(result)\n    _params = min(candidates, key=lambda r: np.dot(r.fun, r.fun)).x\n\ndef predict(row):\n    af, tf, a_s, ts = _params\n    h = float(row['H'])\n    return float(float(row['u_now']) * (af * (-np.expm1(-h / tf)) - a_s * (-np.expm1(-h / ts))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

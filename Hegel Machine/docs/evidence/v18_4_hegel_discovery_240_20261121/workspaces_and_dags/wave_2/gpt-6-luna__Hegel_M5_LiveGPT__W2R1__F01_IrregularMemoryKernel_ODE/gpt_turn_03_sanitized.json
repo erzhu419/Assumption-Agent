@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "499539af41da652f",
+  "prompt_tokens": 14218,
+  "cached_tokens": 4864,
+  "completion_tokens": 1000,
+  "task_context_chars": 15096,
+  "wall_ms": 22843.5,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The prior submission failed because predict referenced an undefined global parameter. This version defines a module-level parameter store populated by fit, initializes latent z from each irregular shifted-time prefix (or mem_conv), and uses numerical least squares plus RK4 for the specified coupled ODE.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Eight trajectories are now available, satisfying the source note's minimum for numerical identification of the four coupled-ODE parameters."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; further sampling is not justified before fitting and checking fresh confirmation."
+      },
+      {
+        "option": "Maxwell single-mode exponential",
+        "rejected_reason": "Its snapshot response does not account for the observed history-conditioned transient lag; the verified ODE mechanism is the better-supported candidate."
+      }
+    ],
+    "hypothesis_name": "irregular_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([float(p['t']) for p in pref], dtype=float)\n    xs = np.array([float(p['x']) for p in pref], dtype=float)\n    end = ts[-1]\n    z = math.exp(-(end - ts[0]) / tau) * 0.52 * xs[0]\n    for k in range(1, len(pref)):\n        dt = ts[k] - ts[k-1]\n        q0 = math.exp(-(end - ts[k-1]) / tau) * xs[k-1]\n        q1 = math.exp(-(end - ts[k]) / tau) * xs[k]\n        z += 0.52 * 0.5 * (q0 + q1) * dt / tau\n    return z\n\ndef _sim(row, pars):\n    a, b, c, tau = [float(v) for v in pars]\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    h = H / n\n    def f(state):\n        xx, zz = state\n        return np.array([-a*xx + b*zz + c*u, (0.52*xx - zz)/tau])\n    state = np.array([x, z], dtype=float)\n    for _ in range(n):\n        k1 = f(state)\n        k2 = f(state + 0.5*h*k1)\n        k3 = f(state + 0.5*h*k2)\n        k4 = f(state + h*k3)\n        state += (h/6.0)*(k1 + 2*k2 + 2*k3 + k4)\n    return float(state[0])\n\ndef fit(train_rows):\n    global _PARAMS\n    def residual(p):\n        return np.array([_sim(r, p) - float(r['y']) for r in train_rows])\n    result = least_squares(residual, x0=np.array([0.8, 0.3, 0.5, 0.15]), bounds=([0.001, 0.001, 0.001, 0.005], [5.0, 5.0, 5.0, 5.0]), max_nfev=3000)\n    _PARAMS = result.x.copy()\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return _sim(row, _PARAMS)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

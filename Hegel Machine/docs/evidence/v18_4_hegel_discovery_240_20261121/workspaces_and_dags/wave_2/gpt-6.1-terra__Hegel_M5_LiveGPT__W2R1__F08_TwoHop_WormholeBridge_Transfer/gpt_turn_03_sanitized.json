@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "f34072c5915db76b",
+  "prompt_tokens": 17459,
+  "cached_tokens": 13184,
+  "completion_tokens": 1182,
+  "task_context_chars": 7565,
+  "wall_ms": 27695.22,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The observations show a saturating response to u_now and a decreasing response to s_grad. The code numerically fits three compact smooth transfer models and selects among them by leave-one-out error. All paid rows have the same horizon and other state variables, so their effects remain unidentified; fresh confirmation is needed to test the selected model.",
+    "considered_alternatives": [
+      {
+        "option": "Beverton–Holt recruitment without gradient",
+        "rejected_reason": "The paid branch observations show a substantial gradient effect, which this model cannot represent."
+      },
+      {
+        "option": "Bilinear mass action",
+        "rejected_reason": "The pilot response saturates strongly with increasing u_now rather than increasing linearly."
+      },
+      {
+        "option": "Further trajectory probe",
+        "rejected_reason": "The listed informative probes have already been acquired; the available data now support testing gradient-dependent saturation on fresh confirmation."
+      }
+    ],
+    "hypothesis_name": "gradient_dependent_saturating_transfer",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n_kind = None\n\ndef _eval(p, u, s, kind):\n    a, b, c, d = np.exp(np.clip(p, -15, 15))\n    if kind == 0:\n        return a * u / (1.0 + b * u + c * s) + d\n    if kind == 1:\n        return a * u / (1.0 + b * u) + c / (1.0 + d * s)\n    return a * u / (1.0 + b * u) * (1.0 + c / (1.0 + d * s))\n\ndef _fit(u, s, y, kind):\n    starts = [np.log([3.0, 0.7, 1.0, 0.1]), np.log([5.0, 1.0, 2.0, 1.0]), np.log([2.0, 0.4, 0.3, 2.0])]\n    best = None\n    for start in starts:\n        r = least_squares(lambda p: _eval(p, u, s, kind) - y, start, max_nfev=2000)\n        loss = np.sum(r.fun ** 2)\n        if best is None or loss < best[0]:\n            best = (loss, r.x)\n    return best[1]\n\ndef fit(train_rows):\n    global _params, _kind\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    scores = []\n    for kind in range(3):\n        errors = []\n        for i in range(len(y)):\n            mask = np.arange(len(y)) != i\n            p = _fit(u[mask], s[mask], y[mask], kind)\n            errors.append(float(_eval(p, u[i], s[i], kind) - y[i]))\n        scores.append(np.mean(np.square(errors)))\n    _kind = int(np.argmin(scores))\n    _params = _fit(u, s, y, _kind)\n\ndef predict(row):\n    return float(_eval(_params, float(row['u_now']), float(row['s_grad']), _kind))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "37f1b716e0c316fc",
+  "prompt_tokens": 28510,
+  "cached_tokens": 18560,
+  "completion_tokens": 1077,
+  "task_context_chars": 14066,
+  "wall_ms": 25791.65,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The verified mechanism note specifies the history-conditioned two-state ODE and initialization from irregular raw prefixes. Eight rows are available, so fit its four parameters numerically and integrate with RK4 for prediction.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Eight trajectories now meet the source note's minimum for identifying the four coupled-ODE parameters; the signatures and raw irregular prefixes support that mechanism."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired and expanded the training set to eight rows."
+      },
+      {
+        "option": "Maxwell dashpot snapshot law",
+        "rejected_reason": "It does not account for the observed history-conditioned coupled transient lag and endpoint-matched history gap."
+      },
+      {
+        "option": "Coarse adiabatic slow ODE",
+        "rejected_reason": "It discards the explicitly indicated fast memory state; the coupled memory mechanism is better supported."
+      }
+    ],
+    "hypothesis_name": "irregular_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix')\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([p['t'] for p in pref], dtype=float)\n    xs = np.array([p['x'] for p in pref], dtype=float)\n    end = ts[-1]\n    z = math.exp(-(end-ts[0])/tau) * 0.52 * xs[0]\n    conv = 0.0\n    for k in range(1, len(ts)):\n        dt = ts[k]-ts[k-1]\n        conv += 0.5 * (math.exp(-(end-ts[k-1])/tau)*xs[k-1] + math.exp(-(end-ts[k])/tau)*xs[k]) * dt / tau\n    return z + 0.52 * conv\n\ndef _sim(row, pars):\n    a, b, c, tau = pars\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    h = H / n\n    def f(q):\n        xx, zz = q\n        return np.array([-a*xx + b*zz + c*u, (0.52*xx-zz)/tau])\n    q = np.array([x, z], dtype=float)\n    for _ in range(n):\n        k1 = f(q); k2 = f(q + 0.5*h*k1); k3 = f(q + 0.5*h*k2); k4 = f(q + h*k3)\n        q += (h/6.0)*(k1+2*k2+2*k3+k4)\n    return float(q[0])\n\ndef fit(train_rows):\n    def residual(p):\n        return np.array([_sim(r, p)-float(r['y']) for r in train_rows])\n    starts = [np.array([0.4, 0.2, 0.5, 0.3]), np.array([0.8, 0.4, 0.8, 0.8]), np.array([0.2, 0.1, 0.4, 1.5])]\n    sols = [least_squares(residual, s, bounds=([1e-5, 1e-5, 1e-5, 0.02], [5.0, 5.0, 5.0, 10.0]), max_nfev=3000) for s in starts]\n    return min(sols, key=lambda q: float(np.dot(q.fun, q.fun))).x\n\ndef predict(row):\n    return _sim(row, fit([row]) if False else _PARAMS)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

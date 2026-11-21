@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "3e0b9e6b56e6e9bc",
+  "prompt_tokens": 15059,
+  "cached_tokens": 8320,
+  "completion_tokens": 773,
+  "task_context_chars": 15492,
+  "wall_ms": 19830.52,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The initial short-horizon observations are positive, while paid long-horizon observations become negative. This directly supports the dual-horizon endogenous adaptation law; numerically fit its four amplitude and timescale parameters to the complete training set.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; the negative response at H=13.82 and 19.2 resolves the long-horizon reversal ambiguity."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The supplied samples follow the explicit dual-horizon pattern and do not require trajectory-level state identification."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is unrelated to the observed horizon-dependent sign reversal and is explicitly not worth its cost."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows])\n    H = np.array([float(r['H']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n\n    def predict_params(p):\n        amp_fast, tau_fast, amp_slow, tau_slow = p\n        return u * (amp_fast * (1.0 - np.exp(-H / tau_fast)) - amp_slow * (1.0 - np.exp(-H / tau_slow)))\n\n    def residual(p):\n        return predict_params(p) - y\n\n    result = least_squares(\n        residual,\n        x0=np.array([1.0, 0.5, 0.5, 10.0]),\n        bounds=(np.array([0.0, 1e-4, 0.0, 1e-3]), np.array([100.0, 100.0, 100.0, 1000.0])),\n        max_nfev=50000,\n        xtol=1e-13,\n        ftol=1e-13,\n        gtol=1e-13,\n    )\n    p = result.x\n    return {'amp_fast': float(p[0]), 'tau_fast': float(p[1]), 'amp_slow': float(p[2]), 'tau_slow': float(p[3])}\n\ndef predict(row):\n    p = fit([row])\n    H = float(row['H'])\n    u = float(row['u_now'])\n    return float(u * (p['amp_fast'] * (1.0 - math.exp(-H / p['tau_fast'])) - p['amp_slow'] * (1.0 - math.exp(-H / p['tau_slow']))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

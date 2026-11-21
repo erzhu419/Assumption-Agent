@@ -1,0 +1,422 @@
+{
+  "episode_summary": {
+    "task_id": "S101_A03_BeforeAfterOppositionNeg",
+    "suite": "A_TemporalMemory",
+    "subfamily": "A_before_after_contrast",
+    "arm": "EqualAuth_Dynamic_Flat_BM25",
+    "is_out_of_scope": false,
+    "status": "confirmed_ok",
+    "selected_model_class": "M2_BeforeAfterOpposition",
+    "strict_pass": true,
+    "false_confirmation": false,
+    "evaluated_candidate_count": 1,
+    "total_nfev": 10,
+    "confirm_rmse": 0.0,
+    "heldout_rmse": 0.0,
+    "decision_count": 6,
+    "measurement_cost": 12.0,
+    "compute_cost": 5.76,
+    "composite_cost": 12.288
+  },
+  "chain_verification": {
+    "valid": true,
+    "decision_count": 6,
+    "terminal_record_sha256": "d6057fc26cb63d94bb69ec5071a352f273937045f1d969935992212cb0ede270",
+    "verified_measurement_cost": 12.0,
+    "verified_compute_cost": 5.76,
+    "verified_composite_cost": 12.288,
+    "verified_total_tokens": 0
+  },
+  "decision_dag": [
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A03_BeforeAfterOppositionNeg",
+      "arm": "EqualAuth_Dynamic_Flat_BM25",
+      "decision_seq": 1,
+      "decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__001",
+      "parent_decision_id": null,
+      "prev_record_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "decision_type": "D0_TASK_ARRIVAL_AND_PILOT_ACQUISITION",
+      "evidence_inputs": {
+        "task_id": "S101_A03_BeforeAfterOppositionNeg",
+        "coarse_channel_available": false,
+        "observed_probe_signatures": [
+          "sig:static_snapshot_uninformative",
+          "sig:opposing_step_shift"
+        ],
+        "pilot_row_keys": [
+          [
+            3.32584,
+            3.30843,
+            0.86125,
+            0.95854,
+            0.89845,
+            0.6
+          ],
+          [
+            1.23668,
+            0.55861,
+            1.1752,
+            -0.06724,
+            0.64076,
+            0.6
+          ],
+          [
+            0.75843,
+            0.95645,
+            0.16587,
+            0.93661,
+            1.9736,
+            0.6
+          ],
+          [
+            2.7708,
+            2.98846,
+            -0.38011,
+            0.61054,
+            0.68684,
+            0.6
+          ],
+          [
+            0.31385,
+            2.21104,
+            1.16326,
+            -0.81736,
+            1.40569,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "channel": "coarse_macro",
+          "unit_cost": 1.0,
+          "eligible": false
+        },
+        {
+          "channel": "standard_fine",
+          "unit_cost": 1.5,
+          "eligible": true
+        }
+      ],
+      "chosen_option": {
+        "selected_channel": "standard_fine",
+        "acquired_rows": 5
+      },
+      "rejection_reasons": {
+        "coarse_macro": "no_certified_coarse_edge_or_not_slow_horizon_query"
+      },
+      "rationale_summary": "Acquire prefix-isolated initial pilot rows under authorized measurement channel.",
+      "cost_ledger_delta": {
+        "measurement_delta": 7.5,
+        "compute_delta": 0.0,
+        "composite_delta": 7.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.0,
+        "composite_cost": 7.5,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "f19ca35e8357305984a4d95c17e4cdfc53376d205b260e62d65cf1e571beb577"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A03_BeforeAfterOppositionNeg",
+      "arm": "EqualAuth_Dynamic_Flat_BM25",
+      "decision_seq": 2,
+      "decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__002",
+      "parent_decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__001",
+      "prev_record_sha256": "f19ca35e8357305984a4d95c17e4cdfc53376d205b260e62d65cf1e571beb577",
+      "decision_type": "D1_CAUSAL_TEMPORAL_REGIME_EXTRACTION",
+      "evidence_inputs": {
+        "prefix_sample_count": 5,
+        "causal_cutoff_policy": "strict_prefix_le_t0"
+      },
+      "candidates_evaluated": [
+        {
+          "mode": "strict_causal_online_prefix",
+          "ok": true,
+          "future_regime_leaked": false
+        }
+      ],
+      "chosen_option": {
+        "causal_cutoff_t0": 0.4,
+        "past_present_extracted": true
+      },
+      "rejection_reasons": {
+        "centered_or_post_t0_window": "blocked_by_strict_online_causality"
+      },
+      "rationale_summary": "Extract (P_tau, N_tau) strictly from <= t0 prefix with zero future leakage.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.5,
+        "composite_delta": 0.025,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.5,
+        "composite_cost": 7.525,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "926e7575d6a27535ddcd88dae827eb54bb75fdff5275a2558c2c8e3b6ce0bbaa"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A03_BeforeAfterOppositionNeg",
+      "arm": "EqualAuth_Dynamic_Flat_BM25",
+      "decision_seq": 3,
+      "decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__003",
+      "parent_decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__002",
+      "prev_record_sha256": "926e7575d6a27535ddcd88dae827eb54bb75fdff5275a2558c2c8e3b6ce0bbaa",
+      "decision_type": "D2_INDEX_RETRIEVAL_RANKING",
+      "evidence_inputs": {
+        "query_signatures": [
+          "sig:static_snapshot_uninformative",
+          "sig:opposing_step_shift"
+        ],
+        "index_kind": "FlatBM25"
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_before_after_opposition",
+          "score": 0.0
+        }
+      ],
+      "chosen_option": {
+        "top_k_node_ids": [
+          "node_A_before_after_opposition"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Rank candidate forest nodes purely from observed sig:* pilot cues.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 1.06,
+        "composite_delta": 0.053,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 1.56,
+        "composite_cost": 7.578,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "9316bc0745fc927980965ea599e211dd6995cfc605190ebd5abf194214b09ec6"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A03_BeforeAfterOppositionNeg",
+      "arm": "EqualAuth_Dynamic_Flat_BM25",
+      "decision_seq": 4,
+      "decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__004",
+      "parent_decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__003",
+      "prev_record_sha256": "9316bc0745fc927980965ea599e211dd6995cfc605190ebd5abf194214b09ec6",
+      "decision_type": "D3_FOUR_TIER_PERMISSION_AND_GRAYZONE_GATE",
+      "evidence_inputs": {
+        "observed_target_features": {
+          "has_history_or_lag_gap": false
+        }
+      },
+      "candidates_evaluated": [
+        {
+          "node_id": "node_A_before_after_opposition",
+          "granted": true,
+          "reason": "bounded_trial_authorized"
+        }
+      ],
+      "chosen_option": {
+        "authorized_ordered_model_queue": [
+          "M2_BeforeAfterOpposition"
+        ]
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Filter retrieved nodes through 4-tier preconditions & gray-zone bounds before fitting.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 1.56,
+        "composite_cost": 7.578,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "4316ac154585b66d48e627e80c8569046d0ef248ab26f0f1c12c988b4b17c756"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A03_BeforeAfterOppositionNeg",
+      "arm": "EqualAuth_Dynamic_Flat_BM25",
+      "decision_seq": 5,
+      "decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__005",
+      "parent_decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__004",
+      "prev_record_sha256": "4316ac154585b66d48e627e80c8569046d0ef248ab26f0f1c12c988b4b17c756",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M2_BeforeAfterOpposition",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            3.55291,
+            0.87032,
+            1.03748,
+            0.91695,
+            0.61336,
+            0.6
+          ],
+          [
+            2.90374,
+            2.75372,
+            0.79924,
+            -0.50677,
+            2.14318,
+            0.6
+          ],
+          [
+            2.52673,
+            2.88982,
+            -0.174,
+            -0.22586,
+            1.72784,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M2_BeforeAfterOpposition",
+          "nfev": 10,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.0,
+          "confirm_rmse": 0.0,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_ACCEPTED"
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Candidate M2_BeforeAfterOpposition passed disjoint confirmation (RMSE=0.00000 <= 0.045).",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 4.2,
+        "composite_delta": 4.71,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 5.76,
+        "composite_cost": 12.288,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "371e75402450e5dfed3a0842651233468dc49ebb0f9e2caa6a78090f4af3df5f"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_A03_BeforeAfterOppositionNeg",
+      "arm": "EqualAuth_Dynamic_Flat_BM25",
+      "decision_seq": 6,
+      "decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__006",
+      "parent_decision_id": "dec__det_m5__S101_A03_BeforeAfterOppositionNeg__EqualAuth_Dynamic_Flat_BM25__005",
+      "prev_record_sha256": "371e75402450e5dfed3a0842651233468dc49ebb0f9e2caa6a78090f4af3df5f",
+      "decision_type": "D9_TERMINAL_DECISION_AND_HELDOUT_AUDIT",
+      "evidence_inputs": {
+        "locked_model_class": "M2_BeforeAfterOpposition",
+        "heldout_row_count": 5,
+        "any_fit_after_confirm": false
+      },
+      "candidates_evaluated": [
+        {
+          "status": "confirmed_ok",
+          "heldout_rmse": 0.0
+        }
+      ],
+      "chosen_option": {
+        "final_status": "confirmed_ok",
+        "selected_model_class": "M2_BeforeAfterOpposition",
+        "strict_pass": true
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Lock confirmed model with zero refit and audit on disjoint heldout set.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 5.76,
+        "composite_cost": 12.288,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "d6057fc26cb63d94bb69ec5071a352f273937045f1d969935992212cb0ede270"
+    }
+  ]
+}

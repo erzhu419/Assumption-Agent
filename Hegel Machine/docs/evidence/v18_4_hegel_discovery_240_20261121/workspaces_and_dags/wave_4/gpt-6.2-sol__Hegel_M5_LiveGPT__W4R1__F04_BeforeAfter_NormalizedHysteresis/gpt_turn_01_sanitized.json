@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "91ddffdf4fe7366b",
+  "prompt_tokens": 65523,
+  "cached_tokens": 61440,
+  "completion_tokens": 1489,
+  "task_context_chars": 3393,
+  "wall_ms": 47658.2,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Every pilot begins at x_now = 0.58*u_past. For both step directions, subtracting 0.58*u_now and dividing by the signed step gives 1.38*exp(-H/1.104) to the reported precision. The no-step row stays at equilibrium. Fit all three parameters numerically and submit for fresh confirmation; relaxation from an off-equilibrium initial state is a model assumption, not a pilot observation.",
+    "considered_alternatives": [
+      {
+        "option": "Pure Maxwell decay",
+        "rejected_reason": "It predicts zero for the no-step row, whose observed response is 0.87. Subtracting the initial state still leaves a step-normalized gain that is not a pure exponential."
+      },
+      {
+        "option": "Snapshot mean reversion without a step transient",
+        "rejected_reason": "Mean reversion toward the new equilibrium alone cannot explain overshoot in both step directions."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Four nonzero steps constrain the gain and decay rate across horizons bracketing H = 0.65. A finer trajectory is unnecessary for confirmation in this regime."
+      }
+    ],
+    "hypothesis_name": "equilibrium_shift_with_exponential_hysteresis",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_keys = ('u_past', 'u_now', 'x_now', 'H')\n_params = None\n\ndef fit(train_rows):\n    global _params\n    data = np.array([[r[k] for k in _keys + ('y',)] for r in train_rows], dtype=float)\n    past, now, x, h, y = data.T\n    du = now - past\n\n    def residual(p):\n        c, a, log_tau = p\n        return c * now + (x - c * past + a * du) * np.exp(-h / np.exp(log_tau)) - y\n\n    _params = least_squares(residual, [0.5, 1.0, 0.0], ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n    return _params\n\ndef predict(row):\n    c, a, log_tau = _params\n    past, now, x, h = (float(row[k]) for k in _keys)\n    return float(c * now + (x - c * past + a * (now - past)) * math.exp(-h / math.exp(log_tau)))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

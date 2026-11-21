@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "89cac4e46e470a7c",
+  "prompt_tokens": 10508,
+  "cached_tokens": 4864,
+  "completion_tokens": 957,
+  "task_context_chars": 8320,
+  "wall_ms": 21862.13,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-horizon pilots showed positive response but were insufficient to identify the slow adaptation term; the acquired H=8,16,22,24 observations provide long-horizon coverage and show the predicted sign reversal. Fit the five specified parameters numerically to the sink-coupled dual-horizon law; no further probe is required.",
+    "considered_alternatives": [
+      {
+        "option": "high_sgrad_regime_probe / threshold-avalanche siphon",
+        "rejected_reason": "The slow-horizon probe includes s_grad=1.9 and the observed strong negative long-horizon responses align with the explicitly co-activated dual-horizon reversal; fitting the specified smooth siphon-plus-adaptation model is the more direct completion."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled transient-lag ODE",
+        "rejected_reason": "No coupled-transient-lag signature is reported, and the observed long-horizon sign reversal is directly diagnostic of the dual-exponential law."
+      },
+      {
+        "option": "Monotone Arrhenius or stationary siphon-only law",
+        "rejected_reason": "Cannot explain negative values at H=16 and H=22 after positive short-horizon responses."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _value(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    H = float(row['H'])\n    un = u  # supplied tau_scale is 1.0\n    inflow = vmax * (1.0 - rho * s / (1.0 + s)) * (un / (1.2 + un))\n    return inflow * (1.0 - math.exp(-H / tau_fast)) - amp_adapt * un * (1.0 - math.exp(-H / tau_slow))\n\ndef fit(train_rows):\n    global _PARAMS\n    y = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_value(r, p) for r in train_rows]) - y\n    # Warm start around the shared siphon subtree; bounded positive timescales\n    # and amplitudes, with tau_slow > tau_fast to encode dual-horizon reversal.\n    best = None\n    for tf0, ts0 in [(0.5, 10.0), (1.0, 8.0), (0.25, 15.0)]:\n        p0 = np.array([6.5, 0.70, tf0, 1.0, ts0])\n        lo = np.array([1.0, 0.05, 0.03, 0.0, 1.0])\n        hi = np.array([15.0, 0.95, 5.0, 4.0, 80.0])\n        res = least_squares(residual, p0, bounds=(lo, hi), max_nfev=20000,\n                            xtol=1e-13, ftol=1e-13, gtol=1e-13)\n        if best is None or np.dot(res.fun, res.fun) < np.dot(best.fun, best.fun):\n            best = res\n    _PARAMS = best.x\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    return float(_value(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

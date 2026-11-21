@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "c1e5a40930b66ad0",
+  "prompt_tokens": 15071,
+  "cached_tokens": 8320,
+  "completion_tokens": 941,
+  "task_context_chars": 15500,
+  "wall_ms": 24147.7,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid observations show increasing short-horizon positive gain and negative outcomes at the requested long horizon, matching the supplied dual-horizon endogenous adaptation form. Fit its four positive parameters numerically in log space; no further probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; observations at H=7.66, 15.77, and 21.9 show the predicted positive-to-negative reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "Not needed: the rows directly support the supplied dual-horizon adaptation law, and further trajectory data would add cost without resolving a remaining ambiguity."
+      },
+      {
+        "option": "stationary monotone static or single-timescale laws",
+        "rejected_reason": "Rejected by the observed negative long-horizon outputs following positive short-horizon gains."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    H = np.array([float(r['H']) for r in rows])\n    u = np.array([float(r['u_now']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n\n    # Positive amplitudes and time constants are optimized in log space.\n    def predict_values(q):\n        amp_fast, tau_fast, amp_slow, tau_slow = np.exp(q)\n        return u * (amp_fast * (-np.expm1(-H / tau_fast))\n                    - amp_slow * (-np.expm1(-H / tau_slow)))\n\n    starts = [np.log([1.5, 0.5, 1.0, 12.0]),\n              np.log([2.0, 1.0, 1.0, 20.0]),\n              np.log([1.0, 0.2, 0.5, 8.0])]\n    best = None\n    for q0 in starts:\n        result = least_squares(lambda q: predict_values(q) - y, q0,\n                               bounds=(np.log([1e-5, 1e-4, 1e-5, 1e-3]),\n                                       np.log([100.0, 100.0, 100.0, 1e4])),\n                               max_nfev=20000)\n        if best is None or np.sum(result.fun ** 2) < np.sum(best.fun ** 2):\n            best = result\n    _params = np.exp(best.x)\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    amp_fast, tau_fast, amp_slow, tau_slow = _params\n    H = float(row['H'])\n    u = float(row['u_now'])\n    return float(u * (amp_fast * (-math.expm1(-H / tau_fast))\n                      - amp_slow * (-math.expm1(-H / tau_slow))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

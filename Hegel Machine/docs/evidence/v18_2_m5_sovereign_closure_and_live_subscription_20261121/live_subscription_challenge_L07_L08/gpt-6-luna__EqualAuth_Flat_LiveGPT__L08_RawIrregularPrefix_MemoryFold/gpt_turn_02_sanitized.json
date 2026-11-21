@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "46b79e36ea1278e0",
+  "prompt_tokens": 18002,
+  "cached_tokens": 0,
+  "completion_tokens": 1531,
+  "task_context_chars": 12632,
+  "wall_ms": 32634.35,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Eight paid rows are available and show history-dependent responses, consistent with the coupled memory ODE. Fit its four parameters numerically using the raw irregular prefix to reconstruct the initial memory state, then integrate the forecast at the requested horizon. No chaotic-sign signature is present.",
+    "considered_alternatives": [
+      {
+        "option": "acquire_probe: extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the resulting eight rows meet the recalled source note's minimum sample count for fitting the four coupled parameters."
+      },
+      {
+        "option": "acquire_probe: open_branch_discriminating_probe",
+        "rejected_reason": "The observed endpoint-history gap and transient lag support the memory mechanism; more measurements are unnecessary before testing it on fresh confirmation."
+      },
+      {
+        "option": "Underdamped oscillator",
+        "rejected_reason": "A history-independent oscillator does not account for different outcomes associated with distinct raw-prefix histories."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode_raw_prefix",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    def z0(row, tau):\n        if row.get('mem_conv') is not None:\n            return float(row['mem_conv'])\n        pref = row.get('raw_prefix') or []\n        if not pref:\n            return 0.52 * float(row['x_now'])\n        ts = np.array([float(p['t']) for p in pref], dtype=float)\n        xs = np.array([float(p['x']) for p in pref], dtype=float)\n        z = 0.52 * xs[0]\n        for i in range(1, len(ts)):\n            dt = max(0.0, ts[i] - ts[i-1])\n            avgx = 0.5 * (xs[i] + xs[i-1])\n            e = math.exp(-dt / tau)\n            z = e * z + 0.52 * avgx * (1.0 - e)\n        return z\n\n    def forecast(row, p):\n        a, b, c, tau = p\n        x = float(row['x_now'])\n        z = z0(row, tau)\n        u = float(row['u_now'])\n        H = float(row['H'])\n        n = max(1, int(math.ceil(H / 0.004)))\n        h = H / n\n        def rhs(xv, zv):\n            return -a*xv + b*zv + c*u, (0.52*xv-zv)/tau\n        for _ in range(n):\n            k1x,k1z = rhs(x,z)\n            k2x,k2z = rhs(x+0.5*h*k1x,z+0.5*h*k1z)\n            k3x,k3z = rhs(x+0.5*h*k2x,z+0.5*h*k2z)\n            k4x,k4z = rhs(x+h*k3x,z+h*k3z)\n            x += h*(k1x+2*k2x+2*k3x+k4x)/6.0\n            z += h*(k1z+2*k2z+2*k3z+k4z)/6.0\n        return x\n\n    y = np.array([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.array([forecast(r,p) for r in train_rows]) - y\n    best = None\n    for start in ([0.8,0.5,0.5,0.2], [1.2,0.8,0.7,0.5], [0.5,0.3,1.0,1.0]):\n        res = least_squares(residual, np.array(start), bounds=([0.001,0.0,0.0,0.01],[5.0,5.0,5.0,5.0]), max_nfev=1500)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    return best.x\n\ndef predict(row):\n    p = _FIT_PARAMS\n    a,b,c,tau = p\n    if row.get('mem_conv') is not None:\n        z = float(row['mem_conv'])\n    else:\n        pref = row.get('raw_prefix') or []\n        if not pref:\n            z = 0.52*float(row['x_now'])\n        else:\n            ts = [float(q['t']) for q in pref]; xs = [float(q['x']) for q in pref]\n            z = 0.52*xs[0]\n            for i in range(1,len(ts)):\n                dt=max(0.0,ts[i]-ts[i-1]); e=math.exp(-dt/tau)\n                z=e*z+0.52*0.5*(xs[i]+xs[i-1])*(1.0-e)\n    x=float(row['x_now']); u=float(row['u_now']); H=float(row['H'])\n    n=max(1,int(math.ceil(H/0.004))); h=H/n\n    def rhs(xv,zv): return -a*xv+b*zv+c*u,(0.52*xv-zv)/tau\n    for _ in range(n):\n        k1x,k1z=rhs(x,z); k2x,k2z=rhs(x+0.5*h*k1x,z+0.5*h*k1z)\n        k3x,k3z=rhs(x+0.5*h*k2x,z+0.5*h*k2z); k4x,k4z=rhs(x+h*k3x,z+h*k3z)\n        x+=h*(k1x+2*k2x+2*k3x+k4x)/6.0; z+=h*(k1z+2*k2z+2*k3z+k4z)/6.0\n    return float(x)\n\n# The fit contract stores fitted parameters for prediction.\n_FIT_PARAMS = np.array([1.0, 0.5, 0.5, 0.5])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "02d5887da095b656",
+  "prompt_tokens": 21052,
+  "cached_tokens": 13440,
+  "completion_tokens": 1073,
+  "task_context_chars": 14223,
+  "wall_ms": 28658.96,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history gap and transient lag support a coupled memory state. Fit all four parameters jointly, reconstructing missing memory from each irregular prefix using elapsed times, then forecast with RK4 under constant current input. The paid batch supports submitting the model for fresh confirmation at tolerance 0.045.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired batch brings the total to eight trajectories with both upward and downward input steps and horizons bracketing 0.45. Fit and confirm before paying for another probe."
+      },
+      {
+        "option": "adiabatic snapshot balance",
+        "rejected_reason": "A snapshot-only model assigns identical forecasts to matched endpoints with different histories, contrary to the observed history gap."
+      },
+      {
+        "option": "single-mode Maxwell decay",
+        "rejected_reason": "The input-step sign reverses across trajectories while all targets remain positive, ruling out the proposed proportional stress-decay law."
+      }
+    ],
+    "hypothesis_name": "coupled_ode_irregular_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _pack(row):\n    z = row['mem_conv']\n    if z is not None:\n        hist = None\n    else:\n        pref = row['raw_prefix']\n        t = np.array([p['t'] for p in pref], dtype=float)\n        x = np.array([p['x'] for p in pref], dtype=float)\n        hist = (t[-1] - t, np.diff(t), x)\n    return float(row['x_now']), float(row['u_now']), float(row['H']), z, hist\n\n\ndef _forecast(p, data):\n    a, b, c, tau = p\n    x, u, H, z, hist = data\n    if z is None:\n        age, dt, xp = hist\n        w = xp * np.exp(-age / tau)\n        z = 0.52 * (w[0] + np.dot(dt, w[:-1] + w[1:]) / (2.0 * tau))\n    if H == 0.0:\n        return x\n    n = math.ceil(H / 0.004)\n    h = H / n\n    drive = c * u\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + h * k1 / 2, z + h * l1 / 2)\n        k3, l3 = rhs(x + h * k2 / 2, z + h * l2 / 2)\n        k4, l4 = rhs(x + h * k3, z + h * l3)\n        x += h * (k1 + 2 * k2 + 2 * k3 + k4) / 6\n        z += h * (l1 + 2 * l2 + 2 * l3 + l4) / 6\n    return float(x)\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = [_pack(r) for r in rows]\n    y = np.array([r['y'] for r in rows], dtype=float)\n\n    def residual(p):\n        return np.array([_forecast(p, d) for d in data]) - y\n\n    fits = [least_squares(residual, [1.6, 0.9, 1.1, tau],\n                         bounds=([0.0, 0.0, 0.0, 0.01], [np.inf] * 4),\n                         x_scale='jac', max_nfev=250)\n            for tau in (0.12, 0.45, 1.2)]\n    _params = min(fits, key=lambda result: result.cost).x\n    return _params\n\n\ndef predict(row) -> float:\n    return _forecast(_params, _pack(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

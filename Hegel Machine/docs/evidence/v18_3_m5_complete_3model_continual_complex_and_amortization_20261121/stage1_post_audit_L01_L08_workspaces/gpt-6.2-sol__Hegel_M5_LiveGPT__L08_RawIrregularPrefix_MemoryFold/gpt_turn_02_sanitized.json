@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "0bb98fd28796f872",
+  "prompt_tokens": 43769,
+  "cached_tokens": 32896,
+  "completion_tokens": 2224,
+  "task_context_chars": 14148,
+  "wall_ms": 53876.77,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The matched-endpoint history gap and transient lag favor a retained memory state. A diagnostic fit using exact forward propagation and the elapsed-time trapezoidal fold gave a training RMSE of about 3.6e-6 across all eight rows. The submitted model refits all four parameters numerically with RK4 propagation; fresh confirmation remains necessary to test the 0.045 tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid trajectories span both directions of drive change and a constant-drive case near the target horizon. The coupled model fits them closely enough to proceed to fresh confirmation."
+      },
+      {
+        "option": "snapshot balance or damped oscillator",
+        "rejected_reason": "Neither model can explain a history gap between matched endpoints because neither retains the prefix."
+      },
+      {
+        "option": "Piecewise-linear history integration",
+        "rejected_reason": "The specified trapezoidal exponential fold gave a smaller training residual in the numerical comparison."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    if z is None:\n        prefix = row['raw_prefix']\n        t = np.array([p['t'] - prefix[-1]['t'] for p in prefix], dtype=float)\n        x = np.array([p['x'] for p in prefix], dtype=float)\n        history = (t, x, np.diff(t))\n    else:\n        history = None\n    return float(row['x_now']), float(row['u_now']), float(row['H']), z, history\n\n\ndef _rk4_matrix(A, h):\n    M = h * A\n    I = np.eye(3)\n    return I + M @ (I + M @ (I / 2 + M @ (I / 6 + M / 24)))\n\n\ndef _forecast(data, params):\n    a, b, c, tau = params\n    x0, u, H, z0, history = data\n    if history is not None:\n        t, x, dt = history\n        w = np.exp(t / tau) * x\n        z0 = 0.52 * (math.exp(t[0] / tau) * x[0] + np.dot(dt, w[:-1] + w[1:]) / (2 * tau))\n    A = np.array([[-a, b, c * u], [0.52 / tau, -1 / tau, 0.0], [0.0, 0.0, 0.0]])\n    h = 0.004\n    n = int(H / h)\n    state = np.linalg.matrix_power(_rk4_matrix(A, h), n) @ np.array([x0, z0, 1.0])\n    remainder = H - n * h\n    if remainder > 0:\n        state = _rk4_matrix(A, remainder) @ state\n    return float(state[0])\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    inputs = [_prepare(row) for row in rows]\n    y = np.array([row['y'] for row in rows], dtype=float)\n\n    def residual(params):\n        return np.array([_forecast(data, params) for data in inputs]) - y\n\n    _params = least_squares(residual, [1.8, 1.3, 1.35, 0.6], bounds=([0, 0, 0, 0.01], np.inf), gtol=1e-12).x\n    return _params\n\n\ndef predict(row) -> float:\n    return _forecast(_prepare(row), _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

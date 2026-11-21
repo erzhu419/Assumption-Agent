@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "7ead79aeb869e8dd",
+  "prompt_tokens": 29090,
+  "cached_tokens": 17152,
+  "completion_tokens": 1069,
+  "task_context_chars": 13276,
+  "wall_ms": 30693.79,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five pilot horizons bracket the target H of 4.13. A two-parameter relaxation toward an equilibrium proportional to u_now explains the remaining initial-state and horizon dependence with pilot RMSE below 0.000004, versus the 0.045 confirmation tolerance. Submit it for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Static proportional equilibrium",
+        "rejected_reason": "Its pilot RMSE is about 0.0133, but it omits the resolved dependence on the initial state and horizon."
+      },
+      {
+        "option": "Coupled two-state memory ODE with extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot does not identify a separate fast mode, and the coarse model already fits all five target-horizon observations nearly exactly."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not distinguish the plausible forecast mechanisms."
+      }
+    ],
+    "hypothesis_name": "adiabatic_single_exponential_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, x, h, y = np.asarray([(r['u_now'], r['x_now'], r['H'], r['y']) for r in train_rows], dtype=float).T\n    gain0 = float(np.dot(u, y) / np.dot(u, u))\n    def residual(p):\n        delta = -np.expm1(-p[1] * h)\n        return x + (p[0] * u - x) * delta - y\n    result = least_squares(residual, [gain0, 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf]))\n    _params = tuple(map(float, result.x))\n    return _params\n\ndef predict(row) -> float:\n    gain, rate = _params\n    x = row['x_now']\n    return float(x - (gain * row['u_now'] - x) * math.expm1(-rate * row['H']))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

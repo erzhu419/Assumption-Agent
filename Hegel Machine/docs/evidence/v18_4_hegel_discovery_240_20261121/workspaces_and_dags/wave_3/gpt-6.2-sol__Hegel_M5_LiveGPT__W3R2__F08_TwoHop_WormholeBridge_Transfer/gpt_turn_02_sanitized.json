@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "011be35da544797f",
+  "prompt_tokens": 134634,
+  "cached_tokens": 125440,
+  "completion_tokens": 3768,
+  "task_context_chars": 5506,
+  "wall_ms": 99605.19,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At the target horizon, the fixed-gradient sweep resolves a saturating term plus a square-root term. The two off-gradient rows are matched to rounding precision by reciprocal sink inhibition on the saturating term alone. The paid rows do not establish how the law changes with horizon or the other fixed inputs.",
+    "considered_alternatives": [
+      {
+        "option": "Input-only saturation or uncoupled Newton cooling",
+        "rejected_reason": "Neither accounts for the gradient-dependent shifts revealed by the branch probe."
+      },
+      {
+        "option": "Gradient attenuation on the square-root path or on both paths",
+        "rejected_reason": "These can fit the sparse gradient data, but attenuation on the saturating path recovers a unit reciprocal gradient scale to rounding precision and is consistent with the thermal-fin bridge note."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The branch probe already supports a compact law to rounding precision at the target horizon; submit it for fresh confirmation before paying for finer trajectories."
+      }
+    ],
+    "hypothesis_name": "sink_inhibited_two_path_flux",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.asarray([r['u_now'] for r in train_rows], dtype=float)\n    s = np.asarray([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.asarray([r['y'] for r in train_rows], dtype=float)\n    root_u = np.sqrt(u)\n\n    def residual(p):\n        a, b, k, c, d = p\n        return (a + b / (1.0 + k * s)) * u / (c + u) + d * root_u - y\n\n    _params = least_squares(residual, [2.0, 4.0, 1.0, 1.0, 0.4], bounds=([0.0, 0.0, 1e-8, 1e-8, 0.0], np.inf)).x\n    return _params\n\ndef predict(row) -> float:\n    a, b, k, c, d = _params\n    u, s = float(row['u_now']), float(row['s_grad'])\n    return float((a + b / (1.0 + k * s)) * u / (c + u) + d * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

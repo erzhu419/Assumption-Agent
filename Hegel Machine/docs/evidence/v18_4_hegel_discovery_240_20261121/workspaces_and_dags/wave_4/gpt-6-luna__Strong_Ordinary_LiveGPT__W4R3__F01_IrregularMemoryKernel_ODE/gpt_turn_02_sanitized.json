@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "d4c9fd38e8c6c408",
+  "prompt_tokens": 22818,
+  "cached_tokens": 6272,
+  "completion_tokens": 1316,
+  "task_context_chars": 22265,
+  "wall_ms": 30524.52,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The initial five rows were insufficient for the four-parameter coupled ODE, so the fine-trajectory batch was acquired. The resulting eight diverse history/current-state rows permit numerical parameter fitting. The implementation reconstructs the initial memory state from each raw prefix when mem_conv is absent, then integrates the coupled states by RK4 and fits positive parameters with least squares.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All supplied and added rows have s_grad=0, but the observed endpoint-matched history dependence and lag specifically identify a temporal memory mechanism; additional branch-sign data is not required to fit that response."
+      },
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "The task's forecast horizon is 0.45 and observed transient horizons already straddle it; this is not the long-horizon ambiguity specified for that probe."
+      },
+      {
+        "option": "Static, contrast-only, or single-state relaxation models",
+        "rejected_reason": "They do not account for the stated coupled transient lag together with dependence on the pre-switch history; the verified coupled two-state memory ODE is the most directly supported mechanism."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = np.array([0.5, 0.3, 0.5, 0.15], dtype=float)\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    prefix = row.get('raw_prefix') or []\n    if not prefix:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([float(p['t']) for p in prefix], dtype=float)\n    xs = np.array([float(p['x']) for p in prefix], dtype=float)\n    order = np.argsort(ts)\n    ts, xs = ts[order], xs[order]\n    z = 0.52 * xs[0]\n    for i in range(1, len(ts)):\n        dt = ts[i] - ts[i-1]\n        if dt <= 0:\n            continue\n        decay = math.exp(-dt / tau)\n        # Exact exponential weighting with linearly interpolated x on this interval.\n        slope = (xs[i] - xs[i-1]) / dt\n        z = decay * z + 0.52 * (xs[i-1] * (1.0-decay) + slope * (dt - tau*(1.0-decay)))\n    return z\n\ndef _simulate(row, p):\n    a, b, c, tau = [float(v) for v in p]\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = max(0.0, float(row['H']))\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def f(xv, zv):\n        return -a*xv + b*zv + c*u, (0.52*xv-zv)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+0.5*dt*k1x,z+0.5*dt*k1z)\n        k3x,k3z=f(x+0.5*dt*k2x,z+0.5*dt*k2z)\n        k4x,k4z=f(x+dt*k3x,z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6.0\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6.0\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    ys = np.array([float(r['y']) for r in train_rows])\n    def residual(logp):\n        p = np.exp(logp)\n        return np.array([_simulate(r, p) for r in train_rows]) - ys\n    starts = [np.log([0.5,0.3,0.5,0.15]), np.log([0.8,0.5,0.8,0.3]), np.log([0.3,0.8,0.4,0.08])]\n    best = None\n    for s in starts:\n        res = least_squares(residual, s, max_nfev=250)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    _PARAMS = np.exp(best.x)\n    return _PARAMS\n\ndef predict(row) -> float:\n    return float(_simulate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

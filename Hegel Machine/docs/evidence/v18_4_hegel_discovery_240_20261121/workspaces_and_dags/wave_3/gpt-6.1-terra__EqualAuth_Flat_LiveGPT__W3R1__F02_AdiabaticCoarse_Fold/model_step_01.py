@@ -1,0 +1,22 @@
+import math
+import numpy as np
+from scipy.optimize import least_squares
+
+_params = None
+
+def fit(train_rows):
+    global _params
+    u = np.array([r['u_now'] for r in train_rows], dtype=float)
+    x = np.array([r['x_now'] for r in train_rows], dtype=float)
+    h = np.array([r['H'] for r in train_rows], dtype=float)
+    y = np.array([r['y'] for r in train_rows], dtype=float)
+    def residual(p):
+        k, a = p
+        return k*u + (x-k*u)*np.exp(-a*h) - y
+    result = least_squares(residual, [2.0, 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf]), xtol=1e-12, ftol=1e-12, gtol=1e-12)
+    _params = result.x
+
+def predict(row):
+    k, a = _params
+    steady = k * float(row['u_now'])
+    return float(steady + (float(row['x_now']) - steady) * math.exp(-a * float(row['H'])))

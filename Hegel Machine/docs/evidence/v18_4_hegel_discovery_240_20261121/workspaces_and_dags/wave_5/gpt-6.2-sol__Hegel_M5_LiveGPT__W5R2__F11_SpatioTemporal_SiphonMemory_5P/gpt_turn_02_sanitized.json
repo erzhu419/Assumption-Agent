@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "22a484a0f0925bcc",
+  "prompt_tokens": 26130,
+  "cached_tokens": 20992,
+  "completion_tokens": 1692,
+  "task_context_chars": 7490,
+  "wall_ms": 45600.73,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Numerical fits of the equivalent closed-form ODE solution converged from several starting values to the same parameters, with training RMSE near 3e-8. Submit the RK4 implementation for fresh confirmation at the 0.045 tolerance without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Uncoupled Kelvin–Voigt creep or damped harmonic oscillator",
+        "rejected_reason": "Neither model uses the initial pool, the measured memory state, or the sink gradient."
+      },
+      {
+        "option": "Square-root or threshold-avalanche siphon branch",
+        "rejected_reason": "The eight observations are already consistent with the smooth coupled model, and none reaches the documented avalanche threshold."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch or nuisance_high_var_aux",
+        "rejected_reason": "The first trajectory batch supplied eight rows with varied initial states and horizons bracketing the target. The nuisance probe does not distinguish the remaining model candidates."
+      }
+    ],
+    "hypothesis_name": "gradient_siphon_coupled_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _inputs(rows):\n    return np.asarray([[r['u_now'], r['x_now'], r['mem_conv'], r['s_grad'], r['H']] for r in rows], dtype=float).T\n\n\ndef _forecast(p, data):\n    a, b, vmax, rho, tau = p\n    u, x, z, s, H = data\n    un = u / 0.005\n    j = vmax * (1.0 - rho * s / (1.0 + s)) * un / (1.2 + un)\n    n = max(1, math.ceil(float(np.max(H)) / 0.008))\n    h = H / n\n\n    def rhs(x, z):\n        return -a * x + b * z + j, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + 0.5*h*kx, z + 0.5*h*kz)\n        mx, mz = rhs(x + 0.5*h*lx, z + 0.5*h*lz)\n        nx, nz = rhs(x + h*mx, z + h*mz)\n        x = x + (h/6.0)*(kx + 2*lx + 2*mx + nx)\n        z = z + (h/6.0)*(kz + 2*lz + 2*mz + nz)\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _inputs(rows)\n    y = np.asarray([r['y'] for r in rows], dtype=float)\n    result = least_squares(lambda p: _forecast(p, data) - y,\n                           [2.0, 1.0, 6.5, 0.70, 0.4],\n                           bounds=([0.0, 0.0, 0.0, 0.0, 0.02],\n                                   [30.0, 30.0, 40.0, 1.0, 5.0]),\n                           x_scale='jac', ftol=1e-10, xtol=1e-10, gtol=1e-10)\n    _params = result.x\n\n\ndef predict(row):\n    return float(_forecast(_params, _inputs([row]))[0])\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "7c0d3983f1a98405",
+  "prompt_tokens": 16784,
+  "cached_tokens": 13184,
+  "completion_tokens": 629,
+  "task_context_chars": 6248,
+  "wall_ms": 17831.39,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilot shows positive short-horizon gain, while the acquired observations cross negative between H=6.72 and H=13.82 and remain negative at the target horizon. Fit the verified dual-exponential adaptation law numerically and test it on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "5-parameter sink-coupled dual-horizon adaptation",
+        "rejected_reason": "The observed data exhibit the specified reversal and support the simpler verified dual-exponential mechanism; all measured s_grad values are zero, so a sink coefficient cannot be identified from these rows."
+      },
+      {
+        "option": "Periodic Lotka-Volterra readout",
+        "rejected_reason": "The measured gradual long-horizon reversal is directly explained by the verified adaptation mechanism; a periodic readout is not needed."
+      },
+      {
+        "option": "Extra fine trajectory batch",
+        "rejected_reason": "The acquired long-horizon observations span the reversal and supply sufficient constraints to fit the four-parameter candidate before fresh confirmation."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _evaluate(p, u, h):\n    af, slow, tf, ts = p\n    return u * (af * (-np.expm1(-h / tf)) - slow * (-np.expm1(-h / ts)))\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    best = None\n    for tf in (0.3, 1.0, 3.0):\n        for ts in (5.0, 15.0, 40.0):\n            result = least_squares(lambda p: _evaluate(p, u, h) - y, [2.0, 3.0, tf, ts], bounds=([0.0, 0.0, 0.01, 0.1], [100.0, 100.0, 100.0, 1000.0]), max_nfev=5000)\n            if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n                best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_evaluate(_params, float(row['u_now']), float(row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

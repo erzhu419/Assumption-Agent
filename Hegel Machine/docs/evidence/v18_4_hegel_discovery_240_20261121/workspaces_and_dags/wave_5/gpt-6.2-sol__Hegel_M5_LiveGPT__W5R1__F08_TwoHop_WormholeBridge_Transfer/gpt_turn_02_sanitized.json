@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "8dac58cc8b82052e",
+  "prompt_tokens": 81028,
+  "cached_tokens": 69888,
+  "completion_tokens": 3483,
+  "task_context_chars": 5569,
+  "wall_ms": 102643.9,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A gradient-attenuated rational term plus a separately attenuated square-root term reproduces all seven paid observations to reported precision. The branch measurements constrain gradient dependence, and all rows are already at the target horizon H=0.6. Submit the fitted law for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Input-only Beverton–Holt saturation",
+        "rejected_reason": "The branch measurements show a strong gradient effect that input-only saturation cannot explain."
+      },
+      {
+        "option": "Sum of two rational saturation terms",
+        "rejected_reason": "It leaves systematic residuals on the fixed-gradient pilot rows; the square-root second term fits all seven rows to their reported precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing gradient contrasts already support a five-parameter law at the requested horizon. Fresh confirmation is the next useful test."
+      }
+    ],
+    "hypothesis_name": "two_hop_gradient_attenuated_transfer",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _law(u, s, p):\n    a, b, c, d, e = p\n    return a*u/(1.0 + b*u + c*s) + d*math.sqrt(u)/(1.0 + e*s)\n\ndef fit(train_rows):\n    global _params\n    rows = [(float(r['u_now']), float(r['s_grad']), float(r['y'])) for r in train_rows]\n    def residuals(p):\n        return np.array([_law(u, s, p) - y for u, s, y in rows])\n    _params = least_squares(residuals, [7.0, 1.3, 0.6, 1.5, 2.5], bounds=(0.0, np.inf), gtol=1e-12).x\n\ndef predict(row):\n    return float(_law(float(row['u_now']), float(row['s_grad']), _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

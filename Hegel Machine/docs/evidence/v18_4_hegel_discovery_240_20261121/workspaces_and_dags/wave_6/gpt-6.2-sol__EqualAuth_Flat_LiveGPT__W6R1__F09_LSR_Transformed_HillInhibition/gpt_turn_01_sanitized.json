@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "b906a58ac0d5b084",
+  "prompt_tokens": 32173,
+  "cached_tokens": 29184,
+  "completion_tokens": 959,
+  "task_context_chars": 3569,
+  "wall_ms": 28105.65,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The sigmoidal onset and sink-gradient dependence support cooperative Hill-2 activation with competitive inhibition and linear bleed. With the supplied unit scale, the maximum absolute pilot residual is below 3e-8. Submit directly for fresh confirmation at the 0.045 RMSE tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The pilot sink-gradient span is 2.0, well above the 0.08 ambiguity threshold, and the four-parameter law fits all five rows to rounding precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "All five rows already use the target horizon, and the algebraic law fits without a trajectory model."
+      },
+      {
+        "option": "Weibull cumulative hazard and Avrami kinetics",
+        "rejected_reason": "A monotone input-only Weibull curve cannot reproduce the observed reversals, and an H-only Avrami law predicts the same value for all five rows."
+      }
+    ],
+    "hypothesis_name": "hill2_sink_inhibition_linear_bleed",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _law(u, s, p):\n    vmax, k_half, alpha_inh, c_leak = p\n    u2 = u * u\n    return vmax * u2 / ((k_half + u2) * (1.0 + alpha_inh * s)) - c_leak * u\n\ndef fit(train_rows):\n    global _params\n    data = np.array([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float)\n    u, s, y = data.T\n    _params = least_squares(lambda p: _law(u, s, p) - y, [4.0, 1.0, 1.0, 0.1], bounds=([0.0, 1e-10, 0.0, 0.0], np.inf), x_scale='jac').x\n    return _params\n\ndef predict(row) -> float:\n    return float(_law(float(row['u_now']), float(row['s_grad']), _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

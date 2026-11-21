@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "666040695155f567",
+  "prompt_tokens": 11982,
+  "cached_tokens": 8320,
+  "completion_tokens": 652,
+  "task_context_chars": 6303,
+  "wall_ms": 17999.91,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-window positive response and measured negative long-horizon response match the authorized dual-exponential adaptation law. Fit its four parameters numerically across all paid rows and use fresh confirmation to test it.",
+    "considered_alternatives": [
+      {
+        "option": "5-parameter sink-coupled adaptation",
+        "rejected_reason": "The observed response is consistent with the authorized simpler linear-in-input dual-horizon mechanism; all measured s_grad values are zero, so the sink parameter is not identified."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The slow-horizon probe supplies three additional time points spanning the reversal, sufficient to fit and confirm the four-parameter candidate."
+      },
+      {
+        "option": "periodic Lotka-Volterra readout",
+        "rejected_reason": "The observed slow reversal and pilot signatures favor the authorized endogenous-adaptation mechanism."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _value(p, row):\n    amp_fast, amp_slow, tau_fast, tau_slow = np.exp(p)\n    h = float(row['H'])\n    return float(row['u_now']) * (amp_fast * (-np.expm1(-h / tau_fast)) - amp_slow * (-np.expm1(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    def residual(p):\n        return np.array([_value(p, row) - float(row['y']) for row in train_rows])\n    bounds = (np.log([1e-5, 1e-5, 1e-3, 0.1]), np.log([100.0, 100.0, 100.0, 1000.0]))\n    best = None\n    for fast in (0.3, 1.0, 3.0):\n        for slow in (5.0, 15.0, 40.0):\n            result = least_squares(residual, np.log([2.0, 3.0, fast, slow]), bounds=bounds, max_nfev=5000)\n            if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n                best = result\n    _params = best.x\n    return _params\n\ndef predict(row):\n    return float(_value(_params, row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

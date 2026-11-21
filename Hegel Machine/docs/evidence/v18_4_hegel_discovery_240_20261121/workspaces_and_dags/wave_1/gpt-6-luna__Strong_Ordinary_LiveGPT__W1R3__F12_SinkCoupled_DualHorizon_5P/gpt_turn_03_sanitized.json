@@ -1,0 +1,36 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "1d394bbc50e9f58e",
+  "prompt_tokens": 12973,
+  "cached_tokens": 4864,
+  "completion_tokens": 969,
+  "task_context_chars": 15960,
+  "wall_ms": 24189.68,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The acquired long-horizon points show the archived dual-horizon adaptation pattern: positive response at short horizons and negative response at long horizons. Fit all four positive parameters numerically, constraining the slow timescale to exceed the fast timescale. No further probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its added long-horizon observations reveal the sign reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The observations support the explicit dual-horizon law; the coupled-memory ODE alternative is unnecessary and would require a trajectory batch."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to identifying this smooth horizon-dependent mechanism and explicitly not worth purchasing."
+      },
+      {
+        "option": "stationary siphon or static response models",
+        "rejected_reason": "They do not explain positive short-horizon outputs followed by negative values at H=15.5 and 23.7."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_P = None\n\ndef _model(row, p):\n    amp_fast, tau_fast, amp_slow, tau_slow = p\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (1.0 - math.exp(-h / tau_fast)) - amp_slow * (1.0 - math.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _P\n    rows = list(train_rows)\n    ys = np.array([float(r['y']) for r in rows], dtype=float)\n    # Log parameters keep amplitudes and timescales positive; tau_slow > tau_fast.\n    def unpack(q):\n        tf = math.exp(float(q[1]))\n        return (math.exp(float(q[0])), tf, math.exp(float(q[2])), tf + math.exp(float(q[3])))\n    def residual(q):\n        p = unpack(q)\n        return np.array([_model(r, p) - y for r, y in zip(rows, ys)], dtype=float)\n    starts = [np.log([0.8, 1.0, 1.2, 7.0]), np.log([1.0, 0.5, 1.0, 10.0]), np.log([1.5, 2.0, 2.0, 12.0])]\n    best = None\n    for q0 in starts:\n        res = least_squares(residual, q0, max_nfev=20000)\n        score = float(np.dot(res.fun, res.fun))\n        if best is None or score < best[0]:\n            best = (score, unpack(res.x))\n    _P = best[1]\n    return _P\n\ndef predict(row):\n    if _P is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_model(row, _P))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

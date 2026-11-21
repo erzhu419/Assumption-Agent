@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "c1f37937073543bb",
+  "prompt_tokens": 19872,
+  "cached_tokens": 6272,
+  "completion_tokens": 625,
+  "task_context_chars": 15446,
+  "wall_ms": 18632.15,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The long-horizon probe shows the predicted endogenous reversal, while the pilot shows short-horizon positive gain. Fit the archived dual-exponential response numerically to all eight paid rows and test it on fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its three observations reveal the long-horizon reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The eight existing observations span short and long horizons and support fitting the archived four-parameter adaptation model; another batch is not yet justified."
+      },
+      {
+        "option": "single-timescale relaxation or static saturation",
+        "rejected_reason": "These do not explain the observed transition from positive short-horizon response to negative long-horizon response."
+      },
+      {
+        "option": "sink-coupled dual-horizon adaptation",
+        "rejected_reason": "All observed sink gradients are zero, and the archived linear-in-input dual-horizon mechanism is the simpler candidate for confirmation."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        af, slow, tf, ts = p\n        return u * (af * (-np.expm1(-h / tf)) - slow * (-np.expm1(-h / ts))) - y\n    best = None\n    for guess in ([2, 3, 1, 10], [1.5, 2, 0.5, 5], [3, 4, 2, 20], [1, 2, 0.3, 15]):\n        result = least_squares(residual, guess, bounds=([0, 0, 0.001, 0.01], [100, 100, 100, 1000]), max_nfev=5000, xtol=1e-12, ftol=1e-12, gtol=1e-12)\n        if best is None or np.sum(result.fun ** 2) < np.sum(best.fun ** 2):\n            best = result\n    _params = best.x\n\ndef predict(row):\n    af, slow, tf, ts = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (af * (-np.expm1(-h / tf)) - slow * (-np.expm1(-h / ts))))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

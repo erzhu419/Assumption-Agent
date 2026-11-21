@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "6164f4ced1dc254b",
+  "prompt_tokens": 9494,
+  "cached_tokens": 8576,
+  "completion_tokens": 779,
+  "task_context_chars": 5787,
+  "wall_ms": 18291.46,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-horizon positive gains and measured negative response at H=20 support the authorized dual-exponential adaptation mechanism. Fit all four parameters numerically and test it on fresh observations.",
+    "considered_alternatives": [
+      {
+        "option": "Monotone Arrhenius rate",
+        "rejected_reason": "The negative observation at H=20 contradicts the positive monotone mechanism for positive input."
+      },
+      {
+        "option": "Additional slow-horizon or fine-trajectory probe",
+        "rejected_reason": "The acquired long-horizon observation establishes the reversal, and the six observations can fit the specified four-parameter mechanism; fresh confirmation is the appropriate next test."
+      },
+      {
+        "option": "Nuisance high-variance auxiliary probe",
+        "rejected_reason": "It does not address the identified mechanism."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n\n    def residual(logp):\n        af, tf, a_s, ts = np.exp(logp)\n        return u * (af * (-np.expm1(-h / tf)) - a_s * (-np.expm1(-h / ts))) - y\n\n    lower = np.log([0.001, 0.01, 0.001, 0.5])\n    upper = np.log([100.0, 10.0, 100.0, 200.0])\n    best = None\n    for tf in (0.2, 0.7, 2.0):\n        for ts in (3.0, 10.0, 40.0):\n            for amp in (1.0, 3.0):\n                start = np.log([amp, tf, amp, ts])\n                result = least_squares(residual, start, bounds=(lower, upper), max_nfev=5000, xtol=1e-13, ftol=1e-13, gtol=1e-13)\n                if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n                    best = result\n    _params = np.exp(best.x)\n\ndef predict(row):\n    af, tf, a_s, ts = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (af * (-np.expm1(-h / tf)) - a_s * (-np.expm1(-h / ts))))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

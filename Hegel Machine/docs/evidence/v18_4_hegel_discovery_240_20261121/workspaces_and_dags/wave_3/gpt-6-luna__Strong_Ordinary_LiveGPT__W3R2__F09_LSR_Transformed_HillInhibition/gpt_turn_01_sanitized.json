@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "8765ae4b8dfd11ed",
+  "prompt_tokens": 44986,
+  "cached_tokens": 36352,
+  "completion_tokens": 1023,
+  "task_context_chars": 13425,
+  "wall_ms": 27727.95,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The archive identifies a four-parameter cooperative Hill-2 inhibition law matching the sigmoidal onset and sink-gradient signatures. Existing rows span sink gradient substantially and include five observations for four parameters, so fit the target parameters directly without purchasing a probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed s_grad span is 0.25 to 2.25, far above the archive's <0.08 trigger for branch ambiguity; a probe is not justified."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled-memory ODE",
+        "rejected_reason": "No raw trajectory or memory signature supports a coupled ODE, and the available five rows vary over current input and sink gradient."
+      },
+      {
+        "option": "single-factor Michaelis or static quadratic",
+        "rejected_reason": "These omit sink-gradient inhibition or the observed sigmoidal onset, respectively."
+      }
+    ],
+    "hypothesis_name": "cooperative_hill2_sink_inhibition",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    u = np.array([float(r['u_now']) for r in train_rows], dtype=float)\n    s = np.array([float(r['s_grad']) for r in train_rows], dtype=float)\n    y = np.array([float(r['y']) for r in train_rows], dtype=float)\n    def model(p, uu, ss):\n        vmax, k_half, alpha_inh, c_leak = p\n        return vmax * (uu * uu / (k_half + uu * uu)) / (1.0 + alpha_inh * ss) - c_leak * uu\n    scale = max(1.0, float(np.max(np.abs(y))))\n    starts = [[max(scale, 1.0), 1.0, 0.5, 0.05], [2*scale, 4.0, 1.0, 0.2], [5*scale, 10.0, 0.1, 0.0]]\n    best = None\n    for p0 in starts:\n        res = least_squares(lambda p: model(p, u, s) - y, p0,\n                            bounds=([1e-9, 1e-9, 0.0, 0.0], [1e4, 1e4, 1e3, 1e3]),\n                            max_nfev=20000)\n        if best is None or np.dot(res.fun, res.fun) < np.dot(best.fun, best.fun):\n            best = res\n    return best.x\n\ndef predict(row):\n    p = fit(row['train_rows']) if 'train_rows' in row else None\n    if p is None:\n        raise ValueError('predict requires fitted parameters; call fit(train_rows) and use its result')\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    vmax, k_half, alpha_inh, c_leak = p\n    return float(vmax * (u*u / (k_half + u*u)) / (1.0 + alpha_inh*s) - c_leak*u)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

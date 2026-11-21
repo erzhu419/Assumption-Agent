@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "a8be1ad76a64ecc5",
+  "prompt_tokens": 12007,
+  "cached_tokens": 8320,
+  "completion_tokens": 1309,
+  "task_context_chars": 6772,
+  "wall_ms": 30034.48,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The prior model failed due to attaching parameters to a function; this implementation uses fit-stored parameters and numerical least-squares fitting. The original five rows show a saturating response to u_now, while the paid contrast shows substantial gradient dependence. The chosen compact bridge model is fit to all available rows; confirmation can assess whether this stationary smooth approximation reaches tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch probe",
+        "rejected_reason": "Seven observations now include a deliberate gradient contrast; fitting a compact model is preferable to another costly measurement unless confirmation fails."
+      },
+      {
+        "option": "present-snapshot queue or linear pipeline",
+        "rejected_reason": "Those authorized alternatives do not explain the strong output variation under changed s_grad as well as a gradient-sensitive bridge response."
+      },
+      {
+        "option": "nuisance_high_var_aux probe",
+        "rejected_reason": "It is explicitly a nuisance measurement and is not relevant to resolving the observed bridge law."
+      }
+    ],
+    "hypothesis_name": "saturating_bridge_gradient",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _features(row):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    # Saturating present-supply response plus a gradient-dependent bridge flux.\n    sat = 1.0 - math.exp(-max(0.0, u) / max(1e-8, _PARAMS[1]))\n    return sat, s\n\ndef fit(train_rows):\n    global _PARAMS\n    def pred(p, r):\n        u = max(0.0, float(r['u_now']))\n        sat = 1.0 - math.exp(-u / max(1e-8, p[1]))\n        # Gradient changes the usable flux; the interaction allows the gradient\n        # effect to vary with bridge loading.\n        return p[0] + p[2]*sat + p[3]*float(r['s_grad']) + p[4]*sat*float(r['s_grad'])\n    y = np.array([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.array([pred(p, r) for r in train_rows]) - y\n    best = None\n    for scale in (0.5, 1.0, 2.0):\n        p0 = np.array([0.5, scale, 2.0, -0.5, 0.0])\n        res = least_squares(residual, p0, bounds=([-20, 0.03, -20, -10, -10], [20, 20, 20, 10, 10]), max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    _PARAMS = best.x\n    return _PARAMS.copy()\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    u = max(0.0, float(row['u_now']))\n    sat = 1.0 - math.exp(-u / max(1e-8, _PARAMS[1]))\n    return float(_PARAMS[0] + _PARAMS[2]*sat + _PARAMS[3]*float(row['s_grad']) + _PARAMS[4]*sat*float(row['s_grad']))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

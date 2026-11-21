@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "b9a7b856665e12cd",
+  "prompt_tokens": 38738,
+  "cached_tokens": 32512,
+  "completion_tokens": 1071,
+  "task_context_chars": 13433,
+  "wall_ms": 30713.73,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The normalized Hill-2 response captures the sigmoidal onset, while competitive sink inhibition and linear bleed explain the lower outputs at higher gradients. The four-parameter fit reproduces all five paid observations to rounding precision, so submit it for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The sink-gradient span is already 2.0, and the existing rows distinguish the Hill-2 and barrier-activated laws."
+      },
+      {
+        "option": "barrier_modulated_siphon",
+        "rejected_reason": "Its numerical pilot fit had RMSE about 0.46, compared with about 2.8e-8 for the Hill-2 law."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot already samples the target horizon, and the static Hill-2 law accounts for the observed response without a memory state."
+      }
+    ],
+    "hypothesis_name": "cooperative_hill2_sink_inhibition",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _law(p, u2, u, s):\n    vmax, k_half, alpha, leak = p\n    return vmax * (u2 / (k_half + u2)) / (1.0 + alpha * s) - leak * u\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([r['u_now'] / 0.1 for r in rows], dtype=float)\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    u2 = u * u\n    result = least_squares(lambda p: _law(p, u2, u, s) - y,\n                           [10.0, 2.0, 0.5, 0.3],\n                           bounds=([0.0, 1e-8, 0.0, 0.0], np.inf),\n                           ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n    return _params\n\ndef predict(row):\n    u = row['u_now'] / 0.1\n    return float(_law(_params, math.pow(u, 2), u, row['s_grad']))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

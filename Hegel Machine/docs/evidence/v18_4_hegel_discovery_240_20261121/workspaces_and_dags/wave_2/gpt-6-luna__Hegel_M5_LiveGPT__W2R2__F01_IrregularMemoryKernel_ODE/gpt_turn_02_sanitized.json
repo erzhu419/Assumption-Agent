@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "dd283222869c8c2e",
+  "prompt_tokens": 28735,
+  "cached_tokens": 18560,
+  "completion_tokens": 1291,
+  "task_context_chars": 14205,
+  "wall_ms": 31393.66,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The targeted fine batch increased the data to eight rows, the stated minimum for fitting the four-parameter coupled memory ODE. Fit its parameters numerically, reconstruct the latent initial memory state from each irregular prefix using shifted time intervals, and integrate the coupled state to the requested horizon for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Eight trajectory rows now provide the specified minimum coverage to fit the four coupled-ODE parameters; an additional branch probe is not needed before model confirmation."
+      },
+      {
+        "option": "Maxwell single-mode stress decay",
+        "rejected_reason": "This present-snapshot law does not explain the observed coupled transient lag or the history-conditioned horizon readout."
+      },
+      {
+        "option": "Coarse adiabatic/snapshot balance",
+        "rejected_reason": "The history-gap signature and non-negligible forecast horizons make this reduced snapshot model an inadequate primary hypothesis."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is explicitly nuisance information and does not resolve the stated parameter-identifiability question."
+      }
+    ],
+    "hypothesis_name": "irregular_history_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _z_history(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    times = np.array([float(p['t']) for p in pref], dtype=float)\n    xs = np.array([float(p['x']) for p in pref], dtype=float)\n    end = times[-1]\n    z = math.exp(-(end-times[0])/tau) * 0.52 * xs[0]\n    for k in range(1, len(times)):\n        dt = times[k] - times[k-1]\n        z += 0.52 * 0.5 * (math.exp(-(end-times[k-1])/tau)*xs[k-1] + math.exp(-(end-times[k])/tau)*xs[k]) * dt / tau\n    return z\n\ndef _pred(row, p):\n    a, b, c, tau = p\n    x = float(row['x_now'])\n    z = _z_history(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    h = H / n\n    def f(x, z):\n        return -a*x + b*z + c*u, (0.52*x-z)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+h*k1x/2,z+h*k1z/2)\n        k3x,k3z=f(x+h*k2x/2,z+h*k2z/2)\n        k4x,k4z=f(x+h*k3x,z+h*k3z)\n        x += h*(k1x+2*k2x+2*k3x+k4x)/6\n        z += h*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    global _params\n    ys = np.array([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.array([_pred(r, p) for r in train_rows]) - ys\n    best = None\n    for start in ([0.5,0.4,0.5,0.2], [1.0,0.8,0.8,0.5], [0.2,0.2,0.3,1.0]):\n        result = least_squares(residual, start, bounds=([0,0,0,0.01],[5,5,5,5]), max_nfev=3000)\n        if best is None or np.dot(result.fun,result.fun) < np.dot(best.fun,best.fun):\n            best = result\n    _params = best.x\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_pred(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

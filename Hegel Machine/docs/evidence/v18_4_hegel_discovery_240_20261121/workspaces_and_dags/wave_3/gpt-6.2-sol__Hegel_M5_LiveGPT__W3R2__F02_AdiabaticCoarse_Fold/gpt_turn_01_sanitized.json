@@ -1,0 +1,36 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "43b38aa82be834a3",
+  "prompt_tokens": 22654,
+  "cached_tokens": 19456,
+  "completion_tokens": 1129,
+  "task_context_chars": 3567,
+  "wall_ms": 33342.78,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A proportional equilibrium plus an exponentially damped initial-state transient fits all five paid rows to within about 0.00001, compared with a proportional-only RMSE of 0.00464. The fitted gain is about 1.759 and the decay rate about 1.472. The paid horizons bracket H=4.07, so submit this law for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Proportional equilibrium alone",
+        "rejected_reason": "Its pilot RMSE is already below tolerance, but it misses the small signed deviations explained by relaxation from x_now."
+      },
+      {
+        "option": "Kelvin–Voigt creep and unit-gain Newton cooling",
+        "rejected_reason": "Creep omits the initial-state transient, while unit-gain cooling cannot account for the observed equilibrium gain near 1.76."
+      },
+      {
+        "option": "Vogel–Fulcher–Tammann response",
+        "rejected_reason": "A model driven by u_now alone does not explain the initial-state and horizon correction resolved by the relaxation fit."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing rows bracket the target horizon and already resolve the two-parameter relaxation, so a finer trajectory is not needed for confirmation."
+      }
+    ],
+    "hypothesis_name": "damped_relaxation_to_proportional_equilibrium",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    global _gain, _rate\n    u, x, h, y = np.asarray([[r['u_now'], r['x_now'], r['H'], r['y']] for r in train_rows], dtype=float).T\n\n    def residual(params):\n        gain, rate = params\n        eq = gain * u\n        return eq + (x - eq) * np.exp(-rate * h) - y\n\n    gain0 = np.dot(u, y) / np.dot(u, u)\n    _gain, _rate = least_squares(residual, [gain0, 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf]), gtol=1e-12).x\n\n\ndef predict(row):\n    eq = _gain * row['u_now']\n    return float(eq + (row['x_now'] - eq) * math.exp(-_rate * row['H']))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

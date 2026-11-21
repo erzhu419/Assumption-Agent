@@ -1,0 +1,28 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "565a388f2929e295",
+  "prompt_tokens": 18741,
+  "cached_tokens": 8320,
+  "completion_tokens": 843,
+  "task_context_chars": 22211,
+  "wall_ms": 22366.38,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fit the archived coupled ODE numerically, reconstructing its latent initial state from each irregular prefix and integrating the forecast with RK4. Fresh confirmation will test the resulting model.",
+    "considered_alternatives": [
+      {
+        "option": "Uncoupled relaxation or static response",
+        "rejected_reason": "The history-gap and coupled-lag signatures favor a latent memory state over an endpoint-only model."
+      },
+      {
+        "option": "Additional trajectory or gradient probe",
+        "rejected_reason": "The purchased batch supplies the eight rows specified for the four-parameter memory model; gradient variation is not implicated by these observations."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _memory(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    prefix = row['raw_prefix']\n    z = 0.52 * float(prefix[0]['x'])\n    for left, right in zip(prefix[:-1], prefix[1:]):\n        dt = float(right['t']) - float(left['t'])\n        decay = math.exp(-dt / tau)\n        z = decay * z + 0.52 * dt / (2.0 * tau) * (float(left['x']) * decay + float(right['x']))\n    return z\n\ndef _forecast(row, p):\n    a, b, c, tau = p\n    x = float(row['x_now'])\n    z = _memory(row, tau)\n    u = float(row['u_now'])\n    horizon = float(row['H'])\n    n = max(1, int(math.ceil(horizon / 0.004)))\n    h = horizon / n\n    def deriv(x, z):\n        return (-a*x + b*z + c*u, (0.52*x-z)/tau)\n    for _ in range(n):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x+h*k1x/2, z+h*k1z/2)\n        k3x, k3z = deriv(x+h*k2x/2, z+h*k2z/2)\n        k4x, k4z = deriv(x+h*k3x, z+h*k3z)\n        x += h*(k1x+2*k2x+2*k3x+k4x)/6\n        z += h*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    global _params\n    def residual(p):\n        return np.array([_forecast(row, p) - float(row['y']) for row in train_rows])\n    results = [least_squares(residual, start, bounds=([0, -10, -10, 0.03], [10, 10, 10, 10]), max_nfev=1500) for start in ([1, 1, 1, 0.3], [2, 2, 2, 1.0], [1, 0.5, 1, 0.1])]\n    _params = min(results, key=lambda r: np.dot(r.fun, r.fun)).x\n\ndef predict(row):\n    return float(_forecast(row, _params))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

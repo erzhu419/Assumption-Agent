@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "6b29797390451bf3",
+  "prompt_tokens": 15638,
+  "cached_tokens": 8320,
+  "completion_tokens": 1278,
+  "task_context_chars": 12769,
+  "wall_ms": 29554.29,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fit the recalled coupled two-state memory ODE to all eight paid rows, deriving each initial memory state from the raw irregular history when no precomputed convolution is supplied. RK4 integration predicts x(H), the observed target y.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another probe",
+        "rejected_reason": "The fine trajectory batch raised the dataset to eight rows, satisfying the recalled four-parameter ODE identifiability requirement."
+      },
+      {
+        "option": "Single-mode Maxwell or Kelvin-Voigt law",
+        "rejected_reason": "History-gap and transient-lag signatures, along with varied endpoint-matched histories, favor the coupled memory ODE."
+      },
+      {
+        "option": "Abstain scoped unknown",
+        "rejected_reason": "The observations are consistent with a stationary smooth coupled ODE; no chaotic sign-oscillation signature or refuting confirmation is reported."
+      }
+    ],
+    "hypothesis_name": "coupled_two_state_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    hist = row.get('raw_prefix') or []\n    if not hist:\n        return 0.52 * float(row['x_now'])\n    z = 0.52 * float(hist[0]['x'])\n    t0 = float(hist[0]['t'])\n    for k in range(1, len(hist)):\n        t1 = float(hist[k]['t'])\n        x0, x1 = float(hist[k-1]['x']), float(hist[k]['x'])\n        n = max(1, int(math.ceil((t1-t0)/0.004)))\n        h = (t1-t0)/n\n        for j in range(n):\n            xa = x0 + (x1-x0)*j/n\n            xb = x0 + (x1-x0)*(j+1)/n\n            xm = 0.5*(xa+xb)\n            # RK4 for dz/dt=(0.52*x-z)/tau with linearly interpolated x\n            frac = (j+0.5)/n\n            def f(zz, ff):\n                xx = x0 + (x1-x0)*ff\n                return (0.52*xx-zz)/tau\n            f1=f(z,j/n); f2=f(z+0.5*h*f1,frac); f3=f(z+0.5*h*f2,frac); f4=f(z+h*f3,(j+1)/n)\n            z += h*(f1+2*f2+2*f3+f4)/6.0\n        t0=t1\n    return z\n\ndef _simulate(row, p):\n    a,b,c,tau = p\n    x=float(row['x_now']); z=_z0(row,tau); u=float(row['u_now'])\n    H=float(row['H']); n=max(1,int(math.ceil(H/0.004))); h=H/n\n    def f(xx,zz): return (-a*xx+b*zz+c*u, (0.52*xx-zz)/tau)\n    for _ in range(n):\n        k1=f(x,z); k2=f(x+h*k1[0]/2,z+h*k1[1]/2); k3=f(x+h*k2[0]/2,z+h*k2[1]/2); k4=f(x+h*k3[0],z+h*k3[1])\n        x += h*(k1[0]+2*k2[0]+2*k3[0]+k4[0])/6\n        z += h*(k1[1]+2*k2[1]+2*k3[1]+k4[1])/6\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    def residual(p):\n        return np.array([_simulate(r,p)-float(r['y']) for r in train_rows])\n    best=None\n    for guess in ([0.4,0.4,0.4,0.5],[0.8,0.5,0.5,1.0],[0.2,0.2,0.8,1.5]):\n        res=least_squares(residual,guess,bounds=([0,0,0,0.03],[5,5,5,10]),max_nfev=300)\n        if best is None or np.sum(res.fun**2)<np.sum(best.fun**2): best=res\n    _PARAMS=best.x\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_simulate(row,_PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

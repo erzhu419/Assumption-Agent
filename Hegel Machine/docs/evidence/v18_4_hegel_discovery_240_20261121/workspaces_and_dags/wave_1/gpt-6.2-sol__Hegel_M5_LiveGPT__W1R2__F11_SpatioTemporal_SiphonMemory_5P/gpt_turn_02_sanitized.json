@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "c6482362952e5b0f",
+  "prompt_tokens": 30778,
+  "cached_tokens": 26368,
+  "completion_tokens": 1531,
+  "task_context_chars": 6655,
+  "wall_ms": 38964.45,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A numerical RK4 fit of the five-parameter coupled law reproduces all eight paid endpoints with training RMSE below 1e-7. The observations span H = 0.38–0.60 and bracket the target H = 0.46, so submit the fitted mechanism for fresh confirmation without another purchase.",
+    "considered_alternatives": [
+      {
+        "option": "Uncoupled Kelvin–Voigt creep or stretched-exponential relaxation",
+        "rejected_reason": "Neither models both the gradient-dependent drive and the transient from the initial memory state."
+      },
+      {
+        "option": "Square-root siphon branch",
+        "rejected_reason": "Its activation signature is absent, and the coupled base law already reproduces all eight endpoints to rounding precision."
+      },
+      {
+        "option": "Further paid measurement",
+        "rejected_reason": "The acquired batch varies initial memory, gradient, and horizon around the forecast regime. The remaining nuisance probe does not test the coupled mechanism."
+      }
+    ],
+    "hypothesis_name": "gradient_siphon_coupled_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _endpoint(row, p):\n    a, b, vmax, rho, tau = p\n    u, x, z, s, H = (float(row[k]) for k in ('u_now', 'x_now', 'mem_conv', 's_grad', 'H'))\n    J = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    n = max(64, math.ceil(abs(H) * max(a, b, 1.0 / tau) / 0.2))\n    h = H / n\n    def rhs(x, z):\n        return -a * x + b * z + J, (0.52 * x - z) / tau\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + 0.5*h*k1, z + 0.5*h*l1)\n        k3, l3 = rhs(x + 0.5*h*k2, z + 0.5*h*l2)\n        k4, l4 = rhs(x + h*k3, z + h*l3)\n        x += h * (k1 + 2*k2 + 2*k3 + k4) / 6.0\n        z += h * (l1 + 2*l2 + 2*l3 + l4) / 6.0\n    return float(x)\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.array([float(row['y']) for row in rows])\n    def residual(p):\n        return np.array([_endpoint(row, p) for row in rows]) - y\n    result = least_squares(residual, [1.0, 1.0, 6.5, 0.70, 0.5], bounds=([0.0, 0.0, 1.0, 0.05, 0.01], [np.inf, np.inf, 15.0, 0.95, np.inf]), x_scale='jac', ftol=1e-11, xtol=1e-11, gtol=1e-11)\n    _params = result.x\n\ndef predict(row):\n    return _endpoint(row, _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

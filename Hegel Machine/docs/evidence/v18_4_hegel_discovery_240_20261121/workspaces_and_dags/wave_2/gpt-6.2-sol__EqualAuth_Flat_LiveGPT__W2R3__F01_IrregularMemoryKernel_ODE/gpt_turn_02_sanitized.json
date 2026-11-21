@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "0023ac745e6ee3b1",
+  "prompt_tokens": 28803,
+  "cached_tokens": 18432,
+  "completion_tokens": 2286,
+  "task_context_chars": 12570,
+  "wall_ms": 55161.9,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history gap and transient lag support a coupled memory state. Reconstructing that state from the irregular prefixes and fitting all four ODE parameters gives a training RMSE of about 9e-6 and leave-one-out errors below 4e-5 across horizons spanning H=0.45. These are checks on paid data, not fresh confirmation; submit the model for that test.",
+    "considered_alternatives": [
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "The observed targets stay positive for both signs of the input step, which a single signed step-response amplitude cannot reproduce."
+      },
+      {
+        "option": "Uncoupled Kelvin–Voigt creep",
+        "rejected_reason": "The recalled law depends only on the current input and horizon, so it cannot represent the observed history gap at matched endpoints."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid trajectories already constrain the coupled model near the target horizon; fresh confirmation is more informative than another training probe."
+      }
+    ],
+    "hypothesis_name": "coupled_ode_irregular_memory_kernel",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    prefix = row.get('raw_prefix') or []\n    return (float(row['x_now']), float(row['u_now']), float(row['H']),\n            row.get('mem_conv'), tuple((float(p['t']), float(p['x'])) for p in prefix))\n\ndef _forecast(params, data):\n    a, b, c, tau = params\n    x, u, H, mem, prefix = data\n    if mem is not None:\n        z = float(mem)\n    elif prefix:\n        z = 0.52 * prefix[0][1]\n        for (t0, x0), (t1, x1) in zip(prefix, prefix[1:]):\n            q = (t1 - t0) / tau\n            decay = math.exp(-q)\n            z = decay * z + 0.26 * q * (decay * x0 + x1)\n    else:\n        z = 0.52 * x\n    n = max(1, math.ceil(H / 0.004))\n    # The third state is constant u; the RK4 step is a matrix polynomial.\n    B = (H / n) * np.array([[-a, b, c], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    B2 = B @ B\n    step = np.eye(3) + B + B2 / 2.0 + (B2 @ B) / 6.0 + (B2 @ B2) / 24.0\n    return float(np.linalg.matrix_power(step, n)[0] @ np.array([x, z, u]))\n\ndef fit(train_rows):\n    global _params\n    rows = [(_prepare(row), float(row['y'])) for row in train_rows]\n    def residual(params):\n        return np.array([_forecast(params, data) - y for data, y in rows])\n    _params = least_squares(residual, [1.5, 1.0, 1.2, 0.35],\n                            bounds=([0.0, 0.0, 0.0, 0.01], [np.inf] * 4),\n                            x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row) -> float:\n    return _forecast(_params, _prepare(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

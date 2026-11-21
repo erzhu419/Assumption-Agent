@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "6e881f121ae94fe9",
+  "prompt_tokens": 35512,
+  "cached_tokens": 30720,
+  "completion_tokens": 1718,
+  "task_context_chars": 7446,
+  "wall_ms": 43792.79,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid rows bracket the target horizon and vary the drive, gradient, and initial memory. The five-parameter RK4 model fits them with a training RMSE of about 2e-8. Submit it for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired. Its three rows add contrasting initial memory and state values and bring the fit to eight observations."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Does not constrain the siphon forcing or memory dynamics."
+      },
+      {
+        "option": "Snapshot creep or damped oscillator",
+        "rejected_reason": "Neither uses the observed gradient, initial state, or stored memory, whereas the coupled law fits the paid observations to their reported precision."
+      }
+    ],
+    "hypothesis_name": "five_parameter_siphon_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\ndef _readout(features, p):\n    u, x, z, s, H = features.T\n    a, b, vmax, rho, tau = p\n    u_n = u / 0.05\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u_n / (1.2 + u_n)\n    n = max(1, math.ceil(float(np.max(H)) / 0.005))\n    h = H / n\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + 0.5 * h * k1, z + 0.5 * h * l1)\n        k3, l3 = rhs(x + 0.5 * h * k2, z + 0.5 * h * l2)\n        k4, l4 = rhs(x + h * k3, z + h * l3)\n        x = x + h * (k1 + 2 * k2 + 2 * k3 + k4) / 6\n        z = z + h * (l1 + 2 * l2 + 2 * l3 + l4) / 6\n    return x\n\ndef fit(train_rows):\n    global _params\n    X = np.array([[row[k] for k in _KEYS] for row in train_rows], dtype=float)\n    y = np.array([row['y'] for row in train_rows], dtype=float)\n    result = least_squares(lambda p: _readout(X, p) - y,\n                           [2.0, 1.0, 6.5, 0.70, 0.4],\n                           bounds=([0, 0, 0, 0, 0.005], [np.inf, np.inf, np.inf, 1, np.inf]),\n                           x_scale='jac', ftol=1e-11, xtol=1e-11, gtol=1e-11)\n    _params = result.x\n\ndef predict(row):\n    X = np.array([[row[k] for k in _KEYS]], dtype=float)\n    return float(_readout(X, _params)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

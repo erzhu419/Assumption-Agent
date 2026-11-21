@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "1c72606f6eedda4d",
+  "prompt_tokens": 10870,
+  "cached_tokens": 8320,
+  "completion_tokens": 695,
+  "task_context_chars": 3569,
+  "wall_ms": 18283.45,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The candidate source note specifies a four-parameter cooperative Hill-2 response with competitive sink inhibition and linear bleed. The five paid rows span u_now and s_grad, and the sink-gradient span is ample, so fit the stated law numerically without an additional probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed s_grad span is 2.0, well above the source note's 0.08 trigger; the provided observations already vary inhibition substantially."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The candidate mechanism is a static four-parameter response law and the existing five rows span u_now and s_grad; an additional batch is not presently needed."
+      },
+      {
+        "option": "Weibull cumulative-hazard or Avrami saturation laws",
+        "rejected_reason": "These alternatives omit the broad sink-gradient dependence; the recalled cooperative Hill-inhibition mechanism directly accounts for it."
+      }
+    ],
+    "hypothesis_name": "cooperative_hill_sink_inhibition",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\ndef _value(row, name, default=0.0):\n    return float(row.get(name, default))\n\ndef _predict_params(row, p):\n    vmax, k_half, alpha_inh, c_leak = p\n    u = _value(row, 'u_now')\n    s = _value(row, 's_grad')\n    u2 = u * u\n    return vmax * (u2 / (k_half + u2)) / (1.0 + alpha_inh * s) - c_leak * u\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows], dtype=float)\n    def residuals(p):\n        return np.array([_predict_params(r, p) for r in rows]) - y\n    result = least_squares(residuals, x0=np.array([4.0, 1.0, 0.5, 0.1]), bounds=([0.0, 1e-9, 0.0, 0.0], [np.inf, np.inf, np.inf, np.inf]))\n    return {'params': result.x}\n\ndef predict(row):\n    return float(_predict_params(row, fit.params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

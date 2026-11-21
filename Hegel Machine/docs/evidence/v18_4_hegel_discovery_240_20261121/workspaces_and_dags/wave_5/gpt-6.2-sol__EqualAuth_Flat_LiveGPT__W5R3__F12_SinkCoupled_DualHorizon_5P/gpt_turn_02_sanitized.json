@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "f3ab5839e578fbbd",
+  "prompt_tokens": 34219,
+  "cached_tokens": 30208,
+  "completion_tokens": 1149,
+  "task_context_chars": 5773,
+  "wall_ms": 35137.09,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid probe found a positive response at H = 8 and negative responses at H = 15.5 and 23.3. The sink-coupled dual-horizon law fits all eight observations with training RMSE about 3.2e-8. The target H = 21.8 lies within the sampled horizon range, so submit for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Sink-free dual-horizon adaptation",
+        "rejected_reason": "It can reverse sign but omits the sink-gradient dependence and saturation in the early response."
+      },
+      {
+        "option": "Periodic Lotka–Volterra harmonic",
+        "rejected_reason": "The observed reversal does not establish periodicity, and this model omits the sink-gradient dependence."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing long-horizon measurements bracket the target and already resolve the fast and slow terms in the five-parameter fit."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_5p",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _evaluate(p, u, s, h):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    fast = -np.expm1(-h / tau_fast)\n    slow = -np.expm1(-h / tau_slow)\n    return vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) * fast - amp_adapt * u * slow\n\ndef fit(train_rows):\n    global _params\n    u, s, h, y = np.array([[r[k] for k in ('u_now', 's_grad', 'H', 'y')] for r in train_rows], dtype=float).T\n    result = least_squares(lambda p: _evaluate(p, u, s, h) - y,\n                           [8.0, 0.7, 0.35, 1.8, 12.0],\n                           bounds=([0.0, 0.0, 1e-6, 0.0, 1e-6],\n                                   [np.inf, 1.0, np.inf, np.inf, np.inf]))\n    _params = result.x\n\ndef predict(row):\n    return float(_evaluate(_params, row['u_now'], row['s_grad'], row['H']))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

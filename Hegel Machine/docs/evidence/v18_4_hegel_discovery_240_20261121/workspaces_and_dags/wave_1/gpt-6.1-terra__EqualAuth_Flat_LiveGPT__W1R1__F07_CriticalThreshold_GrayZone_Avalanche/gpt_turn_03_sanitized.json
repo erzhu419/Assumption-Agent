@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "c1a02fc724ebad62",
+  "prompt_tokens": 15539,
+  "cached_tokens": 11008,
+  "completion_tokens": 863,
+  "task_context_chars": 7621,
+  "wall_ms": 20330.17,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The low-gradient data support the recalled hydraulic saturation field, while the high-gradient measurements reveal a threshold-like avalanche. Fit the saturation and threshold-branch parameters numerically and test them on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "Haldane substrate inhibition or Cobb-Douglas law",
+        "rejected_reason": "Neither accounts naturally for the sharp gradient-dependent decline into negative values."
+      },
+      {
+        "option": "Hydraulic saturation without a branch term",
+        "rejected_reason": "The high-gradient observations show a large decline inconsistent with the unbranched basin mechanism."
+      },
+      {
+        "option": "Additional fine trajectory or high-gradient probe",
+        "rejected_reason": "Both relevant probes have already been acquired; the eleven observations now constrain a threshold-branch model for fresh confirmation."
+      }
+    ],
+    "hypothesis_name": "hydraulic_saturation_with_threshold_avalanche",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _values(p, u, s):\n    vmax, rho, threshold, strength, power = p\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    return base - strength * np.maximum(s - threshold, 0.0) ** power\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    bounds = ([0.0, 0.0, 0.0, 0.0, 0.3], [100.0, 1.5, 3.58, 100.0, 5.0])\n    best = None\n    for threshold in (2.0, 2.3, 2.5, 2.7):\n        for power in (1.0, 1.5, 2.0, 3.0):\n            p0 = [8.0, 0.7, threshold, 4.0, power]\n            result = least_squares(lambda p: _values(p, u, s) - y, p0, bounds=bounds, max_nfev=5000, ftol=1e-12, xtol=1e-12, gtol=1e-12)\n            if best is None or np.sum(result.fun ** 2) < np.sum(best.fun ** 2):\n                best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_values(_params, float(row['u_now']), float(row['s_grad'])))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

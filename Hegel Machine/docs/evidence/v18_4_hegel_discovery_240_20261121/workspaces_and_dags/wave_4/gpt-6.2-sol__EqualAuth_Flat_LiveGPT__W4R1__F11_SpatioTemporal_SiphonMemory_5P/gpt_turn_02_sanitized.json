@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "68c31667e63b32de",
+  "prompt_tokens": 34289,
+  "cached_tokens": 29952,
+  "completion_tokens": 1805,
+  "task_context_chars": 5373,
+  "wall_ms": 50573.58,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The added rows vary initial memory and state independently, and the measured horizons bracket the target H = 0.46. The five-parameter ODE fits all eight paid endpoints to RMSE about 1.5e-8, supporting fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Haldane substrate inhibition",
+        "rejected_reason": "A response depending only on current input cannot account for the observed gradient and memory lag."
+      },
+      {
+        "option": "Cobb–Douglas power law",
+        "rejected_reason": "It includes gradient dependence but omits both initial states and the forecast horizon."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not constrain the coupled dynamics, and the acquired trajectory batch already supplies eight relevant endpoints."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\ndef _inputs(rows):\n    return np.asarray([[row[k] for k in _KEYS] for row in rows], dtype=float).T\n\ndef _forecast(params, inputs):\n    a, b, tau, vmax, rho = params\n    u, x, z, s, H = inputs\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    n = max(64, math.ceil(8.0 * float(np.max(H)) * max(a, 1.0 / tau)))\n    h = H / n\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + 0.5 * h * k1, z + 0.5 * h * l1)\n        k3, l3 = rhs(x + 0.5 * h * k2, z + 0.5 * h * l2)\n        k4, l4 = rhs(x + h * k3, z + h * l3)\n        x = x + h * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0\n        z = z + h * (l1 + 2.0 * l2 + 2.0 * l3 + l4) / 6.0\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    inputs = _inputs(rows)\n    target = np.asarray([row['y'] for row in rows], dtype=float)\n    _params = least_squares(\n        lambda p: _forecast(p, inputs) - target,\n        [0.7, 0.8, 0.35, 3.0, 0.5],\n        bounds=([0.0, 0.0, 0.02, 0.0, 0.0], [np.inf, np.inf, np.inf, np.inf, 1.0]),\n        ftol=1e-11, xtol=1e-11, gtol=1e-11,\n    ).x\n\ndef predict(row):\n    return float(_forecast(_params, _inputs([row]))[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

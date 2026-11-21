@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "4c2edc7ee8876b30",
+  "prompt_tokens": 51271,
+  "cached_tokens": 46720,
+  "completion_tokens": 1564,
+  "task_context_chars": 5315,
+  "wall_ms": 52092.54,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives y = x_now. For every nonzero step, dividing y - x_now by the signed step yields the same horizon law to about 1e-6: 0.638 + 2.657 exp(-1.681 H). This supports a persistent shift plus one decaying transient, with the target H = 0.65 inside the measured range. Since x_now = 0.638 u_past throughout the paid data, the snapshot and prior-input baselines are not separately identified.",
+    "considered_alternatives": [
+      {
+        "option": "Snapshot plus a Maxwell transient with no steady shift",
+        "rejected_reason": "The log of the step-normalized residual flattens with horizon rather than following the straight line required by pure exponential decay."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck drift toward a fixed mean",
+        "rejected_reason": "A fixed mean cannot explain positive residuals from snapshots below the unchanged no-step snapshot and negative residuals from snapshots above it while leaving that no-step snapshot fixed."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch",
+        "rejected_reason": "The paid rows already resolve the decay curvature on both sides of the target horizon. They do not separate the snapshot from the prepared input, and another batch is not specified to vary them independently."
+      }
+    ],
+    "hypothesis_name": "snapshot_anchored_hysteresis",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    x, step, h, y = np.array([(r['x_now'], r['u_now'] - r['u_past'], r['H'], r['y']) for r in train_rows], dtype=float).T\n    def residual(p):\n        steady, transient, rate = p\n        return x + step * (steady + transient * np.exp(-rate * h)) - y\n    _params = least_squares(residual, [0.5, 2.5, 1.5], bounds=([0.0, 0.0, 0.0], [np.inf, np.inf, np.inf])).x\n\ndef predict(row) -> float:\n    steady, transient, rate = _params\n    step = row['u_now'] - row['u_past']\n    return float(row['x_now'] + step * (steady + transient * math.exp(-rate * row['H'])))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

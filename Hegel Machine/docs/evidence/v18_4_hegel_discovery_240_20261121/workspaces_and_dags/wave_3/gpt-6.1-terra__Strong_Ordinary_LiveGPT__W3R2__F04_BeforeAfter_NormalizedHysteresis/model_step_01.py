@@ -1,0 +1,20 @@
+import numpy as np
+from scipy.optimize import least_squares
+
+_params = None
+
+def fit(train_rows):
+    global _params
+    un = np.array([r['u_now'] for r in train_rows], dtype=float)
+    up = np.array([r['u_past'] for r in train_rows], dtype=float)
+    h = np.array([r['H'] for r in train_rows], dtype=float)
+    y = np.array([r['y'] for r in train_rows], dtype=float)
+    def residual(p):
+        gain, log_tau, k_eq = p
+        return gain * (un - up) * np.exp(-h / np.exp(log_tau)) + k_eq * un - y
+    fits = [least_squares(residual, [2.0, np.log(t), 0.6], bounds=([-np.inf, -10, -np.inf], [np.inf, 10, np.inf])) for t in (0.3, 1.0, 3.0)]
+    _params = min(fits, key=lambda f: np.dot(f.fun, f.fun)).x
+
+def predict(row):
+    gain, log_tau, k_eq = _params
+    return float(gain * (row['u_now'] - row['u_past']) * np.exp(-row['H'] / np.exp(log_tau)) + k_eq * row['u_now'])

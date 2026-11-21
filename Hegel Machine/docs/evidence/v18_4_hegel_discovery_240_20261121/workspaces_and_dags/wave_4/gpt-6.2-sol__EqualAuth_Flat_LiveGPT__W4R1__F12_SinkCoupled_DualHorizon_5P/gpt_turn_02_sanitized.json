@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "acf70fecb00637c8",
+  "prompt_tokens": 24521,
+  "cached_tokens": 20480,
+  "completion_tokens": 1360,
+  "task_context_chars": 5649,
+  "wall_ms": 41579.73,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The slow-horizon probe stays positive at H=8 and turns negative at H=15.5 and 21.9, which bracket the target H=20.4. The sink-coupled law fits all eight paid observations to rounding precision, with fast and slow timescales near 0.35 and 13.3. Submit for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "sink-free dual-horizon reversal",
+        "rejected_reason": "It can reverse sign but has no sink-gradient dependence and assumes a linear fast drive instead of a saturating one."
+      },
+      {
+        "option": "harmonic Lotka–Volterra model",
+        "rejected_reason": "It omits the sink gradient and imposes recurring oscillations that the measured reversal does not require."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The paid observations already constrain both timescales and bracket the target horizon."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not distinguish the competing mechanisms."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, h, y = np.asarray([[r['u_now'], r['s_grad'], r['H'], r['y']] for r in train_rows], dtype=float).T\n    drive = u / (1.2 + u)\n    sink = s / (1.0 + s)\n\n    def residual(p):\n        vmax, rho, amp, fast, gap = p\n        slow = fast + gap\n        return vmax * (1.0 - rho * sink) * drive * (-np.expm1(-h / fast)) - amp * u * (-np.expm1(-h / slow)) - y\n\n    result = least_squares(residual, [5.0, 0.5, 1.0, 0.5, 9.5], bounds=([0.0, 0.0, 0.0, 1e-6, 1e-6], [np.inf, 1.0, np.inf, np.inf, np.inf]), x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    vmax, rho, amp, fast, gap = map(float, result.x)\n    _params = (vmax, rho, amp, fast, fast + gap)\n    return _params\n\ndef predict(row) -> float:\n    vmax, rho, amp, fast, slow = _params\n    u, s, h = (float(row[k]) for k in ('u_now', 's_grad', 'H'))\n    return vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) * (-math.expm1(-h / fast)) - amp * u * (-math.expm1(-h / slow))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

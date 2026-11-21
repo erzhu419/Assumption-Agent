@@ -1,0 +1,28 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "df091cea8e34e7f6",
+  "prompt_tokens": 14620,
+  "cached_tokens": 11008,
+  "completion_tokens": 536,
+  "task_context_chars": 6067,
+  "wall_ms": 14084.18,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The slow-horizon observations show the predicted reversal and extend to the target horizon. Fit all four parameters numerically and request fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing eight observations span the pilot and slow reversal, providing direct constraints on the four-parameter law."
+      },
+      {
+        "option": "Lotka-Volterra harmonic or Ricker dome",
+        "rejected_reason": "The verified adaptation mechanism and measured horizon-dependent reversal support the dual-exponential law instead."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        af, tf, a_s, ts = np.exp(p)\n        return u * (af * (-np.expm1(-h / tf)) - a_s * (-np.expm1(-h / ts))) - y\n    best = None\n    for tf in (0.2, 0.7, 2.0):\n        for ts in (5.0, 15.0, 40.0):\n            result = least_squares(residual, np.log([2.0, tf, 3.0, ts]), bounds=(np.log([1e-4, 0.01, 1e-4, 0.1]), np.log([100.0, 100.0, 100.0, 1000.0])), max_nfev=3000)\n            if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n                best = result\n    _params = np.exp(best.x)\n\ndef predict(row):\n    af, tf, a_s, ts = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (af * (-np.expm1(-h / tf)) - a_s * (-np.expm1(-h / ts))))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

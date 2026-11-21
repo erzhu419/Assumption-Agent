@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "2c7b5a0f1dafecd2",
+  "prompt_tokens": 15090,
+  "cached_tokens": 8320,
+  "completion_tokens": 827,
+  "task_context_chars": 15549,
+  "wall_ms": 21298.75,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Long-horizon measurements show clear reversal to negative y while short-horizon measurements are positive. This supports the five-parameter sink-inhibited fast response minus slow adaptation law. Fit all five parameters numerically to the eight paid rows; the existing long-horizon observations resolve the key ambiguity without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its long-H negative observations distinguish slow adaptation from short-window positive-only behavior."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The observed horizon reversal matches the archived dual-horizon law; no evidence requires a coupled memory-state mechanism or additional rows."
+      },
+      {
+        "option": "static siphon or short-horizon-only model",
+        "rejected_reason": "Cannot explain the negative outcomes at H=15.5 and H=21.5 alongside the positive short-horizon measurements."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to identifying the supported mechanism and expressly not worth its cost."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _value(row, p):\n    vmax, rho, amp_adapt, tau_fast, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    H = float(row['H'])\n    sink = 1.0 - rho * s / (1.0 + s)\n    base = vmax * sink * (u / (1.2 + u)) * (1.0 - math.exp(-H / tau_fast))\n    adapt = amp_adapt * u * (1.0 - math.exp(-H / tau_slow))\n    return base - adapt\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows])\n    def residual(p):\n        return np.asarray([_value(r, p) for r in rows]) - y\n    starts = [\n        [3.0, 0.7, 0.4, 0.5, 10.0],\n        [2.0, 0.3, 0.3, 0.2, 20.0],\n        [4.0, 0.9, 0.6, 1.0, 30.0],\n    ]\n    lo = [0.0, 0.0, 0.0, 1e-4, 0.01]\n    hi = [100.0, 1.0, 100.0, 100.0, 1000.0]\n    fits = [least_squares(residual, x0, bounds=(lo, hi), max_nfev=20000) for x0 in starts]\n    best = min(fits, key=lambda result: float(np.dot(result.fun, result.fun)))\n    return {'params': [float(v) for v in best.x]}\n\ndef predict(row):\n    return float(_value(row, fit_params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

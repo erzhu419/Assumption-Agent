@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "c48bda62e5933071",
+  "prompt_tokens": 33319,
+  "cached_tokens": 24320,
+  "completion_tokens": 2283,
+  "task_context_chars": 12837,
+  "wall_ms": 55923.98,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history gap and transient lag favor a coupled memory state. Fitting all four parameters with the irregular-prefix reconstruction gave an in-sample RMSE of about 9e-6. The submitted model uses RK4 for forecasting; the 0.045 tolerance still needs fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Trapezoidal exponential convolution",
+        "rejected_reason": "Both reconstructions fit well, but exact convolution of the piecewise-linear prefix gave a lower training residual at negligible extra cost."
+      },
+      {
+        "option": "Single-mode Maxwell stress decay",
+        "rejected_reason": "A response proportional to the signed input step cannot match positive targets for both step directions with one shared coefficient."
+      },
+      {
+        "option": "Uncoupled Kelvin–Voigt creep",
+        "rejected_reason": "The proposed law ignores both the current state and the history, so it cannot explain the endpoint-matched history gap."
+      },
+      {
+        "option": "open_branch_discriminating_probe or another extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch brings the fit to eight trajectories with both step directions and horizons bracketing 0.45. Fresh confirmation is the next useful test."
+      }
+    ],
+    "hypothesis_name": "coupled_ode_irregular_exponential_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _forecast(row, p):\n    a, b, c, tau = map(float, p)\n    x = float(row['x_now'])\n    u = float(row['u_now'])\n    H = float(row['H'])\n    z = row.get('mem_conv')\n    if z is None:\n        prefix = sorted(row['raw_prefix'], key=lambda sample: sample['t'])\n        z = 0.52 * prefix[0]['x']\n        for left, right in zip(prefix, prefix[1:]):\n            w = (right['t'] - left['t']) / tau\n            if w == 0.0:\n                continue\n            mass = -math.expm1(-w)\n            # Exact exponential convolution for linear interpolation on this interval.\n            z = math.exp(-w) * z + 0.52 * (left['x'] * mass + (right['x'] - left['x']) * (1.0 - mass / w))\n    z = float(z)\n    if H == 0.0:\n        return x\n    n = math.ceil(H / 0.004)\n    h = H / n\n    drive = c * u\n\n    def rhs(X, Z):\n        return -a * X + b * Z + drive, (0.52 * X - Z) / tau\n\n    for _ in range(n):\n        k1x, k1z = rhs(x, z)\n        k2x, k2z = rhs(x + 0.5 * h * k1x, z + 0.5 * h * k1z)\n        k3x, k3z = rhs(x + 0.5 * h * k2x, z + 0.5 * h * k2z)\n        k4x, k4z = rhs(x + h * k3x, z + h * k3z)\n        x += h * (k1x + 2.0 * k2x + 2.0 * k3x + k4x) / 6.0\n        z += h * (k1z + 2.0 * k2z + 2.0 * k3z + k4z) / 6.0\n    return float(x)\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.array([row['y'] for row in rows], dtype=float)\n    result = least_squares(lambda p: np.array([_forecast(row, p) for row in rows]) - y,\n                           x0=[1.6, 1.0, 1.5, 0.5],\n                           bounds=([0.0, 0.0, 0.0, 0.01], [np.inf] * 4))\n    _params = result.x\n    return _params\n\n\ndef predict(row) -> float:\n    return _forecast(row, _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

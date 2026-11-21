@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "366f959113649e19",
+  "prompt_tokens": 71820,
+  "cached_tokens": 60288,
+  "completion_tokens": 2100,
+  "task_context_chars": 5456,
+  "wall_ms": 59028.69,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The zero-step row preserves x_now. For both step directions, (y − x_now)/(u_now − u_past) follows a single exponential with a nonzero floor: the fitted floor is about 24.6, the transient amplitude 135.1, and the decay rate 0.836. All eight paid observations are reproduced to rounding precision, so proceed to fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Snapshot-only Ornstein–Uhlenbeck and zero-floor Maxwell decay",
+        "rejected_reason": "The snapshot law omits the signed input step. Maxwell decay omits the persistent step response; forcing the gain to decay to zero leaves systematic horizon residuals."
+      },
+      {
+        "option": "Two decaying exponentials",
+        "rejected_reason": "The second fitted rate is effectively zero. A constant plus one exponential already fits to the precision of the reported observations."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not discriminate the step-response mechanisms, and the paid trajectory batch already brackets the target horizon."
+      }
+    ],
+    "hypothesis_name": "persistent_step_with_exponential_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    data = np.array([[r['u_now'] - r['u_past'], r['H'], r['y'] - r['x_now']] for r in train_rows], dtype=float)\n    du, h, dy = data.T\n\n    def residual(p):\n        steady, transient, rate = p\n        return du * (steady + transient * np.exp(-rate * h)) - dy\n\n    _params = least_squares(residual, [20.0, 130.0, 1.0], bounds=([-np.inf, -np.inf, 0.0], [np.inf, np.inf, np.inf]), x_scale='jac').x\n\ndef predict(row) -> float:\n    steady, transient, rate = _params\n    du = row['u_now'] - row['u_past']\n    return float(row['x_now'] + du * (steady + transient * math.exp(-rate * row['H'])))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

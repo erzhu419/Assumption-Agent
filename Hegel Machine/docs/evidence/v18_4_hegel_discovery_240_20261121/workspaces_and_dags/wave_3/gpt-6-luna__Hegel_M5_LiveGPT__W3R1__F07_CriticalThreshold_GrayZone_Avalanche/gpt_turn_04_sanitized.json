@@ -1,0 +1,36 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "5d85dfd6961aedc4",
+  "prompt_tokens": 17342,
+  "cached_tokens": 16384,
+  "completion_tokens": 1122,
+  "task_context_chars": 10256,
+  "wall_ms": 27090.62,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid high-gradient observations show a steep threshold-like decline from positive to negative output, consistent with the authorized supercritical avalanche law. Fit all five parameters numerically, constraining the critical gradient to the supplied 2.50–2.68 range; cache fitted parameters for predict(row).",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another high_sgrad_regime_probe",
+        "rejected_reason": "The paid probe already spans gradients 2.78–3.58 and shows the abrupt negative avalanche regime; the target horizon matches the observed H=0.8."
+      },
+      {
+        "option": "Smooth siphon or Haldane snapshot model",
+        "rejected_reason": "Neither captures the observed strong high-gradient collapse to negative y; the supplied threshold-avalanche mechanism directly matches it."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The available rows support a five-parameter fit, and no temporal or oscillatory evidence suggests a trajectory batch is needed."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is explicitly nuisance information and is not needed to identify the observed response."
+      }
+    ],
+    "hypothesis_name": "threshold_avalanche_siphon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows], dtype=float)\n    u = np.asarray([float(r['u_now']) for r in rows], dtype=float)\n    s = np.asarray([float(r['s_grad']) for r in rows], dtype=float)\n\n    def predict_params(p):\n        vmax, rho, c_loc, k_aval, s_crit = p\n        return (vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n                + c_loc * np.sqrt(np.maximum(u, 0.0))\n                - k_aval * np.maximum(0.0, s - s_crit) * u)\n\n    def residual(p):\n        return predict_params(p) - y\n\n    lower = np.array([0.01, 0.0, -5.0, 0.0, 2.50])\n    upper = np.array([30.0, 1.0, 5.0, 5.0, 2.68])\n    starts = [\n        [6.5, 0.70, 0.2, 0.8, 2.59],\n        [5.0, 0.65, 0.8, 1.2, 2.55],\n        [8.0, 0.75, -0.2, 0.5, 2.65],\n    ]\n    best = None\n    for start in starts:\n        result = least_squares(residual, np.asarray(start, dtype=float),\n                               bounds=(lower, upper), max_nfev=20000,\n                               xtol=1e-13, ftol=1e-13, gtol=1e-13)\n        score = float(np.sum(result.fun ** 2))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _PARAMS = best[1].copy()\n    return _PARAMS.copy()\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    vmax, rho, c_loc, k_aval, s_crit = _PARAMS\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n                 + c_loc * math.sqrt(max(u, 0.0))\n                 - k_aval * max(0.0, s - s_crit) * u)"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "54ce1cfbfda6d9d7",
+  "prompt_tokens": 11978,
+  "cached_tokens": 8320,
+  "completion_tokens": 1128,
+  "task_context_chars": 6343,
+  "wall_ms": 27479.7,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-horizon rows are positive while the paid H=8.26, 16.99, and 23.6 observations progress through reversal to a negative response, matching the verified dual-horizon endogenous adaptation law. The target horizon is directly sampled, resolving the main ambiguity; numerically fit the four amplitudes/time-scale parameters using all rows.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; it supplies target-horizon and intermediate-horizon evidence of the predicted sign reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The verified dual-exponential family is identified by the current horizon-spanning observations; extra rows are unnecessary for the stated confirmation tolerance."
+      },
+      {
+        "option": "5-parameter sink-coupled dual-horizon model",
+        "rejected_reason": "All supplied rows have s_grad=0, and the provided verified 4-parameter dual-horizon mechanism directly matches the observed positive-to-negative reversal."
+      },
+      {
+        "option": "Lotka-Volterra periodic model",
+        "rejected_reason": "The observed response scales with u_now and reverses across horizons as the supplied dual-horizon note predicts; no state-dependent periodic evidence supports this alternative."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    H = np.asarray([float(r['H']) for r in train_rows], dtype=float)\n    u = np.asarray([float(r['u_now']) for r in train_rows], dtype=float)\n    y = np.asarray([float(r['y']) for r in train_rows], dtype=float)\n    scale = np.maximum(np.abs(u), 1e-12)\n    z = y / scale\n\n    # Parameterize positive time constants with tau_slow > tau_fast.\n    def curve(p, h):\n        af, ass, log_tf, log_gap = p\n        tf = math.exp(log_tf)\n        ts = tf + math.exp(log_gap)\n        return af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts))\n\n    best = None\n    for tf0 in (0.05, 0.2, 0.5, 1.0, 2.0):\n        for ts0 in (3.0, 8.0, 20.0, 50.0):\n            if ts0 <= tf0:\n                continue\n            p0 = np.array([1.2, 1.0, math.log(tf0), math.log(ts0 - tf0)])\n            result = least_squares(lambda p: curve(p, H) - z, p0,\n                                   bounds=([-20.0, -20.0, math.log(1e-4), math.log(1e-4)],\n                                           [20.0, 20.0, math.log(1e3), math.log(1e3)]),\n                                   max_nfev=20000)\n            loss = float(np.dot(result.fun, result.fun))\n            if best is None or loss < best[0]:\n                best = (loss, result.x)\n    _params = best[1]\n    af, ass, log_tf, log_gap = _params\n    return {'amp_fast': float(af), 'amp_slow': float(ass),\n            'tau_fast': math.exp(float(log_tf)),\n            'tau_slow': math.exp(float(log_tf)) + math.exp(float(log_gap))}\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    af, ass, log_tf, log_gap = _params\n    tf = math.exp(float(log_tf))\n    ts = tf + math.exp(float(log_gap))\n    h = float(row['H'])\n    gain = af * (-math.expm1(-h / tf)) - ass * (-math.expm1(-h / ts))\n    return float(row['u_now']) * gain\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "ed297f6a40d1ecdb",
+  "prompt_tokens": 13936,
+  "cached_tokens": 0,
+  "completion_tokens": 1302,
+  "task_context_chars": 15168,
+  "wall_ms": 29256.24,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The supplied signatures and raw-prefix histories indicate that predictions depend on a latent memory state initialized from the full observed trajectory, followed by coupled evolution over H. Fit the four ODE parameters numerically and integrate both the prefix state and forecast with RK4.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the resulting eight rows meet the archive's stated minimum for fitting the four-parameter coupled-memory ODE."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed endpoint-matched history gap and transient lag support a history-initialized dynamic mechanism; this probe is not needed to identify the supplied ODE parameters."
+      },
+      {
+        "option": "stationary static or direct contrast laws",
+        "rejected_reason": "These do not represent the observed history dependence and coupled transient lag."
+      }
+    ],
+    "hypothesis_name": "history_initialized_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _z0(row, tau):\n    pref = row.get('raw_prefix')\n    if pref:\n        z = 0.52 * float(pref[0]['x'])\n        for p, q in zip(pref[:-1], pref[1:]):\n            dt = float(q['t']) - float(p['t'])\n            x0, x1 = float(p['x']), float(q['x'])\n            # RK4 for tau*z' = .52*x(t)-z, with x linearly interpolated.\n            def f(s, zz):\n                x = x0 + (x1 - x0) * s\n                return (0.52 * x - zz) / tau\n            k1 = f(0.0, z)\n            k2 = f(0.5, z + 0.5 * dt * k1)\n            k3 = f(0.5, z + 0.5 * dt * k2)\n            k4 = f(1.0, z + dt * k3)\n            z += dt * (k1 + 2*k2 + 2*k3 + k4) / 6.0\n        return z\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    return 0.52 * float(row['x_now'])\n\ndef _sim(row, pars):\n    a, b, c, tau = pars\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def deriv(xx, zz):\n        return -a*xx + b*zz + c*u, (0.52*xx - zz)/tau\n    for _ in range(n):\n        k1x,k1z = deriv(x,z)\n        k2x,k2z = deriv(x+dt*k1x/2, z+dt*k1z/2)\n        k3x,k3z = deriv(x+dt*k2x/2, z+dt*k2z/2)\n        k4x,k4z = deriv(x+dt*k3x, z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    def residual(p):\n        return np.array([_sim(r, p) - float(r['y']) for r in train_rows])\n    best = None\n    for start in ([0.4,0.2,0.8,0.15], [0.8,0.1,1.0,0.3], [0.2,0.5,0.5,0.08]):\n        res = least_squares(residual, start, bounds=([0,0,-10,0.005],[10,10,10,5]), max_nfev=3000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    pars = best.x.tolist()\n    def predict(row):\n        return float(_sim(row, pars))\n    return predict\n\ndef predict(row):\n    raise RuntimeError('Call fit(train_rows) and use its returned prediction function.')"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

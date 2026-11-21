@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "480dc6222c2354f6",
+  "prompt_tokens": 30951,
+  "cached_tokens": 23552,
+  "completion_tokens": 956,
+  "task_context_chars": 15244,
+  "wall_ms": 28843.45,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The open-branch probe expanded the sink-gradient span from 0.018 to 2.17. A saturating source with two-layer sink inhibition and a positive square-root branch fits all seven paid observations with training RMSE about 2.3e-8. Submit this law for fresh confirmation at H = 0.6.",
+    "considered_alternatives": [
+      {
+        "option": "Two-layer siphon with a linear branch",
+        "rejected_reason": "Its training RMSE is about 0.0116, whereas the square-root branch matches all seven observations to their reported precision."
+      },
+      {
+        "option": "Two-layer siphon with the archived rho range fixed",
+        "rejected_reason": "The widened gradient observations identify rho near 0.912, outside the archived 0.69–0.72 range."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The seven observations identify all three coefficients of the static law at the target horizon; trajectory measurements would add cost without resolving a remaining ambiguity at that horizon."
+      }
+    ],
+    "hypothesis_name": "two_layer_siphon_positive_sqrt_branch",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(row):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    base = u / (1.2 + u)\n    return (base, -base * s / (1.0 + s), math.sqrt(u))\n\n\ndef fit(train_rows):\n    global _coef\n    rows = list(train_rows)\n    X = np.array([_features(row) for row in rows], dtype=float)\n    y = np.array([row['y'] for row in rows], dtype=float)\n    _coef = least_squares(lambda p: X @ p - y, [1.0, 0.5, 0.1], jac=lambda p: X).x\n\n\ndef predict(row) -> float:\n    return float(np.dot(_coef, _features(row)))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

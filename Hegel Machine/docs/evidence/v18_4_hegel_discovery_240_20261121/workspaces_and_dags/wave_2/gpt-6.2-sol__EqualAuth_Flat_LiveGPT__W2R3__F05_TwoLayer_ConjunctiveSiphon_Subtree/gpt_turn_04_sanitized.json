@@ -1,0 +1,32 @@
+{
+  "turn": 4,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "cd4d2f7036156dce",
+  "prompt_tokens": 40970,
+  "cached_tokens": 26368,
+  "completion_tokens": 1482,
+  "task_context_chars": 7337,
+  "wall_ms": 40263.68,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The rationally suppressed saturating term plus a square-root correction reproduces all nine target-horizon observations to rounding precision. Submit that fitted law for fresh confirmation; accuracy in an unobserved siphon regime remains unverified.",
+    "considered_alternatives": [
+      {
+        "option": "Supercritical or conjunctive siphon",
+        "rejected_reason": "The paid rows do not show activation: the smooth base already matches them to rounding precision, and the largest measured gradient is 2.20, below the recalled supercritical range. A threshold and its strength cannot be fitted from these rows."
+      },
+      {
+        "option": "Haldane self-inhibition",
+        "rejected_reason": "An input-only curve omits the gradient suppression seen across the paid rows."
+      },
+      {
+        "option": "Repeat the open-branch or fine-trajectory probe",
+        "rejected_reason": "Both have already been acquired. Neither exposed a departure from the smooth base, and the menu has no dedicated high-gradient probe."
+      }
+    ],
+    "hypothesis_name": "saturating_base_with_gradient_suppression",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float) / 0.05\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    g = s / (1.0 + s)\n    root = np.sqrt(u)\n\n    def residual(p):\n        vmax, rho, km, c_loc = p\n        return vmax * (1.0 - rho * g) * u / (km + u) + c_loc * root - y\n\n    _params = least_squares(residual, [5.0, 0.65, 1.2, -0.3], bounds=([0.0, 0.0, 1e-8, -np.inf], [np.inf, 1.0, np.inf, np.inf]), ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row) -> float:\n    vmax, rho, km, c_loc = _params\n    u = float(row['u_now']) / 0.05\n    s = float(row['s_grad'])\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * u / (km + u) + c_loc * math.sqrt(u))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

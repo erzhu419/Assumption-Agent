@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "04815e0079a94667",
+  "prompt_tokens": 10966,
+  "cached_tokens": 8320,
+  "completion_tokens": 679,
+  "task_context_chars": 3963,
+  "wall_ms": 18894.99,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fit the authorized four-parameter Hill-2 inhibition law numerically and submit it for fresh confirmation. The input is already normalized because the characteristic tau scale is 1.0.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The pilot spans s_grad from 0.25 to 2.25, well above the specified 0.08 threshold; the supplied mechanism has four parameters and five varied observations."
+      },
+      {
+        "option": "Weibull or Avrami saturation",
+        "rejected_reason": "These alternatives do not account for the observed sink-gradient dependence, unlike the verified cooperative inhibition mechanism."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The verified readout is a present snapshot rather than a trajectory-dependent mechanism."
+      }
+    ],
+    "hypothesis_name": "cooperative_hill_inhibition_linear_bleed",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _values(rows):\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    return u, s\n\ndef _model(p, u, s):\n    vmax, k_half, alpha_inh, c_leak = p\n    return vmax * u**2 / (k_half + u**2) / (1.0 + alpha_inh * s) - c_leak * u\n\ndef fit(train_rows):\n    global _params\n    u, s = _values(train_rows)\n    y = np.array [r['y'] for r in train_rows] if False else np.array([r['y'] for r in train_rows], dtype=float)\n    best = None\n    for k in (0.3, 1.0, 4.0):\n        for a in (0.1, 1.0, 3.0):\n            result = least_squares(lambda p: _model(p, u, s) - y, [8.0, k, a, 0.1], bounds=([0.0, 1e-9, 0.0, 0.0], [np.inf, np.inf, np.inf, np.inf]), max_nfev=5000, xtol=1e-12, ftol=1e-12, gtol=1e-12)\n            if best is None or np.sum(result.fun**2) < np.sum(best.fun**2):\n                best = result\n    _params = best.x\n    return _params\n\ndef predict(row):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return float(_model(_params, u, s))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

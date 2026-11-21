@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "ddc548439e6f4a3c",
+  "prompt_tokens": 34339,
+  "cached_tokens": 29952,
+  "completion_tokens": 1849,
+  "task_context_chars": 5368,
+  "wall_ms": 47575.05,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five-parameter siphon-memory ODE fits the eight paid observations to rounding precision in a numerical check. The target horizon, 0.46, is inside the observed range of 0.38–0.60. Submit the fitted mechanism for fresh confirmation rather than buying more observations.",
+    "considered_alternatives": [
+      {
+        "option": "Haldane substrate inhibition",
+        "rejected_reason": "A drive-only curve cannot account for the observed gradient and initial-state dependence."
+      },
+      {
+        "option": "Cobb–Douglas power law",
+        "rejected_reason": "It includes the gradient but omits the evolving state and memory lag."
+      },
+      {
+        "option": "Further trajectory measurements",
+        "rejected_reason": "The acquired batch already varies initial state, memory, and gradient across horizons that bracket the target."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n_keys = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n\n\ndef _inputs(rows):\n    return np.array([[row[k] for k in _keys] for row in rows], dtype=float).T\n\n\ndef _endpoint(p, data):\n    a, b, vmax, rho, tau = p\n    u, x, z, s, H = data\n    un = u / 2.0\n    j = vmax * (1.0 - rho * s / (1.0 + s)) * un / (1.2 + un)\n    n = max(1, math.ceil(float(np.max(H)) / 0.0075))\n    h = H / n\n\n    def step(x, z):\n        return h * (-a*x + b*z + j), (h/tau) * (0.52*x - z)\n\n    for _ in range(n):\n        k1, l1 = step(x, z)\n        k2, l2 = step(x + k1/2, z + l1/2)\n        k3, l3 = step(x + k2/2, z + l2/2)\n        k4, l4 = step(x + k3, z + l3)\n        x = x + (k1 + 2*k2 + 2*k3 + k4)/6\n        z = z + (l1 + 2*l2 + 2*l3 + l4)/6\n    return x\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _inputs(rows)\n    target = np.array([row['y'] for row in rows], dtype=float)\n    result = least_squares(lambda p: _endpoint(p, data) - target,\n                           [1.0, 1.0, 5.0, 0.5, 0.5],\n                           bounds=([0, 0, 0, 0, 0.015],\n                                   [np.inf, np.inf, np.inf, 1, np.inf]),\n                           x_scale='jac', max_nfev=200)\n    _params = result.x\n    return _params\n\n\ndef predict(row):\n    return float(_endpoint(_params, _inputs([row]))[0])\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

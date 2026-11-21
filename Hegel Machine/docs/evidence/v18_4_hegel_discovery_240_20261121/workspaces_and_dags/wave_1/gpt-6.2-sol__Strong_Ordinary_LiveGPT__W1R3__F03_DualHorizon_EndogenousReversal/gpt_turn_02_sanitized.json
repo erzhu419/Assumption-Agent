@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "26255e9f0ec617b1",
+  "prompt_tokens": 12622,
+  "cached_tokens": 4992,
+  "completion_tokens": 834,
+  "task_context_chars": 14389,
+  "wall_ms": 21361.46,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five short-horizon observations constrain the fast rise. The three paid late-horizon observations show normalized gain falling from +0.296 at H=8.47 to −0.340 at H=17.42 and −0.592 at H=24.2. This supports a fast positive response opposed by slower negative adaptation and provides enough horizon coverage to fit all four parameters and submit for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "single-exponential relaxation toward equilibrium",
+        "rejected_reason": "With zero initial state and positive input, this model cannot give positive early gain and negative late gain."
+      },
+      {
+        "option": "two-state memory ODE and extra_fine_trajectory_batch",
+        "rejected_reason": "The paid late-horizon measurements resolve the reversal without requiring a memory-state reconstruction or another trajectory batch."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "The auxiliary reading does not constrain the fast or slow response."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h = np.array([row['H'] for row in train_rows], dtype=float)\n    u = np.array([row['u_now'] for row in train_rows], dtype=float)\n    y = np.array([row['y'] for row in train_rows], dtype=float)\n\n    def residual(p):\n        amp_fast, amp_slow, tau_fast, gap = p\n        tau_slow = tau_fast + gap\n        fast = -np.expm1(-h / tau_fast)\n        slow = -np.expm1(-h / tau_slow)\n        return u * (amp_fast * fast - amp_slow * slow) - y\n\n    result = least_squares(residual, [1.5, 2.3, 0.35, 12.0],\n                           bounds=([0.0, 0.0, 1e-6, 1e-6], np.inf),\n                           x_scale='jac')\n    _params = result.x\n    return _params\n\ndef predict(row) -> float:\n    amp_fast, amp_slow, tau_fast, gap = _params\n    h = row['H']\n    fast = -math.expm1(-h / tau_fast)\n    slow = -math.expm1(-h / (tau_fast + gap))\n    return float(row['u_now'] * (amp_fast * fast - amp_slow * slow))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

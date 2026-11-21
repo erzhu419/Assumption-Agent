@@ -1,0 +1,36 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "e75acc1843326789",
+  "prompt_tokens": 18149,
+  "cached_tokens": 8576,
+  "completion_tokens": 1095,
+  "task_context_chars": 3707,
+  "wall_ms": 30034.23,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At H=3.6, the five paid rows give y ≈ 1.970245 u_now + 0.007556 x_now, with a maximum absolute residual below 0.000003 versus a 0.045 RMSE tolerance. The small positive snapshot weight is consistent with the reported damped transient. A single exponential provides a two-parameter representation for fresh confirmation at the requested horizon; the pilot does not establish the decay shape at other horizons.",
+    "considered_alternatives": [
+      {
+        "option": "Proportional steady-state fold / fixed-horizon Andrade creep",
+        "rejected_reason": "A proportional fit is already within tolerance on the pilot, but retaining the small x_now term reduces the maximum residual from 0.0065 to below 0.000003."
+      },
+      {
+        "option": "Second-order hyperbolic decay",
+        "rejected_reason": "Positive-rate decay cannot produce outputs above x_now, as observed in every pilot row."
+      },
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Another horizon could distinguish decay shapes, but the requested horizon is already directly sampled and the two coefficients are identifiable there."
+      },
+      {
+        "option": "open_branch_discriminating_probe or extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot residuals do not motivate an additional branch or a resolved trajectory for prediction at H=3.6."
+      }
+    ],
+    "hypothesis_name": "adiabatic_fold_with_damped_transient",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    data = np.array([[r['u_now'], r['x_now'], r['H'], r['y']] for r in train_rows], dtype=float)\n    u, x, h, y = data.T\n\n    def residual(p):\n        gain, rate = p\n        return gain * u * (-np.expm1(-rate * h)) + x * np.exp(-rate * h) - y\n\n    _params = least_squares(residual, [float(u @ y / (u @ u)), 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf])).x\n\ndef predict(row) -> float:\n    gain, rate = _params\n    z = -rate * row['H']\n    return float(-gain * row['u_now'] * math.expm1(z) + row['x_now'] * math.exp(z))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

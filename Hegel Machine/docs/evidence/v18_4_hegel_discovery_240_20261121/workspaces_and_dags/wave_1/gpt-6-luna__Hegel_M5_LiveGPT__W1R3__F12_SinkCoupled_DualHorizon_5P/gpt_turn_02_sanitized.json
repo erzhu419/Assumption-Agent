@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f128cd20ff6e7561",
+  "prompt_tokens": 10099,
+  "cached_tokens": 8960,
+  "completion_tokens": 956,
+  "task_context_chars": 7156,
+  "wall_ms": 21979.98,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Long-horizon measurements add the missing horizon discrimination and show the predicted reversal. Fit the supplied five-parameter sink-coupled dual-horizon law numerically to all observed rows, then use fresh confirmation to assess the required tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired long-horizon probe provides the needed horizon coverage and observed sign reversal; additional trajectory measurements are not justified before fitting."
+      },
+      {
+        "option": "single-horizon Ricker or periodic Lotka-Volterra models",
+        "rejected_reason": "They do not match the supplied multi-tree mechanism, including sink-gradient modulation and the observed short-positive/long-negative reversal."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Nuisance measurements do not resolve the mechanism or target-horizon prediction."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n# Parameters: vmax, rho, tau_fast, amp_adapt, tau_slow.\ndef _model(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base * (-math.expm1(-h / tau_fast)) - amp_adapt * u * (-math.expm1(-h / tau_slow))\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows])\n    lo = np.array([1.0, 0.05, 0.01, 0.0, 0.1])\n    hi = np.array([15.0, 0.95, 10.0, 5.0, 200.0])\n    starts = [\n        [6.5, 0.70, 0.25, 0.8, 20.0],\n        [5.0, 0.35, 0.10, 0.7, 35.0],\n        [9.0, 0.85, 0.50, 1.0, 15.0],\n        [7.0, 0.65, 1.0, 0.5, 60.0],\n    ]\n    best = None\n    for start in starts:\n        res = least_squares(\n            lambda p: np.asarray([_model(r, p) for r in rows]) - y,\n            np.clip(np.asarray(start, dtype=float), lo + 1e-9, hi - 1e-9),\n            bounds=(lo, hi), max_nfev=30000\n        )\n        score = float(np.dot(res.fun, res.fun))\n        if best is None or score < best[0]:\n            best = (score, res.x)\n    return best[1]\n\ndef predict(row):\n    return float(_model(row, fit([dict(row, y=0.0)])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "1ab744b8e67e391d",
+  "prompt_tokens": 21073,
+  "cached_tokens": 0,
+  "completion_tokens": 1223,
+  "task_context_chars": 14344,
+  "wall_ms": 31550.24,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history gap and transient lag favor a coupled memory state. Fit all four parameters jointly on the eight paid trajectories, reconstructing the missing memory state from elapsed times in each irregular prefix. Test the resulting forecasts on fresh data against RMSE 0.045.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired batch brings the fit to eight trajectories with both rising and falling transients and horizons bracketing 0.45. Submit the coupled model for fresh confirmation before buying more observations."
+      },
+      {
+        "option": "Adiabatic snapshot balance",
+        "rejected_reason": "It gives identical forecasts for matched endpoints and horizons, so it cannot explain the observed history gap."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "Its output is proportional to the signed input jump and cannot explain positive observed levels for both jump directions."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    history = None\n    if z is None:\n        prefix = row['raw_prefix']\n        t = np.array([p['t'] for p in prefix], dtype=float)\n        x = np.array([p['x'] for p in prefix], dtype=float)\n        history = (t[-1] - t, np.diff(t), x)\n    H = float(row['H'])\n    n = max(1, math.ceil(H / 0.004))\n    return float(row['x_now']), float(row['u_now']), z, history, n, H / n\n\n\ndef _forecast(p, row):\n    a, b, c, tau = p\n    x, u, z, history, n, h = row\n    if z is None:\n        lag, dt, hx = history\n        w = np.exp(-lag / tau)\n        wx = w * hx\n        z = 0.52 * (wx[0] + np.dot(dt, wx[:-1] + wx[1:]) / (2 * tau))\n    # Apply the RK4 step matrix for the affine system (x, z, 1).\n    M = h * np.array([[-a, b, c * u], [0.52 / tau, -1 / tau, 0.0], [0.0, 0.0, 0.0]])\n    I = np.eye(3)\n    R = I + M @ (I + M @ (I / 2 + M @ (I / 6 + M / 24)))\n    return float(np.linalg.matrix_power(R, n)[0] @ np.array([x, z, 1.0]))\n\n\ndef fit(train_rows):\n    global _params\n    rows = [_prepare(r) for r in train_rows]\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n\n    def residual(p):\n        return np.array([_forecast(p, r) for r in rows]) - y\n\n    best = None\n    for tau0 in (0.25, 0.08, 0.8):\n        result = least_squares(residual, [1.6, 0.8, 1.2, tau0], bounds=([0, 0, 0, 0.004], [np.inf] * 4), x_scale='jac', max_nfev=400, ftol=1e-11, xtol=1e-11, gtol=1e-11)\n        if best is None or result.cost < best.cost:\n            best = result\n        if best.cost < 0.5 * len(rows) * 1e-10:\n            break\n    _params = best.x\n\n\ndef predict(row) -> float:\n    return _forecast(_params, _prepare(row))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

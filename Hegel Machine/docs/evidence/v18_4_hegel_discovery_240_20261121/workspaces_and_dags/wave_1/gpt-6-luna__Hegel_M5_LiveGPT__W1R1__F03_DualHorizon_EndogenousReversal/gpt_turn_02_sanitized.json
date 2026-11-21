@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "15f0d1bd4aef8d34",
+  "prompt_tokens": 9725,
+  "cached_tokens": 8576,
+  "completion_tokens": 953,
+  "task_context_chars": 6117,
+  "wall_ms": 22541.64,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Short-horizon responses are positive and long-horizon responses become negative, including at the forecast target. The source-note dual-exponential adaptation law directly captures this pattern; the paid horizons span both sides of reversal and support numerical fitting of its four parameters.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another slow-horizon probe",
+        "rejected_reason": "The paid batch now includes H=8.5, 17.5, and target H=24.3, spanning the documented reversal region; the four-parameter law is identifiable with these plus short-horizon rows."
+      },
+      {
+        "option": "Fit a present-snapshot periodic or Ricker law",
+        "rejected_reason": "These alternatives do not account for the strong horizon-dependent sign reversal, unlike the supplied verified dual-horizon mechanism."
+      },
+      {
+        "option": "Acquire nuisance_high_var_aux",
+        "rejected_reason": "No nuisance measurement is relevant to the observed horizon-conditioned response."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    # Positive amplitudes and ordered time constants: tau_slow > tau_fast.\n    def predict_params(z):\n        af, ass = np.exp(z[0]), np.exp(z[1])\n        tf, ts = np.exp(z[2]), np.exp(z[2]) + np.exp(z[3])\n        return u * (af * (-np.expm1(-h / tf)) - ass * (-np.expm1(-h / ts)))\n    starts = [np.log([1.0, 1.0, tf, ts_delta]) for tf, ts_delta in [(0.5, 5.0), (1.0, 10.0), (2.0, 20.0)]]\n    best = None\n    for z0 in starts:\n        res = least_squares(lambda z: predict_params(z) - y, z0, max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    z = best.x\n    return {'amp_fast': float(np.exp(z[0])), 'amp_slow': float(np.exp(z[1])), 'tau_fast': float(np.exp(z[2])), 'tau_slow': float(np.exp(z[2]) + np.exp(z[3]))}\n\ndef predict(row):\n    p = fit_params\n    h = float(row['H'])\n    return float(row['u_now']) * (p['amp_fast'] * (1.0 - math.exp(-h / p['tau_fast'])) - p['amp_slow'] * (1.0 - math.exp(-h / p['tau_slow'])))\n\nfit_params = None\n# The evaluation harness fits once before prediction; cache fitted parameters through fit().\n_fit_impl = fit\ndef fit(train_rows):\n    global fit_params\n    fit_params = _fit_impl(train_rows)\n    return fit_params\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

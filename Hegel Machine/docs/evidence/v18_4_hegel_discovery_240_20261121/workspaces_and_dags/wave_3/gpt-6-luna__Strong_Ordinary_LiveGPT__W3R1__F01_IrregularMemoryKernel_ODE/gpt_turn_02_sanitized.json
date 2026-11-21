@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "a3b99ff43741c739",
+  "prompt_tokens": 22816,
+  "cached_tokens": 12416,
+  "completion_tokens": 1306,
+  "task_context_chars": 22260,
+  "wall_ms": 30689.09,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The history-gap and coupled-lag signatures point to the archived two-state memory ODE. Eight observations are now available for its four parameters. The supplied predictor numerically fits the ODE parameters and integrates the irregular-prefix memory state before forecasting.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "The archive's coupled-memory mechanism matches the pilot signatures; the fine trajectory batch has already raised the data count to eight, the stated minimum for the four-parameter ODE."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All observed sink gradients are zero, but the pilot signatures and the measured history dependence specifically favor the coupled memory ODE over sink-gradient branch models."
+      },
+      {
+        "option": "static or before/after contrast law",
+        "rejected_reason": "These alternatives do not explain the stated coupled-transient-lag signature as directly as the archived memory ODE."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    prefix = row.get('raw_prefix') or []\n    if not prefix:\n        return 0.52 * float(row['x_now'])\n    prefix = sorted(prefix, key=lambda q: q['t'])\n    z = 0.52 * float(prefix[0]['x'])\n    t0 = float(prefix[0]['t'])\n    for left, right in zip(prefix[:-1], prefix[1:]):\n        dt = float(right['t']) - float(left['t'])\n        if dt <= 0:\n            continue\n        decay = math.exp(-dt / tau)\n        # Trapezoidal exponential-kernel update for linearly varying x.\n        xmid = 0.5 * (float(left['x']) + float(right['x']))\n        z = decay * z + 0.52 * xmid * (1.0 - decay)\n        t0 = float(right['t'])\n    return z\n\ndef _predict(row, p):\n    a, b, c, tau = [float(v) for v in p]\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def deriv(xv, zv):\n        return -a * xv + b * zv + c * u, (0.52 * xv - zv) / tau\n    for _ in range(n):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x + 0.5*dt*k1x, z + 0.5*dt*k1z)\n        k3x, k3z = deriv(x + 0.5*dt*k2x, z + 0.5*dt*k2z)\n        k4x, k4z = deriv(x + dt*k3x, z + dt*k3z)\n        x += (dt/6.0) * (k1x + 2*k2x + 2*k3x + k4x)\n        z += (dt/6.0) * (k1z + 2*k2z + 2*k3z + k4z)\n    return x\n\ndef fit(train_rows):\n    ys = np.asarray([float(r['y']) for r in train_rows], dtype=float)\n    def residual(p):\n        return np.asarray([_predict(r, p) for r in train_rows]) - ys\n    starts = ([0.4, 0.2, 0.3, 0.1], [1.0, 0.5, 0.8, 0.2], [0.2, 0.8, 0.5, 0.05])\n    best = None\n    for p0 in starts:\n        result = least_squares(residual, p0, bounds=([1e-5, 1e-5, 1e-5, 1e-4], [10.0, 10.0, 10.0, 10.0]), max_nfev=3000)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    return best.x\n\ndef predict(row):\n    return float(_predict(row, fit([dict(row, y=0.0)])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

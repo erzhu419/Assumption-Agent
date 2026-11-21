@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "d7cdd28dd7134546",
+  "prompt_tokens": 19177,
+  "cached_tokens": 14080,
+  "completion_tokens": 1044,
+  "task_context_chars": 4964,
+  "wall_ms": 28172.57,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The barrier-modulated siphon fits all five pilot readouts with RMSE about 2.3e-9, yielding a positive barrier and a positive square-root contribution. The gradient span and target-horizon coverage support proceeding directly to fresh confirmation without another paid probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The pilot already spans 2.0 in s_grad with interleaved drive and gradient values, and the fit resolves a positive square-root coefficient."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot is already at the target horizon, and its readouts are explained to their reported precision without time-resolved measurements."
+      },
+      {
+        "option": "unmodulated saturating siphon",
+        "rejected_reason": "It omits the observed barrier onset; the barrier-modulated law explains all five rows to their reported precision."
+      }
+    ],
+    "hypothesis_name": "barrier_modulated_siphon_with_sqrt_branch",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] / 0.02 for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    sink = s / (1.0 + s)\n    root = np.sqrt(u)\n\n    def residual(p):\n        j0, beta, rho, c = p\n        return j0 * u * np.exp(-beta / (0.5 + u)) * (1.0 - rho * sink) + c * root - y\n\n    result = least_squares(residual, [4.0, 1.0, 0.70, 0.0], bounds=([0.0, 0.0, 0.05, -np.inf], [np.inf, np.inf, 0.95, np.inf]))\n    _params = result.x\n    return _params\n\ndef predict(row) -> float:\n    j0, beta, rho, c = _params\n    u = row['u_now'] / 0.02\n    s = row['s_grad']\n    return float(j0 * u * math.exp(-beta / (0.5 + u)) * (1.0 - rho * s / (1.0 + s)) + c * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "243ac5143b26bff7",
+  "prompt_tokens": 11845,
+  "cached_tokens": 8576,
+  "completion_tokens": 1246,
+  "task_context_chars": 5291,
+  "wall_ms": 32459.85,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The base-field, sink-gradient, and transient-lag signatures support a two-state siphon-memory ODE. The added trajectories contrast high state with low memory against low state with high memory, helping distinguish state decay from memory coupling. Fit all five parameters to the eight paid observations and submit the RK4 forecast for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Haldane substrate inhibition",
+        "rejected_reason": "An input-only curve cannot account for the observed dependence on initial state, memory, and forecast horizon."
+      },
+      {
+        "option": "Cobb–Douglas power law",
+        "rejected_reason": "A static input–gradient interaction omits the coupled memory transient."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the eight rows vary initial state and memory independently enough to proceed to confirmation."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not constrain the five parameters of the proposed mechanism."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\ndef _matrix(rows):\n    return np.asarray([[row[k] for k in _KEYS] for row in rows], dtype=float).T\n\ndef _forecast(data, p):\n    a_slow, b_couple, tau_fast, vmax, rho = p\n    u, x, z, s, h = data\n    u_n = u / 2.0\n    j = vmax * (1.0 - rho * s / (1.0 + s)) * u_n / (1.2 + u_n)\n    n = max(48, math.ceil(128.0 * float(np.max(h))))\n    dt = h / n\n\n    def rhs(x, z):\n        return -a_slow * x + b_couple * z + j, (0.52 * x - z) / tau_fast\n\n    for _ in range(n):\n        k1x, k1z = rhs(x, z)\n        k2x, k2z = rhs(x + 0.5 * dt * k1x, z + 0.5 * dt * k1z)\n        k3x, k3z = rhs(x + 0.5 * dt * k2x, z + 0.5 * dt * k2z)\n        k4x, k4z = rhs(x + dt * k3x, z + dt * k3z)\n        x = x + (dt / 6.0) * (k1x + 2.0 * k2x + 2.0 * k3x + k4x)\n        z = z + (dt / 6.0) * (k1z + 2.0 * k2z + 2.0 * k3z + k4z)\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _matrix(rows)\n    y = np.asarray([row['y'] for row in rows], dtype=float)\n    bounds = ([0.0, 0.0, 0.02, 0.0, 0.0], [10.0, 10.0, 10.0, 40.0, 1.0])\n    best = None\n    for tau0 in (0.35, 1.2, 0.08):\n        result = least_squares(lambda p: _forecast(data, p) - y,\n                               [0.5, 0.8, tau0, 3.0, 0.5], bounds=bounds,\n                               x_scale='jac', max_nfev=250,\n                               ftol=1e-10, xtol=1e-10, gtol=1e-10)\n        if best is None or result.cost < best.cost:\n            best = result\n        if math.sqrt(2.0 * best.cost / len(rows)) < 1e-5:\n            break\n    _params = best.x\n\ndef predict(row) -> float:\n    return float(_forecast(_matrix([row]), _params)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

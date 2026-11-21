@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f33e9d734fa26c14",
+  "prompt_tokens": 16118,
+  "cached_tokens": 0,
+  "completion_tokens": 1221,
+  "task_context_chars": 14278,
+  "wall_ms": 29238.29,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The observed endpoint-matched history gap and coupled transient lag support the specified two-state memory ODE. The eight rows provide the recommended identifiability threshold; fitting the four parameters numerically and deriving each initial memory state from the shifted irregular prefix avoids further probe cost.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The coupled-memory mechanism is already directly supported by the verified guidance and the acquired batch supplies eight trajectories, enough to fit its four parameters."
+      },
+      {
+        "option": "Maxwell single-mode stress decay",
+        "rejected_reason": "This present-snapshot law cannot account for the measured horizon-dependent coupled transient and history-conditioned response."
+      },
+      {
+        "option": "Coarse adiabatic slow ODE / static snapshot balance",
+        "rejected_reason": "The pilot signatures indicate a finite fast-memory lag, so the reduced or H-independent forms discard relevant dynamics."
+      }
+    ],
+    "hypothesis_name": "irregular_memory_coupled_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    t0 = float(pref[0]['t'])\n    te = float(pref[-1]['t'])\n    z = 0.52 * float(pref[0]['x'])\n    for a, b in zip(pref[:-1], pref[1:]):\n        ta, tb = float(a['t']), float(b['t'])\n        xa, xb = float(a['x']), float(b['x'])\n        dt = tb - ta\n        wa = math.exp(-(te - ta) / tau)\n        wb = math.exp(-(te - tb) / tau)\n        z += 0.52 * 0.5 * (wa * xa + wb * xb) * dt / tau\n    return math.exp(-(te - t0) / tau) * (0.52 * float(pref[0]['x'])) + (z - 0.52 * float(pref[0]['x']))\n\ndef _integrate(row, p):\n    a, b, c, tau = map(float, p)\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def f(xv, zv):\n        return -a * xv + b * zv + c * u, (0.52 * xv - zv) / tau\n    for _ in range(n):\n        k1x, k1z = f(x, z)\n        k2x, k2z = f(x + .5*dt*k1x, z + .5*dt*k1z)\n        k3x, k3z = f(x + .5*dt*k2x, z + .5*dt*k2z)\n        k4x, k4z = f(x + dt*k3x, z + dt*k3z)\n        x += dt * (k1x + 2*k2x + 2*k3x + k4x) / 6\n        z += dt * (k1z + 2*k2z + 2*k3z + k4z) / 6\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    y = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_integrate(r, p) for r in train_rows]) - y\n    starts = ([0.6, 0.5, 0.8, 0.25], [0.3, 0.8, 0.5, 0.5], [1.0, 0.3, 1.0, 1.0])\n    best = None\n    for s in starts:\n        sol = least_squares(residual, s, bounds=([0.001, 0.001, -5.0, 0.01], [5.0, 5.0, 5.0, 5.0]), max_nfev=3000)\n        if best is None or np.sum(sol.fun**2) < np.sum(best.fun**2):\n            best = sol\n    _PARAMS = best.x\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_integrate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

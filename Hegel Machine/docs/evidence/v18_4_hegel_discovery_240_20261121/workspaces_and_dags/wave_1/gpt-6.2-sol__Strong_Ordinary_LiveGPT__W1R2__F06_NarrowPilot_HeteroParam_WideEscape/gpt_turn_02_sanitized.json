@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "2022774aa1db0177",
+  "prompt_tokens": 27263,
+  "cached_tokens": 17408,
+  "completion_tokens": 1506,
+  "task_context_chars": 14195,
+  "wall_ms": 38229.83,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The two wide-gradient observations identify strong sink inhibition. A single fit across all seven rows gives vmax about 8.79, rho about 0.894, and a square-root branch coefficient about -0.401, with training RMSE below 1e-7. Submit this law for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Two-layer siphon with linear bleed",
+        "rejected_reason": "Its training RMSE is about 0.014, whereas the square-root branch reproduces all seven rows to rounding precision."
+      },
+      {
+        "option": "Cooperative Hill-2 inhibition",
+        "rejected_reason": "It does not reproduce the drive curvature and the two wide-gradient observations together; training RMSE is about 0.063."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing wide-gradient rows distinguish the sink and branch effects at the target horizon, so another paid batch is not warranted before confirmation."
+      }
+    ],
+    "hypothesis_name": "two_layer_siphon_negative_sqrt_branch",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef features(row):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    sat = u / (1.2 + u)\n    return sat, -sat * s / (1.0 + s), math.sqrt(u)\n\n\ndef fit(train_rows):\n    global coefficients\n    rows = list(train_rows)\n    X = np.asarray([features(row) for row in rows], dtype=float)\n    y = np.asarray([row['y'] for row in rows], dtype=float)\n    # Coefficients are vmax, vmax * rho, and the signed branch amplitude.\n    coefficients = least_squares(lambda p: X @ p - y, np.zeros(3), jac=lambda p: X).x\n\n\ndef predict(row) -> float:\n    return float(np.dot(features(row), coefficients))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

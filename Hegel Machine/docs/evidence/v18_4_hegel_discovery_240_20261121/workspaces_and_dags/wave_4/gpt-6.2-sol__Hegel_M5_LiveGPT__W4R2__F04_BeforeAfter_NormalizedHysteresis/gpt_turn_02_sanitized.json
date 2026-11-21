@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "85c25fedea4aaee2",
+  "prompt_tokens": 96157,
+  "cached_tokens": 79488,
+  "completion_tokens": 2599,
+  "task_context_chars": 5421,
+  "wall_ms": 74214.0,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives y = x_now. For both step directions, the change per unit step follows a single exponential plus a constant. This three-parameter law fits all eight paid rows to rounding precision, and the target horizon of 0.65 lies within the observed range, so submit it for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Single-mode Maxwell decay added to x_now",
+        "rejected_reason": "Without a persistent step term, the fit has paid-row errors up to 0.088, versus rounding-level errors for the selected model."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck snapshot mean",
+        "rejected_reason": "Relaxation toward a common mean does not explain the opposing shifts from upward and downward input steps."
+      },
+      {
+        "option": "Use the new-input equilibrium instead of x_now as the baseline",
+        "rejected_reason": "All paid rows have x_now = 80 u_past, so this is observationally equivalent after refitting. The selected form preserves the measured state when there is no step; behavior off that relation remains untested."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch or nuisance_high_var_aux",
+        "rejected_reason": "The measured horizons already bracket the target and identify the three coefficients. The acquired batch did not vary x_now independently, and the nuisance probe does not address that ambiguity."
+      }
+    ],
+    "hypothesis_name": "step_hysteresis_with_equilibrium_shift",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    step = np.array([r['u_now'] - r['u_past'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    target = np.array([r['y'] - r['x_now'] for r in train_rows], dtype=float)\n    def residual(p):\n        gain, amplitude, rate = p\n        return step * (gain - amplitude * np.exp(-rate * h)) - target\n    _params = least_squares(residual, [80.0, 400.0, 1.0], bounds=([-np.inf, 0.0, 0.0], [np.inf, np.inf, np.inf]), ftol=1e-13, xtol=1e-13, gtol=1e-13).x\n\ndef predict(row):\n    gain, amplitude, rate = _params\n    step = row['u_now'] - row['u_past']\n    return float(row['x_now'] + step * (gain - amplitude * math.exp(-rate * row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "fb1f84b7794fe7ba",
+  "prompt_tokens": 25433,
+  "cached_tokens": 20992,
+  "completion_tokens": 988,
+  "task_context_chars": 7372,
+  "wall_ms": 29177.3,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The probe expanded the gradient span from 0.018 to 2.17. The square-root siphon fits all seven rows to rounding precision (training RMSE 1.76e-8), with rho about 0.122 and a positive branch coefficient about 0.293. The full fallback bounds retain this low-rho solution for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Linear leakage branch",
+        "rejected_reason": "Even an unconstrained linear branch fits worse (training RMSE 0.00994) and requires a positive slope, opposite to leakage."
+      },
+      {
+        "option": "Supercritical avalanche branch",
+        "rejected_reason": "The largest observed gradient is 2.35, below the supercritical guard; no threshold term is needed in the observed regime."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The wide-gradient rows resolved the original parameter ambiguity at the target horizon, so another paid batch is not warranted before confirmation."
+      }
+    ],
+    "hypothesis_name": "subcritical_siphon_positive_sqrt",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    base = u / (1.2 + u)\n    gradient = s / (1.0 + s)\n    root = np.sqrt(u)\n\n    def residual(p):\n        vmax, rho, c = p\n        return vmax * (1.0 - rho * gradient) * base + c * root - y\n\n    _params = least_squares(residual, [7.0, 0.5, 0.0], bounds=([1.0, 0.05, -2.0], [15.0, 0.95, 2.0]), ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row):\n    vmax, rho, c = _params\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u) + c * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

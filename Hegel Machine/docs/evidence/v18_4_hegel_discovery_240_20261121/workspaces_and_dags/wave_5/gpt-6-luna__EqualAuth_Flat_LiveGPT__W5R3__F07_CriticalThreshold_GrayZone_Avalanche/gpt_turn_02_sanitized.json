@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "e026e83834699754",
+  "prompt_tokens": 11839,
+  "cached_tokens": 8320,
+  "completion_tokens": 1099,
+  "task_context_chars": 5600,
+  "wall_ms": 30858.67,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The response increases and saturates at moderate s_grad, then collapses from 1.866 to 0.176 to -2.561 across the acquired high-gradient rows. This supports a positive baseline sink-gradient term with an above-threshold avalanche penalty. Fit its parameters numerically to all eight observations; no additional probe is presently needed.",
+    "considered_alternatives": [
+      {
+        "option": "high_sgrad_regime_probe",
+        "rejected_reason": "Already acquired; its three added points show the sharp transition and negative response above the threshold."
+      },
+      {
+        "option": "Haldane substrate-inhibition curve",
+        "rejected_reason": "Does not explain the response changing strongly with s_grad, including the negative high-gradient values."
+      },
+      {
+        "option": "Cobb-Douglas power law",
+        "rejected_reason": "A smooth positive power law cannot capture the observed high-gradient collapse and sign change."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Deferred: the targeted threshold-region observations resolve the salient ambiguity at lower additional cost."
+      }
+    ],
+    "hypothesis_name": "supercritical_sink_gradient_avalanche",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(row):\n    u = max(1e-8, float(row['u_now']))\n    s = float(row['s_grad'])\n    return u, s\n\ndef _model(row, p):\n    u, s = _features(row)\n    vmax, rho, c_loc, k_aval, s_crit = p\n    return (vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n            + c_loc * math.sqrt(u)\n            - k_aval * max(0.0, s - s_crit) * u)\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows], dtype=float)\n    starts = [\n        [5.0, 0.5, 0.5, 1.0, 2.6],\n        [4.0, 0.2, 0.8, 1.5, 2.5],\n        [8.0, 0.8, 0.2, 0.8, 2.7],\n    ]\n    best = None\n    for x0 in starts:\n        result = least_squares(\n            lambda p: np.asarray([_model(r, p) for r in rows]) - y,\n            x0=np.asarray(x0, dtype=float),\n            bounds=([0.0, 0.0, 0.0, 0.0, 2.0], [30.0, 1.0, 10.0, 10.0, 3.2]),\n            max_nfev=20000,\n        )\n        score = float(np.sum(result.fun ** 2))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _params = best[1]\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_model(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

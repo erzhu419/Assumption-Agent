@@ -1,0 +1,36 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "2a527ebd1340c47d",
+  "prompt_tokens": 15731,
+  "cached_tokens": 13440,
+  "completion_tokens": 782,
+  "task_context_chars": 3362,
+  "wall_ms": 22107.86,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives an equilibrium coefficient of 0.614. After subtracting that equilibrium term and dividing by the signed normalized step, the other four rows give approximately −1.923, −1.629, −1.271, and −0.951. These follow a single exponential with a relaxation time near 1.21, supporting fresh confirmation without another paid probe.",
+    "considered_alternatives": [
+      {
+        "option": "Pure Maxwell contrast decay",
+        "rejected_reason": "Predicts zero for the no-step row, which has y = 0.921."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck mean reversion",
+        "rejected_reason": "A shared equilibrium cannot account for the observed departures: y falls below the smallest initial state and rises above the largest."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The no-step row identifies the equilibrium coefficient, and the four step rows already span both step directions and bracket the target horizon."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Does not constrain the equilibrium or the contrast decay."
+      }
+    ],
+    "hypothesis_name": "normalized_before_after_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nTAU_SCALE = 0.02\n_params = None\n\ndef fit(train_rows):\n    global _params\n    data = np.asarray([[r['u_past'], r['u_now'], r['H'], r['y']] for r in train_rows], dtype=float)\n    past, now, horizon, y = data.T\n    contrast = (now - past) / TAU_SCALE\n    current = now / TAU_SCALE\n\n    def residual(p):\n        gain, tau, k_eq = p\n        return gain * contrast * np.exp(-horizon / tau) + k_eq * current - y\n\n    _params = least_squares(residual, [-1.0, max(float(np.median(horizon)), 0.01), 1.0], bounds=([-np.inf, 1e-6, -np.inf], [np.inf, np.inf, np.inf])).x\n    return _params\n\ndef predict(row):\n    gain, tau, k_eq = _params\n    now = row['u_now'] / TAU_SCALE\n    past = row['u_past'] / TAU_SCALE\n    return float(gain * (now - past) * math.exp(-row['H'] / tau) + k_eq * now)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

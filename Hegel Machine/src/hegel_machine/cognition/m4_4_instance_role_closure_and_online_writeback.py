@@ -115,6 +115,8 @@ from .wormhole_forest import (
     TaskView,
     authorize_abstraction_use,
     canonical_digest,
+    compute_order_invariant_source_diversity,
+    compute_shared_base_subtree_digest,
     validate_claim_certificate_instance_identity,
 )
 
@@ -238,18 +240,45 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
         if isinstance(forest_dict_or_obj, PhilosophicalForest)
         else forest_dict_or_obj.get("shared_base_subtrees", {})
     )
+    subtree_hist = (
+        getattr(forest_dict_or_obj, "shared_base_subtree_history", {})
+        if isinstance(forest_dict_or_obj, PhilosophicalForest)
+        else forest_dict_or_obj.get("shared_base_subtree_history", {})
+    )
     subtree_mismatches: list[dict[str, Any]] = []
-    for sid, sb in sorted((subtrees or {}).items()):
-        comp_sub = canonical_digest({
-            "subtree_id": sb["subtree_id"],
-            "shared_nodes": sb["shared_nodes"],
-            "shared_relations": sb["shared_relations"],
-            "role_and_scale_schema": sb["role_and_scale_schema"],
-            "open_completion_slots": sb["open_completion_slots"],
-            "permission_tier": sb["permission_tier"],
-        })
+    subtree_hist_mismatches: list[dict[str, Any]] = []
+
+    def _check_one_subtree_record(key_label: str, sb: dict[str, Any], out_list: list[dict[str, Any]]) -> None:
+        comp_sub = compute_shared_base_subtree_digest(sb)
         if comp_sub != sb.get("subtree_digest"):
-            subtree_mismatches.append({"subtree_id": sid, "recorded": sb.get("subtree_digest"), "computed": comp_sub})
+            out_list.append({"subtree_id": key_label, "reason": "subtree_digest_mismatch", "recorded": sb.get("subtree_digest"), "computed": comp_sub})
+            return
+        # Relational governance consistency check (also protects legacy v1 snapshots if provenance/diversity tampered!)
+        recomp_div = compute_order_invariant_source_diversity(list(sb.get("supporting_sources") or ()))
+        rec_div = dict(sb.get("diversity_metrics") or {})
+        recomp_ev_ids: list[str] = []
+        for sn in sb.get("shared_nodes") or ():
+            for eid in sn.get("evidence_dependency_ids", ()):
+                if str(eid) not in recomp_ev_ids:
+                    recomp_ev_ids.append(str(eid))
+        if (
+            int(recomp_div["independent_lineage_count"]) != int(rec_div.get("independent_lineage_count", -1))
+            or abs(float(recomp_div["d_eff_set"]) - float(rec_div.get("d_eff_set", -999.0))) > 1e-6
+            or recomp_ev_ids != list(sb.get("unique_evidence_dependency_ids") or ())
+            or bool(sb.get("stale_endpoint_revision", False))
+        ):
+            out_list.append({
+                "subtree_id": key_label,
+                "reason": "subtree_governance_provenance_inconsistency",
+                "recorded_diversity": rec_div,
+                "recomputed_diversity": recomp_div,
+            })
+
+    for sid, sb in sorted((subtrees or {}).items()):
+        _check_one_subtree_record(sid, sb, subtree_mismatches)
+    for h_sid, h_list in sorted((subtree_hist or {}).items()):
+        for h_i, h_sb in enumerate(h_list):
+            _check_one_subtree_record(f"{h_sid}:hist_{h_i}", h_sb, subtree_hist_mismatches)
 
     out_report = {
         "node_count": len(nodes),
@@ -264,10 +293,12 @@ def verify_forest_snapshot_digests(forest_dict_or_obj: dict[str, Any] | Philosop
         "edge_certificate_instance_mismatch_count": len(edge_inst_mismatches),
         "edge_certificate_instance_mismatches": edge_inst_mismatches,
     }
-    if subtrees:
-        out_report["shared_base_subtree_count"] = len(subtrees)
-        out_report["subtree_digest_mismatch_count"] = len(subtree_mismatches)
-        out_report["subtree_digest_mismatches"] = subtree_mismatches
+    if subtrees or subtree_hist:
+        combined_sub_mis = [*subtree_mismatches, *subtree_hist_mismatches]
+        out_report["shared_base_subtree_count"] = len(subtrees or {})
+        out_report["subtree_digest_mismatch_count"] = len(combined_sub_mis)
+        out_report["subtree_digest_mismatches"] = combined_sub_mis
+        out_report["subtree_history_digest_mismatch_count"] = len(subtree_hist_mismatches)
     return out_report
 
 

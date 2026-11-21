@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "cc1d65fcd78842cd",
+  "prompt_tokens": 53063,
+  "cached_tokens": 46976,
+  "completion_tokens": 1538,
+  "task_context_chars": 5442,
+  "wall_ms": 43027.75,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives y = x_now. For every nonzero step, dividing y - x_now by the signed step collapses both directions onto one curve: a persistent gain plus a decaying exponential. The three-parameter law matches the paid rows to rounding precision, and H = 0.65 lies within the observed range, so submit it for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Present-snapshot Ornstein–Uhlenbeck drift",
+        "rejected_reason": "It does not account for the signed before–after step; the observed no-step row instead preserves x_now."
+      },
+      {
+        "option": "Baseline plus pure Maxwell exponential",
+        "rejected_reason": "Even with the observed x_now baseline, forcing the step response to decay to zero gives training RMSE of about 0.058, above tolerance."
+      },
+      {
+        "option": "Baseline plus reciprocal horizon decay",
+        "rejected_reason": "It fits within tolerance but leaves visible residuals, whereas the persistent-plus-exponential law matches the observations to their reported precision."
+      },
+      {
+        "option": "Additional trajectory or nuisance probe",
+        "rejected_reason": "The paid trajectory batch already spans both step directions and brackets the target horizon. The nuisance probe does not distinguish the response laws."
+      }
+    ],
+    "hypothesis_name": "persistent_plus_relaxing_step",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    step = np.array([100.0 * (r['u_now'] - r['u_past']) for r in rows])\n    horizon = np.array([r['H'] for r in rows], dtype=float)\n    shift = np.array([r['y'] - r['x_now'] for r in rows])\n\n    def residual(p):\n        a, b, k = p\n        return step * (a + b * np.exp(-k * horizon)) - shift\n\n    _params = least_squares(residual, [1.5, 4.0, 1.3], bounds=(0.0, np.inf)).x\n\ndef predict(row):\n    a, b, k = _params\n    step = 100.0 * (row['u_now'] - row['u_past'])\n    return float(row['x_now'] + step * (a + b * math.exp(-k * row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

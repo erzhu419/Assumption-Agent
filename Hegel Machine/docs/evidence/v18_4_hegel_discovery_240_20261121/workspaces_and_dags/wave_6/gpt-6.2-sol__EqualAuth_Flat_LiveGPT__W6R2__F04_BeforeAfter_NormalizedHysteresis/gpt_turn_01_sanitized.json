@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "45aa1312ed7492da",
+  "prompt_tokens": 10923,
+  "cached_tokens": 8576,
+  "completion_tokens": 773,
+  "task_context_chars": 3373,
+  "wall_ms": 22326.07,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives an equilibrium coefficient of 0.637. After subtracting that equilibrium term and dividing by the signed normalized step, all four remaining observations follow a single exponential with a relaxation time near 1.11. The pilot data support submitting this three-parameter law for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Pure Maxwell stress decay",
+        "rejected_reason": "It predicts zero for the no-step row, which has y = 0.9555."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck mean reversion",
+        "rejected_reason": "A shared equilibrium cannot explain both the rise from 0.2548 to 4.894051 and the fall from 1.5925 to -2.696125."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The no-step row identifies the equilibrium coefficient, and four signed steps constrain the decay at horizons that bracket the target."
+      }
+    ],
+    "hypothesis_name": "normalized_step_contrast_with_equilibrium",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nTAU_SCALE = 0.004\n_params = None\n\ndef fit(train_rows):\n    global _params\n    un, up, h, y = np.asarray([(r['u_now']/TAU_SCALE, r['u_past']/TAU_SCALE, r['H'], r['y']) for r in train_rows], dtype=float).T\n    def residual(p):\n        gain, log_tau, k_eq = p\n        return gain * (un - up) * np.exp(-h * np.exp(-log_tau)) + k_eq * un - y\n    result = least_squares(residual, [1.0, math.log(float(np.median(h))), 1.0], bounds=([-np.inf, -20.0, -np.inf], [np.inf, 20.0, np.inf]))\n    _params = result.x\n\ndef predict(row) -> float:\n    gain, log_tau, k_eq = _params\n    un = row['u_now'] / TAU_SCALE\n    up = row['u_past'] / TAU_SCALE\n    return float(gain * (un - up) * math.exp(-row['H'] * math.exp(-log_tau)) + k_eq * un)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

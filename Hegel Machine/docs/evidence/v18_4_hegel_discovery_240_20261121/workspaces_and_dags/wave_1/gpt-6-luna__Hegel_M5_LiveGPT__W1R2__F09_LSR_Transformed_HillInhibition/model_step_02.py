@@ -1,0 +1,25 @@
+import math
+import numpy as np
+from scipy.optimize import least_squares
+
+_PARAMS = None
+
+def _model(p, row):
+    vmax, k_half, alpha_inh, c_leak = p
+    u_n = float(row['u_now']) / 2.5
+    s = float(row['s_grad'])
+    return vmax * (u_n ** 2 / (k_half + u_n ** 2)) / (1.0 + alpha_inh * s) - c_leak * u_n
+
+def fit(train_rows):
+    global _PARAMS
+    y = np.asarray([float(r['y']) for r in train_rows], dtype=float)
+    def residual(p):
+        return np.asarray([_model(p, r) for r in train_rows]) - y
+    result = least_squares(residual, x0=np.array([6.0, 2.0, 0.7, 0.1]), bounds=([0.0, 1e-8, 0.0, 0.0], [30.0, 100.0, 20.0, 10.0]), max_nfev=20000)
+    _PARAMS = result.x
+    return result.x
+
+def predict(row):
+    if _PARAMS is None:
+        raise RuntimeError('Call fit(train_rows) before predict(row).')
+    return float(_model(_PARAMS, row))

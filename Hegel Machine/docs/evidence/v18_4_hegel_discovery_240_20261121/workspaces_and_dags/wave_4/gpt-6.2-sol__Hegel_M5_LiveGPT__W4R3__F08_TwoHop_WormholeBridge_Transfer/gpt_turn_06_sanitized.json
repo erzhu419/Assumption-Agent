@@ -1,0 +1,32 @@
+{
+  "turn": 6,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "52f7d7347640f160",
+  "prompt_tokens": 148033,
+  "cached_tokens": 119040,
+  "completion_tokens": 5046,
+  "task_context_chars": 8293,
+  "wall_ms": 125845.26,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At H = 0.6, the five baseline rows identify a saturating inflow term plus a square-root term. The five gradient contrasts identify reciprocal attenuation of the saturating term toward a nonzero floor. The fit reproduces all ten paid observations to rounding precision; fresh confirmation is the next test.",
+    "considered_alternatives": [
+      {
+        "option": "Gradient-independent saturation",
+        "rejected_reason": "It cannot explain the output shifts when the paid probes vary the downstream gradient."
+      },
+      {
+        "option": "One gradient multiplier on the entire response",
+        "rejected_reason": "It leaves systematic residuals; reciprocal attenuation on the saturating term alone with an independent square-root term fits to rounding precision."
+      },
+      {
+        "option": "Additional paid probing",
+        "rejected_reason": "The ten rows already distinguish the two-term transfer at the target horizon."
+      }
+    ],
+    "hypothesis_name": "two_hop_reciprocal_gradient_transfer",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, y = np.array([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float).T\n    root_u = np.sqrt(u)\n\n    def residual(p):\n        floor, gain, k, attenuation, bypass = p\n        return (floor + gain / (1.0 + attenuation * s)) * u / (k + u) + bypass * root_u - y\n\n    _params = least_squares(residual, [2.0, 5.0, 1.0, 1.0, 0.5], bounds=([0.0, 0.0, 1e-8, 0.0, 0.0], np.inf)).x\n    return _params\n\ndef predict(row) -> float:\n    floor, gain, k, attenuation, bypass = _params\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return float((floor + gain / (1.0 + attenuation * s)) * u / (k + u) + bypass * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

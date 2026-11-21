@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "797fa76410936e20",
+  "prompt_tokens": 34117,
+  "cached_tokens": 24576,
+  "completion_tokens": 2305,
+  "task_context_chars": 14274,
+  "wall_ms": 56889.71,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Numerical fits to the eight paid trajectories gave a training RMSE of about 0.000010 for the coupled memory ODE. The model reconstructs the missing memory state using only elapsed times in the observed prefix, then integrates forward under the current input. Fresh confirmation against the 0.045 tolerance is the next step.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired batch brought the total to eight trajectories, and repeated fits from different starting timescales converged to the same solution. No further probe is warranted before fresh confirmation."
+      },
+      {
+        "option": "Trapezoidal exponential convolution",
+        "rejected_reason": "Exact integration under piecewise-linear interpolation gave a slightly lower training residual and accounts for the unequal sample intervals directly."
+      },
+      {
+        "option": "Adiabatic snapshot balance",
+        "rejected_reason": "It discards the observed history dependence, and the fitted memory timescale of about 0.51 is comparable to the target horizon of 0.45."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "It predicts opposite signs for upward and downward input steps, whereas the observed forecasts are positive for both."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    history = ()\n    if z is None:\n        prefix = row['raw_prefix']\n        z = 0.52 * prefix[0]['x']\n        history = tuple((hi['t'] - lo['t'], lo['x'], hi['x'] - lo['x'])\n                        for lo, hi in zip(prefix, prefix[1:]))\n    return row['x_now'], z, row['u_now'], row['H'], history\n\ndef _forecast(p, data):\n    a, b, c, tau = p\n    x, z, u, H, history = data\n    # Exact memory update on each interval with linearly interpolated x.\n    for dt, left_x, delta_x in history:\n        q = dt / tau\n        weight = -math.expm1(-q)\n        z = math.exp(-q) * z + 0.52 * (weight * left_x + (1.0 - weight / q) * delta_x)\n\n    n = max(1, math.ceil(H / 0.004))\n    h = H / n\n    drive = c * u\n    inv_tau = 1.0 / tau\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) * inv_tau\n\n    for _ in range(n):\n        k1, j1 = rhs(x, z)\n        k2, j2 = rhs(x + 0.5*h*k1, z + 0.5*h*j1)\n        k3, j3 = rhs(x + 0.5*h*k2, z + 0.5*h*j2)\n        k4, j4 = rhs(x + h*k3, z + h*j3)\n        x += h/6 * (k1 + 2*k2 + 2*k3 + k4)\n        z += h/6 * (j1 + 2*j2 + 2*j3 + j4)\n    return float(x)\n\ndef fit(train_rows):\n    global _params\n    data = [_prepare(row) for row in train_rows]\n    y = np.array([row['y'] for row in train_rows], dtype=float)\n\n    def residuals(p):\n        return np.array([_forecast(p, d) for d in data]) - y\n\n    _params = least_squares(residuals, [1.5, 1.0, 1.5, 0.5],\n                            bounds=([0.0, 0.0, 0.0, 0.01], np.inf),\n                            ftol=1e-10, xtol=1e-10, gtol=1e-10).x\n    return _params\n\ndef predict(row) -> float:\n    return _forecast(_params, _prepare(row))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

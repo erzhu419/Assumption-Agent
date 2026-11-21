@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "1599575b35253954",
+  "prompt_tokens": 18348,
+  "cached_tokens": 13568,
+  "completion_tokens": 1237,
+  "task_context_chars": 3567,
+  "wall_ms": 35184.43,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Relaxation from x_now toward a fitted multiple of u_now gives a gain near 1.868 and a decay rate near 1.50, with training RMSE below 0.000004 versus the 0.045 confirmation tolerance. The observed horizons bracket H = 4.22, so proceed directly to fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Kelvin–Voigt creep from zero",
+        "rejected_reason": "Its training RMSE is about 0.0027; it omits the initial-state term that explains the remaining variation."
+      },
+      {
+        "option": "Newton cooling with unit equilibrium gain",
+        "rejected_reason": "The long-horizon response is approximately 1.868 times the current input, not equal to it."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The five rows already bracket the target horizon and resolve the gain and decay rate in the two-parameter model."
+      }
+    ],
+    "hypothesis_name": "single_exponential_relaxation_to_scaled_input",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, x, H, y = np.asarray([(r['u_now'], r['x_now'], r['H'], r['y']) for r in train_rows], dtype=float).T\n    gain0 = float(np.dot(u, y) / np.dot(u, u))\n\n    def residual(p):\n        gain, rate = p\n        return gain * u * (-np.expm1(-rate * H)) + x * np.exp(-rate * H) - y\n\n    _params = least_squares(residual, [gain0, 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf]), gtol=1e-12).x\n\ndef predict(row) -> float:\n    gain, rate = _params\n    z = -float(rate) * row['H']\n    return float(gain * row['u_now'] * (-math.expm1(z)) + row['x_now'] * math.exp(z))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

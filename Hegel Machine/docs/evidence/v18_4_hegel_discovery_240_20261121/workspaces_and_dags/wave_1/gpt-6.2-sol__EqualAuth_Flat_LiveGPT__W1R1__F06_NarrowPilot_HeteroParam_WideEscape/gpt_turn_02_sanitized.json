@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "b0b5213b22806c3a",
+  "prompt_tokens": 119157,
+  "cached_tokens": 106496,
+  "completion_tokens": 3798,
+  "task_context_chars": 5428,
+  "wall_ms": 95357.37,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Hydraulic saturation with an additive square-root sink reproduces all seven paid observations within 5e-8, including both wide-gradient measurements. The fitted rho is approximately 0.902, outside the recalled source range. Submit for fresh confirmation at H=0.6.",
+    "considered_alternatives": [
+      {
+        "option": "Hydraulic saturation with source-range rho and no separate sink",
+        "rejected_reason": "The wide-gradient observations require stronger attenuation than the recalled rho range allows, and the branch-free fit leaves systematic residuals."
+      },
+      {
+        "option": "Haldane and Cobb–Douglas laws",
+        "rejected_reason": "Haldane alone has no gradient dependence; Cobb–Douglas does not capture the saturation in u_now. Neither explains the paid rows at their reported precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The wide-gradient probe resolved the ambiguity at H=0.6. The three-parameter law already matches every paid row to rounding precision."
+      }
+    ],
+    "hypothesis_name": "hydraulic_saturation_with_sqrt_sink",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(row):\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return u / (1.2 + u), s / (1.0 + s), math.sqrt(u)\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    q, g, root = np.asarray([_features(row) for row in rows], dtype=float).T\n    y = np.asarray([row['y'] for row in rows], dtype=float)\n\n    def residual(p):\n        vmax, rho, sink = p\n        return vmax * q * (1.0 - rho * g) - sink * root - y\n\n    _params = least_squares(residual, [5.0, 0.8, 0.2]).x\n\n\ndef predict(row) -> float:\n    q, g, root = _features(row)\n    vmax, rho, sink = _params\n    return float(vmax * q * (1.0 - rho * g) - sink * root)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

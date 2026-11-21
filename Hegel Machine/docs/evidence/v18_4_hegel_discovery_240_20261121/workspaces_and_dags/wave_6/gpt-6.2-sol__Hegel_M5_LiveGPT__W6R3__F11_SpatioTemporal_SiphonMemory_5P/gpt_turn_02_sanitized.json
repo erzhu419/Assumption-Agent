@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "ca062d454a2cd5ca",
+  "prompt_tokens": 17329,
+  "cached_tokens": 13440,
+  "completion_tokens": 1158,
+  "task_context_chars": 7368,
+  "wall_ms": 30888.01,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid observations span H = 0.38–0.60 around the target horizon of 0.46 and vary both initial states and the sink gradient. Fit the five-parameter coupled siphon-memory model by nonlinear least squares with RK4 endpoint predictions, then test it on fresh observations against the 0.045 RMSE tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Another extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired batch brings the total to eight observations and varies the initial memory and pool states, so the five-parameter model is ready for confirmation."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not help distinguish the siphon drive from memory coupling and relaxation."
+      },
+      {
+        "option": "Kelvin–Voigt creep or damped harmonic oscillator",
+        "rejected_reason": "The supplied forms omit the measured initial pool, stored memory, and sink gradient, despite the coupled-lag and gradient signatures."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n_keys = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n\ndef _read(rows):\n    return np.array([[float(row[k]) for k in _keys] for row in rows], dtype=float).T\n\ndef _endpoint(p, data):\n    a, b, vmax, rho, tau = p\n    u, x, z, s, horizon = data\n    u = u / 2.0\n    drive = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    n = max(48, math.ceil(float(np.max(horizon)) / (0.5 * tau)))\n    h = horizon / n\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        k1, l1 = rhs(x, z)\n        k2, l2 = rhs(x + 0.5 * h * k1, z + 0.5 * h * l1)\n        k3, l3 = rhs(x + 0.5 * h * k2, z + 0.5 * h * l2)\n        k4, l4 = rhs(x + h * k3, z + h * l3)\n        x = x + h * (k1 + 2.0 * (k2 + k3) + k4) / 6.0\n        z = z + h * (l1 + 2.0 * (l2 + l3) + l4) / 6.0\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = _read(rows)\n    y = np.array([float(row['y']) for row in rows])\n    best = None\n    for tau0 in (0.3, 0.08, 0.9):\n        result = least_squares(lambda p: _endpoint(p, data) - y,\n                               [0.8, 0.7, 6.5, 0.70, tau0],\n                               bounds=([0.0, 0.0, 0.0, 0.0, 0.005],\n                                       [np.inf, np.inf, np.inf, 1.0, np.inf]),\n                               x_scale='jac', max_nfev=250)\n        if best is None or result.cost < best.cost:\n            best = result\n        if np.linalg.norm(best.fun) <= 1e-6 * math.sqrt(len(rows)):\n            break\n    _params = best.x\n    return _params.copy()\n\ndef predict(row) -> float:\n    return float(_endpoint(_params, _read([row]))[0])\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

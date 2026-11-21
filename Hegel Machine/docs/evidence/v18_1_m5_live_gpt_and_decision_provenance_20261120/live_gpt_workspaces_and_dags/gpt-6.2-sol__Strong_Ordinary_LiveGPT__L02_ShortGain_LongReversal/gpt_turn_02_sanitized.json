@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "85df017931adb67d",
+  "prompt_tokens": 31705,
+  "cached_tokens": 20480,
+  "completion_tokens": 1288,
+  "task_context_chars": 7902,
+  "wall_ms": 44242.48,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five short-horizon gains are positive, but the paid H=20 observation gives y/u_now = -0.467. A fast positive response opposed by slower adaptation fits all six rows with training RMSE below 0.000001 and fitted time constants near 0.35 and 12.0. Submit it for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Single-timescale positive gain or static saturation",
+        "rejected_reason": "Neither explains the negative response at H=20 under positive drive while preserving the positive pilot gains."
+      },
+      {
+        "option": "Damped harmonic oscillator",
+        "rejected_reason": "The normalized pilot gains rise smoothly with H, unlike the initial decline of a damped cosine. There is no observed oscillation to favor that mechanism."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The four-parameter adaptation law already fits all six rows closely, including the reversal, without invoking coupled state dynamics."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The remaining test is fresh forecast accuracy, not which static sink branch applies."
+      }
+    ],
+    "hypothesis_name": "dual_timescale_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _gain(h, p):\n    fast_amp, slow_amp, fast_tau, gap = p\n    slow_tau = fast_tau + gap\n    return -fast_amp * np.expm1(-h / fast_tau) + slow_amp * np.expm1(-h / slow_tau)\n\ndef fit(train_rows):\n    global _params\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    start = np.log([1.0, 2.0, np.median(h), 0.5 * np.max(h)])\n    result = least_squares(lambda q: u * _gain(h, np.exp(q)) - y, start, ftol=1e-12, xtol=1e-12, gtol=1e-12, max_nfev=1000)\n    _params = np.exp(result.x)\n\ndef predict(row):\n    fast_amp, slow_amp, fast_tau, gap = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (-fast_amp * math.expm1(-h / fast_tau) + slow_amp * math.expm1(-h / (fast_tau + gap))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

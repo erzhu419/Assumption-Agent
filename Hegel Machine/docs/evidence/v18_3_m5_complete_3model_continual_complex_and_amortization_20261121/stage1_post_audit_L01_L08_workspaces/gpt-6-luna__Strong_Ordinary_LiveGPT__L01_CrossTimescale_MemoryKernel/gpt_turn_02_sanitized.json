@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "284b279d286ac553",
+  "prompt_tokens": 15276,
+  "cached_tokens": 4864,
+  "completion_tokens": 1027,
+  "task_context_chars": 8755,
+  "wall_ms": 23693.15,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid observations satisfy the archive's stated minimum for fitting the four target parameters. Fit the prescribed coupled two-state memory ODE by least squares and RK4 at the observed horizon; the endpoint-matched history gap and transient-lag signatures support this mechanism over stationary or contrast-only alternatives.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight diverse rows meet the archive's minimum for numerically fitting the four-parameter coupled ODE; no branch-sign ambiguity is needed for this fit."
+      },
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Although all training horizons are 0.6, the explicit endpoint-history-gap and transient-lag signatures point to the supplied memory ODE, and a longer-horizon probe is not necessary to fit its specified parameters."
+      },
+      {
+        "option": "Static/coarse adiabatic or contrast models",
+        "rejected_reason": "They do not represent the observed coupled transient history dependence and are less consistent with the pilot signatures."
+      },
+      {
+        "option": "Dual-horizon adaptation and siphon/static archive families",
+        "rejected_reason": "The supplied signatures favor coupled memory dynamics rather than horizon reversal or a static input-gradient response."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _integrate(row, p):\n    a_slow, b_couple, c_drive, tau_fast = p\n    x = float(row['x_now'])\n    z = float(row['mem_conv'])\n    u = float(row['u_now'])\n    H = float(row['H'])\n    if H <= 0:\n        return x\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def deriv(xv, zv):\n        return (-a_slow * xv + b_couple * zv + c_drive * u,\n                (0.52 * xv - zv) / tau_fast)\n    for _ in range(n):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x + 0.5*dt*k1x, z + 0.5*dt*k1z)\n        k3x, k3z = deriv(x + 0.5*dt*k2x, z + 0.5*dt*k2z)\n        k4x, k4z = deriv(x + dt*k3x, z + dt*k3z)\n        x += dt*(k1x + 2*k2x + 2*k3x + k4x)/6.0\n        z += dt*(k1z + 2*k2z + 2*k3z + k4z)/6.0\n    return x\n\ndef fit(train_rows):\n    global _params\n    y = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_integrate(r, p) for r in train_rows]) - y\n    result = least_squares(residual, x0=np.array([0.8, 0.3, 0.8, 0.15]),\n                           bounds=([0.0, 0.0, 0.0, 0.005], [10.0, 10.0, 10.0, 10.0]),\n                           max_nfev=3000)\n    _params = result.x\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row)')\n    return float(_integrate(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

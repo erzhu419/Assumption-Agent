@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "c85bede875c6c1d3",
+  "prompt_tokens": 15072,
+  "cached_tokens": 8320,
+  "completion_tokens": 1053,
+  "task_context_chars": 15468,
+  "wall_ms": 25753.68,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-H rows are positive, while the long-H rows become negative, matching the supplied sink-coupled dual-horizon adaptation law. The added probe supplies three long-horizon observations and raises the dataset to eight rows, sufficient to numerically fit its five parameters; no further measurement is needed before fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch for coupled memory ODE",
+        "rejected_reason": "The paid long-horizon probe already gives 8 rows, identifies the sign reversal, and the ODE alternative is less consistent with the dual-horizon signature; another batch is unnecessary."
+      },
+      {
+        "option": "Static sink-inhibited siphon (nodes C/D)",
+        "rejected_reason": "Cannot explain the large negative outputs at long horizons alongside positive short-window gains."
+      },
+      {
+        "option": "Open-branch or high-sgrad discriminating probe",
+        "rejected_reason": "Current sink-gradient span is broad, and there is no evidence of the high-gradient avalanche regime; these probes do not resolve the key horizon dependence."
+      },
+      {
+        "option": "Nuisance high-variance auxiliary",
+        "rejected_reason": "Irrelevant to fitting the observed target law."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _value(row, p):\n    vmax, rho, amp_adapt, tau_fast, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    H = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base * (1.0 - math.exp(-H / tau_fast)) - amp_adapt * u * (1.0 - math.exp(-H / tau_slow))\n\ndef fit(train_rows):\n    global _params\n    ys = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_value(r, p) for r in train_rows]) - ys\n    lower = np.array([0.0, 0.0, 0.0, 0.01, 0.02])\n    upper = np.array([20.0, 0.999, 10.0, 20.0, 100.0])\n    starts = [\n        [3.0, 0.7, 1.0, 0.5, 5.0],\n        [4.0, 0.5, 1.0, 1.0, 10.0],\n        [2.0, 0.8, 0.5, 0.2, 20.0],\n        [5.0, 0.3, 1.5, 2.0, 30.0],\n    ]\n    best = None\n    for start in starts:\n        result = least_squares(residual, np.clip(start, lower + 1e-8, upper - 1e-8), bounds=(lower, upper), max_nfev=20000)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _params = best[1]\n    return _params\n\ndef predict(row):\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_value(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "a81e46a323dd6766",
+  "prompt_tokens": 11589,
+  "cached_tokens": 8320,
+  "completion_tokens": 498,
+  "task_context_chars": 5192,
+  "wall_ms": 23185.11,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Seven paid rows include an open-branch gradient intervention, showing that the response is not explained by the coarse single-input cooling alternatives. Submit a fitted smooth bridge/flux candidate for fresh confirmation rather than buying another batch.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Higher cost and not needed before testing a compact smooth law against confirmation."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Already acquired; it varied s_grad and exposed strong bridge dependence."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Explicitly irrelevant and costly."
+      },
+      {
+        "option": "uncoupled Newton cooling / pure quartic loss",
+        "rejected_reason": "Cannot explain the direction and magnitude of the changed-gradient observations."
+      }
+    ],
+    "hypothesis_name": "two_hop_thermal_flux",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    a = np.asarray([[r['u_past'], r['u_now'], r['x_now'], r['mem_conv'], r['s_grad'], r['H']] for r in train_rows], dtype=float)\n    y = np.asarray([r['y'] for r in train_rows], dtype=float)\n    # Fit a smooth quartic flux response with a gradient-controlled bridge factor.\n    def pred(p, z):\n        up, u, x, m, g, H = z.T\n        h, eps, b, k, c = p\n        return h*u - eps*(0.2*u)**4 + b*g + k*(u-up)*np.exp(-c*H) + 0.0*x + 0.0*m\n    def residual(p):\n        return pred(p, a) - y\n    sol = least_squares(residual, x0=np.array([1.0, 0.05, 0.5, 0.1, 1.0]), max_nfev=20000)\n    return sol.x\n\ndef predict(row):\n    p = fit([row]) if False else None\n    # Parameters are fitted on the latest training set and stored by fit.\n    return float(_MODEL(row))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

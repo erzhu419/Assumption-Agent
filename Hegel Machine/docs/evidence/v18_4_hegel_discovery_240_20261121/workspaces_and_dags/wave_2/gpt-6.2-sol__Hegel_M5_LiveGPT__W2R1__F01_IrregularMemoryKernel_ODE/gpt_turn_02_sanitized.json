@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "d880afd6b84a6ea2",
+  "prompt_tokens": 43846,
+  "cached_tokens": 32896,
+  "completion_tokens": 2254,
+  "task_context_chars": 14083,
+  "wall_ms": 55543.89,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid trajectories include upward and downward input steps and span the target horizon. A numerical fit of the coupled law with the irregular-prefix kernel gives a training RMSE of about 0.000003. Submit it for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Adiabatic snapshot balance",
+        "rejected_reason": "It cannot distinguish endpoint-matched histories, and the fitted memory time of about 0.75 is not short relative to the 0.45 forecast horizon."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "A signed input-step decay predicts opposite output signs for upward and downward steps, whereas both have positive observed outputs."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired trajectory batch supports a consistent four-parameter fit, so fresh confirmation is the next informative test."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    x = float(row['x_now'])\n    u = float(row['u_now'])\n    h = float(row['H'])\n    z = row.get('mem_conv')\n    if z is not None:\n        return x, u, h, float(z), None\n    prefix = row['raw_prefix']\n    t = np.array([point['t'] for point in prefix], dtype=float)\n    xs = np.array([point['x'] for point in prefix], dtype=float)\n    return x, u, h, None, (t[-1] - t, np.diff(t), xs)\n\n\ndef _forecast(data, params):\n    x, u, h, z, history = data\n    a, b, c, tau = params\n    if z is None:\n        ages, widths, xs = history\n        weighted = np.exp(-ages / tau) * xs\n        z = 0.52 * (weighted[0] + np.dot(widths, weighted[:-1] + weighted[1:]) / (2.0 * tau))\n    if h == 0.0:\n        return x\n    n = int(math.ceil(h / 0.004))\n    # Augment the two states with a constant 1 for the affine drive.\n    m = (h / n) * np.array([[-a, b, c * u], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    m2 = m @ m\n    # Classical RK4 step matrix for the constant linear generator.\n    step = np.eye(3) + m + m2 / 2.0 + (m2 @ m) / 6.0 + (m2 @ m2) / 24.0\n    return float((np.linalg.matrix_power(step, n) @ np.array([x, z, 1.0]))[0])\n\n\ndef fit(train_rows):\n    global _params\n    data = [_prepare(row) for row in train_rows]\n    target = np.array([row['y'] for row in train_rows], dtype=float)\n\n    def residual(params):\n        return np.array([_forecast(row, params) for row in data]) - target\n\n    result = least_squares(residual, [2.0, 1.0, 1.0, 0.7], bounds=([0.0, 0.0, 0.0, 0.01], np.inf), x_scale='jac', gtol=1e-11)\n    _params = result.x\n    return _params\n\n\ndef predict(row) -> float:\n    return _forecast(_prepare(row), _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

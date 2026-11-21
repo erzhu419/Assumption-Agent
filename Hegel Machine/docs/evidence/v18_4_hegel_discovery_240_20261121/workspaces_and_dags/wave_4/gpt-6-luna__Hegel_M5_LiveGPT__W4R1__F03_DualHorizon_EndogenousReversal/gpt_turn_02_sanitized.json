@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "49826e82c1a6535c",
+  "prompt_tokens": 11976,
+  "cached_tokens": 8320,
+  "completion_tokens": 946,
+  "task_context_chars": 6354,
+  "wall_ms": 23322.44,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid long-horizon probe extends observations from H<=0.48 to H=7.59–21.7 and captures the positive-to-negative reversal. Fit the authorized four-parameter dual-exponential law to all eight rows, enforcing positive amplitudes and ordered timescales; no further probe is needed.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; the added long-horizon observations resolve the extrapolation ambiguity and reveal the predicted sign reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Not needed for the authorized four-parameter dual-exponential law: eight observations span short and long horizons and provide adequate fit information."
+      },
+      {
+        "option": "5-parameter sink-coupled dual-horizon model",
+        "rejected_reason": "All observed rows have s_grad=0, so the sink-coupling parameter is unidentifiable and unnecessary; the authorized dual-horizon mechanism matches the evidence."
+      },
+      {
+        "option": "periodic Lotka-Volterra harmonic model",
+        "rejected_reason": "The observed horizon-dependent positive-to-negative change with input-proportional response supports the dual-horizon adaptation note, not a periodic state-dependent mechanism."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _model(row, p):\n    amp_fast, tau_fast, amp_slow, tau_slow = p\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (1.0 - math.exp(-h / tau_fast)) - amp_slow * (1.0 - math.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    ys = np.asarray([float(r['y']) for r in rows])\n    # Positive amplitudes and timescales; parameterize tau_slow > tau_fast.\n    def unpack(z):\n        return np.array([math.exp(z[0]), math.exp(z[1]), math.exp(z[2]), math.exp(z[1]) + math.exp(z[3])])\n    def residual(z):\n        p = unpack(z)\n        return np.asarray([_model(r, p) for r in rows]) - ys\n    best = None\n    for start in ([math.log(1.0), math.log(1.0), math.log(0.5), math.log(4.0)],\n                  [math.log(2.0), math.log(0.3), math.log(0.8), math.log(8.0)],\n                  [math.log(1.5), math.log(2.0), math.log(1.0), math.log(10.0)]):\n        result = least_squares(residual, np.asarray(start), max_nfev=20000)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, unpack(result.x))\n    _params = best[1]\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_model(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

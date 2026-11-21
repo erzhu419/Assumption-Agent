@@ -1,0 +1,32 @@
+{
+  "turn": 6,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "076bf6889e5e6be7",
+  "prompt_tokens": 38758,
+  "cached_tokens": 30336,
+  "completion_tokens": 1541,
+  "task_context_chars": 19774,
+  "wall_ms": 41115.17,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The data show gradient-dependent short-horizon response and long-horizon reversal. Fit and compare explicit stationary models in which sink gradient modifies dual-timescale adaptation, then test the selected fit on fresh confirmation; its success is not assumed.",
+    "considered_alternatives": [
+      {
+        "option": "Previously submitted additive and gradient-coupled adaptation models",
+        "rejected_reason": "Fresh confirmation refuted those particular implementations; this candidate instead allows sink gradient to alter a relaxation rate or slow-response amplitude."
+      },
+      {
+        "option": "Another trajectory probe",
+        "rejected_reason": "The available trajectory batch has already been acquired, and the current observations cover both short and long horizons."
+      },
+      {
+        "option": "Scoped abstention",
+        "rejected_reason": "The observed reversal does not show chaotic high-frequency oscillation, and the prior failures do not refute every stationary smooth mechanism."
+      }
+    ],
+    "hypothesis_name": "sink_dependent_dual_horizon_rates",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_model = None\n_params = None\n\ndef _calc(p, rows, kind):\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    q = s / (1.0 + s)\n    base = p[0] * (1.0 - p[1] * q) * u / (1.2 + u) + p[2] * np.sqrt(np.maximum(u, 0.0))\n    tf, ts = np.exp(p[5]), np.exp(p[6])\n    if kind == 0:\n        fast = 1.0 - np.exp(-h / tf)\n        slow = 1.0 - np.exp(-h * np.exp(p[7] * q) / ts)\n        return base + u * (p[3] * fast - p[4] * slow)\n    if kind == 1:\n        fast = 1.0 - np.exp(-h / tf)\n        slow = 1.0 - np.exp(-h / ts)\n        return base + u * (p[3] * fast - p[4] * (1.0 + p[7] * q) * slow)\n    fast = 1.0 - np.exp(-h * np.exp(p[7] * q) / tf)\n    slow = 1.0 - np.exp(-h / ts)\n    return base + u * (p[3] * fast - p[4] * slow)\n\ndef fit(train_rows):\n    global _model, _params\n    rows = list(train_rows)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    best = None\n    lower = [-20, -3, -10, -10, -10, np.log(0.02), np.log(0.3), -5]\n    upper = [20, 3, 10, 10, 10, np.log(10), np.log(100), 5]\n    for kind in range(3):\n        for tf in (0.5, 2.0):\n            for ts in (5.0, 20.0):\n                p0 = [3.0, 0.7, 0.2, 1.0, 1.5, np.log(tf), np.log(ts), 0.0]\n                result = least_squares(lambda p: _calc(p, rows, kind) - y, p0, bounds=(lower, upper), max_nfev=5000)\n                score = np.sum(result.fun ** 2)\n                if best is None or score < best[0]:\n                    best = (score, kind, result.x)\n    _model, _params = best[1], best[2]\n\ndef predict(row):\n    return float(_calc(_params, [row], _model)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

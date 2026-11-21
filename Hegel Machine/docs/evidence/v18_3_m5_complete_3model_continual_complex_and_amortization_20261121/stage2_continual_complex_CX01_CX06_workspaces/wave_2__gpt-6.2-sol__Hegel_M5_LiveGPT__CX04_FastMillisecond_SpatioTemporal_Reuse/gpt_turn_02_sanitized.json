@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "c74fa1fef0b6427d",
+  "prompt_tokens": 22082,
+  "cached_tokens": 15360,
+  "completion_tokens": 2073,
+  "task_context_chars": 7786,
+  "wall_ms": 52607.77,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight paid rows bracket H = 0.45 and span both initial memory and sink gradient. A diagnostic fit using the exact solution of the coupled ODE reproduced the paid endpoints to their reported precision, including the high-gradient rows. Submit the numerically fitted RK4 model for fresh confirmation rather than buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the resulting eight rows support fitting all five parameters without another purchase."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It does not distinguish the candidate mechanisms."
+      },
+      {
+        "option": "threshold-avalanche siphon",
+        "rejected_reason": "The coupled ODE fits the observed rows above and below the proposed gradient threshold without a threshold term."
+      },
+      {
+        "option": "damped harmonic oscillator",
+        "rejected_reason": "Its amplitude is bounded by u_now for nonnegative damping, far below the observed outputs, and it omits the measured initial states."
+      }
+    ],
+    "hypothesis_name": "coupled_siphon_memory_rk4",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n_KEYS = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n\n\ndef _forecast(data, params):\n    a_slow, b_couple, vmax, rho, tau_fast = params\n    u, x, z, s, horizon = data.T\n    u_n = u / 0.005\n    inflow = vmax * (1.0 - rho * s / (1.0 + s)) * u_n / (1.2 + u_n)\n    n = max(1, math.ceil(float(np.max(horizon)) / 0.005))\n    generator = np.zeros((len(data), 3, 3))\n    generator[:, 0, 0] = -a_slow\n    generator[:, 0, 1] = b_couple\n    generator[:, 0, 2] = inflow\n    generator[:, 1, 0] = 0.52 / tau_fast\n    generator[:, 1, 1] = -1.0 / tau_fast\n    m = generator * (horizon / n)[:, None, None]\n    eye = np.eye(3)\n    # One classical RK4 step for the augmented state (x, z, 1).\n    step = eye + m @ (eye + m @ (eye / 2.0 + m @ (eye / 6.0 + m / 24.0)))\n    initial = np.stack((x, z, np.ones_like(x)), axis=-1)\n    return (np.linalg.matrix_power(step, n) @ initial[..., None])[:, 0, 0]\n\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    data = np.array([[row[key] for key in _KEYS] for row in rows], dtype=float)\n    target = np.array([row['y'] for row in rows], dtype=float)\n    result = least_squares(\n        lambda params: _forecast(data, params) - target,\n        x0=[1.5, 1.0, 6.0, 0.7, 0.2],\n        bounds=([0.0, 0.0, 0.0, 0.0, 0.005], [20.0, 20.0, 25.0, 1.0, 5.0]),\n        x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12,\n    )\n    _PARAMS = result.x\n\n\ndef predict(row) -> float:\n    data = np.array([[row[key] for key in _KEYS]], dtype=float)\n    return float(_forecast(data, _PARAMS)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

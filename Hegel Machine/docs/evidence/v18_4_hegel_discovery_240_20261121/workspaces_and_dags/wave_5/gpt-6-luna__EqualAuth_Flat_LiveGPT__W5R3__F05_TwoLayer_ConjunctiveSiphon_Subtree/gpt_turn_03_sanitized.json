@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "868703be53ee03ab",
+  "prompt_tokens": 34045,
+  "cached_tokens": 28800,
+  "completion_tokens": 804,
+  "task_context_chars": 7067,
+  "wall_ms": 22723.59,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The data exhibit nonmonotone response to s_grad, with high-gradient observations depressed relative to comparable lower-gradient observations, consistent with the supplied supercritical siphon mechanism. Fit its five parameters numerically against all nine paid rows; no oscillatory or chaotic signature is present.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another probe",
+        "rejected_reason": "Nine observations already span u_now and s_grad, including values above and below the suggested critical-gradient region; the known structured siphon model can be fitted directly."
+      },
+      {
+        "option": "Haldane substrate-inhibition curve",
+        "rejected_reason": "It ignores s_grad, whose effect is evident across observations and whose value changes substantially."
+      },
+      {
+        "option": "Cobb–Douglas power law",
+        "rejected_reason": "It predicts smooth monotonic power dependence and cannot naturally represent gradient-linked decline/siphoning."
+      }
+    ],
+    "hypothesis_name": "two_layer_conjunctive_siphon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    # The known two-layer siphon structure: a saturating base field, a\n    # conjunctive local/gradient contribution, and a supercritical sink term.\n    def pred(p, r):\n        vmax, rho, c_loc, k_aval, s_crit = p\n        u = max(0.0, float(r['u_now']))\n        s = max(0.0, float(r['s_grad']))\n        base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n        local = c_loc * math.sqrt(u)\n        siphon = k_aval * max(0.0, s - s_crit) * u\n        return base + local - siphon\n    def residual(p):\n        return np.array([pred(p, r) - float(r['y']) for r in train_rows])\n    starts = [\n        [5.0, 0.3, 0.2, 0.04, 2.6],\n        [4.0, 0.5, 0.1, 0.08, 2.5],\n        [6.0, 0.2, 0.3, 0.02, 2.7],\n    ]\n    best = None\n    for p0 in starts:\n        res = least_squares(residual, p0, bounds=([0,0,0,0,2.36],[100,1,10,10,5]), max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    return best.x.tolist()\n\ndef predict(row):\n    p = fit(row.get('train_rows', []))\n    vmax, rho, c_loc, k_aval, s_crit = p\n    u = max(0.0, float(row['u_now']))\n    s = max(0.0, float(row['s_grad']))\n    return float(vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u)) + c_loc * math.sqrt(u) - k_aval * max(0.0, s - s_crit) * u)"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

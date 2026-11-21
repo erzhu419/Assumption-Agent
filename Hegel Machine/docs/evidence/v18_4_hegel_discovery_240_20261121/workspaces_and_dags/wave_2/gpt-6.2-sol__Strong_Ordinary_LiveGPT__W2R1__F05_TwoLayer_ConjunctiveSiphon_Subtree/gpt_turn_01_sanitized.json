@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "493f772b2567fe94",
+  "prompt_tokens": 38752,
+  "cached_tokens": 25600,
+  "completion_tokens": 862,
+  "task_context_chars": 13458,
+  "wall_ms": 26062.67,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At H = 0.6, the full-rank three-parameter fit gives vmax ≈ 7.128, rho ≈ 0.690, and a positive square-root coefficient ≈ 0.425. The training RMSE is about 1.5e-8, consistent with rounding, so submit for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Linear branch or no branch",
+        "rejected_reason": "The best linear branch has a positive slope, not a leak, and leaves systematic residuals. The positive square-root branch fits all five rows to rounding precision."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The existing variation in drive and sink gradient already distinguishes the archive branch forms."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The static siphon law explains the paid rows at the target horizon without a memory term."
+      }
+    ],
+    "hypothesis_name": "two_layer_siphon_positive_sqrt",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] / 0.05 for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    base = u / (1.2 + u)\n    X = np.column_stack((base, -base * s / (1.0 + s), np.sqrt(u)))\n    _params = least_squares(lambda p: X @ p - y, [7.0, 5.0, 0.5], jac=lambda p: X).x\n\ndef predict(row) -> float:\n    v, v_rho, c = _params\n    u = row['u_now'] / 0.05\n    s = row['s_grad']\n    return float((v - v_rho * s / (1.0 + s)) * u / (1.2 + u) + c * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

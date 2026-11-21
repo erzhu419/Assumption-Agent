@@ -437,11 +437,22 @@ class OutcomeDrivenForestConsolidator:
                     ]
                     all_clean = [*hist_clean, *ep_clean]
                     if all_clean and len(ep_broken) >= 1 and max(all_clean) < min(ep_broken) - 0.05:
-                        theta_emp = round(0.5 * (max(all_clean) + min(ep_broken)), 4)
+                        max_sup_c = round(max(all_clean), 4)
+                        min_ref_c = round(min(ep_broken), 4)
+                        theta_emp = round(0.5 * (max_sup_c + min_ref_c), 4)
                         upd_cc = deepcopy(r_cc)
                         upd_cc["preconditions"] = [
                             *list(upd_cc.get("preconditions", ())),
                             {"field": str(cr_name), "op": "<=", "value": theta_emp},
+                        ]
+                        upd_cc["gray_zone_bounds"] = [
+                            *list(upd_cc.get("gray_zone_bounds", ())),
+                            {
+                                "field": str(cr_name),
+                                "max_supported": max_sup_c,
+                                "min_refuted": min_ref_c,
+                                "monotonicity_premise": "monotone_connected_below_max_supported",
+                            },
                         ]
                         self.forest.empirical_revise_node(
                             r_nid,

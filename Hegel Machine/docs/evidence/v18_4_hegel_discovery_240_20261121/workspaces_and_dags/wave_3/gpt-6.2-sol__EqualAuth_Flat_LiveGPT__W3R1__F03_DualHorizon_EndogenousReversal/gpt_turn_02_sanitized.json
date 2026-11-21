@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "918f22439c9a0271",
+  "prompt_tokens": 24423,
+  "cached_tokens": 20480,
+  "completion_tokens": 1211,
+  "task_context_chars": 5561,
+  "wall_ms": 40765.42,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The paid probe found a positive response at H = 8.36 and negative responses at H = 17.21 and 23.9. A positive fast response minus a stronger, slower adaptation fits all eight paid rows with RMSE about 2.2e-8. Submit this law for fresh confirmation against the 0.045 tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Harmonic Lotka–Volterra model",
+        "rejected_reason": "With x_now = 0, it requires |y/u_now| at H = 0.48 to be at most twice its value at H = 0.16 by the triple-angle identity. The observed ratio is about 2.12."
+      },
+      {
+        "option": "Five-parameter sink-coupled dual-horizon model",
+        "rejected_reason": "All paid rows have s_grad = 0, so the sink coefficient is unidentifiable. The simpler input-linear law already fits all eight observations to rounding precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing probe sampled both sides of the reversal and reached H = 23.9, so no additional trajectory data are needed before fresh confirmation."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n\n    def residual(log_params):\n        a_fast, a_slow, tau_fast, gap = np.exp(log_params)\n        tau_slow = tau_fast + gap\n        return u * (-a_fast * np.expm1(-h / tau_fast) + a_slow * np.expm1(-h / tau_slow)) - y\n\n    result = least_squares(residual, np.log([1.5, 2.5, 0.5, 10.0]))\n    a_fast, a_slow, tau_fast, gap = np.exp(result.x)\n    _params = (a_fast, a_slow, tau_fast, tau_fast + gap)\n\ndef predict(row) -> float:\n    a_fast, a_slow, tau_fast, tau_slow = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (-a_fast * math.expm1(-h / tau_fast) + a_slow * math.expm1(-h / tau_slow)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 5,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "3e285587e09d02b6",
+  "prompt_tokens": 12282,
+  "cached_tokens": 11904,
+  "completion_tokens": 1615,
+  "task_context_chars": 13414,
+  "wall_ms": 34336.78,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The two failed combinations omitted the archive's open square-root branch. This candidate adds it while fitting the coupled-memory and source parameters numerically, and tests both direct and sink-attenuated ODE drive. Fresh confirmation is needed to determine whether the revision meets tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "Five-parameter coupled-memory and siphon combinations",
+        "rejected_reason": "Both previously tested combinations exceeded the fresh-confirmation tolerance."
+      },
+      {
+        "option": "Siphon base with an open square-root branch",
+        "rejected_reason": "Retained as an additional fitted branch rather than discarded; the archive explicitly identifies its sign as open."
+      },
+      {
+        "option": "Further trajectory or branch probes",
+        "rejected_reason": "Both informative batches have already been acquired; the ten rows support testing this revised smooth mechanism first."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_siphon_with_open_branch",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_model = None\n_params = None\n\ndef initial_memory(row, tau):\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    prefix = row['raw_prefix']\n    z = 0.52 * float(prefix[0]['x'])\n    for p, q in zip(prefix[:-1], prefix[1:]):\n        dt = float(q['t']) - float(p['t'])\n        if dt <= 0:\n            continue\n        e = math.exp(-dt / tau)\n        # Exact exponential-kernel integral for linearly interpolated x.\n        x0, x1 = float(p['x']), float(q['x'])\n        z = e*z + 0.52*(x0*(1-e) + (x1-x0)*(1 - tau*(1-e)/dt))\n    return z\n\ndef forecast(row, p, mode):\n    a, b, c, tau, vmax, branch = p\n    u, s, H = float(row['u_now']), float(row['s_grad']), float(row['H'])\n    source = (1.0 - 0.705*s/(1.0+s))*u/(1.2+u)\n    x, z = float(row['x_now']), initial_memory(row, tau)\n    n = max(1, int(math.ceil(H/0.004)))\n    dt = H/n\n    drive = c*u if mode == 0 else c*source\n    def f(x, z):\n        return -a*x + b*z + drive, (0.52*x-z)/tau\n    for _ in range(n):\n        k1, l1 = f(x, z)\n        k2, l2 = f(x+dt*k1/2, z+dt*l1/2)\n        k3, l3 = f(x+dt*k2/2, z+dt*l2/2)\n        k4, l4 = f(x+dt*k3, z+dt*l3)\n        x += dt*(k1+2*k2+2*k3+k4)/6\n        z += dt*(l1+2*l2+2*l3+l4)/6\n    return x + vmax*source + branch*math.sqrt(max(u, 0.0))\n\ndef fit(train_rows):\n    global _model, _params\n    rows = list(train_rows)\n    lower = [0.0, -10.0, -10.0, 0.03, -10.0, -10.0]\n    upper = [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]\n    best = None\n    for mode in (0, 1):\n        def residual(p):\n            return np.array([forecast(r, p, mode)-float(r['y']) for r in rows])\n        for tau0 in (0.2, 1.0, 3.0):\n            p0 = [0.5, 0.5, 0.5, tau0, 0.5, 0.0]\n            result = least_squares(residual, p0, bounds=(lower, upper), max_nfev=1200)\n            score = float(np.dot(result.fun, result.fun))\n            if best is None or score < best[0]:\n                best = (score, mode, result.x)\n    _, _model, _params = best\n\ndef predict(row):\n    return float(forecast(row, _params, _model))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "a16dfcf1c15dbd5b",
+  "prompt_tokens": 34696,
+  "cached_tokens": 24576,
+  "completion_tokens": 2180,
+  "task_context_chars": 14312,
+  "wall_ms": 62314.22,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight trajectories support fitting all four coefficients. The coupled model with a causal, elapsed-time memory kernel fits the paid observations to about 0.000015 RMSE. Submit it for fresh confirmation against the 0.045 tolerance.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired batch resolves the practical fitting ambiguity; proceed to fresh confirmation rather than buy another probe."
+      },
+      {
+        "option": "snapshot_balance",
+        "rejected_reason": "An endpoint-only model cannot explain different outcomes for matched endpoints with different histories."
+      },
+      {
+        "option": "single_mode_maxwell_decay",
+        "rejected_reason": "The input jump changes sign across the observations while the target stays positive; a fixed-amplitude Maxwell decay cannot reproduce that pattern."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_STEP = 0.004\n_I = np.eye(3)\n_params = None\n\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    history = None\n    if z is None:\n        prefix = row['raw_prefix']\n        t = np.array([p['t'] for p in prefix], dtype=float)\n        x = np.array([p['x'] for p in prefix], dtype=float)\n        history = (t[-1] - t, np.diff(t), x)\n    H = float(row['H'])\n    n = math.floor(H / _STEP)\n    return float(row['x_now']), float(row['u_now']), z, history, n, H - n * _STEP\n\n\ndef _rk4_matrix(A, h):\n    B = h * A\n    return _I + B @ (_I + B @ (_I / 2 + B @ (_I / 6 + B / 24)))\n\n\ndef _evaluate(p, rows):\n    a, b, c, tau = p\n    A = np.array([[-a, b, c], [0.52 / tau, -1 / tau, 0.0], [0.0, 0.0, 0.0]])\n    step = _rk4_matrix(A, _STEP)\n    values = []\n    for x0, u, z, history, n, remainder in rows:\n        if z is None:\n            ages, widths, x = history\n            w = np.exp(-ages / tau)\n            wx = w * x\n            z = 0.52 * (wx[0] + np.dot(widths, wx[:-1] + wx[1:]) / (2 * tau))\n        state = np.linalg.matrix_power(step, n) @ np.array([x0, z, u])\n        if remainder > 0:\n            state = _rk4_matrix(A, remainder) @ state\n        values.append(state[0])\n    return np.array(values)\n\n\ndef fit(train_rows):\n    global _params\n    rows = [_prepare(row) for row in train_rows]\n    y = np.array([row['y'] for row in train_rows], dtype=float)\n    result = least_squares(lambda p: _evaluate(p, rows) - y, [1.3, 0.65, 1.1, 0.35], bounds=([0, 0, 0, 0.01], [20, 20, 20, 10]), gtol=1e-12)\n    _params = result.x\n\n\ndef predict(row) -> float:\n    return float(_evaluate(_params, [_prepare(row)])[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

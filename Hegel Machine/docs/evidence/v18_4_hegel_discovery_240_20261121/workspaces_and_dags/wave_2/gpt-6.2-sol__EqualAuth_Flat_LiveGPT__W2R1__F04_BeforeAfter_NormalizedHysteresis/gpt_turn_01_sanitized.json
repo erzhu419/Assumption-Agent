@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "f1109bb771823a68",
+  "prompt_tokens": 22201,
+  "cached_tokens": 19456,
+  "completion_tokens": 857,
+  "task_context_chars": 3346,
+  "wall_ms": 27151.15,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row gives an equilibrium coefficient of 0.273. After subtracting that baseline and dividing by the signed step, the four remaining rows give a negative transient whose log magnitude is linear in H with slope about -1.20. The three-parameter law is identified by the paid observations and is ready for fresh confirmation without another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Pure Maxwell stress decay",
+        "rejected_reason": "Predicts zero for the no-step row, which has y = 0.4095."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck mean reversion",
+        "rejected_reason": "With positive reversion, a shared equilibrium cannot drive some rows above their initial state and others below it when the predictions overshoot the observed initial-state range in both directions."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The no-step row isolates the equilibrium term, and the four signed steps resolve the decay across horizons that bracket the target."
+      }
+    ],
+    "hypothesis_name": "normalized_opposing_step_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nTAU_SCALE = 1.0\n_params = None\n\ndef fit(train_rows):\n    global _params\n    past, now, horizon, y = np.asarray([\n        (r['u_past'] / TAU_SCALE, r['u_now'] / TAU_SCALE, r['H'], r['y'])\n        for r in train_rows\n    ], dtype=float).T\n    step = now - past\n    gain0, eq0 = np.linalg.lstsq(\n        np.column_stack((step * np.exp(-horizon / TAU_SCALE), now)), y, rcond=None\n    )[0]\n\n    def residual(p):\n        gain, tau, eq = p\n        return gain * step * np.exp(-horizon / tau) + eq * now - y\n\n    _params = least_squares(residual, [gain0, TAU_SCALE, eq0],\n                           bounds=([-np.inf, 1e-8, -np.inf], [np.inf, np.inf, np.inf])).x\n    return _params\n\ndef predict(row):\n    gain, tau, eq = _params\n    past = row['u_past'] / TAU_SCALE\n    now = row['u_now'] / TAU_SCALE\n    return float(gain * (now - past) * math.exp(-row['H'] / tau) + eq * now)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

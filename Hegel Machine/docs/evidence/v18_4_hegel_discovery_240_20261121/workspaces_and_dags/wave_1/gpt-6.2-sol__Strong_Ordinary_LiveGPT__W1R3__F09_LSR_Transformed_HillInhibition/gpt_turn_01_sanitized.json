@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "1f64ad48d9fafa93",
+  "prompt_tokens": 23955,
+  "cached_tokens": 16640,
+  "completion_tokens": 1104,
+  "task_context_chars": 12383,
+  "wall_ms": 32339.17,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "At H = 0.7, the cooperative Hill-2 law with competitive sink inhibition and linear bleed fits all five paid observations with RMSE about 4e-9. The fitted parameters are approximately 6.544, 2.115, 0.854, and 0.169, respectively. The near-exact pilot fit and broad gradient span justify proceeding directly to fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The pilot already spans 2.0 units of sink gradient and constrains all four Hill parameters; no unresolved branch warrants a paid probe."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The observations are already at the target horizon, and the static Hill law fits to rounding precision without a trajectory model."
+      },
+      {
+        "option": "Michaelis–Menten without inhibition or barrier-modulated siphon",
+        "rejected_reason": "Uninhibited Michaelis–Menten cannot explain the nonmonotonic response as input rises. The barrier model is less directly supported by the cooperative onset and sink signatures than the Hill law, which reproduces all five observations."
+      }
+    ],
+    "hypothesis_name": "hill2_competitive_sink_linear_bleed",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _response(u, s, p):\n    vmax, k_half, alpha, leak = p\n    u2 = u * u\n    return vmax * u2 / (k_half + u2) / (1.0 + alpha * s) - leak * u\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([float(r['u_now']) for r in rows]) / 0.1\n    s = np.array([float(r['s_grad']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    result = least_squares(lambda p: _response(u, s, p) - y,\n                           [6.0, 2.0, 1.0, 0.1],\n                           bounds=([0.0, 1e-12, 0.0, 0.0], math.inf),\n                           ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n\ndef predict(row):\n    return float(_response(float(row['u_now']) / 0.1, float(row['s_grad']), _params))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

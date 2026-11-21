@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "90f70d1d4f07bad2",
+  "prompt_tokens": 12371,
+  "cached_tokens": 4864,
+  "completion_tokens": 883,
+  "task_context_chars": 14125,
+  "wall_ms": 20769.47,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight observations support the archive's coupled two-state memory ODE and meet its stated minimum for fitting the four parameters. Fit those parameters numerically and predict by RK4 integration from the supplied x_now and mem_conv initial states.",
+    "considered_alternatives": [
+      {
+        "option": "nuisance_high_var_aux probe",
+        "rejected_reason": "It does not distinguish or identify the supported coupled memory mechanism."
+      },
+      {
+        "option": "Static siphon or static saturation models",
+        "rejected_reason": "The pilot signatures include a coupled transient lag, and observations vary in initial x and memory state; static laws omit this behavior."
+      },
+      {
+        "option": "Dual-horizon reversal or uncoupled relaxation",
+        "rejected_reason": "These do not match the stated coupled-memory signature; the acquired observations provide enough rows to fit the four-parameter coupled ODE."
+      }
+    ],
+    "hypothesis_name": "coupled_two_state_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _integrate(row, p):\n    a_slow, b_couple, c_drive, tau_fast = p\n    x = float(row['x_now'])\n    z = float(row['mem_conv'])\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def deriv(xv, zv):\n        return -a_slow * xv + b_couple * zv + c_drive * u, (0.52 * xv - zv) / tau_fast\n    for _ in range(n):\n        k1x, k1z = deriv(x, z)\n        k2x, k2z = deriv(x + 0.5*dt*k1x, z + 0.5*dt*k1z)\n        k3x, k3z = deriv(x + 0.5*dt*k2x, z + 0.5*dt*k2z)\n        k4x, k4z = deriv(x + dt*k3x, z + dt*k3z)\n        x += dt * (k1x + 2*k2x + 2*k3x + k4x) / 6.0\n        z += dt * (k1z + 2*k2z + 2*k3z + k4z) / 6.0\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        return np.array([_integrate(r, p) for r in rows]) - y\n    result = least_squares(residual, x0=np.array([0.5, 0.2, 0.3, 0.2]), bounds=([0.0, -5.0, -5.0, 0.001], [10.0, 5.0, 5.0, 10.0]), max_nfev=5000)\n    _PARAMS = result.x\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row).')\n    return float(_integrate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

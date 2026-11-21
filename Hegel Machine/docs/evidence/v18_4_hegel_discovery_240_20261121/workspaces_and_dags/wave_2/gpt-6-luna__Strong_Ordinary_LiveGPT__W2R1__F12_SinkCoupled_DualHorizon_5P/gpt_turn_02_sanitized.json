@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "1f6ad065ef838c18",
+  "prompt_tokens": 19167,
+  "cached_tokens": 12416,
+  "completion_tokens": 1059,
+  "task_context_chars": 15550,
+  "wall_ms": 25067.16,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The acquired slow-horizon observations directly reveal the predicted reversal: short-horizon gains are positive, but outputs are negative at H=15.5 and 23.8. Fit all five parameters numerically to the eight available rows; the diversified horizons and sink gradients provide evidence for the sink-coupled dual-horizon adaptation mechanism.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch for the 5-parameter spatiotemporal memory ODE",
+        "rejected_reason": "That candidate requires trajectory data and at least eight rows; the paid long-horizon data instead show sign reversal consistent with the dual-horizon law."
+      },
+      {
+        "option": "Open-branch discriminating probe",
+        "rejected_reason": "Sink gradient already spans 0.25 to 2.15, so an additional branch-sign probe is unnecessary for this law."
+      },
+      {
+        "option": "Stationary saturation or static sink-inhibition models",
+        "rejected_reason": "They do not explain positive short-horizon outputs alongside negative outputs at H=15.5 and 23.8."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _predict_params(row, p):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    h = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base * (1.0 - math.exp(-h / tau_fast)) - amp_adapt * u * (1.0 - math.exp(-h / tau_slow))\n\ndef fit(train_rows):\n    y = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_predict_params(r, p) for r in train_rows]) - y\n    starts = [\n        [4.0, 0.5, 0.3, 0.8, 15.0],\n        [3.0, 0.7, 0.5, 1.0, 25.0],\n        [6.0, 0.3, 0.2, 0.5, 10.0],\n        [2.0, 0.8, 1.0, 1.5, 40.0],\n    ]\n    lo = [0.0, 0.0, 0.01, 0.0, 0.6]\n    hi = [20.0, 1.0, 5.0, 10.0, 200.0]\n    sols = [least_squares(residual, x0, bounds=(lo, hi), max_nfev=20000) for x0 in starts]\n    best = min(sols, key=lambda z: float(np.dot(z.fun, z.fun)))\n    return {'vmax': float(best.x[0]), 'rho': float(best.x[1]), 'tau_fast': float(best.x[2]), 'amp_adapt': float(best.x[3]), 'tau_slow': float(best.x[4])}\n\ndef predict(row):\n    p = (row['vmax'], row['rho'], row['tau_fast'], row['amp_adapt'], row['tau_slow'])\n    return float(_predict_params(row, p))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

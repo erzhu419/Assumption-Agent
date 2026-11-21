@@ -1,0 +1,36 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f13c3353066d0b83",
+  "prompt_tokens": 15505,
+  "cached_tokens": 0,
+  "completion_tokens": 959,
+  "task_context_chars": 16858,
+  "wall_ms": 24114.03,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Paid data show the diagnostic positive-to-negative horizon reversal and match the archived dual-horizon endogenous adaptation law. Fit its four parameters numerically to all paid rows, excluding the attempted single-row prediction pathway that caused the prior KeyError.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; responses turn negative by H=14.9 and remain negative at 20.7, identifying the horizon reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The observations contain the predicted dual-horizon sign reversal; no trajectory-state data suggests the higher-parameter ODE."
+      },
+      {
+        "option": "static or monotone response families",
+        "rejected_reason": "They cannot explain positive short-horizon output followed by negative long-horizon output."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to the observed horizon-dependent reversal and explicitly not needed."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    H = np.array([float(r['H']) for r in rows])\n    u = np.array([float(r['u_now']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n\n    # y = u * (A_fast*(1-exp(-H/tau_fast)) - A_slow*(1-exp(-H/tau_slow)))\n    def residual(p):\n        af, tf, ass, ts = p\n        pred = u * (af * (-np.expm1(-H / tf)) - ass * (-np.expm1(-H / ts)))\n        return pred - y\n\n    fit_result = least_squares(\n        residual,\n        x0=np.array([1.0, 0.2, 1.0, 10.0]),\n        bounds=([0.0, 1e-5, 0.0, 1e-4], [100.0, 100.0, 100.0, 1000.0]),\n        max_nfev=50000\n    )\n    return fit_result.x\n\ndef predict(row):\n    p = fit(_TRAIN_ROWS)\n    af, tf, ass, ts = p\n    H = float(row['H'])\n    u = float(row['u_now'])\n    return float(u * (af * (-math.expm1(-H / tf)) - ass * (-math.expm1(-H / ts))))\n\n_TRAIN_ROWS = []\n# fit() stores parameters for predict() through its input rows, so predict expects\n# the evaluator to call fit(train_rows) first.\n_PARAMS = None\n\ndef fit(train_rows):\n    global _TRAIN_ROWS, _PARAMS\n    _TRAIN_ROWS = list(train_rows)\n    rows = _TRAIN_ROWS\n    H = np.array([float(r['H']) for r in rows])\n    u = np.array([float(r['u_now']) for r in rows])\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        af, tf, ass, ts = p\n        return u * (af * (-np.expm1(-H / tf)) - ass * (-np.expm1(-H / ts))) - y\n    res = least_squares(residual, [1.0, 0.2, 1.0, 10.0], bounds=([0.0, 1e-5, 0.0, 1e-4], [100.0, 100.0, 100.0, 1000.0]), max_nfev=50000)\n    _PARAMS = res.x\n    return _PARAMS\n\ndef predict(row):\n    af, tf, ass, ts = _PARAMS\n    H = float(row['H'])\n    u = float(row['u_now'])\n    return float(u * (af * (-math.expm1(-H / tf)) - ass * (-math.expm1(-H / ts))))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

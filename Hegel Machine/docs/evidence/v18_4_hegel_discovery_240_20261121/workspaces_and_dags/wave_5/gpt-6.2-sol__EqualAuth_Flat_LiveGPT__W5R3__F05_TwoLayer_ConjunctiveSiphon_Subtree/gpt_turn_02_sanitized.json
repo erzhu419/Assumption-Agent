@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "685aec2f5a0a37dd",
+  "prompt_tokens": 52694,
+  "cached_tokens": 47232,
+  "completion_tokens": 1896,
+  "task_context_chars": 5112,
+  "wall_ms": 55551.52,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A saturating input response attenuated by a bounded gradient factor, plus a square-root input term, reproduces all six paid observations to rounding precision, including the added low-gradient row. Submit this law for fresh confirmation at H = 0.6. A separate threshold above the observed gradient range remains untested.",
+    "considered_alternatives": [
+      {
+        "option": "Supercritical avalanche branch with fixed km = 1.2",
+        "rejected_reason": "The threshold term is inactive throughout the measured range, and the fixed-km smooth component misses the tolerance even on the training rows."
+      },
+      {
+        "option": "Input-only Haldane curve or Cobb–Douglas power law",
+        "rejected_reason": "Haldane omits gradient suppression; Cobb–Douglas does not capture the observed saturating input response and bounded gradient attenuation."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The observations already match the target horizon and the fitted law reproduces all six rows to rounding precision. No observed residual calls for finer trajectory measurements."
+      }
+    ],
+    "hypothesis_name": "saturating_base_with_gradient_siphon",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _law(u, s, p):\n    vmax, km, rho, c_loc = p\n    return vmax * (u / (km + u)) * (1.0 - rho * s / (1.0 + s)) + c_loc * np.sqrt(u)\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    _params = least_squares(\n        lambda p: _law(u, s, p) - y,\n        x0=[5.0, 4.0, 0.65, 0.25],\n        bounds=([0.0, 1e-8, 0.0, 0.0], [np.inf, np.inf, 1.0, np.inf]),\n    ).x\n    return _params\n\n\ndef predict(row) -> float:\n    u, s = float(row['u_now']), float(row['s_grad'])\n    vmax, km, rho, c_loc = _params\n    return float(vmax * (u / (km + u)) * (1.0 - rho * s / (1.0 + s)) + c_loc * math.sqrt(u))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

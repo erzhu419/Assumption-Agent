@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f197d8e98ee7aa28",
+  "prompt_tokens": 9627,
+  "cached_tokens": 4864,
+  "completion_tokens": 950,
+  "task_context_chars": 5631,
+  "wall_ms": 23393.29,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The measured response is positive at H≤0.48, falls to 0.669 at H=8.5, then becomes negative at H=17.5 and H=24.3. This is the diagnostic endogenous slow-adaptation reversal. Fit amplitudes and fast/slow time constants numerically; the dormant sink coefficient remains weakly identified because all s_grad values are zero.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its 8.5–24.3 horizon rows directly show the predicted crossover and negative long-horizon output."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Unneeded for this smooth dual-timescale response: eight rows span short positive and long negative regimes."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant nuisance measurement; s_grad is zero in the observations and the target law is identified without it."
+      },
+      {
+        "option": "single-horizon gain or harmonic Lotka–Volterra model",
+        "rejected_reason": "Cannot explain the sign reversal across H with x_now fixed at zero; recalled verified dual-horizon mechanism matches the data."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    s = np.array([r.get('s_grad', 0.0) for r in rows], dtype=float)\n\n    # Fast positive gain saturates quickly; slower adaptation subtracts\n    # an approximately linear-in-dose term at long horizons.\n    def pred(p, uu, hh, ss):\n        af, tsf, aa, tss, rho = p\n        fast = af * (1.0 - np.exp(-hh / tsf))\n        slow = aa * (1.0 - np.exp(-hh / tss))\n        sink = 1.0 - rho * ss / (1.0 + ss)\n        return uu * (sink * fast - slow)\n\n    def residual(p):\n        return pred(p, u, h, s) - y\n\n    # Positive amplitudes and ordered timescales avoid swapped/degenerate fits.\n    best = None\n    for x0 in ([1.5, 0.3, 0.7, 12.0, 0.0], [2.5, 0.5, 0.8, 20.0, 0.2], [1.0, 1.0, 0.5, 8.0, 0.5]):\n        res = least_squares(residual, x0=x0, bounds=([0, 1e-4, 0, 0.5001, 0], [20, 5, 20, 1000, 1]), max_nfev=30000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    af, tsf, aa, tss, rho = best.x\n    return {'params': (float(af), float(tsf), float(aa), float(tss), float(rho))}\n\ndef predict(row):\n    af, tsf, aa, tss, rho = fit._params\n    u = float(row['u_now']); h = float(row['H']); s = float(row.get('s_grad', 0.0))\n    return u * ((1.0 - rho*s/(1.0+s))*af*(1.0-math.exp(-h/tsf)) - aa*(1.0-math.exp(-h/tss)))\n\n# Bind fitted parameters for predict after fit, as required by the harness.\n_fit_impl = fit\ndef fit(train_rows):\n    result = _fit_impl(train_rows)\n    fit._params = result['params']\n    return result\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

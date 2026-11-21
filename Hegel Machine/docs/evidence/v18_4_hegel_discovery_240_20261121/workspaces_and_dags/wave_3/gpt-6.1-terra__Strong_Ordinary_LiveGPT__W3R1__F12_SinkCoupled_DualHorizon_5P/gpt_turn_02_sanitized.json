@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "2d26f36e4d71234f",
+  "prompt_tokens": 19894,
+  "cached_tokens": 13184,
+  "completion_tokens": 732,
+  "task_context_chars": 15497,
+  "wall_ms": 19660.12,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The acquired long-horizon rows show reversal from positive short-horizon gain to negative responses near the target horizon. The archived sink-coupled adaptation mechanism accounts for both this reversal and sink-gradient dependence; fit its five parameters numerically and test on fresh confirmation data.",
+    "considered_alternatives": [
+      {
+        "option": "Extra-fine trajectory batch for coupled memory ODE",
+        "rejected_reason": "The slow-horizon observations directly support adaptation and provide eight rows for the specified five-parameter model; another probe is not needed before confirmation."
+      },
+      {
+        "option": "Static sink siphon or uncoupled dual-horizon law",
+        "rejected_reason": "The observed long-horizon sign reversal rules against a purely static positive siphon, while the pilot shows sink-gradient dependence absent from the uncoupled law."
+      },
+      {
+        "option": "Nuisance high-variance auxiliary probe",
+        "rejected_reason": "It does not resolve the remaining mechanism or forecast ambiguity."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _evaluate(p, rows):\n    vmax, rho, tau_fast, amp_adapt, tau_slow = p\n    u = np.array([r['u_now'] for r in rows], dtype=float)\n    s = np.array([r['s_grad'] for r in rows], dtype=float)\n    h = np.array([r['H'] for r in rows], dtype=float)\n    return (vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n            * (-np.expm1(-h / tau_fast))\n            - amp_adapt * u * (-np.expm1(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.array [r['y'] for r in rows] if False else np.array([r['y'] for r in rows], dtype=float)\n    bounds = ([0.0, 0.0, 0.001, 0.0, 0.1], [1000.0, 2.0, 20.0, 100.0, 1000.0])\n    best = None\n    for tf in (0.1, 0.5, 1.5):\n        for ts in (5.0, 15.0, 40.0):\n            result = least_squares(lambda p: _evaluate(p, rows) - y,\n                                   [6.0, 0.7, tf, 1.5, ts],\n                                   bounds=bounds, max_nfev=5000,\n                                   ftol=1e-12, xtol=1e-12, gtol=1e-12)\n            if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n                best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_evaluate(_params, [row])[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

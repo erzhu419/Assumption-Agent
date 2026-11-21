@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "098ffb9aab14d836",
+  "prompt_tokens": 32233,
+  "cached_tokens": 27904,
+  "completion_tokens": 1369,
+  "task_context_chars": 5104,
+  "wall_ms": 33370.43,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five fixed-gradient observations show a smooth, concave rise with u_now, while the two open-branch readings show a strong gradient-dependent correction consistent with the bridge-supply signature. Fit a concave power response plus gradient interaction and nuisance-input terms numerically, using the available observations without another paid probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Already acquired; its two added gradient settings help identify the bridge correction."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing seven rows span current pull and bridge gradient at the stated forecast horizon; an additional batch is not necessary before fitting this smooth candidate."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "The auxiliary measurement is irrelevant to the target law and explicitly should not be purchased."
+      },
+      {
+        "option": "hyperbolic queue blowup",
+        "rejected_reason": "The observed response is concave over u_now rather than showing a finite-capacity divergence."
+      }
+    ],
+    "hypothesis_name": "concave_bridge_transfer",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    X = np.array([[float(r['u_now']), float(r['s_grad']), float(r['H']), float(r['u_past']), float(r['x_now']), float(r['mem_conv'])] for r in rows], dtype=float)\n    y = np.array([float(r['y']) for r in rows], dtype=float)\n    # Concave two-hop transfer response in current pull with a gradient-dependent\n    # bridge correction. Fit all coefficients and the power numerically.\n    def pred(p, x):\n        u, s, h, up, xn, m = x.T\n        return p[0] + p[1] * np.maximum(u, 1e-9) ** p[2] + p[3] * s + p[4] * s * u + p[5] * h + p[6] * up + p[7] * xn + p[8] * m\n    def residual(p):\n        return pred(p, X) - y\n    p0 = np.array([0.0, 2.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])\n    lo = [-100, -100, 0.05, -100, -100, -100, -100, -100, -100]\n    hi = [100, 100, 1.5, 100, 100, 100, 100, 100, 100]\n    result = least_squares(residual, p0, bounds=(lo, hi), max_nfev=20000)\n    return result.x.tolist()\n\ndef predict(row):\n    p = fit(_fit_rows)\n    u = max(float(row['u_now']), 1e-9)\n    s = float(row['s_grad']); h = float(row['H'])\n    return float(p[0] + p[1]*u**p[2] + p[3]*s + p[4]*s*u + p[5]*h + p[6]*float(row['u_past']) + p[7]*float(row['x_now']) + p[8]*float(row['mem_conv']))\n\n_fit_rows = []\n# fit/predict API stores parameters from fit; callable predictors are handled by the harness.\n_original_fit = fit\ndef fit(train_rows):\n    global _fit_rows\n    _fit_rows = list(train_rows)\n    return _original_fit(_fit_rows)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

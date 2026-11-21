@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "d44011f95bc3f53a",
+  "prompt_tokens": 30975,
+  "cached_tokens": 23552,
+  "completion_tokens": 1126,
+  "task_context_chars": 15442,
+  "wall_ms": 32240.31,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The gain is positive at H=7.66 and negative at H=15.77 and H=21.9. A fast positive response opposed by slower negative adaptation fits all eight paid observations to within rounding error, so the next step is fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "single-exponential relaxation",
+        "rejected_reason": "A single exponential cannot reproduce the observed rise and subsequent sign reversal in y/u_now."
+      },
+      {
+        "option": "sink-coupled dual-horizon adaptation",
+        "rejected_reason": "Its saturating fast-drive term fits substantially worse even at zero sink gradient."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing short- and long-horizon measurements already constrain both timescales; another batch is not needed before confirmation."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, h, y = np.asarray([(r['u_now'], r['H'], r['y']) for r in train_rows], dtype=float).T\n\n    def residual(log_params):\n        a_fast, a_slow, tau_fast, gap = np.exp(log_params)\n        tau_slow = tau_fast + gap\n        gain = -a_fast * np.expm1(-h / tau_fast) + a_slow * np.expm1(-h / tau_slow)\n        return u * gain - y\n\n    start = np.log([1.5, 2.0, 0.5, 10.0])\n    result = least_squares(residual, start, ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    a_fast, a_slow, tau_fast, gap = np.exp(result.x)\n    _params = (a_fast, a_slow, tau_fast, tau_fast + gap)\n\ndef predict(row) -> float:\n    a_fast, a_slow, tau_fast, tau_slow = _params\n    h = row['H']\n    gain = -a_fast * math.expm1(-h / tau_fast) + a_slow * math.expm1(-h / tau_slow)\n    return float(row['u_now'] * gain)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

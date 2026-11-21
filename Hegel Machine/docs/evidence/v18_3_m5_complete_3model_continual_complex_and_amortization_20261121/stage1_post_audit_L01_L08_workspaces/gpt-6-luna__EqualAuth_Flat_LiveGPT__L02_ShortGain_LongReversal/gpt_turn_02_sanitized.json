@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "d6f18306bde7b63c",
+  "prompt_tokens": 9358,
+  "cached_tokens": 4864,
+  "completion_tokens": 844,
+  "task_context_chars": 5307,
+  "wall_ms": 19532.99,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-horizon rows are positive while the H=20 observation is negative, matching the dual-horizon adaptation mechanism and refuting the monotone alternative. Fit the fast/slow amplitudes and time constants numerically from all paid rows; prediction depends on current input and forecast horizon.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; the H=20 result is negative, directly supporting long-horizon reversal."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Not needed after the long-H measurement resolves the key ambiguity."
+      },
+      {
+        "option": "Monotone Arrhenius thermal-rate model",
+        "rejected_reason": "Cannot account for positive short-H outputs and the negative H=20 output."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Auxiliary nuisance information does not identify the observed horizon-dependent sign reversal."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    u = np.array([float(r['u_now']) for r in train_rows], dtype=float)\n    H = np.array([float(r['H']) for r in train_rows], dtype=float)\n    y = np.array([float(r['y']) for r in train_rows], dtype=float)\n    z = y / np.maximum(np.abs(u), 1e-8)\n    def pred(p):\n        af, ass, tf, ts = p[0], p[1], math.exp(p[2]), math.exp(p[3])\n        return af * (1.0 - np.exp(-H / tf)) - ass * (1.0 - np.exp(-H / ts))\n    def resid(p):\n        return pred(p) - z\n    starts = [\n        [2.0, 1.0, math.log(0.5), math.log(10.0)],\n        [3.0, 1.5, math.log(1.0), math.log(20.0)],\n        [1.5, 0.8, math.log(0.3), math.log(5.0)],\n        [4.0, 2.0, math.log(2.0), math.log(30.0)],\n    ]\n    best = None\n    for p0 in starts:\n        res = least_squares(resid, p0, max_nfev=20000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    return best.x.tolist()\n\ndef predict(row):\n    af, ass, log_tf, log_ts = fit_params\n    tf, ts = math.exp(log_tf), math.exp(log_ts)\n    H = float(row['H'])\n    return float(row['u_now']) * (af * (1.0 - math.exp(-H / tf)) - ass * (1.0 - math.exp(-H / ts)))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

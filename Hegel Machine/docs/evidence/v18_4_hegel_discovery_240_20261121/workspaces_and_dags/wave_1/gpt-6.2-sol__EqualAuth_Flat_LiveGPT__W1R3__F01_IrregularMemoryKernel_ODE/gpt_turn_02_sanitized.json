@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "2d4cd5283740abed",
+  "prompt_tokens": 28958,
+  "cached_tokens": 4992,
+  "completion_tokens": 2281,
+  "task_context_chars": 12700,
+  "wall_ms": 54241.53,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The four-parameter coupled ODE with timestamp-weighted memory reconstruction fits the eight paid rows at about 0.000007 RMSE. The largest absolute leave-one-out error is about 0.000026, well below the 0.045 tolerance. Submit for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired batch already supports the coupled model: leave-one-out predictions are well within tolerance, and the observed horizons span the target."
+      },
+      {
+        "option": "Single-mode Maxwell decay",
+        "rejected_reason": "The input steps have both signs, but all observed targets are positive, so a fixed modulus cannot account for both step directions."
+      },
+      {
+        "option": "Uncoupled Kelvin–Voigt creep",
+        "rejected_reason": "A creep law driven only by the current input cannot account for the observed dependence on history at matched endpoints."
+      }
+    ],
+    "hypothesis_name": "coupled_ode_irregular_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _forecast(row, params):\n    a, b, c, tau = params\n    x = row['x_now']\n    horizon = row['H']\n    if horizon == 0:\n        return float(x)\n    z = row.get('mem_conv')\n    if z is None:\n        prefix = row['raw_prefix']\n        z = 0.52 * prefix[0]['x']\n        for left, right in zip(prefix, prefix[1:]):\n            q = (right['t'] - left['t']) / tau\n            decay = math.exp(-q)\n            z = decay * z + 0.26 * q * (decay * left['x'] + right['x'])\n    n = math.ceil(horizon / 0.004)\n    h = horizon / n\n    # Augment by a constant so one RK4 step is a matrix map.\n    M = h * np.array([[-a, b, c * row['u_now']], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    M2 = M @ M\n    step = np.eye(3) + M + M2 / 2.0 + (M2 @ M) / 6.0 + (M2 @ M2) / 24.0\n    return float(np.linalg.matrix_power(step, n)[0] @ np.array([x, z, 1.0]))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    target = np.array([r['y'] for r in rows], dtype=float)\n    def residual(params):\n        return np.array([_forecast(r, params) for r in rows]) - target\n    result = least_squares(residual, [2.0, 1.0, 1.0, 0.3], bounds=([0.0, 0.0, 0.0, 0.01], np.inf), x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n    return _params\n\ndef predict(row):\n    return _forecast(row, _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

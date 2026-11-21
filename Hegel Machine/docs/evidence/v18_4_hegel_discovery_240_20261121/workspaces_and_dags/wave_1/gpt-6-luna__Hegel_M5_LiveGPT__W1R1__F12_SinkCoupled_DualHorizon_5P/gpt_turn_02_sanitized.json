@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "2bb86f2db0f6fed1",
+  "prompt_tokens": 10093,
+  "cached_tokens": 4864,
+  "completion_tokens": 1039,
+  "task_context_chars": 7150,
+  "wall_ms": 23715.4,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The acquired long-horizon batch resolves the key ambiguity left by the five short-H pilots: positive responses at short H and negative responses at H=15.5 and 23 support dual-timescale endogenous adaptation. Fit the guided sink-coupled fast gain minus slow adaptation law numerically, including its five unknown parameters.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another slow_horizon_discriminating_probe",
+        "rejected_reason": "The purchased batch spans H=8, 15.5, and 23 and already directly identifies the long-horizon sign reversal required at target H=21.5."
+      },
+      {
+        "option": "Single-horizon Ricker dome map",
+        "rejected_reason": "Cannot explain the same input family transitioning from positive short-H observations to negative values at H=15.5 and 23."
+      },
+      {
+        "option": "Lotka–Volterra periodic harmonic law",
+        "rejected_reason": "The observed pattern is specifically horizon-dependent reversal and sink-gradient modulation, while the provided matched-subtree and co-activation guidance supports the coupled dual-horizon law."
+      },
+      {
+        "option": "Extra fine trajectory batch",
+        "rejected_reason": "Existing observations cover a wide input and sink-gradient range plus short and long horizons; the specified five-parameter law can now be fitted."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _predict_with(p, row):\n    vmax, rho, amp_adapt, tau_fast, tau_slow = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    H = float(row['H'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base * (1.0 - math.exp(-H / tau_fast)) - amp_adapt * u * (1.0 - math.exp(-H / tau_slow))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        return np.array([_predict_with(p, r) for r in rows]) - y\n    lower = [0.0, 0.0, 0.0, 1e-4, 1e-3]\n    upper = [30.0, 0.999999, 10.0, 100.0, 500.0]\n    starts = [\n        [6.0, 0.7, 0.8, 1.0, 20.0],\n        [5.0, 0.5, 0.5, 0.5, 10.0],\n        [8.0, 0.8, 1.0, 2.0, 40.0],\n    ]\n    best = None\n    for x0 in starts:\n        result = least_squares(residual, x0, bounds=(lower, upper), max_nfev=30000, xtol=1e-13, ftol=1e-13, gtol=1e-13)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _params = best[1]\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_predict_with(_params, row))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

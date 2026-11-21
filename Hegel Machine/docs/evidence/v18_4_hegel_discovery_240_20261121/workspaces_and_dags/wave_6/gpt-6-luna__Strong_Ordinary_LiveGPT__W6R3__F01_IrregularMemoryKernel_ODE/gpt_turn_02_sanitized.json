@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f34f40749f17a49a",
+  "prompt_tokens": 18754,
+  "cached_tokens": 8320,
+  "completion_tokens": 1338,
+  "task_context_chars": 22243,
+  "wall_ms": 33093.8,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight available training rows include irregular raw histories needed to initialize the memory state. Fit the four coupled ODE parameters numerically, initialize the latent state from each history using the exponential kernel, and integrate the forecast with RK4; this directly matches both pilot signatures without further measurement.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All supplied rows have s_grad=0 and no branch ambiguity is implicated; signatures and raw histories point to coupled transient memory."
+      },
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "H values are near the target forecast horizon, and the observed signatures indicate a short-horizon coupled-memory mechanism rather than dual-horizon reversal."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the resulting eight rows meet the archive's minimum count for fitting the four-parameter memory ODE."
+      },
+      {
+        "option": "Static snapshot, before/after contrast, and uncoupled relaxation models",
+        "rejected_reason": "Endpoint-matched histories yield different outcomes and the coupled transient-lag signature contradicts a purely static or uncoupled model."
+      }
+    ],
+    "hypothesis_name": "irregular_memory_kernel_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_P = None\n\ndef _z0(row, tau):\n    pref = row.get('raw_prefix') or []\n    if not pref:\n        return 0.52 * float(row.get('x_now', 0.0))\n    ts = np.array([float(q['t']) for q in pref], dtype=float)\n    xs = np.array([float(q['x']) for q in pref], dtype=float)\n    order = np.argsort(ts)\n    ts, xs = ts[order], xs[order]\n    end = ts[-1]\n    z = 0.52 * xs[0] * math.exp(-(end-ts[0])/tau)\n    for i in range(len(ts)-1):\n        d = ts[i+1]-ts[i]\n        if d <= 0: continue\n        # Integrate the linearly interpolated x forcing against the exponential kernel.\n        q = d/tau\n        e = math.exp(-q)\n        w0 = (1.0-(1.0+q)*e)/q\n        w1 = 1.0-w0\n        z += 0.52 * (xs[i]*w0 + xs[i+1]*w1) * (1.0-e)\n    return z\n\ndef _simulate(row, p):\n    a, b, c, tau = [float(v) for v in p]\n    x = float(row['x_now'])\n    z = float(row['mem_conv']) if row.get('mem_conv') is not None else _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H/0.004)))\n    dt = H/n\n    def f(xv, zv):\n        return -a*xv + b*zv + c*u, (0.52*xv-zv)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+dt*k1x/2,z+dt*k1z/2)\n        k3x,k3z=f(x+dt*k2x/2,z+dt*k2z/2)\n        k4x,k4z=f(x+dt*k3x,z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    global _P\n    y = np.array([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.array([_simulate(r,p) for r in train_rows])-y\n    starts = [[0.5,0.2,0.8,0.15],[1.0,0.5,1.0,0.3],[0.2,0.1,0.5,0.08]]\n    best = None\n    for s in starts:\n        res = least_squares(residual, s, bounds=([0.001,-5,-5,0.005],[5,5,5,2]), max_nfev=3000)\n        if best is None or np.dot(res.fun,res.fun)<np.dot(best.fun,best.fun): best=res\n    _P = best.x\n    return _P\n\ndef predict(row):\n    if _P is None:\n        raise RuntimeError('Call fit(train_rows) first')\n    return float(_simulate(row,_P))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

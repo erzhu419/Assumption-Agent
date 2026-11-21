@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "3f1a8bb47564df91",
+  "prompt_tokens": 78661,
+  "cached_tokens": 57600,
+  "completion_tokens": 2365,
+  "task_context_chars": 5509,
+  "wall_ms": 62866.66,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five pilot rows identify a saturating input term plus a square-root term. The branch probe shows that the downstream gradient scales the saturating term through a reciprocal factor. This four-parameter law reproduces all seven paid observations to rounding precision at H = 0.6; fresh confirmation is still needed.",
+    "considered_alternatives": [
+      {
+        "option": "Gradient-independent saturation",
+        "rejected_reason": "The branch probe departs from the pilot curve by about +1.22 and -0.80 at low and high gradients, respectively."
+      },
+      {
+        "option": "Gradient-dependent half-saturation",
+        "rejected_reason": "A linear gradient shift in the saturation denominator leaves systematic residuals; reciprocal modulation of the gain fits to observation precision."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The existing rows resolve the gradient response at the requested horizon, so a trajectory batch is not needed before fresh confirmation."
+      }
+    ],
+    "hypothesis_name": "two_hop_saturating_flux",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    root = np.sqrt(u)\n    def residual(p):\n        a, b, k, c = p\n        return (a + b / (1.0 + s)) * u / (k + u) + c * root - y\n    _params = least_squares(residual, [2.0, 5.0, 1.0, 0.3], bounds=([0.0, 0.0, 1e-8, 0.0], np.inf)).x\n\ndef predict(row) -> float:\n    a, b, k, c = _params\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return float((a + b / (1.0 + s)) * u / (k + u) + c * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

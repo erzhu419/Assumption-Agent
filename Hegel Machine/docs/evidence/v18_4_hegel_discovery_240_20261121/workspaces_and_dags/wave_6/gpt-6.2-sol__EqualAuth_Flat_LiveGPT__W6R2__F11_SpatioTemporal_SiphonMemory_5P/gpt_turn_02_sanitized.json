@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "580151597a33596e",
+  "prompt_tokens": 34313,
+  "cached_tokens": 29952,
+  "completion_tokens": 1616,
+  "task_context_chars": 5444,
+  "wall_ms": 42675.29,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The five-parameter coupled ODE reproduces all eight paid endpoints with training RMSE about 2.5e-8, consistent with rounding. The observations bracket the target horizon and vary both initial memory and sink gradient, so fresh confirmation is more informative than another paid probe.",
+    "considered_alternatives": [
+      {
+        "option": "Haldane substrate inhibition",
+        "rejected_reason": "An input-only curve omits the initial state, memory, and gradient dependence indicated by the observations."
+      },
+      {
+        "option": "Cobb–Douglas power law",
+        "rejected_reason": "A static input–gradient law cannot represent the observed transient lag or dependence on initial memory."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch or nuisance_high_var_aux",
+        "rejected_reason": "The acquired batch supplies eight endpoints that constrain the coupled model at horizons bracketing 0.46. The auxiliary probe does not test this mechanism."
+      }
+    ],
+    "hypothesis_name": "spatiotemporal_siphon_memory_5p",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_keys = ('u_now', 'x_now', 'mem_conv', 's_grad', 'H')\n_params = None\n\ndef _endpoint(data, params):\n    a, b, tau, vmax, rho = params\n    u, x, z, s, H = data.T\n    u = u / 0.005\n    source = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    n = max(80, math.ceil(float(np.max(H)) / tau))\n    h = H / n\n\n    def increment(x, z):\n        return h * (-a*x + b*z + source), (h/tau) * (0.52*x - z)\n\n    for _ in range(n):\n        kx, kz = increment(x, z)\n        lx, lz = increment(x + 0.5*kx, z + 0.5*kz)\n        mx, mz = increment(x + 0.5*lx, z + 0.5*lz)\n        nx, nz = increment(x + mx, z + mz)\n        x = x + (kx + 2*lx + 2*mx + nx) / 6.0\n        z = z + (kz + 2*lz + 2*mz + nz) / 6.0\n    return x\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    data = np.array([[r[k] for k in _keys] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    result = least_squares(lambda p: _endpoint(data, p) - y,\n                           [0.6, 0.8, 0.15, 4.0, 0.4],\n                           bounds=([0, 0, 0.001, 0, 0], [np.inf, np.inf, np.inf, np.inf, 1]),\n                           x_scale='jac', ftol=1e-11, xtol=1e-11, gtol=1e-11)\n    _params = result.x\n    return _params\n\ndef predict(row):\n    data = np.array([[row[k] for k in _keys]], dtype=float)\n    return float(_endpoint(data, _params)[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

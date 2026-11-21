@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f746d035a5f25f17",
+  "prompt_tokens": 31522,
+  "cached_tokens": 28032,
+  "completion_tokens": 607,
+  "task_context_chars": 5513,
+  "wall_ms": 18947.85,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The open-branch results establish a large gradient-dependent contribution, while the original sweep is saturating in u_now. Fit a compact nonlinear gradient-coupled saturating response to all paid rows; no chaotic sign oscillation is evident. This is a provisional smooth empirical model, not a uniquely identified mechanistic two-hop ODE.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Seven observations now span an open-branch gradient contrast and multiple u_now values; an additional trajectory batch is not justified unless the fitted family cannot confirm."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "Already acquired; the new low/high-gradient rows provide a direct contrast."
+      },
+      {
+        "option": "saturating snapshot-only response",
+        "rejected_reason": "The marked gradient contrast changes the output substantially, so a u_now-only snapshot mechanism is inadequate."
+      }
+    ],
+    "hypothesis_name": "two_hop_bridge_decay",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    rows = train_rows\n    # Empirical response suggests saturating dependence on u_now, with a\n    # gradient-sensitive bridge contribution. Fit a parsimonious smooth law.\n    def pred(p, r):\n        a,b,c,d,e = p\n        u=float(r['u_now']); g=float(r['s_grad']); h=float(r['H'])\n        return a + b*u/(c+u) + d*g + e*u*g\n    def residual(p):\n        return [pred(p,r)-float(r['y']) for r in rows]\n    starts=[np.array([0.0,5.0,1.0,-0.5,0.05]),np.array([1.0,4.0,0.5,0.0,0.0])]\n    fits=[least_squares(residual,s,max_nfev=5000) for s in starts]\n    p=min(fits,key=lambda z: np.sum(z.fun**2)).x\n    return p\n\ndef predict(row):\n    # fit caches parameters on training rows; callers should invoke fit first.\n    p=_params\n    a,b,c,d,e=p\n    u=float(row['u_now']); g=float(row['s_grad'])\n    return float(a+b*u/(c+u)+d*g+e*u*g)\n\n_params=None\n_orig_fit=fit\ndef fit(train_rows):\n    global _params\n    _params=_orig_fit(train_rows)\n    return _params\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

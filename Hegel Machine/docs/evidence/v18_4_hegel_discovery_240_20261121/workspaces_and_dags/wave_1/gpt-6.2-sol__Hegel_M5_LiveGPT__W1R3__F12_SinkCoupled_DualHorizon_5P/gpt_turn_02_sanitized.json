@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "832509d275dadf44",
+  "prompt_tokens": 10219,
+  "cached_tokens": 4992,
+  "completion_tokens": 1108,
+  "task_context_chars": 7116,
+  "wall_ms": 27548.99,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "All five short-horizon responses are positive. The probe remains positive at H=8 and is negative at H=15.5 and H=23.7, supporting a fast, sink-attenuated gain opposed by slower adaptation. The eight rows support fitting all five parameters, and the target H=22.2 lies between the two late observations.",
+    "considered_alternatives": [
+      {
+        "option": "Sink-free dual exponential",
+        "rejected_reason": "It permits a horizon reversal but omits the sink-gradient dependence indicated by the pilot."
+      },
+      {
+        "option": "Static Ricker or square-root sink branch",
+        "rejected_reason": "These mechanisms lack the slow adaptation term needed to explain the negative late-horizon observations."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The five short-horizon rows and three longer-horizon rows already span both response regimes and bracket the target horizon; proceed to fresh confirmation without another purchase."
+      }
+    ],
+    "hypothesis_name": "sink_coupled_dual_horizon_reversal",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _response(u, s, h, p):\n    vmax, rho, tau_fast, amp_adapt, tau_gap = p\n    tau_slow = tau_fast + tau_gap\n    gain = vmax * (1.0 - rho * s / (1.0 + s)) * u / (1.2 + u)\n    return gain * (-np.expm1(-h / tau_fast)) - amp_adapt * u * (-np.expm1(-h / tau_slow))\n\n\ndef fit(train_rows):\n    global _params\n    u, s, h, y = np.array([[r['u_now'], r['s_grad'], r['H'], r['y']] for r in train_rows], dtype=float).T\n\n    def residual(p):\n        return _response(u, s, h, p) - y\n\n    bounds = ([0.0, 0.0, 1e-6, 0.0, 1e-6], [np.inf, 1.0, np.inf, np.inf, np.inf])\n    best = None\n    for start in ([7.0, 0.7, 0.5, 2.0, 10.0], [5.0, 0.5, 0.2, 1.5, 4.0], [9.0, 0.75, 1.0, 3.0, 20.0]):\n        result = least_squares(residual, start, bounds=bounds, x_scale='jac', ftol=1e-11, xtol=1e-11, gtol=1e-11, max_nfev=1500)\n        if best is None or result.cost < best.cost:\n            best = result\n        if math.sqrt(2.0 * best.cost / y.size) < 1e-6:\n            break\n    _params = best.x\n\n\ndef predict(row):\n    return float(_response(row['u_now'], row['s_grad'], row['H'], _params))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

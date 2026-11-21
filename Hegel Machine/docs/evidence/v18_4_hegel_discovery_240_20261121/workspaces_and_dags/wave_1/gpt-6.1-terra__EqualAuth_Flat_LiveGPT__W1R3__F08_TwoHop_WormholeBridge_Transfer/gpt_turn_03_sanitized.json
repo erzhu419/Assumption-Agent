@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "45ec9067da10108c",
+  "prompt_tokens": 20860,
+  "cached_tokens": 15104,
+  "completion_tokens": 1869,
+  "task_context_chars": 7235,
+  "wall_ms": 41150.77,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The ten observations show a smooth concave response to current input and substantial gradient dependence. A numerically fitted logarithmic interaction is a compact candidate for fresh confirmation; the unchanged past input, state, memory and horizon do not identify their effects.",
+    "considered_alternatives": [
+      {
+        "option": "Another open-branch or fine-trajectory probe",
+        "rejected_reason": "Both offered discriminating probes have already been acquired; confirmation is the next informative action."
+      },
+      {
+        "option": "Linear Little's Law or hyperbolic queue",
+        "rejected_reason": "The pilot response is concave and saturating rather than linear or exhibiting a queue-capacity blowup."
+      },
+      {
+        "option": "Separable additive gradient correction",
+        "rejected_reason": "The gradient effect appears to vary with input level, motivating an interaction term."
+      }
+    ],
+    "hypothesis_name": "saturating_input_gradient_interaction",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _features(rows):\n    return np.array([[float(r['u_now']), float(r['s_grad'])] for r in rows], dtype=float)\n\ndef _model(p, X):\n    u, s = X[:, 0], X[:, 1]\n    lu = np.log1p(np.maximum(u, 0.0) * np.exp(p[4]))\n    ls = np.log1p(np.maximum(s, 0.0) * np.exp(p[5]))\n    return p[0] + p[1]*lu + p[2]*ls + p[3]*lu*ls\n\ndef fit(train_rows):\n    global _params\n    X = _features(train_rows)\n    y = np.array([float(r['y']) for r in train_rows])\n    best = None\n    for ku in (0.3, 1.0, 3.0, 10.0):\n        for ks in (0.3, 1.0, 3.0, 10.0):\n            p0 = [0.0, 2.0, -1.0, 0.0, np.log(ku), np.log(ks)]\n            result = least_squares(lambda p: _model(p, X) - y, p0, bounds=([-100, -100, -100, -100, -6, -6], [100, 100, 100, 100, 6, 6]), max_nfev=3000)\n            if best is None or np.sum(result.fun**2) < np.sum(best.fun**2):\n                best = result\n    _params = best.x\n\ndef predict(row):\n    return float(_model(_params, _features([row]))[0])"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

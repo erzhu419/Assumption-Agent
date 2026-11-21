@@ -92,12 +92,12 @@ def test_m5_track1_anonymous_benchmark_and_joint_stream_cold_reload(tmp_path: Pa
         j_arms["Hegel_M5_Full_TemporalSubtree_Forest"]["total_composite_cost"]
         < j_arms["EqualAuth_Dynamic_Flat_BM25"]["total_composite_cost"]
     )
-    assert (
-        j_arms["Hegel_M5_Full_TemporalSubtree_Forest"]["total_composite_cost"]
-        < j_arms["Strong_Dynamic_StateSpace_NoSubtree"]["total_composite_cost"]
-            if "Strong_Dynamic_StateSpace_NoSubtree" in j_arms
-            else j_arms["Strong_Dynamic_StateSpace_AllHistory"]["total_composite_cost"]
+    strong_j_key = (
+        "Strong_Dynamic_StateSpace_NoSubtree"
+        if "Strong_Dynamic_StateSpace_NoSubtree" in j_arms
+        else "Strong_Dynamic_StateSpace_AllHistory"
     )
+    assert j_arms["Hegel_M5_Full_TemporalSubtree_Forest"]["total_composite_cost"] < j_arms[strong_j_key]["total_composite_cost"]
 
     cold = j_res["cold_subprocess_continuation_J17_J20"]
     assert cold["digest_check"]["semantic_digest_mismatch_count"] == 0

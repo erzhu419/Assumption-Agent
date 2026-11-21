@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "bd138f3faca77c19",
+  "prompt_tokens": 15077,
+  "cached_tokens": 0,
+  "completion_tokens": 602,
+  "task_context_chars": 15521,
+  "wall_ms": 16940.39,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Observed positive short-H gains followed by negative responses at H=14.9 and 20.7 directly support dual-horizon adaptation. The four-parameter law is numerically fit from the paid rows.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; long-horizon rows are negative while short-horizon observations are positive, identifying the reversal regime."
+      },
+      {
+        "option": "extra_fine_trajectory_batch / coupled memory ODE",
+        "rejected_reason": "The acquired long-horizon points and varied H support the explicitly matching dual-horizon reversal law; no memory-convolution evidence warrants an ODE batch."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "Irrelevant to the observed horizon-dependent sign reversal and explicitly not worth its cost."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _f(p, row):\n    amp_fast, tau_fast, amp_slow, tau_slow = p\n    H = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (-math.expm1(-H / tau_fast)) - amp_slow * (-math.expm1(-H / tau_slow)))\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    ys = np.array([float(r['y']) for r in rows], dtype=float)\n    def residual(p):\n        return np.array([_f(p, r) for r in rows]) - ys\n    best = None\n    for p0 in ([1.0, 1.0, 1.0, 10.0], [2.0, 0.5, 1.0, 20.0], [1.0, 2.0, 2.0, 15.0], [3.0, 1.0, 2.0, 30.0]):\n        res = least_squares(residual, p0, bounds=([0.0, 1e-4, 0.0, 1e-3], [100.0, 100.0, 100.0, 200.0]), max_nfev=20000)\n        score = float(np.dot(res.fun, res.fun))\n        if best is None or score < best[0]:\n            best = (score, res.x)\n    return best[1]\n\ndef predict(row):\n    p = fit([row])\n    return _f(p, row)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

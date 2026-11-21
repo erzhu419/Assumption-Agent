@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "d467c187f89f9d11",
+  "prompt_tokens": 15734,
+  "cached_tokens": 13440,
+  "completion_tokens": 885,
+  "task_context_chars": 3365,
+  "wall_ms": 25599.74,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "After subtracting the equilibrium term inferred from the no-step row, dividing each shifted response by its signed normalized step gives a common negative exponential with a relaxation time of about 0.68. The paid rows support fitting all three parameters and proceeding directly to fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Pure Maxwell exponential contrast",
+        "rejected_reason": "It predicts zero for the no-step row, which has y = 0.4545."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck mean reversion",
+        "rejected_reason": "The shifted endpoints lie on opposite sides of their starting states, which a shared equilibrium cannot explain for these initial states."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The no-step row isolates the equilibrium term, and four signed contrasts at distinct horizons identify the gain and decay rate. The target horizon is inside the sampled range."
+      }
+    ],
+    "hypothesis_name": "normalized_before_after_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    u = np.array([r['u_now'] for r in rows], dtype=float) / 0.02\n    d = u - np.array([r['u_past'] for r in rows], dtype=float) / 0.02\n    h = np.array([r['H'] for r in rows], dtype=float)\n    y = np.array([r['y'] for r in rows], dtype=float)\n    tau0 = max(float(np.median(h)), 1e-3)\n    design = np.column_stack((d * np.exp(-h / tau0), u))\n    gain0, eq0 = np.linalg.lstsq(design, y, rcond=None)[0]\n\n    def residual(p):\n        gain, log_tau, eq = p\n        return gain * d * np.exp(-h / math.exp(log_tau)) + eq * u - y\n\n    _params = least_squares(residual, [gain0, math.log(tau0), eq0],\n                            bounds=([-np.inf, -25, -np.inf], [np.inf, 25, np.inf])).x\n    return _params\n\n\ndef predict(row) -> float:\n    gain, log_tau, eq = _params\n    u = row['u_now'] / 0.02\n    d = (row['u_now'] - row['u_past']) / 0.02\n    return float(gain * d * math.exp(-row['H'] / math.exp(log_tau)) + eq * u)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

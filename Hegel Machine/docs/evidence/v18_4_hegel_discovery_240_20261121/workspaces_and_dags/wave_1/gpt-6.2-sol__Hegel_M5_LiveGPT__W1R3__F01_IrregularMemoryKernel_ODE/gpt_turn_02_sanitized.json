@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "406a50c18fbe4193",
+  "prompt_tokens": 58378,
+  "cached_tokens": 37888,
+  "completion_tokens": 2169,
+  "task_context_chars": 14152,
+  "wall_ms": 53521.37,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The irregular-prefix coupled ODE fits the eight paid outcomes with training RMSE about 0.000007. It reconstructs memory using elapsed times within each prefix, then forecasts the coupled state under the current input. Submit it for fresh confirmation against the 0.045 tolerance without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid trajectories span horizons from 0.36 to 0.55 and give consistent fits across starting values. No remaining ambiguity warrants another purchase before fresh confirmation."
+      },
+      {
+        "option": "Reduced snapshot balance ODE",
+        "rejected_reason": "It discards history and therefore cannot reproduce the observed gap between endpoint-matched histories."
+      },
+      {
+        "option": "Single-mode Maxwell stress decay",
+        "rejected_reason": "An input-step decay would predict opposite signs for upward and downward steps at fixed modulus, whereas the measured outcomes are positive for both."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _prepare(row):\n    memory = row.get('mem_conv')\n    if memory is None:\n        prefix = row['raw_prefix']\n        t = np.asarray([p['t'] for p in prefix], dtype=float)\n        x = np.asarray([p['x'] for p in prefix], dtype=float)\n        memory = (t[-1] - t, np.diff(t), x)\n    return float(row['x_now']), float(row['u_now']), float(row['H']), memory\n\n\ndef _rk4_matrix(A, h):\n    B = h * A\n    I = np.eye(3)\n    return I + B @ (I + B @ (I / 2 + B @ (I / 6 + B / 24)))\n\n\ndef _forecast(rows, p):\n    a, b, c, tau = p\n    A = np.array([[-a, b, c], [0.52 / tau, -1 / tau, 0.0], [0.0, 0.0, 0.0]])\n    step = _rk4_matrix(A, 0.004)\n    for x, u, horizon, memory in rows:\n        if isinstance(memory, tuple):\n            lag, dt, hist_x = memory\n            w = np.exp(-lag / tau) * hist_x\n            z = 0.52 * (w[0] + np.dot(dt, w[:-1] + w[1:]) / (2 * tau))\n        else:\n            z = float(memory)\n        n = math.floor(horizon / 0.004)\n        state = np.linalg.matrix_power(step, n) @ np.array([x, z, u])\n        rem = horizon - n * 0.004\n        if rem > 0:\n            state = _rk4_matrix(A, rem) @ state\n        yield float(state[0])\n\n\ndef fit(train_rows):\n    global _params\n    train_rows = list(train_rows)\n    rows = [_prepare(row) for row in train_rows]\n    y = np.asarray([row['y'] for row in train_rows], dtype=float)\n\n    def residual(p):\n        return np.fromiter(_forecast(rows, p), dtype=float, count=len(rows)) - y\n\n    fits = [least_squares(residual, [2.0, 1.0, 1.5, tau],\n                          bounds=([0.0, 0.0, 0.0, 0.01], [np.inf] * 4),\n                          x_scale='jac', max_nfev=500)\n            for tau in (0.2, 0.8)]\n    _params = min(fits, key=lambda result: result.cost).x\n    return _params\n\n\ndef predict(row) -> float:\n    return next(_forecast([_prepare(row)], _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

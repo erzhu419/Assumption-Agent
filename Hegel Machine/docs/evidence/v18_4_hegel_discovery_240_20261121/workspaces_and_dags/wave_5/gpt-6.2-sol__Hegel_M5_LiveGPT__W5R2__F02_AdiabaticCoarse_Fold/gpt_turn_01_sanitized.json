@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "cac0f3e99f69eb11",
+  "prompt_tokens": 34663,
+  "cached_tokens": 31104,
+  "completion_tokens": 1203,
+  "task_context_chars": 3567,
+  "wall_ms": 34771.71,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A single exponential relaxes the initial state toward an equilibrium proportional to the current drive. The fitted gain is about 2.0944 and the decay rate about 1.2683, giving a pilot RMSE of about 4e-8 across all five rows. The target horizon lies within the pilot span, so submit the reduced law for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Pure steady-state proportional law",
+        "rejected_reason": "Its pilot RMSE is about 0.011, but it misses the systematic residual dependence on the initial state."
+      },
+      {
+        "option": "Zero-initial-state Kelvin–Voigt creep or unit-gain Newton cooling",
+        "rejected_reason": "The former omits the observed initial-state transient; the latter fixes the equilibrium gain at 1 rather than the fitted value near 2.094."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot already spans the target horizon and identifies both parameters of the reduced law to the precision of the observations."
+      }
+    ],
+    "hypothesis_name": "exponential_relaxation_to_driven_equilibrium",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef fit(train_rows):\n    global _gain, _rate\n    u, x, h, y = np.array([(r['u_now'], r['x_now'], r['H'], r['y']) for r in train_rows], dtype=float).T\n    gain0 = float(np.dot(u, y) / np.dot(u, u))\n\n    def residual(p):\n        gain, rate = p\n        t = -rate * h\n        return x * np.exp(t) - gain * u * np.expm1(t) - y\n\n    _gain, _rate = least_squares(residual, [gain0, 1.0], bounds=([-np.inf, 0.0], [np.inf, np.inf])).x\n\n\ndef predict(row):\n    t = -_rate * row['H']\n    return float(row['x_now'] * np.exp(t) - _gain * row['u_now'] * np.expm1(t))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "8c82aaf2be7c03b2",
+  "prompt_tokens": 15406,
+  "cached_tokens": 14976,
+  "completion_tokens": 882,
+  "task_context_chars": 16629,
+  "wall_ms": 23431.64,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The low-gradient response approaches a plateau, then drops strongly and turns negative above approximately s_grad=2.5, matching the supplied supercritical sink-gradient avalanche law. Fit its five parameters numerically to the eight available rows; the previous failure was a missing training-data variable, avoided here by keeping fitted parameters in module state.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another high_sgrad_regime_probe",
+        "rejected_reason": "The targeted probe already sampled gradients 2.78–3.58 and captured the predicted abrupt downturn and negative response."
+      },
+      {
+        "option": "Fit a smooth saturation or static Michaelis-Menten model",
+        "rejected_reason": "These cannot account for the observed sharp fall and sign reversal at high sink gradients."
+      },
+      {
+        "option": "Fit a memory ODE or dual-horizon adaptation model",
+        "rejected_reason": "All observations have the same H and the transition tracks high s_grad; no evidence warrants the more costly trajectory or horizon measurements."
+      }
+    ],
+    "hypothesis_name": "supercritical_sink_avalanche",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _response(row, p):\n    vmax, rho, c_loc, k_aval, s_crit = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    base = vmax * (1.0 - rho * s / (1.0 + s)) * (u / (1.2 + u))\n    return base + c_loc * math.sqrt(max(u, 0.0)) - k_aval * max(0.0, s - s_crit) * u\n\ndef fit(train_rows):\n    global _PARAMS\n    y = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_response(r, p) for r in train_rows]) - y\n    starts = [\n        [5.0, 0.7, 0.0, 2.0, 2.6],\n        [4.0, 0.5, 0.2, 1.0, 2.5],\n        [8.0, 0.8, -0.2, 3.0, 2.7],\n    ]\n    best = None\n    for p0 in starts:\n        result = least_squares(residual, p0,\n            bounds=([0.0, 0.0, -10.0, 0.0, 2.0], [100.0, 1.0, 10.0, 20.0, 4.0]),\n            max_nfev=20000)\n        score = float(np.dot(result.fun, result.fun))\n        if best is None or score < best[0]:\n            best = (score, result.x)\n    _PARAMS = best[1]\n    return _PARAMS\n\ndef predict(row):\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called before predict(row)')\n    return float(_response(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

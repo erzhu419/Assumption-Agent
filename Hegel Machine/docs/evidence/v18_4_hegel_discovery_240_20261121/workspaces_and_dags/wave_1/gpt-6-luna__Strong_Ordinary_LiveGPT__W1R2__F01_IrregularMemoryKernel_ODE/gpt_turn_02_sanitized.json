@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "0b45ff7f4eb19eb0",
+  "prompt_tokens": 16178,
+  "cached_tokens": 4864,
+  "completion_tokens": 1076,
+  "task_context_chars": 21198,
+  "wall_ms": 24877.16,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The archive identifies a coupled two-state memory ODE for this signature and recommends fitting its four parameters using the raw-prefix-derived initial memory and RK4 forecast. The fine batch has raised the sample count to eight. Fit the ODE parameters numerically and forecast x(H).",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All rows have s_grad=0 and the evidence is history-dependent; this probe does not resolve the coupled-memory fit."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; the resulting eight rows meet the archive's stated minimum for the four-parameter coupled ODE."
+      },
+      {
+        "option": "dual-horizon endogenous adaptation",
+        "rejected_reason": "Horizons are all short and close, with strong endpoint-matched history effects and coupled transient-lag signature favoring the memory ODE."
+      },
+      {
+        "option": "static or single-state response laws",
+        "rejected_reason": "They do not account for the clear dependence on pre-switch history when current inputs and horizons are similar."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _z0(row, tau):\n    prefix = row.get('raw_prefix') or []\n    if not prefix:\n        return float(row.get('mem_conv') if row.get('mem_conv') is not None else 0.52 * row['x_now'])\n    tlast = float(prefix[-1]['t'])\n    z = 0.52 * float(prefix[0]['x'])\n    for a, b in zip(prefix[:-1], prefix[1:]):\n        dt = max(0.0, tlast - float(a['t'])) - max(0.0, tlast - float(b['t']))\n        decay = math.exp(-dt / tau)\n        xa, xb = float(a['x']), float(b['x'])\n        z = decay * z + 0.52 * (1.0 - decay) * 0.5 * (xa + xb)\n    return z\n\ndef _sim(row, p):\n    a, b, c, tau = p\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def f(x, z):\n        return -a*x + b*z + c*u, (0.52*x-z)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+dt*k1x/2,z+dt*k1z/2)\n        k3x,k3z=f(x+dt*k2x/2,z+dt*k2z/2)\n        k4x,k4z=f(x+dt*k3x,z+dt*k3z)\n        x += dt*(k1x+2*k2x+2*k3x+k4x)/6\n        z += dt*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.array([float(r['y']) for r in rows])\n    def residual(p):\n        return np.array([_sim(r, p) for r in rows]) - y\n    starts = ([0.5,0.5,0.5,0.1], [1.0,1.0,0.5,0.3], [0.2,0.2,1.0,0.05])\n    fits = [least_squares(residual, s, bounds=([0,0,0,0.005],[10,10,10,5]), max_nfev=3000) for s in starts]\n    return min(fits, key=lambda q: np.dot(q.fun,q.fun)).x\n\ndef predict(row):\n    return float(_sim(row, fit._params))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

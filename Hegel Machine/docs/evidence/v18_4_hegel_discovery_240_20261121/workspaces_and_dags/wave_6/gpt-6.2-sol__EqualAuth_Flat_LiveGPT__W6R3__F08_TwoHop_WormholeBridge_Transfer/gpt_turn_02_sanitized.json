@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "867f5e297dcaa5e5",
+  "prompt_tokens": 170156,
+  "cached_tokens": 145920,
+  "completion_tokens": 4668,
+  "task_context_chars": 5203,
+  "wall_ms": 120493.12,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The pilot curve identifies a saturating inflow minus a square-root loss. The branch observations distinguish a gradient-independent transfer component from one attenuated by 1/(1+s_grad). The resulting law matches the paid observations to rounding precision at H = 0.6 and is ready for fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "Gradient-independent saturation",
+        "rejected_reason": "It cannot explain the two branch observations, which move in opposite directions relative to the pilot curve."
+      },
+      {
+        "option": "Exponential gradient gate",
+        "rejected_reason": "A free decay rate can interpolate the three measured gradient levels, but the reciprocal gate with fixed unit scale matches all seven observations to rounding precision without that extra parameter."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The four-parameter law fits all seven observations at the requested horizon, so fresh confirmation is the next test."
+      }
+    ],
+    "hypothesis_name": "two_hop_saturating_transfer",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, y = np.array([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float).T\n    root_u = np.sqrt(u)\n    def residual(p):\n        direct, gated, half_sat, loss = p\n        return (direct + gated / (1.0 + s)) * u / (half_sat + u) - loss * root_u - y\n    _params = least_squares(residual, [2.0, 5.0, 1.0, 0.4], bounds=([0.0, 0.0, 1e-8, 0.0], np.inf)).x\n    return _params\n\ndef predict(row) -> float:\n    direct, gated, half_sat, loss = _params\n    u, s = row['u_now'], row['s_grad']\n    return float((direct + gated / (1.0 + s)) * u / (half_sat + u) - loss * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

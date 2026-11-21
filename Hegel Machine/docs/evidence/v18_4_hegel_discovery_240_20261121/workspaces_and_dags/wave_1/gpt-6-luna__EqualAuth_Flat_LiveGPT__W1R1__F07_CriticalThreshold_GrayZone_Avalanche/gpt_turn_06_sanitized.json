@@ -1,0 +1,32 @@
+{
+  "turn": 6,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "943e33d64e14ed5e",
+  "prompt_tokens": 29496,
+  "cached_tokens": 19200,
+  "completion_tokens": 1161,
+  "task_context_chars": 20289,
+  "wall_ms": 27825.78,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The expanded observations show a gradual saturating positive response through moderate s_grad, followed by a steep negative reversal at high s_grad. A fitted quadratic hinge models a critical-gradient avalanche while retaining a saturating baseline; it is more directly supported than the previously refuted smooth inhibition candidates. Fresh confirmation is needed to assess the threshold location and curvature.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire another high_sgrad_regime_probe",
+        "rejected_reason": "The existing high-gradient batch already locates a positive-to-negative reversal; more of the same regime is unlikely to resolve the threshold shape."
+      },
+      {
+        "option": "Refit competitive Hill inhibition or barrier-modulated siphon",
+        "rejected_reason": "Both stationary mechanisms were already tested and refuted on fresh confirmation."
+      },
+      {
+        "option": "Abstain as non-stationary",
+        "rejected_reason": "No high-frequency chaotic sign oscillation is observed; the reversal instead tracks the high-s_grad region and is compatible with a stationary threshold response."
+      }
+    ],
+    "hypothesis_name": "sgrad_threshold_avalanche",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\ndef fit(train_rows):\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def pred(p, uu, ss):\n        base, amp, rate, drop, threshold = p\n        return base + amp * (1.0 - np.exp(-rate * uu)) - drop * np.maximum(0.0, ss - threshold) ** 2\n    best = None\n    for p0 in ([1.0, 2.0, 1.0, 1.0, 2.5], [0.0, 3.0, 0.5, 2.0, 2.6], [2.0, 1.0, 2.0, 0.5, 2.4]):\n        res = least_squares(lambda p: pred(p, u, s) - y, p0,\n                            bounds=([-20.0, -20.0, 1e-5, 0.0, 0.0], [20.0, 20.0, 20.0, 20.0, 10.0]),\n                            max_nfev=20000)\n        if best is None or np.sum(res.fun ** 2) < np.sum(best.fun ** 2):\n            best = res\n    return best.x\n\ndef predict(row):\n    p = fit(_FIT_ROWS)\n    base, amp, rate, drop, threshold = p\n    u = float(row['u_now'])\n    s = float(row['s_grad'])\n    return float(base + amp * (1.0 - np.exp(-rate * u)) - drop * max(0.0, s - threshold) ** 2)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

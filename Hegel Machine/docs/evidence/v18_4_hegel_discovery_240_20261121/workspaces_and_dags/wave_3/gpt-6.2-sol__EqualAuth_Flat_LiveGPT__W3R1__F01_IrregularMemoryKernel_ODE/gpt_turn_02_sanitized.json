@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "6b078c8e6de77881",
+  "prompt_tokens": 42672,
+  "cached_tokens": 33792,
+  "completion_tokens": 2192,
+  "task_context_chars": 12859,
+  "wall_ms": 61590.38,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Reconstructing the latent memory from the irregular prefixes and fitting the four ODE parameters gives a paid-row RMSE of about 0.000004. Leave-one-out errors are also well below the 0.045 tolerance. Submit the model for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The eight paid trajectories already span both switch directions and bracket the target horizon. The coupled model predicts each held-out paid row within 0.000015."
+      },
+      {
+        "option": "Single-mode Maxwell stress decay",
+        "rejected_reason": "Its prediction changes sign with the input step, but both upward and downward steps have positive targets."
+      },
+      {
+        "option": "Uncoupled Kelvin–Voigt creep",
+        "rejected_reason": "The proposed law uses only current input and horizon; it cannot account for the observed gap between endpoint-matched histories."
+      }
+    ],
+    "hypothesis_name": "coupled_ode_irregular_exponential_memory",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\n\ndef _forecast(row, params):\n    a, b, c, tau = map(float, params)\n    x, u, H = (float(row[k]) for k in ('x_now', 'u_now', 'H'))\n    z = row.get('mem_conv')\n    if z is None:\n        prefix = row.get('raw_prefix')\n        if prefix:\n            t = np.array([p['t'] for p in prefix], dtype=float)\n            X = np.array([p['x'] for p in prefix], dtype=float)\n            weights = np.exp((t - t[-1]) / tau)\n            weighted_x = X * weights\n            z = 0.52 * X[0] * weights[0] + (0.26 / tau) * np.dot(np.diff(t), weighted_x[:-1] + weighted_x[1:])\n        else:\n            z = 0.52 * x\n    z = float(z)\n    n = max(1, math.ceil(H / 0.004))\n    h = H / n\n    drive = c * u\n\n    def rhs(x, z):\n        return -a * x + b * z + drive, (0.52 * x - z) / tau\n\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + 0.5 * h * kx, z + 0.5 * h * kz)\n        mx, mz = rhs(x + 0.5 * h * lx, z + 0.5 * h * lz)\n        nx, nz = rhs(x + h * mx, z + h * mz)\n        x += h * (kx + 2 * lx + 2 * mx + nx) / 6\n        z += h * (kz + 2 * lz + 2 * mz + nz) / 6\n    return float(x)\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.array([r['y'] for r in rows], dtype=float)\n\n    def residual(params):\n        return np.array([_forecast(r, params) for r in rows]) - y\n\n    _params = least_squares(residual, [1.5, 1.0, 1.0, 0.6], bounds=([0, 0, 0, 0.02], [np.inf, np.inf, np.inf, np.inf]), x_scale='jac').x\n    return _params\n\n\ndef predict(row) -> float:\n    return _forecast(row, _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

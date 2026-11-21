@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "bcf13d3e060be7f9",
+  "prompt_tokens": 35942,
+  "cached_tokens": 30720,
+  "completion_tokens": 1281,
+  "task_context_chars": 7218,
+  "wall_ms": 34859.02,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "A saturating input response with bounded gradient attenuation and a square-root correction fits all nine paid rows at H = 0.6 to rounding precision. Submit this baseline for fresh confirmation; the paid fit does not establish whether it holds beyond the sampled joint input–gradient regime.",
+    "considered_alternatives": [
+      {
+        "option": "Conjunctive siphon correction",
+        "rejected_reason": "Neither paid probe revealed a departure from the smooth baseline. The observed rows do not identify a separate activation threshold or branch strength."
+      },
+      {
+        "option": "Supercritical avalanche with the recalled fixed saturation scale",
+        "rejected_reason": "The fixed scale gives about 0.113 training RMSE, and no paid row reaches the recalled avalanche threshold."
+      },
+      {
+        "option": "Haldane or Cobb–Douglas law",
+        "rejected_reason": "Haldane omits the gradient effect; Cobb–Douglas replaces the jointly supported saturation and bounded gradient attenuation with powers."
+      }
+    ],
+    "hypothesis_name": "saturating_base_with_smooth_sink",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u, s, y = np.asarray([(r['u_now'], r['s_grad'], r['y']) for r in train_rows], dtype=float).T\n    sink = s / (1.0 + s)\n    root = np.sqrt(u)\n\n    def design(k):\n        f = u / (k + u)\n        return np.column_stack((f, -f * sink, root))\n\n    def residual(p):\n        return design(p[0]) @ p[1:] - y\n\n    k0 = max(float(np.median(u)), 1e-6)\n    beta0 = np.linalg.lstsq(design(k0), y, rcond=None)[0]\n    result = least_squares(residual, np.r_[k0, beta0], bounds=([1e-9, -np.inf, -np.inf, -np.inf], np.inf), x_scale='jac', ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n\ndef predict(row) -> float:\n    k, a, b, c = _params\n    u, s = float(row['u_now']), float(row['s_grad'])\n    return float((a - b * s / (1.0 + s)) * u / (k + u) + c * math.sqrt(u))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

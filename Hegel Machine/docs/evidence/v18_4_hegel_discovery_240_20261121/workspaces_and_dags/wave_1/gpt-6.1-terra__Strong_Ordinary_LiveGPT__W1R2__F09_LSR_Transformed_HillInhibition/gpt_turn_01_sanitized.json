@@ -1,0 +1,32 @@
+{
+  "turn": 1,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "9b86df6d51a2c24e",
+  "prompt_tokens": 11568,
+  "cached_tokens": 4864,
+  "completion_tokens": 651,
+  "task_context_chars": 12380,
+  "wall_ms": 16755.37,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Fit the archived cooperative Hill-2 inhibition law numerically using the measured gradient variation and the specified normalization scale. Fresh confirmation is needed to establish predictive accuracy.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed sink-gradient span is 2.0, well above the archived 0.08 threshold; the Hill mechanism has five observations for four parameters."
+      },
+      {
+        "option": "barrier-modulated siphon and inland-hub siphon",
+        "rejected_reason": "The cooperative-onset signature and archived Hill-inhibition mechanism favor the Hill-2 model; fresh confirmation will test it."
+      },
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The pilot does not indicate the coupled-memory mechanism for which that trajectory batch is needed."
+      }
+    ],
+    "hypothesis_name": "cooperative_hill2_competitive_inhibition_linear_bleed",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    u = np.array([r['u_now'] / 2.5 for r in train_rows], dtype=float)\n    s = np.array([r['s_grad'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        vmax, k_half, alpha, leak = p\n        return vmax * u**2 / (k_half + u**2) / (1.0 + alpha*s) - leak*u - y\n    best = None\n    for start in ([8, 1, 1, 0.1], [5, 0.3, 0.5, 0.1], [15, 3, 2, 0.5]):\n        result = least_squares(residual, start, bounds=([0, 1e-8, 0, 0], [np.inf, np.inf, np.inf, np.inf]), max_nfev=10000, xtol=1e-12, ftol=1e-12, gtol=1e-12)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = best.x\n\ndef predict(row):\n    vmax, k_half, alpha, leak = _params\n    u = float(row['u_now']) / 2.5\n    return float(vmax * u*u / (k_half + u*u) / (1.0 + alpha*float(row['s_grad'])) - leak*u)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

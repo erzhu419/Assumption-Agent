@@ -1,0 +1,1029 @@
+{
+  "episode_summary": {
+    "task_id": "S101_OOS02_NonStationaryChirp2",
+    "suite": "C_BaseSubtree",
+    "subfamily": "OOS_nonstationary_chirp",
+    "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+    "is_out_of_scope": true,
+    "status": "scoped_unknown",
+    "selected_model_class": null,
+    "strict_pass": true,
+    "false_confirmation": false,
+    "evaluated_candidate_count": 8,
+    "total_nfev": 177,
+    "confirm_rmse": null,
+    "heldout_rmse": null,
+    "decision_count": 14,
+    "measurement_cost": 16.5,
+    "compute_cost": 61.04,
+    "composite_cost": 19.552
+  },
+  "chain_verification": {
+    "valid": true,
+    "decision_count": 14,
+    "terminal_record_sha256": "7b884b110d1366b6de32fba8dd3bc38c9c2bb7d2d95bb6209cdc552d96739c6a",
+    "verified_measurement_cost": 16.5,
+    "verified_compute_cost": 61.04,
+    "verified_composite_cost": 19.552,
+    "verified_total_tokens": 0
+  },
+  "decision_dag": [
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 1,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__001",
+      "parent_decision_id": null,
+      "prev_record_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "decision_type": "D0_TASK_ARRIVAL_AND_PILOT_ACQUISITION",
+      "evidence_inputs": {
+        "task_id": "S101_OOS02_NonStationaryChirp2",
+        "coarse_channel_available": false,
+        "observed_probe_signatures": [
+          "sig:high_freq_sign_oscillation"
+        ],
+        "pilot_row_keys": [
+          [
+            1.04172,
+            3.73299,
+            -0.52743,
+            0.75225,
+            0.93565,
+            0.6
+          ],
+          [
+            2.86185,
+            2.0565,
+            0.8301,
+            0.96024,
+            2.06754,
+            0.6
+          ],
+          [
+            0.97905,
+            3.36743,
+            0.73177,
+            -0.9543,
+            0.69692,
+            0.6
+          ],
+          [
+            2.79938,
+            1.70808,
+            -0.76506,
+            -0.69044,
+            1.93631,
+            0.6
+          ],
+          [
+            2.57729,
+            0.58417,
+            -0.45626,
+            0.84626,
+            1.3209,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "channel": "coarse_macro",
+          "unit_cost": 1.0,
+          "eligible": false
+        },
+        {
+          "channel": "standard_fine",
+          "unit_cost": 1.5,
+          "eligible": true
+        }
+      ],
+      "chosen_option": {
+        "selected_channel": "standard_fine",
+        "acquired_rows": 5
+      },
+      "rejection_reasons": {
+        "coarse_macro": "no_certified_coarse_edge_or_not_slow_horizon_query"
+      },
+      "rationale_summary": "Acquire prefix-isolated initial pilot rows under authorized measurement channel.",
+      "cost_ledger_delta": {
+        "measurement_delta": 7.5,
+        "compute_delta": 0.0,
+        "composite_delta": 7.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.0,
+        "composite_cost": 7.5,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "d4761db0e4d6e367af4bf1f8fac8fd8828464f5762126b03ef44d20a8d6e9b55"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 2,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__002",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__001",
+      "prev_record_sha256": "d4761db0e4d6e367af4bf1f8fac8fd8828464f5762126b03ef44d20a8d6e9b55",
+      "decision_type": "D1_CAUSAL_TEMPORAL_REGIME_EXTRACTION",
+      "evidence_inputs": {
+        "prefix_sample_count": 5,
+        "causal_cutoff_policy": "strict_prefix_le_t0"
+      },
+      "candidates_evaluated": [
+        {
+          "mode": "strict_causal_online_prefix",
+          "ok": true,
+          "future_regime_leaked": false
+        }
+      ],
+      "chosen_option": {
+        "causal_cutoff_t0": 0.4,
+        "past_present_extracted": true
+      },
+      "rejection_reasons": {
+        "centered_or_post_t0_window": "blocked_by_strict_online_causality"
+      },
+      "rationale_summary": "Extract (P_tau, N_tau) strictly from <= t0 prefix with zero future leakage.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.5,
+        "composite_delta": 0.025,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 0.5,
+        "composite_cost": 7.525,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "8c3cb48a9e7183cdc2911c885e092d67c4f775636f670c4511106ca021edebbb"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 3,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__003",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__002",
+      "prev_record_sha256": "8c3cb48a9e7183cdc2911c885e092d67c4f775636f670c4511106ca021edebbb",
+      "decision_type": "D2_INDEX_RETRIEVAL_RANKING",
+      "evidence_inputs": {
+        "query_signatures": [
+          "sig:high_freq_sign_oscillation"
+        ],
+        "index_kind": "HippoRAG_PPR"
+      },
+      "candidates_evaluated": [],
+      "chosen_option": {
+        "top_k_node_ids": []
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Rank candidate forest nodes purely from observed sig:* pilot cues.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.5,
+        "composite_delta": 0.025,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 1.0,
+        "composite_cost": 7.55,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "79fe5500d1193428f764c8dbe8b7c4d73442c264fce8344895975ef2c2ba3ef7"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 4,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__004",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__003",
+      "prev_record_sha256": "79fe5500d1193428f764c8dbe8b7c4d73442c264fce8344895975ef2c2ba3ef7",
+      "decision_type": "D3_FOUR_TIER_PERMISSION_AND_GRAYZONE_GATE",
+      "evidence_inputs": {
+        "observed_target_features": {
+          "has_history_or_lag_gap": false
+        }
+      },
+      "candidates_evaluated": [],
+      "chosen_option": {
+        "authorized_ordered_model_queue": []
+      },
+      "rejection_reasons": {},
+      "rationale_summary": "Filter retrieved nodes through 4-tier preconditions & gray-zone bounds before fitting.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 7.5,
+        "compute_cost": 1.0,
+        "composite_cost": 7.55,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "5dff54b0ea8b9a93dd05a09845db801992ebf1c72451bed1c550e65a2e1b5be7"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 5,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__005",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__004",
+      "prev_record_sha256": "5dff54b0ea8b9a93dd05a09845db801992ebf1c72451bed1c550e65a2e1b5be7",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M1_SnapshotLinear",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M1_SnapshotLinear",
+          "nfev": 5,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.826902,
+          "confirm_rmse": 0.947988,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M1_SnapshotLinear": "confirm_rmse 0.94799 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M1_SnapshotLinear refuted on disjoint confirmation (RMSE=0.94799 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 2.6,
+        "composite_delta": 4.63,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 3.6,
+        "composite_cost": 12.18,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "9a18e22e19e1cb5c93829d8ce1e656a6e6482061ebedca997ccdf0fa68c67bfe"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 6,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__006",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__005",
+      "prev_record_sha256": "9a18e22e19e1cb5c93829d8ce1e656a6e6482061ebedca997ccdf0fa68c67bfe",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M3_ReducedSlowODE",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M3_ReducedSlowODE",
+          "nfev": 12,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.890613,
+          "confirm_rmse": 0.801226,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M3_ReducedSlowODE": "confirm_rmse 0.80123 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M3_ReducedSlowODE refuted on disjoint confirmation (RMSE=0.80123 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 4.64,
+        "composite_delta": 0.232,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 8.24,
+        "composite_cost": 12.412,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "44ba7955cb1863a5581e0bb07e479385811da4884da61626f08b9c33278a41ed"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 7,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__007",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__006",
+      "prev_record_sha256": "44ba7955cb1863a5581e0bb07e479385811da4884da61626f08b9c33278a41ed",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M2_BeforeAfterOpposition",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M2_BeforeAfterOpposition",
+          "nfev": 21,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.885999,
+          "confirm_rmse": 0.890277,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M2_BeforeAfterOpposition": "confirm_rmse 0.89028 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M2_BeforeAfterOpposition refuted on disjoint confirmation (RMSE=0.89028 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 6.62,
+        "composite_delta": 0.331,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 14.86,
+        "composite_cost": 12.743,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "a0fd4c07abfb16dee19fc8df6b9bb90d915c79d99c24b080bba16fdab71eeffd"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 8,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__008",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__007",
+      "prev_record_sha256": "a0fd4c07abfb16dee19fc8df6b9bb90d915c79d99c24b080bba16fdab71eeffd",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M7_QuadraticStorage",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M7_QuadraticStorage",
+          "nfev": 3,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.837615,
+          "confirm_rmse": 0.971175,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M7_QuadraticStorage": "confirm_rmse 0.97118 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M7_QuadraticStorage refuted on disjoint confirmation (RMSE=0.97118 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 2.16,
+        "composite_delta": 0.108,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 17.02,
+        "composite_cost": 12.851,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "0f28bed63a26c17849fdc29c767572e1136a39340703226428cf6d35704ef67c"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 9,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__009",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__008",
+      "prev_record_sha256": "0f28bed63a26c17849fdc29c767572e1136a39340703226428cf6d35704ef67c",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M6_SiphonSubtree_SqrtBranch",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M6_SiphonSubtree_SqrtBranch",
+          "nfev": 59,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.84252,
+          "confirm_rmse": 0.85565,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M6_SiphonSubtree_SqrtBranch": "confirm_rmse 0.85565 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M6_SiphonSubtree_SqrtBranch refuted on disjoint confirmation (RMSE=0.85565 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 15.98,
+        "composite_delta": 0.799,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 33.0,
+        "composite_cost": 13.65,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "7fb70812307c23e57afef6c861a2937364513427ed1250dfe87ad0eedbe1c258"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 10,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__010",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__009",
+      "prev_record_sha256": "7fb70812307c23e57afef6c861a2937364513427ed1250dfe87ad0eedbe1c258",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M6_SiphonSubtree_LinearLeakBranch",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M6_SiphonSubtree_LinearLeakBranch",
+          "nfev": 50,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.851921,
+          "confirm_rmse": 1.029295,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M6_SiphonSubtree_LinearLeakBranch": "confirm_rmse 1.02930 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M6_SiphonSubtree_LinearLeakBranch refuted on disjoint confirmation (RMSE=1.02930 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 14.0,
+        "composite_delta": 0.7,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 47.0,
+        "composite_cost": 14.35,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "c0a9392570ee3b4e141d58f903de46337e95083e71f02381b10c7771660d6db7"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 11,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__011",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__010",
+      "prev_record_sha256": "c0a9392570ee3b4e141d58f903de46337e95083e71f02381b10c7771660d6db7",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M5_DualHorizonReversal",
+        "train_row_count": 5,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M5_DualHorizonReversal",
+          "nfev": 7,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.889992,
+          "confirm_rmse": 0.801868,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M5_DualHorizonReversal": "confirm_rmse 0.80187 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M5_DualHorizonReversal refuted on disjoint confirmation (RMSE=0.80187 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 4.04,
+        "composite_delta": 0.202,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 12.0,
+        "compute_cost": 51.04,
+        "composite_cost": 14.552,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "3bade5b4b812dbda30718d55f8f4b35037c23ccdd27f249bc62c8a5eaf1aef4b"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 12,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__012",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__011",
+      "prev_record_sha256": "3bade5b4b812dbda30718d55f8f4b35037c23ccdd27f249bc62c8a5eaf1aef4b",
+      "decision_type": "D6_CEGAR_FINE_TRAJECTORY_ESCALATION",
+      "evidence_inputs": {
+        "escalated_to": "M4_MoriZwanzigMemoryKernel",
+        "prior_rows": 5
+      },
+      "candidates_evaluated": [
+        {
+          "action": "acquire_3_fine_rows_for_4param_identifiability",
+          "measurement_cost": 4.5
+        }
+      ],
+      "chosen_option": {
+        "new_train_row_count": 8
+      },
+      "rejection_reasons": {
+        "underdetermined_fit": "4_param_memory_kernel_requires_at_least_8_rows"
+      },
+      "rationale_summary": "Escalate along reverse coarse_grains_to edge and acquire 3 fine trajectories.",
+      "cost_ledger_delta": {
+        "measurement_delta": 4.5,
+        "compute_delta": 0.0,
+        "composite_delta": 4.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 16.5,
+        "compute_cost": 51.04,
+        "composite_cost": 19.052,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "c773e34d3bc1c58a12a0c59feb8d56e967ca957224f8faf67032fade203d07c7"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 13,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__013",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__012",
+      "prev_record_sha256": "c773e34d3bc1c58a12a0c59feb8d56e967ca957224f8faf67032fade203d07c7",
+      "decision_type": "D7_D8_CANDIDATE_FIT_AND_FRESH_CONFIRMATION",
+      "evidence_inputs": {
+        "model_class": "M4_MoriZwanzigMemoryKernel",
+        "train_row_count": 8,
+        "confirm_row_keys": [
+          [
+            1.048,
+            1.65627,
+            -0.10002,
+            0.71787,
+            0.63485,
+            0.6
+          ],
+          [
+            0.38302,
+            1.91055,
+            0.71217,
+            0.34501,
+            1.62261,
+            0.6
+          ],
+          [
+            1.61714,
+            0.9958,
+            -0.42942,
+            0.99576,
+            1.5341,
+            0.6
+          ]
+        ]
+      },
+      "candidates_evaluated": [
+        {
+          "model_class": "M4_MoriZwanzigMemoryKernel",
+          "nfev": 20,
+          "used_warm_start": false,
+          "escaped_to_wide_fallback": false,
+          "train_rmse": 0.802354,
+          "confirm_rmse": 0.802824,
+          "tolerance": 0.045
+        }
+      ],
+      "chosen_option": {
+        "verdict": "CONFIRM_REJECTED_NEXT_CANDIDATE"
+      },
+      "rejection_reasons": {
+        "M4_MoriZwanzigMemoryKernel": "confirm_rmse 0.80282 > tolerance 0.04500"
+      },
+      "rationale_summary": "Candidate M4_MoriZwanzigMemoryKernel refuted on disjoint confirmation (RMSE=0.80282 > 0.045); continue search.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 10.0,
+        "composite_delta": 0.5,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 16.5,
+        "compute_cost": 61.04,
+        "composite_cost": 19.552,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "5da7c3a52869294787a1b00afdd9ef8115d4be89104830ea973c8b833d26c8fa"
+    },
+    {
+      "run_id": "det_m5",
+      "model": "deterministic_least_squares_rk4",
+      "provider_backend": "deterministic_local",
+      "task_id": "S101_OOS02_NonStationaryChirp2",
+      "arm": "Hegel_M5_Full_TemporalSubtree_Forest",
+      "decision_seq": 14,
+      "decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__014",
+      "parent_decision_id": "dec__det_m5__S101_OOS02_NonStationaryChirp2__Hegel_M5_Full_TemporalSubtree_Forest__013",
+      "prev_record_sha256": "5da7c3a52869294787a1b00afdd9ef8115d4be89104830ea973c8b833d26c8fa",
+      "decision_type": "D9_TERMINAL_DECISION_AND_HELDOUT_AUDIT",
+      "evidence_inputs": {
+        "exhausted_candidates": 8
+      },
+      "candidates_evaluated": [
+        {
+          "status": "scoped_unknown"
+        }
+      ],
+      "chosen_option": {
+        "final_status": "scoped_unknown",
+        "strict_pass": true
+      },
+      "rejection_reasons": {
+        "M1_SnapshotLinear": "refuted_on_fresh_confirm",
+        "M3_ReducedSlowODE": "refuted_on_fresh_confirm",
+        "M2_BeforeAfterOpposition": "refuted_on_fresh_confirm",
+        "M7_QuadraticStorage": "refuted_on_fresh_confirm",
+        "M6_SiphonSubtree_SqrtBranch": "refuted_on_fresh_confirm",
+        "M6_SiphonSubtree_LinearLeakBranch": "refuted_on_fresh_confirm",
+        "M5_DualHorizonReversal": "refuted_on_fresh_confirm",
+        "M4_MoriZwanzigMemoryKernel": "refuted_on_fresh_confirm"
+      },
+      "rationale_summary": "All candidate dynamic families refuted on disjoint confirmation; honestly return scoped_unknown.",
+      "cost_ledger_delta": {
+        "measurement_delta": 0.0,
+        "compute_delta": 0.0,
+        "composite_delta": 0.0,
+        "prompt_tokens_delta": 0,
+        "cached_tokens_delta": 0,
+        "completion_tokens_delta": 0,
+        "wall_ms_delta": 0.0
+      },
+      "cumulative_cost_after": {
+        "measurement_cost": 16.5,
+        "compute_cost": 61.04,
+        "composite_cost": 19.552,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "wall_ms": 0.0
+      },
+      "state_digest_after": "c31e1b001b7d7a04",
+      "extra_artifacts": {},
+      "record_sha256": "7b884b110d1366b6de32fba8dd3bc38c9c2bb7d2d95bb6209cdc552d96739c6a"
+    }
+  ]
+}

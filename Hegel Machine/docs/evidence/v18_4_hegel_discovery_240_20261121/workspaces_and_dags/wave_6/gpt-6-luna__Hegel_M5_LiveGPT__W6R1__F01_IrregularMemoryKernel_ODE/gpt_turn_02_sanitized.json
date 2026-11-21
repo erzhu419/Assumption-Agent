@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "f0d1345a4eb739fd",
+  "prompt_tokens": 20173,
+  "cached_tokens": 12416,
+  "completion_tokens": 1233,
+  "task_context_chars": 14067,
+  "wall_ms": 29533.96,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "Eight paid trajectories are available, and the verified history-conditioned two-state ODE matches both pilot signatures. Fit all four positive parameters numerically, computing the initial memory state from the irregular raw prefix with shifted-time integration and forecasting via RK4.",
+    "considered_alternatives": [
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The verified memory-kernel mechanism and observed history-gap/transient-lag signatures align; eight trajectories are now available, meeting its stated fitting minimum."
+      },
+      {
+        "option": "Maxwell single-mode snapshot law",
+        "rejected_reason": "It does not account for history-conditioned endpoint gaps or the coupled transient-lag signature."
+      },
+      {
+        "option": "Coarse adiabatic slow ODE",
+        "rejected_reason": "It discards finite-fast-state memory that is implicated by the observed transient lag."
+      },
+      {
+        "option": "nuisance_high_var_aux",
+        "rejected_reason": "It is explicitly irrelevant and has unnecessary measurement cost."
+      }
+    ],
+    "hypothesis_name": "irregular_history_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _hist_z(row, tau):\n    pref = row.get('raw_prefix')\n    if row.get('mem_conv') is not None:\n        return float(row['mem_conv'])\n    if not pref:\n        return 0.52 * float(row['x_now'])\n    ts = np.array([float(p['t']) for p in pref], dtype=float)\n    xs = np.array([float(p['x']) for p in pref], dtype=float)\n    z = 0.52 * xs[0]\n    for i in range(1, len(ts)):\n        dt = ts[i] - ts[i-1]\n        n = max(1, int(math.ceil(dt / 0.004)))\n        h = dt / n\n        x0, x1 = xs[i-1], xs[i]\n        for j in range(n):\n            xa = x0 + (x1-x0) * j/n\n            xb = x0 + (x1-x0) * (j+1)/n\n            xm = 0.5*(xa+xb)\n            # RK4 for dz/dt=(0.52*x-z)/tau with linearly interpolated x\n            k1 = (0.52*xa-z)/tau\n            k2 = (0.52*(0.5*(xa+xm))-(z+0.5*h*k1))/tau\n            k3 = (0.52*(0.5*(xm+xb))-(z+0.5*h*k2))/tau\n            k4 = (0.52*xb-(z+h*k3))/tau\n            z += h*(k1+2*k2+2*k3+k4)/6\n    return z\n\ndef _forecast(row, p):\n    a, b, c, tau = p\n    x = float(row['x_now'])\n    z = _hist_z(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H/0.004)))\n    h = H/n\n    def f(x,z):\n        return -a*x+b*z+c*u, (0.52*x-z)/tau\n    for _ in range(n):\n        k1x,k1z=f(x,z)\n        k2x,k2z=f(x+0.5*h*k1x,z+0.5*h*k1z)\n        k3x,k3z=f(x+0.5*h*k2x,z+0.5*h*k2z)\n        k4x,k4z=f(x+h*k3x,z+h*k3z)\n        x += h*(k1x+2*k2x+2*k3x+k4x)/6\n        z += h*(k1z+2*k2z+2*k3z+k4z)/6\n    return x\n\ndef fit(train_rows):\n    y = np.array([float(r['y']) for r in train_rows])\n    def residual(q):\n        p = np.exp(q)\n        return np.array([_forecast(r,p) for r in train_rows])-y\n    starts = [np.log([0.5,0.5,0.5,0.2]), np.log([1.0,1.0,1.0,0.5]), np.log([2.0,0.2,0.8,0.1])]\n    best = None\n    for q0 in starts:\n        res = least_squares(residual, q0, max_nfev=3000)\n        if best is None or np.dot(res.fun,res.fun) < np.dot(best.fun,best.fun):\n            best = res\n    return np.exp(best.x)\n\ndef predict(row):\n    return float(_forecast(row, fit([row])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

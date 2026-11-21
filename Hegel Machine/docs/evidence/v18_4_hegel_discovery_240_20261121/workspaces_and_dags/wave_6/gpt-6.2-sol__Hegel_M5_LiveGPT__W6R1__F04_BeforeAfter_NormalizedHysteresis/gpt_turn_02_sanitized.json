@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "0db5603db9dda212",
+  "prompt_tokens": 36873,
+  "cached_tokens": 28800,
+  "completion_tokens": 1243,
+  "task_context_chars": 5333,
+  "wall_ms": 37939.78,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The no-step row preserves x_now. For both step directions, (y - x_now)/(u_now - u_past) follows 0.0756 + 0.3332 exp(-0.8306 H) to near the precision of the reported observations. This supports confirming a signed step response with a persistent gain and one decaying mode.",
+    "considered_alternatives": [
+      {
+        "option": "Snapshot-only Ornstein–Uhlenbeck mean",
+        "rejected_reason": "A shared equilibrium cannot explain the opposing shifts: low initial states move above 3 while high initial states move below zero."
+      },
+      {
+        "option": "Pure Maxwell step decay",
+        "rejected_reason": "It predicts zero for the observed nonzero no-step row, and even after adding the baseline, the log of step gain is not linear in horizon."
+      },
+      {
+        "option": "Another extra_fine_trajectory_batch",
+        "rejected_reason": "The acquired rows already pin down the three-parameter gain curve, and the target horizon lies inside the observed range."
+      }
+    ],
+    "hypothesis_name": "step_gain_with_exponential_relaxation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    d = np.array([r['u_now'] - r['u_past'] for r in train_rows], dtype=float)\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    dy = np.array([r['y'] - r['x_now'] for r in train_rows], dtype=float)\n    def residual(p):\n        c, a, k = p\n        return d * (c + a * np.exp(-k * h)) - dy\n    _params = least_squares(residual, [0.08, 0.33, 0.8], bounds=([0, 0, 0], [np.inf, np.inf, np.inf])).x\n\ndef predict(row) -> float:\n    c, a, k = _params\n    d = row['u_now'] - row['u_past']\n    return float(row['x_now'] + d * (c + a * math.exp(-k * row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

@@ -673,6 +673,37 @@ class ForestScopeDispatcher:
                 conf_dig = str(loaded_art["confirmation_digest"])
                 provenance_tier = "host_confirmed_discovered_instance"
 
+            eff_cc_for_auth = nd["claim_contract"]
+            if (
+                not eff_cc_for_auth.get("gray_zone_bounds")
+                and (nd.get("revision_record") or {}).get("diagnosis_cause") == "protocol_or_scope_mismatch"
+                and loaded_art is not None
+            ):
+                hb_rows = [
+                    *((loaded_art.get("host_confirmation_bundle") or {}).get("training_prefix_rows") or ()),
+                    *((loaded_art.get("host_confirmation_bundle") or {}).get("confirm_rows") or ()),
+                ]
+                inferred_gz: list[dict[str, Any]] = []
+                for pr_c in eff_cc_for_auth.get("preconditions", ()):
+                    if isinstance(pr_c, dict) and pr_c.get("op") in {"<=", "<"} and isinstance(pr_c.get("value"), (int, float)):
+                        ax_f = str(pr_c["field"])
+                        obs_ax_vals = [
+                            float((rw.get("features") or {})[ax_f])
+                            for rw in hb_rows
+                            if ax_f in (rw.get("features") or {})
+                        ]
+                        if obs_ax_vals:
+                            max_v_inst = max(obs_ax_vals)
+                            theta_v = float(pr_c["value"])
+                            if max_v_inst < theta_v - 1e-6:
+                                inferred_gz.append({
+                                    "field": ax_f,
+                                    "max_supported": max_v_inst,
+                                    "min_refuted": round(2.0 * theta_v - max_v_inst, 6),
+                                })
+                if inferred_gz:
+                    eff_cc_for_auth = {**eff_cc_for_auth, "gray_zone_bounds": inferred_gz}
+
             auth = authorize_abstraction_use(
                 requested_tier="local_solver_guidance",
                 task_view={
@@ -684,7 +715,7 @@ class ForestScopeDispatcher:
                     "expected_confirmation_digest": conf_dig,
                 },
                 target_features=merged_target_feats,
-                claim_contract=nd["claim_contract"],
+                claim_contract=eff_cc_for_auth,
                 scale_map=nd.get("scale_map"),
                 evidence_receipt={
                     "passed": True,

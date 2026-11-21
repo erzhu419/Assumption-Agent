@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "68f0db755e2746da",
+  "prompt_tokens": 39348,
+  "cached_tokens": 27392,
+  "completion_tokens": 2189,
+  "task_context_chars": 22083,
+  "wall_ms": 55942.93,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The fine-trajectory batch brings the fit to eight rows spanning horizons 0.36–0.55, which bracket the 0.45 target. A coupled memory ODE with a trapezoidal exponential kernel fits those rows at about 3.3e-6 training RMSE. Submit it for fresh confirmation rather than purchasing more measurements.",
+    "considered_alternatives": [
+      {
+        "option": "Single-state snapshot relaxation",
+        "rejected_reason": "It predicts identical outcomes for matched endpoints at the same horizon and cannot explain the observed history gap."
+      },
+      {
+        "option": "Before/after input contrast",
+        "rejected_reason": "It uses only the input endpoints and discards the irregularly sampled state trajectory that informs the lag."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The observed signatures point to temporal memory, not an unresolved sink-gradient branch."
+      }
+    ],
+    "hypothesis_name": "coupled_irregular_history_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _memory(row, tau):\n    measured = row.get('mem_conv')\n    if measured is not None:\n        return float(measured)\n    prefix = row.get('raw_prefix')\n    if not prefix:\n        return 0.52 * float(row['x_now'])\n    samples = sorted(prefix, key=lambda sample: sample['t'])\n    z = 0.52 * samples[0]['x']\n    for left, right in zip(samples, samples[1:]):\n        q = (right['t'] - left['t']) / tau\n        decay = math.exp(-q)\n        z = decay * z + 0.26 * q * (decay * left['x'] + right['x'])\n    return z\n\n\ndef _forecast(row, params):\n    a, b, c, tau = params\n    h = float(row['H'])\n    x = float(row['x_now'])\n    z = _memory(row, tau)\n    n = max(1, math.ceil(h / 0.004))\n    # RK4 update polynomial for the augmented linear system (x, z, u).\n    m = (h / n) * np.array([[-a, b, c], [0.52 / tau, -1.0 / tau, 0.0], [0.0, 0.0, 0.0]])\n    identity = np.eye(3)\n    step = identity + m @ (identity + m @ (identity / 2 + m @ (identity / 6 + m / 24)))\n    state = np.array([x, z, float(row['u_now'])])\n    return float((np.linalg.matrix_power(step, n) @ state)[0])\n\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    target = np.array([row['y'] for row in rows], dtype=float)\n\n    def residual(params):\n        return np.array([_forecast(row, params) for row in rows]) - target\n\n    result = least_squares(residual, [2.0, 1.0, 1.0, 0.7], bounds=([0.0, 0.0, 0.0, 0.01], [20.0, 20.0, 20.0, 20.0]), ftol=1e-12, xtol=1e-12, gtol=1e-12)\n    _params = result.x\n    return _params\n\n\ndef predict(row):\n    return _forecast(row, _params)\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

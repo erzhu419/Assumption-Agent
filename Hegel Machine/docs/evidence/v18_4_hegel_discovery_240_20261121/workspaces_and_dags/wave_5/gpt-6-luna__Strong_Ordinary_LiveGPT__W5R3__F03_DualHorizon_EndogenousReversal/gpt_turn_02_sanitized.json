@@ -1,0 +1,36 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "5983f0339bce82e9",
+  "prompt_tokens": 19136,
+  "cached_tokens": 12416,
+  "completion_tokens": 991,
+  "task_context_chars": 15480,
+  "wall_ms": 24562.79,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The short-H pilots are positive, while values at H=15.19 and 21.1 are negative, matching endogenous dual-horizon adaptation and the documented reversal regime. The slow-horizon probe provides discrimination at the requested forecast horizon; fit its four positive parameters numerically to all eight rows.",
+    "considered_alternatives": [
+      {
+        "option": "Acquire extra_fine_trajectory_batch",
+        "rejected_reason": "The observations already include three long-horizon points, resolving the key short-versus-long horizon ambiguity; this batch is for the multi-state memory ODE requiring more trajectory rows."
+      },
+      {
+        "option": "Fit static quadratic, Michaelis, or other H-independent response",
+        "rejected_reason": "These cannot explain the observed transition from positive short-horizon values to negative values at H=15.19 and 21.1."
+      },
+      {
+        "option": "Fit coupled memory ODE",
+        "rejected_reason": "Less consistent with the explicit dual-horizon reversal evidence and would require additional fine-trajectory observations."
+      },
+      {
+        "option": "Acquire nuisance_high_var_aux",
+        "rejected_reason": "The auxiliary measurement is explicitly irrelevant to the identified horizon-dependent behavior."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _predict_with(row, p):\n    amp_fast, tau_fast, amp_slow, tau_slow = p\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (1.0 - math.exp(-h / tau_fast)) - amp_slow * (1.0 - math.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    global _params\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows])\n    # Optimize log-parameters so amplitudes and time constants remain positive.\n    def residual(logp):\n        p = np.exp(logp)\n        return np.asarray([_predict_with(r, p) for r in rows]) - y\n    starts = [np.log([1.0, 0.3, 1.0, 10.0]), np.log([2.0, 0.5, 1.0, 15.0]), np.log([1.0, 1.0, 2.0, 20.0])]\n    best = None\n    for x0 in starts:\n        result = least_squares(residual, x0, bounds=(np.log([1e-5, 1e-4, 1e-5, 1e-3]), np.log([100.0, 100.0, 100.0, 1e4])), max_nfev=20000)\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    _params = np.exp(best.x)\n    return _params\n\ndef predict(row) -> float:\n    if _params is None:\n        raise RuntimeError('Call fit(train_rows) before predict(row)')\n    return float(_predict_with(row, _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

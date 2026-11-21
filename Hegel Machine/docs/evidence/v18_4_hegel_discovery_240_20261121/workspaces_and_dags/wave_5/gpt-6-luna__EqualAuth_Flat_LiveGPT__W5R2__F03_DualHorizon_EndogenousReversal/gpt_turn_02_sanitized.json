@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "1e3ad499663fe72c",
+  "prompt_tokens": 11797,
+  "cached_tokens": 8320,
+  "completion_tokens": 809,
+  "task_context_chars": 5606,
+  "wall_ms": 23046.64,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The long-horizon probe resolved the key ambiguity: y is positive at short H and negative by H=17.42–24.2. Fit the four amplitudes/time constants of the dual-horizon adaptation law directly to all eight paid rows. Fresh confirmation is addressed by the fitted model's numerical parameter estimation.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "The paid short- and long-horizon rows already show the predicted sign reversal and provide eight observations for the four-parameter dual-horizon law; another trajectory batch is unnecessary."
+      },
+      {
+        "option": "5-parameter sink-coupled dual-horizon model",
+        "rejected_reason": "All observed s_grad values are zero, so the sink-coupling coefficient is unidentifiable and adds no explanatory value for these rows."
+      },
+      {
+        "option": "Lotka–Volterra harmonic model",
+        "rejected_reason": "The observed long-horizon negative response and short-horizon positive gain align with the supplied endogenous-adaptation mechanism; the harmonic form is not supported by evidence of periodic behavior."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _value(p, row):\n    amp_fast, amp_slow, tau_fast, tau_slow = p\n    h = float(row['H'])\n    u = float(row['u_now'])\n    return u * (amp_fast * (1.0 - math.exp(-h / tau_fast)) - amp_slow * (1.0 - math.exp(-h / tau_slow)))\n\ndef fit(train_rows):\n    rows = list(train_rows)\n    y = np.asarray([float(r['y']) for r in rows])\n    starts = ([1.5, 0.8, 0.3, 15.0], [2.0, 1.0, 0.5, 25.0], [1.0, 0.5, 0.2, 10.0])\n    best = None\n    for initial in starts:\n        result = least_squares(\n            lambda p: np.asarray([_value(p, r) for r in rows]) - y,\n            x0=np.asarray(initial, dtype=float),\n            bounds=([0.0, 0.0, 1e-6, 1e-6], [100.0, 100.0, 1e4, 1e4]),\n            max_nfev=20000\n        )\n        if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n            best = result\n    return best.x\n\ndef predict(row):\n    return float(_value(fit(_TRAIN_ROWS), row))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

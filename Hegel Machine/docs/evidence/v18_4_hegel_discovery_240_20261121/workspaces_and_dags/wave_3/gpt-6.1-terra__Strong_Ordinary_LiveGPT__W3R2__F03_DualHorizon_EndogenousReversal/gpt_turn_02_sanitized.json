@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.1-terra",
+  "prompt_sha256_prefix": "4a7ac044eb6dc29e",
+  "prompt_tokens": 19877,
+  "cached_tokens": 13184,
+  "completion_tokens": 596,
+  "task_context_chars": 15419,
+  "wall_ms": 17084.85,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The observations change from positive at short horizons to negative at long horizons, matching the archived endogenous-adaptation law. Numerically fit its four parameters with positive, ordered time scales and request fresh confirmation.",
+    "considered_alternatives": [
+      {
+        "option": "slow_horizon_discriminating_probe",
+        "rejected_reason": "Already acquired; its three long-horizon observations expose the reversal and constrain slow adaptation."
+      },
+      {
+        "option": "single-exponential relaxation or static response",
+        "rejected_reason": "These do not explain the observed positive short-horizon response followed by negative long-horizon response as naturally as the archived dual-horizon mechanism."
+      },
+      {
+        "option": "extra_fine_trajectory_batch and coupled memory ODE",
+        "rejected_reason": "The eight existing observations cover both time scales and support the simpler archived dual-exponential mechanism; an additional probe is not currently necessary."
+      }
+    ],
+    "hypothesis_name": "dual_horizon_endogenous_adaptation",
+    "python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    h = np.array([r['H'] for r in train_rows], dtype=float)\n    u = np.array([r['u_now'] for r in train_rows], dtype=float)\n    y = np.array([r['y'] for r in train_rows], dtype=float)\n    def residual(p):\n        af, slow, tf, delta = p\n        ts = tf + delta\n        return u * (af * (-np.expm1(-h / tf)) - slow * (-np.expm1(-h / ts))) - y\n    best = None\n    for tf in (0.2, 0.7, 2.0):\n        for ts in (5.0, 15.0, 40.0):\n            result = least_squares(residual, [2.0, 3.0, tf, ts], bounds=([0, 0, 0.001, 0.001], [100, 100, 100, 1000]), max_nfev=5000)\n            if best is None or np.dot(result.fun, result.fun) < np.dot(best.fun, best.fun):\n                best = result\n    _params = best.x\n\ndef predict(row):\n    af, slow, tf, delta = _params\n    h = float(row['H'])\n    return float(row['u_now'] * (af * (-np.expm1(-h / tf)) - slow * (-np.expm1(-h / (tf + delta)))))\n"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

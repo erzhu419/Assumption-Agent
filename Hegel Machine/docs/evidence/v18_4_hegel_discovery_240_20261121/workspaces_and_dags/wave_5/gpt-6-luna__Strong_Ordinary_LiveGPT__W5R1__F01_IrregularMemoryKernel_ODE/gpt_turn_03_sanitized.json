@@ -1,0 +1,32 @@
+{
+  "turn": 3,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6-luna",
+  "prompt_sha256_prefix": "d40baeea4cd478cd",
+  "prompt_tokens": 19042,
+  "cached_tokens": 8320,
+  "completion_tokens": 1252,
+  "task_context_chars": 23287,
+  "wall_ms": 29856.05,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The prior code failed because prediction referenced an uninitialized global parameter variable. This executable version numerically fits the four coupled ODE parameters to all eight rows, initializes the fitted parameters in fit(), computes the history-conditioned z initial state, and uses RK4 for the forecast.",
+    "considered_alternatives": [
+      {
+        "option": "extra_fine_trajectory_batch",
+        "rejected_reason": "Already acquired; it raised the training set from five to eight rows, meeting the ODE family’s stated row-count requirement."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "All observed s_grad values are zero and signatures plus history patterns point to transient memory rather than a sink-dependent branch; another probe is not needed to fit the supported four-parameter family."
+      },
+      {
+        "option": "Static snapshot or before/after contrast models",
+        "rejected_reason": "Endpoint-matched histories and coupled transient lag signatures contradict a history-independent snapshot or a simple single-exponential contrast."
+      }
+    ],
+    "hypothesis_name": "coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_PARAMS = None\n\ndef _z0(row, tau):\n    hist = row.get('raw_prefix') or []\n    if not hist:\n        return 0.52 * float(row.get('x_now', 0.0))\n    t0 = float(hist[0]['t'])\n    tlast = float(hist[-1]['t'])\n    z = 0.52 * float(hist[0]['x'])\n    for left, right in zip(hist[:-1], hist[1:]):\n        dt = float(right['t']) - float(left['t'])\n        if dt <= 0:\n            continue\n        decay = math.exp(-dt / tau)\n        xbar = 0.5 * (float(left['x']) + float(right['x']))\n        z = decay * z + 0.52 * xbar * (1.0 - decay)\n    return z\n\ndef _simulate(row, p):\n    a, b, c, tau = [float(v) for v in p]\n    x = float(row['x_now'])\n    z = _z0(row, tau)\n    u = float(row['u_now'])\n    H = float(row['H'])\n    n = max(1, int(math.ceil(H / 0.004)))\n    dt = H / n\n    def f(xx, zz):\n        return -a * xx + b * zz + c * u, (0.52 * xx - zz) / tau\n    for _ in range(n):\n        k1x, k1z = f(x, z)\n        k2x, k2z = f(x + 0.5*dt*k1x, z + 0.5*dt*k1z)\n        k3x, k3z = f(x + 0.5*dt*k2x, z + 0.5*dt*k2z)\n        k4x, k4z = f(x + dt*k3x, z + dt*k3z)\n        x += dt * (k1x + 2*k2x + 2*k3x + k4x) / 6.0\n        z += dt * (k1z + 2*k2z + 2*k3z + k4z) / 6.0\n    return x\n\ndef fit(train_rows):\n    global _PARAMS\n    y = np.asarray([float(r['y']) for r in train_rows])\n    def residual(p):\n        return np.asarray([_simulate(r, p) for r in train_rows]) - y\n    best = None\n    for start in ([0.3, 0.1, 0.5, 0.2], [0.8, 0.4, 0.8, 0.5], [0.1, 0.8, 0.2, 1.0]):\n        res = least_squares(residual, np.asarray(start), bounds=([0.001, 0.0, -5.0, 0.01], [5.0, 5.0, 5.0, 5.0]), max_nfev=3000)\n        if best is None or np.sum(res.fun**2) < np.sum(best.fun**2):\n            best = res\n    _PARAMS = best.x\n    return _PARAMS\n\ndef predict(row) -> float:\n    if _PARAMS is None:\n        raise RuntimeError('fit(train_rows) must be called first')\n    return float(_simulate(row, _PARAMS))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

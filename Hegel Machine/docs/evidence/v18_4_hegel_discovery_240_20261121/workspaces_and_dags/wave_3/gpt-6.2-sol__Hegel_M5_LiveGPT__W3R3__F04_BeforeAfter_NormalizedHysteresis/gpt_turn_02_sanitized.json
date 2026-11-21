@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "646ad2f1dcfcdcdb",
+  "prompt_tokens": 51377,
+  "cached_tokens": 23808,
+  "completion_tokens": 1954,
+  "task_context_chars": 5473,
+  "wall_ms": 53843.07,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The zero step leaves x_now unchanged. For nonzero steps, the shift divided by the signed input step follows a constant plus one decaying exponential. The fitted steady gain, transient gain, and decay rate are about 22.7, 117.0, and 0.8163. Paid-row RMSE is about 2e-8; fresh confirmation is the next test.",
+    "considered_alternatives": [
+      {
+        "option": "Single Maxwell decay added to x_now",
+        "rejected_reason": "With no lasting step response, it leaves systematic horizon-dependent residuals. Adding a steady step term fits to the precision of the reported observations."
+      },
+      {
+        "option": "Ornstein–Uhlenbeck snapshot mean reversion",
+        "rejected_reason": "A fixed mean that preserves the no-step observation cannot also account for the observed shifts on both sides of that mean."
+      },
+      {
+        "option": "Further probe acquisition",
+        "rejected_reason": "The acquired trajectory rows constrain the three parameters across both step directions and bracket the target horizon. The nuisance probe does not test the fitted mechanism."
+      }
+    ],
+    "hypothesis_name": "equilibrium_shift_plus_exponential_transient",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef fit(train_rows):\n    global _params\n    delta = np.array([r['u_now'] - r['u_past'] for r in train_rows], dtype=float)\n    horizon = np.array([r['H'] for r in train_rows], dtype=float)\n    shift = np.array([r['y'] - r['x_now'] for r in train_rows], dtype=float)\n\n    def residual(params):\n        steady, transient, rate = params\n        return delta * (steady + transient * np.exp(-rate * horizon)) - shift\n\n    _params = least_squares(residual, [20.0, 100.0, 1.0],\n                            bounds=([-np.inf, -np.inf, 0.0], np.inf),\n                            ftol=1e-12, xtol=1e-12, gtol=1e-12).x\n\ndef predict(row):\n    steady, transient, rate = _params\n    delta = row['u_now'] - row['u_past']\n    return float(row['x_now'] + delta * (steady + transient * math.exp(-rate * row['H'])))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}

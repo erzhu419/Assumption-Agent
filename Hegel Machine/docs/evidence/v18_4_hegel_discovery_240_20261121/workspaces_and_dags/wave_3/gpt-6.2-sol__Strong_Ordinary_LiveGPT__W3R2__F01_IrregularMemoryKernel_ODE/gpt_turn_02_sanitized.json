@@ -1,0 +1,32 @@
+{
+  "turn": 2,
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "returned_model": "gpt-6.2-sol",
+  "prompt_sha256_prefix": "a39464db2333c58d",
+  "prompt_tokens": 39963,
+  "cached_tokens": 18816,
+  "completion_tokens": 2465,
+  "task_context_chars": 22366,
+  "wall_ms": 60973.44,
+  "tool_name": "author_and_confirm_python_model",
+  "tool_args": {
+    "rationale": "The eight trajectories include rising and falling transients at horizons bracketing H = 0.45. A numerical cross-check of the coupled ODE gave a training RMSE of about 5.3e-6 and a maximum leave-one-out error below 2e-5. Those are checks on the paid rows, not fresh confirmation. Submit the model for fresh confirmation without buying another probe.",
+    "considered_alternatives": [
+      {
+        "option": "Single-state snapshot relaxation",
+        "rejected_reason": "It assigns identical forecasts to matched endpoints and cannot explain the observed history gap."
+      },
+      {
+        "option": "Before/after input contrast",
+        "rejected_reason": "It collapses the prefix to two input levels and misses the dependence on the timing and shape of the state trajectory."
+      },
+      {
+        "option": "open_branch_discriminating_probe",
+        "rejected_reason": "The acquired trajectories already distinguish the memory mechanism near the target horizon. There is no evidence that a sink-gradient branch is needed."
+      }
+    ],
+    "hypothesis_name": "irregular_prefix_coupled_memory_ode",
+    "python_code": "import math\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_params = None\n\ndef _prepare(row):\n    z = row.get('mem_conv')\n    prefix = None\n    if z is None:\n        samples = row['raw_prefix']\n        prefix = (0.52 * float(samples[0]['x']), [\n            (float(right['t']) - float(left['t']), float(left['x']), float(right['x']))\n            for left, right in zip(samples, samples[1:])\n            if float(right['t']) > float(left['t'])\n        ])\n    return float(row['x_now']), float(row['u_now']), float(row['H']), z, prefix\n\ndef _forecast(data, params):\n    a, b, c, tau = map(float, params)\n    x, u, horizon, z, prefix = data\n    if horizon == 0.0:\n        return x\n    if z is None:\n        z, intervals = prefix\n        for dt, left, right in intervals:\n            r = dt / tau\n            q = -math.expm1(-r)\n            # Exact exponential-kernel update with linear x on this interval.\n            w = r * (0.5 - r / 6.0 + r * r / 24.0) if r < 1e-4 else 1.0 - q / r\n            z += 0.52 * (q * left + w * (right - left)) - q * z\n    else:\n        z = float(z)\n    n = max(1, math.ceil(horizon / 0.004))\n    h = horizon / n\n    drive = c * u\n    inv_tau = 1.0 / tau\n\n    def rhs(xx, zz):\n        return -a * xx + b * zz + drive, (0.52 * xx - zz) * inv_tau\n\n    for _ in range(n):\n        kx, kz = rhs(x, z)\n        lx, lz = rhs(x + 0.5 * h * kx, z + 0.5 * h * kz)\n        mx, mz = rhs(x + 0.5 * h * lx, z + 0.5 * h * lz)\n        nx, nz = rhs(x + h * mx, z + h * mz)\n        x += (h / 6.0) * (kx + 2.0 * lx + 2.0 * mx + nx)\n        z += (h / 6.0) * (kz + 2.0 * lz + 2.0 * mz + nz)\n    return x\n\ndef fit(train_rows):\n    global _params\n    data = [_prepare(row) for row in train_rows]\n    y = np.asarray([row['y'] for row in train_rows], dtype=float)\n\n    def residuals(params):\n        return np.asarray([_forecast(row, params) for row in data]) - y\n\n    result = least_squares(residuals, [1.6, 1.0, 1.1, 0.5],\n                           bounds=([0.0, 0.0, 0.0, 0.01], np.inf),\n                           x_scale='jac', ftol=1e-10, xtol=1e-10, gtol=1e-10)\n    _params = result.x\n    return _params\n\ndef predict(row) -> float:\n    return float(_forecast(_prepare(row), _params))"
+  },
+  "auth_mode": "chatgpt_oauth_subscription_redacted"
+}
