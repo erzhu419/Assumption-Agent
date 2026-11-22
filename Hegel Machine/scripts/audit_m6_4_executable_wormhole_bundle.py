@@ -167,9 +167,13 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
             and bm_judge_tokens
             == int(
                 manifest.get(
-                    "biomystery_judge_total_tokens_m6_5"
-                    if "M6_5" in arm_name
-                    else "biomystery_judge_total_tokens_m6_4",
+                    "biomystery_judge_total_tokens_m6_6"
+                    if "M6_6" in arm_name
+                    else (
+                        "biomystery_judge_total_tokens_m6_5"
+                        if "M6_5" in arm_name
+                        else "biomystery_judge_total_tokens_m6_4"
+                    ),
                     0,
                 )
             ),

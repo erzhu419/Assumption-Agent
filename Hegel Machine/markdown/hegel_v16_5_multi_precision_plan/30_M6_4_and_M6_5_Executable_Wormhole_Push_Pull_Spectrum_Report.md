@@ -18,7 +18,8 @@
 | **`Hegel M6.4` (28T)** | **`init_payload` Manifest + Voluntary Pull** | **`13/20 (65.0%)`** | `12/20 (60.0%)` | `7/10 (70%)` | **`6/10 (60%)`** | **`2,523` (`4/15` tasks)** | **`symbolic-regression`, `navigation` (`+2`)** |
 | `Hegel M6.5a` (Wave 1) | Forced `Turn 1-3` Push (Ablation) | `3/9` Wave-1 partial | `3/9` | `3/9` | — | `17,454` (`5/9` tasks) | Flipped `sparse-network-assimilation` (`0->1`, 15T), hurt 4 1st-principles tasks |
 | **`Hegel M6.5` (28T)** | **Hidden from `init_payload` until `Turn 6` Footer** | **`10/20 (50.0%)`** | `10/20 (50.0%)` | `5/10 (50%)` | `5/10 (50%)` | **`0` (`0/15` tasks)** | **`certified-sparse`, `navigation` (`+2`), live `AMR` `23/23`** |
-| *R&D Lineage Union (`M6.1`–`M6.5`)* | *Cross-version solved union (non-single-run)* | *`16/20 (80.0%)`* | — | *`8/10 (80%)`* | *`8/10 (80%)`* | — | *All 13 `Bare` tasks + `certified-sparse`, `navigation`, `symbolic-regression`* |
+| **`Hegel M6.6` (28T)** | **`init_payload` Manifest + Hedged `"whenever helpful"` + Reentrant Lock** | **`11/20 (55.0%)`** | `11/20 (55.0%)` | **`7/10 (70%)`** | `4/10 (40%)` | **`0` (`0/15` tasks)** | **`navigation` (`+1`), live `AMR` `23/23` + `sparse-network` `7/7` (`clinical` `0.8474` vs `0.8500`)** |
+| *R&D Lineage Union (`M6.1`–`M6.6`)* | *Cross-version solved union (non-single-run)* | *`16/20 (80.0%)`* | — | *`8/10 (80%)`* | *`8/10 (80%)`* | — | *All 13 `Bare` tasks + `certified-sparse`, `navigation`, `symbolic-regression`* |
 
 ---
 
