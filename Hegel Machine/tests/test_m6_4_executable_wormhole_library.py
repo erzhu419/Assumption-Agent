@@ -28,6 +28,8 @@ from hegel_machine.cognition.m6_frontier_real_benchmarks import (
     FrontierBenchmarkTask,
     build_m6_frontier_general_forest,
     exec_container_bash,
+    extract_public_task_signatures,
+    load_frontier_scout_20_tasks,
     run_biomystery_verifier,
     start_detached_container,
     stop_container_safely,
@@ -277,6 +279,17 @@ def test_reentrant_heavy_timing_rwlock_no_deadlock() -> None:
         lk.release_write()
     lk.acquire_read()
     lk.release_read()
+
+
+def test_word_boundary_public_signatures_prevent_ode_substring_false_positives() -> None:
+    waves = load_frontier_scout_20_tasks()
+    by_id = {t.task_id: t for w in waves.values() for t in w}
+    vb_sigs = extract_public_task_signatures(by_id["tb__virtual-baseline-localization"])
+    assert "sig:guided_wave_dispersion_and_geometry_transfer" in vb_sigs
+    assert "sig:symbolic_ode_and_law_regression" not in vb_sigs
+    nano_sigs = extract_public_task_signatures(by_id["tb__nanoindentation-property-extraction"])
+    assert "sig:robust_physical_calibration_and_safety_margins" in nano_sigs
+    assert "sig:symbolic_ode_and_law_regression" not in nano_sigs
 
 
 if __name__ == "__main__":
