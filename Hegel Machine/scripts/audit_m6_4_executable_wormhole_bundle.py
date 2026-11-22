@@ -39,6 +39,7 @@ from hegel_machine.cognition.m6_4_executable_wormhole_library import (
     sum_skill_activation_calls,
 )
 from hegel_machine.cognition.m6_8_b_prime_capability_bridge import SKILL_07_MULTISCALE_RECONCILIATION
+from hegel_machine.cognition.m6_9_a_dialectical_synthesis_engine import PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY
 
 
 def verify_sha256sums_dir(ev_dir: Path) -> dict[str, Any]:
@@ -66,9 +67,11 @@ def verify_sha256sums_dir(ev_dir: Path) -> dict[str, Any]:
 def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontier_LiveGPT") -> dict[str, Any]:
     sha_res = verify_sha256sums_dir(ev_dir)
 
-    dag_files = sorted(ev_dir.rglob("01_decision_provenance_dag.json"))
+    ep_dags_root = ev_dir / "episodes" if (ev_dir / "episodes").is_dir() else ev_dir
+    dag_files = sorted(ep_dags_root.rglob("01_decision_provenance_dag.json"))
+    subbranch_dags = sorted((ev_dir / "branch_trajectories").rglob("01_decision_provenance_dag.json")) if (ev_dir / "branch_trajectories").is_dir() else []
     invalid_dags: list[str] = []
-    for df in dag_files:
+    for df in [*dag_files, *subbranch_dags]:
         obj = json.loads(df.read_text(encoding="utf-8"))
         ver = verify_decision_provenance_chain(obj.get("records", []))
         if not ver.get("valid"):
@@ -84,6 +87,7 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
     for label_s, src_s in (
         ("host_gate_runner", HOST_MECHANICAL_WORMHOLE_GATE_RUNNER_PY),
         ("skill_07_multiscale", SKILL_07_MULTISCALE_RECONCILIATION),
+        ("m69_public_synthesis_eval", PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY),
     ):
         for tok in forbidden_tokens:
             if tok in src_s:
