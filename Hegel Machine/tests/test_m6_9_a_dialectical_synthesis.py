@@ -197,3 +197,58 @@ def test_bug_s3_guided_wave_cross_geometry_dominance_and_anti_tautology_rule(mon
         )
         assert res["selected_branch"] == "antithesis"
         assert "public_guided_wave_cross_geometry_dominance" in res["selection_mechanism"]
+
+
+def test_bug_r1_r2_r3_probe_guard_producer_ast_and_turn_aligned_digest() -> None:
+    """Regression tests for R1 (missing-module probe guard), R2 (`04b` AST sublation), and R3 (turn-boundary digest + Layer 3i)."""
+    from hegel_machine.cognition.m6_4_executable_wormhole_library import (
+        HOST_MECHANICAL_WORMHOLE_GATE_RUNNER_PY,
+        consolidate_wave1_executable_modules_into_forest,
+    )
+    from hegel_machine.cognition.m6_9_a_dialectical_synthesis_engine import _extract_trajectory_evidence_digest
+
+    # R1: Probe runner checks `find_spec(req_mod)` before importing optional domain modules
+    assert "importlib.util.find_spec(req_mod)" in HOST_MECHANICAL_WORMHOLE_GATE_RUNNER_PY
+
+    # R2: Wave-1 AST sublation extracts pure functions from `04b_producer_skill_manifest/producers/*.py` even when `04` has only `.json`/`.csv`!
+    forest, archive, _ = m6f.build_m6_frontier_general_forest()
+    with tempfile.TemporaryDirectory(prefix="m69_r2_ast_") as td:
+        ep_dir = Path(td) / "ep_ode"
+        (ep_dir / "04_submitted_artifacts_snapshot").mkdir(parents=True)
+        (ep_dir / "04_submitted_artifacts_snapshot" / "equations.json").write_text("{}", encoding="utf-8")
+        prod_dir = ep_dir / "04b_producer_skill_manifest" / "producers"
+        prod_dir.mkdir(parents=True)
+        (prod_dir / "tmp__ode_helper.py").write_text(
+            "import numpy as np\n\ndef rational_pade_basis(x, c=1.0):\n    v = np.asarray(x, dtype=float)\n    return v / (1.0 + c * v * v)\n",
+            encoding="utf-8",
+        )
+        events = consolidate_wave1_executable_modules_into_forest(
+            wave1_episode_dirs=[
+                (
+                    {
+                        "task_id": "tb__ode-law-discovery",
+                        "short_name": "ode-law-discovery",
+                        "strict_pass": True,
+                        "wormhole_family": "fam_symbolic_and_dynamical_laws",
+                    },
+                    ep_dir,
+                )
+            ],
+            forest=forest,
+            archive=archive,
+        )
+        assert len(events) == 1
+        assert events[0]["exported_functions"] == ["rational_pade_basis"]
+
+        # R3: Turn-boundary-aligned trajectory digest NEVER slices mid-turn when complete turns fit in `max_chars`
+        traj_md = (
+            "# Header\n\n### Turn 1 — init\n" + ("A" * 5000) +
+            "\n### Turn 2 — holdout definition\nARRAY_LEGEND = '[pos_rms, att_rms]'\n" + ("B" * 4000) +
+            "\n### Turn 3 — submit\nFinal check passed.\n## 4. Official Verifier Post-Mortem Verdict\nSECRET\n"
+        )
+        (ep_dir / "02_human_readable_trajectory.md").write_text(traj_md, encoding="utf-8")
+        dig = json.loads(_extract_trajectory_evidence_digest(ep_dir, {"arm": "test"}, max_chars=14000))
+        tail = dig["trajectory_tail_public_evidence"]
+        assert tail.startswith("### Turn ")
+        assert "ARRAY_LEGEND" in tail
+        assert "SECRET" not in tail

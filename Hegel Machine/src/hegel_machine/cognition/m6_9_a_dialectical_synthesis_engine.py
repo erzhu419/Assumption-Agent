@@ -96,6 +96,10 @@ out = {
     "nano_missing_popins": None,
     "gw_cross_pass_20mm": None,
     "gw_cross_worst_mm": None,
+    "nav_schema_ok": None,
+    "nav_holdout_pos_rms_m": None,
+    "nav_holdout_att_rms_deg": None,
+    "nav_cal_drift_score": None,
 }
 
 # 1. Public submission checker scripts (`/data/check_submission.py` for ODE, `/app/data/check_outputs.py` for sparse-network)
@@ -460,6 +464,73 @@ if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/healthy_refe
     except Exception:
         pass
 
+# 10. Navigation Sensor Calibration Leave-Window-Out & Cadence-Subsampling Invariance (`/root/results/solver.py` + `/root/data/development`)
+if os.path.isfile("/root/results/solver.py") and os.path.isdir("/root/data/development") and os.path.isfile("/root/data/output_schema.json"):
+    nav_code = (
+        "import json, math, os, shutil, subprocess, sys, tempfile\n"
+        "import numpy as np, pandas as pd\n"
+        "with tempfile.TemporaryDirectory(prefix='_hegel_nav_') as td:\n"
+        "    out_f = os.path.join(td, 'out_f'); os.makedirs(out_f, exist_ok=True)\n"
+        "    p0 = subprocess.run([sys.executable, '-B', '/root/results/solver.py', '--input-dir', '/root/data/development', '--output-dir', out_f], capture_output=True, text=True, timeout=65)\n"
+        "    if p0.returncode != 0:\n"
+        "        print(json.dumps({'ok': False})); sys.exit(0)\n"
+        "    cal_f = json.load(open(os.path.join(out_f, 'calibration.json')))\n"
+        "    tr_f = pd.read_csv(os.path.join(out_f, 'trajectory.csv'))\n"
+        "    q_f = tr_f[['qx_body_to_enu','qy_body_to_enu','qz_body_to_enu','qw_body_to_enu']].to_numpy(dtype=float)\n"
+        "    q_ok = bool(np.all(np.isfinite(q_f)) and np.max(np.abs(np.linalg.norm(q_f, axis=1) - 1.0)) < 1e-3)\n"
+        "    sess_h = os.path.join(td, 'sess_h'); out_h = os.path.join(td, 'out_h')\n"
+        "    shutil.copytree('/root/data/development', sess_h); os.makedirs(out_h, exist_ok=True)\n"
+        "    sp = pd.read_csv(os.path.join(sess_h, 'survey_pose.csv'), dtype={'timestamp': str})\n"
+        "    sp_t = sp['timestamp'].astype(float).to_numpy()\n"
+        "    gaps = np.where(np.diff(sp_t) > 1.0)[0]\n"
+        "    bounds = np.r_[0, gaps + 1, len(sp)]\n"
+        "    w_idx = 1 if len(bounds) >= 3 else 0\n"
+        "    ho = np.zeros(len(sp), dtype=bool); ho[bounds[w_idx]:bounds[w_idx+1]] = True\n"
+        "    sp.iloc[np.flatnonzero(~ho)[::5]].to_csv(os.path.join(sess_h, 'survey_pose.csv'), index=False)\n"
+        "    sp_val = sp.iloc[np.flatnonzero(ho)].copy()\n"
+        "    sp_val[['timestamp']].to_csv(os.path.join(sess_h, 'trajectory_query.csv'), index=False)\n"
+        "    p1 = subprocess.run([sys.executable, '-B', '/root/results/solver.py', '--input-dir', sess_h, '--output-dir', out_h], capture_output=True, text=True, timeout=65)\n"
+        "    if p1.returncode != 0:\n"
+        "        print(json.dumps({'ok': False})); sys.exit(0)\n"
+        "    cal_h = json.load(open(os.path.join(out_h, 'calibration.json')))\n"
+        "    pred = pd.read_csv(os.path.join(out_h, 'trajectory.csv'))\n"
+        "    pos_err = np.linalg.norm(pred[['x_enu_m','y_enu_m','z_enu_m']].to_numpy() - sp_val[['x_enu_m','y_enu_m','z_enu_m']].to_numpy(), axis=1)\n"
+        "    q1 = pred[['qx_body_to_enu','qy_body_to_enu','qz_body_to_enu','qw_body_to_enu']].to_numpy(dtype=float)\n"
+        "    q2 = sp_val[['qx_body_to_enu','qy_body_to_enu','qz_body_to_enu','qw_body_to_enu']].to_numpy(dtype=float)\n"
+        "    q1 /= np.linalg.norm(q1, axis=1, keepdims=True); q2 /= np.linalg.norm(q2, axis=1, keepdims=True)\n"
+        "    att_deg = np.degrees(2.0 * np.arccos(np.clip(np.abs(np.sum(q1 * q2, axis=1)), 0.0, 1.0)))\n"
+        "    # Normalized intrinsic/extrinsic calibration parameter shift under 5x survey thinning:\n"
+        "    scales = {\n"
+        "        'lidar_translation_body_m': 0.01,\n"
+        "        'lidar_rotation_body_from_lidar_quaternion_xyzw': 0.001,\n"
+        "        'lidar_translation_scale': 0.0005,\n"
+        "        'imu_gyro_correction_scale': 0.001,\n"
+        "        'gps_lever_arm_body_m': 0.03,\n"
+        "        'lidar_time_offset_sec': 0.02,\n"
+        "    }\n"
+        "    drift_score = 0.0\n"
+        "    for k_s, sc_v in scales.items():\n"
+        "        if k_s in cal_f and k_s in cal_h:\n"
+        "            drift_score += float(np.max(np.abs(np.asarray(cal_f[k_s], float) - np.asarray(cal_h[k_s], float)))) / sc_v\n"
+        "    print(json.dumps({\n"
+        "        'ok': q_ok,\n"
+        "        'pos_rms_m': round(float(np.sqrt(np.mean(pos_err**2))), 5),\n"
+        "        'att_rms_deg': round(float(np.sqrt(np.mean(att_deg**2))), 5),\n"
+        "        'cal_drift': round(drift_score, 4),\n"
+        "    }))\n"
+    )
+    try:
+        pr = subprocess.run([sys.executable, "-c", nav_code], cwd="/root", capture_output=True, text=True, timeout=140)
+        if pr.returncode == 0 and pr.stdout.strip():
+            nj = json.loads(pr.stdout.strip().splitlines()[-1])
+            out["nav_schema_ok"] = bool(nj.get("ok"))
+            if nj.get("ok"):
+                out["nav_holdout_pos_rms_m"] = nj["pos_rms_m"]
+                out["nav_holdout_att_rms_deg"] = nj["att_rms_deg"]
+                out["nav_cal_drift_score"] = nj["cal_drift"]
+    except Exception:
+        out["nav_schema_ok"] = False
+
 print(json.dumps(out))
 '''
 
@@ -470,7 +541,7 @@ def _run_public_container_candidate_benchmark(synth_cid: str) -> dict[str, Any]:
             ["docker", "exec", "-w", "/", synth_cid, "python3", "-c", PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY],
             capture_output=True,
             text=True,
-            timeout=75,
+            timeout=155,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return dict(json.loads(proc.stdout.strip().splitlines()[-1]))
@@ -479,8 +550,8 @@ def _run_public_container_candidate_benchmark(synth_cid: str) -> dict[str, Any]:
     return {}
 
 
-def _extract_trajectory_evidence_digest(ep_dir: Path, summary: dict[str, Any]) -> str:
-    """Extract the final 5 turns' empirical commands, stdout metrics, and rationale for blinded synthesis."""
+def _extract_trajectory_evidence_digest(ep_dir: Path, summary: dict[str, Any], *, max_chars: int = 14000) -> str:
+    """Extract complete turn-boundary-aligned final verification turns (`R3` Fix: never slices mid-code-block!)."""
     traj_fp = ep_dir / "02_human_readable_trajectory.md"
     tail_txt = ""
     if traj_fp.is_file():
@@ -488,7 +559,19 @@ def _extract_trajectory_evidence_digest(ep_dir: Path, summary: dict[str, Any]) -
         # Strip Section 4 (`Official Verifier Post-Mortem Verdict`) even though verifier was deferred!
         if "## 4. Official Verifier" in full_txt:
             full_txt = full_txt.split("## 4. Official Verifier", 1)[0]
-        tail_txt = full_txt[-6500:]
+        turn_parts = full_txt.split("\n### Turn ")
+        if len(turn_parts) > 1:
+            kept: list[str] = []
+            cur_len = 0
+            for t_blk in reversed(turn_parts[1:]):
+                chunk = "### Turn " + t_blk
+                if cur_len + len(chunk) > max_chars and len(kept) >= 2:
+                    break
+                kept.append(chunk)
+                cur_len += len(chunk) + 1
+            tail_txt = "\n".join(reversed(kept))[-max(max_chars, 16000):]
+        else:
+            tail_txt = full_txt[-max_chars:]
     return json.dumps(
         {
             "arm": summary.get("arm"),
@@ -753,6 +836,26 @@ def reconcile_thesis_and_antithesis_publicly(
         if int(gw_a) > int(gw_t):
             return _finalize_choice("antithesis", f"public_guided_wave_cross_geometry_dominance({gw_a}>{gw_t})")
         return _finalize_choice("thesis", f"public_guided_wave_cross_geometry_dominance({gw_t}>{gw_a})")
+
+    # 3i. Public Navigation Leave-Survey-Window-Out & Cadence-Thinning Calibration Invariance dominance
+    if pub_t.get("nav_schema_ok") is not None or pub_a.get("nav_schema_ok") is not None:
+        nt_ok, na_ok = bool(pub_t.get("nav_schema_ok")), bool(pub_a.get("nav_schema_ok"))
+        if na_ok and not nt_ok:
+            return _finalize_choice("antithesis", "public_navigation_holdout_cli_contract")
+        if nt_ok and not na_ok:
+            return _finalize_choice("thesis", "public_navigation_holdout_cli_contract")
+        if nt_ok and na_ok:
+            pt, pa = float(pub_t["nav_holdout_pos_rms_m"]), float(pub_a["nav_holdout_pos_rms_m"])
+            at, aa = float(pub_t["nav_holdout_att_rms_deg"]), float(pub_a["nav_holdout_att_rms_deg"])
+            dt, da = float(pub_t["nav_cal_drift_score"]), float(pub_a["nav_cal_drift_score"])
+            if pa < 0.80 * pt and aa <= 1.05 * at:
+                return _finalize_choice("antithesis", f"public_navigation_holdout_pose_dominance({pa}m<{pt}m)")
+            if pt < 0.80 * pa and at <= 1.05 * aa:
+                return _finalize_choice("thesis", f"public_navigation_holdout_pose_dominance({pt}m<{pa}m)")
+            if da < 0.70 * dt and pa <= 1.08 * pt and aa <= 1.08 * at:
+                return _finalize_choice("antithesis", f"public_navigation_calibration_invariance({da}<{dt})")
+            if dt < 0.70 * da and pt <= 1.08 * pa and at <= 1.08 * aa:
+                return _finalize_choice("thesis", f"public_navigation_calibration_invariance({dt}<{da})")
 
     # Layer 4: Blinded Dialectical Trajectory Synthesis Reconciler (`1` structured LLM call, ZERO private truth!)
     ev_t = _extract_trajectory_evidence_digest(thesis_dir, thesis_summary)
@@ -1058,12 +1161,16 @@ def run_m6_9_a_two_branch_episode(
             rationale_summary=f"Propagated {skill_call_total} verified Antithesis Skill∞ calls into synthesized episode bundle.",
         )
 
-        anti_man_dir = antithesis_dir / "04b_producer_skill_manifest"
-        if "antithesis" in str(synth_res["selected_branch"]) and anti_man_dir.is_dir():
+        winning_man_dir = (
+            antithesis_dir / "04b_producer_skill_manifest"
+            if "antithesis" in str(synth_res["selected_branch"])
+            else thesis_dir / "04b_producer_skill_manifest"
+        )
+        if winning_man_dir.is_dir():
             dst_man_dir = episode_out_dir / "04b_producer_skill_manifest"
             if dst_man_dir.exists():
                 shutil.rmtree(dst_man_dir)
-            shutil.copytree(anti_man_dir, dst_man_dir)
+            shutil.copytree(winning_man_dir, dst_man_dir)
 
         saved_snapshots: list[str] = []
         if not is_bm and synth_cid is not None and task.declared_artifacts:

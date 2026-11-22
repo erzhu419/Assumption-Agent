@@ -3493,9 +3493,9 @@ def run_frontier_episode(
                 rationale_summary=f"Harvested {skill_call_total} runtime Skill∞ wormhole calls ({len(skill_activations)} log entries) from `/tmp/.hegel_skill_activations.jsonl`.",
             )
 
-        # Harvest complete `ExecutableSkillManifest` (`P0b` Fix: full `/tmp` + workspace producer closure & content-addressed blobs before teardown!)
+        # Harvest complete `ExecutableSkillManifest` (`P0b` + `R2` Fix: harvest for M6.8+ AND Two-Branch Synthesis tar exports!)
         manifest_summary: dict[str, Any] | None = None
-        if is_m6_8 and (not is_bm) and agent_cid != "mock":
+        if (is_m6_8 or export_artifacts_tar_path is not None) and (not is_bm) and agent_cid != "mock":
             prod_man = harvest_container_producer_skill_manifest(
                 agent_cid=agent_cid,
                 task_id=task.task_id,

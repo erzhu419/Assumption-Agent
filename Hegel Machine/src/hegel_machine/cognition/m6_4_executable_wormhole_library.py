@@ -1296,13 +1296,22 @@ def consolidate_wave1_executable_modules_into_forest(
         if not summary.get("strict_pass"):
             continue
         snap_dir = ep_dir / "04_submitted_artifacts_snapshot"
-        if not snap_dir.is_dir():
+        prod_dir = ep_dir / "04b_producer_skill_manifest" / "producers"
+        if not snap_dir.is_dir() and not prod_dir.is_dir():
             continue
         fam = str(summary.get("wormhole_family") or "")
         t_short = str(summary.get("short_name") or summary.get("task_id") or "").replace("-", "_")
 
+        cand_py_files: list[Path] = []
+        if snap_dir.is_dir():
+            cand_py_files.extend(sorted(snap_dir.glob("*.py")))
+        if prod_dir.is_dir():
+            cand_py_files.extend(
+                p for p in sorted(prod_dir.glob("*.py")) if ".hegel" not in p.name and "wormhole" not in p.name
+            )
+
         collected_fns: list[tuple[str, str]] = []
-        for py_fp in sorted(snap_dir.glob("*.py")):
+        for py_fp in cand_py_files:
             src = py_fp.read_text(encoding="utf-8", errors="ignore")
             for fn_name, fn_code in extract_pure_reusable_functions_from_python(src):
                 if all(fn_name != ex[0] for ex in collected_fns):
@@ -2018,18 +2027,19 @@ def main() -> None:
                     expanded_arts.append(os.path.join(dp, fn))
 
     probe_specs = [
-        ("mip_certificate_and_assimilation", {"node_F06_sparse_identifiability_and_certificates"}, _probe_mip_certificate_and_assimilation),
-        ("symbolic_nested_cv", {"node_F01_symbolic_sparse_dynamics"}, _probe_symbolic_predictor),
-        ("clinical_cohort_alignment", {"node_F07_clinical_and_network_imputation"}, _probe_clinical_cohort_alignment),
-        ("guided_wave_localization", {"node_F04_guided_wave_physics_transfer", "node_F05_digital_twin_and_baseline_free_wave"}, _probe_guided_wave_localization),
-        ("indentation_and_calibration", {"node_F08_robust_calibration_and_safety_control"}, _probe_indentation_and_calibration),
-        ("conservation_flux_episodes", {"node_F02_operator_and_conservation_inversion", "node_F03_multiscale_pde_and_fast_numpy"}, _probe_conservation_flux_episodes),
+        ("mip_certificate_and_assimilation", {"node_F06_sparse_identifiability_and_certificates"}, "hegel_wormhole_skills.variational_assimilation_and_certificate_wormhole", _probe_mip_certificate_and_assimilation),
+        ("symbolic_nested_cv", {"node_F01_symbolic_sparse_dynamics"}, "hegel_wormhole_skills.symbolic_and_dynamical_wormhole", _probe_symbolic_predictor),
+        ("clinical_cohort_alignment", {"node_F07_clinical_and_network_imputation"}, "hegel_wormhole_skills.cohort_transfer_and_imputation_wormhole", _probe_clinical_cohort_alignment),
+        ("guided_wave_localization", {"node_F04_guided_wave_physics_transfer", "node_F05_digital_twin_and_baseline_free_wave"}, "hegel_wormhole_skills.wave_dispersion_and_lopo_imaging_wormhole", _probe_guided_wave_localization),
+        ("indentation_and_calibration", {"node_F08_robust_calibration_and_safety_control"}, "hegel_wormhole_skills.stage_protocol_and_outlier_calibration_wormhole", _probe_indentation_and_calibration),
+        ("conservation_flux_episodes", {"node_F02_operator_and_conservation_inversion", "node_F03_multiscale_pde_and_fast_numpy"}, None, _probe_conservation_flux_episodes),
     ]
 
     probe_results: list[dict] = []
     all_reports: list[str] = []
-    for pid, trigger_nodes, fn in probe_specs:
-        if not (nids & trigger_nodes):
+    for pid, trigger_nodes, req_mod, fn in probe_specs:
+        mod_missing = bool(req_mod is not None and importlib.util.find_spec(req_mod) is None)
+        if not (nids & trigger_nodes) or mod_missing:
             probe_results.append({
                 "probe_id": pid,
                 "status": "not_applicable",
@@ -2105,7 +2115,7 @@ def run_host_mechanical_wormhole_gate_probes_v2(
     payload = json.dumps(
         {
             "declared_artifacts": list(declared_artifacts),
-            "recalled_node_ids": [str(n.get("node_id", "")) for n in recalled_notes],
+            "recalled_node_ids": [str(n.get("node_id", "")) for n in recalled_notes[:2]],
             "candidate_sha256": candidate_sha256,
         }
     )
@@ -2123,6 +2133,8 @@ def run_host_mechanical_wormhole_gate_probes_v2(
                 [
                     "docker",
                     "exec",
+                    "-w",
+                    "/",
                     agent_cid,
                     "bash",
                     "-lc",
