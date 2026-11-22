@@ -551,9 +551,12 @@ def build_m6_frontier_general_forest() -> tuple[PhilosophicalForest, dict[str, d
         ["sig:guided_wave_dispersion_and_geometry_transfer"],
         "fam_guided_wave_shm_localization",
         (
-            "DIGITAL-TWIN & BASELINE-FREE WAVE CALIBRATION: When only a virtual baseline, single healthy plate, or baseline-free reciprocity set exists, "
-            "always align phase/amplitude/time-shift transfer functions per distance bin or reciprocity pair (`i->j` vs `j->i`) first so benign dispersion/gain "
-            "mismatch between reference and query is not misclassified as damage near plate boundaries or sensor locations."
+            "DIGITAL-TWIN & BASELINE-FREE WAVE CALIBRATION: When only a virtual FE baseline, single healthy plate, or baseline-free reciprocity set exists, "
+            "align phase/amplitude/time-shift transfer functions per distance bin or reciprocity pair (`i->j` vs `j->i`) first so benign dispersion/gain "
+            "mismatch between simulated FE and experimental PZT query is not misclassified as damage. CRITICAL GRID-ARRAY ACOUSTICS: on 2D/interior PZT layouts, "
+            "collinear rays passing near an intermediate bonded transducer `s_k` (`k != i, j`) suffer ~20-30% passive PZT obstruction AND secondary scatter at "
+            "`||a - s_k|| + ||s_k - b||`! Deconfound intermediate-PZT obstruction (`direct_packet_irls_attenuation_tomography`), gate passive sensor-bounce + "
+            "wall/corner image arrivals, and fuse calibrated transmission-shadow tomography with bistatic scatter + LOPO consensus rather than discarding direct shadow!"
         ),
     )
     _add(

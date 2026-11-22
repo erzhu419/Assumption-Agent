@@ -96,6 +96,8 @@ out = {
     "nano_missing_popins": None,
     "gw_cross_pass_20mm": None,
     "gw_cross_worst_mm": None,
+    "vb_cross_pass_20mm": None,
+    "vb_cross_worst_mm": None,
     "nav_schema_ok": None,
     "nav_holdout_pos_rms_m": None,
     "nav_holdout_att_rms_deg": None,
@@ -464,6 +466,68 @@ if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/healthy_refe
     except Exception:
         pass
 
+# 9b. Digital-Twin Virtual-Baseline Cross-Geometry Crack Shadow+Scatter Public Benchmark (`/app/solution.py` + `/app/data/virtual_baseline.npz`)
+if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/virtual_baseline.npz"):
+    vb_code = (
+        "import json, math, sys, numpy as np\n"
+        "from scipy.signal import hilbert\n"
+        "sys.path.insert(0, '/app')\n"
+        "import solution\n"
+        "if not hasattr(solution, 'predict_damage'): sys.exit(0)\n"
+        "z = np.load('/app/data/virtual_baseline.npz')\n"
+        "fe_sig = np.asarray(z['signals'], dtype=float)\n"
+        "fs = float(z['sampling_frequency_hz']); f0 = float(z['excitation_frequency_hz']); h_th = float(z['plate_thickness_m'])\n"
+        "sim_xy = np.asarray(z['sensor_xy_m'], dtype=float); sim_pp = np.asarray(z['path_pairs'], dtype=int); sim_sz = np.asarray(z['panel_size_m'], dtype=float)\n"
+        "sim_d = np.linalg.norm(sim_xy[sim_pp[:,0]] - sim_xy[sim_pp[:,1]], axis=1)\n"
+        "env = np.abs(hilbert(fe_sig, axis=0)); pk_idx = np.argmax(env[20:240], axis=0) + 20\n"
+        "coef, *_ = np.linalg.lstsq(np.column_stack([np.ones_like(sim_d), sim_d]), pk_idx.astype(float), rcond=None)\n"
+        "k0_s = float(coef[0]) + 3.5; slow_s = float(coef[1]) * 1.07\n"
+        "n_samp = np.arange(fe_sig.shape[0], dtype=float); u_grid = np.arange(-42.0, 56.0)\n"
+        "aligned = np.array([np.interp(np.clip(pk + u_grid, 0, len(n_samp)-1), n_samp, env[:, j] / max(env[pk, j], 1e-18)) for j, pk in enumerate(pk_idx)])\n"
+        "emp_env = np.median(aligned, axis=0) * np.exp(-0.5 * (np.maximum(np.abs(u_grid) - 24.0, 0.0) / 8.0) ** 2)\n"
+        "omega0 = 2.0 * math.pi * f0 / fs\n"
+        "rng = np.random.default_rng(20261124); errs_mm = []\n"
+        "q_sz = np.array([0.56, 0.44])\n"
+        "gx, gy = np.meshgrid([0.11, 0.28, 0.45], [0.09, 0.22, 0.35])\n"
+        "q_xy = np.column_stack([gx.ravel(), gy.ravel()])\n"
+        "n_s = len(q_xy); q_pp = np.array([[i, j] for i in range(n_s) for j in range(n_s) if i != j], dtype=int)\n"
+        "for mode_idx in range(10):\n"
+        "    dmg = np.array([rng.uniform(0.14, 0.42), rng.uniform(0.12, 0.32)])\n"
+        "    pair_phi = {(i, j): float(rng.uniform(-0.35, 0.35)) for i in range(n_s) for j in range(i + 1, n_s)}\n"
+        "    s_gain = np.exp(rng.normal(0.0, 0.10, size=n_s))\n"
+        "    q_sig = np.zeros((len(n_samp), len(q_pp)), dtype=float)\n"
+        "    for p_i, (u, v) in enumerate(q_pp):\n"
+        "        phi = pair_phi[(min(int(u), int(v)), max(int(u), int(v)))]\n"
+        "        pa, pb = q_xy[u], q_xy[v]; d_ab = float(np.linalg.norm(pb - pa))\n"
+        "        seg = pb - pa; ux, uy = seg / max(d_ab, 1e-9)\n"
+        "        # Include physical intermediate-PZT obstruction (`~24%` loss on collinear paths)!\n"
+        "        obs_loss = sum(0.24 * math.exp(-0.5 * (abs((q_xy[k,0]-pa[0])*uy - (q_xy[k,1]-pa[1])*ux) / 0.011)**2) for k in range(n_s) if k not in (u,v) and 0.02 < np.dot(q_xy[k]-pa, [ux,uy]) < d_ab - 0.02)\n"
+        "        proj = float(np.clip(np.dot(dmg - pa, seg) / max(d_ab**2, 1e-9), 0.0, 1.0))\n"
+        "        perp = float(np.linalg.norm((pa + proj * seg) - dmg))\n"
+        "        crk_sh = (0.36 * math.exp(-0.5 * (perp / 0.015)**2)) if mode_idx in (0,1,2,6,7,8,9) else 0.05 * math.exp(-0.5 * (perp / 0.015)**2)\n"
+        "        amp0 = float(s_gain[u] * s_gain[v]) * (1.0 - min(obs_loss, 0.45)) / math.sqrt(max(d_ab, 0.04))\n"
+        "        c_d = k0_s + slow_s * d_ab\n"
+        "        w_d = (1.0 - crk_sh) * amp0 * np.interp(n_samp - c_d, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_d) + phi)\n"
+        "        d_w = float(np.linalg.norm(np.array([pa[0], -pa[1]]) - pb)); c_w = k0_s + slow_s * d_w\n"
+        "        w_w = 0.22 * (1.0 / math.sqrt(max(d_w, 0.05))) * np.interp(n_samp - c_w, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_w) + phi + 0.7)\n"
+        "        d_sc = float(np.linalg.norm(pa - dmg) + np.linalg.norm(dmg - pb)); c_sc = k0_s + slow_s * d_sc\n"
+        "        sc_g = 0.16 if mode_idx in (3,4,5,6,7,8,9) else 0.03\n"
+        "        w_s = sc_g * (1.0 / math.sqrt(max(d_sc, 0.06))) * np.interp(n_samp - c_sc, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_sc) + phi - 0.5)\n"
+        "        q_sig[:, p_i] = w_d + w_w + w_s + rng.normal(0.0, 0.007 * amp0, size=len(n_samp))\n"
+        "    meta = {'sampling_frequency_hz': fs, 'excitation_frequency_hz': f0, 'plate_thickness_m': h_th, 'simulated': {'sensor_xy_m': sim_xy, 'path_pairs': sim_pp, 'panel_size_m': sim_sz}, 'inspection': {'sensor_xy_m': q_xy, 'path_pairs': q_pp, 'panel_size_m': q_sz}}\n"
+        "    pred = np.asarray(solution.predict_damage(fe_sig, q_sig, meta), dtype=float)\n"
+        "    errs_mm.append(float(np.linalg.norm(pred - dmg) * 1000.0))\n"
+        "print(json.dumps({'pass_20mm': int(sum(e <= 20.0 for e in errs_mm)), 'worst_mm': round(max(errs_mm), 2)}))\n"
+    )
+    try:
+        pr = subprocess.run([sys.executable, "-c", vb_code], cwd="/app", capture_output=True, text=True, timeout=45)
+        if pr.returncode == 0 and pr.stdout.strip():
+            vj = json.loads(pr.stdout.strip().splitlines()[-1])
+            out["vb_cross_pass_20mm"] = int(vj["pass_20mm"])
+            out["vb_cross_worst_mm"] = float(vj["worst_mm"])
+    except Exception:
+        pass
+
 # 10. Navigation Sensor Calibration Leave-Window-Out & Cadence-Subsampling Invariance (`/root/results/solver.py` + `/root/data/development`)
 if os.path.isfile("/root/results/solver.py") and os.path.isdir("/root/data/development") and os.path.isfile("/root/data/output_schema.json"):
     nav_code = (
@@ -536,15 +600,16 @@ print(json.dumps(out))
 
 
 def _run_public_container_candidate_benchmark(synth_cid: str) -> dict[str, Any]:
+    """Execute public container candidate benchmark via `m6f.exec_container_bash` so `HeavyTimingRWLock` read-lock parity is enforced (`P2` Fix)!"""
+    import base64 as _b64
+
+    b64_src = _b64.b64encode(PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY.encode("utf-8")).decode("ascii")
+    cmd = f"cd / && python3 -c \"import base64; exec(base64.b64decode('{b64_src}').decode('utf-8'))\""
     try:
-        proc = subprocess.run(
-            ["docker", "exec", "-w", "/", synth_cid, "python3", "-c", PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY],
-            capture_output=True,
-            text=True,
-            timeout=155,
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            return dict(json.loads(proc.stdout.strip().splitlines()[-1]))
+        res = m6f.exec_container_bash(synth_cid, cmd, timeout_sec=155)
+        stdout = str(res.get("stdout") or "").strip()
+        if int(res.get("exit_code", 1)) == 0 and stdout:
+            return dict(json.loads(stdout.splitlines()[-1]))
     except Exception as exc:
         return {"benchmark_error": f"{type(exc).__name__}:{str(exc)[:140]}"}
     return {}
@@ -695,14 +760,16 @@ def reconcile_thesis_and_antithesis_publicly(
 
     sha_t, chk_t, pub_t = _reset_and_load(thesis_tar)
     sha_a, chk_a, pub_a = _reset_and_load(antithesis_tar)
-    clean_base_tar.unlink(missing_ok=True)
 
     ok_t = bool(chk_t.get("accepted"))
     ok_a = bool(chk_a.get("accepted"))
 
     def _finalize_choice(branch: str, mechanism: str, rationale: str = "", llm_tok: dict[str, Any] | None = None) -> dict[str, Any]:
         chosen_tar = antithesis_tar if branch == "antithesis" else thesis_tar
+        if clean_base_tar.is_file():
+            m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, clean_base_tar)
         imp_f = m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, chosen_tar)
+        clean_base_tar.unlink(missing_ok=True)
         return {
             "selected_branch": branch,
             "selection_mechanism": mechanism,
@@ -749,6 +816,7 @@ def reconcile_thesis_and_antithesis_publicly(
                 subprocess.run(["tar", "-cf", str(merged_tar), "-C", str(t_ext), "."], check=True)
                 imp_m = m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, merged_tar)
                 merged_tar.unlink(missing_ok=True)
+                clean_base_tar.unlink(missing_ok=True)
                 dom_branch = "antithesis" if sum(float(v) for v in e_a.values()) < sum(float(v) for v in e_t.values()) else "thesis"
                 return {
                     "selected_branch": f"componentwise_synthesis_{dom_branch}",
@@ -829,13 +897,14 @@ def reconcile_thesis_and_antithesis_publicly(
             if st < 0.85 * sa:
                 return _finalize_choice("thesis", f"public_pde_runtime_speedup({st}s<{sa}s)")
 
-    # 3h. Public Guided-Wave Cross-Geometry Incoherent-Phase & Wall-Echo Benchmark dominance
-    gw_t = pub_t.get("gw_cross_pass_20mm")
-    gw_a = pub_a.get("gw_cross_pass_20mm")
-    if gw_t is not None and gw_a is not None and abs(int(gw_a) - int(gw_t)) >= 2:
-        if int(gw_a) > int(gw_t):
-            return _finalize_choice("antithesis", f"public_guided_wave_cross_geometry_dominance({gw_a}>{gw_t})")
-        return _finalize_choice("thesis", f"public_guided_wave_cross_geometry_dominance({gw_t}>{gw_a})")
+    # 3h. Public Guided-Wave / Virtual-Baseline Cross-Geometry Benchmark dominance
+    for wave_key, wave_lbl in (("gw_cross_pass_20mm", "public_guided_wave_cross_geometry_dominance"), ("vb_cross_pass_20mm", "public_virtual_baseline_cross_geometry_dominance")):
+        wt_v = pub_t.get(wave_key)
+        wa_v = pub_a.get(wave_key)
+        if wt_v is not None and wa_v is not None and abs(int(wa_v) - int(wt_v)) >= 2:
+            if int(wa_v) > int(wt_v):
+                return _finalize_choice("antithesis", f"{wave_lbl}({wa_v}>{wt_v})")
+            return _finalize_choice("thesis", f"{wave_lbl}({wt_v}>{wa_v})")
 
     # 3i. Public Navigation Leave-Survey-Window-Out & Cadence-Thinning Calibration Invariance dominance
     if pub_t.get("nav_schema_ok") is not None or pub_a.get("nav_schema_ok") is not None:

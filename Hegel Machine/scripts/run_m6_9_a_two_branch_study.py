@@ -207,7 +207,7 @@ def main() -> int:
                 hippo_idx=h_idx,
                 episode_out_dir=ep_dir,
                 branches_work_root=branches_root,
-                run_id="m6_9_a_two_branch_28turn",
+                run_id=ev_dir.name,
                 max_turns_per_branch=args.max_turns_per_branch,
                 cmd_timeout_sec=args.cmd_timeout,
                 reasoning_effort="medium",
@@ -327,7 +327,7 @@ def main() -> int:
                 bm_judge_tokens_total += int((v_obj.get("llm_judge_tokens") or {}).get("total_tokens", 0))
 
     manifest = {
-        "study_id": "m6_9_a_two_branch_frontier_40ep_20261122",
+        "study_id": ev_dir.name,
         "architecture_track": "A_two_branch_dialectical_synthesis_declared_2x_budget",
         "git_branch": "exp/m6-causal-wormhole-sandbox",
         "provider_backend": codex_info["provider_backend"],
