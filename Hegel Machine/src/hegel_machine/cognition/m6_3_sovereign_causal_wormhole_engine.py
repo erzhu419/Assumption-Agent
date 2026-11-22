@@ -80,218 +80,419 @@ M6_3_ARMS: tuple[str, ...] = (
 # ============================================================================
 
 
-def _analyze_module_row_provenance(tree: ast.Module) -> tuple[dict[int, set[str]], set[int]]:
-    """Return `(row_vars_by_scope_id, prediction_reachable_scope_ids)` via fixed-point dataflow.
+def _extract_const_str_seq(val: ast.AST) -> list[str] | None:
+    if isinstance(val, (ast.Tuple, ast.List)) and val.elts:
+        items: list[str] = []
+        for elt in val.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                items.append(elt.value)
+            else:
+                return None
+        return items
+    return None
 
-    Tracks which variable names inside each function/lambda scope represent a single data `row`
-    dict (vs `rows_collection` or unrelated parameter dicts like `P = {'z_2': 4.0}`).
+
+def _analyze_flow_sensitive_row_accesses(tree: ast.Module) -> dict[str, Any]:
+    """Flow-sensitive, lexical-scope-aware `row` provenance, constant key-tuple & call-graph analyzer (`A01`/`A07` Fix).
+
+    Correctly handles:
+      - Constant string key tuples/lists (`_KEYS = ('x', 'z'); sum(row[k] for k in _KEYS)`), including multi-generator comprehensions;
+      - Sequential alias kill on rebinding (`r = row; r = {'x': 7.0}` -> `r['x']` after rebinding is NOT a row access);
+      - Positional AND keyword helper calls (`helper(q=row)`);
+      - Nested local helper definitions (`def helper(q): ...` inside `predict(row)` or `fit(rows)`).
     """
-    top_fns: dict[str, ast.FunctionDef] = {}
-    all_scopes: list[ast.AST] = [tree]
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            all_scopes.append(node)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
-            top_fns[node.name] = node
-
-    row_vars: dict[int, set[str]] = {id(sc): set() for sc in all_scopes}
-    coll_vars: dict[int, set[str]] = {id(sc): set() for sc in all_scopes}
+    scope_seeded_rows: dict[int, set[str]] = {}
+    scope_seeded_colls: dict[int, set[str]] = {}
     pred_scopes: set[int] = set()
 
-    # Seed `predict(row, ...)` and `fit(train_rows, ...)`
-    if "predict" in top_fns:
-        p_fn = top_fns["predict"]
-        pred_scopes.add(id(p_fn))
-        if p_fn.args.args:
-            row_vars[id(p_fn)].add(p_fn.args.args[0].arg)
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            if node.name == "predict":
+                pred_scopes.add(id(node))
+                if node.args.args:
+                    scope_seeded_rows.setdefault(id(node), set()).add(node.args.args[0].arg)
+            elif node.name == "fit":
+                if node.args.args:
+                    scope_seeded_colls.setdefault(id(node), set()).add(node.args.args[0].arg)
+                ret_names: set[str] = set()
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Return):
+                        if isinstance(sub.value, ast.Name):
+                            ret_names.add(sub.value.id)
+                        elif isinstance(sub.value, ast.Lambda):
+                            pred_scopes.add(id(sub.value))
+                            if sub.value.args.args:
+                                scope_seeded_rows.setdefault(id(sub.value), set()).add(sub.value.args.args[0].arg)
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.FunctionDef) and sub is not node and sub.name in ret_names and sub.args.args:
+                        pred_scopes.add(id(sub))
+                        scope_seeded_rows.setdefault(id(sub), set()).add(sub.args.args[0].arg)
 
-    if "fit" in top_fns:
-        f_fn = top_fns["fit"]
-        if f_fn.args.args:
-            coll_vars[id(f_fn)].add(f_fn.args.args[0].arg)
-        # Inner closures returned by `fit(rows)` (e.g. `def _pred(row): ...; return _pred`)
-        returned_names: set[str] = set()
-        for sub in ast.walk(f_fn):
-            if isinstance(sub, ast.Return) and isinstance(sub.value, ast.Name):
-                returned_names.add(sub.value.id)
-            elif isinstance(sub, ast.Return) and isinstance(sub.value, ast.Lambda):
-                pred_scopes.add(id(sub.value))
-                if sub.value.args.args:
-                    row_vars[id(sub.value)].add(sub.value.args.args[0].arg)
-        for sub in f_fn.body:
-            if isinstance(sub, ast.FunctionDef) and sub.name in returned_names and sub.args.args:
-                pred_scopes.add(id(sub))
-                row_vars[id(sub)].add(sub.args.args[0].arg)
+    row_access_pred: dict[int, list[str]] = {}
+    row_access_all: dict[int, list[str]] = {}
+    row_seq_assign_ids: set[int] = set()
+    nonrow_seq_assign_ids: set[int] = set()
 
-    # Fixed-point propagation of collection loops, variable aliases, and helper function calls
-    changed = True
-    while changed:
-        changed = False
-        for sc in all_scopes:
-            sid = id(sc)
-            r_set = row_vars[sid]
-            c_set = coll_vars[sid]
-            body_nodes = sc.body if isinstance(sc, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef)) else [sc.body]  # type: ignore[attr-defined]
-            for stmt in body_nodes:
-                for node in ast.walk(stmt):
-                    # Collection aliasing: `rows = list(train_rows)` or `rows = copy.deepcopy(train_rows)`
-                    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                        tgt = node.targets[0].id
-                        val = node.value
-                        if isinstance(val, ast.Name):
-                            if val.id in r_set and tgt not in r_set:
-                                r_set.add(tgt)
-                                changed = True
-                            if val.id in c_set and tgt not in c_set:
-                                c_set.add(tgt)
-                                changed = True
-                        elif isinstance(val, ast.Call) and val.args and isinstance(val.args[0], ast.Name):
-                            a0 = val.args[0].id
-                            fn_id = val.func.id if isinstance(val.func, ast.Name) else (
-                                val.func.attr if isinstance(val.func, ast.Attribute) else ""
-                            )
-                            if a0 in c_set and fn_id in {"list", "tuple", "deepcopy", "copy"} and tgt not in c_set:
-                                c_set.add(tgt)
-                                changed = True
-                            if a0 in r_set and fn_id in {"dict", "deepcopy", "copy"} and tgt not in r_set:
-                                r_set.add(tgt)
-                                changed = True
+    # Iterate to fixed point so inter-procedural row/collection parameter taint converges cleanly
+    for _pass in range(8):
+        prev_snap = (
+            {k: set(v) for k, v in scope_seeded_rows.items()},
+            {k: set(v) for k, v in scope_seeded_colls.items()},
+            set(pred_scopes),
+        )
+        row_access_pred.clear()
+        row_access_all.clear()
+        row_seq_assign_ids.clear()
+        nonrow_seq_assign_ids.clear()
 
-                    # Iteration over rows collection: `for r in train_rows:` or `[... for r in rows]`
-                    if isinstance(node, ast.For) and isinstance(node.iter, ast.Name) and node.iter.id in c_set:
-                        if isinstance(node.target, ast.Name) and node.target.id not in r_set:
-                            r_set.add(node.target.id)
-                            changed = True
-                    if isinstance(node, ast.comprehension) and isinstance(node.iter, ast.Name) and node.iter.id in c_set:
-                        if isinstance(node.target, ast.Name) and node.target.id not in r_set:
-                            r_set.add(node.target.id)
-                            changed = True
+        def _walk_scope(
+            sc_node: ast.AST,
+            in_pred: bool,
+            inh_rows: set[str],
+            inh_colls: set[str],
+            inh_consts: dict[str, tuple[int, list[str]]],
+            inh_key_iters: dict[str, tuple[int, list[str]]],
+            inh_fns: dict[str, ast.FunctionDef],
+        ) -> None:
+            sid = id(sc_node)
+            is_pred = in_pred or (sid in pred_scopes)
+            live_rows = set(inh_rows) | set(scope_seeded_rows.get(sid, set()))
+            live_colls = set(inh_colls) | set(scope_seeded_colls.get(sid, set()))
+            consts = dict(inh_consts)
+            key_iters = dict(inh_key_iters)
+            vis_fns = dict(inh_fns)
 
-                    # Intra-module helper calls: `helper(row)` -> propagate row provenance & reachability
-                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in top_fns:
-                        callee = top_fns[node.func.id]
+            # Pre-register direct FunctionDef declarations in this lexical block so mutual/forward helpers resolve
+            stmts = sc_node.body if isinstance(sc_node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef)) else [sc_node.body]  # type: ignore[attr-defined]
+            if isinstance(sc_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                all_formals = [a.arg for a in (*sc_node.args.posonlyargs, *sc_node.args.args, *sc_node.args.kwonlyargs)]
+                for fm in all_formals:
+                    if fm not in scope_seeded_rows.get(sid, set()):
+                        live_rows.discard(fm)
+                    if fm not in scope_seeded_colls.get(sid, set()):
+                        live_colls.discard(fm)
+                    key_iters.pop(fm, None)
+
+            for st in stmts:
+                if isinstance(st, ast.FunctionDef):
+                    vis_fns[st.name] = st
+
+            def _is_row_expr(e: ast.AST, lr: set[str]) -> bool:
+                if isinstance(e, ast.Name):
+                    return e.id in lr
+                if isinstance(e, ast.Call) and e.args and isinstance(e.args[0], ast.Name) and e.args[0].id in lr:
+                    fn_nm = e.func.id if isinstance(e.func, ast.Name) else (e.func.attr if isinstance(e.func, ast.Attribute) else "")
+                    return fn_nm in {"dict", "copy", "deepcopy"}
+                return False
+
+            def _is_coll_expr(e: ast.AST, lc: set[str]) -> bool:
+                if isinstance(e, ast.Name):
+                    return e.id in lc
+                if isinstance(e, ast.Call) and e.args and isinstance(e.args[0], ast.Name) and e.args[0].id in lc:
+                    fn_nm = e.func.id if isinstance(e.func, ast.Name) else (e.func.attr if isinstance(e.func, ast.Attribute) else "")
+                    return fn_nm in {"list", "tuple", "copy", "deepcopy"}
+                return False
+
+            def _walk_expr(
+                ex: ast.AST | None,
+                lr: set[str],
+                lc: set[str],
+                cs: dict[str, tuple[int, list[str]]],
+                ki: dict[str, tuple[int, list[str]]],
+                vf: dict[str, ast.FunctionDef],
+            ) -> None:
+                if ex is None:
+                    return
+                if isinstance(ex, ast.Lambda):
+                    _walk_scope(ex, is_pred, lr, lc, cs, ki, vf)
+                    return
+                if isinstance(ex, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+                    sub_lr = set(lr)
+                    sub_lc = set(lc)
+                    sub_ki = dict(ki)
+                    for gen in ex.generators:
+                        _walk_expr(gen.iter, sub_lr, sub_lc, cs, sub_ki, vf)
+                        if isinstance(gen.target, ast.Name):
+                            t_nm = gen.target.id
+                            if _is_coll_expr(gen.iter, sub_lc):
+                                sub_lr.add(t_nm)
+                                sub_ki.pop(t_nm, None)
+                            elif isinstance(gen.iter, ast.Name) and gen.iter.id in cs:
+                                sub_lr.discard(t_nm)
+                                sub_ki[t_nm] = cs[gen.iter.id]
+                            else:
+                                sub_lr.discard(t_nm)
+                                sub_ki.pop(t_nm, None)
+                        for if_clause in gen.ifs:
+                            _walk_expr(if_clause, sub_lr, sub_lc, cs, sub_ki, vf)
+                    if isinstance(ex, ast.DictComp):
+                        _walk_expr(ex.key, sub_lr, sub_lc, cs, sub_ki, vf)
+                        _walk_expr(ex.value, sub_lr, sub_lc, cs, sub_ki, vf)
+                    else:
+                        _walk_expr(ex.elt, sub_lr, sub_lc, cs, sub_ki, vf)
+                    return
+
+                if isinstance(ex, ast.Subscript):
+                    _walk_expr(ex.value, lr, lc, cs, ki, vf)
+                    _walk_expr(ex.slice, lr, lc, cs, ki, vf)
+                    is_r = isinstance(ex.value, ast.Name) and ex.value.id in lr
+                    sl = ex.slice
+                    if is_r:
+                        if isinstance(sl, ast.Constant) and isinstance(sl.value, str) and sl.value != "y":
+                            row_access_all[id(ex)] = [sl.value]
+                            if is_pred:
+                                row_access_pred[id(ex)] = [sl.value]
+                        elif isinstance(sl, ast.Name) and sl.id in ki:
+                            aid, seq_vals = ki[sl.id]
+                            ks = [s for s in seq_vals if s != "y"]
+                            row_seq_assign_ids.add(aid)
+                            row_access_all[id(ex)] = ks
+                            if is_pred:
+                                row_access_pred[id(ex)] = ks
+                    elif isinstance(sl, ast.Name) and sl.id in ki:
+                        nonrow_seq_assign_ids.add(ki[sl.id][0])
+                    return
+
+                if isinstance(ex, ast.Call):
+                    for a_ex in ex.args:
+                        _walk_expr(a_ex, lr, lc, cs, ki, vf)
+                    for kw in ex.keywords:
+                        _walk_expr(kw.value, lr, lc, cs, ki, vf)
+                    _walk_expr(ex.func, lr, lc, cs, ki, vf)
+
+                    # `row.get(k, default)`
+                    if (
+                        isinstance(ex.func, ast.Attribute)
+                        and ex.func.attr == "get"
+                        and isinstance(ex.func.value, ast.Name)
+                        and ex.args
+                    ):
+                        is_r = ex.func.value.id in lr
+                        a0 = ex.args[0]
+                        if is_r:
+                            if isinstance(a0, ast.Constant) and isinstance(a0.value, str) and a0.value != "y":
+                                row_access_all[id(ex)] = [a0.value]
+                                if is_pred:
+                                    row_access_pred[id(ex)] = [a0.value]
+                            elif isinstance(a0, ast.Name) and a0.id in ki:
+                                aid, seq_vals = ki[a0.id]
+                                ks = [s for s in seq_vals if s != "y"]
+                                row_seq_assign_ids.add(aid)
+                                row_access_all[id(ex)] = ks
+                                if is_pred:
+                                    row_access_pred[id(ex)] = ks
+                        elif isinstance(a0, ast.Name) and a0.id in ki:
+                            nonrow_seq_assign_ids.add(ki[a0.id][0])
+
+                    # Intra-module / nested helper call propagation (positional + keyword args!)
+                    if isinstance(ex.func, ast.Name) and ex.func.id in vf:
+                        callee = vf[ex.func.id]
                         cid = id(callee)
-                        if sid in pred_scopes and cid not in pred_scopes:
+                        if is_pred:
                             pred_scopes.add(cid)
-                            changed = True
-                        for idx_a, arg_expr in enumerate(node.args):
-                            if idx_a < len(callee.args.args) and isinstance(arg_expr, ast.Name):
-                                formal = callee.args.args[idx_a].arg
-                                if arg_expr.id in r_set and formal not in row_vars[cid]:
-                                    row_vars[cid].add(formal)
-                                    changed = True
-                                if arg_expr.id in c_set and formal not in coll_vars[cid]:
-                                    coll_vars[cid].add(formal)
-                                    changed = True
+                        pos_formals = [a.arg for a in (*callee.args.posonlyargs, *callee.args.args)]
+                        all_formals_map = {a.arg: a.arg for a in (*callee.args.posonlyargs, *callee.args.args, *callee.args.kwonlyargs)}
+                        for idx_a, arg_ex in enumerate(ex.args):
+                            if idx_a < len(pos_formals):
+                                fm = pos_formals[idx_a]
+                                if _is_row_expr(arg_ex, lr):
+                                    scope_seeded_rows.setdefault(cid, set()).add(fm)
+                                if _is_coll_expr(arg_ex, lc):
+                                    scope_seeded_colls.setdefault(cid, set()).add(fm)
+                        for kw in ex.keywords:
+                            if kw.arg and kw.arg in all_formals_map:
+                                fm = kw.arg
+                                if _is_row_expr(kw.value, lr):
+                                    scope_seeded_rows.setdefault(cid, set()).add(fm)
+                                if _is_coll_expr(kw.value, lc):
+                                    scope_seeded_colls.setdefault(cid, set()).add(fm)
+                    return
 
-    return row_vars, pred_scopes
+                for ch in ast.iter_child_nodes(ex):
+                    _walk_expr(ch, lr, lc, cs, ki, vf)
+
+            def _walk_stmt_list(
+                s_list: list[ast.stmt],
+                lr: set[str],
+                lc: set[str],
+                cs: dict[str, tuple[int, list[str]]],
+                ki: dict[str, tuple[int, list[str]]],
+                vf: dict[str, ast.FunctionDef],
+            ) -> None:
+                for st in s_list:
+                    if isinstance(st, ast.FunctionDef):
+                        vf[st.name] = st
+                        _walk_scope(st, is_pred, lr, lc, cs, ki, vf)
+                    elif isinstance(st, ast.Assign):
+                        _walk_expr(st.value, lr, lc, cs, ki, vf)
+                        seq_lit = _extract_const_str_seq(st.value)
+                        for tgt in st.targets:
+                            if isinstance(tgt, ast.Name):
+                                t_nm = tgt.id
+                                if _is_row_expr(st.value, lr):
+                                    lr.add(t_nm)
+                                else:
+                                    lr.discard(t_nm)
+                                if _is_coll_expr(st.value, lc):
+                                    lc.add(t_nm)
+                                else:
+                                    lc.discard(t_nm)
+                                if seq_lit is not None:
+                                    cs[t_nm] = (id(st.value), seq_lit)
+                                else:
+                                    cs.pop(t_nm, None)
+                                ki.pop(t_nm, None)
+                            else:
+                                for sub_t in ast.walk(tgt):
+                                    if isinstance(sub_t, ast.Name) and isinstance(sub_t.ctx, ast.Store):
+                                        lr.discard(sub_t.id)
+                                        lc.discard(sub_t.id)
+                                        cs.pop(sub_t.id, None)
+                                        ki.pop(sub_t.id, None)
+                    elif isinstance(st, ast.AnnAssign):
+                        if st.value is not None:
+                            _walk_expr(st.value, lr, lc, cs, ki, vf)
+                        if isinstance(st.target, ast.Name):
+                            t_nm = st.target.id
+                            if st.value is not None and _is_row_expr(st.value, lr):
+                                lr.add(t_nm)
+                            else:
+                                lr.discard(t_nm)
+                            if st.value is not None and _is_coll_expr(st.value, lc):
+                                lc.add(t_nm)
+                            else:
+                                lc.discard(t_nm)
+                            seq_lit = _extract_const_str_seq(st.value) if st.value is not None else None
+                            if seq_lit is not None and st.value is not None:
+                                cs[t_nm] = (id(st.value), seq_lit)
+                            else:
+                                cs.pop(t_nm, None)
+                            ki.pop(t_nm, None)
+                    elif isinstance(st, ast.For):
+                        _walk_expr(st.iter, lr, lc, cs, ki, vf)
+                        loop_lr = set(lr)
+                        loop_lc = set(lc)
+                        loop_ki = dict(ki)
+                        if isinstance(st.target, ast.Name):
+                            t_nm = st.target.id
+                            if _is_coll_expr(st.iter, lc):
+                                loop_lr.add(t_nm)
+                                loop_ki.pop(t_nm, None)
+                            elif isinstance(st.iter, ast.Name) and st.iter.id in cs:
+                                loop_lr.discard(t_nm)
+                                loop_ki[t_nm] = cs[st.iter.id]
+                            else:
+                                loop_lr.discard(t_nm)
+                                loop_ki.pop(t_nm, None)
+                        _walk_stmt_list(st.body, loop_lr, loop_lc, dict(cs), loop_ki, dict(vf))
+                        _walk_stmt_list(st.orelse, lr, lc, cs, ki, vf)
+                    elif isinstance(st, ast.If):
+                        _walk_expr(st.test, lr, lc, cs, ki, vf)
+                        b_lr, b_lc, b_cs, b_ki = set(lr), set(lc), dict(cs), dict(ki)
+                        e_lr, e_lc, e_cs, e_ki = set(lr), set(lc), dict(cs), dict(ki)
+                        _walk_stmt_list(st.body, b_lr, b_lc, b_cs, b_ki, dict(vf))
+                        _walk_stmt_list(st.orelse, e_lr, e_lc, e_cs, e_ki, dict(vf))
+                        lr.clear()
+                        lr.update(b_lr | e_lr)
+                        lc.clear()
+                        lc.update(b_lc | e_lc)
+                    elif isinstance(st, (ast.With, ast.While)):
+                        for ch_ex in ast.iter_child_nodes(st):
+                            if isinstance(ch_ex, ast.expr):
+                                _walk_expr(ch_ex, lr, lc, cs, ki, vf)
+                        _walk_stmt_list(st.body, lr, lc, cs, ki, vf)
+                    elif isinstance(st, ast.Try):
+                        _walk_stmt_list(st.body, set(lr), set(lc), dict(cs), dict(ki), dict(vf))
+                        for hnd in st.handlers:
+                            _walk_stmt_list(hnd.body, set(lr), set(lc), dict(cs), dict(ki), dict(vf))
+                        _walk_stmt_list(st.orelse, set(lr), set(lc), dict(cs), dict(ki), dict(vf))
+                        _walk_stmt_list(st.finalbody, set(lr), set(lc), dict(cs), dict(ki), dict(vf))
+                    else:
+                        for ch_ex in ast.iter_child_nodes(st):
+                            if isinstance(ch_ex, ast.expr):
+                                _walk_expr(ch_ex, lr, lc, cs, ki, vf)
+
+            if isinstance(sc_node, ast.Lambda):
+                _walk_expr(sc_node.body, live_rows, live_colls, consts, key_iters, vis_fns)
+            else:
+                _walk_stmt_list(list(stmts), live_rows, live_colls, consts, key_iters, vis_fns)
+
+        _walk_scope(tree, False, set(), set(), {}, {}, {})
+        cur_snap = (
+            {k: set(v) for k, v in scope_seeded_rows.items()},
+            {k: set(v) for k, v in scope_seeded_colls.items()},
+            set(pred_scopes),
+        )
+        if cur_snap == prev_snap:
+            break
+
+    active_map = row_access_pred if row_access_pred else row_access_all
+    used_keys = sorted({k for ks in active_map.values() for k in ks if k != "y"})
+    return {
+        "used_keys": used_keys,
+        "row_access_node_ids": set(row_access_all.keys()),
+        "pure_row_seq_ids": row_seq_assign_ids - nonrow_seq_assign_ids,
+        "shared_row_seq_ids": row_seq_assign_ids & nonrow_seq_assign_ids,
+    }
 
 
-class _ScopedRowKeyCollector(ast.NodeVisitor):
-    """Collect string keys accessed ONLY on tracked `row` variables across reachable prediction scopes."""
+class _FlowSensitiveRowTranslator(ast.NodeTransformer):
+    """Rewrite ONLY flow-verified row accesses (`row['k']`, `row.get('k')`, and pure row-key constant tuples)."""
 
-    def __init__(self, row_vars: dict[int, set[str]], target_scopes: set[int]) -> None:
-        self.row_vars = row_vars
-        self.target_scopes = target_scopes
-        self._scope_stack: list[int] = []
-        self.keys: set[str] = set()
-
-    def _active_row_names(self) -> set[str]:
-        out: set[str] = set()
-        for sid in self._scope_stack:
-            out |= self.row_vars.get(sid, set())
-        return out
-
-    def _in_target(self) -> bool:
-        return not self.target_scopes or any(sid in self.target_scopes for sid in self._scope_stack)
-
-    def visit_Module(self, node: ast.Module) -> Any:
-        self._scope_stack.append(id(node))
-        self.generic_visit(node)
-        self._scope_stack.pop()
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
-        self._scope_stack.append(id(node))
-        self.generic_visit(node)
-        self._scope_stack.pop()
-
-    def visit_Lambda(self, node: ast.Lambda) -> Any:
-        self._scope_stack.append(id(node))
-        self.generic_visit(node)
-        self._scope_stack.pop()
-
-    def visit_Subscript(self, node: ast.Subscript) -> Any:
-        if self._in_target() and isinstance(node.value, ast.Name) and node.value.id in self._active_row_names():
-            sl = node.slice
-            if isinstance(sl, ast.Constant) and isinstance(sl.value, str) and sl.value != "y":
-                self.keys.add(sl.value)
-        self.generic_visit(node)
-
-    def visit_Call(self, node: ast.Call) -> Any:
-        if (
-            self._in_target()
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "get"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id in self._active_row_names()
-            and node.args
-        ):
-            a0 = node.args[0]
-            if isinstance(a0, ast.Constant) and isinstance(a0.value, str) and a0.value != "y":
-                self.keys.add(a0.value)
-        self.generic_visit(node)
-
-
-class _ScopedRowKeyTranslator(ast.NodeTransformer):
-    """Rewrite `row['k']` and `row.get('k', ...)` ONLY when `row` has tracked row provenance."""
-
-    def __init__(self, row_vars: dict[int, set[str]], role_map: dict[str, str]) -> None:
-        self.row_vars = row_vars
+    def __init__(
+        self,
+        row_access_node_ids: set[int],
+        pure_row_seq_ids: set[int],
+        shared_row_seq_ids: set[int],
+        role_map: dict[str, str],
+    ) -> None:
+        self.row_access_node_ids = row_access_node_ids
+        self.pure_row_seq_ids = pure_row_seq_ids
+        self.shared_row_seq_ids = shared_row_seq_ids
         self.role_map = dict(role_map)
-        self._scope_stack: list[int] = []
 
-    def _active_row_names(self) -> set[str]:
-        out: set[str] = set()
-        for sid in self._scope_stack:
-            out |= self.row_vars.get(sid, set())
-        return out
-
-    def visit_Module(self, node: ast.Module) -> Any:
-        self._scope_stack.append(id(node))
-        node = self.generic_visit(node)  # type: ignore[assignment]
-        self._scope_stack.pop()
+    def _translate_seq_elts(self, node: ast.Tuple | ast.List) -> ast.Tuple | ast.List:
+        if id(node) in self.pure_row_seq_ids:
+            new_elts: list[ast.expr] = []
+            for elt in node.elts:
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str) and elt.value in self.role_map:
+                    new_elts.append(ast.Constant(value=self.role_map[elt.value]))
+                else:
+                    new_elts.append(elt)
+            node.elts = new_elts
         return node
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
-        self._scope_stack.append(id(node))
+    def visit_Tuple(self, node: ast.Tuple) -> Any:
         node = self.generic_visit(node)  # type: ignore[assignment]
-        self._scope_stack.pop()
-        return node
+        return self._translate_seq_elts(node)
 
-    def visit_Lambda(self, node: ast.Lambda) -> Any:
-        self._scope_stack.append(id(node))
+    def visit_List(self, node: ast.List) -> Any:
         node = self.generic_visit(node)  # type: ignore[assignment]
-        self._scope_stack.pop()
-        return node
+        return self._translate_seq_elts(node)
 
     def visit_Subscript(self, node: ast.Subscript) -> Any:
+        orig_id = id(node)
         node = self.generic_visit(node)  # type: ignore[assignment]
-        if isinstance(node.value, ast.Name) and node.value.id in self._active_row_names():
+        if orig_id in self.row_access_node_ids:
             sl = node.slice
             if isinstance(sl, ast.Constant) and isinstance(sl.value, str) and sl.value in self.role_map:
                 node.slice = ast.Constant(value=self.role_map[sl.value])
+            elif isinstance(sl, ast.Name) and self.shared_row_seq_ids:
+                map_dict = ast.Dict(
+                    keys=[ast.Constant(value=k) for k in sorted(self.role_map)],
+                    values=[ast.Constant(value=self.role_map[k]) for k in sorted(self.role_map)],
+                )
+                node.slice = ast.Call(
+                    func=ast.Attribute(value=map_dict, attr="get", ctx=ast.Load()),
+                    args=[sl, ast.Name(id=sl.id, ctx=ast.Load())],
+                    keywords=[],
+                )
         return node
 
     def visit_Call(self, node: ast.Call) -> Any:
+        orig_id = id(node)
         node = self.generic_visit(node)  # type: ignore[assignment]
-        if (
-            isinstance(node.func, ast.Attribute)
-            and node.func.attr == "get"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id in self._active_row_names()
-            and node.args
-        ):
+        if orig_id in self.row_access_node_ids and node.args:
             a0 = node.args[0]
             if isinstance(a0, ast.Constant) and isinstance(a0.value, str) and a0.value in self.role_map:
                 node.args[0] = ast.Constant(value=self.role_map[a0.value])
@@ -302,7 +503,7 @@ def extract_and_translate_authored_ast_v2(
     python_code: str,
     role_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Call-graph & `row`-provenance-aware Python AST extractor and wormhole role translator."""
+    """Flow-sensitive, call-graph & constant-tuple-aware Python AST extractor and wormhole role translator."""
     src = str(python_code or "").strip()
     if not src:
         return {"ok": False, "reason": "empty_python_code", "used_keys": [], "translated_code": ""}
@@ -311,44 +512,35 @@ def extract_and_translate_authored_ast_v2(
     except SyntaxError as exc:
         return {"ok": False, "reason": f"syntax_error:{exc}", "used_keys": [], "translated_code": ""}
 
-    row_vars, pred_scopes = _analyze_module_row_provenance(tree)
-    collector = _ScopedRowKeyCollector(row_vars, pred_scopes)
-    collector.visit(tree)
-    if not collector.keys:
-        # Fallback to any tracked row scope in module (e.g., custom callable class or fit-only script)
-        collector_all = _ScopedRowKeyCollector(row_vars, set())
-        collector_all.visit(tree)
-        used_keys = sorted(collector_all.keys)
-    else:
-        used_keys = sorted(collector.keys)
+    info = _analyze_flow_sensitive_row_accesses(tree)
+    used_keys = info["used_keys"]
+    binding_status = "bound" if used_keys else "unresolved_opaque"
 
     if not role_map:
         return {
             "ok": True,
+            "binding_status": binding_status,
             "used_keys": used_keys,
             "translated_keys": used_keys,
             "translated_code": ast.unparse(tree),
         }
 
     tree_copy = deepcopy(tree)
-    row_vars_copy, pred_scopes_copy = _analyze_module_row_provenance(tree_copy)
-    translated_tree = _ScopedRowKeyTranslator(row_vars_copy, role_map).visit(tree_copy)
+    info_copy = _analyze_flow_sensitive_row_accesses(tree_copy)
+    translated_tree = _FlowSensitiveRowTranslator(
+        info_copy["row_access_node_ids"],
+        info_copy["pure_row_seq_ids"],
+        info_copy["shared_row_seq_ids"],
+        role_map,
+    ).visit(tree_copy)
     ast.fix_missing_locations(translated_tree)
 
-    row_vars_post, pred_scopes_post = _analyze_module_row_provenance(translated_tree)
-    post_col = _ScopedRowKeyCollector(row_vars_post, pred_scopes_post)
-    post_col.visit(translated_tree)
-    if not post_col.keys:
-        post_col_all = _ScopedRowKeyCollector(row_vars_post, set())
-        post_col_all.visit(translated_tree)
-        trans_keys = sorted(post_col_all.keys)
-    else:
-        trans_keys = sorted(post_col.keys)
-
+    info_post = _analyze_flow_sensitive_row_accesses(translated_tree)
     return {
         "ok": True,
+        "binding_status": "bound" if info_post["used_keys"] else "unresolved_opaque",
         "used_keys": used_keys,
-        "translated_keys": trans_keys,
+        "translated_keys": info_post["used_keys"],
         "translated_code": ast.unparse(translated_tree),
     }
 
@@ -377,7 +569,7 @@ def resolve_verified_writeback_owner(
     """
     obs_set = set(observed_signatures)
     key_set = set(active_ast_keys)
-    scored_candidates: list[tuple[int, int, int, int, str]] = []
+    scored_candidates: list[tuple[int, int, int, int, str, set[str], set[str]]] = []
 
     for rank_idx, nid in enumerate(recalled_node_ids):
         if nid not in node_archive or nid not in forest.nodes:
@@ -389,21 +581,40 @@ def resolve_verified_writeback_owner(
         node_sigs = set(n_raw.get("probe_signatures", ()) if isinstance(n_raw, dict) else n_raw.probe_signatures)
         sig_overlap = len(obs_set & node_sigs)
         vmap_keys = set((meta.get("interface_var_to_dag_node") or {}).keys())
-        core_overlap = len(key_set & vmap_keys)
+        covered = key_set & vmap_keys
+        uncovered = key_set - vmap_keys
+        core_overlap = len(covered)
         if (not violated_root_ids) and sig_overlap >= 1 and vmap_keys and core_overlap >= 1:
-            is_full_subset = 1 if key_set.issubset(vmap_keys) else 0
-            scored_candidates.append((sig_overlap, is_full_subset, core_overlap, -rank_idx, nid))
+            is_full_subset = 1 if not uncovered else 0
+            scored_candidates.append((is_full_subset, sig_overlap, core_overlap, -rank_idx, nid, covered, uncovered))
 
+    anchor_nid: str | None = None
+    anchor_covered: list[str] = []
+    anchor_uncovered: list[str] = sorted(key_set)
     if scored_candidates:
         scored_candidates.sort(reverse=True)
-        best_nid = scored_candidates[0][4]
-        return {
-            "owner_mode": "verified_existing_node",
-            "owner_node_id": best_nid,
-            "signature_overlap": scored_candidates[0][0],
-        }
+        is_full, sig_ov, _, _, best_nid, cov_set, uncov_set = scored_candidates[0]
+        anchor_nid = best_nid
+        anchor_covered = sorted(cov_set)
+        anchor_uncovered = sorted(uncov_set)
+        if is_full == 1:
+            return {
+                "owner_mode": "verified_existing_node",
+                "owner_node_id": best_nid,
+                "signature_overlap": sig_ov,
+                "covered_core_keys": anchor_covered,
+                "uncovered_extra_keys": [],
+            }
+        if len(cov_set) > len(uncov_set):
+            return {
+                "owner_mode": "extended_regime_on_core_node",
+                "owner_node_id": best_nid,
+                "signature_overlap": sig_ov,
+                "covered_core_keys": anchor_covered,
+                "uncovered_extra_keys": anchor_uncovered,
+            }
 
-    # Check if this is a multi-module composite law (e.g. precondition-violated root + sub-components)
+    # Multi-module or foreign-dominated composite law -> grow dedicated composite synthesis node
     sig_digest = hashlib.sha256(
         json.dumps({"sigs": sorted(obs_set), "keys": sorted(key_set)}, sort_keys=True).encode("utf-8")
     ).hexdigest()[:8]
@@ -438,17 +649,22 @@ def resolve_verified_writeback_owner(
             "local_dag_edges": [(f"V_{k}", "Y_out") for k in sorted(key_set)],
             "interface_var_to_dag_node": {k: f"V_{k}" for k in sorted(key_set)},
             "synthesized_from_violated_roots": list(violated_root_ids),
+            "core_anchor_node_id": anchor_nid,
+            "covered_core_keys": anchor_covered,
+            "uncovered_extra_keys": anchor_uncovered,
         }
-        for r_nid in violated_root_ids:
-            if r_nid in forest.nodes:
+        link_sources = list(violated_root_ids) + ([anchor_nid] if anchor_nid else [])
+        for r_nid in link_sources:
+            if r_nid and r_nid in forest.nodes:
                 wh_id = f"wh_synth_{r_nid}_to_{synth_nid}"
                 if wh_id not in forest.horizontal_wormhole_edges:
+                    mapped_keys = anchor_covered if (r_nid == anchor_nid and anchor_covered) else sorted(key_set)
                     forest.add_horizontal_wormhole(
                         wormhole_id=wh_id,
                         node_a_id=r_nid,
                         node_b_id=synth_nid,
                         probe_signature_refs=sorted(obs_set),
-                        role_and_observation_map={"role_map": {k: k for k in sorted(key_set)}},
+                        role_and_observation_map={"role_map": {k: k for k in mapped_keys}},
                         hop_error_budget=0.015,
                         lipschitz_factor=0.90,
                         permission_tier="local_solver_guidance",
@@ -458,12 +674,24 @@ def resolve_verified_writeback_owner(
         "owner_mode": "synthesized_composite_branch",
         "owner_node_id": synth_nid,
         "signature_overlap": len(obs_set),
+        "core_anchor_node_id": anchor_nid,
+        "covered_core_keys": anchor_covered,
+        "uncovered_extra_keys": anchor_uncovered,
     }
 
 
 # ============================================================================
 # 3. Pareto Multi-Candidate Partial-Subtree Wormhole Consolidation (`M6-02`/`M6-06`)
 # ============================================================================
+
+
+def _canonical_ast_fingerprint(python_code: str) -> str:
+    src = str(python_code or "").strip()
+    try:
+        dumped = ast.dump(ast.parse(src), include_attributes=False)
+    except SyntaxError:
+        dumped = src
+    return hashlib.sha256(dumped.encode("utf-8")).hexdigest()[:16]
 
 
 def _append_pareto_candidate(
@@ -473,28 +701,131 @@ def _append_pareto_candidate(
     python_code: str,
     confirm_rmse: float,
     provenance_tag: str,
+    uncovered_extra_keys: list[str] | None = None,
 ) -> bool:
-    """Maintain signature-diverse Pareto archive per node (preserving partial-commonality subsets!)."""
+    """Maintain mechanism- AND signature-diverse Pareto archive (`A02` Fix: never overwrite distinct ASTs on same variables!)."""
     archive: list[dict[str, Any]] = entry.setdefault("pareto_confirmed_candidates", [])
     key_sig = tuple(sorted(used_keys))
+    ast_fp = _canonical_ast_fingerprint(python_code)
+    src_sha = hashlib.sha256(str(python_code).encode("utf-8")).hexdigest()[:16]
+
     for existing in archive:
-        if tuple(existing["used_keys"]) == key_sig:
+        ex_fp = existing.get("ast_fingerprint") or _canonical_ast_fingerprint(existing.get("python_code", ""))
+        if tuple(existing["used_keys"]) == key_sig and ex_fp == ast_fp:
             if confirm_rmse < float(existing["confirm_rmse"]) - 1e-9:
                 existing["python_code"] = python_code
                 existing["confirm_rmse"] = round(float(confirm_rmse), 6)
                 existing["provenance_tag"] = provenance_tag
+                existing["source_sha256_16"] = src_sha
+                existing["ast_fingerprint"] = ast_fp
                 return True
             return False
+
     archive.append(
         {
+            "artifact_id": f"cand_{ast_fp}",
+            "ast_fingerprint": ast_fp,
+            "source_sha256_16": src_sha,
             "used_keys": list(key_sig),
+            "uncovered_extra_keys": list(uncovered_extra_keys or []),
             "python_code": python_code,
             "confirm_rmse": round(float(confirm_rmse), 6),
             "provenance_tag": provenance_tag,
         }
     )
-    archive.sort(key=lambda c: (len(c["used_keys"]), c["confirm_rmse"], tuple(c["used_keys"])))
+    archive.sort(
+        key=lambda c: (
+            len(c["used_keys"]),
+            c["confirm_rmse"],
+            tuple(c["used_keys"]),
+            c.get("ast_fingerprint", ""),
+        )
+    )
     return True
+
+
+def _evaluate_historical_shadow_on_pilot(
+    shadow_note: str,
+    pilot_rows: list[dict[str, float]],
+) -> dict[str, Any]:
+    """Evaluate the historical `L1` shadow formula `y = <rhs>` on passive `pilot_rows` (`A04` Fix)."""
+    import math as _math
+    import re as _re
+    from scipy.optimize import least_squares as _least_squares
+
+    note_txt = str(shadow_note or "")
+    note_sha = hashlib.sha256(note_txt.encode("utf-8")).hexdigest()[:16]
+    if not pilot_rows:
+        return {"status": "no_pilot_rows", "shadow_sha256_16": note_sha, "preds": None}
+
+    # Extract explicit `y = <expr>` or `y ≈ <expr>` from backticks or plain text (allowing decimal points inside numbers!)
+    m_bt = _re.search(r"`\s*y\s*(?:=|≈)\s*([^`]+)`", note_txt)
+    if m_bt:
+        rhs_str = m_bt.group(1).strip()
+    else:
+        m_plain = _re.search(r"\by\s*(?:=|≈)\s*([^\n;`]+)", note_txt)
+        rhs_str = m_plain.group(1).strip().rstrip(".") if m_plain else ""
+
+    if not rhs_str:
+        return {"status": "unavailable_prose_only", "shadow_sha256_16": note_sha, "preds": None}
+
+    try:
+        expr_tree = ast.parse(rhs_str, mode="eval")
+    except SyntaxError:
+        return {"status": "unparseable_shadow_formula", "shadow_sha256_16": note_sha, "preds": None}
+
+    safe_funcs = {
+        "exp": _math.exp,
+        "log": _math.log,
+        "sqrt": _math.sqrt,
+        "sin": _math.sin,
+        "cos": _math.cos,
+        "tanh": _math.tanh,
+        "abs": abs,
+        "max": max,
+        "min": min,
+    }
+    row_cols = {k for k in pilot_rows[0].keys() if k != "y"}
+    loaded_names = sorted(
+        {
+            sub.id
+            for sub in ast.walk(expr_tree)
+            if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
+        }
+    )
+    free_params = [nm for nm in loaded_names if nm not in row_cols and nm not in safe_funcs]
+    code_obj = compile(expr_tree, "<historical_shadow>", "eval")
+    y_true = np.array([float(r["y"]) for r in pilot_rows], dtype=float)
+
+    def _eval_vec(p_vals: np.ndarray) -> np.ndarray:
+        p_map = {nm: float(val) for nm, val in zip(free_params, p_vals)}
+        out = np.empty(len(pilot_rows), dtype=float)
+        for idx, r in enumerate(pilot_rows):
+            env = {**safe_funcs, **{k: float(v) for k, v in r.items() if k != "y"}, **p_map}
+            out[idx] = float(eval(code_obj, {"__builtins__": {}}, env))
+        return out
+
+    try:
+        if not free_params:
+            preds = _eval_vec(np.zeros(0, dtype=float))
+            return {"status": "evaluated_exact_shadow", "shadow_sha256_16": note_sha, "formula": rhs_str, "preds": preds}
+        p0 = np.ones(len(free_params), dtype=float)
+        fit = _least_squares(
+            lambda p: _eval_vec(p) - y_true,
+            p0,
+            bounds=(np.full(len(free_params), -1e4), np.full(len(free_params), 1e4)),
+            max_nfev=200,
+        )
+        preds = _eval_vec(fit.x)
+        return {
+            "status": "evaluated_fitted_shadow",
+            "shadow_sha256_16": note_sha,
+            "formula": rhs_str,
+            "free_params": free_params,
+            "preds": preds,
+        }
+    except Exception:
+        return {"status": "shadow_eval_failed", "shadow_sha256_16": note_sha, "preds": None}
 
 
 def _refresh_node_note_from_pareto(entry: dict[str, Any], header_prefix: str) -> None:
@@ -502,7 +833,7 @@ def _refresh_node_note_from_pareto(entry: dict[str, Any], header_prefix: str) ->
     if not archive:
         return
     # Primary reference is lowest confirm_rmse (ties broken by simpler partial-commonality signature)
-    best = min(archive, key=lambda c: (c["confirm_rmse"], len(c["used_keys"]), tuple(c["used_keys"])))
+    best = min(archive, key=lambda c: (c["confirm_rmse"], len(c["used_keys"]), tuple(c["used_keys"]), c.get("ast_fingerprint", "")))
     entry["confirmed_active_variables"] = best["used_keys"]
     entry["confirmed_python_reference"] = best["python_code"]
     summary_blocks = [
@@ -557,11 +888,47 @@ def consolidate_wave1_sovereign_m6_3(
     for rec in eligible_recs:
         py_src = str(rec["winning_python_code"]).strip()
         ast_info = extract_and_translate_authored_ast_v2(py_src, role_map=None)
-        if not ast_info["ok"] or not ast_info["used_keys"]:
+        if not ast_info["ok"]:
+            continue
+
+        recalled_list = list(
+            rec.get("recalled_node_ids")
+            or ([rec["primary_recalled_node_id"]] if rec.get("primary_recalled_node_id") else [])
+        )
+        if not ast_info["used_keys"]:
+            # `A01` Fix: NEVER discard a confirmed winning program just because static subscript keys are opaque!
+            fallback_nid = next(
+                (nid for nid in recalled_list if nid in node_archive and str(node_archive[nid].get("epistemic_rung")) != "L1_DISTRACTOR"),
+                None,
+            )
+            if fallback_nid is not None:
+                op_list = node_archive[fallback_nid].setdefault("opaque_confirmed_modules", [])
+                op_sha = hashlib.sha256(py_src.encode("utf-8")).hexdigest()[:16]
+                if all(x.get("source_sha256_16") != op_sha for x in op_list):
+                    op_list.append(
+                        {
+                            "source_sha256_16": op_sha,
+                            "binding_status": "unresolved_opaque",
+                            "python_code": py_src,
+                            "confirm_rmse": round(float(rec.get("confirm_rmse") or 0.0), 6),
+                        }
+                    )
+                events.append(
+                    {
+                        "owner_node_id": fallback_nid,
+                        "owner_mode": "retained_opaque_unresolved",
+                        "extracted_active_variables": [],
+                        "added_to_pareto_archive": False,
+                        "retained_opaque_module": True,
+                        "empirical_retroactive_projection": None,
+                        "reinterpreted_wormhole_targets": [],
+                        "collider_shielded_blocked_targets": [],
+                    }
+                )
             continue
 
         owner_res = resolve_verified_writeback_owner(
-            recalled_node_ids=list(rec.get("recalled_node_ids") or ([rec["primary_recalled_node_id"]] if rec.get("primary_recalled_node_id") else [])),
+            recalled_node_ids=recalled_list,
             observed_signatures=list(rec.get("observed_signatures") or []),
             active_ast_keys=ast_info["used_keys"],
             violated_root_ids=list(rec.get("violated_root_ids") or []),
@@ -574,12 +941,10 @@ def consolidate_wave1_sovereign_m6_3(
         if "historical_L1_shadow" not in src_entry:
             src_entry["historical_L1_shadow"] = src_entry["verified_mechanism_note"]
 
-        # Empirical Retroactive Projection check on `pilot_rows` (`P_obs`) if available (`M6-06` Fix)
+        # Genuine Retroactive Projection check comparing REAL historical L1 shadow vs REAL confirmed model (`A04` Fix)
         pilot_rows = list(rec.get("pilot_rows_snapshot") or [])
         retro_cert: dict[str, Any] | None = None
         if pilot_rows:
-            y_obs = [float(r["y"]) for r in pilot_rows]
-            # Evaluate confirmed code on pilot_rows to record empirical P_obs residual consistency
             eval_p = _execute_authored_python_in_isolated_subprocess(
                 Path("/tmp/hegel_retro_proj_chk"),
                 step_idx=0,
@@ -587,26 +952,59 @@ def consolidate_wave1_sovereign_m6_3(
                 train_rows=pilot_rows,
                 confirm_rows=pilot_rows,
                 heldout_rows=pilot_rows,
+                include_predictions=True,
             )
-            if eval_p.get("ok"):
+            if eval_p.get("ok") and eval_p.get("train_preds"):
                 primary_x = ast_info["used_keys"][0]
                 xs_arr = np.array([float(r.get(primary_x, idx)) for idx, r in enumerate(pilot_rows)], dtype=float)
-                ys_arr = np.array(y_obs, dtype=float)
-                proj = verify_retroactive_projection_certificate(
-                    obs_x=xs_arr,
-                    obs_z=ys_arr,
-                    old_associational_predict_fn=lambda _x: float(np.mean(ys_arr)),
-                    new_causal_predict_fn=lambda _x, z_val: float(z_val),
-                    n_bins=max(1, len(pilot_rows) // 5),
-                    tolerance=max(0.08, float(eval_p["train_rmse"]) + 0.05),
-                )
-                retro_cert = {
-                    "verification_scope": "empirical_pilot_slice_check",
-                    "pilot_sample_count": len(pilot_rows),
-                    "confirmed_model_pilot_rmse": eval_p["train_rmse"],
-                    "passive_shadow_consistent": bool(eval_p["train_rmse"] <= 0.08),
-                    "projection_helper_evaluated_bins": proj["evaluated_bins"],
-                }
+                new_preds = np.asarray(eval_p["train_preds"], dtype=float)
+                shadow_eval = _evaluate_historical_shadow_on_pilot(str(src_entry.get("historical_L1_shadow", "")), pilot_rows)
+                if shadow_eval["preds"] is not None:
+                    old_preds = np.asarray(shadow_eval["preds"], dtype=float)
+                    proj = verify_retroactive_projection_certificate(
+                        obs_x=xs_arr,
+                        obs_z=np.arange(len(pilot_rows), dtype=float),
+                        old_associational_predict_fn=lambda _x, idx_arr=old_preds: float(idx_arr[0]),  # unused scalar stub; we pass row-aligned wrapper below
+                        new_causal_predict_fn=lambda _x, z_idx: float(new_preds[int(round(z_idx))]),
+                        n_bins=max(1, len(pilot_rows) // 5),
+                        tolerance=max(0.15, float(eval_p["train_rmse"]) + 0.12),
+                    )
+                    # Compute exact binned conditional-mean defect `max_b |mean_b(new_preds) - mean_b(old_preds)|`
+                    n_bins = max(1, len(pilot_rows) // 5)
+                    edges = np.quantile(xs_arr, np.linspace(0.0, 1.0, n_bins + 1))
+                    bin_defects: list[float] = []
+                    for bi in range(n_bins):
+                        lo_b, hi_b = edges[bi], edges[bi + 1]
+                        mask = (xs_arr >= lo_b) & (xs_arr <= hi_b if bi == n_bins - 1 else xs_arr < hi_b)
+                        if np.any(mask):
+                            bin_defects.append(float(abs(np.mean(new_preds[mask]) - np.mean(old_preds[mask]))))
+                    max_bin_def = round(max(bin_defects) if bin_defects else float(np.max(np.abs(new_preds - old_preds))), 6)
+                    signed_diff = round(float(np.mean(new_preds - old_preds)), 6)
+                    tol_proj = max(0.25, float(eval_p["train_rmse"]) + 0.20)
+                    is_cons = bool(max_bin_def <= tol_proj and float(eval_p["train_rmse"]) <= 0.08)
+                    retro_cert = {
+                        "verification_scope": "empirical_pilot_slice_check",
+                        "pilot_sample_count": len(pilot_rows),
+                        "old_shadow_sha256_16": shadow_eval["shadow_sha256_16"],
+                        "old_shadow_status": shadow_eval["status"],
+                        "confirmed_model_pilot_rmse": eval_p["train_rmse"],
+                        "max_bin_projection_defect": max_bin_def,
+                        "signed_mean_projection_diff": signed_diff,
+                        "passive_shadow_consistent": is_cons,
+                        "projection_helper_evaluated_bins": len(bin_defects) or proj["evaluated_bins"],
+                    }
+                else:
+                    retro_cert = {
+                        "verification_scope": "empirical_pilot_slice_check",
+                        "pilot_sample_count": len(pilot_rows),
+                        "old_shadow_sha256_16": shadow_eval["shadow_sha256_16"],
+                        "old_shadow_status": shadow_eval["status"],
+                        "confirmed_model_pilot_rmse": eval_p["train_rmse"],
+                        "max_bin_projection_defect": None,
+                        "signed_mean_projection_diff": None,
+                        "passive_shadow_consistent": None,
+                        "projection_helper_evaluated_bins": 0,
+                    }
                 src_entry["empirical_retroactive_projection_receipt"] = retro_cert
 
         added = _append_pareto_candidate(
@@ -615,6 +1013,7 @@ def consolidate_wave1_sovereign_m6_3(
             python_code=ast_info["translated_code"],
             confirm_rmse=float(rec.get("confirm_rmse") or 0.0),
             provenance_tag=f"Wave1_Confirmed({owner_res['owner_mode']})",
+            uncovered_extra_keys=owner_res.get("uncovered_extra_keys", []),
         )
         if added:
             src_entry["epistemic_rung"] = "L2_EMPIRICALLY_CONFIRMED_LOCAL"
@@ -657,7 +1056,6 @@ def consolidate_wave1_sovereign_m6_3(
                     curr_meta = node_archive[curr_nid]
                     curr_dag = curr_meta.get("local_dag_edges", [])
                     curr_vmap = curr_meta.get("interface_var_to_dag_node", {})
-                    active_dag_nodes = {curr_vmap[k] for k in curr_keys if k in curr_vmap} | {"Y_out"}
 
                     for wh in forest.horizontal_wormhole_edges.values():
                         if wh["node_a_id"] == curr_nid:
@@ -675,9 +1073,24 @@ def consolidate_wave1_sovereign_m6_3(
                         if str(node_archive[nbr_nid].get("epistemic_rung", "")) == "L1_DISTRACTOR":
                             continue
 
-                        wh_dom_dag_nodes = {curr_vmap[k] for k in rmap.keys() if k in curr_vmap}
-                        if curr_dag and wh_dom_dag_nodes:
-                            if is_d_separated_dag(curr_dag, active_dag_nodes, wh_dom_dag_nodes, conditioned_vars=set()):
+                        # `A05` Fix: Non-redundant Bayes-Ball check! Every mapped non-actuator DAG node on the wormhole
+                        # bridge MUST be causally d-connected to `Y_out` under `conditioned_vars = set()` (blocking
+                        # collider-only variables like `W_orth -> C_collider <- X_obs` EVEN WHEN `curr_keys <= rmap.keys()`!).
+                        wh_predictor_dag_nodes = {
+                            curr_vmap[k] for k in rmap.keys() if k in curr_vmap and curr_vmap[k] != "Y_out"
+                        }
+                        cand_predictor_dag_nodes = {
+                            curr_vmap[k] for k in curr_keys if k in curr_vmap and curr_vmap[k] != "Y_out"
+                        }
+                        if curr_dag and wh_predictor_dag_nodes:
+                            bridge_blocked = is_d_separated_dag(
+                                curr_dag, wh_predictor_dag_nodes, {"Y_out"}, conditioned_vars=set()
+                            )
+                            cand_blocked = any(
+                                is_d_separated_dag(curr_dag, {vd}, {"Y_out"}, conditioned_vars=set())
+                                for vd in cand_predictor_dag_nodes
+                            )
+                            if bridge_blocked or cand_blocked:
                                 blocked_targets.add(nbr_nid)
                                 continue
 
@@ -778,11 +1191,10 @@ def _evaluate_recalled_pilot_warmstarts(
     recalled_notes: list[dict[str, Any]],
     pilot_rows: list[dict[str, float]],
     workspace_dir: Path,
+    tolerance: float = 0.05,
 ) -> list[dict[str, Any]]:
-    """Skill∞ Activation Bridge: Refit recalled `pareto_confirmed_candidates` ONLY on already-paid `pilot_rows`!
-
-    Zero confirmation/heldout leakage: `confirm_rows` and `heldout_rows` are NEVER passed here.
-    Gives both `LearnedFlat` and `M6.3` concrete pilot-fit diagnostics so transported ASTs are actually tested!
+    """Skill∞ Activation Bridge (`A03` Fix): Refit recalled `pareto_confirmed_candidates` ONLY on already-paid `pilot_rows`
+    and explicitly distinguish `validated_pilot` (`pilot_refit_rmse <= tolerance`) from `rejected_pilot_high_error`!
     """
     if not pilot_rows:
         return []
@@ -792,7 +1204,7 @@ def _evaluate_recalled_pilot_warmstarts(
     for note in recalled_notes:
         nid = str(note.get("node_id", ""))
         cands = list(note.get("pareto_confirmed_candidates") or [])
-        for cand in cands[:2]:
+        for cand in cands[:4]:
             req_keys = set(cand.get("used_keys") or [])
             if not req_keys or not req_keys.issubset(pilot_cols):
                 continue
@@ -806,17 +1218,20 @@ def _evaluate_recalled_pilot_warmstarts(
                 heldout_rows=pilot_rows,
             )
             if ev.get("ok"):
+                p_rmse = float(ev["train_rmse"])
+                v_status = "validated_pilot" if p_rmse <= float(tolerance) * 1.5 else "rejected_pilot_high_error"
                 previews.append(
                     {
                         "source_node_id": nid,
                         "provenance_tag": cand.get("provenance_tag"),
                         "active_keys": cand["used_keys"],
-                        "pilot_refit_rmse": ev["train_rmse"],
+                        "pilot_refit_rmse": p_rmse,
+                        "validation_status": v_status,
                         "abi_mode": ev.get("abi_mode"),
                         "executable_python_skeleton": cand["python_code"],
                     }
                 )
-    previews.sort(key=lambda x: float(x["pilot_refit_rmse"]))
+    previews.sort(key=lambda x: (0 if x["validation_status"] == "validated_pilot" else 1, float(x["pilot_refit_rmse"])))
     return previews
 
 
@@ -888,16 +1303,31 @@ def build_m6_3_arm_brief(
     recalled_notes = [_strip_internal_meta_v2(deepcopy(node_archive[nid])) for nid in rec_ids if nid in node_archive]
 
     # Skill∞ Activation Bridge: Pilot-only warmstart evaluation for ANY recalled L2 candidate (fair to BOTH LearnedFlat & M6.3!)
-    warmstarts = [] if ds.is_out_of_scope else _evaluate_recalled_pilot_warmstarts(recalled_notes, ds.pilot_rows, workspace_dir)
-    if warmstarts:
+    all_pilot_trials = (
+        []
+        if ds.is_out_of_scope
+        else _evaluate_recalled_pilot_warmstarts(recalled_notes, ds.pilot_rows, workspace_dir, tolerance=ds.tolerance)
+    )
+    warmstarts = [w for w in all_pilot_trials if w.get("validation_status") == "validated_pilot"]
+    rejected_warmstarts = [w for w in all_pilot_trials if w.get("validation_status") != "validated_pilot"]
+    if all_pilot_trials:
         p_id = ledger.record_decision(
             decision_type="D4C_SKILL_ACTIVATION_PILOT_WARMSTART",
             parent_decision_id=p_id,
-            evidence_inputs={"candidates_checked": len(warmstarts)},
-            candidates_evaluated=[{"node_id": w["source_node_id"], "pilot_rmse": w["pilot_refit_rmse"]} for w in warmstarts],
-            chosen_option={"best_pilot_rmse": warmstarts[0]["pilot_refit_rmse"]},
-            rejection_reasons={},
-            rationale_summary="Pilot-only refit check of recalled/transported Python AST candidates.",
+            evidence_inputs={"candidates_checked": len(all_pilot_trials), "validated_count": len(warmstarts)},
+            candidates_evaluated=[
+                {"node_id": w["source_node_id"], "pilot_rmse": w["pilot_refit_rmse"], "status": w["validation_status"]}
+                for w in all_pilot_trials
+            ],
+            chosen_option={
+                "best_pilot_rmse": all_pilot_trials[0]["pilot_refit_rmse"],
+                "validated_warmstarts": len(warmstarts),
+            },
+            rejection_reasons={
+                w["source_node_id"]: f"pilot_refit_rmse={w['pilot_refit_rmse']} > tol"
+                for w in rejected_warmstarts
+            },
+            rationale_summary="Pilot-only refit check separating validated warmstarts from high-error inapplicable neighbors.",
             compute_delta=0.5,
         )
 
@@ -907,10 +1337,19 @@ def build_m6_3_arm_brief(
             "arm_mode": arm,
             "recalled_notes": recalled_notes,
             "verified_pilot_warmstart_candidates": warmstarts,
+            "rejected_pilot_warmstart_diagnostics": [
+                {"source_node_id": w["source_node_id"], "pilot_refit_rmse": w["pilot_refit_rmse"]}
+                for w in rejected_warmstarts
+            ],
         }, p_id, {"recalled_node_ids": rec_ids, "violated_root_ids": [], "warmstart_count": len(warmstarts)}
 
     # --- `Hegel_M6_3_Sovereign_LiveGPT`: Strict Interventional MEC Check + Slice-Aware Precondition BFS ---
-    has_transported_L2 = bool(warmstarts)
+    # `A03` Fix: Failed/inapplicable neighbor warmstarts (`warmstarts == []`) NEVER suppress causal identifiability checks!
+    has_transported_L2 = any(
+        w.get("validation_status") == "validated_pilot"
+        and "wormhole" in str(w.get("provenance_tag") or "")
+        for w in warmstarts
+    )
     mec_warning: dict[str, Any] | None = None
     if (not ds.is_out_of_scope) and (not has_transported_L2):
         mec_warning = detect_observational_identifiability_hazards_v2(ds.pilot_rows, ds.probe_pool)

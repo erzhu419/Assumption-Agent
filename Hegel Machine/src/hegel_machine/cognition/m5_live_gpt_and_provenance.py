@@ -1098,6 +1098,7 @@ def _execute_authored_python_in_isolated_subprocess(
     train_rows: list[dict[str, float]],
     confirm_rows: list[dict[str, float]],
     heldout_rows: list[dict[str, float]],
+    include_predictions: bool = False,
 ) -> dict[str, Any]:
     """Write GPT-authored `model.py` to disk and evaluate in a separate isolated Python subprocess!
 
@@ -1136,8 +1137,17 @@ def _execute_authored_python_in_isolated_subprocess(
         "    rp = os.path.realpath(sp) if sp else sandbox_root\n"
         "    if not rp.startswith(allowed_prefixes):\n"
         "        sys.path.remove(sp)\n"
+        "blocked_imports = {'ctypes', '_ctypes', 'cffi', 'socket', 'subprocess', 'multiprocessing', 'http', 'urllib', 'ftplib'}\n"
         "def _audit_guard(event, args):\n"
-        "    if event in ('subprocess.Popen', 'os.system', 'os.exec', 'os.spawn', 'socket.connect', 'socket.bind'):\n"
+        "    if event == 'import' and args:\n"
+        "        top_pkg = str(args[0]).split('.')[0]\n"
+        "        if top_pkg in blocked_imports:\n"
+        "            raise PermissionError(f'Hermetic sandbox blocked import: {top_pkg}')\n"
+        "    if event.startswith(('ctypes.', 'subprocess.', 'os.exec', 'os.spawn', 'os.fork', 'socket.')) or event in ('os.system', 'os.open'):\n"
+        "        if event == 'os.open' and args and isinstance(args[0], (str, bytes, os.PathLike)):\n"
+        "            ps0 = os.fsdecode(args[0])\n"
+        "            if os.path.realpath(ps0).startswith(allowed_prefixes):\n"
+        "                return\n"
         "        raise PermissionError(f'Hermetic sandbox blocked {event}')\n"
         "    if event in ('open', 'os.listdir', 'os.scandir') and args:\n"
         "        p0 = args[0]\n"
@@ -1157,11 +1167,12 @@ def _execute_authored_python_in_isolated_subprocess(
         "    abi_mode = 'fit_returned_callable'\n"
         "elif hasattr(mod, 'predict'):\n"
         "    sig = inspect.signature(mod.predict)\n"
-        "    req_p = [\n"
+        "    pos_p = [\n"
         "        p for p in sig.parameters.values()\n"
-        "        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) and p.default is p.empty\n"
+        "        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)\n"
         "    ]\n"
-        "    if len(req_p) >= 2 and fit_ret is not None:\n"
+        "    has_varargs = any(p.kind == p.VAR_POSITIONAL for p in sig.parameters.values())\n"
+        "    if (len(pos_p) >= 2 or has_varargs) and fit_ret is not None:\n"
         "        pred_fn = lambda row, _st=fit_ret: mod.predict(row, _st)\n"
         "        abi_mode = 'predict_row_and_fit_state'\n"
         "    else:\n"
@@ -1217,7 +1228,7 @@ def _execute_authored_python_in_isolated_subprocess(
     tr_rmse = _rmse(out["train_preds"], [r["y"] for r in train_rows])
     cf_rmse = _rmse(out["confirm_preds"], [r["y"] for r in confirm_rows])
     ho_rmse = _rmse(out["heldout_preds"], [r["y"] for r in heldout_rows])
-    return {
+    res_dict: dict[str, Any] = {
         "ok": True,
         "abi_mode": str(out.get("abi_mode", "module_state_predict")),
         "model_path": str(model_file),
@@ -1227,6 +1238,9 @@ def _execute_authored_python_in_isolated_subprocess(
         "confirm_rmse": round(cf_rmse, 6),
         "heldout_rmse": round(ho_rmse, 6),
     }
+    if include_predictions:
+        res_dict["train_preds"] = [float(x) for x in out["train_preds"]]
+    return res_dict
 
 
 def _build_live_k15_forest_and_archive() -> tuple[PhilosophicalForest, dict[str, Any], dict[str, dict[str, Any]]]:

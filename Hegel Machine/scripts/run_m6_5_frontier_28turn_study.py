@@ -45,22 +45,31 @@ from run_m6_frontier_scout_study import _aggregate_results, _write_sha256sums  #
 
 
 class _HeavyTimingRWLock:
-    """Reentrant-writer reader-writer lock: concurrent agent bash commands hold shared read locks; `>=10GiB` live-timed verifiers hold an exclusive write lock (reentrant if the writer thread itself invokes `exec_container_bash`)."""
+    """Reader- AND writer-reentrant RWLock (`H04` Fix): nested reads on a thread already holding a read lock
+    succeed immediately without deadlocking behind `_writers_waiting > 0`."""
 
     def __init__(self) -> None:
         self._cond = threading.Condition(threading.Lock())
         self._readers = 0
+        self._reader_depths: dict[int, int] = {}
         self._writers_waiting = 0
         self._writer_active = False
         self._writer_tid: int | None = None
+        self._writer_depth = 0
 
     def acquire_read(self) -> None:
         tid = threading.get_ident()
         with self._cond:
             if self._writer_active and self._writer_tid == tid:
                 return
+            cur_depth = self._reader_depths.get(tid, 0)
+            if cur_depth > 0:
+                self._reader_depths[tid] = cur_depth + 1
+                self._readers += 1
+                return
             while self._writer_active or self._writers_waiting > 0:
                 self._cond.wait()
+            self._reader_depths[tid] = 1
             self._readers += 1
 
     def release_read(self) -> None:
@@ -68,6 +77,13 @@ class _HeavyTimingRWLock:
         with self._cond:
             if self._writer_active and self._writer_tid == tid:
                 return
+            cur_depth = self._reader_depths.get(tid, 0)
+            if cur_depth <= 0:
+                return
+            if cur_depth == 1:
+                self._reader_depths.pop(tid, None)
+            else:
+                self._reader_depths[tid] = cur_depth - 1
             self._readers -= 1
             if self._readers == 0:
                 self._cond.notify_all()
@@ -75,20 +91,30 @@ class _HeavyTimingRWLock:
     def acquire_write(self) -> None:
         tid = threading.get_ident()
         with self._cond:
+            if self._writer_active and self._writer_tid == tid:
+                self._writer_depth += 1
+                return
             self._writers_waiting += 1
             try:
                 while self._writer_active or self._readers > 0:
                     self._cond.wait()
                 self._writer_active = True
                 self._writer_tid = tid
+                self._writer_depth = 1
             finally:
                 self._writers_waiting -= 1
 
     def release_write(self) -> None:
+        tid = threading.get_ident()
         with self._cond:
-            self._writer_active = False
-            self._writer_tid = None
-            self._cond.notify_all()
+            if not self._writer_active or self._writer_tid != tid:
+                return
+            self._writer_depth -= 1
+            if self._writer_depth <= 0:
+                self._writer_active = False
+                self._writer_tid = None
+                self._writer_depth = 0
+                self._cond.notify_all()
 
 
 def main() -> int:

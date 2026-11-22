@@ -61,8 +61,15 @@ from .m6_4_executable_wormhole_library import (
     find_uninlined_wormhole_imports_in_container,
     harvest_container_skill_activations,
     run_host_mechanical_wormhole_gate_probes,
+    run_host_mechanical_wormhole_gate_probes_v2,
     stage_recalled_executable_wormholes_in_container,
     sum_skill_activation_calls,
+)
+from .m6_8_b_prime_capability_bridge import (
+    SKILL_07_MULTISCALE_RECONCILIATION,
+    harvest_container_producer_skill_manifest,
+    qualify_staged_wormhole_modules_in_container,
+    verify_candidate_artifact_contract_in_container,
 )
 from .m6_causal_wormhole_sandbox import is_d_separated_dag
 from .wormhole_forest import (
@@ -1494,27 +1501,112 @@ def archive_candidate_version_in_container(
     snap_dir = f"/tmp/.hegel_candidate_archive/v{version_idx:02d}_{digest[:8]}"
     cmds = [f"mkdir -p {json.dumps(snap_dir)}"]
     for idx, art in enumerate(declared_artifacts):
-        bname = Path(art.rstrip("/")).name or f"art_{idx}"
-        cmds.append(f"cp -a {json.dumps(art)} {json.dumps(snap_dir + '/' + bname)} 2>/dev/null || true")
+        art_clean = art.rstrip("/") or art
+        bname = Path(art_clean).name or f"art_{idx}"
+        slot_dst = f"{snap_dir}/slot_{idx:02d}__{bname}"
+        human_dst = f"{snap_dir}/{bname}"
+        cmds.append(f"cp -a {json.dumps(art_clean)} {json.dumps(slot_dst)} 2>/dev/null || true")
+        cmds.append(f"cp -a {json.dumps(art_clean)} {json.dumps(human_dst)} 2>/dev/null || true")
     subprocess.run(["docker", "exec", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, timeout=20)
     return snap_dir
 
 
+def restore_candidate_version_in_container(
+    cid: str,
+    declared_artifacts: tuple[str, ...],
+    snap_dir: str,
+    expected_sha256: str,
+) -> dict[str, Any]:
+    """Atomically restore archived `declared_artifacts` from `snap_dir` when budget expires on an unverified edit (`H01` Fix)."""
+    if not snap_dir or not declared_artifacts:
+        return {"restored": False, "reason": "missing_snap_dir_or_artifacts"}
+    cmds: list[str] = []
+    for idx, art in enumerate(declared_artifacts):
+        art_clean = art.rstrip("/") or art
+        parent_dir = str(Path(art_clean).parent)
+        bname = Path(art_clean).name or f"art_{idx}"
+        slot_src = f"{snap_dir}/slot_{idx:02d}__{bname}"
+        fallback_src = f"{snap_dir}/{bname}"
+        cmds.append(
+            f"if [ -e {json.dumps(slot_src)} ]; then mkdir -p {json.dumps(parent_dir)} && rm -rf {json.dumps(art_clean)} && cp -a {json.dumps(slot_src)} {json.dumps(art_clean)}; "
+            f"elif [ -e {json.dumps(fallback_src)} ]; then mkdir -p {json.dumps(parent_dir)} && rm -rf {json.dumps(art_clean)} && cp -a {json.dumps(fallback_src)} {json.dumps(art_clean)}; fi"
+        )
+    proc = subprocess.run(["docker", "exec", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, text=True, timeout=20)
+    new_sha = compute_declared_artifacts_digest(cid, declared_artifacts)
+    return {
+        "restored": bool(proc.returncode == 0 and new_sha == expected_sha256),
+        "returncode": proc.returncode,
+        "restored_sha256": new_sha,
+        "expected_sha256": expected_sha256,
+    }
+
+
 def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[str, ...]) -> bool:
-    """FR04 Fix: Trivial commands (`true`, `ls`, `echo`, `pwd`) CANNOT clear candidate verification debt!"""
+    """`H01`/`FR04` Fix: Substantive verification check rejecting print-only `-c` strings & unrelated `/tmp/test_*` calls."""
+    import ast as _ast
+    import shlex as _shlex
+
     s = cmd_str.strip()
     if not s or s in {"true", ":", "pwd", "ls"}:
         return False
     low = s.lower()
-    exec_tokens = ("python", "pytest", "bash ", "sh ", "Rscript", "julia", "./")
-    if not any(tok.lower() in low for tok in exec_tokens):
+    exec_tokens = ("python", "pytest", "bash ", "sh ", "rscript", "julia", "./")
+    if not any(tok in low for tok in exec_tokens):
         return False
+
+    art_names = [Path(a.rstrip("/")).name.lower() for a in declared_artifacts if Path(a.rstrip("/")).name]
+    art_stems = [Path(a.rstrip("/")).stem.lower() for a in declared_artifacts if Path(a.rstrip("/")).stem]
+    art_roots = [a.rstrip("/").lower() for a in declared_artifacts]
+
+    # Parse shell tokens safely to inspect `-c <inline_code>` and explicit script/pytest targets
+    try:
+        toks = _shlex.split(s)
+    except ValueError:
+        toks = s.split()
+
+    # 1. Inspect `python -c "<inline>"` AST: reject pure print/literal/pass snippets that neither import nor read files!
+    for idx, tk in enumerate(toks[:-1]):
+        if tk == "-c" and idx >= 1 and "python" in toks[idx - 1].lower():
+            inline_src = toks[idx + 1]
+            try:
+                tree = _ast.parse(inline_src)
+            except SyntaxError:
+                return False
+            has_real_eval = False
+            io_or_exec_attrs = {"open", "load", "loadtxt", "read_csv", "read_table", "read_text", "read_bytes", "run", "check_output", "import_module", "spec_from_file_location"}
+            for node in _ast.walk(tree):
+                if isinstance(node, (_ast.Import, _ast.ImportFrom)):
+                    has_real_eval = True
+                    break
+                if isinstance(node, _ast.Call):
+                    if isinstance(node.func, _ast.Name) and node.func.id in {"open", "__import__", "exec", "eval"}:
+                        has_real_eval = True
+                        break
+                    if isinstance(node.func, _ast.Attribute) and node.func.attr in io_or_exec_attrs:
+                        has_real_eval = True
+                        break
+            if not has_real_eval:
+                return False
+
     if not declared_artifacts:
         return True
-    # Must either invoke python/pytest or reference at least one declared artifact root/basename
-    art_tokens = [Path(a.rstrip("/")).name.lower() for a in declared_artifacts if Path(a.rstrip("/")).name]
-    art_roots = [a.rstrip("/").lower() for a in declared_artifacts]
-    return ("pytest" in low) or any(t in low for t in [*art_tokens, *art_roots])
+
+    # 2. If `pytest` is given explicit `/tmp/...` paths, require that they reference candidate validation or declared artifacts
+    if "pytest" in low:
+        tmp_targets = [tk.lower() for tk in toks if tk.startswith("/tmp/") and tk.endswith(".py")]
+        if tmp_targets:
+            return any(
+                any(k in tt for k in ("validat", "verif", "candidate", "audit", *art_stems, *art_names))
+                for tt in tmp_targets
+            )
+        return True
+
+    # 3. Accept explicit candidate validator scripts (`/tmp/validate_*.py`, `/tmp/verify_*.py`, `/tmp/check_*candidate*.py`)
+    validator_patterns = ("validate_", "verify_", "check_candidate", "audit_candidate")
+    if any(vp in low for vp in validator_patterns):
+        return True
+
+    return any(t in low for t in [*art_names, *art_roots])
 
 
 def classify_tb_failure_taxonomy(
@@ -1824,6 +1916,7 @@ def _build_system_and_initial_brief(
         "Hegel_M6_5_Frontier_LiveGPT",
         "Hegel_M6_6_Frontier_LiveGPT",
         "Hegel_M6_7_Frontier_LiveGPT",
+        "Hegel_M6_8_BPrime_LiveGPT",
     }
     is_m6_1 = arm == "Hegel_M6_1_Frontier_LiveGPT"
     is_m6_2 = arm == "Hegel_M6_2_Frontier_LiveGPT"
@@ -1832,6 +1925,7 @@ def _build_system_and_initial_brief(
     is_m6_5 = arm == "Hegel_M6_5_Frontier_LiveGPT"
     is_m6_6 = arm == "Hegel_M6_6_Frontier_LiveGPT"
     is_m6_7 = arm == "Hegel_M6_7_Frontier_LiveGPT"
+    is_m6_8 = arm == "Hegel_M6_8_BPrime_LiveGPT"
     is_bm = task.benchmark == "BioMysteryBench-Preview"
 
     common_env_rules = (
@@ -1877,6 +1971,49 @@ def _build_system_and_initial_brief(
             "scientific_domain": task.scientific_domain,
             "max_turns": max_turns,
             "container_initial_snapshot": env_boot_info,
+            "task_instruction": task.instruction_text,
+        }
+        return sys_prompt, init_payload
+
+    if is_m6_8:
+        exec_skill_rules = (
+            "5. MULTI-SCALE `Pi_fold`, PARTIAL-SUBTREE & RECONCILIATION WORMHOLE LIBRARY (`/tmp/hegel_wormhole_skills`, `PYTHONPATH=/tmp`):\n"
+            "   - Domain-general operators AND Wave-1 confirmed producer closures bound to your recalled `PhilosophicalForest` nodes are mounted at `/tmp/hegel_wormhole_skills` (listed in `mounted_executable_wormhole_skills`).\n"
+            "   - Use them selectively for diagnostic screening, multi-scale causal temporal folding (`pi_fold_temporal_regime_selector`), cohort alignment (`cohort_shift_aligner`), nested out-of-selection CV, or minority-slice comparison (`adjudicate_incumbent_vs_challenger_slices`) — NEVER force slow Python calls inside inner PDE/C++ loops when direct first-principles solvers apply!\n"
+            "   - ANTI-SNOOPING & MINORITY-SLICE INCUMBENT PROTECTION: Always place feature/support/frequency/threshold selection INSIDE outer CV training folds (never trust fixed-support CV after full-dataset search!); treat LOPO/LOSO stability as subset precision only (verify wave speed/dispersion/drift identifiability on held-out windows/calibrations); check ALL required output columns/fields (including secondary events like `pop_in_load_uN`), and NEVER overwrite a verified incumbent when an edit trades off cohort/slice metrics!\n"
+            "   - SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — inline pure standard NumPy/SciPy/sklearn code in final deliverables!\n"
+            if staged_wormhole_manifest
+            else ""
+        )
+        sys_prompt = (
+            "You are `Hegel-M6.8-B'`, a sovereign multi-scale causal, partial-subtree & candidate-verified scientific discovery agent.\n"
+            + common_env_rules
+            + "HEGEL-M6.8-B' SOVEREIGN SCIENTIFIC DISCOVERY & CANDIDATE TRANSACTION PROTOCOL:\n"
+            "1. SPARSE CAUSAL `nogood_update` & CONDITIONAL AUFHEBUNG:\n"
+            "   - Record `has_new_nogood=true` strictly when empirical evidence refutes a model assumption; preserve valid sub-domains/mechanisms rather than discarding working baselines.\n"
+            "2. MULTI-SCALE TEMPORAL & IDENTIFIABILITY DISCIPLINE:\n"
+            "   - Separate fast relaxation, adiabatic slow drift, stage-transition boundaries (`hold_end` vs `ramp_end`), and exponential memory/creep history (`Pi_fold`); check state-gain-forcing and drift identifiability across distinct time windows and held-out sensors.\n"
+            "3. NESTED OUT-OF-SELECTION VALIDATION & INCUMBENT RATCHET:\n"
+            "   - Write a clean, contract-complete baseline candidate to the declared target path early; every candidate version is hash-archived at `/tmp/.hegel_candidate_archive/vXX_<sha8>`.\n"
+            "   - Promote a challenger ONLY if nested out-of-selection worst-slice performance strictly improves without regressing other slices or breaking schema completeness; run a substantive Python/script verification bound to the exact final artifact hash before `submit_completed_task`.\n"
+            + exec_skill_rules
+            + "Return a single valid JSON object matching the Hegel lean decision schema."
+        )
+        init_payload = {
+            "task_id": task.task_id,
+            "benchmark": task.benchmark,
+            "scientific_domain": task.scientific_domain,
+            "max_turns": max_turns,
+            "container_initial_snapshot": env_boot_info,
+            "recalled_wormhole_methodology_and_wave1_sublations": [
+                {
+                    "node_id": n["node_id"],
+                    "principle": n["methodology_principle"],
+                    "wave1_consolidated_nogoods": n.get("wave1_consolidated_nogoods", []),
+                }
+                for n in recalled_m6_notes
+            ],
+            "mounted_executable_wormhole_skills": staged_wormhole_manifest or [],
             "task_instruction": task.instruction_text,
         }
         return sys_prompt, init_payload
@@ -2329,6 +2466,7 @@ def run_frontier_episode(
         "Hegel_M6_5_Frontier_LiveGPT",
         "Hegel_M6_6_Frontier_LiveGPT",
         "Hegel_M6_7_Frontier_LiveGPT",
+        "Hegel_M6_8_BPrime_LiveGPT",
     }
     is_m6 = arm in {
         "Hegel_M6_Frontier_LiveGPT",
@@ -2339,6 +2477,7 @@ def run_frontier_episode(
         "Hegel_M6_5_Frontier_LiveGPT",
         "Hegel_M6_6_Frontier_LiveGPT",
         "Hegel_M6_7_Frontier_LiveGPT",
+        "Hegel_M6_8_BPrime_LiveGPT",
     }
     is_m6_1 = arm == "Hegel_M6_1_Frontier_LiveGPT"
     is_m6_2 = arm == "Hegel_M6_2_Frontier_LiveGPT"
@@ -2347,7 +2486,8 @@ def run_frontier_episode(
     is_m6_5 = arm == "Hegel_M6_5_Frontier_LiveGPT"
     is_m6_6 = arm == "Hegel_M6_6_Frontier_LiveGPT"
     is_m6_7 = arm == "Hegel_M6_7_Frontier_LiveGPT"
-    is_exec_wormhole_m6 = is_m6_4 or is_m6_5 or is_m6_6 or is_m6_7
+    is_m6_8 = arm == "Hegel_M6_8_BPrime_LiveGPT"
+    is_exec_wormhole_m6 = is_m6_4 or is_m6_5 or is_m6_6 or is_m6_7 or is_m6_8
     is_sovereign_m6 = is_m6_3 or is_exec_wormhole_m6
     is_lean_m6 = is_m6_2 or is_sovereign_m6
     is_bm = task.benchmark == "BioMysteryBench-Preview"
@@ -2443,7 +2583,24 @@ def run_frontier_episode(
                 compute_delta=float(rec.get("query_compute_cost", 1.0)),
             )
             if is_exec_wormhole_m6 and recalled_notes and (not is_bm):
-                staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(agent_cid, recalled_notes)
+                extra_mods = (
+                    [
+                        (
+                            "multiscale_and_reconciliation_wormhole.py",
+                            SKILL_07_MULTISCALE_RECONCILIATION,
+                            "m5_pi_fold_and_branch_reconciliation",
+                            "pi_fold_temporal_regime_selector(timestamps, forcing_u, observed_y), adjudicate_incumbent_vs_challenger_slices(incumbent_slice_losses, challenger_slice_losses)",
+                        )
+                    ]
+                    if is_m6_8
+                    else None
+                )
+                if extra_mods:
+                    staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(
+                        agent_cid, recalled_notes, extra_modules=extra_mods
+                    )
+                else:
+                    staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(agent_cid, recalled_notes)
                 prev_fs = snapshot_container_files(agent_cid)
                 last_parent = ledger.record_decision(
                     decision_type="D1B_EXECUTABLE_WORMHOLE_STAGED",
@@ -2452,8 +2609,19 @@ def run_frontier_episode(
                     candidates_evaluated=[{"module_import": m["module_import"]} for m in staged_wormhole_manifest],
                     chosen_option={"staged_module_count": len(staged_wormhole_manifest), "staged_modules": staged_wormhole_manifest},
                     rejection_reasons={},
-                    rationale_summary="Stage recalled domain-general executable wormhole Python operators into `/tmp/hegel_wormhole_skills` (`Skill∞` telemetry enabled).",
+                    rationale_summary="Stage recalled domain-general & Wave-1 producer wormhole Python modules into `/tmp/hegel_wormhole_skills` (`Skill∞` telemetry enabled).",
                 )
+                if is_m6_8 and agent_cid != "mock" and staged_wormhole_manifest:
+                    qual_res = qualify_staged_wormhole_modules_in_container(agent_cid, staged_wormhole_manifest)
+                    last_parent = ledger.record_decision(
+                        decision_type="D1C_SKILL_BINDING_AND_SMOKE_QUALIFICATION",
+                        parent_decision_id=last_parent,
+                        evidence_inputs={"staged_count": len(staged_wormhole_manifest)},
+                        candidates_evaluated=qual_res,
+                        chosen_option={"qualified_count": sum(1 for q in qual_res if q.get("lifecycle_state") == "bound_and_import_qualified")},
+                        rejection_reasons={},
+                        rationale_summary="Isolated smoke-test import qualification (`HEGEL_SKILL_CALLER_ROLE=smoke_test`, excluded from agent activation counts).",
+                    )
 
         sys_prompt, init_payload = _build_system_and_initial_brief(
             task,
@@ -2477,10 +2645,14 @@ def run_frontier_episode(
         stress_challenge_gate_triggered = False
         host_wormhole_gate_executed = False
         host_wormhole_gate_reports: list[str] = []
+        host_wormhole_probe_results: list[dict[str, Any]] = []
+        completed_probe_shas: set[str] = set()
         incumbent_checkpoint_alerts_fired = 0
         latest_m6_2_metric_note = ""
         current_candidate_sha256 = initial_art_digest
         verified_candidate_sha256 = ""
+        verification_receipts_by_sha: dict[str, dict[str, Any]] = {}
+        validated_incumbent: dict[str, Any] | None = None
         artifacts_modified_since_last_verify = True
         llm_infra_retries = 0
         ended_by_finish = False
@@ -2584,12 +2756,16 @@ def run_frontier_episode(
                 if is_lean_m6
                 else (HEGEL_M6_FRONTIER_DECISION_SCHEMA if is_m6 else BARE_REACT_DECISION_SCHEMA)
             )
-            llm_res = client.call_structured(
-                system_prompt=sys_prompt,
-                conversation_turns=convo_turns,
-                output_schema=active_schema,
-                stage_subdir=stage_subdir,
-            )
+            try:
+                llm_res = client.call_structured(
+                    system_prompt=sys_prompt,
+                    conversation_turns=convo_turns,
+                    output_schema=active_schema,
+                    stage_subdir=stage_subdir,
+                )
+            except StopIteration:
+                turns_used = max(1, turn_idx - 1)
+                break
             if not llm_res.get("ok"):
                 llm_infra_retries += 1
                 last_parent = ledger.record_decision(
@@ -2744,9 +2920,10 @@ def run_frontier_episode(
                     turn_idx += 1
                     continue
 
-                # 2. Candidate-Hash-Bound Root-Pullback Pre-Commit Gate (`FR04` Fix: requires substantive verification bound to current candidate SHA-256!)
-                if is_m6 and (not pullback_gate_triggered) and (turn_idx < max_turns):
+                # 2. Candidate-Hash-Bound Verification Transaction (`H01`/`FR04` Fix: EVERY submit checks `verification_receipts_by_sha[cur_dig]` — NO double-submit or last-turn bypass!)
+                if is_m6:
                     gate_reasons: list[str] = []
+                    cur_dig = ""
                     if not is_bm:
                         art_chk = check_declared_artifacts_in_container(agent_cid, task.declared_artifacts)
                         cur_dig = compute_declared_artifacts_digest(agent_cid, task.declared_artifacts)
@@ -2761,11 +2938,11 @@ def run_frontier_episode(
                             )
                         if not art_chk["all_present"] or not cur_dig:
                             gate_reasons.append(f"Missing or empty declared artifacts: {art_chk['missing_or_empty']}")
-                        elif artifacts_modified_since_last_verify or (cur_dig != verified_candidate_sha256):
+                        elif (cur_dig not in verification_receipts_by_sha) or artifacts_modified_since_last_verify or (cur_dig != verified_candidate_sha256):
                             gate_reasons.append(
-                                f"Declared artifacts (`sha256={cur_dig[:12]}`) lack a substantive post-modification Python/script verification receipt (`true`/`ls` do not qualify!)."
+                                f"Declared artifacts (`sha256={cur_dig[:12]}`) lack a candidate-hash-bound post-modification `VerificationReceipt` (`true`/`ls`/`print` or double-submit do NOT qualify!)."
                             )
-                        if is_m6_7 and art_chk["all_present"] and (not host_wormhole_gate_executed):
+                        if is_m6_7 and art_chk["all_present"] and (not host_wormhole_gate_executed) and (turn_idx < max_turns):
                             host_wormhole_gate_reports = run_host_mechanical_wormhole_gate_probes(
                                 agent_cid, task.declared_artifacts, recalled_notes, timeout_sec=75
                             )
@@ -2781,6 +2958,34 @@ def run_frontier_episode(
                             )
                             if host_wormhole_gate_reports:
                                 gate_reasons.append("HOST MECHANICAL WORMHOLE AUDIT RECEIPT: " + " | ".join(host_wormhole_gate_reports))
+                        if is_m6_8 and art_chk["all_present"] and cur_dig and (cur_dig not in completed_probe_shas) and (max_turns - turn_idx >= 4) and agent_cid != "mock":
+                            probe_v2 = run_host_mechanical_wormhole_gate_probes_v2(
+                                agent_cid, task.declared_artifacts, recalled_notes, candidate_sha256=cur_dig, timeout_sec=45
+                            )
+                            host_wormhole_gate_executed = True
+                            host_wormhole_probe_results.append(probe_v2)
+                            if probe_v2.get("overall_status") in {"diagnostic", "completed_no_issue", "not_applicable"}:
+                                completed_probe_shas.add(cur_dig)
+                            reps_v2 = list(probe_v2.get("probe_reports", []))
+                            if reps_v2:
+                                host_wormhole_gate_reports = reps_v2
+                                gate_reasons.append("HOST NON-COERCIVE DIAGNOSTIC RECEIPT: " + " | ".join(reps_v2))
+                            last_parent = ledger.record_decision(
+                                decision_type="D_HOST_STRUCTURED_PROBE_EVALUATION",
+                                parent_decision_id=last_parent,
+                                evidence_inputs={"trigger": "precommit_eligible_budget", "turn_idx": turn_idx, "candidate_sha256_12": cur_dig[:12]},
+                                candidates_evaluated=list(probe_v2.get("probe_results", [])),
+                                chosen_option={
+                                    "overall_status": probe_v2.get("overall_status"),
+                                    "elapsed_ms": probe_v2.get("elapsed_ms"),
+                                    "returncode": probe_v2.get("returncode"),
+                                    "report_count": len(reps_v2),
+                                },
+                                rejection_reasons=({"probe_error": str(probe_v2.get("stderr"))} if probe_v2.get("returncode") != 0 else {}),
+                                rationale_summary=f"Structured host probe evaluation completed with status={probe_v2.get('overall_status')} in {probe_v2.get('elapsed_ms')}ms.",
+                                compute_delta=round(float(probe_v2.get("elapsed_ms", 0.0)) / 1000.0, 4),
+                                wall_ms_delta=float(probe_v2.get("elapsed_ms", 0.0)),
+                            )
                     else:
                         if not is_lean_m6:
                             unv = [c["requirement"] for c in latest_checklist if c.get("status") != "verified"]
@@ -2798,12 +3003,15 @@ def run_frontier_episode(
                         last_parent = ledger.record_decision(
                             decision_type="D_PULLBACK_PRECOMMIT_GATE",
                             parent_decision_id=last_parent,
-                            evidence_inputs={"gate_reasons": gate_reasons},
+                            evidence_inputs={"gate_reasons": gate_reasons, "turn_idx": turn_idx, "max_turns": max_turns},
                             candidates_evaluated=[{"action": "intercept_for_candidate_hash_verification"}],
-                            chosen_option={"intercepted": True},
+                            chosen_option={"intercepted": True, "at_budget_limit": bool(turn_idx >= max_turns)},
                             rejection_reasons={"unverified_candidate_digest": "; ".join(gate_reasons)},
-                            rationale_summary="Intercept premature submit to enforce candidate-hash-bound verification receipt.",
+                            rationale_summary="Intercept unverified submit to enforce candidate-hash-bound VerificationReceipt.",
                         )
+                        if turn_idx >= max_turns:
+                            # Budget exhausted on an unverified submit: NEVER mark `ended_by_finish = True`!
+                            break
                         assistant_decisions.append(parsed)
                         raw_exec_observations.append(
                             {
@@ -2822,11 +3030,11 @@ def run_frontier_episode(
                 turn_logs.append(t_entry)
                 break
 
-            # Execute `execute_in_remote_docker` inside `<agent_cid>` (auto-exporting `PYTHONPATH=/tmp` for M6.5/M6.6/M6.7 mounted skills!)
+            # Execute `execute_in_remote_docker` inside `<agent_cid>` (auto-exporting `PYTHONPATH=/tmp` for M6.5/M6.6/M6.7/M6.8 mounted skills!)
             cmd_str = str(bash_cmd or "echo 'No command provided'")
             effective_cmd_str = (
                 f'export PYTHONPATH="/tmp:${{PYTHONPATH:-}}"; {cmd_str}'
-                if ((is_m6_5 or is_m6_6 or is_m6_7) and staged_wormhole_manifest)
+                if ((is_m6_5 or is_m6_6 or is_m6_7 or is_m6_8) and staged_wormhole_manifest)
                 else cmd_str
             )
             ex_res = exec_container_bash(agent_cid, effective_cmd_str, timeout_sec=cmd_timeout_sec)
@@ -2869,7 +3077,7 @@ def run_frontier_episode(
                 new_dig = compute_declared_artifacts_digest(agent_cid, task.declared_artifacts)
                 if new_dig and new_dig != current_candidate_sha256:
                     current_candidate_sha256 = new_dig
-                    artifacts_modified_since_last_verify = True
+                    artifacts_modified_since_last_verify = new_dig not in verification_receipts_by_sha
                     if is_sovereign_m6 and new_dig != initial_art_digest:
                         v_num = len(host_candidate_archive) + 1
                         snap_p = archive_candidate_version_in_container(agent_cid, task.declared_artifacts, v_num, new_dig)
@@ -2878,19 +3086,84 @@ def run_frontier_episode(
                                 "version": f"v{v_num:02d}",
                                 "turn": turn_idx,
                                 "sha256_12": new_dig[:12],
+                                "sha256": new_dig,
                                 "archive_path": snap_p,
                                 "metric_note": latest_m6_2_metric_note[:160],
                             }
                         )
                 elif art_touched:
                     artifacts_modified_since_last_verify = True
-                elif (
+
+                # `H01` Fix: Sequential `if` (NOT `elif`!) so single-turn modify+verify is honored immediately without false debt!
+                if (
                     ex_res["exit_code"] == 0
                     and current_candidate_sha256
                     and is_substantive_verification_command(cmd_str, task.declared_artifacts)
                 ):
-                    artifacts_modified_since_last_verify = False
-                    verified_candidate_sha256 = current_candidate_sha256
+                    contract_ok = True
+                    contract_chk: dict[str, Any] = {"accepted": True, "reasons": []}
+                    if is_m6_8 and agent_cid != "mock":
+                        contract_chk = verify_candidate_artifact_contract_in_container(
+                            agent_cid, task.declared_artifacts, current_candidate_sha256
+                        )
+                        contract_ok = bool(contract_chk.get("accepted"))
+                    if contract_ok:
+                        artifacts_modified_since_last_verify = False
+                        verified_candidate_sha256 = current_candidate_sha256
+                        matching_arch = next(
+                            (a for a in reversed(host_candidate_archive) if a.get("sha256") == current_candidate_sha256),
+                            None,
+                        )
+                        v_rec = {
+                            "candidate_sha256": current_candidate_sha256,
+                            "verified_turn": turn_idx,
+                            "verification_command": cmd_str[:240],
+                            "contract_check": contract_chk,
+                            "archive_path": matching_arch["archive_path"] if matching_arch else None,
+                        }
+                        verification_receipts_by_sha[current_candidate_sha256] = v_rec
+                        validated_incumbent = v_rec
+
+                # Early-to-mid budget-aware structured probe pilot for `M6.8-B'` (runs once first verified candidate forms with >= 6 turns left!)
+                if (
+                    is_m6_8
+                    and agent_cid != "mock"
+                    and current_candidate_sha256
+                    and (current_candidate_sha256 in verification_receipts_by_sha)
+                    and (current_candidate_sha256 not in completed_probe_shas)
+                    and (max_turns - turn_idx >= 6)
+                ):
+                    probe_mid = run_host_mechanical_wormhole_gate_probes_v2(
+                        agent_cid, task.declared_artifacts, recalled_notes, candidate_sha256=current_candidate_sha256, timeout_sec=45
+                    )
+                    host_wormhole_gate_executed = True
+                    host_wormhole_probe_results.append(probe_mid)
+                    if probe_mid.get("overall_status") in {"diagnostic", "completed_no_issue", "not_applicable"}:
+                        completed_probe_shas.add(current_candidate_sha256)
+                    reps_mid = list(probe_mid.get("probe_reports", []))
+                    if reps_mid:
+                        host_wormhole_gate_reports = reps_mid
+                        ex_res["stdout"] = (
+                            str(ex_res.get("stdout") or "")
+                            + "\n\n=== HOST STRUCTURED CANDIDATE DIAGNOSTIC (NON-COERCIVE — RETAIN INCUMBENT ON TRADEOFF) ===\n"
+                            + "\n".join(reps_mid)
+                        )
+                    last_parent = ledger.record_decision(
+                        decision_type="D_HOST_STRUCTURED_PROBE_EVALUATION",
+                        parent_decision_id=last_parent,
+                        evidence_inputs={"trigger": "first_verified_candidate_pilot", "turn_idx": turn_idx, "candidate_sha256_12": current_candidate_sha256[:12]},
+                        candidates_evaluated=list(probe_mid.get("probe_results", [])),
+                        chosen_option={
+                            "overall_status": probe_mid.get("overall_status"),
+                            "elapsed_ms": probe_mid.get("elapsed_ms"),
+                            "returncode": probe_mid.get("returncode"),
+                            "report_count": len(reps_mid),
+                        },
+                        rejection_reasons=({"probe_error": str(probe_mid.get("stderr"))} if probe_mid.get("returncode") != 0 else {}),
+                        rationale_summary=f"Budget-gated candidate pilot probe finished with status={probe_mid.get('overall_status')} in {probe_mid.get('elapsed_ms')}ms.",
+                        compute_delta=round(float(probe_mid.get("elapsed_ms", 0.0)) / 1000.0, 4),
+                        wall_ms_delta=float(probe_mid.get("elapsed_ms", 0.0)),
+                    )
 
             t_entry["candidate_sha256"] = current_candidate_sha256[:16] if current_candidate_sha256 else None
             t_entry["exec_result"] = ex_res
@@ -2974,12 +3247,52 @@ def run_frontier_episode(
                     wall_ms_delta=float(fin_llm["wall_ms"]),
                 )
 
-        # Harvest runtime `Skill∞` activation telemetry for `Hegel_M6_4` / `Hegel_M6_5` before verification & container teardown
+        # `H01` Fix: Automatic Incumbent Rollback if budget expired on an unverified edit while a prior `VerificationReceipt` archive exists!
+        incumbent_auto_restored = False
+        if (
+            is_sovereign_m6
+            and (not is_bm)
+            and task.declared_artifacts
+            and agent_cid != "mock"
+            and ((not ended_by_finish) or (current_candidate_sha256 not in verification_receipts_by_sha))
+            and validated_incumbent is not None
+            and validated_incumbent.get("archive_path")
+            and validated_incumbent.get("candidate_sha256") != current_candidate_sha256
+        ):
+            rb_res = restore_candidate_version_in_container(
+                agent_cid,
+                task.declared_artifacts,
+                str(validated_incumbent["archive_path"]),
+                str(validated_incumbent["candidate_sha256"]),
+            )
+            if rb_res.get("restored"):
+                incumbent_auto_restored = True
+                unverified_sha = current_candidate_sha256
+                current_candidate_sha256 = str(rb_res["restored_sha256"])
+                last_parent = ledger.record_decision(
+                    decision_type="D_INCUMBENT_ROLLBACK_ON_UNVERIFIED_FINAL",
+                    parent_decision_id=last_parent,
+                    evidence_inputs={
+                        "unverified_final_sha256_12": unverified_sha[:12] if unverified_sha else "MISSING",
+                        "incumbent_verified_turn": validated_incumbent.get("verified_turn"),
+                    },
+                    candidates_evaluated=[{"action": "restore_validated_incumbent_archive"}],
+                    chosen_option={"restored_sha256_12": current_candidate_sha256[:12], "archive_path": validated_incumbent["archive_path"]},
+                    rejection_reasons={"unverified_final_edit": "Budget expired without VerificationReceipt for final edit; restored best verified incumbent."},
+                    rationale_summary="Automatically rolled back unverified budget-expired edit to the last candidate-hash-verified incumbent archive.",
+                )
+
+        # Harvest runtime `Skill∞` activation telemetry (`H05` Fix: persist full unfiltered `04c_full_skill_activations.jsonl`!)
         skill_activations: list[dict[str, Any]] = []
         skill_call_total = 0
         if is_exec_wormhole_m6 and (not is_bm):
             skill_activations = harvest_container_skill_activations(agent_cid)
             skill_call_total = sum_skill_activation_calls(skill_activations)
+            if skill_activations:
+                (episode_out_dir / "04c_full_skill_activations.jsonl").write_text(
+                    "\n".join(json.dumps(r, ensure_ascii=False) for r in skill_activations) + "\n",
+                    encoding="utf-8",
+                )
             last_parent = ledger.record_decision(
                 decision_type="D_SKILL_ACTIVATION_HARVEST",
                 parent_decision_id=last_parent,
@@ -2992,6 +3305,38 @@ def run_frontier_episode(
                 },
                 rejection_reasons={},
                 rationale_summary=f"Harvested {skill_call_total} runtime Skill∞ wormhole calls ({len(skill_activations)} log entries) from `/tmp/.hegel_skill_activations.jsonl`.",
+            )
+
+        # Harvest complete `ExecutableSkillManifest` (`P0b` Fix: full `/tmp` + workspace producer closure & content-addressed blobs before teardown!)
+        manifest_summary: dict[str, Any] | None = None
+        if is_m6_8 and (not is_bm) and agent_cid != "mock":
+            prod_man = harvest_container_producer_skill_manifest(
+                agent_cid=agent_cid,
+                task_id=task.task_id,
+                short_name=task.short_name,
+                wormhole_family=task.wormhole_family,
+                episode_id=episode_out_dir.name,
+                declared_artifacts=task.declared_artifacts,
+                candidate_sha256=current_candidate_sha256,
+                turn_logs=turn_logs,
+                verification_receipts=verification_receipts_by_sha,
+                episode_out_dir=episode_out_dir,
+            )
+            manifest_summary = {
+                "artifact_id": (prod_man.get("identity") or {}).get("artifact_id"),
+                "binding_status": (prod_man.get("producer") or {}).get("binding_status"),
+                "full_producer_count": (prod_man.get("structure") or {}).get("full_producer_count", 0),
+                "exported_pure_functions": (prod_man.get("interface") or {}).get("exported_pure_functions", []),
+                "temporal_readout_mode": (prod_man.get("temporal") or {}).get("temporal_readout_mode"),
+            }
+            last_parent = ledger.record_decision(
+                decision_type="D_PRODUCER_SKILL_MANIFEST_HARVEST",
+                parent_decision_id=last_parent,
+                evidence_inputs={"candidate_sha256_12": current_candidate_sha256[:12] if current_candidate_sha256 else "MISSING"},
+                candidates_evaluated=[manifest_summary],
+                chosen_option=manifest_summary,
+                rejection_reasons={},
+                rationale_summary="Harvested complete `/tmp` & workspace producer closure + content-addressed blob refs into `04b_producer_skill_manifest`.",
             )
 
         # Snapshot submitted small text/code artifacts for post-mortem inspection (`TB-Science`)
@@ -3059,6 +3404,9 @@ def run_frontier_episode(
             "ended_by_finish": ended_by_finish,
             "turns_used": turns_used,
             "max_turns": max_turns,
+            "final_candidate_sha256": current_candidate_sha256,
+            "validated_incumbent_sha256": (validated_incumbent or {}).get("candidate_sha256"),
+            "incumbent_auto_restored": incumbent_auto_restored,
             "pullback_gate_triggered": pullback_gate_triggered,
             "stress_challenge_gate_triggered": stress_challenge_gate_triggered,
             "incumbent_checkpoint_alerts_fired": incumbent_checkpoint_alerts_fired,
@@ -3068,6 +3416,8 @@ def run_frontier_episode(
             "staged_wormhole_modules": staged_wormhole_manifest,
             "host_wormhole_gate_executed": host_wormhole_gate_executed,
             "host_wormhole_gate_reports": host_wormhole_gate_reports,
+            "host_wormhole_probe_results": host_wormhole_probe_results,
+            "producer_skill_manifest_summary": manifest_summary,
             "skill_activation_count": skill_call_total,
             "skill_activations": skill_activations[:50],
             "saved_artifact_snapshots": saved_snapshots,
