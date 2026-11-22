@@ -57,6 +57,12 @@ from .m5_live_gpt_and_provenance import (
     discover_chatgpt_subscription_codex_cli,
     verify_decision_provenance_chain,
 )
+from .m6_4_executable_wormhole_library import (
+    find_uninlined_wormhole_imports_in_container,
+    harvest_container_skill_activations,
+    stage_recalled_executable_wormholes_in_container,
+    sum_skill_activation_calls,
+)
 from .m6_causal_wormhole_sandbox import is_d_separated_dag
 from .wormhole_forest import (
     ClaimContract,
@@ -1680,16 +1686,23 @@ def run_biomystery_verifier(
                 det_method = "numeric_match"
             else:
                 lst_m = _list_match(cleaned_pred, rubric)
-                if lst_m is not None:
-                    det_match = bool(lst_m)
+                if lst_m is True:
+                    det_match = True
                     det_method = "list_match"
 
     judge_used = False
     judge_verdict = None
     judge_reason = ""
+    judge_tokens: dict[str, Any] = {
+        "judge_model": None,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    }
     final_pass = det_match
 
-    if (not det_match) and cleaned_pred and det_method == "none" and codex_info and codex_info.get("available"):
+    if (not det_match) and cleaned_pred and det_method != "numeric_match" and codex_info and codex_info.get("available"):
         judge_used = True
         judge_client = FrontierCodexClient(
             codex_info=codex_info,
@@ -1710,6 +1723,13 @@ def run_biomystery_verifier(
             output_schema=BIOMYSTERY_JUDGE_SCHEMA,
             stage_subdir=f"bm_judge_{task.short_name}",
         )
+        judge_tokens = {
+            "judge_model": j_res.get("returned_model") or "gpt-6-luna",
+            "prompt_tokens": int(j_res.get("prompt_tokens", 0)),
+            "cached_tokens": int(j_res.get("cached_tokens", 0)),
+            "completion_tokens": int(j_res.get("completion_tokens", 0)),
+            "total_tokens": int(j_res.get("prompt_tokens", 0)) + int(j_res.get("completion_tokens", 0)),
+        }
         if j_res.get("ok"):
             judge_verdict = str(j_res["parsed"].get("verdict", "NO")).upper()
             judge_reason = str(j_res["parsed"].get("reason", ""))
@@ -1735,6 +1755,7 @@ def run_biomystery_verifier(
         "llm_judge_used": judge_used,
         "llm_judge_verdict": judge_verdict,
         "llm_judge_reason": judge_reason,
+        "llm_judge_tokens": judge_tokens,
         "failure_taxonomy": tax,
     }
 
@@ -1780,6 +1801,7 @@ def _build_system_and_initial_brief(
     *,
     env_boot_info: str,
     recalled_m6_notes: list[dict[str, Any]],
+    staged_wormhole_manifest: list[dict[str, Any]] | None = None,
     max_turns: int,
     cmd_timeout_sec: int,
 ) -> tuple[str, dict[str, Any]]:
@@ -1788,10 +1810,14 @@ def _build_system_and_initial_brief(
         "Hegel_M6_1_Frontier_LiveGPT",
         "Hegel_M6_2_Frontier_LiveGPT",
         "Hegel_M6_3_Frontier_LiveGPT",
+        "Hegel_M6_4_Frontier_LiveGPT",
+        "Hegel_M6_5_Frontier_LiveGPT",
     }
     is_m6_1 = arm == "Hegel_M6_1_Frontier_LiveGPT"
     is_m6_2 = arm == "Hegel_M6_2_Frontier_LiveGPT"
     is_m6_3 = arm == "Hegel_M6_3_Frontier_LiveGPT"
+    is_m6_4 = arm == "Hegel_M6_4_Frontier_LiveGPT"
+    is_m6_5 = arm == "Hegel_M6_5_Frontier_LiveGPT"
     is_bm = task.benchmark == "BioMysteryBench-Preview"
 
     common_env_rules = (
@@ -1802,10 +1828,19 @@ def _build_system_and_initial_brief(
         f"- Each `execute_in_remote_docker` runs in a fresh `bash -lc` subshell inside the same persistent container (working directory resets each turn; files written to `/app`, `/results`, `/workspace`, `/root`, `/tmp` persist across turns).\n"
     )
     if is_bm:
+        allowed_dom_str = (
+            f" Allowed biological reference domains: `{list(task.biomystery_allowed_domains)}`."
+            if task.biomystery_allowed_domains
+            else ""
+        )
         common_env_rules += (
             "- Problem data files are inside the remote Docker container at `/workspace/data/` (read-only). Write scripts/intermediate files to `/workspace/scratch/`.\n"
             "- Bioinformatics recipe guides are inside the remote container at `/workspace/skills/` (`ls /workspace/skills/`).\n"
-            "- The remote container has internet access for biological databases (NCBI/Ensembl/UniProt/UCSC/JASPAR).\n"
+            "- The remote container has internet access for biological reference databases (NCBI BLAST/GenBank/RefSeq, Ensembl, UniProt, JASPAR, UCSC, RCSB PDB)."
+            + allowed_dom_str
+            + "\n"
+            "- SCIENTIFIC INTEGRITY RULE: Solve strictly from biological sequence/structure/expression analysis and reference annotation databases; "
+            "NEVER query study/dataset provenance repositories (e.g. GEO/SRA/ENA/BioProject/EuropePMC/PubMed paper search) to reverse-identify the source publication!\n"
             "- When ready to conclude, return `\"action_type\": \"submit_completed_task\"` with `final_answer` set ONLY to the exact requested answer "
             "(matching exact capitalization/identifiers/units from the question & data, with NO surrounding prose or `FINAL ANSWER:` prefix).\n"
         )
@@ -1828,6 +1863,105 @@ def _build_system_and_initial_brief(
             "scientific_domain": task.scientific_domain,
             "max_turns": max_turns,
             "container_initial_snapshot": env_boot_info,
+            "task_instruction": task.instruction_text,
+        }
+        return sys_prompt, init_payload
+
+    if is_m6_5:
+        exec_skill_rules = (
+            "5. FIRST-PRINCIPLES PRIORITY + NOGOOD-GATED ON-DEMAND WORMHOLE PULL (`/tmp/hegel_wormhole_skills`):\n"
+            "   - ALWAYS derive your primary model, conservation law, ODE/PDE stencil, or controller directly from `/app` / `/data` first principles FIRST — NEVER prematurely replace exact problem structure with a generic library template!\n"
+            "   - Once you record an empirical `nogood_update` or reach mid-episode refinement (`hegel_m6_live_state.nogood_gated_on_demand_wormhole_skills`), optional domain-general operators in `/tmp/hegel_wormhole_skills` (`PYTHONPATH=/tmp` pre-configured) become available ON DEMAND (`python3 -c \"import inspect; from hegel_wormhole_skills.<mod> import ...; print(inspect.getsource(...))\"`).\n"
+            "   - Adopt a wormhole operator ONLY when real-data cross-slice / LOCO / LOPO / dual-gap validation proves it strictly beats your first-principles incumbent! Inline pure standard NumPy/SciPy/sklearn helpers into final target artifacts (NEVER leave `import hegel_wormhole_skills` in `/app` or `/results`).\n"
+            if staged_wormhole_manifest
+            else ""
+        )
+        sys_prompt = (
+            "You are `Hegel-M6.5`, a sovereign dialectical causal & nogood-gated executable-wormhole (`Skill∞`) scientific discovery agent.\n"
+            + common_env_rules
+            + "HEGEL-M6.5 SOVEREIGN FIRST-PRINCIPLES & NOGOOD-GATED WORMHOLE PROTOCOL:\n"
+            "1. SPARSE CAUSAL `nogood_update` (`RUNG_2` ALGEBRAIC COMPLETENESS BEFORE `RUNG_3` MECHANISM PIVOT):\n"
+            "   - Reserve `has_new_nogood=true` strictly for genuine empirical falsifications (NEVER routine shell/inspection steps!).\n"
+            "   - Check `RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY` first: verify exact conservation laws, pairwise sums/differences `(x_i +- c*x_j)`, "
+            "3-way products, rational quotients `P(x)/(1 + a*Q(x)^2)`, sign/unit/coordinate conventions, and multi-pass subtree compaction before heuristic surrogates!\n"
+            "2. ANTI-TAUTOLOGY REAL-DATA CROSS-SLICE VALIDATION (NEVER TRUST SELF-GENERATED SIMULATORS ALONE):\n"
+            "   - Validate primarily on REAL provided measurements via leave-one-sensor-out / LOPO ray jackknife / cross-cohort LOCO / multi-horizon & boundary-pulse consistency, "
+            "plus an independent perturbed-physics mismatch check!\n"
+            "3. DECOUPLED LATENT ESTIMATION vs READOUT / CLASSIFICATION / CERTIFICATE BOUNDARIES:\n"
+            "   - Audit EVERY deliverable metric independently: separate continuous trajectory/state fit from discrete outlier classification precision/recall "
+            "(using Mahalanobis innovation covariance); evaluate indentation contact depth/hardness at `hold_end` unloading onset with viscoelastic creep stiffness correction; "
+            "eliminate per-sensor affine `(a_s, b_s)` via closed-form Variable Projection; and select minimax/medoid consensus solutions across boundary regimes!\n"
+            "4. HOST-ARCHIVED INCUMBENT RATCHET & CANDIDATE-HASH VERIFICATION:\n"
+            "   - Our host snapshots every modified target artifact into `/tmp/.hegel_candidate_archive/vXX_<sha8>`. Promote `/tmp` candidates to target paths ONLY when "
+            "real-data worst-slice metrics strictly improve, and run a clean-process Python verification on the final self-contained target artifact before `submit_completed_task`.\n"
+            + exec_skill_rules
+            + "Return a single valid JSON object matching the Hegel-M6.2/M6.5 lean schema."
+        )
+        init_payload = {
+            "task_id": task.task_id,
+            "benchmark": task.benchmark,
+            "scientific_domain": task.scientific_domain,
+            "max_turns": max_turns,
+            "container_initial_snapshot": env_boot_info,
+            "recalled_wormhole_methodology_and_wave1_sublations": [
+                {
+                    "node_id": n["node_id"],
+                    "principle": n["methodology_principle"],
+                    "wave1_consolidated_nogoods": n.get("wave1_consolidated_nogoods", []),
+                }
+                for n in recalled_m6_notes
+            ],
+            "task_instruction": task.instruction_text,
+        }
+        return sys_prompt, init_payload
+
+    if is_m6_4:
+        exec_skill_rules = (
+            "5. EXECUTABLE PYTHON WORMHOLE MICRO-LIBRARY (`/tmp/hegel_wormhole_skills` — `Skill∞` RUNTIME OPERATORS):\n"
+            "   - Domain-general Python operators bound to your recalled `PhilosophicalForest` wormholes are staged inside the container at `/tmp/hegel_wormhole_skills` "
+            "(listed in `mounted_executable_wormhole_skills` in the initial payload).\n"
+            "   - Call them directly in `/tmp` diagnostic/screening scripts via `PYTHONPATH=/tmp python3 -c \"from hegel_wormhole_skills.<mod> import ...\"`!\n"
+            "   - CRITICAL SELF-CONTAINMENT RULE: The separate air-gapped verifier container copies ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER copies `/tmp`! "
+            "Therefore, NEVER leave `import hegel_wormhole_skills` inside final target artifacts — inline pure standard NumPy/SciPy/sklearn code in submitted deliverables!\n"
+            if staged_wormhole_manifest
+            else ""
+        )
+        sys_prompt = (
+            "You are `Hegel-M6.4`, a sovereign dialectical causal & executable-wormhole (`Skill∞`) scientific discovery agent.\n"
+            + common_env_rules
+            + "HEGEL-M6.4 SOVEREIGN CAUSAL & EXECUTABLE-WORMHOLE PROTOCOL:\n"
+            "1. SPARSE CAUSAL `nogood_update` (`RUNG_2` ALGEBRAIC COMPLETENESS BEFORE `RUNG_3` MECHANISM PIVOT):\n"
+            "   - Reserve `has_new_nogood=true` strictly for genuine empirical falsifications (NEVER routine shell/inspection steps!).\n"
+            "   - Check `RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY` first: verify exact conservation laws, pairwise sums/differences `(x_i +- c*x_j)`, "
+            "3-way products, rational quotients `P(x)/(1 + a*Q(x)^2)`, sign/unit/coordinate conventions, and tight dual bounds/subtree pruning before heuristic surrogates!\n"
+            "2. ANTI-TAUTOLOGY REAL-DATA CROSS-SLICE VALIDATION (NEVER TRUST SELF-GENERATED SIMULATORS ALONE):\n"
+            "   - Validate primarily on REAL provided measurements via leave-one-sensor-out / LOPO ray jackknife / cross-cohort LOCO / multi-horizon & boundary-pulse consistency, "
+            "plus an independent perturbed-physics mismatch check!\n"
+            "3. DECOUPLED LATENT ESTIMATION vs READOUT / CLASSIFICATION / CERTIFICATE BOUNDARIES:\n"
+            "   - Audit EVERY deliverable metric independently: separate continuous trajectory/state fit from discrete outlier classification precision/recall "
+            "(using Mahalanobis innovation covariance); verify experimental stage-transition breakpoints (`hold_end` vs `unload_start`) across ALL samples; "
+            "and when observation residuals are near-zero across an equivalence set of parameters, select the minimax/medoid consensus solution across boundary regimes!\n"
+            "4. HOST-ARCHIVED INCUMBENT RATCHET & CANDIDATE-HASH VERIFICATION:\n"
+            "   - Our host snapshots every modified target artifact into `/tmp/.hegel_candidate_archive/vXX_<sha8>`. Promote `/tmp` candidates to target paths ONLY when "
+            "real-data worst-slice metrics strictly improve, and run a clean-process Python verification on the final self-contained target artifact before `submit_completed_task`.\n"
+            + exec_skill_rules
+            + "Return a single valid JSON object matching the Hegel-M6.2/M6.4 lean schema."
+        )
+        init_payload = {
+            "task_id": task.task_id,
+            "benchmark": task.benchmark,
+            "scientific_domain": task.scientific_domain,
+            "max_turns": max_turns,
+            "container_initial_snapshot": env_boot_info,
+            "recalled_wormhole_methodology_and_wave1_sublations": [
+                {
+                    "node_id": n["node_id"],
+                    "principle": n["methodology_principle"],
+                    "wave1_consolidated_nogoods": n.get("wave1_consolidated_nogoods", []),
+                }
+                for n in recalled_m6_notes
+            ],
+            "mounted_executable_wormhole_skills": staged_wormhole_manifest or [],
             "task_instruction": task.instruction_text,
         }
         return sys_prompt, init_payload
@@ -1983,6 +2117,7 @@ def _write_human_readable_postmortem_md(
         f"| **Failure / Outcome Taxonomy** | `{summary['failure_taxonomy']}` |",
         f"| **Turns Used / Max Turns** | `{summary['turns_used']} / {summary['max_turns']}` |",
         f"| **ATMS Nogoods Recorded** | `{len(summary.get('nogoods_recorded', []))}` |",
+        f"| **Staged Executable Wormholes / Runtime Calls** | `{len(summary.get('staged_wormhole_modules', []))}` / `{summary.get('skill_activation_count', 0)}` |",
         f"| **Pullback Gate Triggered** | `{summary.get('pullback_gate_triggered', False)}` |",
         f"| **Total Tokens (Prompt / Cached / Out)** | `{summary['total_tokens']:,}` (`{summary['prompt_tokens']:,}` / `{summary['cached_tokens']:,}` / `{summary['completion_tokens']:,}`) |",
         f"| **Total Episode Wall Time (s)** | `{round(summary['wall_ms'] / 1000.0, 2)}s` |",
@@ -2069,17 +2204,25 @@ def run_frontier_episode(
         "Hegel_M6_1_Frontier_LiveGPT",
         "Hegel_M6_2_Frontier_LiveGPT",
         "Hegel_M6_3_Frontier_LiveGPT",
+        "Hegel_M6_4_Frontier_LiveGPT",
+        "Hegel_M6_5_Frontier_LiveGPT",
     }
     is_m6 = arm in {
         "Hegel_M6_Frontier_LiveGPT",
         "Hegel_M6_1_Frontier_LiveGPT",
         "Hegel_M6_2_Frontier_LiveGPT",
         "Hegel_M6_3_Frontier_LiveGPT",
+        "Hegel_M6_4_Frontier_LiveGPT",
+        "Hegel_M6_5_Frontier_LiveGPT",
     }
     is_m6_1 = arm == "Hegel_M6_1_Frontier_LiveGPT"
     is_m6_2 = arm == "Hegel_M6_2_Frontier_LiveGPT"
     is_m6_3 = arm == "Hegel_M6_3_Frontier_LiveGPT"
-    is_lean_m6 = is_m6_2 or is_m6_3
+    is_m6_4 = arm == "Hegel_M6_4_Frontier_LiveGPT"
+    is_m6_5 = arm == "Hegel_M6_5_Frontier_LiveGPT"
+    is_exec_wormhole_m6 = is_m6_4 or is_m6_5
+    is_sovereign_m6 = is_m6_3 or is_exec_wormhole_m6
+    is_lean_m6 = is_m6_2 or is_sovereign_m6
     is_bm = task.benchmark == "BioMysteryBench-Preview"
 
     episode_out_dir.mkdir(parents=True, exist_ok=True)
@@ -2145,6 +2288,7 @@ def run_frontier_episode(
         )
 
         recalled_notes: list[dict[str, Any]] = []
+        staged_wormhole_manifest: list[dict[str, Any]] = []
         if is_m6:
             pub_sigs = extract_public_task_signatures(task)
             rec = hippo_idx.retrieve(
@@ -2171,12 +2315,25 @@ def run_frontier_episode(
                 rationale_summary="Retrieve general scientific invariants & Wave-1 consolidated sublations via HippoRAG PPR + 1-hop wormholes.",
                 compute_delta=float(rec.get("query_compute_cost", 1.0)),
             )
+            if is_exec_wormhole_m6 and recalled_notes and (not is_bm):
+                staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(agent_cid, recalled_notes)
+                prev_fs = snapshot_container_files(agent_cid)
+                last_parent = ledger.record_decision(
+                    decision_type="D1B_EXECUTABLE_WORMHOLE_STAGED",
+                    parent_decision_id=last_parent,
+                    evidence_inputs={"recalled_node_ids": [n["node_id"] for n in recalled_notes]},
+                    candidates_evaluated=[{"module_import": m["module_import"]} for m in staged_wormhole_manifest],
+                    chosen_option={"staged_module_count": len(staged_wormhole_manifest), "staged_modules": staged_wormhole_manifest},
+                    rejection_reasons={},
+                    rationale_summary="Stage recalled domain-general executable wormhole Python operators into `/tmp/hegel_wormhole_skills` (`Skill∞` telemetry enabled).",
+                )
 
         sys_prompt, init_payload = _build_system_and_initial_brief(
             task,
             arm,
             env_boot_info=env_boot_info,
             recalled_m6_notes=recalled_notes,
+            staged_wormhole_manifest=staged_wormhole_manifest,
             max_turns=max_turns,
             cmd_timeout_sec=cmd_timeout_sec,
         )
@@ -2237,11 +2394,15 @@ def run_frontier_episode(
                         "active_structural_nogoods": nogoods_recorded[-5:],
                         "latest_hypothesis_and_metric": latest_m6_2_metric_note,
                     }
-                    if is_m6_3 and not is_bm:
+                    if is_sovereign_m6 and not is_bm:
                         m6_state["current_candidate_sha256"] = current_candidate_sha256[:16] if current_candidate_sha256 else "MISSING"
                         m6_state["candidate_hash_verified"] = bool(current_candidate_sha256 and current_candidate_sha256 == verified_candidate_sha256)
                         if host_candidate_archive:
                             m6_state["host_candidate_archive_versions"] = host_candidate_archive[-4:]
+                        if is_m6_5 and staged_wormhole_manifest and (len(nogoods_recorded) >= 1 or turn_idx >= 6):
+                            m6_state["nogood_gated_on_demand_wormhole_skills"] = [
+                                f"{m['module_import']}: {m['exported_apis']}" for m in staged_wormhole_manifest
+                            ]
                     if len(nogoods_recorded) >= 5:
                         m6_state["monotone_ratchet_guard"] = (
                             f"MONOTONE RATCHET ACTIVE ({len(nogoods_recorded)} structural Nogoods recorded): Do NOT overwrite a working "
@@ -2405,7 +2566,7 @@ def run_frontier_episode(
                     art_chk_early = check_declared_artifacts_in_container(agent_cid, task.declared_artifacts)
                     stress_challenge_gate_triggered = True
                     stress_msg = (
-                        f"HEGEL-{('M6.3' if is_m6_3 else 'M6.2')} NON-TAUTOLOGICAL REAL-SLICE AUDIT GATE (`{max_turns - turn_idx}` turns remaining; "
+                        f"HEGEL-{('M6.5' if is_m6_5 else ('M6.4' if is_m6_4 else ('M6.3' if is_m6_3 else 'M6.2')))} NON-TAUTOLOGICAL REAL-SLICE AUDIT GATE (`{max_turns - turn_idx}` turns remaining; "
                         f"artifact status={art_chk_early['artifact_status']}): Before early lock, run ONE real-data cross-slice / decoupled-metric audit in `/tmp`: "
                         "(a) verify leave-one-sensor-out / split-pair / cross-cohort / multi-horizon transfer on REAL provided measurements (NOT solely on your own "
                         "synthetic forward simulator!); (b) audit secondary deliverables separately (outlier classification precision/recall, stage-transition "
@@ -2442,6 +2603,15 @@ def run_frontier_episode(
                     if not is_bm:
                         art_chk = check_declared_artifacts_in_container(agent_cid, task.declared_artifacts)
                         cur_dig = compute_declared_artifacts_digest(agent_cid, task.declared_artifacts)
+                        uninlined = (
+                            find_uninlined_wormhole_imports_in_container(agent_cid, task.declared_artifacts)
+                            if is_exec_wormhole_m6
+                            else []
+                        )
+                        if uninlined:
+                            gate_reasons.append(
+                                f"Target artifact(s) `{uninlined}` still reference `/tmp` `hegel_wormhole_skills` (which is NOT copied to the verifier container — inline pure NumPy/SciPy/sklearn helpers!)."
+                            )
                         if not art_chk["all_present"] or not cur_dig:
                             gate_reasons.append(f"Missing or empty declared artifacts: {art_chk['missing_or_empty']}")
                         elif artifacts_modified_since_last_verify or (cur_dig != verified_candidate_sha256):
@@ -2489,9 +2659,14 @@ def run_frontier_episode(
                 turn_logs.append(t_entry)
                 break
 
-            # Execute `execute_in_remote_docker` inside `<agent_cid>`
+            # Execute `execute_in_remote_docker` inside `<agent_cid>` (auto-exporting `PYTHONPATH=/tmp` for M6.5 mounted skills!)
             cmd_str = str(bash_cmd or "echo 'No command provided'")
-            ex_res = exec_container_bash(agent_cid, cmd_str, timeout_sec=cmd_timeout_sec)
+            effective_cmd_str = (
+                f'export PYTHONPATH="/tmp:${{PYTHONPATH:-}}"; {cmd_str}'
+                if (is_m6_5 and staged_wormhole_manifest)
+                else cmd_str
+            )
+            ex_res = exec_container_bash(agent_cid, effective_cmd_str, timeout_sec=cmd_timeout_sec)
             cur_fs = snapshot_container_files(agent_cid)
             fdiff = compute_filesystem_diff(prev_fs, cur_fs)
             prev_fs = cur_fs
@@ -2508,7 +2683,7 @@ def run_frontier_episode(
                 if new_dig and new_dig != current_candidate_sha256:
                     current_candidate_sha256 = new_dig
                     artifacts_modified_since_last_verify = True
-                    if is_m6_3 and new_dig != initial_art_digest:
+                    if is_sovereign_m6 and new_dig != initial_art_digest:
                         v_num = len(host_candidate_archive) + 1
                         snap_p = archive_candidate_version_in_container(agent_cid, task.declared_artifacts, v_num, new_dig)
                         host_candidate_archive.append(
@@ -2612,6 +2787,26 @@ def run_frontier_episode(
                     wall_ms_delta=float(fin_llm["wall_ms"]),
                 )
 
+        # Harvest runtime `Skill∞` activation telemetry for `Hegel_M6_4` / `Hegel_M6_5` before verification & container teardown
+        skill_activations: list[dict[str, Any]] = []
+        skill_call_total = 0
+        if is_exec_wormhole_m6 and (not is_bm):
+            skill_activations = harvest_container_skill_activations(agent_cid)
+            skill_call_total = sum_skill_activation_calls(skill_activations)
+            last_parent = ledger.record_decision(
+                decision_type="D_SKILL_ACTIVATION_HARVEST",
+                parent_decision_id=last_parent,
+                evidence_inputs={"staged_module_count": len(staged_wormhole_manifest)},
+                candidates_evaluated=[{"activated_functions": sorted({r.get("function", "") for r in skill_activations})}],
+                chosen_option={
+                    "skill_activation_count": skill_call_total,
+                    "log_record_count": len(skill_activations),
+                    "sample_activations": skill_activations[:15],
+                },
+                rejection_reasons={},
+                rationale_summary=f"Harvested {skill_call_total} runtime Skill∞ wormhole calls ({len(skill_activations)} log entries) from `/tmp/.hegel_skill_activations.jsonl`.",
+            )
+
         # Snapshot submitted small text/code artifacts for post-mortem inspection (`TB-Science`)
         saved_snapshots: list[str] = []
         if not is_bm and task.declared_artifacts:
@@ -2683,6 +2878,9 @@ def run_frontier_episode(
             "nogood_count": len(nogoods_recorded),
             "nogoods_recorded": nogoods_recorded,
             "recalled_node_ids": [n["node_id"] for n in recalled_notes],
+            "staged_wormhole_modules": staged_wormhole_manifest,
+            "skill_activation_count": skill_call_total,
+            "skill_activations": skill_activations[:50],
             "saved_artifact_snapshots": saved_snapshots,
             "submitted_final_answer": submitted_final_answer if is_bm else None,
             "decision_count": tots["decision_count"],
