@@ -438,7 +438,7 @@ print(json.dumps({"accepted": len(issues) == 0, "issues": issues, "checked_files
     v_sha = hashlib.sha256(validator_py.encode("utf-8")).hexdigest()[:16]
     try:
         proc = subprocess.run(
-            ["docker", "exec", agent_cid, "python3", "-c", validator_py, json.dumps(list(declared_artifacts))],
+            ["docker", "exec", "-w", "/", agent_cid, "python3", "-c", validator_py, json.dumps(list(declared_artifacts))],
             capture_output=True,
             text=True,
             timeout=25,

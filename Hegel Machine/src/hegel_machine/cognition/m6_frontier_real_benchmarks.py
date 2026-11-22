@@ -1485,7 +1485,7 @@ def compute_declared_artifacts_digest(cid: str, declared_artifacts: tuple[str, .
         "print(h.hexdigest())\n"
     )
     proc = subprocess.run(
-        ["docker", "exec", cid, "python3", "-c", py_chk, json.dumps(list(declared_artifacts))],
+        ["docker", "exec", "-w", "/", cid, "python3", "-c", py_chk, json.dumps(list(declared_artifacts))],
         capture_output=True, text=True, timeout=15,
     )
     return proc.stdout.strip() if proc.returncode == 0 else ""
@@ -1507,7 +1507,7 @@ def archive_candidate_version_in_container(
         human_dst = f"{snap_dir}/{bname}"
         cmds.append(f"cp -a {json.dumps(art_clean)} {json.dumps(slot_dst)} 2>/dev/null || true")
         cmds.append(f"cp -a {json.dumps(art_clean)} {json.dumps(human_dst)} 2>/dev/null || true")
-    subprocess.run(["docker", "exec", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, timeout=20)
+    subprocess.run(["docker", "exec", "-w", "/", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, timeout=20)
     return snap_dir
 
 
@@ -1531,7 +1531,7 @@ def restore_candidate_version_in_container(
             f"if [ -e {json.dumps(slot_src)} ]; then mkdir -p {json.dumps(parent_dir)} && rm -rf {json.dumps(art_clean)} && cp -a {json.dumps(slot_src)} {json.dumps(art_clean)}; "
             f"elif [ -e {json.dumps(fallback_src)} ]; then mkdir -p {json.dumps(parent_dir)} && rm -rf {json.dumps(art_clean)} && cp -a {json.dumps(fallback_src)} {json.dumps(art_clean)}; fi"
         )
-    proc = subprocess.run(["docker", "exec", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, text=True, timeout=20)
+    proc = subprocess.run(["docker", "exec", "-w", "/", cid, "bash", "-lc", " && ".join(cmds)], capture_output=True, text=True, timeout=20)
     new_sha = compute_declared_artifacts_digest(cid, declared_artifacts)
     return {
         "restored": bool(proc.returncode == 0 and new_sha == expected_sha256),
@@ -1561,7 +1561,7 @@ def export_declared_artifacts_tar(
         "        tf.add(p, arcname=p.lstrip('/'))\n"
     )
     proc = subprocess.run(
-        ["docker", "exec", cid, "python3", "-c", py_tar, json.dumps(list(declared_artifacts))],
+        ["docker", "exec", "-w", "/", cid, "python3", "-c", py_tar, json.dumps(list(declared_artifacts))],
         capture_output=True,
         timeout=60,
     )
@@ -1580,15 +1580,42 @@ def import_declared_artifacts_tar(
     declared_artifacts: tuple[str, ...],
     in_tar_path: Path,
 ) -> dict[str, Any]:
-    """Clean `declared_artifacts` targets inside `<cid>` and unpack `in_tar_path` at `/` (`M6.9-A` Synthesis Materializer)."""
+    """Clean `declared_artifacts` targets inside `<cid>` (preserving WORKDIR directories!) and unpack `in_tar_path` at `/` (`M6.9.1-A` Fix)."""
     if not in_tar_path.is_file() or cid == "mock":
         return {"imported": False, "reason": "missing_tar_or_mock"}
-    clean_cmds = [f"rm -rf {json.dumps(a.rstrip('/') or a)}" for a in declared_artifacts]
-    if clean_cmds:
-        subprocess.run(["docker", "exec", cid, "bash", "-lc", " && ".join(clean_cmds)], capture_output=True, timeout=20)
+    py_clean = (
+        "import json, os, shutil, sys\n"
+        "for raw_a in json.loads(sys.argv[1]):\n"
+        "    p = raw_a.rstrip('/') or raw_a\n"
+        "    if p == '/':\n"
+        "        continue\n"
+        "    if os.path.isdir(p) and not os.path.islink(p):\n"
+        "        for entry in os.listdir(p):\n"
+        "            ep = os.path.join(p, entry)\n"
+        "            if os.path.isdir(ep) and not os.path.islink(ep):\n"
+        "                shutil.rmtree(ep, ignore_errors=True)\n"
+        "            else:\n"
+        "                try:\n"
+        "                    os.unlink(ep)\n"
+        "                except OSError:\n"
+        "                    pass\n"
+        "    elif os.path.lexists(p):\n"
+        "        try:\n"
+        "            os.unlink(p)\n"
+        "        except OSError:\n"
+        "            pass\n"
+        "    elif raw_a.endswith('/'):\n"
+        "        os.makedirs(p, exist_ok=True)\n"
+    )
+    if declared_artifacts:
+        subprocess.run(
+            ["docker", "exec", "-w", "/", cid, "python3", "-c", py_clean, json.dumps(list(declared_artifacts))],
+            capture_output=True,
+            timeout=20,
+        )
     raw = in_tar_path.read_bytes()
     proc = subprocess.run(
-        ["docker", "exec", "-i", cid, "tar", "-xf", "-", "-C", "/"],
+        ["docker", "exec", "-w", "/", "-i", cid, "tar", "-xf", "-", "-C", "/"],
         input=raw,
         capture_output=True,
         timeout=60,

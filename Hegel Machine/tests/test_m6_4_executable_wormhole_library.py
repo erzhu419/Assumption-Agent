@@ -212,9 +212,25 @@ def pure_huber_weights(residuals, delta=1.345):
         )
         assert len(events) == 1
         assert events[0]["exported_functions"] == ["pure_huber_weights"]
-        assert "node_F08_robust_calibration_and_safety_control" in events[0]["propagated_to_nodes"]
-        # Verify cross-wormhole propagation onto signature-overlapping neighbor node!
-        assert len(events[0]["propagated_to_nodes"]) >= 2
+        assert events[0]["propagated_to_nodes"] == ["node_F08_robust_calibration_and_safety_control"]
+        # Verify cross-family isolation (does NOT pollute clinical node_F07) AND same-family wormhole propagation (`>= 2` nodes on wave family)!
+        events_gw = consolidate_wave1_executable_modules_into_forest(
+            wave1_episode_dirs=[
+                (
+                    {
+                        "task_id": "tb__baseline-free-localization",
+                        "short_name": "baseline-free-localization",
+                        "strict_pass": True,
+                        "wormhole_family": "fam_guided_wave_shm_localization",
+                    },
+                    ep_dir,
+                )
+            ],
+            forest=forest,
+            archive=archive,
+        )
+        assert len(events_gw) == 1
+        assert len(events_gw[0]["propagated_to_nodes"]) >= 2
 
 
 def test_biomystery_list_match_false_falls_through_and_docker_staging() -> None:
