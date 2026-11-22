@@ -790,15 +790,15 @@ def consolidate_wave1_skill_manifests_with_reconciliation(
                 Program("feature", name="memory_state" if "mori_zwanzig" in temp_mode else "slow_state"),
             ),
         )
-        exported_programs_by_family.setdefault(fam, []).append((t_short, prog_repr))
+        if summary.get("benchmark") != "BioMysteryBench-Preview":
+            exported_programs_by_family.setdefault(fam, []).append((t_short, prog_repr))
 
         direct_nids = sorted(nid for nid, nd in archive.items() if nd.get("family_tag") == fam)
         target_nids: set[str] = set(direct_nids)
         for nid in direct_nids:
-            src_sigs = set(archive[nid].get("signatures") or [])
             for wh in forest.horizontal_wormhole_edges.values():
                 nb = wh["node_b_id"] if wh["node_a_id"] == nid else (wh["node_a_id"] if wh["node_b_id"] == nid else None)
-                if nb and (set(wh.get("probe_signature_refs") or []) & (src_sigs | set(archive.get(nb, {}).get("signatures") or []))):
+                if nb and archive.get(nb, {}).get("family_tag") == fam:
                     target_nids.add(nb)
 
         if closures:
