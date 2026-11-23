@@ -575,6 +575,34 @@ if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/healthy_refe
         "        pred = solution.predict(href, q_sig, qg)\n"
         "        loc = np.asarray(pred['location_m'], dtype=float)\n"
         "        errs_mm.append(float(np.linalg.norm(loc - dmg) * 1000.0))\n"
+        "# Cases 7-8: Rayleigh-Lamb dispersive Fourier propagation (`phase_vel != group_vel`) + 4-wall reflections & near-sensor shadow!\n"
+        "j_r0 = int(np.argmin(np.abs(ref_d - np.median(ref_d)))); d_r0 = float(ref_d[j_r0])\n"
+        "nfft = 2048; freqs = np.fft.rfftfreq(nfft, d=1.0/fs)\n"
+        "Y_r0 = np.fft.rfft(ref_sig[:, j_r0].astype(float) * np.exp(-0.5 * ((n_samp - float(pk_idx[j_r0])) / 22.0)**4), nfft) * math.sqrt(max(d_r0, 0.05))\n"
+        "k_gw = (slowness * (2.0 * math.pi * 50000.0 / fs) * fs * 0.58) * (np.maximum(freqs, 1.0) / 50000.0) ** 0.58; k_gw[0] = 0.0\n"
+        "S_gw = Y_r0 * np.exp(1j * k_gw * d_r0)\n"
+        "def _p_gw(dist, ph=0.0): return np.fft.irfft(S_gw * np.exp(-1j * k_gw * dist + 1j * ph - 0.9 * dist) / math.sqrt(max(dist, 0.03)), nfft)[:300]\n"
+        "for W_d, xy_d, dmg_d, sh_d, sc_d in (\n"
+        "    (np.array([0.50, 0.36]), np.column_stack([g_m.ravel() for g_m in np.meshgrid([0.10, 0.25, 0.40], [0.08, 0.18, 0.28])]), np.array([0.135, 0.195]), 0.48, 0.08),\n"
+        "    (np.array([0.44, 0.40]), np.array([[0.08,0.08],[0.22,0.07],[0.36,0.08],[0.37,0.20],[0.36,0.32],[0.22,0.33],[0.08,0.32],[0.07,0.20]]), np.array([0.275, 0.155]), 0.14, 0.22),\n"
+        "):\n"
+        "    nd = len(xy_d); pp_d = np.array([[i, j] for i in range(nd) for j in range(nd) if i != j], dtype=int)\n"
+        "    ph_d = {(i, j): float(rng.uniform(0.0, 2.0 * math.pi)) for i in range(nd) for j in range(i + 1, nd)}\n"
+        "    gn_d = np.exp(rng.normal(0.0, 0.12, size=nd)); q_d = np.zeros((300, len(pp_d)), dtype=np.float32)\n"
+        "    for pi_d, (u, v) in enumerate(pp_d):\n"
+        "        pa, pb = xy_d[u], xy_d[v]; dab = float(np.linalg.norm(pb - pa)); ud = (pb - pa) / max(dab, 1e-12)\n"
+        "        ph = ph_d[(min(int(u), int(v)), max(int(u), int(v)))]; guv = float(gn_d[u] * gn_d[v])\n"
+        "        al = float(np.dot(dmg_d - pa, ud)); perp = float(np.linalg.norm((dmg_d - pa) - np.clip(al, 0.0, dab) * ud))\n"
+        "        tr = 1.0 - sh_d * math.exp(-0.5 * (perp / 0.016)**2) * float(np.clip(min(al, dab - al) / 0.010, 0.0, 1.0))\n"
+        "        w = guv * tr * _p_gw(dab, ph)\n"
+        "        for ax in (0, 1):\n"
+        "            for ed in (0.0, float(W_d[ax])):\n"
+        "                pbm = pb.copy(); pbm[ax] = 2.0 * ed - pbm[ax]; w += -0.28 * guv * _p_gw(float(np.linalg.norm(pbm - pa)), ph + 0.3)\n"
+        "        da, db = float(np.linalg.norm(dmg_d - pa)), float(np.linalg.norm(dmg_d - pb))\n"
+        "        w += sc_d * guv * _p_gw(da + db, ph - 0.6) * (0.09 / math.sqrt(max(min(da, db), 0.03)))\n"
+        "        q_d[:, pi_d] = (w + rng.normal(0.0, 0.006 * float(np.max(np.abs(w))), size=300)).astype(np.float32)\n"
+        "    pred_d = solution.predict(href, q_d, {'sensor_xy_m': xy_d, 'path_pairs': pp_d, 'panel_size_m': W_d})\n"
+        "    errs_mm.append(float(np.linalg.norm(np.asarray(pred_d['location_m'], dtype=float) - dmg_d) * 1000.0))\n"
         "print(json.dumps({'status': 'ok', 'pass_20mm': int(sum(e <= 20.0 for e in errs_mm)), 'total': len(errs_mm), 'worst_mm': round(max(errs_mm), 2)}))\n"
     )
     try:
@@ -584,6 +612,7 @@ if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/healthy_refe
             out["gw_probe_status"] = gj.get("status", "ok")
             if gj.get("status") == "ok":
                 out["gw_cross_pass_20mm"] = int(gj["pass_20mm"])
+                out["gw_cross_total"] = int(gj.get("total", 8))
                 out["gw_cross_worst_mm"] = float(gj["worst_mm"])
         else:
             out["gw_probe_status"] = f"rc_{pr.returncode}:{(pr.stderr or '').strip()[-140:]}"
@@ -850,6 +879,14 @@ def should_spawn_dialectical_second_branch(
     pub = public_metrics or {}
     if not bool(chk.get("accepted", True)):
         triggers.append("failed_public_artifact_contract")
+    if task.benchmark == "Hegel-OOD-Holdout-12":
+        max_t = int(primary_summary.get("max_turns") or 28)
+        used_t = int(primary_summary.get("turns_used") or 0)
+        if used_t >= max(1, max_t - 3):
+            triggers.append("near_budget_exhaustion_ambiguity")
+        if int(primary_summary.get("nogood_count") or 0) >= 3:
+            triggers.append("multiple_falsified_hypotheses_warrant_cross_check")
+        return {"spawn_second_branch": len(triggers) > 0, "triggers": triggers}
     if pub.get("public_checker_passed") is False:
         triggers.append("failed_public_checker_script")
     if pub.get("amr_solve_ok") is False:
@@ -931,12 +968,13 @@ def _public_benchmark_has_unresolved_gap(pub_t: dict[str, Any], pub_a: dict[str,
         if max(vt, va) < v_tot or min(wt, wa) > 18.5:
             return True, f"vb_cross_pass_20mm_incomplete(T={vt}/{v_tot}@{wt}mm,A={va}/{v_tot}@{wa}mm)"
     if pub_t.get("gw_probe_status") == "ok" or pub_a.get("gw_probe_status") == "ok":
+        g_tot = int(pub_t.get("gw_cross_total") or pub_a.get("gw_cross_total") or 6)
         gt = int(pub_t.get("gw_cross_pass_20mm") or 0)
         ga = int(pub_a.get("gw_cross_pass_20mm") or 0)
         wt = float(pub_t.get("gw_cross_worst_mm") or 1e9)
         wa = float(pub_a.get("gw_cross_worst_mm") or 1e9)
-        if max(gt, ga) < 6 or min(wt, wa) > 14.5:
-            return True, f"gw_cross_pass_20mm_incomplete(T={gt}/6@{wt}mm,A={ga}/6@{wa}mm)"
+        if max(gt, ga) < g_tot or min(wt, wa) > 14.5:
+            return True, f"gw_cross_pass_20mm_incomplete(T={gt}/{g_tot}@{wt}mm,A={ga}/{g_tot}@{wa}mm)"
     if pub_t.get("public_checker_passed") is False and pub_a.get("public_checker_passed") is False:
         return True, "both_failed_public_checker_script"
     if pub_t.get("amr_solve_ok") is False and pub_a.get("amr_solve_ok") is False:
@@ -968,14 +1006,15 @@ def _synthesized_strictly_dominates_branches(
         if vs == v_tot and vs >= max(vt, va) and ws < 0.85 * best_w:
             return True, f"vb_worst_mm({ws}mm<{round(best_w, 2)}mm)"
     if pub_sub.get("gw_probe_status") == "ok":
+        g_tot = int(pub_sub.get("gw_cross_total") or pub_t.get("gw_cross_total") or pub_a.get("gw_cross_total") or 6)
         gs = int(pub_sub.get("gw_cross_pass_20mm") or 0)
         gt = int(pub_t.get("gw_cross_pass_20mm") or 0)
         ga = int(pub_a.get("gw_cross_pass_20mm") or 0)
         ws = float(pub_sub.get("gw_cross_worst_mm") or 1e9)
         best_w = min(float(pub_t.get("gw_cross_worst_mm") or 1e9), float(pub_a.get("gw_cross_worst_mm") or 1e9))
-        if gs > max(gt, ga):
-            return True, f"gw_pass({gs}>{max(gt, ga)},worst={ws}mm)"
-        if gs == 6 and gs >= max(gt, ga) and ws < 0.85 * best_w:
+        if gs > max(vt := gt, va := ga):
+            return True, f"gw_pass({gs}>{max(vt, va)},worst={ws}mm)"
+        if gs == g_tot and gs >= max(gt, ga) and ws < 0.85 * best_w:
             return True, f"gw_worst_mm({ws}mm<{round(best_w, 2)}mm)"
     if pub_sub.get("public_checker_passed") is True and not (pub_t.get("public_checker_passed") or pub_a.get("public_checker_passed")):
         return True, "public_checker_repaired"
@@ -1517,6 +1556,10 @@ def grade_archived_branch_post_lock(
         ans = str(branch_summary.get("submitted_final_answer") or "")
         ver = m6f.run_biomystery_verifier(task, ans, codex_info=codex_info)
         return ver
+    if task.benchmark == "Hegel-OOD-Holdout-12":
+        from .m7_holdout_ood_blind_benchmark import run_holdout_private_verifier_by_id
+
+        return run_holdout_private_verifier_by_id(task.task_id, branch_tar)
 
     cid: str | None = None
     try:
@@ -1544,6 +1587,16 @@ def grade_archived_branch_post_lock(
         m6f.stop_container_safely(cid)
 
 
+def _init_holdout_public_env_if_needed(cid: str, task: m6f.FrontierBenchmarkTask) -> None:
+    if task.benchmark == "Hegel-OOD-Holdout-12" and task.holdout_public_setup_py:
+        subprocess.run(["docker", "exec", cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
+        with tempfile.TemporaryDirectory(prefix="hegel_ho_syn_") as td_h:
+            setup_fp = Path(td_h) / "_setup_holdout.py"
+            setup_fp.write_text(task.holdout_public_setup_py, encoding="utf-8")
+            subprocess.run(["docker", "cp", str(setup_fp), f"{cid}:/tmp/_setup_holdout.py"], check=True, timeout=20)
+        m6f.exec_container_bash(cid, "python3 /tmp/_setup_holdout.py && rm -f /tmp/_setup_holdout.py", timeout_sec=60)
+
+
 def run_m6_9_a_two_branch_episode(
     task: m6f.FrontierBenchmarkTask,
     *,
@@ -1558,10 +1611,12 @@ def run_m6_9_a_two_branch_episode(
     max_turns_per_branch: int = 28,
     cmd_timeout_sec: int = 180,
     reasoning_effort: str = "medium",
+    selective_second_branch: bool = False,
 ) -> dict[str, Any]:
-    """Execute one complete `Hegel_M6_9_A_TwoBranch_LiveGPT` (`Thesis + Antithesis -> Blind Synthesis`) episode."""
+    """Execute one `Hegel_M6_9_A_TwoBranch_LiveGPT` (or `selective_second_branch=True` `~1.3x` selective) episode."""
     ep_t0 = monotonic()
     is_bm = task.benchmark == "BioMysteryBench-Preview"
+    is_ho = task.benchmark == "Hegel-OOD-Holdout-12"
     episode_out_dir.mkdir(parents=True, exist_ok=True)
     task_branch_root = branches_work_root / f"{task.wave}__{model}__{task.task_id}"
     thesis_dir = task_branch_root / "branch_1_thesis_bare"
@@ -1569,7 +1624,7 @@ def run_m6_9_a_two_branch_episode(
     thesis_tar = thesis_dir / "declared_artifacts_bundle.tar"
     antithesis_tar = antithesis_dir / "declared_artifacts_bundle.tar"
 
-    # 1 & 2. Run Branch 1 (`Thesis` = Pure First-Principles `Bare_ReAct_LiveGPT`) AND Branch 2 (`Antithesis` = `Hegel_M6_9_Antithesis_LiveGPT`) CONCURRENTLY with official verifiers DEFERRED!
+    # 1 & 2. Run Branch(es) with official verifiers DEFERRED!
     def _exec_thesis() -> dict[str, Any]:
         return m6f.run_frontier_episode(
             task,
@@ -1606,45 +1661,83 @@ def run_m6_9_a_two_branch_episode(
             defer_official_verifier=True,
         )
 
-    with ThreadPoolExecutor(max_workers=2) as branch_pool:
-        fut_t = branch_pool.submit(_exec_thesis)
-        fut_a = branch_pool.submit(_exec_antithesis)
-        thesis_sum = fut_t.result()
-        anti_sum = fut_a.result()
+    selective_decision: dict[str, Any] | None = None
+    thesis_sum: dict[str, Any] | None = None
+    if selective_second_branch:
+        anti_sum = _exec_antithesis()
+        chk_sel: dict[str, Any] = {"accepted": True}
+        pub_sel: dict[str, Any] = {}
+        if not is_bm:
+            probe_cid: str | None = None
+            try:
+                probe_cid = m6f.start_detached_container(
+                    task.agent_image_tag,
+                    memory_limit=f"{task.agent_memory_mb}m",
+                    cpus=str(task.agent_cpus),
+                )
+                _init_holdout_public_env_if_needed(probe_cid, task)
+                if antithesis_tar.is_file():
+                    m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                chk_sel = verify_candidate_artifact_contract_in_container(
+                    probe_cid, task.declared_artifacts, str(anti_sum.get("final_candidate_sha256") or "")
+                )
+                if chk_sel.get("accepted"):
+                    pub_sel = _run_public_container_candidate_benchmark(probe_cid)
+            finally:
+                m6f.stop_container_safely(probe_cid)
+        selective_decision = should_spawn_dialectical_second_branch(
+            task=task, primary_summary=anti_sum, contract_check=chk_sel, public_metrics=pub_sel
+        )
+        selective_decision["primary_public_metrics"] = {k: v for k, v in pub_sel.items() if v is not None}
+        if selective_decision.get("spawn_second_branch"):
+            thesis_sum = _exec_thesis()
+    else:
+        with ThreadPoolExecutor(max_workers=2) as branch_pool:
+            fut_t = branch_pool.submit(_exec_thesis)
+            fut_a = branch_pool.submit(_exec_antithesis)
+            thesis_sum = fut_t.result()
+            anti_sum = fut_a.result()
 
     thesis_tar_sha = hashlib.sha256(thesis_tar.read_bytes()).hexdigest() if thesis_tar.is_file() else ""
     anti_tar_sha = hashlib.sha256(antithesis_tar.read_bytes()).hexdigest() if antithesis_tar.is_file() else ""
+    spawned_second = thesis_sum is not None
 
     # 3. Blind Public Synthesis (BEFORE any official verifier runs!)
     ledger = DecisionProvenanceLedger(
         run_id=run_id,
         task_id=task.task_id,
-        arm="Hegel_M6_9_A_TwoBranch_LiveGPT",
+        arm=("Hegel_M6_9_2_Selective_LiveGPT" if selective_second_branch else "Hegel_M6_9_A_TwoBranch_LiveGPT"),
         model=model,
         provider_backend=str(codex_info["provider_backend"]),
     )
     last_p = ledger.record_decision(
         decision_type="D0_M6_9_TWO_BRANCH_INIT",
         parent_decision_id=None,
-        evidence_inputs={"task_id": task.task_id, "max_turns_per_branch": max_turns_per_branch, "declared_budget": "2x_56_turns_total"},
+        evidence_inputs={
+            "task_id": task.task_id,
+            "max_turns_per_branch": max_turns_per_branch,
+            "selective_second_branch": selective_second_branch,
+            "spawned_second_branch": spawned_second,
+        },
         candidates_evaluated=[{"branch_1": "Bare_ReAct_LiveGPT"}, {"branch_2": "Hegel_M6_9_Antithesis_LiveGPT"}],
-        chosen_option={"two_branch_launched": True},
+        chosen_option={"two_branch_launched": spawned_second, "selective_decision": selective_decision},
         rejection_reasons={},
-        rationale_summary="Initialize Stage-2 Hegel M6.9-A Thesis + Antithesis -> Blind Public Synthesis episode (`zero` verifier access during synthesis).",
+        rationale_summary="Initialize Hegel dialectical episode (`zero` verifier access prior to lock).",
     )
-    last_p = ledger.record_decision(
-        decision_type="D1_THESIS_BRANCH_COMPLETED",
-        parent_decision_id=last_p,
-        evidence_inputs={"thesis_terminal_sha256": thesis_sum.get("terminal_record_sha256")},
-        candidates_evaluated=[{"turns_used": thesis_sum["turns_used"], "candidate_sha256": thesis_sum.get("final_candidate_sha256")}],
-        chosen_option={"thesis_candidate_sha256": thesis_sum.get("final_candidate_sha256")},
-        rejection_reasons={},
-        rationale_summary="Completed Branch 1 (Thesis: Pure First-Principles ReAct) with verifier deferred.",
-        prompt_tokens_delta=int(thesis_sum["prompt_tokens"]),
-        cached_tokens_delta=int(thesis_sum["cached_tokens"]),
-        completion_tokens_delta=int(thesis_sum["completion_tokens"]),
-        wall_ms_delta=float(thesis_sum["wall_ms"]),
-    )
+    if thesis_sum is not None:
+        last_p = ledger.record_decision(
+            decision_type="D1_THESIS_BRANCH_COMPLETED",
+            parent_decision_id=last_p,
+            evidence_inputs={"thesis_terminal_sha256": thesis_sum.get("terminal_record_sha256")},
+            candidates_evaluated=[{"turns_used": thesis_sum["turns_used"], "candidate_sha256": thesis_sum.get("final_candidate_sha256")}],
+            chosen_option={"thesis_candidate_sha256": thesis_sum.get("final_candidate_sha256")},
+            rejection_reasons={},
+            rationale_summary="Completed Branch 1 (Thesis: Pure First-Principles ReAct) with verifier deferred.",
+            prompt_tokens_delta=int(thesis_sum["prompt_tokens"]),
+            cached_tokens_delta=int(thesis_sum["cached_tokens"]),
+            completion_tokens_delta=int(thesis_sum["completion_tokens"]),
+            wall_ms_delta=float(thesis_sum["wall_ms"]),
+        )
     last_p = ledger.record_decision(
         decision_type="D1B_EXECUTABLE_WORMHOLE_STAGED",
         parent_decision_id=last_p,
@@ -1684,25 +1777,38 @@ def run_m6_9_a_two_branch_episode(
                 memory_limit=f"{task.agent_memory_mb}m",
                 cpus=str(task.agent_cpus),
             )
-        synth_res = reconcile_thesis_and_antithesis_publicly(
-            task=task,
-            synth_cid=synth_cid,
-            thesis_dir=thesis_dir,
-            thesis_summary=thesis_sum,
-            thesis_tar=thesis_tar,
-            antithesis_dir=antithesis_dir,
-            antithesis_summary=anti_sum,
-            antithesis_tar=antithesis_tar,
-            client=synth_client,
-            stage_subdir=stage_sub,
-            forest_archive=forest_archive,
-        )
+            _init_holdout_public_env_if_needed(synth_cid, task)
+        if thesis_sum is None:
+            if (not is_bm) and synth_cid is not None and antithesis_tar.is_file():
+                m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, antithesis_tar)
+            synth_res = {
+                "selected_branch": "antithesis",
+                "selection_mechanism": "selective_router_confident_single_branch",
+                "rationale": "Primary Antithesis branch cleared all public contract & benchmark checks; second branch skipped (`1.0x` compute).",
+                "synthesized_candidate_sha256": anti_sum.get("final_candidate_sha256"),
+                "synthesized_final_answer": anti_sum.get("submitted_final_answer"),
+                "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
+            }
+        else:
+            synth_res = reconcile_thesis_and_antithesis_publicly(
+                task=task,
+                synth_cid=synth_cid,
+                thesis_dir=thesis_dir,
+                thesis_summary=thesis_sum,
+                thesis_tar=thesis_tar,
+                antithesis_dir=antithesis_dir,
+                antithesis_summary=anti_sum,
+                antithesis_tar=antithesis_tar,
+                client=synth_client,
+                stage_subdir=stage_sub,
+                forest_archive=forest_archive,
+            )
         s_tok = synth_res["llm_tokens"]
         last_p = ledger.record_decision(
             decision_type="D3_DIALECTICAL_SYNTHESIS_COMMIT",
             parent_decision_id=last_p,
             evidence_inputs={
-                "thesis_sha256": thesis_sum.get("final_candidate_sha256"),
+                "thesis_sha256": thesis_sum.get("final_candidate_sha256") if thesis_sum else None,
                 "antithesis_sha256": anti_sum.get("final_candidate_sha256"),
             },
             candidates_evaluated=[
@@ -1759,9 +1865,18 @@ def run_m6_9_a_two_branch_episode(
             )
 
         # 4. Official Air-Gapped Verification of the LOCKED Synthesized Deliverable!
+        tot_turns = int(anti_sum["turns_used"]) + (int(thesis_sum["turns_used"]) if thesis_sum else 0)
+        tot_max_turns = max_turns_per_branch * (2 if thesis_sum else 1)
+        any_finished = bool(anti_sum["ended_by_finish"] or (thesis_sum and thesis_sum["ended_by_finish"]))
         submitted_final_ans = str(synth_res.get("synthesized_final_answer") or "") if is_bm else None
         if is_bm:
             verifier_report = m6f.run_biomystery_verifier(task, submitted_final_ans or "", codex_info=codex_info)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif is_ho:
+            assert synth_cid is not None
+            from .m7_holdout_ood_blind_benchmark import run_holdout_private_verifier_for_container
+
+            verifier_report = run_holdout_private_verifier_for_container(task.task_id, synth_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             assert synth_cid is not None
@@ -1769,9 +1884,9 @@ def run_m6_9_a_two_branch_episode(
             failure_tax = m6f.classify_tb_failure_taxonomy(
                 strict_pass=bool(verifier_report["strict_pass"]),
                 artifact_audit=verifier_report["artifact_audit"],
-                turns_used=int(thesis_sum["turns_used"]) + int(anti_sum["turns_used"]),
-                max_turns=2 * max_turns_per_branch,
-                ended_by_finish=bool(thesis_sum["ended_by_finish"] or anti_sum["ended_by_finish"]),
+                turns_used=tot_turns,
+                max_turns=tot_max_turns,
+                ended_by_finish=any_finished,
                 ctrf_summary=verifier_report.get("ctrf_summary"),
                 verifier_stdout=verifier_report.get("verifier_stdout", ""),
                 verifier_stderr=verifier_report.get("verifier_stderr", ""),
@@ -1795,16 +1910,19 @@ def run_m6_9_a_two_branch_episode(
         m6f.stop_container_safely(synth_cid)
 
     # 5. Post-Lock Independent Branch Grading (for `Bare_Run2_1x`, `Oracle_BestOf2_Bare_2x`, `Antithesis_1x`, and `Selection Regret`!)
-    thesis_ver = grade_archived_branch_post_lock(
-        task=task, branch_summary=thesis_sum, branch_tar=thesis_tar, codex_info=codex_info
-    )
-    anti_ver = grade_archived_branch_post_lock(
-        task=task, branch_summary=anti_sum, branch_tar=antithesis_tar, codex_info=codex_info
-    )
-    # Persist post-lock branch verifier reports in their separate branch folders (NOT mutating main episode bundle!)
-    (thesis_dir / "03_postlock_branch_verifier_report.json").write_text(
-        json.dumps(thesis_ver, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    if thesis_sum is None:
+        anti_ver = verifier_report
+        thesis_ver: dict[str, Any] | None = None
+    else:
+        thesis_ver = grade_archived_branch_post_lock(
+            task=task, branch_summary=thesis_sum, branch_tar=thesis_tar, codex_info=codex_info
+        )
+        anti_ver = grade_archived_branch_post_lock(
+            task=task, branch_summary=anti_sum, branch_tar=antithesis_tar, codex_info=codex_info
+        )
+        (thesis_dir / "03_postlock_branch_verifier_report.json").write_text(
+            json.dumps(thesis_ver, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
     (antithesis_dir / "03_postlock_branch_verifier_report.json").write_text(
         json.dumps(anti_ver, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
@@ -1828,14 +1946,19 @@ def run_m6_9_a_two_branch_episode(
         "returned_model": str(anti_sum.get("returned_model") or model),
         "provider_backend": str(codex_info["provider_backend"]),
         "auth_mode": str(codex_info["auth_mode"]),
-        "arm": "Hegel_M6_9_A_TwoBranch_LiveGPT",
-        "declared_budget_multiplier": "2x_56_turns_plus_synthesis",
+        "arm": ("Hegel_M6_9_2_Selective_LiveGPT" if selective_second_branch else "Hegel_M6_9_A_TwoBranch_LiveGPT"),
+        "declared_budget_multiplier": (
+            ("selective_2x_spawned_synthesis" if thesis_sum else "selective_1x_single_branch")
+            if selective_second_branch
+            else "2x_56_turns_plus_synthesis"
+        ),
+        "selective_router_decision": selective_decision,
         "strict_pass": strict_pass,
         "reward": reward_val,
         "failure_taxonomy": failure_tax,
-        "ended_by_finish": bool(thesis_sum["ended_by_finish"] or anti_sum["ended_by_finish"]),
-        "turns_used": int(thesis_sum["turns_used"]) + int(anti_sum["turns_used"]),
-        "max_turns": 2 * max_turns_per_branch,
+        "ended_by_finish": any_finished,
+        "turns_used": tot_turns,
+        "max_turns": tot_max_turns,
         "synthesis_decision": {
             "selected_branch": synth_res["selected_branch"],
             "selection_mechanism": synth_res["selection_mechanism"],
@@ -1845,11 +1968,12 @@ def run_m6_9_a_two_branch_episode(
             "antithesis_bundle_tar_sha256": anti_tar_sha,
         },
         "postlock_branch_outcomes": {
-            "thesis_bare_run2_strict_pass": bool(thesis_ver["strict_pass"]),
-            "thesis_turns_used": int(thesis_sum["turns_used"]),
+            "thesis_spawned": thesis_sum is not None,
+            "thesis_bare_run2_strict_pass": (bool(thesis_ver["strict_pass"]) if thesis_ver else None),
+            "thesis_turns_used": (int(thesis_sum["turns_used"]) if thesis_sum else 0),
             "antithesis_wormhole_strict_pass": bool(anti_ver["strict_pass"]),
             "antithesis_turns_used": int(anti_sum["turns_used"]),
-            "oracle_either_branch_pass": bool(thesis_ver["strict_pass"] or anti_ver["strict_pass"]),
+            "oracle_either_branch_pass": bool(anti_ver["strict_pass"] or (thesis_ver and thesis_ver["strict_pass"])),
         },
         "pullback_gate_triggered": bool(anti_sum.get("pullback_gate_triggered")),
         "stress_challenge_gate_triggered": bool(anti_sum.get("stress_challenge_gate_triggered")),
@@ -1863,11 +1987,11 @@ def run_m6_9_a_two_branch_episode(
         "host_wormhole_probe_results": list(anti_sum.get("host_wormhole_probe_results", [])),
         "producer_skill_manifest_summary": (
             anti_sum.get("producer_skill_manifest_summary")
-            if "antithesis" in str(synth_res["selected_branch"])
+            if ("antithesis" in str(synth_res["selected_branch"]) or thesis_sum is None)
             else thesis_sum.get("producer_skill_manifest_summary")
         ),
         "antithesis_producer_skill_manifest_summary": anti_sum.get("producer_skill_manifest_summary"),
-        "thesis_producer_skill_manifest_summary": thesis_sum.get("producer_skill_manifest_summary"),
+        "thesis_producer_skill_manifest_summary": (thesis_sum.get("producer_skill_manifest_summary") if thesis_sum else None),
         "skill_activation_count": skill_call_total,
         "skill_activations": list(anti_sum.get("skill_activations", []))[:50],
         "saved_artifact_snapshots": saved_snapshots,
@@ -1895,7 +2019,7 @@ def run_m6_9_a_two_branch_episode(
     )
     winning_traj_fp = (
         antithesis_dir / "02_human_readable_trajectory.md"
-        if "antithesis" in str(synth_res["selected_branch"])
+        if ("antithesis" in str(synth_res["selected_branch"]) or thesis_sum is None)
         else thesis_dir / "02_human_readable_trajectory.md"
     )
     winning_traj_body = ""
@@ -1905,13 +2029,14 @@ def run_m6_9_a_two_branch_episode(
             wt = wt.split("## 4. Official Verifier", 1)[0]
         winning_traj_body = wt
 
+    t_ver_str = f"`{thesis_ver['strict_pass']}` ({thesis_sum['turns_used']}T)" if (thesis_ver and thesis_sum) else "`NOT_SPAWNED (0T)`"
     md_lines = [
-        f"# Dialectical Two-Branch Synthesis Trajectory: `{model}` | `Hegel_M6_9_A_TwoBranch_LiveGPT` | `{task.task_id}`",
+        f"# Dialectical Synthesis Trajectory: `{model}` | `{summary['arm']}` | `{task.task_id}`",
         "",
         f"- **Official Strict Pass**: **`{'PASS (1.0)' if strict_pass else 'FAIL (0.0)'}`** (`{failure_tax}`)",
         f"- **Blind Public Synthesis Choice**: `{synth_res['selected_branch']}` via `{synth_res['selection_mechanism']}`",
         f"- **Synthesis Rationale**: {synth_res.get('rationale', '')}",
-        f"- **Post-Lock Branch Verdicts**: Thesis (`Bare_Run2`) = `{thesis_ver['strict_pass']}` ({thesis_sum['turns_used']}T) | Antithesis (`Wormhole`) = `{anti_ver['strict_pass']}` ({anti_sum['turns_used']}T)",
+        f"- **Post-Lock Branch Verdicts**: Thesis (`Bare`) = {t_ver_str} | Antithesis (`Wormhole`) = `{anti_ver['strict_pass']}` ({anti_sum['turns_used']}T)",
         "",
         "## Selected Branch Trajectory Record",
         winning_traj_body,

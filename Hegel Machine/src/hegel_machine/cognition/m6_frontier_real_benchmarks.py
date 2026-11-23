@@ -114,6 +114,7 @@ class FrontierBenchmarkTask:
     biomystery_answer_rubric: str | None = None
     biomystery_allowed_domains: tuple[str, ...] = ()
     biomystery_human_solvable: bool = True
+    holdout_public_setup_py: str | None = None
 
 
 TB_WAVE_ASSIGNMENTS: tuple[tuple[str, str, str, str, str, int], ...] = (
@@ -424,19 +425,19 @@ def extract_public_task_signatures(task: FrontierBenchmarkTask) -> list[str]:
             sigs.extend(["sig:genomic_sequence_homology_and_blast", "sig:regulatory_motif_and_directional_enrichment"])
         return sorted(set(sigs))
 
-    if _has_any((r"\bsymbolic\b", r"\bsympy\b", r"\bdifferential equation", r"\bode\b", r"\bregressor\.py\b")):
+    if _has_any((r"\bsymbolic\b", r"\bsympy\b", r"\bdifferential equation", r"\bodes?\b", r"\bregressor\.py\b")):
         sigs.append("sig:symbolic_ode_and_law_regression")
-    if _has_any((r"\bsymbolic\b", r"\bsympy\b", r"\bdifferential equation", r"\bode\b", r"\bkoopman\b", r"\bmean[- ]field\b")):
+    if _has_any((r"\bsymbolic\b", r"\bsympy\b", r"\bdifferential equation", r"\bodes?\b", r"\bkoopman\b", r"\bmean[- ]field\b")):
         sigs.append("sig:parsimonious_symbolic_and_operator_dynamics")
     if _has_any((r"\bflux\b", r"\bconservation law", r"\bpoisson\b", r"\bcoarse[- ]fine\b", r"\bfinite[- ]volume\b", r"\bmultigrid\b", r"\breflux")):
         sigs.append("sig:conservation_flux_and_multiscale_pde")
-    if _has_any((r"\bguided[- ]wave", r"\bultrasonic\b", r"\blamb\b", r"\bwaveform", r"\bbaseline[- ]free\b", r"\bvirtual[- ]baseline\b", r"\bpath_pairs\b")):
+    if _has_any((r"\bguided[- ]wave", r"\bultrasonic\b", r"\blamb\b", r"\bwaveform", r"\bbaseline[- ]free\b", r"\bvirtual[- ]baseline\b", r"\bpath_pairs\b", r"\btomograph", r"\bthermoacoustic")):
         sigs.append("sig:guided_wave_dispersion_and_geometry_transfer")
-    if _has_any((r"\bl0\b", r"\bbranch[- ]and[- ]bound\b", r"\blambda_0\b", r"\bassimilation\b", r"\blorenz\b", r"\bcertificate\b")):
+    if _has_any((r"\bl0\b", r"\bbranch[- ]and[- ]bound\b", r"\blambda_0\b", r"\bassimilation\b", r"\blorenz\b", r"\bcertificate\b", r"\bprecision matrix\b", r"\bproof_leaves\b")):
         sigs.append("sig:sparse_identifiability_and_latent_recovery")
-    if _has_any((r"\bclinical\b", r"\bcohort", r"\bimput", r"\bexpression_manifest\b", r"\bclinical[- ]metadata\b", r"\bsample[- ]metadata\b")):
+    if _has_any((r"\bclinical\b", r"\bcohort", r"\bimput", r"\bexpression_manifest\b", r"\bclinical[- ]metadata\b", r"\bsample[- ]metadata\b", r"\b384[- ]well\b", r"\bic50\b")):
         sigs.append("sig:cohort_transfer_and_metadata_imputation")
-    if _has_any((r"\breactor\b", r"\bsafety[- ]critical\b", r"\bimu\b", r"\bgnss\b", r"\bnanoindentation\b", r"\bindenter\b", r"\boliver[- ]pharr\b", r"\bunloading\b", r"\bnavigation\b")):
+    if _has_any((r"\breactor\b", r"\bbioreactor\b", r"\bsafety[- ]critical\b", r"\bimu\b", r"\bgnss\b", r"\bmagnetometer\b", r"\bnanoindentation\b", r"\bindenter\b", r"\boliver[- ]pharr\b", r"\bunloading\b", r"\bviscoelastic\b", r"\bnavigation\b")):
         sigs.append("sig:robust_physical_calibration_and_safety_margins")
     if _has_any((r"\bspin[- ]glass\b", r"\bising\b", r"\bground[- ]state\b", r"\bhamiltonian\b", r"\bcouplings\b")):
         sigs.append("sig:combinatorial_energy_landscape_annealing")
@@ -1265,7 +1266,7 @@ class FrontierCodexClient(CodexSubscriptionClient):
 _SNAPSHOT_PY = (
     "import hashlib, json, os\n"
     "out = {}\n"
-    "for root in ('/app', '/workspace', '/results', '/root', '/pretrain_task'):\n"
+    "for root in ('/app', '/workspace', '/results', '/root', '/pretrain_task', '/holdout_task'):\n"
     "    if not os.path.isdir(root):\n"
     "        continue\n"
     "    for dp, dns, fns in os.walk(root):\n"
@@ -2714,11 +2715,18 @@ def run_frontier_episode(
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/workspace/data", "/workspace/scratch"], capture_output=True, timeout=15)
             subprocess.run(["docker", "cp", f"{task.biomystery_data_dir}/.", f"{agent_cid}:/workspace/data/"], capture_output=True, timeout=45)
             subprocess.run(["docker", "exec", agent_cid, "chmod", "-R", "a-w", "/workspace/data"], capture_output=True, timeout=15)
+        elif task.benchmark == "Hegel-OOD-Holdout-12" and task.holdout_public_setup_py:
+            subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
+            with tempfile.TemporaryDirectory(prefix="hegel_ho_boot_") as td_h:
+                setup_fp = Path(td_h) / "_setup_holdout.py"
+                setup_fp.write_text(task.holdout_public_setup_py, encoding="utf-8")
+                subprocess.run(["docker", "cp", str(setup_fp), f"{agent_cid}:/tmp/_setup_holdout.py"], check=True, timeout=20)
+            exec_container_bash(agent_cid, "python3 /tmp/_setup_holdout.py && rm -f /tmp/_setup_holdout.py", timeout_sec=60)
 
         boot_probe = exec_container_bash(
             agent_cid,
             "pwd && uname -m && nproc && free -m | head -n 2 && "
-            "ls -la /app /workspace /workspace/data /data /results /root 2>/dev/null | head -n 60",
+            "ls -la /app /workspace /workspace/data /data /results /root /holdout_task 2>/dev/null | head -n 60",
             timeout_sec=20,
         )
         env_boot_info = boot_probe["stdout"][:2500]
@@ -2759,22 +2767,31 @@ def run_frontier_episode(
             )
             rec_ids = [c["node_id"] for c in rec.get("candidates", ())]
             expanded_ids: list[str] = list(rec_ids)
-            for nid in rec_ids:
-                for wh in forest.horizontal_wormhole_edges.values():
-                    if wh["node_a_id"] == nid or wh["node_b_id"] == nid:
-                        nb = wh["node_b_id"] if wh["node_a_id"] == nid else wh["node_a_id"]
-                        if nb not in expanded_ids and len(expanded_ids) < 5:
-                            expanded_ids.append(nb)
+            if not bool(forest_archive.get("__disable_wormholes__")):
+                for nid in rec_ids:
+                    for wh in forest.horizontal_wormhole_edges.values():
+                        if wh["node_a_id"] == nid or wh["node_b_id"] == nid:
+                            nb = wh["node_b_id"] if wh["node_a_id"] == nid else wh["node_a_id"]
+                            if nb not in expanded_ids and len(expanded_ids) < 5:
+                                expanded_ids.append(nb)
             recalled_notes = [deepcopy(forest_archive[nid]) for nid in expanded_ids if nid in forest_archive]
             if bool(forest_archive.get("__autogenous_blank_seed__")) or (
                 recalled_notes and all(bool(n.get("autogenous_only")) for n in recalled_notes)
             ):
-                # Prevent cross-domain wormhole noise (e.g. biostatistics `sklearn` modules leaking into pure-SciPy PDE/wave tasks!)
-                recalled_notes = [
-                    n
-                    for n in recalled_notes
-                    if (set(n.get("signatures", [])) & set(pub_sigs)) or n.get("layer_role") == "coarse"
-                ]
+                # Order direct signature-matched nodes first, followed by 1-hop horizontal wormhole bridges,
+                # stripping ONLY `sklearn`-dependent modules on non-ML physics tasks (seccomp `/proc/self/maps` guard).
+                allow_sklearn = bool(
+                    set(pub_sigs) & {"sig:cohort_transfer_and_metadata_imputation", "sig:symbolic_ode_and_law_regression"}
+                )
+                recalled_notes.sort(
+                    key=lambda n: (0 if (set(n.get("signatures", [])) & set(pub_sigs)) else 1)
+                )
+                if not allow_sklearn:
+                    for n_rec in recalled_notes:
+                        if "autogenous_wormhole_modules" in n_rec:
+                            n_rec["autogenous_wormhole_modules"] = [
+                                m for m in n_rec["autogenous_wormhole_modules"] if "sklearn" not in str(m.get("python_code", ""))
+                            ]
             last_parent = ledger.record_decision(
                 decision_type="D1_WORMHOLE_FOREST_RETRIEVAL",
                 parent_decision_id=last_parent,
@@ -2802,7 +2819,7 @@ def run_frontier_episode(
                     else None
                 )
                 stage_notes = (
-                    [n for n in recalled_notes if set(n.get("signatures", [])) & set(pub_sigs)]
+                    recalled_notes[:3]
                     if is_autogenous_blank
                     else (
                         [deepcopy(forest_archive[nid]) for nid in rec_ids[:2] if nid in forest_archive]
@@ -3607,6 +3624,11 @@ def run_frontier_episode(
             failure_tax = "DEFERRED_FOR_BLIND_SYNTHESIS"
         elif is_bm:
             verifier_report = run_biomystery_verifier(task, submitted_final_answer, codex_info=codex_info)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-OOD-Holdout-12":
+            from .m7_holdout_ood_blind_benchmark import run_holdout_private_verifier_for_container
+
+            verifier_report = run_holdout_private_verifier_for_container(task.task_id, agent_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             verifier_report = run_tb_separate_verifier(task, agent_cid)
