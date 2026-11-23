@@ -26,6 +26,7 @@ chronological & cryptographic zero-leakage guarantees:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -1004,6 +1005,7 @@ def reconcile_thesis_and_antithesis_publicly(
     antithesis_tar: Path,
     client: m6f.FrontierCodexClient,
     stage_subdir: str,
+    forest_archive: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Blind Public Synthesis (`Zero` `/tests`, `Zero` `answer_rubric`, `Zero` verifier access, A/B label-blinded!)."""
     is_bm = task.benchmark == "BioMysteryBench-Preview"
@@ -1198,8 +1200,24 @@ def reconcile_thesis_and_antithesis_publicly(
                     f"tar -xf /tmp/dialectic/{slot_name}.tar -C /tmp/dialectic/{slot_name} && rm -f /tmp/dialectic/{slot_name}.tar",
                     timeout_sec=20,
                 )
-            recalled_stub = [{"node_id": str(nid)} for nid in antithesis_summary.get("recalled_node_ids", [])]
-            staged_sub_skills = stage_recalled_executable_wormholes_in_container(synth_cid, recalled_stub) if recalled_stub else []
+            if forest_archive:
+                recalled_stub = [
+                    deepcopy(forest_archive[str(nid)])
+                    for nid in antithesis_summary.get("recalled_node_ids", [])
+                    if str(nid) in forest_archive and not str(nid).startswith("__")
+                ]
+            else:
+                recalled_stub = [{"node_id": str(nid)} for nid in antithesis_summary.get("recalled_node_ids", [])]
+            is_auto_blank = bool(forest_archive and forest_archive.get("__autogenous_blank_seed__")) or (
+                bool(recalled_stub) and all(bool(n.get("autogenous_only")) for n in recalled_stub)
+            )
+            staged_sub_skills = (
+                stage_recalled_executable_wormholes_in_container(
+                    synth_cid, recalled_stub, include_foundational_skills=(not is_auto_blank)
+                )
+                if recalled_stub
+                else []
+            )
             ev_by_slot = {
                 "candidate_a": _extract_trajectory_evidence_digest(antithesis_dir if cand_a_br == "antithesis" else thesis_dir, antithesis_summary if cand_a_br == "antithesis" else thesis_summary, max_chars=7000),
                 "candidate_b": _extract_trajectory_evidence_digest(antithesis_dir if cand_b_br == "antithesis" else thesis_dir, antithesis_summary if cand_b_br == "antithesis" else thesis_summary, max_chars=7000),
@@ -1677,6 +1695,7 @@ def run_m6_9_a_two_branch_episode(
             antithesis_tar=antithesis_tar,
             client=synth_client,
             stage_subdir=stage_sub,
+            forest_archive=forest_archive,
         )
         s_tok = synth_res["llm_tokens"]
         last_p = ledger.record_decision(

@@ -1,0 +1,61 @@
+{
+  "task_id": "pt02__viscoelastic_retraction_and_slip_calibration",
+  "short_name": "viscoelastic_retraction_calibration",
+  "scientific_domain": "solid_mechanics_calibration",
+  "model": "gpt-6.2-sol",
+  "auth_mode": "chatgpt",
+  "strict_pass": true,
+  "ended_by_finish": true,
+  "turns_used": 18,
+  "max_turns": 18,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "assumption_refuted": "The steady hold creep rate can be added unchanged to a broad-window unloading slope.",
+      "empirical_witness": "For spec_A at 8 N, apparent compliance is 0.01597 near onset and 0.05741 later, while steady hold creep is about 0.420 µm/s and the unloading rate is 4.509 N/s. The same additive correction cannot explain both windows.",
+      "causal_blanket_diagnosis": "Once force decreases, a decaying displacement transient and possible elastic curvature both affect the measured slope.",
+      "sublated_pivot": "Keep the measured hold rate as an onset constraint, exclude the transition samples, and compare robust unloading fits with and without force curvature."
+    },
+    {
+      "turn_idx": 13,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "assumption_refuted": "The finite saturation fit covers the constant-rate correction in practice.",
+      "empirical_witness": "The constant-rate stress curves returned stiffness errors of 404–442%, while the corresponding finite-saturation curves stayed within 3.15%.",
+      "causal_blanket_diagnosis": "For a linear force ramp and constant creep, the creep and force terms are collinear. Fitting a saturating term does not recover the missing linear limit unless the independently measured hold rate is applied explicitly.",
+      "sublated_pivot": "Test whether coherent unloading curvature is resolvable above sensor noise, and use the exact hold-rate correction when it is not."
+    }
+  ],
+  "prior_autogenous_skill_calls": 0,
+  "grader_report": {
+    "strict_pass": true,
+    "max_rel_stiffness_err": 0.0186,
+    "slip_events_ok": true
+  },
+  "autogenous_consolidation": {
+    "consolidated": true,
+    "episode_id": "pt02__viscoelastic_retraction_and_slip_calibration",
+    "growth_action": "spawned_specialized_mid_node",
+    "target_node_id": "node_auto_04_creep_corrected_retraction_c",
+    "parent_root_id": "root_A03_ill_posed_regularization_and_certificates",
+    "module_filename": "autogenous_creep_corrected_retraction_calibration.py",
+    "exported_functions": [
+      "first_loading_slip",
+      "calibrate_retraction"
+    ],
+    "compiled_code_sha256": "cab6fbef9073cb8c49dc0dbe60378f11effbf77dbb388c1ec88a3236bf555616",
+    "cross_tree_wormholes_total": 0,
+    "shared_subtree_count": 0,
+    "anti_unification_summary": {
+      "evaluated_node_count": 1,
+      "shared_subtree_count": 0,
+      "shared_subtrees": [],
+      "created_wormhole_ids": []
+    }
+  },
+  "total_tokens": 608659,
+  "wall_ms": 793060.59,
+  "provenance_verified": true,
+  "terminal_record_sha256": "15e7da5cae5c7022a5413b9bf64674e131664346ea795cdd889819c5564383eb"
+}

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+from copy import deepcopy
 import json
 from pathlib import Path
 import subprocess
@@ -1606,30 +1607,36 @@ def stage_recalled_executable_wormholes_in_container(
     recalled_notes: list[dict[str, Any]],
     *,
     extra_modules: list[tuple[str, str, str, str]] | None = None,
+    include_foundational_skills: bool = True,
 ) -> list[dict[str, Any]]:
     """Mount ONLY the executable Python modules bound to recalled `PhilosophicalForest` nodes into `/tmp/hegel_wormhole_skills/`.
 
-    Includes foundational node-bound modules, Wave-1 `ExecutableSkillManifest` closures, and optional
-    M5 multi-scale / branch-reconciliation bridge modules (`extra_modules` = `(fname, code, origin, api_sig)`).
+    When `include_foundational_skills=False` (or recalled nodes carry `autogenous_only=True`), ALL hand-authored
+    `SKILL_01..07` foundational modules are physically excluded — mounting ONLY autogenously pretrained/sublated
+    wormhole modules (`autogenous_wormhole_modules` & `wave1_executable_modules`).
     """
+    is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
+    allow_foundational = bool(include_foundational_skills) and (not is_autogenous_blank)
+
     modules_to_write: dict[str, str] = {}
     manifest_entries: list[dict[str, Any]] = []
 
-    for fname, code_str, origin_tag, api_sig in (extra_modules or []):
-        if fname not in modules_to_write:
-            modules_to_write[fname] = code_str
-            manifest_entries.append(
-                {
-                    "module_import": f"hegel_wormhole_skills.{Path(fname).stem}",
-                    "source_forest_node": "m5_multiscale_and_branch_reconciliation",
-                    "origin": origin_tag,
-                    "exported_apis": api_sig,
-                }
-            )
+    if allow_foundational:
+        for fname, code_str, origin_tag, api_sig in (extra_modules or []):
+            if fname not in modules_to_write:
+                modules_to_write[fname] = code_str
+                manifest_entries.append(
+                    {
+                        "module_import": f"hegel_wormhole_skills.{Path(fname).stem}",
+                        "source_forest_node": "m5_multiscale_and_branch_reconciliation",
+                        "origin": origin_tag,
+                        "exported_apis": api_sig,
+                    }
+                )
 
     for note in recalled_notes:
         nid = str(note.get("node_id") or "")
-        if nid in NODE_TO_EXECUTABLE_WORMHOLE_MODULE:
+        if allow_foundational and nid in NODE_TO_EXECUTABLE_WORMHOLE_MODULE:
             fname, code_str, api_sig = NODE_TO_EXECUTABLE_WORMHOLE_MODULE[nid]
             if fname not in modules_to_write:
                 modules_to_write[fname] = code_str
@@ -1641,6 +1648,20 @@ def stage_recalled_executable_wormholes_in_container(
                         "exported_apis": api_sig,
                     }
                 )
+        for auto_mod in note.get("autogenous_wormhole_modules", []):
+            af_name = str(auto_mod["filename"])
+            if af_name not in modules_to_write:
+                modules_to_write[af_name] = str(auto_mod["python_code"])
+                manifest_entries.append(
+                    {
+                        "module_import": f"hegel_wormhole_skills.{Path(af_name).stem}",
+                        "source_forest_node": nid,
+                        "origin": auto_mod.get("origin", "autogenous_aufhebung_compiled"),
+                        "exported_apis": auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", [])),
+                        "scope_preconditions": auto_mod.get("scope_preconditions", []),
+                        "provenance_episode_id": auto_mod.get("provenance_episode_id", ""),
+                    }
+                )
         for sub_mod in note.get("wave1_executable_modules", []):
             sf_name = str(sub_mod["filename"])
             if sf_name not in modules_to_write:
@@ -1650,7 +1671,7 @@ def stage_recalled_executable_wormholes_in_container(
                         "module_import": f"hegel_wormhole_skills.{Path(sf_name).stem}",
                         "source_forest_node": nid,
                         "origin": sub_mod.get("origin", "wave1_ast_sublated"),
-                        "exported_apis": ", ".join(sub_mod.get("function_names", [])),
+                        "exported_apis": sub_mod.get("exported_apis") or ", ".join(sub_mod.get("function_names", [])),
                     }
                 )
 
@@ -1864,12 +1885,77 @@ def _is_self_contained_pure_ast_function(fn_node: ast.FunctionDef, extra_pure_he
     return _check_pure_lexical_scope(fn_node, base_env)
 
 
+_SCIENTIFIC_OP_KEYWORDS = frozenset(
+    {
+        "hilbert", "fft", "rfft", "irfft", "ifft", "lstsq", "solve", "svd", "eigh", "eigvalsh",
+        "cholesky", "qr", "pinv", "least_squares", "minimize", "linprog", "milp", "savgol_filter",
+        "sosfiltfilt", "filtfilt", "butter", "median", "percentile", "quantile", "mahalanobis",
+        "cov", "corrcoef", "interp", "RectBivariateSpline", "UnivariateSpline", "Ridge", "Lasso",
+    }
+)
+_LOW_VALUE_GLUE_NAMES = frozenset(
+    {"main", "show", "layout", "parse_args", "cli", "print_summary", "format_row"}
+)
+
+
+def _is_pure_literal_expr(expr: ast.AST) -> bool:
+    """True iff `expr` is a pure literal / constant numeric-tuple expression free of I/O or paths."""
+    if isinstance(expr, ast.Constant):
+        if isinstance(expr.value, str) and any(tok in expr.value for tok in _FORBIDDEN_WAVE1_EXPORT_TOKENS):
+            return False
+        return isinstance(expr.value, (int, float, complex, bool, str, type(None)))
+    if isinstance(expr, ast.UnaryOp) and isinstance(expr.op, (ast.UAdd, ast.USub, ast.Not)):
+        return _is_pure_literal_expr(expr.operand)
+    if isinstance(expr, ast.BinOp) and isinstance(expr.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.FloorDiv)):
+        return _is_pure_literal_expr(expr.left) and _is_pure_literal_expr(expr.right)
+    if isinstance(expr, (ast.Tuple, ast.List, ast.Set)):
+        return all(_is_pure_literal_expr(e) for e in expr.elts)
+    return False
+
+
 def extract_pure_reusable_functions_from_python(py_source: str, max_funcs: int = 8) -> list[tuple[str, str]]:
-    """AST-extract pure mathematical/numeric functions AND composite call-graph closures (`L02` Fix!)."""
+    """AST-extract pure mathematical/numeric functions AND composite scientific call-graph closures (`M7.0` Fix!).
+
+    Fixes the `M6.4` Leaf-Glue Slicing Trap:
+    1. Lifts safe module-level scientific imports (`scipy`, `sklearn`, `numpy`, `math`, etc.) and pure scalar/tuple
+       constants directly into referencing functions so bottom-of-file physics operators are NEVER rejected for
+       using top-of-file `from scipy.signal import hilbert` or `EPS = 1e-12`!
+    2. Ranks accepted closures bottom-up by composite call-graph depth + scientific operator richness rather than
+       truncating at the first 4 file-top array-slicing glue helpers (`[:4]`), emitting required intra-module
+       helpers first in topological dependency order!
+    """
     try:
         tree = ast.parse(py_source)
     except SyntaxError:
         return []
+
+    module_import_stmts: dict[str, ast.stmt] = {}
+    module_const_stmts: dict[str, ast.Assign] = {}
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Import):
+            for alias in stmt.names:
+                root_pkg = alias.name.split(".")[0]
+                if root_pkg in _ALLOWED_INTERNAL_IMPORTS:
+                    bound_nm = alias.asname or root_pkg
+                    module_import_stmts[bound_nm] = ast.Import(names=[deepcopy(alias)])
+        elif isinstance(stmt, ast.ImportFrom):
+            root_pkg = (stmt.module or "").split(".")[0]
+            if stmt.level == 0 and root_pkg in _ALLOWED_INTERNAL_IMPORTS:
+                for alias in stmt.names:
+                    if alias.name != "*":
+                        bound_nm = alias.asname or alias.name
+                        module_import_stmts[bound_nm] = ast.ImportFrom(
+                            module=stmt.module, names=[deepcopy(alias)], level=0
+                        )
+        elif (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Name)
+            and _is_pure_literal_expr(stmt.value)
+        ):
+            c_name = stmt.targets[0].id
+            if c_name not in _ALLOWED_PURE_GLOBALS:
+                module_const_stmts[c_name] = deepcopy(stmt)
 
     cand_nodes: list[ast.FunctionDef] = []
     for node in tree.body:
@@ -1878,15 +1964,52 @@ def extract_pure_reusable_functions_from_python(py_source: str, max_funcs: int =
         if node.name in {"main"}:
             continue
         fn_src = ast.unparse(node)
-        if len(fn_src) < 35 or len(fn_src) > 8000:
+        if len(fn_src) < 35 or len(fn_src) > 12000:
             continue
         if any(tok in fn_src for tok in _FORBIDDEN_WAVE1_EXPORT_TOKENS):
             continue
-        cand_nodes.append(node)
+        # Inline any referenced module-level pure imports / literal constants that are not locally bound
+        arg_names = {
+            a.arg
+            for a in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+                *([node.args.vararg] if node.args.vararg else []),
+                *([node.args.kwarg] if node.args.kwarg else []),
+            )
+        }
+        stored_names = {
+            sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store)
+        } | arg_names | {node.name}
+        loaded_names = {
+            sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
+        }
+        free_loads = sorted(loaded_names - stored_names - _ALLOWED_PURE_GLOBALS)
+        injected_prefix: list[ast.stmt] = []
+        for fl in free_loads:
+            if fl in module_import_stmts:
+                injected_prefix.append(deepcopy(module_import_stmts[fl]))
+        if injected_prefix:
+            node_copy = deepcopy(node)
+            # Keep docstring at index 0 if present so `inspect.getdoc` stays intact!
+            if (
+                node_copy.body
+                and isinstance(node_copy.body[0], ast.Expr)
+                and isinstance(node_copy.body[0].value, ast.Constant)
+                and isinstance(node_copy.body[0].value.value, str)
+            ):
+                node_copy.body = [node_copy.body[0], *injected_prefix, *node_copy.body[1:]]
+            else:
+                node_copy.body = [*injected_prefix, *node_copy.body]
+            cand_nodes.append(node_copy)
+        else:
+            cand_nodes.append(node)
 
     # Fixed-point call-graph closure: accept `complete_operator(x)` when all intra-module helpers it calls are pure!
     accepted_names: set[str] = set()
-    accepted_order: list[tuple[str, str]] = []
+    accepted_by_name: dict[str, ast.FunctionDef] = {}
+    topo_order: list[str] = []
     changed = True
     while changed:
         changed = False
@@ -1895,10 +2018,71 @@ def extract_pure_reusable_functions_from_python(py_source: str, max_funcs: int =
                 continue
             if _is_self_contained_pure_ast_function(node, extra_pure_helpers=accepted_names):
                 accepted_names.add(node.name)
-                accepted_order.append((node.name, ast.unparse(node)))
+                accepted_by_name[node.name] = node
+                topo_order.append(node.name)
                 changed = True
 
-    return accepted_order[:max_funcs]
+    if not topo_order:
+        return []
+
+    # Build direct intra-module call graph & scientific richness score to prioritize real composite physics operators!
+    direct_deps: dict[str, list[str]] = {}
+    depth_by_name: dict[str, int] = {}
+    score_by_name: dict[str, float] = {}
+    for fn_nm in topo_order:
+        fn_ast = accepted_by_name[fn_nm]
+        deps = [
+            sub.id
+            for sub in ast.walk(fn_ast)
+            if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load) and sub.id in accepted_names and sub.id != fn_nm
+        ]
+        uniq_deps = sorted(set(deps), key=lambda d: topo_order.index(d))
+        direct_deps[fn_nm] = uniq_deps
+        depth_by_name[fn_nm] = (1 + max((depth_by_name.get(d, 0) for d in uniq_deps), default=0)) if uniq_deps else 0
+        sci_hits = 0
+        for sub in ast.walk(fn_ast):
+            if isinstance(sub, ast.Call):
+                cname = sub.func.id if isinstance(sub.func, ast.Name) else (sub.func.attr if isinstance(sub.func, ast.Attribute) else "")
+                if cname in _SCIENTIFIC_OP_KEYWORDS:
+                    sci_hits += 1
+        n_lines = len(ast.unparse(fn_ast).splitlines())
+        glue_pen = 60.0 if fn_nm in _LOW_VALUE_GLUE_NAMES else (8.0 if fn_nm.startswith("_") and depth_by_name[fn_nm] == 0 else 0.0)
+        score_by_name[fn_nm] = depth_by_name[fn_nm] * 25.0 + sci_hits * 9.0 + min(n_lines, 55) * 0.6 - glue_pen
+
+    ranked_targets = sorted(topo_order, key=lambda nm: (score_by_name[nm], topo_order.index(nm)), reverse=True)
+    selected_set: set[str] = set()
+
+    def _collect_closure(target_nm: str) -> list[str]:
+        vis: set[str] = set()
+        order: list[str] = []
+
+        def _dfs(cur: str) -> None:
+            if cur in vis:
+                return
+            vis.add(cur)
+            for d in direct_deps.get(cur, ()):
+                _dfs(d)
+            order.append(cur)
+
+        _dfs(target_nm)
+        return order
+
+    for cand_nm in ranked_targets:
+        if cand_nm in selected_set:
+            continue
+        needed = _collect_closure(cand_nm)
+        if len(selected_set | set(needed)) <= max_funcs or not selected_set:
+            selected_set.update(needed)
+        if len(selected_set) >= max_funcs:
+            break
+
+    # Emit in strict topological order (helpers before composite callers!) capped only if single closure exceeded `max_funcs`
+    ordered_selected = [nm for nm in topo_order if nm in selected_set]
+    if len(ordered_selected) > max_funcs:
+        # Preserve cohesive dependency closure of top-ranked operator if within reasonable bound (`<= max_funcs + 4`)
+        if len(ordered_selected) > max_funcs + 4:
+            ordered_selected = ordered_selected[:max_funcs]
+    return [(nm, ast.unparse(accepted_by_name[nm])) for nm in ordered_selected]
 
 
 def consolidate_wave1_executable_modules_into_forest(
@@ -1942,9 +2126,10 @@ def consolidate_wave1_executable_modules_into_forest(
 
         mod_stem = f"wave1_sublated_{t_short}"
         mod_fname = f"{mod_stem}.py"
+        kept_closure = collected_fns[:10]
         decorated_blocks = [
             f'@track_wormhole_skill("{mod_stem}")\n{fn_code}'
-            for _, fn_code in collected_fns[:4]
+            for _, fn_code in kept_closure
         ]
         mod_code = (
             f'"""Online Wave-1 Sublated Pure Mathematical Helpers from `{t_short}` (Zero Path/Data Leakage)."""\n'
@@ -1972,7 +2157,7 @@ def consolidate_wave1_executable_modules_into_forest(
         mod_record = {
             "filename": mod_fname,
             "origin": f"wave1_pure_ast_from_{t_short}",
-            "function_names": [fn for fn, _ in collected_fns[:4]],
+            "function_names": [fn for fn, _ in kept_closure],
             "python_code": mod_code,
         }
         for tnid in sorted(target_nids):
@@ -2852,15 +3037,17 @@ def run_host_mechanical_wormhole_gate_probes_v2(
     *,
     candidate_sha256: str = "",
     timeout_sec: int = 60,
+    allow_foundational_probes: bool = True,
 ) -> dict[str, Any]:
-    """Structured Host Mechanical Probe Runner (`L05`/`H03` Fix):
+    """Structured Host Mechanical Probe Runner (`L05`/`H03` + `M7.0` Autogenous Blank-Seed Guard):
     NEVER collapses `not_applicable`, `completed_no_issue`, `diagnostic`, `failed`, and `timed_out` into `[]`!
-    Records exact `status`, `candidate_sha256`, `elapsed_ms`, `returncode`, `stderr`, and kills container process group on timeout.
+    In `autogenous_only` / `allow_foundational_probes=False` mode, skips ALL hardcoded `SKILL_01..06` probes!
     """
     import time as _time
 
     t0 = _time.monotonic()
-    if not declared_artifacts or not recalled_notes:
+    is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
+    if not declared_artifacts or not recalled_notes or (not allow_foundational_probes) or is_autogenous_blank:
         return {
             "overall_status": "not_applicable",
             "candidate_sha256": candidate_sha256,
