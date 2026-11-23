@@ -37,9 +37,23 @@ from typing import Any
 from . import m6_frontier_real_benchmarks as m6f
 from .hipporag_wormhole_index import HippoRAGWormholeIndex
 from .m5_live_gpt_and_provenance import DecisionProvenanceLedger, verify_decision_provenance_chain
-from .m6_4_executable_wormhole_library import sum_skill_activation_calls
+from .m6_4_executable_wormhole_library import (
+    find_uninlined_wormhole_imports_in_container,
+    stage_recalled_executable_wormholes_in_container,
+    sum_skill_activation_calls,
+)
 from .m6_8_b_prime_capability_bridge import verify_candidate_artifact_contract_in_container
 from .wormhole_forest import PhilosophicalForest
+
+CODE_SUBLATION_TURN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["rationale", "bash_command"],
+    "properties": {
+        "rationale": {"type": "string"},
+        "bash_command": {"type": "string"},
+    },
+}
 
 DIALECTICAL_SYNTHESIS_DECISION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -592,44 +606,109 @@ if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/virtual_base
         "sim_xy = np.asarray(z['sensor_xy_m'], dtype=float); sim_pp = np.asarray(z['path_pairs'], dtype=int); sim_sz = np.asarray(z['panel_size_m'], dtype=float)\n"
         "sim_d = np.linalg.norm(sim_xy[sim_pp[:,0]] - sim_xy[sim_pp[:,1]], axis=1)\n"
         "env = np.abs(hilbert(fe_sig, axis=0)); pk_idx = np.argmax(env[20:240], axis=0) + 20\n"
-        "coef, *_ = np.linalg.lstsq(np.column_stack([np.ones_like(sim_d), sim_d]), pk_idx.astype(float), rcond=None)\n"
-        "k0_s = float(coef[0]) + 3.5; slow_s = float(coef[1]) * 1.07\n"
+        "unobs = sim_d < 0.16\n"
+        "coef, *_ = np.linalg.lstsq(np.column_stack([np.ones(int(np.sum(unobs))), sim_d[unobs]]), pk_idx[unobs].astype(float), rcond=None)\n"
+        "k0_s = float(coef[0]) + 3.5; slow_s = float(coef[1]) * 1.08\n"
         "n_samp = np.arange(fe_sig.shape[0], dtype=float); u_grid = np.arange(-42.0, 56.0)\n"
-        "aligned = np.array([np.interp(np.clip(pk + u_grid, 0, len(n_samp)-1), n_samp, env[:, j] / max(env[pk, j], 1e-18)) for j, pk in enumerate(pk_idx)])\n"
+        "aligned = np.array([np.interp(np.clip(pk_idx[j] + u_grid, 0, len(n_samp)-1), n_samp, env[:, j] / max(env[pk_idx[j], j], 1e-18)) for j in np.flatnonzero(unobs)])\n"
         "emp_env = np.median(aligned, axis=0) * np.exp(-0.5 * (np.maximum(np.abs(u_grid) - 24.0, 0.0) / 8.0) ** 2)\n"
-        "fe_med_amp = float(np.median(env[pk_idx, np.arange(len(pk_idx))] * np.sqrt(np.maximum(sim_d, 0.04))))\n"
+        "fe_med_amp = float(np.median(env[pk_idx[unobs], np.flatnonzero(unobs)] * np.sqrt(np.maximum(sim_d[unobs], 0.04))))\n"
         "omega0 = 2.0 * math.pi * f0 / fs\n"
         "rng = np.random.default_rng(20261124); errs_mm = []\n"
-        "q_sz = np.array([0.56, 0.44])\n"
-        "gx, gy = np.meshgrid([0.11, 0.28, 0.45], [0.09, 0.22, 0.35])\n"
-        "q_xy = np.column_stack([gx.ravel(), gy.ravel()])\n"
-        "n_s = len(q_xy); q_pp = np.array([[i, j] for i in range(n_s) for j in range(n_s) if i != j], dtype=int)\n"
-        "for mode_idx in (0, 1, 3, 4, 6, 8):\n"
-        "    dmg = np.array([rng.uniform(0.14, 0.42), rng.uniform(0.12, 0.32)])\n"
-        "    # Sim-to-real PZT epoxy/electronics carrier phase incoherence (`phi_{ij} == phi_{ji} ~ U(0, 2*pi)`)!\n"
+        "layouts = [\n"
+        "    (np.array([0.58, 0.42]), np.column_stack([g.ravel() for g in np.meshgrid([0.11, 0.29, 0.47], [0.09, 0.21, 0.33])]), 0),\n"
+        "    (np.array([0.58, 0.42]), np.column_stack([g.ravel() for g in np.meshgrid([0.11, 0.29, 0.47], [0.09, 0.21, 0.33])]), 1),\n"
+        "    (np.array([0.58, 0.42]), np.column_stack([g.ravel() for g in np.meshgrid([0.11, 0.29, 0.47], [0.09, 0.21, 0.33])]), 2),\n"
+        "    (np.array([0.46, 0.38]), np.array([[0.08,0.07],[0.23,0.06],[0.38,0.07],[0.39,0.19],[0.38,0.31],[0.23,0.32],[0.08,0.31],[0.07,0.19]]), 0),\n"
+        "    (np.array([0.46, 0.38]), np.array([[0.08,0.07],[0.23,0.06],[0.38,0.07],[0.39,0.19],[0.38,0.31],[0.23,0.32],[0.08,0.31],[0.07,0.19]]), 1),\n"
+        "    (np.array([0.46, 0.38]), np.array([[0.08,0.07],[0.23,0.06],[0.38,0.07],[0.39,0.19],[0.38,0.31],[0.23,0.32],[0.08,0.31],[0.07,0.19]]), 2),\n"
+        "]\n"
+        "for q_sz, q_xy, mode_idx in layouts:\n"
+        "    n_s = len(q_xy); q_pp = np.array([[i, j] for i in range(n_s) for j in range(n_s) if i != j], dtype=int)\n"
+        "    dmg = np.array([rng.uniform(0.12, q_sz[0] - 0.12), rng.uniform(0.10, q_sz[1] - 0.10)])\n"
+        "    # Sim-to-real PZT epoxy/electronics carrier phase incoherence (`phi_{ij} == phi_{ji} ~ U(0, 2*pi)`) + viscoelastic `exp(-5.2*d)` damping!\n"
         "    pair_phi = {(i, j): float(rng.uniform(0.0, 2.0 * math.pi)) for i in range(n_s) for j in range(i + 1, n_s)}\n"
-        "    s_gain = np.exp(rng.normal(0.0, 0.12, size=n_s)) * 1.35\n"
+        "    s_gain = np.exp(rng.normal(0.0, 0.12, size=n_s)) * 1.25\n"
         "    q_sig = np.zeros((len(n_samp), len(q_pp)), dtype=float)\n"
         "    for p_i, (u, v) in enumerate(q_pp):\n"
         "        phi = pair_phi[(min(int(u), int(v)), max(int(u), int(v)))]\n"
         "        pa, pb = q_xy[u], q_xy[v]; d_ab = float(np.linalg.norm(pb - pa))\n"
         "        seg = pb - pa; ux, uy = seg / max(d_ab, 1e-9)\n"
-        "        obs_loss = sum(0.24 * math.exp(-0.5 * (abs((q_xy[k,0]-pa[0])*uy - (q_xy[k,1]-pa[1])*ux) / 0.011)**2) for k in range(n_s) if k not in (u,v) and 0.02 < np.dot(q_xy[k]-pa, [ux,uy]) < d_ab - 0.02)\n"
+        "        obs_n = sum(math.exp(-0.5 * (abs((q_xy[k,0]-pa[0])*uy - (q_xy[k,1]-pa[1])*ux) / 0.011)**2) for k in range(n_s) if k not in (u,v) and 0.02 < np.dot(q_xy[k]-pa, [ux,uy]) < d_ab - 0.02)\n"
         "        proj = float(np.clip(np.dot(dmg - pa, seg) / max(d_ab**2, 1e-9), 0.0, 1.0))\n"
         "        perp = float(np.linalg.norm((pa + proj * seg) - dmg))\n"
-        "        crk_sh = (0.36 * math.exp(-0.5 * (perp / 0.015)**2)) if mode_idx in (0,1,6,8) else 0.05 * math.exp(-0.5 * (perp / 0.015)**2)\n"
-        "        amp0 = fe_med_amp * float(s_gain[u] * s_gain[v]) * (1.0 - min(obs_loss, 0.45)) / math.sqrt(max(d_ab, 0.04))\n"
+        "        crk_sh = (0.38 if mode_idx in (0, 2) else 0.06) * math.exp(-0.5 * (perp / 0.015)**2)\n"
+        "        damp = math.exp(-5.2 * max(d_ab - 0.10, 0.0) - 0.85 * obs_n)\n"
+        "        amp0 = fe_med_amp * float(s_gain[u] * s_gain[v]) * damp / math.sqrt(max(d_ab, 0.04))\n"
         "        c_d = k0_s + slow_s * d_ab\n"
         "        w_d = (1.0 - crk_sh) * amp0 * np.interp(n_samp - c_d, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_d) + phi)\n"
         "        d_w = float(np.linalg.norm(np.array([pa[0], -pa[1]]) - pb)); c_w = k0_s + slow_s * d_w\n"
-        "        w_w = 0.22 * (fe_med_amp / math.sqrt(max(d_w, 0.05))) * np.interp(n_samp - c_w, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_w) + phi + 0.7)\n"
+        "        w_w = 0.20 * (fe_med_amp * math.exp(-5.2 * max(d_w - 0.10, 0.0)) / math.sqrt(max(d_w, 0.05))) * np.interp(n_samp - c_w, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_w) + phi + 0.7)\n"
         "        d_sc = float(np.linalg.norm(pa - dmg) + np.linalg.norm(dmg - pb)); c_sc = k0_s + slow_s * d_sc\n"
-        "        sc_g = 0.16 if mode_idx in (3,4,6,8) else 0.03\n"
-        "        w_s = sc_g * (fe_med_amp / math.sqrt(max(d_sc, 0.06))) * np.interp(n_samp - c_sc, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_sc) + phi - 0.5)\n"
+        "        sc_g = 0.22 if mode_idx in (1, 2) else 0.04\n"
+        "        w_s = sc_g * (fe_med_amp * math.exp(-5.2 * max(d_sc - 0.10, 0.0)) / math.sqrt(max(d_sc, 0.06))) * np.interp(n_samp - c_sc, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_sc) + phi - 0.5)\n"
         "        q_sig[:, p_i] = w_d + w_w + w_s + rng.normal(0.0, 0.007 * amp0, size=len(n_samp))\n"
         "    meta = {'sampling_frequency_hz': fs, 'excitation_frequency_hz': f0, 'plate_thickness_m': h_th, 'simulated': {'sensor_xy_m': sim_xy, 'path_pairs': sim_pp, 'panel_size_m': sim_sz}, 'inspection': {'sensor_xy_m': q_xy, 'path_pairs': q_pp, 'panel_size_m': q_sz}}\n"
         "    pred = np.asarray(solution.predict_damage(fe_sig, q_sig, meta), dtype=float)\n"
         "    errs_mm.append(float(np.linalg.norm(pred - dmg) * 1000.0))\n"
+        "for ratio_sc, dmg_sc, sh_sc, co_sc in ((1.24, np.array([0.415, 0.275]), 0.28, 0.045), (1.18, np.array([0.365, 0.235]), 0.40, 0.000)):\n"
+        "    q_sz = sim_sz * ratio_sc; q_xy = sim_xy * ratio_sc\n"
+        "    phi_s = rng.uniform(0.0, 2.0 * math.pi, size=len(q_xy)); g_s = np.exp(rng.uniform(-0.22, 0.22, size=len(q_xy)))\n"
+        "    ws_tr = ratio_sc * 0.915; b_off = 3.5; q_sig = np.zeros_like(fe_sig)\n"
+        "    for idx_s, (u, v) in enumerate(sim_pp):\n"
+        "        z_fe = hilbert(fe_sig[:, idx_s]) * np.exp(-1j * omega0 * n_samp)\n"
+        "        u_src = 27.9 + (n_samp - (27.9 + b_off)) / ws_tr\n"
+        "        w_bb = np.interp(u_src, n_samp, z_fe.real, left=0.0, right=0.0) + 1j * np.interp(u_src, n_samp, z_fe.imag, left=0.0, right=0.0)\n"
+        "        pa, pb = q_xy[u], q_xy[v]; d_uv = float(np.linalg.norm(pb - pa))\n"
+        "        al = float(np.clip(np.dot(dmg_sc - pa, pb - pa) / max(d_uv**2, 1e-9), 0.0, 1.0))\n"
+        "        pp = float(np.linalg.norm((pa + al * (pb - pa)) - dmg_sc))\n"
+        "        sh_v = (sh_sc * math.exp(-0.5 * (pp / 0.016)**2)) if (0.008 < al * d_uv < d_uv - 0.008) else 0.0\n"
+        "        c_dir = 27.9 + b_off + ws_tr * 442.0 * (d_uv / ratio_sc)\n"
+        "        tr_c = float(g_s[u] * g_s[v]) * np.exp(1j * float(phi_s[u] + phi_s[v])) * w_bb * np.exp(1j * omega0 * n_samp) * (1.0 - sh_v * np.exp(-0.5 * ((n_samp - c_dir) / 14.0)**2))\n"
+        "        da, db = float(np.linalg.norm(dmg_sc - pa)), float(np.linalg.norm(dmg_sc - pb))\n"
+        "        c_sc = 27.9 + b_off + ws_tr * 442.0 * ((da + db) / ratio_sc)\n"
+        "        pkt_sc = co_sc * float(np.max(np.abs(tr_c))) * np.exp(-0.5 * ((n_samp - c_sc) / 11.0)**2) * np.exp(1j * (omega0 * (n_samp - c_sc) + float(phi_s[u] + phi_s[v]) + 1.2))\n"
+        "        q_sig[:, idx_s] = np.real(tr_c + pkt_sc) + rng.normal(0.0, 0.008 * float(np.max(np.abs(tr_c))), size=len(n_samp))\n"
+        "    meta_sc = {'sampling_frequency_hz': fs, 'excitation_frequency_hz': f0, 'plate_thickness_m': 0.0024, 'simulated': {'sensor_xy_m': sim_xy, 'path_pairs': sim_pp, 'panel_size_m': sim_sz, 'plate_thickness_m': h_th}, 'inspection': {'sensor_xy_m': q_xy, 'path_pairs': sim_pp, 'panel_size_m': q_sz, 'plate_thickness_m': 0.0024}}\n"
+        "    pred_sc = np.asarray(solution.predict_damage(fe_sig, q_sig, meta_sc), dtype=float)\n"
+        "    errs_mm.append(float(np.linalg.norm(pred_sc - dmg_sc) * 1000.0))\n"
+        "# Cases 9-10: (9) Pure-shadow near-sensor crack (catches `reg_sensor < 0.5` gain absorption!) & (10) Rayleigh-Lamb dispersive scaled 3x3 (catches unverified `late_rho` fast-path wall ghosts!)\n"
+        "q_sz9 = np.array([0.68, 0.56]); q_xy9 = np.column_stack([g.ravel() for g in np.meshgrid([0.14, 0.34, 0.54], [0.12, 0.28, 0.44])]); dmg9 = np.array([0.162, 0.288])\n"
+        "n9 = len(q_xy9); q_pp9 = np.array([[i, j] for i in range(n9) for j in range(n9) if i != j], dtype=int)\n"
+        "phi9 = {(i, j): float(rng.uniform(0.0, 2.0 * math.pi)) for i in range(n9) for j in range(i + 1, n9)}\n"
+        "g9 = np.exp(rng.normal(0.0, 0.14, size=n9)); q_sig9 = np.zeros((len(n_samp), len(q_pp9)), dtype=float); sl9 = slow_s * 1.12\n"
+        "for p_i, (u, v) in enumerate(q_pp9):\n"
+        "    ph = phi9[(min(int(u), int(v)), max(int(u), int(v)))]; pa, pb = q_xy9[u], q_xy9[v]; d_ab = float(np.linalg.norm(pb - pa))\n"
+        "    al = float(np.clip(np.dot(dmg9 - pa, pb - pa) / max(d_ab**2, 1e-9), 0.0, 1.0)); perp = float(np.linalg.norm((pa + al * (pb - pa)) - dmg9))\n"
+        "    crk = 0.62 * math.exp(-0.5 * (perp / 0.017)**2) * float(np.clip(min(al*d_ab, d_ab - al*d_ab)/0.008, 0.0, 1.0))\n"
+        "    amp0 = fe_med_amp * float(g9[u] * g9[v]) * math.exp(-2.4 * max(d_ab - 0.10, 0.0)) / math.sqrt(max(d_ab, 0.04))\n"
+        "    c_d = k0_s + sl9 * d_ab\n"
+        "    w_d = (1.0 - crk) * amp0 * np.interp(n_samp - c_d, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_d) + ph)\n"
+        "    d_w = float(np.linalg.norm(np.array([pa[0], -pa[1]]) - pb)); c_w = k0_s + sl9 * d_w\n"
+        "    w_w = 0.16 * (fe_med_amp * float(g9[u] * g9[v]) / math.sqrt(max(d_w, 0.05))) * np.interp(n_samp - c_w, u_grid, emp_env, left=0.0, right=0.0) * np.cos(omega0 * (n_samp - c_w) + ph + 0.7)\n"
+        "    q_sig9[:, p_i] = w_d + w_w + rng.normal(0.0, 0.005 * amp0, size=len(n_samp))\n"
+        "meta9 = {'sampling_frequency_hz': fs, 'excitation_frequency_hz': f0, 'simulated': {'sensor_xy_m': sim_xy, 'path_pairs': sim_pp, 'panel_size_m': sim_sz, 'plate_thickness_m': h_th}, 'inspection': {'sensor_xy_m': q_xy9, 'path_pairs': q_pp9, 'panel_size_m': q_sz9, 'plate_thickness_m': 0.0016}}\n"
+        "errs_mm.append(float(np.linalg.norm(np.asarray(solution.predict_damage(fe_sig, q_sig9, meta9), dtype=float) - dmg9) * 1000.0))\n"
+        "i_r0 = int(np.flatnonzero((sim_pp[:,0]==0)&(sim_pp[:,1]==1))[0]); nfft = 2048; freqs = np.fft.rfftfreq(nfft, d=1.0/fs)\n"
+        "Y_r0 = np.fft.rfft(fe_sig[:, i_r0] * np.exp(-0.5 * ((n_samp - 72.5) / 22.0)**4), nfft) * math.sqrt(0.10)\n"
+        "k_ref = 376.34 * (np.maximum(freqs, 1.0) / f0) ** 0.604; k_ref[0] = 0.0; S_src = Y_r0 * np.exp(1j * k_ref * 0.10)\n"
+        "q_sz10 = sim_sz * 1.25; q_xy10 = sim_xy * 1.25; dmg10 = np.array([0.39, 0.24]); k_10 = k_ref * math.sqrt(h_th / 0.0015)\n"
+        "g10 = np.exp(rng.normal(0.0, 0.16, size=len(q_xy10))); q_sig10 = np.zeros_like(fe_sig)\n"
+        "def _p_a0(dist, ph=0.0): return np.fft.irfft(S_src * np.exp(-1j * k_10 * dist + 1j * ph - 1.1 * dist) / math.sqrt(max(dist, 0.025)), nfft)[:len(n_samp)]\n"
+        "for idx10, (u, v) in enumerate(sim_pp):\n"
+        "    pa, pb = q_xy10[u], q_xy10[v]; d_ab = float(np.linalg.norm(pb - pa)); ud = (pb - pa) / max(d_ab, 1e-12)\n"
+        "    obs10 = sum(math.exp(-0.5 * (float(np.linalg.norm((q_xy10[m]-pa)-np.dot(q_xy10[m]-pa,ud)*ud))/0.011)**2) for m in range(len(q_xy10)) if m not in (u,v) and 0.012 < float(np.dot(q_xy10[m]-pa,ud)) < d_ab - 0.012)\n"
+        "    al = float(np.dot(dmg10 - pa, ud)); seg = float(np.linalg.norm((dmg10 - pa) - np.clip(al, 0.0, d_ab) * ud))\n"
+        "    tr10 = 1.0 - 0.38 * math.exp(-0.5 * (seg / 0.018)**2) * float(np.clip(min(al, d_ab - al) / 0.012, 0.0, 1.0))\n"
+        "    guv = float(g10[u] * g10[v]); w10 = guv * math.exp(-0.38 * obs10) * tr10 * _p_a0(d_ab, -0.35 * obs10)\n"
+        "    for ax in (0, 1):\n"
+        "        for ed in (0.0, float(q_sz10[ax])):\n"
+        "            pbm = pb.copy(); pbm[ax] = 2.0 * ed - pbm[ax]; w10 += -0.36 * guv * _p_a0(float(np.linalg.norm(pbm - pa)), 0.25)\n"
+        "    da, db = float(np.linalg.norm(dmg10 - pa)), float(np.linalg.norm(dmg10 - pb))\n"
+        "    w10 += 0.16 * guv * _p_a0(da + db, 2.1) * (0.10 / math.sqrt(max(min(da, db), 0.03)))\n"
+        "    q_sig10[:, idx10] = w10 + rng.normal(0.0, 0.006 * float(np.max(np.abs(w10))), size=len(n_samp))\n"
+        "meta10 = {'sampling_frequency_hz': fs, 'excitation_frequency_hz': f0, 'simulated': {'sensor_xy_m': sim_xy, 'path_pairs': sim_pp, 'panel_size_m': sim_sz, 'plate_thickness_m': h_th}, 'inspection': {'sensor_xy_m': q_xy10, 'path_pairs': sim_pp, 'panel_size_m': q_sz10, 'plate_thickness_m': 0.0015}}\n"
+        "errs_mm.append(float(np.linalg.norm(np.asarray(solution.predict_damage(fe_sig, q_sig10, meta10), dtype=float) - dmg10) * 1000.0))\n"
         "print(json.dumps({'status': 'ok', 'pass_20mm': int(sum(e <= 20.0 for e in errs_mm)), 'total': len(errs_mm), 'worst_mm': round(max(errs_mm), 2)}))\n"
     )
     try:
@@ -639,6 +718,7 @@ if os.path.isfile("/app/solution.py") and os.path.isfile("/app/data/virtual_base
             out["vb_probe_status"] = vj.get("status", "ok")
             if vj.get("status") == "ok":
                 out["vb_cross_pass_20mm"] = int(vj["pass_20mm"])
+                out["vb_cross_total"] = int(vj.get("total", 8))
                 out["vb_cross_worst_mm"] = float(vj["worst_mm"])
         else:
             out["vb_probe_status"] = f"rc_{pr.returncode}:{(pr.stderr or '').strip()[-140:]}"
@@ -839,6 +919,79 @@ def _blinded_ab_mapping(task_id: str) -> tuple[str, str, dict[str, str]]:
     return cand_a, cand_b, {"candidate_a": cand_a, "candidate_b": cand_b, "thesis": "thesis", "antithesis": "antithesis"}
 
 
+def _public_benchmark_has_unresolved_gap(pub_t: dict[str, Any], pub_a: dict[str, Any]) -> tuple[bool, str]:
+    """Return `(True, gap_reason)` iff BOTH `Thesis` and `Antithesis` exhibit an objective failure/gap on the public container benchmark."""
+    if pub_t.get("vb_probe_status") == "ok" or pub_a.get("vb_probe_status") == "ok":
+        v_tot = int(pub_t.get("vb_cross_total") or pub_a.get("vb_cross_total") or 6)
+        vt = int(pub_t.get("vb_cross_pass_20mm") or 0)
+        va = int(pub_a.get("vb_cross_pass_20mm") or 0)
+        wt = float(pub_t.get("vb_cross_worst_mm") or 1e9)
+        wa = float(pub_a.get("vb_cross_worst_mm") or 1e9)
+        if max(vt, va) < v_tot or min(wt, wa) > 18.5:
+            return True, f"vb_cross_pass_20mm_incomplete(T={vt}/{v_tot}@{wt}mm,A={va}/{v_tot}@{wa}mm)"
+    if pub_t.get("gw_probe_status") == "ok" or pub_a.get("gw_probe_status") == "ok":
+        gt = int(pub_t.get("gw_cross_pass_20mm") or 0)
+        ga = int(pub_a.get("gw_cross_pass_20mm") or 0)
+        wt = float(pub_t.get("gw_cross_worst_mm") or 1e9)
+        wa = float(pub_a.get("gw_cross_worst_mm") or 1e9)
+        if max(gt, ga) < 6 or min(wt, wa) > 14.5:
+            return True, f"gw_cross_pass_20mm_incomplete(T={gt}/6@{wt}mm,A={ga}/6@{wa}mm)"
+    if pub_t.get("public_checker_passed") is False and pub_a.get("public_checker_passed") is False:
+        return True, "both_failed_public_checker_script"
+    if pub_t.get("amr_solve_ok") is False and pub_a.get("amr_solve_ok") is False:
+        return True, "both_failed_amr_canonical_residual"
+    if pub_t.get("sparse_cert_valid") is False and pub_a.get("sparse_cert_valid") is False:
+        return True, "both_failed_sparse_certificate_validity"
+    if (
+        (pub_t.get("traffic_delayed_ok") is not None or pub_a.get("traffic_delayed_ok") is not None)
+        and not (bool(pub_t.get("traffic_ordinary_ok")) and bool(pub_t.get("traffic_delayed_ok")))
+        and not (bool(pub_a.get("traffic_ordinary_ok")) and bool(pub_a.get("traffic_delayed_ok")))
+    ):
+        return True, "both_failed_traffic_conservation"
+    return False, ""
+
+
+def _synthesized_strictly_dominates_branches(
+    pub_sub: dict[str, Any], pub_t: dict[str, Any], pub_a: dict[str, Any]
+) -> tuple[bool, str]:
+    """Return `(True, reason)` iff `pub_sub` strictly beats `max(Thesis, Antithesis)` on the public container benchmark."""
+    if pub_sub.get("vb_probe_status") == "ok":
+        v_tot = int(pub_sub.get("vb_cross_total") or pub_t.get("vb_cross_total") or pub_a.get("vb_cross_total") or 6)
+        vs = int(pub_sub.get("vb_cross_pass_20mm") or 0)
+        vt = int(pub_t.get("vb_cross_pass_20mm") or 0)
+        va = int(pub_a.get("vb_cross_pass_20mm") or 0)
+        ws = float(pub_sub.get("vb_cross_worst_mm") or 1e9)
+        best_w = min(float(pub_t.get("vb_cross_worst_mm") or 1e9), float(pub_a.get("vb_cross_worst_mm") or 1e9))
+        if vs > max(vt, va):
+            return True, f"vb_pass({vs}>{max(vt, va)},worst={ws}mm)"
+        if vs == v_tot and vs >= max(vt, va) and ws < 0.85 * best_w:
+            return True, f"vb_worst_mm({ws}mm<{round(best_w, 2)}mm)"
+    if pub_sub.get("gw_probe_status") == "ok":
+        gs = int(pub_sub.get("gw_cross_pass_20mm") or 0)
+        gt = int(pub_t.get("gw_cross_pass_20mm") or 0)
+        ga = int(pub_a.get("gw_cross_pass_20mm") or 0)
+        ws = float(pub_sub.get("gw_cross_worst_mm") or 1e9)
+        best_w = min(float(pub_t.get("gw_cross_worst_mm") or 1e9), float(pub_a.get("gw_cross_worst_mm") or 1e9))
+        if gs > max(gt, ga):
+            return True, f"gw_pass({gs}>{max(gt, ga)},worst={ws}mm)"
+        if gs == 6 and gs >= max(gt, ga) and ws < 0.85 * best_w:
+            return True, f"gw_worst_mm({ws}mm<{round(best_w, 2)}mm)"
+    if pub_sub.get("public_checker_passed") is True and not (pub_t.get("public_checker_passed") or pub_a.get("public_checker_passed")):
+        return True, "public_checker_repaired"
+    if pub_sub.get("amr_solve_ok") is True and not (pub_t.get("amr_solve_ok") or pub_a.get("amr_solve_ok")):
+        return True, "amr_canonical_residual_repaired"
+    if pub_sub.get("sparse_cert_valid") is True and not (pub_t.get("sparse_cert_valid") or pub_a.get("sparse_cert_valid")):
+        return True, "sparse_certificate_repaired"
+    if (
+        bool(pub_sub.get("traffic_ordinary_ok"))
+        and bool(pub_sub.get("traffic_delayed_ok"))
+        and not (bool(pub_t.get("traffic_ordinary_ok")) and bool(pub_t.get("traffic_delayed_ok")))
+        and not (bool(pub_a.get("traffic_ordinary_ok")) and bool(pub_a.get("traffic_delayed_ok")))
+    ):
+        return True, "traffic_delayed_and_ordinary_repaired"
+    return False, ""
+
+
 def reconcile_thesis_and_antithesis_publicly(
     *,
     task: m6f.FrontierBenchmarkTask,
@@ -1023,6 +1176,128 @@ def reconcile_thesis_and_antithesis_publicly(
                     "antithesis_public_metrics": pub_a,
                     "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
                 }
+
+    # Layer 2b: Bounded Public-Container Code-Level Dialectical Sublation (`Aufhebung`)
+    # Fires ONLY when BOTH `Thesis` and `Antithesis` leave an unresolved gap on the public container benchmark,
+    # allowing Synthesis to combine `candidate_a` + `candidate_b` + staged `/tmp/hegel_wormhole_skills` in `synth_cid`,
+    # and commits ONLY if the synthesized self-contained artifact passes contract checks AND strictly beats `max(T, A)`!
+    has_gap, gap_reason = _public_benchmark_has_unresolved_gap(pub_t, pub_a)
+    if has_gap and synth_cid != "mock":
+        tok_sub = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
+        try:
+            if clean_base_tar.is_file():
+                m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, clean_base_tar)
+            # Stage both blinded candidates + recalled wormhole operators inside `/tmp` of `synth_cid`
+            tar_by_br = {"thesis": thesis_tar, "antithesis": antithesis_tar}
+            pub_by_br_sub = {"thesis": pub_t, "antithesis": pub_a}
+            m6f.exec_container_bash(synth_cid, "rm -rf /tmp/dialectic && mkdir -p /tmp/dialectic/candidate_a /tmp/dialectic/candidate_b", timeout_sec=15)
+            for slot_name, br_key in (("candidate_a", cand_a_br), ("candidate_b", cand_b_br)):
+                subprocess.run(["docker", "cp", str(tar_by_br[br_key]), f"{synth_cid}:/tmp/dialectic/{slot_name}.tar"], capture_output=True, timeout=20)
+                m6f.exec_container_bash(
+                    synth_cid,
+                    f"tar -xf /tmp/dialectic/{slot_name}.tar -C /tmp/dialectic/{slot_name} && rm -f /tmp/dialectic/{slot_name}.tar",
+                    timeout_sec=20,
+                )
+            recalled_stub = [{"node_id": str(nid)} for nid in antithesis_summary.get("recalled_node_ids", [])]
+            staged_sub_skills = stage_recalled_executable_wormholes_in_container(synth_cid, recalled_stub) if recalled_stub else []
+            ev_by_slot = {
+                "candidate_a": _extract_trajectory_evidence_digest(antithesis_dir if cand_a_br == "antithesis" else thesis_dir, antithesis_summary if cand_a_br == "antithesis" else thesis_summary, max_chars=7000),
+                "candidate_b": _extract_trajectory_evidence_digest(antithesis_dir if cand_b_br == "antithesis" else thesis_dir, antithesis_summary if cand_b_br == "antithesis" else thesis_summary, max_chars=7000),
+            }
+            sub_turns: list[dict[str, Any]] = [
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "task_instruction": task.instruction_text,
+                            "declared_artifacts": list(task.declared_artifacts),
+                            "public_benchmark_unresolved_gap": gap_reason,
+                            "candidate_a_dir": "/tmp/dialectic/candidate_a",
+                            "candidate_a_public_metrics": pub_by_br_sub[cand_a_br],
+                            "candidate_a_digest": ev_by_slot["candidate_a"],
+                            "candidate_b_dir": "/tmp/dialectic/candidate_b",
+                            "candidate_b_public_metrics": pub_by_br_sub[cand_b_br],
+                            "candidate_b_digest": ev_by_slot["candidate_b"],
+                            "mounted_executable_wormhole_skills": staged_sub_skills,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
+            sub_sys = (
+                "You are the `Hegel-M6.9.2` Code-Level Dialectical Sublation Engine (`Aufhebung`).\n"
+                "Both `candidate_a` (`/tmp/dialectic/candidate_a`) and `candidate_b` (`/tmp/dialectic/candidate_b`) left an objective gap "
+                "on the public container benchmark (`public_benchmark_unresolved_gap`).\n"
+                "In Turn 1, inspect `candidate_a`, `candidate_b`, and any relevant `/tmp/hegel_wormhole_skills` operators (`PYTHONPATH=/tmp`), "
+                "synthesize a unified, SELF-CONTAINED deliverable directly into `declared_artifacts` (inlining any pure NumPy/SciPy/sklearn "
+                "wormhole functions via `inspect.getsource` — NEVER leave `hegel_wormhole_skills` or `/tmp` imports in target files!), "
+                "and verify clean-process execution (`python3 -I`)."
+            )
+            sub_rat = ""
+            for sub_idx in range(1, 3):
+                llm_sub = client.call_structured(
+                    system_prompt=sub_sys,
+                    conversation_turns=sub_turns,
+                    output_schema=CODE_SUBLATION_TURN_SCHEMA,
+                    stage_subdir=f"{stage_subdir}__code_sublation_t{sub_idx}",
+                )
+                tok_sub["prompt"] += int(llm_sub.get("prompt_tokens", 0))
+                tok_sub["cached"] += int(llm_sub.get("cached_tokens", 0))
+                tok_sub["completion"] += int(llm_sub.get("completion_tokens", 0))
+                tok_sub["wall_ms"] += float(llm_sub.get("wall_ms", 0.0))
+                if not llm_sub.get("ok"):
+                    break
+                p_sub = llm_sub["parsed"]
+                sub_rat = str(p_sub.get("rationale") or "")
+                cmd_sub = str(p_sub.get("bash_command") or "")
+                ex_sub = m6f.exec_container_bash(synth_cid, f"export PYTHONPATH=/tmp:${{PYTHONPATH:-}}\n{cmd_sub}", timeout_sec=120)
+                unin = find_uninlined_wormhole_imports_in_container(synth_cid, task.declared_artifacts)
+                if ex_sub.get("exit_code") == 0 and not unin:
+                    break
+                sub_turns.append({"role": "assistant", "content": json.dumps(p_sub, ensure_ascii=False)})
+                sub_turns.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "exit_code": ex_sub.get("exit_code"),
+                                "uninlined_wormhole_imports": unin,
+                                "stdout_tail": str(ex_sub.get("stdout") or "")[-2500:],
+                                "stderr_tail": str(ex_sub.get("stderr") or "")[-1200:],
+                                "repair_instruction": "Fix any syntax/runtime error and inline ALL `hegel_wormhole_skills` code so `declared_artifacts` runs cleanly under `python3 -I`.",
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
+            m6f.exec_container_bash(synth_cid, "rm -rf /tmp/dialectic /tmp/hegel_wormhole_skills", timeout_sec=10)
+            unin_final = find_uninlined_wormhole_imports_in_container(synth_cid, task.declared_artifacts)
+            sha_sub = m6f.compute_declared_artifacts_digest(synth_cid, task.declared_artifacts)
+            chk_sub = (
+                verify_candidate_artifact_contract_in_container(synth_cid, task.declared_artifacts, sha_sub)
+                if (sha_sub and not unin_final)
+                else {"accepted": False, "reasons": unin_final or ["empty_digest"]}
+            )
+            if chk_sub.get("accepted"):
+                pub_sub = _run_public_container_candidate_benchmark(synth_cid)
+                dom_ok, dom_reason = _synthesized_strictly_dominates_branches(pub_sub, pub_t, pub_a)
+                if dom_ok:
+                    clean_base_tar.unlink(missing_ok=True)
+                    return {
+                        "selected_branch": "code_sublated_synthesis",
+                        "selection_mechanism": f"public_code_sublation({dom_reason})",
+                        "rationale": sub_rat,
+                        "synthesized_candidate_sha256": sha_sub,
+                        "thesis_public_contract": chk_t,
+                        "antithesis_public_contract": chk_a,
+                        "synthesized_public_contract": chk_sub,
+                        "thesis_public_metrics": pub_t,
+                        "antithesis_public_metrics": pub_a,
+                        "synthesized_public_metrics": pub_sub,
+                        "llm_tokens": tok_sub,
+                    }
+        except Exception:
+            pass
 
     # Layer 3: Deterministic Public Container Dominance Rules
     # 3a. Public checker script (`check_submission.py` / `check_outputs.py`)

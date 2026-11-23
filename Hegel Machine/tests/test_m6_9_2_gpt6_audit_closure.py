@@ -469,3 +469,75 @@ def test_a02_a03_auditor_catches_all_4_mutations_and_digest_always_starts_at_tur
         # AUD04: forbidden reverse-provenance URL inside `branch_trajectories` DAG MUST fail `biomystery_provenance_and_judge_token_audit`!
         (br_a / "01_decision_provenance_dag.json").write_text(json.dumps(_make_dag("curl https://europepmc.org/test")), encoding="utf-8")
         assert _run_aud()["biomystery_provenance_and_judge_token_audit"]["passed"] is False
+
+
+def test_virtual_baseline_dispersion_warped_tomography_sim2real_invariance() -> None:
+    """Verify `virtual_baseline_dispersion_warped_tomography` localizes within `<= 20 mm` under sim-to-real
+    panel-size change, 9-sensor stretched grid, `O(2*pi)` PZT bonding phase incoherence, and `exp(-5.2*d)` damping!
+    """
+    ns = {"track_wormhole_skill": lambda _: lambda fn: fn}
+    exec(lib.SKILL_05_WAVE_IMAGING.replace("from . import track_wormhole_skill", ""), ns)
+    vb_tomo = ns["virtual_baseline_dispersion_warped_tomography"]
+
+    fs, f0 = 600000.0, 50000.0
+    omega0 = 2.0 * np.pi * f0 / fs
+    t = np.arange(300, dtype=float)
+
+    # Simulated 0.50 x 0.50 FE baseline (coherent zero phase, 3x3 grid)
+    gx_s, gy_s = np.meshgrid([0.15, 0.25, 0.35], [0.15, 0.25, 0.35])
+    sim_xy = np.column_stack([gx_s.ravel(), gy_s.ravel()])
+    sim_pp = np.array([[i, j] for i in range(9) for j in range(9) if i != j], dtype=int)
+    sim_sig = np.zeros((300, len(sim_pp)), dtype=float)
+    for k, (u, v) in enumerate(sim_pp):
+        d_uv = float(np.linalg.norm(sim_xy[v] - sim_xy[u]))
+        c_uv = 28.0 + 440.0 * d_uv
+        env_uv = np.exp(-0.5 * ((t - c_uv) / 14.0) ** 2) * np.exp(-5.2 * max(d_uv - 0.10, 0.0)) / np.sqrt(d_uv)
+        sim_sig[:, k] = env_uv * np.cos(omega0 * (t - c_uv))
+
+    # Experimental 0.58 x 0.42 stretched 9-sensor panel with `O(2*pi)` PZT phase incoherence + crack at `[0.34, 0.25]`
+    gx_i, gy_i = np.meshgrid([0.11, 0.29, 0.47], [0.09, 0.21, 0.33])
+    insp_xy = np.column_stack([gx_i.ravel(), gy_i.ravel()])
+    insp_pp = np.array([[i, j] for i in range(9) for j in range(9) if i != j], dtype=int)
+    rng = np.random.default_rng(1234)
+    pair_phi = {(i, j): float(rng.uniform(0.0, 2.0 * np.pi)) for i in range(9) for j in range(i + 1, 9)}
+    dmg = np.array([0.34, 0.25])
+    insp_sig = np.zeros((300, len(insp_pp)), dtype=float)
+    for k, (u, v) in enumerate(insp_pp):
+        pa, pb = insp_xy[u], insp_xy[v]
+        d_uv = float(np.linalg.norm(pb - pa))
+        phi = pair_phi[(min(u, v), max(u, v))]
+        seg = pb - pa
+        proj = float(np.clip(np.dot(dmg - pa, seg) / max(d_uv ** 2, 1e-9), 0.0, 1.0))
+        perp = float(np.linalg.norm((pa + proj * seg) - dmg))
+        sh = 0.35 * np.exp(-0.5 * (perp / 0.015) ** 2)
+        c_d = 31.0 + 475.0 * d_uv
+        w_d = (1.0 - sh) * (np.exp(-5.2 * max(d_uv - 0.10, 0.0)) / np.sqrt(d_uv)) * np.exp(-0.5 * ((t - c_d) / 15.0) ** 2) * np.cos(omega0 * (t - c_d) + phi)
+        d_sc = float(np.linalg.norm(pa - dmg) + np.linalg.norm(dmg - pb))
+        c_sc = 31.0 + 475.0 * d_sc
+        w_sc = 0.20 * (np.exp(-5.2 * max(d_sc - 0.10, 0.0)) / np.sqrt(d_sc)) * np.exp(-0.5 * ((t - c_sc) / 15.0) ** 2) * np.cos(omega0 * (t - c_sc) + phi - 0.4)
+        insp_sig[:, k] = w_d + w_sc
+
+    meta = {
+        "sampling_frequency_hz": fs,
+        "excitation_frequency_hz": f0,
+        "plate_thickness_m": 0.002,
+        "simulated": {"sensor_xy_m": sim_xy, "path_pairs": sim_pp, "panel_size_m": np.array([0.50, 0.50])},
+        "inspection": {"sensor_xy_m": insp_xy, "path_pairs": insp_pp, "panel_size_m": np.array([0.58, 0.42])},
+    }
+    res = vb_tomo(sim_sig, insp_sig, meta)
+    err_mm = float(np.linalg.norm(np.asarray(res["location_m"]) - dmg) * 1000.0)
+    assert err_mm <= 18.0, f"Expected <= 18 mm error on stretched incoherent-phase plate, got {err_mm:.2f} mm ({res})"
+
+    # Verify Layer-2b Code-Level Dialectical Sublation gap & strict-dominance predicates
+    pub_t = {"vb_probe_status": "ok", "vb_cross_pass_20mm": 4, "vb_cross_worst_mm": 165.0}
+    pub_a = {"vb_probe_status": "ok", "vb_cross_pass_20mm": 5, "vb_cross_worst_mm": 61.2}
+    has_gap, gap_r = synth._public_benchmark_has_unresolved_gap(pub_t, pub_a)
+    assert has_gap is True and "vb_cross_pass_20mm_incomplete" in gap_r
+
+    pub_clean = {"vb_probe_status": "ok", "vb_cross_pass_20mm": 6, "vb_cross_worst_mm": 13.22}
+    assert synth._public_benchmark_has_unresolved_gap(pub_t, pub_clean)[0] is False
+    dom_ok, dom_r = synth._synthesized_strictly_dominates_branches(pub_clean, pub_t, pub_a)
+    assert dom_ok is True and "6>5" in dom_r
+    assert synth._synthesized_strictly_dominates_branches(pub_a, pub_t, pub_a)[0] is False
+
+
