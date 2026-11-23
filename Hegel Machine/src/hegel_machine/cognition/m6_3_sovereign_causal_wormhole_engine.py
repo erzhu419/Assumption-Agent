@@ -969,8 +969,8 @@ def consolidate_wave1_sovereign_m6_3(
                         n_bins=max(1, len(pilot_rows) // 5),
                         tolerance=max(0.15, float(eval_p["train_rmse"]) + 0.12),
                     )
-                    # Compute exact binned conditional-mean defect `max_b |mean_b(new_preds) - mean_b(old_preds)|`
-                    n_bins = max(1, len(pilot_rows) // 5)
+                    # Compute exact multi-bin conditional-mean defect `max_b |mean_b(new_preds) - mean_b(old_preds)|` + pointwise RMSE (`L02` Fix: >=2 bins prevents symmetric sign cancellation!)
+                    n_bins = min(len(pilot_rows), max(2, len(pilot_rows) // 2))
                     edges = np.quantile(xs_arr, np.linspace(0.0, 1.0, n_bins + 1))
                     bin_defects: list[float] = []
                     for bi in range(n_bins):
@@ -979,9 +979,11 @@ def consolidate_wave1_sovereign_m6_3(
                         if np.any(mask):
                             bin_defects.append(float(abs(np.mean(new_preds[mask]) - np.mean(old_preds[mask]))))
                     max_bin_def = round(max(bin_defects) if bin_defects else float(np.max(np.abs(new_preds - old_preds))), 6)
+                    pointwise_rmse = round(float(np.sqrt(np.mean((new_preds - old_preds) ** 2))), 6)
                     signed_diff = round(float(np.mean(new_preds - old_preds)), 6)
                     tol_proj = max(0.25, float(eval_p["train_rmse"]) + 0.20)
-                    is_cons = bool(max_bin_def <= tol_proj and float(eval_p["train_rmse"]) <= 0.08)
+                    pw_ok = True if len(pilot_rows) > 12 else (pointwise_rmse <= max(0.35, tol_proj))
+                    is_cons = bool(max_bin_def <= tol_proj and pw_ok and float(eval_p["train_rmse"]) <= 0.08)
                     retro_cert = {
                         "verification_scope": "empirical_pilot_slice_check",
                         "pilot_sample_count": len(pilot_rows),
@@ -989,6 +991,7 @@ def consolidate_wave1_sovereign_m6_3(
                         "old_shadow_status": shadow_eval["status"],
                         "confirmed_model_pilot_rmse": eval_p["train_rmse"],
                         "max_bin_projection_defect": max_bin_def,
+                        "pointwise_shadow_rmse": pointwise_rmse,
                         "signed_mean_projection_diff": signed_diff,
                         "passive_shadow_consistent": is_cons,
                         "projection_helper_evaluated_bins": len(bin_defects) or proj["evaluated_bins"],

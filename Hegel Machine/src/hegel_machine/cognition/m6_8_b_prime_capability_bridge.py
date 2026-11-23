@@ -201,8 +201,19 @@ def pi_fold_temporal_regime_selector(
     tr = t <= t0
     va = t > t0
     if int(np.sum(tr)) < 4 or int(np.sum(va)) < 2:
+        if cutoff_t0 is not None:
+            return {
+                "status": "insufficient_causal_history",
+                "selected_pi_fold_mode": "insufficient_history",
+                "forward_horizon_rmse_by_mode": {},
+                "best_memory_tau": None,
+                "causal_cutoff_t0": t0,
+                "prefix_count": int(np.sum(tr)),
+                "horizon_count": int(np.sum(va)),
+            }
         tr = np.arange(len(t)) < max(4, len(t) - 2)
         va = ~tr
+        t0 = float(t[np.flatnonzero(tr)[-1]])
 
     # Mode 1: `effective_constant` (instantaneous affine quasi-steady response `y = a * u + b`)
     A_inst = np.column_stack([u[tr], np.ones(int(np.sum(tr)))])
@@ -222,7 +233,7 @@ def pi_fold_temporal_regime_selector(
     rmse_ode = float(np.sqrt(np.mean((np.asarray(preds_ode) - y[va]) ** 2)))
 
     # Mode 3: `mori_zwanzig_memory_kernel` (causal exponential convolution `m_k(tau) = int_{<=t_k} exp(-(t_k-s)/tau) u(s) ds` + initial decay)
-    best_mz = {"rmse": float("inf"), "tau": tau_grid[0]}
+    best_mz: dict = {"rmse": float("inf"), "tau": float(tau_grid[0]), "coef": np.zeros(4), "last_mem_tr": 0.0}
     for tau in tau_grid:
         tau_f = max(float(tau), 1e-4)
         mem = np.zeros(len(t), dtype=float)
@@ -235,7 +246,12 @@ def pi_fold_temporal_regime_selector(
         c_mz, *_ = np.linalg.lstsq(Phi_mz[tr], y[tr], rcond=None)
         r_mz = float(np.sqrt(np.mean((Phi_mz[va] @ c_mz - y[va]) ** 2)))
         if r_mz < best_mz["rmse"]:
-            best_mz = {"rmse": r_mz, "tau": tau_f}
+            best_mz = {
+                "rmse": r_mz,
+                "tau": tau_f,
+                "coef": c_mz,
+                "last_mem_tr": float(mem[idx_tr[-1]]),
+            }
 
     candidates = {
         "effective_constant": round(rmse_inst, 6),
@@ -244,10 +260,28 @@ def pi_fold_temporal_regime_selector(
     }
     best_mode = min(candidates, key=lambda k: (candidates[k], 0 if k == "effective_constant" else (1 if k == "reduced_slow_ode" else 2)))
     return {
+        "status": "ok",
         "selected_pi_fold_mode": best_mode,
         "forward_horizon_rmse_by_mode": candidates,
         "best_memory_tau": round(float(best_mz["tau"]), 5),
         "causal_cutoff_t0": t0,
+        "prefix_count": int(np.sum(tr)),
+        "horizon_count": int(np.sum(va)),
+        "fitted_parameters": {
+            "effective_constant": {"slope_u": float(coef_inst[0]), "intercept": float(coef_inst[1])},
+            "reduced_slow_ode": {
+                "alpha_state": float(coef_ode[0]),
+                "beta_drive": float(coef_ode[1]),
+                "intercept": float(coef_ode[2]),
+                "y_at_cutoff": float(y[idx_tr[-1]]),
+            },
+            "mori_zwanzig_memory_kernel": {
+                "tau": round(float(best_mz["tau"]), 5),
+                "weights": [float(v) for v in np.asarray(best_mz["coef"]).ravel()],
+                "memory_at_cutoff": float(best_mz["last_mem_tr"]),
+                "t_origin": float(t[0]),
+            },
+        },
     }
 
 
@@ -258,12 +292,19 @@ def adjudicate_incumbent_vs_challenger_slices(
     max_slice_regression_tol: float = 0.002,
 ) -> dict:
     """Branch-Reconciliation Minority-Slice Protection (`Acceptance B4/B8`):
-    Promotes `challenger` ONLY if it improves worst-slice or mean loss WITHOUT regressing ANY slice beyond
-    `max_slice_regression_tol`; otherwise retains `incumbent`!
+    Promotes `challenger` ONLY if it covers ALL incumbent slices and improves worst-slice or mean loss WITHOUT
+    regressing ANY slice beyond `max_slice_regression_tol`; otherwise retains `incumbent`!
     """
-    keys = sorted(set(incumbent_slice_losses.keys()) & set(challenger_slice_losses.keys()))
-    if not keys:
+    if not incumbent_slice_losses:
         return {"decision": "keep_incumbent", "reason": "no_shared_validation_slices"}
+    missing_slices = sorted(set(incumbent_slice_losses.keys()) - set(challenger_slice_losses.keys()))
+    if missing_slices:
+        return {
+            "decision": "keep_incumbent",
+            "reason": "missing_required_slices",
+            "missing_slices": missing_slices,
+        }
+    keys = sorted(incumbent_slice_losses.keys())
     inc_vals = np.array([float(incumbent_slice_losses[k]) for k in keys], dtype=float)
     chl_vals = np.array([float(challenger_slice_losses[k]) for k in keys], dtype=float)
     if not (np.all(np.isfinite(inc_vals)) and np.all(np.isfinite(chl_vals))):
@@ -345,47 +386,80 @@ def verify_candidate_artifact_contract_in_container(
     declared_artifacts: tuple[str, ...],
     candidate_sha256: str,
 ) -> dict[str, Any]:
-    """Host-executed deterministic candidate validator inside `<agent_cid>` (`H01` Fix).
+    """Host-executed deterministic candidate validator inside `<agent_cid>` (`H01` + `E04` Fix).
 
-    Checks clean subprocess Python import/compile, CSV/TSV/JSON/NPZ non-emptiness & finite numeric values,
-    and absence of un-inlined `/tmp` `hegel_wormhole_skills` imports — bound to exact `candidate_sha256`!
+    Recomputes canonical byte-level `computed_candidate_sha256` directly inside `<agent_cid>` (rejecting any digest
+    mismatch!), verifies isolated subprocess Python import & callable/CLI entrypoint existence on explicit `.py`
+    deliverables, rejects `NaN`/`Inf` cells/constants in CSV/TSV/JSON/NPZ, and forbids `/tmp` `hegel_wormhole_skills` imports.
     """
     if not declared_artifacts or not candidate_sha256:
         return {
             "accepted": False,
             "candidate_sha256": candidate_sha256,
+            "computed_candidate_sha256": "",
             "reasons": ["missing_declared_artifacts_or_empty_digest"],
         }
     validator_py = r'''
-import ast, csv, importlib.util, json, math, os, sys
+import ast, csv, hashlib, json, math, os, subprocess, sys
 import numpy as np
 
 arts = json.loads(sys.argv[1])
 issues = []
 checked_files = []
+explicit_py_set = {a for a in arts if a.endswith(".py")}
 
-def _expand(paths):
-    out = []
-    for a in paths:
-        if os.path.isfile(a):
-            out.append(a)
-        elif os.path.isdir(a):
-            for dp, _, fns in os.walk(a):
-                if "__pycache__" in dp:
-                    continue
-                for fn in sorted(fns):
-                    out.append(os.path.join(dp, fn))
+h_all = hashlib.sha256()
+digest_complete = True
+files = []
+
+for a in arts:
+    if os.path.isfile(a):
+        files.append(a)
+        b = open(a, "rb").read()
+        if not b:
+            digest_complete = False
         else:
-            issues.append(f"missing:{a}")
-    return out
+            h_all.update(a.encode("utf-8") + b"\0" + hashlib.sha256(b).digest())
+    elif os.path.isdir(a):
+        dir_files = []
+        for dp, _, fns in os.walk(a):
+            if "__pycache__" in dp:
+                continue
+            for fn in sorted(fns):
+                if fn.endswith(".pyc"):
+                    continue
+                dir_files.append(os.path.join(dp, fn))
+        if not dir_files:
+            issues.append(f"empty_directory:{a}")
+            digest_complete = False
+        for fp in sorted(dir_files):
+            files.append(fp)
+            b = open(fp, "rb").read()
+            h_all.update(fp.encode("utf-8") + b"\0" + hashlib.sha256(b).digest())
+    else:
+        issues.append(f"missing:{a}")
+        digest_complete = False
 
-files = _expand(arts)
+computed_sha = h_all.hexdigest() if (files and digest_complete) else ""
 if not files:
     issues.append("no_files_found")
+
+py_import_runner = (
+    "import importlib.util, os, sys\n"
+    "fp = sys.argv[1]\n"
+    "sys.path.insert(0, os.path.dirname(os.path.abspath(fp)))\n"
+    "spec = importlib.util.spec_from_file_location('_hegel_contract_probe', fp)\n"
+    "if spec is None or spec.loader is None:\n"
+    "    raise ImportError(f'Cannot load spec for {fp}')\n"
+    "mod = importlib.util.module_from_spec(spec)\n"
+    "spec.loader.exec_module(mod)\n"
+)
 
 for fp in files:
     sz = os.path.getsize(fp)
     if sz == 0:
+        if os.path.basename(fp) == "__init__.py" and fp not in explicit_py_set:
+            continue
         issues.append(f"empty_file:{fp}")
         continue
     checked_files.append({"path": fp, "bytes": sz})
@@ -394,9 +468,31 @@ for fp in files:
         if "hegel_wormhole_skills" in txt:
             issues.append(f"uninlined_wormhole_import:{fp}")
         try:
-            ast.parse(txt)
+            tree = ast.parse(txt)
         except SyntaxError as exc:
             issues.append(f"syntax_error:{fp}:{exc.lineno}")
+            continue
+        if fp in explicit_py_set:
+            has_callable_or_cli = False
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    has_callable_or_cli = True
+                    break
+                if isinstance(node, ast.If) and "__main__" in ast.unparse(node.test):
+                    has_callable_or_cli = True
+                    break
+            if not has_callable_or_cli:
+                issues.append(f"no_callable_or_cli_entrypoint:{fp}")
+            pr = subprocess.run(
+                [sys.executable, "-c", py_import_runner, fp],
+                capture_output=True,
+                text=True,
+                timeout=12,
+            )
+            if pr.returncode != 0:
+                err_tail = (pr.stderr or pr.stdout or "").strip().splitlines()
+                msg = err_tail[-1][:140] if err_tail else f"rc={pr.returncode}"
+                issues.append(f"python_import_failed:{fp}:{msg}")
     elif fp.endswith((".csv", ".tsv")):
         sep = "\t" if fp.endswith(".tsv") else ","
         with open(fp, "r", encoding="utf-8", errors="ignore") as f:
@@ -411,16 +507,18 @@ for fp in files:
                     break
                 for cell in r:
                     cs = cell.strip().lower()
-                    if cs in {"inf", "-inf"}:
-                        issues.append(f"infinite_cell_value:{fp}:line_{r_i}")
+                    if cs in {"nan", "+nan", "-nan", "inf", "+inf", "-inf"}:
+                        issues.append(f"non_finite_cell_value:{fp}:line_{r_i}")
                         break
     elif fp.endswith(".json") and sz < 60_000_000:
         try:
-            obj = json.load(open(fp, "r", encoding="utf-8"))
+            def _reject_nonfinite_json(tok):
+                raise ValueError(f"non_finite_json_constant:{tok}")
+            obj = json.load(open(fp, "r", encoding="utf-8"), parse_constant=_reject_nonfinite_json)
             if obj in ({}, [], None):
                 issues.append(f"empty_json_payload:{fp}")
         except Exception as exc:
-            issues.append(f"invalid_json:{fp}:{type(exc).__name__}")
+            issues.append(f"invalid_json:{fp}:{type(exc).__name__}:{str(exc)[:80]}")
     elif fp.endswith(".npz") and sz < 100_000_000:
         try:
             z = np.load(fp, allow_pickle=False)
@@ -433,7 +531,7 @@ for fp in files:
         except Exception as exc:
             issues.append(f"invalid_npz:{fp}:{type(exc).__name__}")
 
-print(json.dumps({"accepted": len(issues) == 0, "issues": issues, "checked_files": checked_files}))
+print(json.dumps({"accepted": len(issues) == 0, "computed_sha256": computed_sha, "issues": issues, "checked_files": checked_files}))
 '''
     v_sha = hashlib.sha256(validator_py.encode("utf-8")).hexdigest()[:16]
     try:
@@ -441,27 +539,36 @@ print(json.dumps({"accepted": len(issues) == 0, "issues": issues, "checked_files
             ["docker", "exec", "-w", "/", agent_cid, "python3", "-c", validator_py, json.dumps(list(declared_artifacts))],
             capture_output=True,
             text=True,
-            timeout=25,
+            timeout=30,
         )
         if proc.returncode != 0:
             return {
                 "accepted": False,
                 "candidate_sha256": candidate_sha256,
+                "computed_candidate_sha256": "",
                 "validator_sha256_16": v_sha,
                 "reasons": [f"validator_rc_{proc.returncode}:{(proc.stderr or '')[-200:]}"],
             }
         parsed = json.loads(proc.stdout.strip().splitlines()[-1])
+        computed_sha = str(parsed.get("computed_sha256") or "")
+        reasons = list(parsed.get("issues", []))
+        if candidate_sha256 != "SKIP_DIGEST_CHECK" and computed_sha != candidate_sha256:
+            reasons.append(f"candidate_sha256_mismatch:expected={candidate_sha256[:16]}!=actual={computed_sha[:16]}")
         return {
-            "accepted": bool(parsed.get("accepted")),
-            "candidate_sha256": candidate_sha256,
+            "accepted": bool(parsed.get("accepted")) and len(reasons) == 0,
+            "candidate_sha256": computed_sha or candidate_sha256,
+            "expected_candidate_sha256": candidate_sha256,
+            "computed_candidate_sha256": computed_sha,
+            "digest_verified": bool(candidate_sha256 == "SKIP_DIGEST_CHECK" or (computed_sha and computed_sha == candidate_sha256)),
             "validator_sha256_16": v_sha,
-            "reasons": list(parsed.get("issues", [])),
+            "reasons": reasons,
             "checked_files": list(parsed.get("checked_files", [])),
         }
     except Exception as exc:
         return {
             "accepted": False,
             "candidate_sha256": candidate_sha256,
+            "computed_candidate_sha256": "",
             "validator_sha256_16": v_sha,
             "reasons": [f"validator_exception:{type(exc).__name__}:{str(exc)[:160]}"],
         }
@@ -492,7 +599,15 @@ def harvest_container_producer_skill_manifest(
     manifest_dir = episode_out_dir / "04b_producer_skill_manifest"
     producers_dir = manifest_dir / "producers"
     producers_dir.mkdir(parents=True, exist_ok=True)
-    blob_store = content_store_root or (episode_out_dir.parents[1] / "content_addressed_blobs")
+    if content_store_root is not None:
+        blob_store = content_store_root
+    else:
+        study_root = episode_out_dir.parents[1]
+        for anc in episode_out_dir.parents:
+            if anc.name in {"episodes", "branch_trajectories"}:
+                study_root = anc.parent
+                break
+        blob_store = study_root / "content_addressed_blobs"
     blob_store.mkdir(parents=True, exist_ok=True)
 
     harvest_py = r'''
@@ -558,7 +673,15 @@ print(json.dumps(out_producers))
             )
             if cp_proc.returncode != 0 or not dst_tmp.exists():
                 continue
-            files_iter = [dst_tmp] if dst_tmp.is_file() else [p for p in sorted(dst_tmp.rglob("*")) if p.is_file()]
+            files_iter = (
+                [dst_tmp]
+                if dst_tmp.is_file()
+                else [
+                    p
+                    for p in sorted(dst_tmp.rglob("*"))
+                    if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
+                ]
+            )
             for fp in files_iter:
                 sz = fp.stat().st_size
                 h = hashlib.sha256()
@@ -566,7 +689,8 @@ print(json.dumps(out_producers))
                     for chunk in iter(lambda: f_in.read(1024 * 1024), b""):
                         h.update(chunk)
                 b_sha = h.hexdigest()
-                ext = fp.suffix or ".bin"
+                orig_name = Path(art.rstrip("/")).name if dst_tmp.is_file() else fp.name
+                ext = Path(orig_name).suffix or ".bin"
                 # Persist blobs up to 15 MB in content-addressed store via `checkpoint_storage.clone_or_copy`
                 stored_blob_rel = None
                 if sz <= 15 * 1024 * 1024:
@@ -577,18 +701,28 @@ print(json.dumps(out_producers))
                 artifact_blob_refs.append(
                     {
                         "declared_root": art,
-                        "filename": fp.name,
+                        "filename": orig_name,
                         "bytes": sz,
                         "sha256": b_sha,
                         "content_addressed_ref": stored_blob_rel,
                     }
                 )
 
-    # Also invoke `code_agent.retain_evaluated_python_model` on the primary Python producer if present!
+    # Also invoke `code_agent.retain_evaluated_python_model` on the primary Python producer if present (`K01` Fix:
+    # rank declared `.py` deliverables & non-checker generator scripts ahead of `check_*`/`verify_*`/`test_*` scripts!)
     retained_model_ref: dict[str, Any] | None = None
     py_prods = [p for p in producer_records if p["archived_relpath"].endswith(".py")]
+    declared_py_basenames = {Path(a.rstrip("/")).name for a in declared_artifacts if a.endswith(".py")}
     if py_prods:
-        primary_py = Path(py_prods[-1]["archived_relpath"]).name
+        def _prod_rank(rec: dict[str, Any]) -> tuple[int, int]:
+            c_path = str(rec.get("container_path") or "")
+            b_name = Path(c_path).name.lower()
+            is_declared = 2 if Path(c_path).name in declared_py_basenames else 0
+            is_checker = -1 if b_name.startswith(("check_", "verify_", "test_", "_")) else 1
+            return (is_declared + is_checker, int(rec.get("bytes") or 0))
+
+        ranked_py = sorted(py_prods, key=_prod_rank)
+        primary_py = Path(ranked_py[-1]["archived_relpath"]).name
         try:
             ret_info = retain_evaluated_python_model(
                 producers_dir,
@@ -599,16 +733,20 @@ print(json.dumps(out_producers))
             )
             retained_model_ref = {
                 "retained_model": ret_info["model"],
+                "primary_producer_container_path": ranked_py[-1]["container_path"],
                 "selected_channels": ret_info["selected_channels"],
+                "training_mse": None,
+                "training_mse_status": "not_applicable_general_frontier_task",
             }
         except Exception:
             retained_model_ref = None
 
-    build_cmds = [
-        str((t.get("decision") or {}).get("bash_command") or "")[:500]
-        for t in turn_logs
-        if any(k in str((t.get("decision") or {}).get("bash_command") or "") for k in ("g++", "gcc", "cmake", "python3"))
-    ][-12:]
+    build_cmds: list[str] = []
+    for t in turn_logs:
+        cmd_raw = str(t.get("bash_command") or (t.get("decision") or {}).get("bash_command") or "").strip()
+        if cmd_raw and any(k in cmd_raw for k in ("g++", "gcc", "cmake", "make", "python3", "python ")):
+            build_cmds.append(cmd_raw[:600])
+    build_cmds = build_cmds[-16:]
 
     # Infer temporal & structural attributes from producer code
     combined_py = "\n\n".join(
@@ -731,8 +869,173 @@ def recover_historical_producers_from_sealed_dag(episode_dir: Path) -> dict[str,
 
 
 # ============================================================================
-# 5. Wire M5 Multi-Scale / Subtree & Branch Reconciliation into Frontier (`P1a`)
+# 5. Genuine AST-to-`Program` Subtree Lifting & Branch Reconciliation (`P1a` + `K02` Fix)
 # ============================================================================
+
+_UNARY_CALL_MAP = {
+    "sin": "sin",
+    "cos": "cos",
+    "tanh": "tanh",
+    "exp": "exp",
+    "log": "log",
+    "log1p": "log",
+    "sqrt": "sqrt",
+    "abs": "abs",
+    "fabs": "abs",
+}
+
+_BINARY_CALL_MAP = {
+    "maximum": "max",
+    "minimum": "min",
+    "max": "max",
+    "min": "min",
+    "add": "add",
+    "subtract": "sub",
+    "multiply": "mul",
+    "divide": "div",
+}
+
+
+def lift_python_scientific_expressions_to_programs(
+    closures: list[dict[str, str]],
+    *,
+    max_programs: int = 4,
+) -> list[tuple[str, Program]]:
+    """Lift real mathematical expressions from pure Python AST closures into typed `Program` trees (`K02` Upgrade).
+
+    Replaces heuristic `len(closures) * u_drive` proxies with genuine AST expression translation (`add`, `sub`,
+    `mul`, `div`, `neg`, `sin`, `cos`, `tanh`, `exp`, `log`, `sqrt`, `abs`, `min`, `max`, integer powers, and
+    straight-line local intermediate bindings), normalizing function parameters to positional roles `x_0, x_1, ...`.
+    Complex procedural/loop/C++ closures that do not expose an algebraic expression return `[]` honestly rather
+    than inventing a synthetic formula!
+    """
+    lifted: list[tuple[str, Program]] = []
+
+    def _lift_expr(node: ast.AST, env: dict[str, Program], depth: int) -> Program | None:
+        if depth > 14:
+            return None
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+            val = float(node.value)
+            return Program("const", value=val) if math.isfinite(val) else None
+        if isinstance(node, ast.Name):
+            if node.id in env:
+                return env[node.id]
+            if node.id == "pi":
+                return Program("const", value=round(math.pi, 8))
+            if node.id == "e":
+                return Program("const", value=round(math.e, 8))
+            return None
+        if isinstance(node, ast.Attribute) and node.attr in {"pi", "e"}:
+            return Program("const", value=round(math.pi if node.attr == "pi" else math.e, 8))
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in env:
+            base_p = env[node.value.id]
+            if base_p.op == "feature" and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                return Program("feature", name=f"{base_p.name}_idx{node.slice.value}")
+            return base_p
+        if isinstance(node, ast.UnaryOp):
+            ch = _lift_expr(node.operand, env, depth + 1)
+            if ch is None:
+                return None
+            if isinstance(node.op, ast.UAdd):
+                return ch
+            if isinstance(node.op, ast.USub):
+                if ch.op == "const" and ch.value is not None:
+                    return Program("const", value=-float(ch.value))
+                return Program("neg", children=(ch,))
+            return None
+        if isinstance(node, ast.BinOp):
+            left = _lift_expr(node.left, env, depth + 1)
+            right = _lift_expr(node.right, env, depth + 1)
+            if left is None:
+                return None
+            if isinstance(node.op, ast.Add) and right is not None:
+                return Program("add", children=(left, right))
+            if isinstance(node.op, ast.Sub) and right is not None:
+                return Program("sub", children=(left, right))
+            if isinstance(node.op, ast.Mult) and right is not None:
+                return Program("mul", children=(left, right))
+            if isinstance(node.op, ast.Div) and right is not None:
+                return Program("div", children=(left, right))
+            if isinstance(node.op, ast.Pow) and isinstance(node.right, ast.Constant) and isinstance(node.right.value, (int, float)):
+                exp_v = float(node.right.value)
+                if exp_v == 2.0:
+                    return Program("mul", children=(left, left))
+                if exp_v == 3.0:
+                    return Program("mul", children=(Program("mul", children=(left, left)), left))
+                if exp_v == 0.5:
+                    return Program("sqrt", children=(left,))
+                if exp_v == -1.0:
+                    return Program("div", children=(Program("const", value=1.0), left))
+            return None
+        if isinstance(node, ast.Call):
+            fn_name = ""
+            if isinstance(node.func, ast.Name):
+                fn_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                fn_name = node.func.attr
+            if fn_name in {"asarray", "array", "float", "real", "ravel"} and len(node.args) >= 1:
+                return _lift_expr(node.args[0], env, depth + 1)
+            if fn_name == "square" and len(node.args) == 1:
+                ch = _lift_expr(node.args[0], env, depth + 1)
+                return Program("mul", children=(ch, ch)) if ch is not None else None
+            if fn_name == "clip" and len(node.args) == 3:
+                x_c = _lift_expr(node.args[0], env, depth + 1)
+                lo_c = _lift_expr(node.args[1], env, depth + 1)
+                hi_c = _lift_expr(node.args[2], env, depth + 1)
+                if x_c is not None and lo_c is not None and hi_c is not None:
+                    return Program("min", children=(Program("max", children=(x_c, lo_c)), hi_c))
+                return None
+            if fn_name in _UNARY_CALL_MAP and len(node.args) == 1:
+                ch = _lift_expr(node.args[0], env, depth + 1)
+                return Program(_UNARY_CALL_MAP[fn_name], children=(ch,)) if ch is not None else None
+            if fn_name in _BINARY_CALL_MAP and len(node.args) == 2:
+                a0 = _lift_expr(node.args[0], env, depth + 1)
+                a1 = _lift_expr(node.args[1], env, depth + 1)
+                return Program(_BINARY_CALL_MAP[fn_name], children=(a0, a1)) if (a0 is not None and a1 is not None) else None
+        if isinstance(node, ast.IfExp):
+            body_p = _lift_expr(node.body, env, depth + 1)
+            else_p = _lift_expr(node.orelse, env, depth + 1)
+            if isinstance(node.test, ast.Compare) and len(node.test.ops) == 1 and len(node.test.comparators) == 1:
+                cl = _lift_expr(node.test.left, env, depth + 1)
+                cr = _lift_expr(node.test.comparators[0], env, depth + 1)
+                if cl is not None and cr is not None and body_p is not None and else_p is not None:
+                    if isinstance(node.test.ops[0], (ast.GtE, ast.Gt)):
+                        return Program("if", children=(Program("ge", children=(cl, cr)), body_p, else_p))
+                    if isinstance(node.test.ops[0], (ast.Lt, ast.LtE)):
+                        return Program("if", children=(Program("lt", children=(cl, cr)), body_p, else_p))
+        return None
+
+    import math
+
+    for cl in closures:
+        fn_name = str(cl.get("name") or "fn")
+        code_str = str(cl.get("code") or "")
+        try:
+            tree = ast.parse(code_str)
+        except SyntaxError:
+            continue
+        for stmt in tree.body:
+            if not isinstance(stmt, ast.FunctionDef):
+                continue
+            env: dict[str, Program] = {}
+            all_args = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
+            for idx, arg in enumerate(all_args):
+                env[arg.arg] = Program("feature", name=f"x_{idx}")
+            best_fn_prog: Program | None = None
+            for b_stmt in stmt.body:
+                if isinstance(b_stmt, ast.Assign) and len(b_stmt.targets) == 1 and isinstance(b_stmt.targets[0], ast.Name):
+                    rhs_p = _lift_expr(b_stmt.value, env, 0)
+                    if rhs_p is not None and rhs_p.size <= 25:
+                        env[b_stmt.targets[0].id] = rhs_p
+                elif isinstance(b_stmt, ast.Return) and b_stmt.value is not None:
+                    ret_p = _lift_expr(b_stmt.value, env, 0)
+                    if ret_p is not None and ret_p.op not in {"const", "feature"}:
+                        best_fn_prog = ret_p
+            if best_fn_prog is not None:
+                lifted.append((fn_name, best_fn_prog))
+                if len(lifted) >= max_programs:
+                    return lifted
+    return lifted
 
 
 def consolidate_wave1_skill_manifests_with_reconciliation(
@@ -741,11 +1044,11 @@ def consolidate_wave1_skill_manifests_with_reconciliation(
     forest: PhilosophicalForest,
     archive: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Consolidate complete Wave-1 `ExecutableSkillManifest` closures + anti-unified shared base subtrees
-    and propagate premise retractions via `branch_reconciliation` & `m5_temporal_multiscale_and_base_subtree` (`P1a`).
+    """Consolidate complete Wave-1 `ExecutableSkillManifest` closures + genuine AST-lifted `SharedBaseSubtree`s
+    and propagate premise retractions via `branch_reconciliation` & `m5_temporal_multiscale_and_base_subtree` (`P1a` + `K02`).
     """
     events: list[dict[str, Any]] = []
-    exported_programs_by_family: dict[str, list[tuple[str, Program]]] = {}
+    exported_programs_all: list[tuple[str, str, str, Program]] = []
     retracted_ids: set[str] = set()
 
     for summary, ep_dir in sorted(wave1_episode_dirs, key=lambda x: str(x[0].get("task_id", ""))):
@@ -776,22 +1079,15 @@ def consolidate_wave1_skill_manifests_with_reconciliation(
             full_prod_cnt = rec_h.get("recovered_file_count", 0)
             temp_mode = "present_or_adiabatic_ode"
 
-        # Represent temporal scaling structure as a typed `Program` AST for `anti_unify_programs` / `SharedBaseSubtreePrior`
-        prog_repr = Program(
-            "add",
-            children=(
-                Program(
-                    "mul",
-                    children=(
-                        Program("const", value=float(max(1, len(closures)))),
-                        Program("feature", name="u_drive"),
-                    ),
-                ),
-                Program("feature", name="memory_state" if "mori_zwanzig" in temp_mode else "slow_state"),
-            ),
+        # Lift genuine mathematical expressions from winning Python closures into typed `Program` ASTs (`K02` Fix!)
+        lifted_progs = (
+            lift_python_scientific_expressions_to_programs(closures, max_programs=4)
+            if summary.get("benchmark") != "BioMysteryBench-Preview"
+            else []
         )
-        if summary.get("benchmark") != "BioMysteryBench-Preview":
-            exported_programs_by_family.setdefault(fam, []).append((t_short, prog_repr))
+        for fn_nm, p_tree in lifted_progs:
+            exported_programs_all.append((t_short, fam, fn_nm, p_tree))
+        abstraction_kind = "ast_program_lifted" if lifted_progs else ("opaque_verified_operator" if (closures or full_prod_cnt > 0) else "no_producer")
 
         direct_nids = sorted(nid for nid, nd in archive.items() if nd.get("family_tag") == fam)
         target_nids: set[str] = set(direct_nids)
@@ -823,6 +1119,8 @@ def consolidate_wave1_skill_manifests_with_reconciliation(
                     "origin": f"wave1_manifest_closure_from_{t_short}",
                     "temporal_readout_mode": temp_mode,
                     "full_producer_count": full_prod_cnt,
+                    "abstraction_kind": abstraction_kind,
+                    "lifted_program_ops": [f"{fn_nm}:{p_t.op}" for fn_nm, p_t in lifted_progs],
                     "function_names": [c["name"] for c in closures],
                     "python_code": mod_code,
                 }
@@ -840,34 +1138,61 @@ def consolidate_wave1_skill_manifests_with_reconciliation(
                 "source_task": t_short,
                 "full_producer_count": full_prod_cnt,
                 "temporal_readout_mode": temp_mode,
+                "abstraction_kind": abstraction_kind,
+                "lifted_program_count": len(lifted_progs),
                 "module_filename": mod_fname,
                 "exported_functions": [c["name"] for c in closures],
                 "propagated_to_nodes": sorted(target_nids),
             }
         )
 
-    # Extract genuine `SharedBaseSubtreePrior` across pairs of confirmed Wave-1 families (`m5` + `anti_unify_programs`)
+    # Extract genuine `SharedBaseSubtreePrior` across ALL compatible pairs of AST-lifted Wave-1 `Program`s!
     registered_subtrees: list[str] = []
-    all_prog_entries = [item for lst in exported_programs_by_family.values() for item in lst]
-    if len(all_prog_entries) >= 2:
-        (src_a, p_a), (src_b, p_b) = all_prog_entries[0], all_prog_entries[1]
-        anti = anti_unify_programs(p_a, p_b)
-        if anti is not None:
-            sub_id = f"subtree_wave1_{src_a}__{src_b}"
+    for i_a in range(len(exported_programs_all)):
+        src_a, fam_a, fn_a, p_a = exported_programs_all[i_a]
+        for i_b in range(i_a + 1, len(exported_programs_all)):
+            src_b, fam_b, fn_b, p_b = exported_programs_all[i_b]
+            if src_a == src_b:
+                continue
+            cand_p_a, cand_p_b = p_a, p_b
+            anti = anti_unify_programs(cand_p_a, cand_p_b)
+            if anti is None:
+                # Scale-covariant identity `E == 1.0 * E`: unify `E_a` against `c * E_b` when inner operator matches!
+                if p_b.op == "mul" and len(p_b.children) == 2 and p_b.children[0].op == "const":
+                    cand_p_a = Program("mul", children=(Program("const", value=1.0), p_a))
+                    anti = anti_unify_programs(cand_p_a, cand_p_b)
+                elif p_a.op == "mul" and len(p_a.children) == 2 and p_a.children[0].op == "const":
+                    cand_p_b = Program("mul", children=(Program("const", value=1.0), p_b))
+                    anti = anti_unify_programs(cand_p_a, cand_p_b)
+            if anti is None:
+                continue
+            skeleton, slots = anti
+            if skeleton.op in {"arg", "const", "feature"}:
+                continue
+            skel_sha8 = hashlib.sha256(json.dumps(skeleton.to_dict(), sort_keys=True).encode("utf-8")).hexdigest()[:8]
+            sub_id = f"subtree_wave1_{src_a}_{fn_a}__{src_b}_{fn_b}__{skel_sha8}"
             if sub_id not in getattr(forest, "shared_base_subtrees", {}):
                 extract_shared_base_subtree_from_sources(
                     forest,
                     subtree_id=sub_id,
-                    prog_a=p_a,
-                    prog_b=p_b,
-                    shared_nodes=[{"role": "drive_response"}, {"role": "state_carryover"}],
-                    shared_relations=[{"relation": "requires_premise_and", "from": "drive_response", "to": "state_carryover"}],
-                    role_and_scale_schema={"q_role": "state", "u_role": "forcing", "temporal_normalization": "t_over_tau"},
-                    open_completion_branches=[{"slot": "residual_nonlinearity"}],
-                    supporting_sources=[{"source_id": src_a, "tree_id": src_a}, {"source_id": src_b, "tree_id": src_b}],
+                    prog_a=cand_p_a,
+                    prog_b=cand_p_b,
+                    shared_nodes=[{"role": "ast_operator_skeleton", "root_op": skeleton.op, "size": skeleton.size}],
+                    shared_relations=[{"relation": "anti_unified_ast_homomorphism", "from": f"{src_a}:{fn_a}", "to": f"{src_b}:{fn_b}"}],
+                    role_and_scale_schema={
+                        "positional_args": sorted(skeleton.required_features()),
+                        "source_families": sorted({fam_a, fam_b}),
+                        "parametric_slots": [s["slot"] for s in slots],
+                    },
+                    open_completion_branches=[{"slot": s["slot"], "path": list(s["path"])} for s in slots] or [{"slot": "exact_invariant"}],
+                    supporting_sources=[{"source_id": src_a, "tree_id": fn_a}, {"source_id": src_b, "tree_id": fn_b}],
                     probe_signatures=["sig:ode_trajectory", "sig:conservation_pde", "sig:sparse_sensor_network"],
                 )
                 registered_subtrees.append(sub_id)
+                if len(registered_subtrees) >= 12:
+                    break
+        if len(registered_subtrees) >= 12:
+            break
 
     # Execute `propagate_premise_retraction_invalidation` across claim dependency records
     retraction_summary: list[dict[str, Any]] = []
@@ -913,6 +1238,7 @@ def consolidate_wave1_skill_manifests_with_reconciliation(
 
     return {
         "wave1_manifest_events": events,
+        "lifted_program_entries_count": len(exported_programs_all),
         "registered_shared_base_subtrees": registered_subtrees,
         "retracted_claim_updates": retraction_summary,
         "m5_pi_fold_and_alignment_wiring": {
@@ -927,8 +1253,9 @@ def qualify_staged_wormhole_modules_in_container(
     agent_cid: str,
     staged_manifest: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Run an isolated container import & contract qualification pilot (`retrieved -> bound -> smoke_qualified`)
-    tagged with `HEGEL_SKILL_CALLER_ROLE=smoke_test` so startup qualification NEVER inflates agent skill counts!
+    """Run an isolated container import qualification pilot (`retrieved -> bound -> import_qualified`, `E01` Fix!)
+    via direct argv `docker exec ... python3 -c` (ZERO `bash -lc` quoting corruption!) and tagged with
+    `HEGEL_SKILL_CALLER_ROLE=smoke_test` so startup qualification NEVER inflates agent skill counts!
     """
     if not staged_manifest:
         return []
@@ -941,24 +1268,71 @@ def qualify_staged_wormhole_modules_in_container(
         "for mn in mods:\n"
         "    try:\n"
         "        m = importlib.import_module(mn)\n"
-        "        fns = [k for k, v in vars(m).items() if callable(v) and not k.startswith('_')]\n"
-        "        out.append({'module_import': mn, 'lifecycle_state': 'bound_and_import_qualified', 'callable_count': len(fns)})\n"
+        "        fns = sorted(k for k, v in vars(m).items() if callable(v) and not k.startswith('_') and k != 'track_wormhole_skill')\n"
+        "        out.append({\n"
+        "            'module_import': mn,\n"
+        "            'lifecycle_state': 'bound_and_import_qualified',\n"
+        "            'import_qualified': True,\n"
+        "            'contract_validated': False,\n"
+        "            'callable_count': len(fns),\n"
+        "            'callable_names': fns,\n"
+        "        })\n"
         "    except Exception as exc:\n"
-        "        out.append({'module_import': mn, 'lifecycle_state': 'failed_import', 'error': f'{type(exc).__name__}:{exc}'})\n"
+        "        out.append({\n"
+        "            'module_import': mn,\n"
+        "            'lifecycle_state': 'failed_import',\n"
+        "            'import_qualified': False,\n"
+        "            'contract_validated': False,\n"
+        "            'error': f'{type(exc).__name__}:{exc}',\n"
+        "        })\n"
         "print(json.dumps(out))\n"
     )
     proc = subprocess.run(
-        ["docker", "exec", agent_cid, "bash", "-lc", f"PYTHONPATH=/tmp python3 -c {json.dumps(qual_py)} {json.dumps(json.dumps(mod_names))}"],
+        [
+            "docker",
+            "exec",
+            "-w",
+            "/",
+            "-e",
+            "PYTHONPATH=/tmp",
+            "-e",
+            "HEGEL_SKILL_CALLER_ROLE=smoke_test",
+            agent_cid,
+            "python3",
+            "-c",
+            qual_py,
+            json.dumps(mod_names),
+        ],
         capture_output=True,
         text=True,
         timeout=20,
     )
     if proc.returncode != 0 or not proc.stdout.strip():
-        return [{"module_import": mn, "lifecycle_state": "qualification_exec_failed"} for mn in mod_names]
+        err_msg = (proc.stderr or proc.stdout or "").strip()[-240:]
+        return [
+            {
+                "module_import": mn,
+                "lifecycle_state": "qualification_exec_failed",
+                "import_qualified": False,
+                "contract_validated": False,
+                "returncode": proc.returncode,
+                "stderr": err_msg,
+            }
+            for mn in mod_names
+        ]
     try:
         return list(json.loads(proc.stdout.strip().splitlines()[-1]))
-    except Exception:
-        return [{"module_import": mn, "lifecycle_state": "qualification_parse_failed"} for mn in mod_names]
+    except Exception as exc:
+        return [
+            {
+                "module_import": mn,
+                "lifecycle_state": "qualification_parse_failed",
+                "import_qualified": False,
+                "contract_validated": False,
+                "error": f"{type(exc).__name__}:{exc}",
+            }
+            for mn in mod_names
+        ]
 
 
 # ============================================================================

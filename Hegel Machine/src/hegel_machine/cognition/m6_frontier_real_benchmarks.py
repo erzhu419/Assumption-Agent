@@ -1654,7 +1654,7 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
     except ValueError:
         toks = s.split()
 
-    # 1. Inspect `python -c "<inline>"` AST: reject pure print/literal/pass snippets that neither import nor read files!
+    # 1. Inspect `python -c "<inline>"` AST: reject print-only, stdlib-only (`import math; print('solver.py')`), or write-only (`Path(...).write_text(...)`) snippets!
     for idx, tk in enumerate(toks[:-1]):
         if tk == "-c" and idx >= 1 and "python" in toks[idx - 1].lower():
             inline_src = toks[idx + 1]
@@ -1662,20 +1662,45 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
                 tree = _ast.parse(inline_src)
             except SyntaxError:
                 return False
-            has_real_eval = False
-            io_or_exec_attrs = {"open", "load", "loadtxt", "read_csv", "read_table", "read_text", "read_bytes", "run", "check_output", "import_module", "spec_from_file_location"}
+            has_artifact_import = False
+            has_read_or_exec = False
+            has_write_call = False
+            read_or_exec_attrs = {
+                "load", "loadtxt", "genfromtxt", "read_csv", "read_table",
+                "read_text", "read_bytes", "run", "check_output",
+                "import_module", "spec_from_file_location",
+            }
+            write_attrs = {"write_text", "write_bytes", "write", "save", "savez", "savez_compressed", "to_csv"}
+            stdlib_names = {s.lower() for s in getattr(sys, "stdlib_module_names", set())} | {"numpy", "np", "scipy", "pandas", "pd", "sklearn"}
+            has_dir_artifact = any(not a.rstrip("/").endswith((".py", ".csv", ".tsv", ".json", ".npz", ".txt", ".md")) for a in declared_artifacts)
             for node in _ast.walk(tree):
-                if isinstance(node, (_ast.Import, _ast.ImportFrom)):
-                    has_real_eval = True
-                    break
-                if isinstance(node, _ast.Call):
-                    if isinstance(node.func, _ast.Name) and node.func.id in {"open", "__import__", "exec", "eval"}:
-                        has_real_eval = True
-                        break
-                    if isinstance(node.func, _ast.Attribute) and node.func.attr in io_or_exec_attrs:
-                        has_real_eval = True
-                        break
-            if not has_real_eval:
+                if isinstance(node, _ast.Import):
+                    for alias in node.names:
+                        mod_root = alias.name.split(".")[0].lower()
+                        if mod_root in art_stems or mod_root in {"importlib", "pytest"} or (has_dir_artifact and mod_root not in stdlib_names):
+                            has_artifact_import = True
+                elif isinstance(node, _ast.ImportFrom):
+                    mod_root = (node.module or "").split(".")[0].lower()
+                    if mod_root in art_stems or mod_root in {"importlib", "pytest"} or (has_dir_artifact and mod_root and mod_root not in stdlib_names):
+                        has_artifact_import = True
+                elif isinstance(node, _ast.Call):
+                    if isinstance(node.func, _ast.Name):
+                        if node.func.id in {"__import__", "exec", "eval"}:
+                            has_read_or_exec = True
+                        elif node.func.id == "open":
+                            mode_arg = node.args[1].value if (len(node.args) >= 2 and isinstance(node.args[1], _ast.Constant)) else "r"
+                            if any(m in str(mode_arg) for m in ("w", "a", "x")):
+                                has_write_call = True
+                            else:
+                                has_read_or_exec = True
+                    elif isinstance(node.func, _ast.Attribute):
+                        if node.func.attr in read_or_exec_attrs:
+                            has_read_or_exec = True
+                        elif node.func.attr in write_attrs:
+                            has_write_call = True
+            if not (has_artifact_import or has_read_or_exec):
+                return False
+            if has_write_call and not (has_artifact_import or has_read_or_exec):
                 return False
 
     if not declared_artifacts:
@@ -1696,7 +1721,7 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
     if any(vp in low for vp in validator_patterns):
         return True
 
-    return any(t in low for t in [*art_names, *art_roots])
+    return any(t in low for t in [*art_names, *art_roots, *art_stems])
 
 
 def classify_tb_failure_taxonomy(

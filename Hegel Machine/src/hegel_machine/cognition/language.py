@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
+import math
 from math import isfinite
 from typing import TYPE_CHECKING, Any
 
@@ -381,6 +382,20 @@ class EvaluationContext:
         left = self._evaluate(program.children[0], bindings)
         if program.op == "abs":
             return abs(left)
+        if program.op == "neg":
+            return -left
+        if program.op == "sin":
+            return math.sin(left)
+        if program.op == "cos":
+            return math.cos(left)
+        if program.op == "tanh":
+            return math.tanh(left)
+        if program.op == "exp":
+            return math.exp(max(-60.0, min(60.0, left)))
+        if program.op == "log":
+            return math.log(max(abs(left), 1e-12))
+        if program.op == "sqrt":
+            return math.sqrt(max(left, 0.0))
         if program.op == "not":
             return float(not left)
         right = self._evaluate(program.children[1], bindings)
@@ -390,6 +405,8 @@ class EvaluationContext:
             return left - right
         if program.op == "mul":
             return left * right
+        if program.op == "div":
+            return left / (right if abs(right) > 1e-12 else (1e-12 if right >= 0 else -1e-12))
         if program.op == "min":
             return min(left, right)
         if program.op == "max":
@@ -414,8 +431,9 @@ class Program:
 
     def __post_init__(self) -> None:
         arities = {
-            "const": 0, "feature": 0, "lag": 0, "available": 0, "arg": 0, "abs": 1, "not": 1,
-            "add": 2, "sub": 2, "mul": 2, "min": 2, "max": 2,
+            "const": 0, "feature": 0, "lag": 0, "available": 0, "arg": 0,
+            "abs": 1, "neg": 1, "sin": 1, "cos": 1, "tanh": 1, "exp": 1, "log": 1, "sqrt": 1, "not": 1,
+            "add": 2, "sub": 2, "mul": 2, "div": 2, "min": 2, "max": 2,
             "ge": 2, "lt": 2, "and": 2, "or": 2, "if": 3,
             "accumulate": 3 if self.name in {"vdp", "vdp_lag1"} else 2,
             "window_sum": 1, "event_delta": 1, "state_replay": 1,

@@ -37,13 +37,20 @@ from hegel_machine.cognition.m5_live_gpt_and_provenance import (
     SubscriptionQuotaPausedError,
     discover_chatgpt_subscription_codex_cli,
 )
-from hegel_machine.cognition.m6_4_executable_wormhole_library import consolidate_wave1_executable_modules_into_forest
+from hegel_machine.cognition.m6_4_executable_wormhole_library import (
+    HOST_MECHANICAL_WORMHOLE_GATE_RUNNER_PY,
+    NODE_TO_EXECUTABLE_WORMHOLE_MODULE,
+    consolidate_wave1_executable_modules_into_forest,
+)
 from hegel_machine.cognition.m6_8_b_prime_capability_bridge import (
     HeavyTimingRWLock,
-    build_regrade_receipt,
+    SKILL_07_MULTISCALE_RECONCILIATION,
     consolidate_wave1_skill_manifests_with_reconciliation,
 )
-from hegel_machine.cognition.m6_9_a_dialectical_synthesis_engine import run_m6_9_a_two_branch_episode
+from hegel_machine.cognition.m6_9_a_dialectical_synthesis_engine import (
+    PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY,
+    run_m6_9_a_two_branch_episode,
+)
 from run_m6_frontier_scout_study import _aggregate_results, _write_sha256sums  # type: ignore
 
 
@@ -72,6 +79,13 @@ def main() -> int:
     parser.add_argument("--max-workers", type=int, default=5)
     parser.add_argument("--max-turns-per-branch", type=int, default=28)
     parser.add_argument("--cmd-timeout", type=int, default=180)
+    parser.add_argument("--reasoning-effort", type=str, default="medium")
+    parser.add_argument(
+        "--wave1-consolidation-source",
+        choices=("antithesis_only", "synthesized"),
+        default="antithesis_only",
+        help="Consolidate Wave-1 lessons/producers strictly from Antithesis 1x branch (`antithesis_only`, pure 1x lineage) or full `synthesized` episode.",
+    )
     args = parser.parse_args()
 
     codex_info = discover_chatgpt_subscription_codex_cli()
@@ -88,7 +102,7 @@ def main() -> int:
     hegel_arm = "Hegel_M6_9_A_TwoBranch_LiveGPT"
     active_arms = ("Bare_ReAct_LiveGPT", hegel_arm)
 
-    # 1. Stage sealed 28-turn Bare_ReAct_Run1 (`12/20` native; `13/20` w/ `05_regrade_receipt.json`)
+    # 1. Stage sealed 28-turn Bare_ReAct_Run1 (`12/20` native — ZERO synthetic regrade fabrication, ZERO mutation of `00_episode_summary.json`, `A03`/`P0a` Fix!)
     all_summaries: list[dict[str, Any]] = []
     bare_run1_by_task: dict[str, bool] = {}
     if args.sealed_bare_dir.is_dir():
@@ -101,33 +115,8 @@ def main() -> int:
             if sum_f.is_file() and ver_f.is_file():
                 s_obj = json.loads(sum_f.read_text(encoding="utf-8"))
                 v_obj = json.loads(ver_f.read_text(encoding="utf-8"))
-                if bool(s_obj.get("strict_pass")) != bool(v_obj.get("strict_pass")):
-                    s_obj["strict_pass"] = bool(v_obj.get("strict_pass"))
-                    sum_f.write_text(json.dumps(s_obj, indent=2, ensure_ascii=False), encoding="utf-8")
                 bare_run1_by_task[str(s_obj["task_id"])] = bool(v_obj.get("strict_pass"))
-                if s_obj.get("task_id") == "tb__amr-poisson-optimize" and not bool(v_obj.get("strict_pass")):
-                    cand_sha = _compute_snapshot_dir_sha256(dst_ep / "04_submitted_artifacts_snapshot")
-                    ver_sha = hashlib.sha256(ver_f.read_bytes()).hexdigest()
-                    receipt = build_regrade_receipt(
-                        original_episode_id=dst_ep.name,
-                        original_candidate_sha256=cand_sha,
-                        regrade_candidate_sha256=cand_sha,
-                        original_verifier_sha256=ver_sha,
-                        task_id="tb__amr-poisson-optimize",
-                        verifier_image_tag="tb_sci_amr-poisson-optimize_verifier:latest",
-                        resource_spec={"cpus": 2, "memory_mb": 12288, "timeout_sec": 3600},
-                        timing_replicates_sec=[71.8, 72.1, 72.3],
-                        official_median_sec=72.1,
-                        threshold_sec=73.1229,
-                        strict_pass=True,
-                        ctrf_summary={"tests": 23, "passed": 23, "failed": 0},
-                        verifier_stdout="Official task.toml 12g/3600s uncontended replay (23/23 passed).",
-                        regrade_reason="official_task_toml_12g_3600s_wrapper_alignment",
-                    )
-                    (dst_ep / "05_regrade_receipt.json").write_text(
-                        json.dumps(receipt, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-                    )
-                all_summaries.append(s_obj)
+                all_summaries.append({**s_obj, "strict_pass": bool(v_obj.get("strict_pass"))})
 
     # 2. Reader+Writer Reentrant `HeavyTimingRWLock` + 3-slot normal verifier semaphore
     rw_lock = HeavyTimingRWLock()
@@ -167,14 +156,38 @@ def main() -> int:
     pause_lock = threading.Lock()
     study_t0 = monotonic()
 
+    lib_code_sha = hashlib.sha256(
+        json.dumps(
+            {
+                "foundational_skills": {k: v[1] for k, v in sorted(NODE_TO_EXECUTABLE_WORMHOLE_MODULE.items())},
+                "skill_07": SKILL_07_MULTISCALE_RECONCILIATION,
+                "host_gate": HOST_MECHANICAL_WORMHOLE_GATE_RUNNER_PY,
+                "public_synth_bench": PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY,
+                "cmd_timeout": args.cmd_timeout,
+                "reasoning_effort": args.reasoning_effort,
+                "wave1_consolidation_source": args.wave1_consolidation_source,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
     def _forest_sha16() -> str:
         c = {
-            k: {
-                "nogoods": v.get("wave1_consolidated_nogoods", []),
-                "exec_mods": [m["filename"] for m in v.get("wave1_executable_modules", [])],
-                "subtrees": sorted(getattr(f_obj, "shared_base_subtrees", {}).keys()),
-            }
-            for k, v in sorted(f_arch.items())
+            "lib_code_sha": lib_code_sha,
+            "nodes": {
+                k: {
+                    "nogoods": v.get("wave1_consolidated_nogoods", []),
+                    "exec_mods": [
+                        {"filename": m["filename"], "code_sha": hashlib.sha256(str(m.get("python_code", "")).encode("utf-8")).hexdigest()}
+                        for m in v.get("wave1_executable_modules", [])
+                    ],
+                }
+                for k, v in sorted(f_arch.items())
+            },
+            "subtrees": {
+                sk: sv.to_dict() if hasattr(sv, "to_dict") else str(sv)
+                for sk, sv in sorted(getattr(f_obj, "shared_base_subtrees", {}).items())
+            },
         }
         return hashlib.sha256(json.dumps(c, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -210,7 +223,7 @@ def main() -> int:
                 run_id=ev_dir.name,
                 max_turns_per_branch=args.max_turns_per_branch,
                 cmd_timeout_sec=args.cmd_timeout,
-                reasoning_effort="medium",
+                reasoning_effort=args.reasoning_effort,
             )
             res["forest_snapshot_sha16"] = f_sha
             sum_file.write_text(json.dumps(res, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -241,15 +254,28 @@ def main() -> int:
         print(f"Stopping before Wave 2 due to quota pause: {quota_paused}", flush=True)
         return 3
 
-    # --- Wave-1 -> Wave-2 Dialectical Sublation ---
+    # --- Wave-1 -> Wave-2 Dialectical Sublation (`R01` Fix: `antithesis_only` preserves pure 1x Antithesis lineage!) ---
     w1_m6_9 = [s for s in all_summaries if s["arm"] == hegel_arm and s["wave"] == "wave_1"]
+    if args.wave1_consolidation_source == "antithesis_only":
+        w1_source_pairs: list[tuple[dict[str, Any], Path]] = []
+        for s in w1_m6_9:
+            anti_d = branches_root / f"{s['wave']}__{model}__{s['task_id']}" / "branch_2_antithesis_wormhole"
+            anti_sf = anti_d / "00_episode_summary.json"
+            anti_s = json.loads(anti_sf.read_text(encoding="utf-8")) if anti_sf.is_file() else dict(s)
+            anti_s["strict_pass"] = bool((s.get("postlock_branch_outcomes") or {}).get("antithesis_wormhole_strict_pass", s["strict_pass"]))
+            w1_source_pairs.append((anti_s, anti_d if anti_d.is_dir() else (ep_root / f"{s['wave']}__{model}__{hegel_arm}__{s['task_id']}")))
+        w1_cons_summaries = [p[0] for p in w1_source_pairs]
+        w1_dirs = w1_source_pairs
+    else:
+        w1_cons_summaries = w1_m6_9
+        w1_dirs = [(s, ep_root / f"{s['wave']}__{model}__{hegel_arm}__{s['task_id']}") for s in w1_m6_9]
+
     c_rec = m6f.consolidate_wave1_into_m6_forest(
-        wave1_m6_summaries=w1_m6_9,
+        wave1_m6_summaries=w1_cons_summaries,
         forest=f_obj,
         archive=f_arch,
         meta_dag=m_dag,
     )
-    w1_dirs = [(s, ep_root / f"{s['wave']}__{model}__{hegel_arm}__{s['task_id']}") for s in w1_m6_9]
     ast_events = consolidate_wave1_executable_modules_into_forest(
         wave1_episode_dirs=w1_dirs,
         forest=f_obj,
@@ -260,6 +286,7 @@ def main() -> int:
         forest=f_obj,
         archive=f_arch,
     )
+    c_rec["wave1_consolidation_source"] = args.wave1_consolidation_source
     c_rec["wave1_ast_executable_sublation_events"] = ast_events
     c_rec["wave1_full_manifest_and_m5_reconciliation"] = manifest_reconcile
     (ev_dir / f"wave1_to_wave2_consolidation_{model}.json").write_text(
@@ -319,9 +346,24 @@ def main() -> int:
     total_skill_calls = sum(int(s.get("skill_activation_count", 0)) for s in tb_m6_9_eps)
 
     bm_judge_tokens_total = 0
+    solving_tokens_thesis = 0
+    solving_tokens_antithesis = 0
+    synthesis_selection_tokens = 0
     for s in m6_9_eps:
+        ep_f = ep_root / f"{s['wave']}__{model}__{hegel_arm}__{s['task_id']}"
+        dag_f = ep_f / "01_decision_provenance_dag.json"
+        if dag_f.is_file():
+            for r_d in json.loads(dag_f.read_text(encoding="utf-8")).get("records", []):
+                dt_s = str(r_d.get("decision_type", ""))
+                tok_d = int(r_d.get("prompt_tokens_delta", 0)) + int(r_d.get("completion_tokens_delta", 0))
+                if dt_s == "D1_THESIS_BRANCH_COMPLETED":
+                    solving_tokens_thesis += tok_d
+                elif dt_s == "D2_ANTITHESIS_BRANCH_COMPLETED":
+                    solving_tokens_antithesis += tok_d
+                elif dt_s == "D3_DIALECTICAL_SYNTHESIS_COMMIT":
+                    synthesis_selection_tokens += tok_d
         if s["benchmark"] == "BioMysteryBench-Preview":
-            vf = ep_root / f"{s['wave']}__{model}__{hegel_arm}__{s['task_id']}" / "03_official_verifier_report.json"
+            vf = ep_f / "03_official_verifier_report.json"
             if vf.is_file():
                 v_obj = json.loads(vf.read_text(encoding="utf-8"))
                 bm_judge_tokens_total += int((v_obj.get("llm_judge_tokens") or {}).get("total_tokens", 0))
@@ -333,11 +375,22 @@ def main() -> int:
         "provider_backend": codex_info["provider_backend"],
         "auth_mode": codex_info["auth_mode"],
         "declared_budget": "2x (28T Thesis + 28T Antithesis + Blind Public Synthesis)",
+        "bare_run1_provenance_study": str(args.sealed_bare_dir),
+        "wave1_consolidation_source": args.wave1_consolidation_source,
         "models": [model],
         "arms": list(active_arms),
         "max_turns_per_branch": args.max_turns_per_branch,
         "cmd_timeout_sec": args.cmd_timeout,
+        "reasoning_effort": args.reasoning_effort,
         "completed_episode_count": len(all_summaries),
+        "four_column_token_accounting": {
+            "formation_consolidation_llm_tokens": 0,
+            "solving_thesis_1x_total_tokens": solving_tokens_thesis,
+            "solving_antithesis_1x_total_tokens": solving_tokens_antithesis,
+            "solving_two_branch_2x_total_tokens": solving_tokens_thesis + solving_tokens_antithesis,
+            "synthesis_selection_llm_tokens": synthesis_selection_tokens,
+            "official_verifier_biomystery_judge_tokens": bm_judge_tokens_total,
+        },
         "matched_1x_and_2x_budget_scoreboard": {
             "Bare_ReAct_Run1_1x_native": f"{bare_r1_cnt}/20 ({bare_r1_cnt/20:.1%})",
             "Bare_ReAct_Run2_1x_native": f"{bare_r2_cnt}/20 ({bare_r2_cnt/20:.1%})",

@@ -104,7 +104,7 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
                 if tok in txt:
                     leak_hits.append(f"producer:{prod_fp.name}:{tok}")
 
-    # 3b. Summary vs Official Verifier Native Score Parity (`P0a` / `H06`: `00_episode_summary.json` must NEVER disagree with `03_official_verifier_report.json`!)
+    # 3b. Summary vs Official Verifier & Branch Post-Lock Native Score Parity (`P0a` / `H06` / `AUD02` / `AUD03` Fix!)
     ep_root = ev_dir / "episodes"
     all_ep_dirs = sorted(p for p in ep_root.iterdir() if p.is_dir()) if ep_root.is_dir() else []
     verifier_parity_mismatches: list[str] = []
@@ -112,11 +112,31 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
     for ep_d in all_ep_dirs:
         s_fp = ep_d / "00_episode_summary.json"
         v_fp = ep_d / "03_official_verifier_report.json"
-        if s_fp.is_file() and v_fp.is_file():
-            s_o = json.loads(s_fp.read_text(encoding="utf-8"))
-            v_o = json.loads(v_fp.read_text(encoding="utf-8"))
-            if bool(s_o.get("strict_pass")) != bool(v_o.get("strict_pass")):
-                verifier_parity_mismatches.append(ep_d.name)
+        if not s_fp.is_file():
+            verifier_parity_mismatches.append(f"missing_summary:{ep_d.name}")
+            continue
+        if not v_fp.is_file():
+            verifier_parity_mismatches.append(f"missing_official_verifier_report:{ep_d.name}")
+            continue
+        s_o = json.loads(s_fp.read_text(encoding="utf-8"))
+        v_o = json.loads(v_fp.read_text(encoding="utf-8"))
+        if bool(s_o.get("strict_pass")) != bool(v_o.get("strict_pass")):
+            verifier_parity_mismatches.append(ep_d.name)
+        # Verify post-lock branch verifier parity when `postlock_branch_outcomes` is recorded (`AUD03`)
+        pb_out = s_o.get("postlock_branch_outcomes")
+        if isinstance(pb_out, dict) and (ev_dir / "branch_trajectories").is_dir():
+            t_br_root = ev_dir / "branch_trajectories" / f"{s_o['wave']}__{s_o['model']}__{s_o['task_id']}"
+            for br_sub, out_key in (
+                ("branch_1_thesis_bare", "thesis_bare_run2_strict_pass"),
+                ("branch_2_antithesis_wormhole", "antithesis_wormhole_strict_pass"),
+            ):
+                br_vf = t_br_root / br_sub / "03_postlock_branch_verifier_report.json"
+                if not br_vf.is_file():
+                    verifier_parity_mismatches.append(f"missing_branch_verifier:{ep_d.name}/{br_sub}")
+                else:
+                    bv_o = json.loads(br_vf.read_text(encoding="utf-8"))
+                    if bool(bv_o.get("strict_pass")) != bool(pb_out.get(out_key)):
+                        verifier_parity_mismatches.append(f"branch_parity_mismatch:{ep_d.name}/{br_sub}")
         r_fp = ep_d / "05_regrade_receipt.json"
         if r_fp.is_file():
             r_o = json.loads(r_fp.read_text(encoding="utf-8"))
@@ -135,7 +155,7 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
                     if "hegel_wormhole_skills" in txt:
                         uninlined_imports.append(f"{ep_d.name}/{fp.name}")
 
-    # 5. Independently recompute Skill∞ runtime telemetry from episode summaries & full JSONL (`04c_full_skill_activations.jsonl`)
+    # 5. Independently recompute Skill∞ runtime telemetry from episode summaries & full JSONL (`04c_full_skill_activations.jsonl`, `AUD01` Fix!)
     staged_eps = 0
     activated_eps = 0
     total_calls = 0
@@ -147,7 +167,9 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
                 staged_eps += 1
             cnt = int(s_obj.get("skill_activation_count", 0))
             full_jsonl = ep_d / "04c_full_skill_activations.jsonl"
-            if full_jsonl.is_file():
+            if cnt > 0 and not full_jsonl.is_file():
+                full_log_mismatches.append(f"{ep_d.name}:missing_04c_full_skill_activations_jsonl_for_cnt={cnt}")
+            elif full_jsonl.is_file():
                 recs = [
                     json.loads(ln)
                     for ln in full_jsonl.read_text(encoding="utf-8").splitlines()
@@ -169,22 +191,36 @@ def audit_m6_4_frontier_bundle(ev_dir: Path, arm_name: str = "Hegel_M6_4_Frontie
         and len(full_log_mismatches) == 0
     )
 
-    # 6. BioMystery provenance & judge-token audit
+    # 6. BioMystery & Branch Trajectory provenance + judge-token audit (`AUD04` Fix: scan ALL arm episodes + ALL `branch_trajectories` DAGs for reverse-provenance & leakage, and ALL 40 DAGs for `/tests/`/`answer_rubric`!)
     bm_prov_hits: list[str] = []
+    historical_control_prov_notes: list[str] = []
     bm_judge_tokens = 0
     prov_domains = ("ebi.ac.uk/ena", "europepmc.org", "ncbi.nlm.nih.gov/geo", "ncbi.nlm.nih.gov/sra", "ncbi.nlm.nih.gov/bioproject")
+    leak_cmd_terms = ("answer_rubric", "/tests/", "ground_truth")
+    arm_dag_set = {(ep_d / "01_decision_provenance_dag.json").resolve() for ep_d in m64_ep_dirs} | {p.resolve() for p in subbranch_dags}
+    for df in [*dag_files, *subbranch_dags]:
+        dag_obj = json.loads(df.read_text(encoding="utf-8"))
+        rel_df = str(df.relative_to(ev_dir))
+        is_arm_or_branch = df.resolve() in arm_dag_set
+        for rec in dag_obj.get("records", []):
+            if "CONTAINER_EXECUTION" in str(rec.get("decision_type", "")):
+                cmd_s = str((rec.get("evidence_inputs") or {}).get("command", "")).lower()
+                for lt in leak_cmd_terms:
+                    if lt in cmd_s:
+                        bm_prov_hits.append(f"{rel_df}#seq{rec.get('decision_seq')}:{lt}")
+                for pd in prov_domains:
+                    if pd in cmd_s:
+                        if is_arm_or_branch:
+                            bm_prov_hits.append(f"{rel_df}#seq{rec.get('decision_seq')}:{pd}")
+                        else:
+                            historical_control_prov_notes.append(f"{rel_df}#seq{rec.get('decision_seq')}:{pd}")
     for ep_d in m64_ep_dirs:
         s_obj = json.loads((ep_d / "00_episode_summary.json").read_text(encoding="utf-8"))
         if s_obj["benchmark"] == "BioMysteryBench-Preview":
-            dag_obj = json.loads((ep_d / "01_decision_provenance_dag.json").read_text(encoding="utf-8"))
-            for rec in dag_obj.get("records", []):
-                if "CONTAINER_EXECUTION" in str(rec.get("decision_type", "")):
-                    cmd_s = str((rec.get("evidence_inputs") or {}).get("command", "")).lower()
-                    for pd in prov_domains:
-                        if pd in cmd_s:
-                            bm_prov_hits.append(f"{s_obj['task_id']}:{pd}")
-            v_obj = json.loads((ep_d / "03_official_verifier_report.json").read_text(encoding="utf-8"))
-            bm_judge_tokens += int((v_obj.get("llm_judge_tokens") or {}).get("total_tokens", 0))
+            vf_bm = ep_d / "03_official_verifier_report.json"
+            if vf_bm.is_file():
+                v_obj = json.loads(vf_bm.read_text(encoding="utf-8"))
+                bm_judge_tokens += int((v_obj.get("llm_judge_tokens") or {}).get("total_tokens", 0))
 
     judge_tok_expected = None
     for k_cand in (

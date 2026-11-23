@@ -43,7 +43,10 @@ def _write_sha256sums(evidence_dir: Path) -> int:
     lines: list[str] = []
     files = sorted(
         p for p in evidence_dir.rglob("*")
-        if p.is_file() and p.name != "SHA256SUMS.txt"
+        if p.is_file()
+        and p.name != "SHA256SUMS.txt"
+        and "__pycache__" not in p.parts
+        and p.suffix != ".pyc"
     )
     for fp in files:
         h = hashlib.sha256(fp.read_bytes()).hexdigest()

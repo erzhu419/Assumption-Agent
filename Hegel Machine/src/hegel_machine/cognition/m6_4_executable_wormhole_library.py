@@ -1143,7 +1143,7 @@ _FORBIDDEN_WAVE1_EXPORT_TOKENS = (
 
 _FORBIDDEN_IO_CALL_NAMES = frozenset(
     {
-        "open", "Path", "loadtxt", "genfromtxt", "fromfile", "save", "savez", "savez_compressed",
+        "open", "Path", "load", "loadtxt", "genfromtxt", "fromfile", "save", "savez", "savez_compressed",
         "memmap", "tofile", "read_csv", "read_table", "read_parquet", "read_json", "read_excel",
         "read_pickle", "to_csv", "to_parquet", "to_json", "glob", "rglob", "listdir", "scandir",
         "walk", "system", "popen", "Popen", "run", "check_output", "check_call",
@@ -1438,15 +1438,21 @@ def _probe_mip_certificate_and_assimilation(arts: list[str], reports: list[str])
     if json_arts and prob_files and x_files and y_files:
         try:
             cert = json.loads(Path(json_arts[0]).read_text(encoding="utf-8"))
-            if isinstance(cert, dict) and isinstance(cert.get("nodes"), list) and "upper_bound" in cert:
+            if isinstance(cert, dict) and isinstance(cert.get("nodes"), list) and ("upper_bound" in cert or ("support" in cert and "coefficients" in cert)):
                 nodes = cert["nodes"]
                 if nodes and isinstance(nodes[0], dict) and "B0" in nodes[0] and "B1" in nodes[0]:
                     prob = json.loads(Path(prob_files[0]).read_text(encoding="utf-8"))
                     l0, l2, M, eps = float(prob["lambda_0"]), float(prob["lambda_2"]), float(prob["M"]), float(prob["epsilon"])
-                    U = float(cert["upper_bound"])
-                    target_lb = U - eps * max(1.0, abs(U)) + 2e-8
                     X = np.load(x_files[0], mmap_mode="r")
                     y = np.load(y_files[0])
+                    if "upper_bound" in cert:
+                        U = float(cert["upper_bound"])
+                    else:
+                        supp_i = [int(v) for v in cert["support"]]
+                        coef_v = np.asarray(cert["coefficients"], dtype=float)
+                        r_u = y - (X[:, supp_i] @ coef_v if len(supp_i) else 0.0)
+                        U = float(0.5 * (r_u @ r_u) + l2 * float(coef_v @ coef_v) + l0 * len(supp_i))
+                    target_lb = U - eps * max(1.0, abs(U)) + 2e-8
                     c_xy = X.T @ y
                     slope = l0 / M + l2 * M
 
@@ -1674,7 +1680,7 @@ def _probe_symbolic_predictor(arts: list[str], reports: list[str]) -> None:
             feats_tr, feats_va = [], []
             for h in scan_tr["univariate"]["top_hits"]:
                 if h["exceeds_q99"]:
-                    c0 = int(h["col"])
+                    c0 = int(h["col"] if "col" in h else h["term"][-1])
                     feats_tr.append(X_tr[:, c0])
                     feats_va.append(X_va[:, c0])
                     fold_stable_terms[f"x[{c0}]"] = fold_stable_terms.get(f"x[{c0}]", 0) + 1
