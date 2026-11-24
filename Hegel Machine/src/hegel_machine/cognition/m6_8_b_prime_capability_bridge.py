@@ -385,12 +385,16 @@ def verify_candidate_artifact_contract_in_container(
     agent_cid: str,
     declared_artifacts: tuple[str, ...],
     candidate_sha256: str,
+    *,
+    required_entrypoints: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Host-executed deterministic candidate validator inside `<agent_cid>` (`H01` + `E04` Fix).
+    """Host-executed deterministic candidate validator inside `<agent_cid>` (`H01` + `E04` + `M7-Audit` Fix).
 
-    Recomputes canonical byte-level `computed_candidate_sha256` directly inside `<agent_cid>` (rejecting any digest
-    mismatch!), verifies isolated subprocess Python import & callable/CLI entrypoint existence on explicit `.py`
-    deliverables, rejects `NaN`/`Inf` cells/constants in CSV/TSV/JSON/NPZ, and forbids `/tmp` `hegel_wormhole_skills` imports.
+    Recomputes canonical byte-level `computed_candidate_sha256` BOTH before and after isolated subprocess Python
+    import (rejecting any self-mutating candidate or digest mismatch!), registers `sys.modules[spec.name] = mod`
+    before `exec_module` so `from __future__ import annotations` + `@dataclass` succeeds (`traffic` fix!),
+    checks optional `required_entrypoints`, rejects `NaN`/`Inf` cells/constants in CSV/TSV/JSON/NPZ, and forbids
+    `/tmp` `hegel_wormhole_skills` imports.
     """
     if not declared_artifacts or not candidate_sha256:
         return {
@@ -404,58 +408,73 @@ import ast, csv, hashlib, json, math, os, subprocess, sys
 import numpy as np
 
 arts = json.loads(sys.argv[1])
+req_entrypoints = json.loads(sys.argv[2]) if len(sys.argv) > 2 else []
 issues = []
 checked_files = []
 explicit_py_set = {a for a in arts if a.endswith(".py")}
 
-h_all = hashlib.sha256()
-digest_complete = True
-files = []
-
-for a in arts:
-    if os.path.isfile(a):
-        files.append(a)
-        b = open(a, "rb").read()
-        if not b:
-            digest_complete = False
-        else:
-            h_all.update(a.encode("utf-8") + b"\0" + hashlib.sha256(b).digest())
-    elif os.path.isdir(a):
-        dir_files = []
-        for dp, _, fns in os.walk(a):
-            if "__pycache__" in dp:
-                continue
-            for fn in sorted(fns):
-                if fn.endswith(".pyc"):
+def _scan_and_digest(target_arts):
+    h = hashlib.sha256()
+    complete = True
+    found = []
+    scan_issues = []
+    for a in target_arts:
+        if os.path.isfile(a):
+            found.append(a)
+            b = open(a, "rb").read()
+            if not b:
+                complete = False
+            else:
+                h.update(a.encode("utf-8") + b"\0" + hashlib.sha256(b).digest())
+        elif os.path.isdir(a):
+            dir_files = []
+            for dp, _, fns in os.walk(a):
+                if "__pycache__" in dp:
                     continue
-                dir_files.append(os.path.join(dp, fn))
-        if not dir_files:
-            issues.append(f"empty_directory:{a}")
-            digest_complete = False
-        for fp in sorted(dir_files):
-            files.append(fp)
-            b = open(fp, "rb").read()
-            h_all.update(fp.encode("utf-8") + b"\0" + hashlib.sha256(b).digest())
-    else:
-        issues.append(f"missing:{a}")
-        digest_complete = False
+                for fn in sorted(fns):
+                    if fn.endswith(".pyc"):
+                        continue
+                    dir_files.append(os.path.join(dp, fn))
+            if not dir_files:
+                scan_issues.append(f"empty_directory:{a}")
+                complete = False
+            for fp in sorted(dir_files):
+                found.append(fp)
+                b = open(fp, "rb").read()
+                h.update(fp.encode("utf-8") + b"\0" + hashlib.sha256(b).digest())
+        else:
+            scan_issues.append(f"missing:{a}")
+            complete = False
+    return found, (h.hexdigest() if (found and complete) else ""), scan_issues
 
-computed_sha = h_all.hexdigest() if (files and digest_complete) else ""
+files, pre_computed_sha, init_issues = _scan_and_digest(arts)
+issues.extend(init_issues)
 if not files:
     issues.append("no_files_found")
 
 py_import_runner = (
-    "import importlib.util, os, sys\n"
+    "import importlib.util, json, os, sys\n"
     "fp = sys.argv[1]\n"
+    "reqs = json.loads(sys.argv[2]) if len(sys.argv) > 2 else []\n"
     "sys.path.insert(0, os.path.dirname(os.path.abspath(fp)))\n"
     "spec = importlib.util.spec_from_file_location('_hegel_contract_probe', fp)\n"
     "if spec is None or spec.loader is None:\n"
     "    raise ImportError(f'Cannot load spec for {fp}')\n"
     "mod = importlib.util.module_from_spec(spec)\n"
-    "spec.loader.exec_module(mod)\n"
+    "sys.modules[spec.name] = mod\n"
+    "try:\n"
+    "    spec.loader.exec_module(mod)\n"
+    "    for ep in reqs:\n"
+    "        if not callable(getattr(mod, ep, None)):\n"
+    "            raise AttributeError(f'missing_required_entrypoint:{ep}')\n"
+    "finally:\n"
+    "    sys.modules.pop(spec.name, None)\n"
 )
 
 for fp in files:
+    if not os.path.exists(fp):
+        issues.append(f"missing_after_scan:{fp}")
+        continue
     sz = os.path.getsize(fp)
     if sz == 0:
         if os.path.basename(fp) == "__init__.py" and fp not in explicit_py_set:
@@ -483,8 +502,9 @@ for fp in files:
                     break
             if not has_callable_or_cli:
                 issues.append(f"no_callable_or_cli_entrypoint:{fp}")
+            fp_reqs = req_entrypoints if len(explicit_py_set) == 1 else []
             pr = subprocess.run(
-                [sys.executable, "-c", py_import_runner, fp],
+                [sys.executable, "-c", py_import_runner, fp, json.dumps(fp_reqs)],
                 capture_output=True,
                 text=True,
                 timeout=12,
@@ -531,12 +551,29 @@ for fp in files:
         except Exception as exc:
             issues.append(f"invalid_npz:{fp}:{type(exc).__name__}")
 
-print(json.dumps({"accepted": len(issues) == 0, "computed_sha256": computed_sha, "issues": issues, "checked_files": checked_files}))
+_, post_computed_sha, post_issues = _scan_and_digest(arts)
+issues.extend(post_issues)
+if pre_computed_sha != post_computed_sha:
+    issues.append(f"candidate_mutated_during_validation:{pre_computed_sha[:12]}->{post_computed_sha[:12]}")
+computed_sha = post_computed_sha
+
+print(json.dumps({"accepted": len(issues) == 0, "computed_sha256": computed_sha, "pre_import_sha256": pre_computed_sha, "issues": issues, "checked_files": checked_files}))
 '''
     v_sha = hashlib.sha256(validator_py.encode("utf-8")).hexdigest()[:16]
     try:
         proc = subprocess.run(
-            ["docker", "exec", "-w", "/", agent_cid, "python3", "-c", validator_py, json.dumps(list(declared_artifacts))],
+            [
+                "docker",
+                "exec",
+                "-w",
+                "/",
+                agent_cid,
+                "python3",
+                "-c",
+                validator_py,
+                json.dumps(list(declared_artifacts)),
+                json.dumps(list(required_entrypoints)),
+            ],
             capture_output=True,
             text=True,
             timeout=30,
@@ -878,7 +915,6 @@ _UNARY_CALL_MAP = {
     "tanh": "tanh",
     "exp": "exp",
     "log": "log",
-    "log1p": "log",
     "sqrt": "sqrt",
     "abs": "abs",
     "fabs": "abs",
@@ -901,14 +937,16 @@ def lift_python_scientific_expressions_to_programs(
     *,
     max_programs: int = 4,
 ) -> list[tuple[str, Program]]:
-    """Lift real mathematical expressions from pure Python AST closures into typed `Program` trees (`K02` Upgrade).
+    """Lift real mathematical expressions from pure Python AST closures into typed `Program` trees (`K02` + `M7-Audit` Fix).
 
-    Replaces heuristic `len(closures) * u_drive` proxies with genuine AST expression translation (`add`, `sub`,
-    `mul`, `div`, `neg`, `sin`, `cos`, `tanh`, `exp`, `log`, `sqrt`, `abs`, `min`, `max`, integer powers, and
-    straight-line local intermediate bindings), normalizing function parameters to positional roles `x_0, x_1, ...`.
-    Complex procedural/loop/C++ closures that do not expose an algebraic expression return `[]` honestly rather
-    than inventing a synthetic formula!
+    Preserves exact mathematical semantics:
+      - `log1p(u)` -> `log(1 + u)` and `expm1(u)` -> `exp(u) - 1` (never conflated with `log(u)`!),
+      - strict vs non-strict inequalities (`>` -> `lt(r, l)`, `>=` -> `ge(l, r)`, `<` -> `lt(l, r)`, `<=` -> `ge(r, l)`),
+      - rejects functions containing imperative loops/mutations (`For`, `While`, `AugAssign`, `If`, `Try`, `With`) so
+        procedural operators remain honest opaque closures rather than emitting stale unmutated return expressions!
     """
+    import math
+
     lifted: list[tuple[str, Program]] = []
 
     def _lift_expr(node: ast.AST, env: dict[str, Program], depth: int) -> Program | None:
@@ -931,7 +969,7 @@ def lift_python_scientific_expressions_to_programs(
             base_p = env[node.value.id]
             if base_p.op == "feature" and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
                 return Program("feature", name=f"{base_p.name}_idx{node.slice.value}")
-            return base_p
+            return None
         if isinstance(node, ast.UnaryOp):
             ch = _lift_expr(node.operand, env, depth + 1)
             if ch is None:
@@ -978,6 +1016,12 @@ def lift_python_scientific_expressions_to_programs(
             if fn_name == "square" and len(node.args) == 1:
                 ch = _lift_expr(node.args[0], env, depth + 1)
                 return Program("mul", children=(ch, ch)) if ch is not None else None
+            if fn_name == "log1p" and len(node.args) == 1:
+                ch = _lift_expr(node.args[0], env, depth + 1)
+                return Program("log", children=(Program("add", children=(Program("const", value=1.0), ch)),)) if ch is not None else None
+            if fn_name == "expm1" and len(node.args) == 1:
+                ch = _lift_expr(node.args[0], env, depth + 1)
+                return Program("sub", children=(Program("exp", children=(ch,)), Program("const", value=1.0))) if ch is not None else None
             if fn_name == "clip" and len(node.args) == 3:
                 x_c = _lift_expr(node.args[0], env, depth + 1)
                 lo_c = _lift_expr(node.args[1], env, depth + 1)
@@ -999,13 +1043,16 @@ def lift_python_scientific_expressions_to_programs(
                 cl = _lift_expr(node.test.left, env, depth + 1)
                 cr = _lift_expr(node.test.comparators[0], env, depth + 1)
                 if cl is not None and cr is not None and body_p is not None and else_p is not None:
-                    if isinstance(node.test.ops[0], (ast.GtE, ast.Gt)):
+                    op0 = node.test.ops[0]
+                    if isinstance(op0, ast.GtE):
                         return Program("if", children=(Program("ge", children=(cl, cr)), body_p, else_p))
-                    if isinstance(node.test.ops[0], (ast.Lt, ast.LtE)):
+                    if isinstance(op0, ast.Gt):
+                        return Program("if", children=(Program("lt", children=(cr, cl)), body_p, else_p))
+                    if isinstance(op0, ast.Lt):
                         return Program("if", children=(Program("lt", children=(cl, cr)), body_p, else_p))
+                    if isinstance(op0, ast.LtE):
+                        return Program("if", children=(Program("ge", children=(cr, cl)), body_p, else_p))
         return None
-
-    import math
 
     for cl in closures:
         fn_name = str(cl.get("name") or "fn")
@@ -1022,16 +1069,36 @@ def lift_python_scientific_expressions_to_programs(
             for idx, arg in enumerate(all_args):
                 env[arg.arg] = Program("feature", name=f"x_{idx}")
             best_fn_prog: Program | None = None
+            aborted_imperative = False
             for b_stmt in stmt.body:
-                if isinstance(b_stmt, ast.Assign) and len(b_stmt.targets) == 1 and isinstance(b_stmt.targets[0], ast.Name):
+                if isinstance(b_stmt, ast.Expr) and isinstance(b_stmt.value, ast.Constant) and isinstance(b_stmt.value.value, str):
+                    continue
+                if isinstance(b_stmt, ast.Pass):
+                    continue
+                if isinstance(b_stmt, ast.Assign):
+                    if len(b_stmt.targets) != 1 or not isinstance(b_stmt.targets[0], ast.Name):
+                        aborted_imperative = True
+                        break
                     rhs_p = _lift_expr(b_stmt.value, env, 0)
-                    if rhs_p is not None and rhs_p.size <= 25:
-                        env[b_stmt.targets[0].id] = rhs_p
+                    if rhs_p is None or rhs_p.size > 25:
+                        aborted_imperative = True
+                        break
+                    env[b_stmt.targets[0].id] = rhs_p
+                elif isinstance(b_stmt, ast.AnnAssign) and isinstance(b_stmt.target, ast.Name) and b_stmt.value is not None:
+                    rhs_p = _lift_expr(b_stmt.value, env, 0)
+                    if rhs_p is None or rhs_p.size > 25:
+                        aborted_imperative = True
+                        break
+                    env[b_stmt.target.id] = rhs_p
                 elif isinstance(b_stmt, ast.Return) and b_stmt.value is not None:
                     ret_p = _lift_expr(b_stmt.value, env, 0)
                     if ret_p is not None and ret_p.op not in {"const", "feature"}:
                         best_fn_prog = ret_p
-            if best_fn_prog is not None:
+                    break
+                else:
+                    aborted_imperative = True
+                    break
+            if (not aborted_imperative) and best_fn_prog is not None:
                 lifted.append((fn_name, best_fn_prog))
                 if len(lifted) >= max_programs:
                     return lifted

@@ -182,7 +182,7 @@ if os.path.isfile("/app/solver/amr_poisson3d.py"):
     except Exception:
         out["amr_solve_ok"] = False
 
-# 3. Certified Sparse Regression exact primal/dual & binary hypercube partition check (`/app/data/problem.json` + `/app/results.json`, `E03` Fix!)
+# 3. Certified Sparse Regression exact primal/dual & binary hypercube partition check (`/app/data/problem.json` + `/app/results.json`, `E03` + `M7-Audit` Fix!)
 if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.json"):
     try:
         prob = json.load(open("/app/data/problem.json", "r", encoding="utf-8"))
@@ -195,41 +195,85 @@ if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.jso
             n_nodes = len(nodes)
             out["sparse_cert_nodes"] = n_nodes
             x_fp, y_fp = "/app/data/X.npy", "/app/data/y.npy"
+            has_xy = os.path.isfile(x_fp) and os.path.isfile(y_fp)
+            X_m = np.load(x_fp, mmap_mode="r") if has_xy else None
+            y_v = np.load(y_fp) if has_xy else None
+            p_dim = int(X_m.shape[1]) if X_m is not None else None
             l0 = float(prob.get("lambda_0", prob.get("l0_penalty", 0.0)))
             l2 = float(prob.get("lambda_2", prob.get("alpha", 0.0)))
             M = float(prob.get("M", prob.get("big_m", 1e9)))
             eps = float(prob.get("epsilon", prob.get("opt_tol", 1e-5)))
-            box_ok = bool(len(supp) == len(coef) and (len(coef) == 0 or np.max(np.abs(coef)) <= M + 1e-9))
-            # Verify exact dyadic binary-hypercube partition measure (`sum_leaf 2^{-(|B0|+|B1|)} == 1`) & disjoint coordinate sets!
+            supp_ok = bool(
+                len(supp) == len(set(supp))
+                and len(supp) == len(coef)
+                and np.all(np.isfinite(coef))
+                and (p_dim is None or all(0 <= s_idx < p_dim for s_idx in supp))
+            )
+            box_ok = bool(supp_ok and (len(coef) == 0 or np.max(np.abs(coef)) <= M + 1e-9))
+
+            # Exact binary-hypercube partition check via measure conservation + Shannon cofactor disjointness!
             part_ok = bool(n_nodes > 0)
+            parsed_leaves = []
             if part_ok:
                 depths = []
                 for nd in nodes:
-                    b0, b1 = nd.get("B0", []), nd.get("B1", [])
-                    if len(set(b0) & set(b1)) > 0:
+                    b0 = frozenset(int(v) for v in nd.get("B0", []))
+                    b1 = frozenset(int(v) for v in nd.get("B1", []))
+                    if (b0 & b1) or (p_dim is not None and any(idx < 0 or idx >= p_dim for idx in (b0 | b1))):
                         part_ok = False
                         break
-                    depths.append(len(set(b0)) + len(set(b1)))
+                    parsed_leaves.append((b0, b1))
+                    depths.append(len(b0) + len(b1))
                 if part_ok:
                     d_max = max(depths)
                     tot_w = sum(1 << (d_max - dk) for dk in depths)
                     part_ok = (tot_w == (1 << d_max))
-            if os.path.isfile(x_fp) and os.path.isfile(y_fp) and box_ok and part_ok:
-                X_m = np.load(x_fp, mmap_mode="r")
-                y_v = np.load(y_fp)
-                p_dim = X_m.shape[1]
+                if part_ok:
+                    # Exact Shannon cofactor expansion guarantees every vertex of {0,1}^p is covered ONCE (no duplicate half-spaces!)
+                    stack = [(parsed_leaves, frozenset(), frozenset())]
+                    while stack:
+                        act, f0, f1 = stack.pop()
+                        if not act:
+                            part_ok = False
+                            break
+                        full_cov = [lf for lf in act if lf[0].issubset(f0) and lf[1].issubset(f1)]
+                        if full_cov:
+                            if len(act) != 1:
+                                part_ok = False
+                                break
+                            continue
+                        var_counts = {}
+                        for b0, b1 in act:
+                            for v in (b0 - f0):
+                                var_counts[v] = var_counts.get(v, 0) + 1
+                            for v in (b1 - f1):
+                                var_counts[v] = var_counts.get(v, 0) + 1
+                        if not var_counts:
+                            part_ok = False
+                            break
+                        split_v = max(var_counts.items(), key=lambda kv: kv[1])[0]
+                        left_act = [lf for lf in act if split_v not in lf[1]]
+                        right_act = [lf for lf in act if split_v not in lf[0]]
+                        stack.append((left_act, f0 | {split_v}, f1))
+                        stack.append((right_act, f0, f1 | {split_v}))
+
+            out["sparse_partition_valid"] = bool(box_ok and part_ok and n_nodes <= max_nodes)
+            if has_xy and box_ok and part_ok and n_nodes <= max_nodes:
                 r_primal = y_v - (X_m[:, supp] @ coef if len(supp) > 0 else 0.0)
                 U_obj = float(0.5 * (r_primal @ r_primal) + l2 * float(coef @ coef) + l0 * len(supp))
                 out["sparse_cert_primal_obj"] = round(U_obj, 9)
-                # Fast stratified dual bound check on sampled leaves using exact Fenchel-Perspective lower bound (`r = y - X_S beta_S` witness)
                 slope = l0 / M + l2 * M
-                sample_ids = np.linspace(0, n_nodes - 1, min(n_nodes, 24), dtype=int)
-                dual_ok = True
+                exhaustive = n_nodes <= 1024
+                check_ids = range(n_nodes) if exhaustive else np.unique(np.linspace(0, n_nodes - 1, 96, dtype=int))
+                dual_ok = np.isfinite(U_obj)
                 worst_gap = 0.0
-                for li in sample_ids:
-                    nd = nodes[int(li)]
-                    z0 = np.asarray(nd["B0"], dtype=int)
-                    z1 = np.asarray(nd["B1"], dtype=int)
+                tol_abs = max(eps, 1e-6) * max(1.0, abs(U_obj)) if prob.get("relative_gap", False) else (eps + 1e-6)
+                # Support both relative and absolute gap specs cleanly: check both `U - L <= eps * max(1, |U|)` and `U - L <= eps`
+                eff_tol = max(eps * max(1.0, abs(U_obj)) * 1.02, eps + 1e-6)
+                for li in check_ids:
+                    b0_s, b1_s = parsed_leaves[int(li)]
+                    z0 = np.fromiter(b0_s, dtype=int)
+                    z1 = np.fromiter(b1_s, dtype=int)
                     if len(z1) > 0:
                         A1 = np.asarray(X_m[:, z1], dtype=float)
                         G1 = A1.T @ A1 + 2.0 * l2 * np.eye(len(z1))
@@ -246,24 +290,42 @@ if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.jso
                         t_st = np.minimum(np.abs(q_l[z1]) / max(2.0 * l2, 1e-12), M)
                         pen[z1] = np.abs(q_l[z1]) * t_st - l2 * (t_st ** 2) - l0
                     dl_quick = float(y_v @ r_l - 0.5 * (r_l @ r_l) - np.sum(pen))
-                    worst_gap = max(worst_gap, max(0.0, U_obj - dl_quick))
-                out["sparse_cert_gap"] = round(worst_gap, 9)
-                out["sparse_cert_valid"] = bool(box_ok and part_ok and n_nodes <= max_nodes)
-                out["sparse_cert_status"] = "verified_primal_and_dyadic_partition"
+                    if not np.isfinite(dl_quick):
+                        dual_ok = False
+                        worst_gap = float("inf")
+                        break
+                    leaf_gap = max(0.0, U_obj - dl_quick)
+                    worst_gap = max(worst_gap, leaf_gap)
+                out["sparse_cert_gap"] = round(worst_gap, 9) if np.isfinite(worst_gap) else 999999.0
+                gap_satisfied = bool(dual_ok and np.isfinite(worst_gap) and worst_gap <= eff_tol)
+                if exhaustive and gap_satisfied:
+                    out["sparse_cert_valid"] = True
+                    out["sparse_cert_status"] = "certified_exhaustive_partition_and_dual_gap"
+                elif (not exhaustive) and gap_satisfied:
+                    out["sparse_cert_valid"] = False
+                    out["sparse_cert_sampled_diagnostic"] = True
+                    out["sparse_cert_status"] = "sampled_diagnostic_dual_ok_not_exhaustive"
+                else:
+                    out["sparse_cert_valid"] = False
+                    out["sparse_cert_status"] = "failed_dual_gap_certificate"
             else:
-                out["sparse_cert_valid"] = bool(box_ok and part_ok and n_nodes <= max_nodes)
-                out["sparse_cert_status"] = "verified_dyadic_partition_only" if out["sparse_cert_valid"] else "invalid_box_or_partition"
+                out["sparse_cert_valid"] = False
+                out["sparse_cert_status"] = "partition_only_no_data_unverified" if out["sparse_partition_valid"] else "invalid_box_or_partition"
         elif "upper_bound" in res or "lower_bound" in res:
-            ub = res.get("upper_bound", res.get("objective", res.get("best_objective")))
-            lb = res.get("lower_bound", res.get("dual_bound"))
+            ub = float(res.get("upper_bound", res.get("objective", res.get("best_objective"))))
+            lb = float(res.get("lower_bound", res.get("dual_bound")))
             cert = res.get("certificate", res.get("tree", res.get("nodes", [])))
             n_nodes = len(cert.get("nodes", cert.get("leaves", []))) if isinstance(cert, dict) else (len(cert) if isinstance(cert, list) else int(res.get("num_nodes", 0) or 0))
-            gap = abs(float(ub) - float(lb)) if (ub is not None and lb is not None) else 999.0
+            finite_bounds = bool(np.isfinite(ub) and np.isfinite(lb) and lb <= ub + 1e-6)
+            gap = abs(ub - lb) if finite_bounds else 999999.0
             out["sparse_cert_gap"] = round(gap, 9)
             out["sparse_cert_nodes"] = n_nodes
-            out["sparse_cert_valid"] = bool(gap <= float(prob.get("opt_tol", 1e-5)) + 1e-6 and (n_nodes <= max_nodes if n_nodes > 0 else True))
-            out["sparse_cert_status"] = "explicit_bounds_schema"
+            # Claimed scalar bounds without verifiable leaf witnesses are diagnostic only, never certified!
+            out["sparse_cert_valid"] = False
+            out["sparse_cert_sampled_diagnostic"] = bool(finite_bounds and gap <= float(prob.get("opt_tol", 1e-5)) + 1e-6 and (n_nodes <= max_nodes if n_nodes > 0 else True))
+            out["sparse_cert_status"] = "unverified_claimed_scalar_bounds"
         else:
+            out["sparse_cert_valid"] = False
             out["sparse_cert_status"] = "unsupported_schema"
     except Exception as exc:
         out["sparse_cert_valid"] = False
@@ -1151,6 +1213,7 @@ def reconcile_thesis_and_antithesis_publicly(
 
     ok_t = bool(chk_t.get("accepted"))
     ok_a = bool(chk_a.get("accepted"))
+    accum_llm_tok = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
 
     def _finalize_choice(branch: str, mechanism: str, rationale: str = "", llm_tok: dict[str, Any] | None = None) -> dict[str, Any]:
         chosen_tar = antithesis_tar if branch == "antithesis" else thesis_tar
@@ -1158,6 +1221,13 @@ def reconcile_thesis_and_antithesis_publicly(
             m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, clean_base_tar)
         imp_f = m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, chosen_tar)
         clean_base_tar.unlink(missing_ok=True)
+        extra_tok = llm_tok or {}
+        merged_tok = {
+            "prompt": int(accum_llm_tok["prompt"]) + int(extra_tok.get("prompt", 0)),
+            "cached": int(accum_llm_tok["cached"]) + int(extra_tok.get("cached", 0)),
+            "completion": int(accum_llm_tok["completion"]) + int(extra_tok.get("completion", 0)),
+            "wall_ms": float(accum_llm_tok["wall_ms"]) + float(extra_tok.get("wall_ms", 0.0)),
+        }
         return {
             "selected_branch": branch,
             "selection_mechanism": mechanism,
@@ -1167,7 +1237,7 @@ def reconcile_thesis_and_antithesis_publicly(
             "antithesis_public_contract": chk_a,
             "thesis_public_metrics": pub_t,
             "antithesis_public_metrics": pub_a,
-            "llm_tokens": llm_tok or {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
+            "llm_tokens": merged_tok,
         }
 
     # Layer 1: Contract & Exact Hash Fast-Path
@@ -1224,7 +1294,6 @@ def reconcile_thesis_and_antithesis_publicly(
     # and commits ONLY if the synthesized self-contained artifact passes contract checks AND strictly beats `max(T, A)`!
     has_gap, gap_reason = _public_benchmark_has_unresolved_gap(pub_t, pub_a)
     if has_gap and synth_cid != "mock":
-        tok_sub = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
         try:
             if clean_base_tar.is_file():
                 m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, clean_base_tar)
@@ -1298,10 +1367,10 @@ def reconcile_thesis_and_antithesis_publicly(
                     output_schema=CODE_SUBLATION_TURN_SCHEMA,
                     stage_subdir=f"{stage_subdir}__code_sublation_t{sub_idx}",
                 )
-                tok_sub["prompt"] += int(llm_sub.get("prompt_tokens", 0))
-                tok_sub["cached"] += int(llm_sub.get("cached_tokens", 0))
-                tok_sub["completion"] += int(llm_sub.get("completion_tokens", 0))
-                tok_sub["wall_ms"] += float(llm_sub.get("wall_ms", 0.0))
+                accum_llm_tok["prompt"] += int(llm_sub.get("prompt_tokens", 0))
+                accum_llm_tok["cached"] += int(llm_sub.get("cached_tokens", 0))
+                accum_llm_tok["completion"] += int(llm_sub.get("completion_tokens", 0))
+                accum_llm_tok["wall_ms"] += float(llm_sub.get("wall_ms", 0.0))
                 if not llm_sub.get("ok"):
                     break
                 p_sub = llm_sub["parsed"]
@@ -1351,7 +1420,7 @@ def reconcile_thesis_and_antithesis_publicly(
                         "thesis_public_metrics": pub_t,
                         "antithesis_public_metrics": pub_a,
                         "synthesized_public_metrics": pub_sub,
-                        "llm_tokens": tok_sub,
+                        "llm_tokens": dict(accum_llm_tok),
                     }
         except Exception:
             pass

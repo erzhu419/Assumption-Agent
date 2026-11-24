@@ -61,12 +61,49 @@ from hegel_machine.cognition.m7_holdout_ood_blind_benchmark import (
 )
 
 
-def install_quiet_timing_locks() -> None:
-    """Protect `amr-poisson-optimize` (`verifier_memory_mb >= 10000`) from parallel container CPU noise."""
+def install_quiet_timing_locks(*, max_containers: int = 8) -> None:
+    """Protect `amr-poisson-optimize` (`verifier_memory_mb >= 10000`) from CPU noise AND cap concurrent containers.
+
+    Decouples high LLM worker concurrency (`--max-workers 16`) from host RAM container pressure (`--max-containers`)
+    so 16-thread runs do not OOM a 43 GiB host with 32 simultaneous heavy Docker containers!
+    """
     rw_lock = HeavyTimingRWLock()
-    verifier_sem = threading.Semaphore(3)
+    verifier_sem = threading.Semaphore(min(4, max(2, max_containers // 2)))
+    container_sem = threading.Semaphore(max(2, int(max_containers)))
+    in_verifier_tls = threading.local()
+    active_cids: set[str] = set()
+    active_cids_lock = threading.Lock()
     orig_exec_bash = m6f.exec_container_bash
     orig_tb_verifier = m6f.run_tb_separate_verifier
+    orig_start_container = m6f.start_detached_container
+    orig_stop_container = m6f.stop_container_safely
+
+    def _capped_start_container(*args: Any, **kwargs: Any) -> str:
+        # Deadlock prevention: `run_tb_separate_verifier` boots a short-lived `verifier_cid` WHILE the caller
+        # already holds `agent_cid`! Bypass `container_sem` inside `_quiet_tb_verifier` (bounded separately by `verifier_sem`).
+        if getattr(in_verifier_tls, "active", False):
+            return orig_start_container(*args, **kwargs)
+        container_sem.acquire()
+        try:
+            cid = orig_start_container(*args, **kwargs)
+        except Exception:
+            container_sem.release()
+            raise
+        with active_cids_lock:
+            active_cids.add(cid)
+        return cid
+
+    def _capped_stop_container(cid: str) -> None:
+        try:
+            orig_stop_container(cid)
+        finally:
+            release = False
+            with active_cids_lock:
+                if cid in active_cids:
+                    active_cids.remove(cid)
+                    release = True
+            if release:
+                container_sem.release()
 
     def _quiet_exec_bash(cid: str, command: str, *, timeout_sec: int = 120) -> dict[str, Any]:
         rw_lock.acquire_read()
@@ -76,19 +113,25 @@ def install_quiet_timing_locks() -> None:
             rw_lock.release_read()
 
     def _quiet_tb_verifier(task: m6f.FrontierBenchmarkTask, agent_cid: str) -> dict[str, Any]:
-        if task.verifier_memory_mb >= 10000:
-            rw_lock.acquire_write()
-            try:
-                return orig_tb_verifier(task, agent_cid)
-            finally:
-                rw_lock.release_write()
-        with verifier_sem:
-            rw_lock.acquire_read()
-            try:
-                return orig_tb_verifier(task, agent_cid)
-            finally:
-                rw_lock.release_read()
+        in_verifier_tls.active = True
+        try:
+            if task.verifier_memory_mb >= 10000:
+                rw_lock.acquire_write()
+                try:
+                    return orig_tb_verifier(task, agent_cid)
+                finally:
+                    rw_lock.release_write()
+            with verifier_sem:
+                rw_lock.acquire_read()
+                try:
+                    return orig_tb_verifier(task, agent_cid)
+                finally:
+                    rw_lock.release_read()
+        finally:
+            in_verifier_tls.active = False
 
+    m6f.start_detached_container = _capped_start_container  # type: ignore[assignment]
+    m6f.stop_container_safely = _capped_stop_container  # type: ignore[assignment]
     m6f.exec_container_bash = _quiet_exec_bash  # type: ignore[assignment]
     m6f.run_tb_separate_verifier = _quiet_tb_verifier  # type: ignore[assignment]
 
@@ -162,6 +205,7 @@ def run_two_wave_autogenous_suite(
     cmd_timeout_sec: int,
     reasoning_effort: str,
     online_wave1_aufhebung: bool = True,
+    selective_online: bool = False,
     task_filter: set[str] | None = None,
 ) -> dict[str, Any]:
     suite_dir.mkdir(parents=True, exist_ok=True)
@@ -201,7 +245,7 @@ def run_two_wave_autogenous_suite(
                 max_turns_per_branch=max_turns,
                 cmd_timeout_sec=cmd_timeout_sec,
                 reasoning_effort=reasoning_effort,
-                selective_second_branch=False,
+                selective_second_branch=selective_online,
             )
             print(
                 f"[DONE {wave_name}] `{task.task_id}`: SYNTH={s['strict_pass']} | "
@@ -316,7 +360,7 @@ def run_wormhole_ablation_and_bare_bestof2(
     *,
     waves: dict[str, list[m6f.FrontierBenchmarkTask]],
     suite_dir: Path,
-    post_wave1_bundle_path: Path,
+    initial_bundle_path: Path,
     model: str,
     codex_info: dict[str, Any],
     max_turns: int,
@@ -324,9 +368,10 @@ def run_wormhole_ablation_and_bare_bestof2(
     cmd_timeout_sec: int,
     reasoning_effort: str,
     run_second_bare: bool = True,
+    wormhole_off_mode: str = "frozen_snapshot",
     wormhole_ablation_task_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Run (a) `Wormhole OFF (__disable_wormholes__=True)` 1x ablation & (b) independent `Bare_ReAct_Run2_1x` for `Bare Best-of-2 (2x)`."""
+    """Run unconfounded `Wormhole OFF` 1x ablation (`frozen_snapshot` or `independent_continual`) + `Bare_Run2_1x`."""
     abl_dir = suite_dir / "ablations"
     abl_dir.mkdir(parents=True, exist_ok=True)
     all_tasks = [t for w in ("wave_1", "wave_2") for t in waves[w]]
@@ -368,50 +413,99 @@ def run_wormhole_ablation_and_bare_bestof2(
             for fut in as_completed(futs):
                 bare2_results[futs[fut]] = fut.result()
 
-    # B. Horizontal Wormhole OFF (`__disable_wormholes__ = True`) vs ON (`Antithesis 1x`)
-    forest_nw, archive_nw, _, _ = load_autogenous_forest_bundle(post_wave1_bundle_path)
+    # B. Unconfounded Horizontal Wormhole OFF (`allow_horizontal_wormholes=False, wormhole_equivalence_pooling=False`)
+    #   - `frozen_snapshot`: All target tasks run on the EXACT same frozen `initial_bundle_path` (`0` post-Wave-1 contamination).
+    #   - `independent_continual`: Clones `initial_bundle_path`, runs Wave-1 OFF -> vertical-only Aufhebung (`0` horizontal edges) -> Wave-2 OFF!
+    forest_nw, archive_nw, meta_dag_nw, _ = load_autogenous_forest_bundle(initial_bundle_path)
     archive_nw["__disable_wormholes__"] = {"enabled": True}
-    # Note: truthy dict triggers `bool(forest_archive.get("__disable_wormholes__")) == True`!
-    hippo_nw = HippoRAGWormholeIndex(forest_nw)
-    target_ids = wormhole_ablation_task_ids or [t.task_id for t in all_tasks if t.benchmark != "BioMysteryBench-Preview"]
-    nw_root = abl_dir / "wormhole_off_1x"
+    target_set = set(wormhole_ablation_task_ids) if wormhole_ablation_task_ids else {
+        t.task_id for t in all_tasks if t.benchmark != "BioMysteryBench-Preview"
+    }
+    target_ids = [t.task_id for t in all_tasks if t.task_id in target_set]
+    nw_root = abl_dir / f"wormhole_off_{wormhole_off_mode}_1x"
     nw_root.mkdir(parents=True, exist_ok=True)
     nw_results: dict[str, dict[str, Any]] = {}
 
-    def _do_nw(tid: str) -> dict[str, Any]:
-        task = tasks_by_id[tid]
-        ep_d = nw_root / tid
-        sfp = ep_d / "00_episode_summary.json"
-        if sfp.is_file():
-            return json.loads(sfp.read_text(encoding="utf-8"))
-        print(f"[WORMHOLE-OFF] Starting `{tid}`...", flush=True)
-        s = m6f.run_frontier_episode(
-            task,
-            "Hegel_M6_9_Antithesis_LiveGPT",
-            model=model,
-            codex_info=codex_info,
-            forest=forest_nw,
-            forest_archive=archive_nw,
-            hippo_idx=hippo_nw,
-            episode_out_dir=ep_d,
-            run_id=f"{suite_dir.name}_wormhole_off",
-            max_turns=max_turns,
-            cmd_timeout_sec=cmd_timeout_sec,
-            reasoning_effort=reasoning_effort,
+    def _run_nw_wave(wave_tids: list[str], cur_f: Any, cur_a: dict[str, Any]) -> None:
+        if not wave_tids:
+            return
+        cur_h = HippoRAGWormholeIndex(
+            cur_f,
+            allow_horizontal_wormholes=False,
+            wormhole_equivalence_pooling=False,
         )
-        print(
-            f"[WORMHOLE-OFF] Finished `{tid}`: pass={s['strict_pass']} | recalled={s.get('recalled_node_ids')} | calls={s.get('skill_activation_count', 0)}",
-            flush=True,
+        assert cur_h.edge_counts.get("horizontal_wormhole_edges", 0) == 0, (
+            f"Wormhole OFF violation: expected 0 horizontal edges, got {cur_h.edge_counts}"
         )
-        return s
 
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futs = {pool.submit(_do_nw, tid): tid for tid in target_ids}
-        for fut in as_completed(futs):
-            nw_results[futs[fut]] = fut.result()
+        def _do_nw(tid: str) -> dict[str, Any]:
+            task = tasks_by_id[tid]
+            ep_d = nw_root / tid
+            sfp = ep_d / "00_episode_summary.json"
+            if sfp.is_file():
+                return json.loads(sfp.read_text(encoding="utf-8"))
+            print(f"[WORMHOLE-OFF:{wormhole_off_mode}] Starting `{tid}`...", flush=True)
+            s = m6f.run_frontier_episode(
+                task,
+                "Hegel_M6_9_Antithesis_LiveGPT",
+                model=model,
+                codex_info=codex_info,
+                forest=cur_f,
+                forest_archive=cur_a,
+                hippo_idx=cur_h,
+                episode_out_dir=ep_d,
+                run_id=f"{suite_dir.name}_wormhole_off_{wormhole_off_mode}",
+                max_turns=max_turns,
+                cmd_timeout_sec=cmd_timeout_sec,
+                reasoning_effort=reasoning_effort,
+            )
+            print(
+                f"[WORMHOLE-OFF:{wormhole_off_mode}] Finished `{tid}`: pass={s['strict_pass']} | recalled={s.get('recalled_node_ids')} | calls={s.get('skill_activation_count', 0)}",
+                flush=True,
+            )
+            return s
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futs = {pool.submit(_do_nw, tid): tid for tid in wave_tids}
+            for fut in as_completed(futs):
+                nw_results[futs[fut]] = fut.result()
+
+    w1_tids = [t.task_id for t in waves["wave_1"] if t.task_id in target_set]
+    w2_tids = [t.task_id for t in waves["wave_2"] if t.task_id in target_set]
+    nw_w1_cons: dict[str, Any] = {"skipped": True}
+    if wormhole_off_mode == "independent_continual":
+        _run_nw_wave(w1_tids, forest_nw, archive_nw)
+        w1_recs = [
+            (tasks_by_id[tid], nw_results[tid], nw_root / tid)
+            for tid in w1_tids
+            if tid in nw_results
+        ]
+        if w1_recs:
+            nw_w1_cons = consolidate_wave1_via_aufhebung_compiler(
+                wave1_antithesis_episodes=w1_recs,
+                forest=forest_nw,
+                archive=archive_nw,
+                codex_info=codex_info,
+                model=model,
+                run_id=f"{suite_dir.name}_wormhole_off_continual",
+                reasoning_effort=reasoning_effort,
+                allow_horizontal_wormholes=False,
+            )
+            serialize_autogenous_forest_bundle(
+                forest=forest_nw,
+                archive=archive_nw,
+                meta_dag=meta_dag_nw,
+                out_path=nw_root / "post_wave1_wormhole_off_bundle.json",
+                extra_metadata={"stage": "post_wave1_wormhole_off_independent", "git_commit": get_git_head_sha()},
+            )
+        _run_nw_wave(w2_tids, forest_nw, archive_nw)
+    else:
+        _run_nw_wave(target_ids, forest_nw, archive_nw)
 
     out = {
         "git_commit": get_git_head_sha(),
+        "wormhole_off_mode": wormhole_off_mode,
+        "wormhole_off_wave1_consolidation": nw_w1_cons,
         "bare_run2_count": len(bare2_results),
         "bare_run2_passes": sum(1 for s in bare2_results.values() if s["strict_pass"]),
         "wormhole_off_count": len(nw_results),
@@ -427,7 +521,10 @@ def run_wormhole_ablation_and_bare_bestof2(
         },
         "bare_run2_per_task": {tid: bool(s["strict_pass"]) for tid, s in bare2_results.items()},
     }
-    (abl_dir / "00_ablation_summary.json").write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (abl_dir / f"00_ablation_{wormhole_off_mode}_summary.json").write_text(
+        json.dumps(out, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
     return out
 
 
@@ -446,14 +543,18 @@ def main() -> int:
     )
     ap.add_argument("--model", type=str, default="gpt-6.2-sol")
     ap.add_argument("--max-turns", type=int, default=28)
-    ap.add_argument("--max-workers", type=int, default=3)
+    ap.add_argument("--max-workers", type=int, default=16, help="Task/LLM worker concurrency (decoupled from container cap).")
+    ap.add_argument("--max-containers", type=int, default=8, help="Hard cap on simultaneous live Docker containers to prevent host OOM.")
     ap.add_argument("--cmd-timeout", type=int, default=180)
     ap.add_argument("--reasoning-effort", type=str, default="medium")
     ap.add_argument("--tasks", nargs="*", default=None)
     ap.add_argument("--skip-bare-run2", action="store_true")
+    ap.add_argument("--wormhole-off-mode", choices=("frozen_snapshot", "independent_continual"), default="frozen_snapshot")
+    ap.add_argument("--selective-online", action="store_true", help="Execute true online selective 2nd-branch routing instead of full 2-branch.")
+    ap.add_argument("--freeze-cross-model", action="store_true", help="Disable online Wave-1 Aufhebung during cross-model evaluation.")
     args = ap.parse_args()
 
-    install_quiet_timing_locks()
+    install_quiet_timing_locks(max_containers=args.max_containers)
     codex_info = m6f.discover_chatgpt_subscription_codex_cli()
     assert codex_info.get("auth_mode") == "chatgpt", f"Official ChatGPT OAuth required: {codex_info}"
 
@@ -474,18 +575,19 @@ def main() -> int:
             cmd_timeout_sec=args.cmd_timeout,
             reasoning_effort=args.reasoning_effort,
             online_wave1_aufhebung=True,
+            selective_online=args.selective_online,
             task_filter=t_filter,
         )
         print("EXP1_MAIN_DONE:", json.dumps({k: v for k, v in rep.items() if k != "per_task"}, ensure_ascii=False), flush=True)
 
     elif args.exp == "exp1_ablations":
         waves = m6f.load_frontier_scout_20_tasks()
-        post_w1 = ev_root / "post_wave1_autogenous_forest_bundle.json"
-        bundle_use = post_w1 if post_w1.is_file() else args.pretrained_bundle.resolve()
+        # M7-Audit Fix: NEVER pass post_wave1_autogenous_forest_bundle.json to Wave-1 ablation tasks (eliminates self-episode contamination)!
+        bundle_use = args.pretrained_bundle.resolve()
         abl = run_wormhole_ablation_and_bare_bestof2(
             waves=waves,
             suite_dir=ev_root,
-            post_wave1_bundle_path=bundle_use,
+            initial_bundle_path=bundle_use,
             model=args.model,
             codex_info=codex_info,
             max_turns=args.max_turns,
@@ -493,6 +595,7 @@ def main() -> int:
             cmd_timeout_sec=args.cmd_timeout,
             reasoning_effort=args.reasoning_effort,
             run_second_bare=(not args.skip_bare_run2),
+            wormhole_off_mode=args.wormhole_off_mode,
             wormhole_ablation_task_ids=list(t_filter) if t_filter else None,
         )
         print("EXP1_ABLATIONS_DONE:", json.dumps(abl, ensure_ascii=False), flush=True)
@@ -525,12 +628,13 @@ def main() -> int:
             cmd_timeout_sec=args.cmd_timeout,
             reasoning_effort=args.reasoning_effort,
             online_wave1_aufhebung=True,
+            selective_online=args.selective_online,
             task_filter=t_filter,
         )
         print("EXP2_HOLDOUT_DONE:", json.dumps({k: v for k, v in rep.items() if k != "per_task"}, ensure_ascii=False), flush=True)
 
     elif args.exp == "exp3_cross_model":
-        # Support evaluating cross-model transfer on either Holdout-OOD-12 or Frontier-20!
+        # Support evaluating cross-model transfer on either Holdout-OOD-12 or Frontier-20, frozen or continual!
         use_holdout = bool(t_filter and all(tid.startswith("ho") for tid in t_filter))
         waves = holdout_tasks_as_frontier_waves() if use_holdout else m6f.load_frontier_scout_20_tasks()
         rep = run_two_wave_autogenous_suite(
@@ -543,7 +647,8 @@ def main() -> int:
             max_workers=args.max_workers,
             cmd_timeout_sec=args.cmd_timeout,
             reasoning_effort=args.reasoning_effort,
-            online_wave1_aufhebung=True,
+            online_wave1_aufhebung=(not args.freeze_cross_model),
+            selective_online=args.selective_online,
             task_filter=t_filter,
         )
         print("EXP3_CROSS_MODEL_DONE:", json.dumps({k: v for k, v in rep.items() if k != "per_task"}, ensure_ascii=False), flush=True)

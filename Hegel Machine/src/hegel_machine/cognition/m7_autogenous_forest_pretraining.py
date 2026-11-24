@@ -332,77 +332,273 @@ def _iter_call_subtrees(prog: Program) -> list[Program]:
     return out
 
 
+def _extract_code_ast_operator_profile(python_code: str) -> dict[str, Any]:
+    """Extract genuine Python AST scientific operator structure & reject degenerate constant-return stubs (`M7-Audit` Fix)."""
+    code = str(python_code or "").strip()
+    if not code:
+        return {"valid": False, "is_constant_stub": True, "op_families": set(), "ast_sha12": ""}
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return {"valid": False, "is_constant_stub": True, "op_families": set(), "ast_sha12": ""}
+
+    sci_calls: list[str] = []
+    op_families: set[str] = set()
+    bin_ops = 0
+    loops_or_comps = 0
+    non_trivial_returns = 0
+    func_count = 0
+
+    _FAM_MAP = {
+        "solve": "linear_system", "lstsq": "linear_system", "spsolve": "linear_system", "inv": "linear_system", "pinv": "linear_system",
+        "svd": "spectral_subspace", "eigh": "spectral_subspace", "eigvalsh": "spectral_subspace", "qr": "spectral_subspace",
+        "minimize": "nonlinear_opt", "least_squares": "nonlinear_opt", "minimize_scalar": "nonlinear_opt", "linprog": "convex_lp",
+        "fft": "harmonic_wave", "rfft": "harmonic_wave", "irfft": "harmonic_wave", "hilbert": "harmonic_wave", "correlate": "harmonic_wave",
+        "median": "robust_stat", "percentile": "robust_stat", "quantile": "robust_stat", "clip": "robust_stat", "tanh": "robust_stat",
+        "exp": "exp_log_kernel", "expm1": "exp_log_kernel", "log": "exp_log_kernel", "log1p": "exp_log_kernel", "hypot": "metric_norm", "norm": "metric_norm",
+    }
+
+    for fn in [n for n in tree.body if isinstance(n, ast.FunctionDef)]:
+        if fn.name.startswith("_"):
+            continue
+        func_count += 1
+        for sub in ast.walk(fn):
+            if isinstance(sub, ast.BinOp):
+                bin_ops += 1
+            elif isinstance(sub, (ast.For, ast.While, ast.ListComp, ast.GeneratorExp, ast.DictComp)):
+                loops_or_comps += 1
+            elif isinstance(sub, ast.Call):
+                cname = sub.func.id if isinstance(sub.func, ast.Name) else (sub.func.attr if isinstance(sub.func, ast.Attribute) else "")
+                if cname and not cname.startswith("_"):
+                    sci_calls.append(cname)
+                    if cname in _FAM_MAP:
+                        op_families.add(_FAM_MAP[cname])
+            elif isinstance(sub, ast.Return) and sub.value is not None:
+                # Check whether return value is a literal numeric/None constant or unary -constant!
+                rv = sub.value
+                is_const = isinstance(rv, ast.Constant) or (
+                    isinstance(rv, ast.UnaryOp) and isinstance(rv.operand, ast.Constant)
+                )
+                if not is_const:
+                    non_trivial_returns += 1
+
+    has_real_computation = bool(func_count > 0 and non_trivial_returns > 0 and (bin_ops >= 2 or len(sci_calls) >= 2))
+    canon_struct = {
+        "op_families": sorted(op_families),
+        "sci_calls": sorted(set(sci_calls)),
+        "bin_ops_bucket": min(bin_ops // 3, 12),
+        "has_loops": loops_or_comps > 0,
+    }
+    ast_sha12 = hashlib.sha256(json.dumps(canon_struct, sort_keys=True).encode("utf-8")).hexdigest()[:12] if has_real_computation else ""
+    return {
+        "valid": has_real_computation,
+        "is_constant_stub": not has_real_computation,
+        "op_families": op_families,
+        "sci_calls": sorted(set(sci_calls)),
+        "ast_sha12": ast_sha12,
+    }
+
+
+def _program_has_nontrivial_sensitivity(prog: Program, slots: list[dict[str, Any]] | None = None) -> bool:
+    """Verify via `EvaluationContext` differential probes that a lifted/anti-unified `Program` depends on its inputs."""
+    from .language import EvaluationContext
+    from .models import Observation
+
+    slot_vals = {
+        str(s["slot"]): float(s.get("value_a", s.get("value_b", 0.1)))
+        for s in (slots or [])
+        if "slot" in s
+    }
+
+    def _bind_slots(p: Program) -> Program:
+        if p.op == "arg":
+            return Program("const", value=slot_vals.get(str(p.name), 0.1))
+        if not p.children:
+            return p
+        return Program(
+            op=p.op,
+            value=p.value,
+            name=p.name,
+            lag=p.lag,
+            children=tuple(_bind_slots(ch) for ch in p.children),
+            definition=p.definition,
+        )
+
+    try:
+        concrete = _bind_slots(prog)
+        obs_a = Observation({f"x_{k}": 0.35 + 0.17 * k for k in range(8)} | {"obs_signal": 0.4}, 0.0)
+        obs_b = Observation({f"x_{k}": 1.85 + 0.29 * k for k in range(8)} | {"obs_signal": 2.1}, 0.0)
+        va = float(EvaluationContext(obs_a).evaluate(concrete))
+        vb = float(EvaluationContext(obs_b).evaluate(concrete))
+        return math.isfinite(va) and math.isfinite(vb) and abs(va - vb) > 1e-9
+    except Exception:
+        return False
+
+
 def discover_cross_tree_operator_wormholes(
     forest: PhilosophicalForest,
     archive: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Run typed `Program` anti-unification across distinct trees to discover `SharedBaseSubtrees` and grow `HorizontalWormholeEdge`s."""
-    prog_nodes: list[tuple[str, str, Program]] = []
+    """Discover cross-tree `SharedBaseSubtrees` and `HorizontalWormholeEdge`s bound to real Python code semantics (`M7-Audit` Fix).
+
+    Two strict qualification tiers replace unconditional `mechanism_stability_verified=True` on stage labels:
+      1. `ast_differential_verified` (`mechanism_stability_verified=True`):
+         Both nodes expose real pure-Python mathematical expressions lifted via `lift_python_scientific_expressions_to_programs`
+         whose anti-unified `Program` skeleton (`size >= 4`) passes finite non-zero differential sensitivity probes!
+      2. `code_backed_stage_prior_candidate` (`mechanism_stability_verified=False`):
+         Stage-pipeline candidates are retained ONLY when BOTH nodes' executable `python_code` pass non-degenerate
+         AST operator verification (`_extract_code_ast_operator_profile`, rejecting constant-return stubs!) AND bind
+         their actual `ast_sha12` operator digests into the subtree identity!
+    """
+    from .m6_8_b_prime_capability_bridge import lift_python_scientific_expressions_to_programs
+
+    node_entries: list[dict[str, Any]] = []
     for nid, rec in iter_live_archive_nodes(archive):
-        if rec.get("layer_role") != "mid":
+        if rec.get("layer_role") not in {"mid", "fine"} or nid not in forest.nodes:
             continue
+        mods = rec.get("autogenous_wormhole_modules") or []
+        closures: list[dict[str, str]] = []
+        merged_fams: set[str] = set()
+        ast_digests: list[str] = []
+        any_real_code = False
+        for m in mods:
+            py_src = str(m.get("python_code") or "")
+            prof = _extract_code_ast_operator_profile(py_src)
+            if prof["valid"]:
+                any_real_code = True
+                merged_fams |= prof["op_families"]
+                ast_digests.append(prof["ast_sha12"])
+                closures.append({"name": str(m.get("filename") or nid), "code": py_src})
+        if not any_real_code:
+            # Degenerate / constant-stub modules cannot anchor cross-tree wormholes!
+            continue
+        lifted_progs = [
+            p for _, p in lift_python_scientific_expressions_to_programs(closures, max_programs=4)
+            if _program_has_nontrivial_sensitivity(p)
+        ]
         st_list = rec.get("operator_pipeline_stages") or []
-        p_tree = lift_operator_pipeline_to_program(st_list)
-        if p_tree is not None and nid in forest.nodes:
-            prog_nodes.append((nid, str(rec.get("tree_id") or ""), p_tree))
+        stage_prog = lift_operator_pipeline_to_program(st_list)
+        role_i = str(rec.get("layer_role") or "")
+        parent_i = str(rec.get("parent_node_id") or "")
+        mid_anchor = parent_i if (role_i == "fine" and parent_i in forest.nodes and forest.nodes[parent_i].get("layer_role") == "mid") else nid
+        if mid_anchor not in forest.nodes or forest.nodes[mid_anchor].get("layer_role") != "mid":
+            continue
+        node_entries.append(
+            {
+                "nid": nid,
+                "mid_anchor_id": mid_anchor,
+                "layer_role": role_i,
+                "tree_id": str(rec.get("tree_id") or ""),
+                "lifted_progs": lifted_progs,
+                "stage_prog": stage_prog,
+                "op_families": merged_fams,
+                "code_ast_digest": hashlib.sha256("|".join(sorted(ast_digests)).encode("utf-8")).hexdigest()[:12],
+            }
+        )
 
     shared_subtrees: list[dict[str, Any]] = []
     created_wormholes: list[str] = []
 
-    for i in range(len(prog_nodes)):
-        nid_a, tree_a, pa = prog_nodes[i]
-        for j in range(i + 1, len(prog_nodes)):
-            nid_b, tree_b, pb = prog_nodes[j]
+    for i in range(len(node_entries)):
+        ea = node_entries[i]
+        nid_a, tree_a = ea["nid"], ea["tree_id"]
+        for j in range(i + 1, len(node_entries)):
+            eb = node_entries[j]
+            nid_b, tree_b = eb["nid"], eb["tree_id"]
             if tree_a == tree_b:
                 continue
-            best_anti: tuple[Program, list[dict[str, Any]]] | None = anti_unify_programs(pa, pb)
-            if best_anti is None:
-                for sub_a in _iter_call_subtrees(pa):
-                    for sub_b in _iter_call_subtrees(pb):
-                        cand = anti_unify_programs(sub_a, sub_b)
-                        if cand is not None and cand[0].size >= 5:
-                            if best_anti is None or cand[0].size > best_anti[0].size:
-                                best_anti = cand
+
+            # Tier 1: Try genuine Python-AST-lifted `Program` anti-unification first!
+            best_real: tuple[Program, list[dict[str, Any]]] | None = None
+            for lpa in ea["lifted_progs"]:
+                for lpb in eb["lifted_progs"]:
+                    cand_r = anti_unify_programs(lpa, lpb)
+                    if cand_r is not None and cand_r[0].size >= 4 and _program_has_nontrivial_sensitivity(cand_r[0], cand_r[1]):
+                        if best_real is None or cand_r[0].size > best_real[0].size:
+                            best_real = cand_r
+
+            verification_tier = ""
+            mech_verified = False
+            best_anti: tuple[Program, list[dict[str, Any]]] | None = None
+            shared_fams = sorted(ea["op_families"] & eb["op_families"])
+
+            if best_real is not None:
+                best_anti = best_real
+                verification_tier = "ast_differential_verified"
+                mech_verified = True
+            elif ea["stage_prog"] is not None and eb["stage_prog"] is not None:
+                pa, pb = ea["stage_prog"], eb["stage_prog"]
+                cand_s = anti_unify_programs(pa, pb)
+                if cand_s is None:
+                    for sub_a in _iter_call_subtrees(pa):
+                        for sub_b in _iter_call_subtrees(pb):
+                            c2 = anti_unify_programs(sub_a, sub_b)
+                            if c2 is not None and c2[0].size >= 5:
+                                if cand_s is None or c2[0].size > cand_s[0].size:
+                                    cand_s = c2
+                if cand_s is not None and cand_s[0].size >= 5:
+                    best_anti = cand_s
+                    verification_tier = "code_backed_stage_prior_candidate"
+                    mech_verified = False
+
             if best_anti is None:
                 continue
+
             skel, slots = best_anti
-            if skel.size < 5:
-                continue
             skel_dict = skel.to_dict()
-            skel_sha = hashlib.sha256(json.dumps(skel_dict, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+            pair_code_bind = f"{ea['code_ast_digest']}:{eb['code_ast_digest']}"
+            skel_sha = hashlib.sha256(
+                (json.dumps(skel_dict, sort_keys=True) + "|" + pair_code_bind).encode("utf-8")
+            ).hexdigest()[:12]
             sub_id = f"sub_opdag_{skel_sha}"
             sigs_union = sorted(
                 set(archive[nid_a].get("signatures", [])) | set(archive[nid_b].get("signatures", []))
             )[:4]
-            forest.register_shared_base_subtree(
-                subtree_id=sub_id,
-                shared_nodes=[
-                    {
-                        "slot_id": str(skel.name or skel.op),
-                        "mechanism_stability_verified": True,
-                        "is_unverified_ephemeral_spike": False,
-                        "evidence_dependency_ids": [
-                            *(archive[nid_a].get("supported_by", [])[:1]),
-                            *(archive[nid_b].get("supported_by", [])[:1]),
-                        ],
-                    }
-                ],
-                shared_relations=[{"relation": "operator_pipeline_composition", "arity": len(skel.children)}],
-                role_and_scale_schema={"kind": "typed_scientific_operator_dag"},
-                open_completion_slots=[{"slot": s["slot"], "path": list(s["path"])} for s in slots],
-                supporting_sources=[
-                    {"source_id": nid_a, "tree_id": tree_a, "lineage_id": tree_a},
-                    {"source_id": nid_b, "tree_id": tree_b, "lineage_id": tree_b},
-                ],
-                probe_signatures=sigs_union,
-                permission_tier="local_solver_guidance",
-                executable_skeleton_dict=skel_dict,
-            )
+            if mech_verified:
+                forest.register_shared_base_subtree(
+                    subtree_id=sub_id,
+                    shared_nodes=[
+                        {
+                            "slot_id": str(skel.name or skel.op),
+                            "mechanism_stability_verified": True,
+                            "verification_tier": verification_tier,
+                            "shared_ast_operator_families": shared_fams,
+                            "is_unverified_ephemeral_spike": False,
+                            "evidence_dependency_ids": [
+                                *(archive[nid_a].get("supported_by", [])[:1]),
+                                *(archive[nid_b].get("supported_by", [])[:1]),
+                            ],
+                        }
+                    ],
+                    shared_relations=[
+                        {
+                            "relation": "ast_expression_anti_unification",
+                            "arity": len(skel.children),
+                        }
+                    ],
+                    role_and_scale_schema={
+                        "kind": "typed_scientific_operator_dag",
+                        "verification_tier": verification_tier,
+                        "source_code_ast_digests": [ea["code_ast_digest"], eb["code_ast_digest"]],
+                    },
+                    open_completion_slots=[{"slot": s["slot"], "path": list(s["path"])} for s in slots],
+                    supporting_sources=[
+                        {"source_id": nid_a, "tree_id": tree_a, "lineage_id": tree_a, "code_ast_digest": ea["code_ast_digest"]},
+                        {"source_id": nid_b, "tree_id": tree_b, "lineage_id": tree_b, "code_ast_digest": eb["code_ast_digest"]},
+                    ],
+                    probe_signatures=sigs_union,
+                    permission_tier="local_solver_guidance",
+                    executable_skeleton_dict=skel_dict,
+                )
             shared_subtrees.append(
                 {
                     "subtree_id": sub_id,
                     "node_a_id": nid_a,
                     "node_b_id": nid_b,
+                    "verification_tier": verification_tier,
+                    "mechanism_stability_verified": mech_verified,
+                    "shared_ast_operator_families": shared_fams,
+                    "code_ast_digests": [ea["code_ast_digest"], eb["code_ast_digest"]],
                     "skeleton_op": skel.op,
                     "skeleton_name": skel.name,
                     "skeleton_size": skel.size,
@@ -411,16 +607,23 @@ def discover_cross_tree_operator_wormholes(
                     "program_dict": skel_dict,
                 }
             )
-            wh_id = f"wh_auto_{nid_a[:18]}__{nid_b[:18]}_{skel_sha[:6]}"
+            anchor_a = str(ea["mid_anchor_id"])
+            anchor_b = str(eb["mid_anchor_id"])
+            wh_id = f"wh_auto_{anchor_a[:18]}__{anchor_b[:18]}_{skel_sha[:6]}"
             if wh_id not in forest.horizontal_wormhole_edges:
                 forest.add_horizontal_wormhole(
                     wormhole_id=wh_id,
-                    node_a_id=nid_a,
-                    node_b_id=nid_b,
+                    node_a_id=anchor_a,
+                    node_b_id=anchor_b,
                     probe_signature_refs=sigs_union,
-                    role_and_observation_map={"kind": "typed_operator_pipeline_isomorphism", "subtree_id": sub_id},
-                    hop_error_budget=0.12,
-                    permission_tier="local_solver_guidance",
+                    role_and_observation_map={
+                        "kind": "ast_differential_isomorphism" if mech_verified else "code_backed_stage_prior_candidate",
+                        "verification_tier": verification_tier,
+                        "subtree_id": sub_id,
+                        "origin_node_ids": [nid_a, nid_b],
+                    },
+                    hop_error_budget=0.08 if mech_verified else 0.18,
+                    permission_tier="local_solver_guidance" if mech_verified else "bounded_trial",
                     compatible_goal_kinds=["scientific_terminal_discovery"],
                 )
                 created_wormholes.append(wh_id)
@@ -428,8 +631,10 @@ def discover_cross_tree_operator_wormholes(
     meta = archive.setdefault("__autogenous_blank_seed__", {})
     meta["shared_operator_subtrees"] = shared_subtrees
     return {
-        "evaluated_node_count": len(prog_nodes),
+        "evaluated_node_count": len(node_entries),
         "shared_subtree_count": len(shared_subtrees),
+        "ast_verified_subtree_count": sum(1 for s in shared_subtrees if s["mechanism_stability_verified"]),
+        "stage_prior_candidate_count": sum(1 for s in shared_subtrees if not s["mechanism_stability_verified"]),
         "shared_subtrees": shared_subtrees,
         "created_wormhole_ids": created_wormholes,
     }
@@ -940,7 +1145,7 @@ def compile_episode_dialectical_sublation(
                 "exported_apis": ", ".join(pub_fb),
                 "packaged_python_code": pkg_fb,
                 "compiled_code_sha256": hashlib.sha256(pkg_fb.encode("utf-8")).hexdigest(),
-                "unit_test_receipt": {"passed": True, "mode": "static_compile_verified"},
+                "unit_test_receipt": {"passed": False, "mode": "static_compile_only_unverified"},
                 "sublated_methodology_principle": (
                     "; ".join(
                         f"Refuted `{ng.get('assumption_refuted')}` -> Pivot `{ng.get('sublated_pivot')}`"
@@ -995,6 +1200,7 @@ def consolidate_autogenous_episode_into_forest(
     archive: dict[str, dict[str, Any]],
     compilation: dict[str, Any],
     nogoods_recorded: list[dict[str, Any]],
+    allow_horizontal_wormholes: bool = True,
 ) -> dict[str, Any]:
     """Grow a new mid-layer `PhilosophicalNode` or bifurcate (`split`) an existing node on regime preconditions,
     wire `ClaimContract` empirical support receipts, and run cross-tree operator anti-unification!
@@ -1020,9 +1226,13 @@ def consolidate_autogenous_episode_into_forest(
     bif = compilation.get("regime_bifurcation") or {}
     should_split = bool(bif.get("should_split_node")) and str(bif.get("regime_axis") or "").strip() not in {"", "none"}
 
+    ut_rec = compilation.get("unit_test_receipt") or {}
+    ut_verified = bool(ut_rec.get("passed")) and str(ut_rec.get("mode") or "") != "static_compile_only_unverified"
     mod_entry = {
         "filename": compilation["filename"],
         "origin": compilation["compilation_mode"],
+        "unit_test_verified": ut_verified,
+        "source_qualification_status": str(compilation.get("source_qualification_status") or "public_episode"),
         "function_names": list(compilation["function_names"]),
         "exported_apis": str(compilation["exported_apis"]),
         "python_code": str(compilation["packaged_python_code"]),
@@ -1074,9 +1284,9 @@ def consolidate_autogenous_episode_into_forest(
                     "epistemic_rung": "L2_AUTOGENOUS_SUBLATED_MECHANISM",
                     "supported_by": [ep_id, f"sha256:{code_sha16}"],
                 },
-                protocol_spec={"epistemic_rung": "L2_AUTOGENOUS_SUBLATED_MECHANISM", "unit_test_verified": True},
+                protocol_spec={"epistemic_rung": "L2_AUTOGENOUS_SUBLATED_MECHANISM", "unit_test_verified": ut_verified},
                 tolerance=1.0,
-                evidence_status="SUPPORTED_IN_SCOPE",
+                evidence_status="SUPPORTED_IN_SCOPE" if ut_verified else "CANDIDATE_SYNTAX_ONLY",
                 permission_tier="local_solver_guidance",
             ),
             probe_signatures=sigs,
@@ -1159,7 +1369,17 @@ def consolidate_autogenous_episode_into_forest(
             scope={"preconditions": guard_rule},
             evidence_status="derived",
         )
-        # Also attach the newly sublated module & counter-regime note to `existing_mid_nid` so recalling either node delivers both branches!
+        # Record explicit complementary counter-regime guard on parent alongside counter-regime note!
+        _COMPLEMENT_OP = {">": "<=", ">=": "<", "<": ">=", "<=": ">", "==": "!=", "!=": "=="}
+        if guard_rule:
+            g0 = guard_rule[0]
+            comp_guard = {
+                "field": g0["field"],
+                "op": _COMPLEMENT_OP.get(str(g0["op"]), "!="),
+                "value": g0["value"],
+                "counterpart_child_id": split_nid,
+            }
+            parent_rec.setdefault("counter_regime_guards", []).append(comp_guard)
         parent_rec["signatures"] = merged_sigs
         parent_rec.setdefault("supported_by", []).append(ep_id)
         if all(m["filename"] != mod_entry["filename"] for m in parent_rec.setdefault("autogenous_wormhole_modules", [])):
@@ -1208,7 +1428,19 @@ def consolidate_autogenous_episode_into_forest(
         growth_action = "enriched_existing_autogenous_node"
         target_nid = existing_mid_nid
 
-    wh_summary = discover_cross_tree_operator_wormholes(forest, archive)
+    wh_summary = (
+        discover_cross_tree_operator_wormholes(forest, archive)
+        if allow_horizontal_wormholes
+        else {
+            "evaluated_node_count": 0,
+            "shared_subtree_count": 0,
+            "ast_verified_subtree_count": 0,
+            "stage_prior_candidate_count": 0,
+            "shared_subtrees": [],
+            "created_wormhole_ids": [],
+            "skipped_horizontal_wormholes_disabled": True,
+        }
+    )
     ev_rec = {
         "episode_id": ep_id,
         "growth_action": growth_action,
@@ -1295,6 +1527,7 @@ def consolidate_wave1_via_aufhebung_compiler(
     model: str,
     run_id: str,
     reasoning_effort: str = "medium",
+    allow_horizontal_wormholes: bool = True,
 ) -> dict[str, Any]:
     """Blind Online Wave-1 -> Wave-2 Dialectical Consolidation (`Audit Fix A01` Preserved!):
     Inspects ONLY public completion signals (`ended_by_finish == True` & non-empty producer code, ZERO private
@@ -1302,7 +1535,7 @@ def consolidate_wave1_via_aufhebung_compiler(
     inside `hegel_clean_scipy_sandbox:v1`, and grows/splits `PhilosophicalForest` nodes before Wave-2 begins!
     """
     ensure_clean_scipy_sandbox_image()
-    sandbox_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2")
+    sandbox_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")
     client = m6f.FrontierCodexClient(
         codex_info=codex_info,
         model=model,
@@ -1352,11 +1585,15 @@ def consolidate_wave1_via_aufhebung_compiler(
                 stage_subdir=f"{run_id}__wave1_aufhebung__{task.short_name}",
                 module_prefix="wave1_aufhebung",
             )
+            comp["source_qualification_status"] = (
+                "completed_public_episode" if bool(anti_sum.get("ended_by_finish")) else "incomplete_exploratory_episode"
+            )
             cons = consolidate_autogenous_episode_into_forest(
                 forest=forest,
                 archive=archive,
                 compilation=comp,
                 nogoods_recorded=list(anti_sum.get("nogoods_recorded", [])),
+                allow_horizontal_wormholes=allow_horizontal_wormholes,
             )
             events.append(
                 {

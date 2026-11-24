@@ -320,27 +320,18 @@ with open("/holdout_task/public_peclet.pkl", "wb") as fh:
     pickle.dump({"problem": prob, "gt_field": c_full, "gt_source_xy": [xs, ys], "gt_Q": Q}, fh)
 ''',
             private_verifier_py=r'''
-import json, pickle, sys, time, numpy as np
+import json, sys, time, numpy as np
+from scipy.sparse import lil_matrix
+from scipy.sparse.linalg import spsolve
 sys.path.insert(0, "/holdout_task")
 import peclet_plume
 
-with open("/holdout_task/public_peclet.pkl", "rb") as fh:
-    pub = pickle.load(fh)
-p0 = pub["problem"]
-# 1. Verify forward Scharfetter-Gummel stencil accuracy
-X, Y = np.meshgrid((np.arange(p0["N"]) + 0.5) * p0["h"], (np.arange(p0["N"]) + 0.5) * p0["h"], indexing="ij")
-src0 = pub["gt_Q"] * np.exp(-0.5 * ((X - pub["gt_source_xy"][0]) ** 2 + (Y - pub["gt_source_xy"][1]) ** 2) / (p0["sigma_s"] ** 2))
-c_fwd = np.asarray(peclet_plume.forward_peclet_field(p0["ux_face"], p0["uy_face"], p0["D"], p0["kappa"], src0, p0["h"]), float)
-fwd_rel = float(np.linalg.norm(c_fwd - pub["gt_field"]) / max(np.linalg.norm(pub["gt_field"]), 1e-12))
-
-# Generate unseen problem on shifted velocity & source!
-from scipy.sparse import lil_matrix
-from scipy.sparse.linalg import spsolve
 def bernoulli(z):
     z = np.asarray(z, dtype=float); out = np.ones_like(z); sm = np.abs(z) < 1e-4
     out[sm] = 1.0 - 0.5 * z[sm] + (z[sm] ** 2) / 12.0; zs = z[~sm]
     out[~sm] = np.where(zs > 40.0, zs * np.exp(-zs), np.where(zs < -40.0, -zs, zs / np.expm1(zs)))
     return out
+
 def sg_ref(N, h, ux_f, uy_f, D, kappa, src):
     A = lil_matrix((N * N, N * N), dtype=float)
     for i in range(N):
@@ -356,6 +347,20 @@ def sg_ref(N, h, ux_f, uy_f, D, kappa, src):
             A[r, r] = d
     return spsolve(A.tocsc(), src.ravel()).reshape(N, N)
 
+# 1. Verify forward Scharfetter-Gummel stencil accuracy on a FRESH UNSEEN PDE field (never public_peclet.pkl!)
+N_f = 96; L_f = 1.0; h_f = L_f / N_f
+xc_f = (np.arange(N_f) + 0.5) * h_f; xf_f = np.arange(N_f + 1) * h_f
+Xf, Yf = np.meshgrid(xc_f, xc_f, indexing="ij")
+Xfx, Yfx = np.meshgrid(xf_f, xc_f, indexing="ij"); Xfy, Yfy = np.meshgrid(xc_f, xf_f, indexing="ij")
+ux_fwd = -1.15 + 0.45 * np.cos(np.pi * Xfx) * np.sin(np.pi * Yfx)
+uy_fwd = 0.95 + 0.30 * np.sin(np.pi * Xfy) * np.cos(np.pi * Yfy)
+D_fwd, kap_fwd = 0.0028, 0.30
+src_fwd = 3.7 * np.exp(-0.5 * ((Xf - 0.62) ** 2 + (Yf - 0.41) ** 2) / (0.05 ** 2))
+gt_fwd_priv = sg_ref(N_f, h_f, ux_fwd, uy_fwd, D_fwd, kap_fwd, src_fwd)
+c_fwd = np.asarray(peclet_plume.forward_peclet_field(ux_fwd, uy_fwd, D_fwd, kap_fwd, src_fwd, h_f), float)
+fwd_rel = float(np.linalg.norm(c_fwd - gt_fwd_priv) / max(np.linalg.norm(gt_fwd_priv), 1e-12))
+
+# 2. Generate unseen inverse problem on shifted velocity & source!
 rng = np.random.default_rng(9303)
 N = 96; L = 1.0; h = L / N; xc = (np.arange(N) + 0.5) * h; xf = np.arange(N + 1) * h
 X, Y = np.meshgrid(xc, xc, indexing="ij")
@@ -375,7 +380,7 @@ inv = peclet_plume.invert_point_source(prob_u)
 dt = time.monotonic() - t0
 pos_err = float(np.linalg.norm(np.asarray(inv["source_xy"], float) - np.array([xs, ys])))
 q_err = abs(float(inv["strength_Q"]) - Q) / Q
-passed = bool(fwd_rel <= 1e-5 and pos_err <= 0.025 and q_err <= 0.08 and dt <= 6.0)
+passed = bool(np.isfinite(fwd_rel) and np.isfinite(pos_err) and np.isfinite(q_err) and fwd_rel <= 1e-5 and pos_err <= 0.025 and q_err <= 0.08 and dt <= 6.0)
 print(json.dumps({"strict_pass": passed, "fwd_rel_err": round(fwd_rel, 7), "pos_err": round(pos_err, 4), "q_rel_err": round(q_err, 4), "wall_s": round(dt, 3)}))
 ''',
         ),
@@ -528,25 +533,53 @@ import deconfound_graph
 
 rng = np.random.default_rng(9505)
 f1s = []
+prec_valid_all = True
+data_dep_all = True
 for sd in (1, 2):
     p, n = 24, 950
-    S = np.eye(p) * 2.3
-    edges = [(i, i + 1) for i in range(p - 1)] + [(0, p - 1), (2, 10), (5, 15), (7, 19), (13, 22)]
-    adj = np.zeros((p, p), dtype=bool)
-    for u, v in edges:
+    S_base = np.eye(p) * 2.35
+    base_edges = [(i, (i + 1) % p) for i in range(p)] + [(0, 8), (3, 14), (6, 17), (10, 21)]
+    adj_base = np.zeros((p, p), dtype=bool)
+    for u, v in base_edges:
         w = float(rng.choice([-0.54, 0.54]))
-        S[u, v] = S[v, u] = w
-        adj[u, v] = adj[v, u] = True
+        S_base[u, v] = S_base[v, u] = w
+        adj_base[u, v] = adj_base[v, u] = True
+    # Secret random vertex permutation eliminates any fixed-ring / index-template shortcut!
+    perm = rng.permutation(p)
+    S = S_base[np.ix_(perm, perm)]
+    adj = adj_base[np.ix_(perm, perm)]
     F = rng.normal(0.0, 0.90, size=(p, 2))
     Sigma = np.linalg.inv(S) + F @ F.T
     X = rng.multivariate_normal(np.zeros(p), Sigma, size=n)
-    res = deconfound_graph.recover_sparse_precision_support(X)
+    res = deconfound_graph.recover_sparse_precision_support(X.copy())
+    if not isinstance(res, dict) or "adjacency" not in res or "sparse_precision" not in res:
+        prec_valid_all = False
+        f1s.append(0.0)
+        continue
     pa = np.asarray(res["adjacency"], dtype=bool)
+    S_hat = np.asarray(res["sparse_precision"], dtype=float)
+    if (
+        pa.shape != (p, p)
+        or S_hat.shape != (p, p)
+        or np.any(np.diag(pa))
+        or not np.array_equal(pa, pa.T)
+        or not np.all(np.isfinite(S_hat))
+        or not np.allclose(S_hat, S_hat.T, atol=1e-3)
+        or float(np.linalg.eigvalsh(0.5 * (S_hat + S_hat.T))[0]) <= 1e-6
+        or (np.any(pa) and float(np.min(np.abs(S_hat[pa]))) <= 1e-5)
+    ):
+        prec_valid_all = False
+    # Verify genuine data dependence: permuting columns of X must correspondingly change predicted support!
+    alt_perm = np.roll(np.arange(p), 5)
+    res_alt = deconfound_graph.recover_sparse_precision_support(X[:, alt_perm].copy())
+    pa_alt = np.asarray(res_alt.get("adjacency", np.zeros_like(pa)), dtype=bool)
+    if np.array_equal(pa, pa_alt):
+        data_dep_all = False
     iu = np.triu_indices(p, 1)
     tp = int(np.sum(pa[iu] & adj[iu])); fp = int(np.sum(pa[iu] & ~adj[iu])); fn = int(np.sum(~pa[iu] & adj[iu]))
     f1s.append((2.0 * tp) / max(2 * tp + fp + fn, 1))
-passed = bool(min(f1s) >= 0.86)
-print(json.dumps({"strict_pass": passed, "min_edge_f1": round(min(f1s), 4), "f1s": [round(v, 4) for v in f1s]}))
+passed = bool(prec_valid_all and data_dep_all and len(f1s) == 2 and min(f1s) >= 0.86)
+print(json.dumps({"strict_pass": passed, "prec_valid": bool(prec_valid_all), "data_dependent": bool(data_dep_all), "min_edge_f1": round(min(f1s), 4), "f1s": [round(v, 4) for v in f1s]}))
 ''',
         ),
 
@@ -1138,8 +1171,8 @@ best_global = float(np.min(min_by_mask))
 
 leaves = res["proof_leaves"]
 cov = np.zeros(1 << m, dtype=int)
-lb_valid = True
-for lf in leaves:
+lb_valid = bool(np.isfinite(ub_rep) and np.isfinite(ub_true) and len(leaves) > 0)
+for lf in (leaves if lb_valid else []):
     fc = set(int(i) for i in lf["fixed_closed"]); fo = set(int(i) for i in lf["fixed_open"])
     if (fc & fo) or any(i < 0 or i >= m for i in (fc | fo)):
         lb_valid = False; break
@@ -1151,10 +1184,10 @@ for lf in leaves:
         if min_by_mask[mask] < sub_min:
             sub_min = min_by_mask[mask]
     rep_lb = float(lf["lower_bound"])
-    if rep_lb > sub_min + 1e-4 or rep_lb < ub_rep - 1e-4:
+    if (not np.isfinite(rep_lb)) or rep_lb > sub_min + 1e-4 or rep_lb < ub_rep - 1e-4:
         lb_valid = False; break
 
-passed = bool(feas and abs(ub_true - best_global) <= 1e-4 and abs(ub_rep - ub_true) <= 1e-4 and np.all(cov == 1) and lb_valid and len(leaves) <= 80)
+passed = bool(feas and np.isfinite(ub_rep) and abs(ub_true - best_global) <= 1e-4 and abs(ub_rep - ub_true) <= 1e-4 and np.all(cov == 1) and lb_valid and len(leaves) <= 80)
 print(json.dumps({"strict_pass": passed, "feas": bool(feas), "opt_exact": bool(abs(ub_true - best_global) <= 1e-4), "partition_exact": bool(np.all(cov == 1)), "lb_valid": bool(lb_valid), "leaf_count": int(len(leaves))}))
 ''',
         ),
@@ -1290,19 +1323,67 @@ def compute_holdout_suite_preregistration_sha256() -> str:
     return hashlib.sha256(json.dumps(serial, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
+def parse_authenticated_grader_stdout(stdout: str, sentinel_prefix: str) -> dict[str, Any]:
+    """Extract ONLY the parent-authenticated sentinel JSON line, ignoring any fake candidate stdout (`M7-Audit` Fix)."""
+    for ln in reversed(stdout.splitlines()):
+        s = ln.strip()
+        if s.startswith(sentinel_prefix):
+            payload = s[len(sentinel_prefix):].strip()
+            try:
+                obj = json.loads(payload)
+                if isinstance(obj, dict):
+                    return obj
+            except json.JSONDecodeError:
+                pass
+    return {"strict_pass": False, "auth_sentinel_missing": True}
+
+
 def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path) -> dict[str, Any]:
-    """Grade `submitted_tar_path` inside a SEPARATE fresh `hegel_clean_scipy_sandbox:v1` container (`zero` agent state!)."""
+    """Grade `submitted_tar_path` inside an air-gapped (`network_mode='none'`) `hegel_clean_scipy_sandbox:v1` container.
+
+    Hardened against M7-Audit boundary controls:
+      1. `network_mode='none'` blocks all outbound network exfiltration/lookup.
+      2. `/tmp/_verify.py` is read into memory and unlinked BEFORE executing user code so candidates cannot read `/tmp/_verify.py`.
+      3. Candidate stdout is redirected during execution, and ONLY the cryptographic `sentinel_prefix` line emitted
+         by the outer wrapper is trusted (`parse_authenticated_grader_stdout`).
+      Boundary note: Candidate module import still executes inside the same Python process within the fresh container
+      (so full hostile-adversary stack-frame isolation would additionally require a child worker subprocess + IPC pipe).
+    """
+    import secrets
+
     ensure_clean_scipy_sandbox_image()
     t0 = monotonic()
-    vcid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="3072m", cpus="2")
+    vcid = m6f.start_detached_container(
+        CLEAN_SCIPY_SANDBOX_IMAGE,
+        memory_limit="3072m",
+        cpus="2",
+        network_mode="none",
+    )
+    sentinel_prefix = f"__HEGEL_VERIFIER_AUTH_{secrets.token_hex(16)}__:"
     try:
         m6f.exec_container_bash(vcid, "mkdir -p /holdout_task /tmp", timeout_sec=10)
+        wrapper_py = (
+            "import contextlib, io, json, os, sys\n"
+            "v_src = open('/tmp/_verify.py', 'r', encoding='utf-8').read()\n"
+            "os.unlink('/tmp/_verify.py')\n"
+            f"sentinel = {sentinel_prefix!r}\n"
+            "_real_stdout = sys.stdout\n"
+            "_cap = io.StringIO()\n"
+            "with contextlib.redirect_stdout(_cap):\n"
+            "    exec(compile(v_src, '<isolated_holdout_verifier>', 'exec'), {'__name__': '__main__'})\n"
+            "lines = [ln.strip() for ln in _cap.getvalue().splitlines() if ln.strip().startswith('{')]\n"
+            "ver_json = lines[-1] if lines else json.dumps({'strict_pass': False})\n"
+            "_real_stdout.write(sentinel + ver_json + '\\n')\n"
+            "_real_stdout.flush()\n"
+        )
         with tempfile.TemporaryDirectory(prefix="hegel_ho_ver_") as td:
             td_p = Path(td)
             (td_p / "_setup.py").write_text(task.public_setup_py, encoding="utf-8")
             (td_p / "_verify.py").write_text(task.private_verifier_py, encoding="utf-8")
+            (td_p / "_run_ver.py").write_text(wrapper_py, encoding="utf-8")
             subprocess.run(["docker", "cp", str(td_p / "_setup.py"), f"{vcid}:/tmp/_setup.py"], check=True, timeout=20)
             subprocess.run(["docker", "cp", str(td_p / "_verify.py"), f"{vcid}:/tmp/_verify.py"], check=True, timeout=20)
+            subprocess.run(["docker", "cp", str(td_p / "_run_ver.py"), f"{vcid}:/tmp/_run_ver.py"], check=True, timeout=20)
         m6f.exec_container_bash(vcid, "python3 /tmp/_setup.py && rm -f /tmp/_setup.py", timeout_sec=60)
         if submitted_tar_path.is_file():
             m6f.import_declared_artifacts_tar(vcid, task.declared_artifacts, submitted_tar_path)
@@ -1320,17 +1401,11 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             }
         ex = m6f.exec_container_bash(
             vcid,
-            "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/_verify.py",
+            "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I -c "
+            "\"import os; s=open('/tmp/_run_ver.py').read(); os.unlink('/tmp/_run_ver.py'); exec(compile(s, '<runner>', 'exec'))\"",
             timeout_sec=120,
         )
-        parsed_v: dict[str, Any] = {"strict_pass": False}
-        for ln in reversed(ex["stdout"].splitlines()):
-            if ln.strip().startswith("{"):
-                try:
-                    parsed_v = json.loads(ln.strip())
-                    break
-                except json.JSONDecodeError:
-                    pass
+        parsed_v = parse_authenticated_grader_stdout(ex["stdout"], sentinel_prefix)
         sp = bool(parsed_v.get("strict_pass")) and int(ex["exit_code"]) == 0
         return {
             "benchmark": "Hegel-OOD-Holdout-12",

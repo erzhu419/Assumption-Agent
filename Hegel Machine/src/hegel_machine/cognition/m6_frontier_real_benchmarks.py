@@ -2760,14 +2760,28 @@ def run_frontier_episode(
         staged_wormhole_manifest: list[dict[str, Any]] = []
         if is_m6:
             pub_sigs = extract_public_task_signatures(task)
-            rec = hippo_idx.retrieve(
+            disable_wh = bool(forest_archive.get("__disable_wormholes__"))
+            eff_hippo = (
+                HippoRAGWormholeIndex(
+                    forest,
+                    allow_horizontal_wormholes=False,
+                    wormhole_equivalence_pooling=False,
+                )
+                if (disable_wh and (getattr(hippo_idx, "allow_horizontal_wormholes", True) or getattr(hippo_idx, "wormhole_equivalence_pooling", True)))
+                else hippo_idx
+            )
+            if disable_wh:
+                assert eff_hippo.edge_counts.get("horizontal_wormhole_edges", 0) == 0, (
+                    f"Wormhole OFF violation: horizontal_wormhole_edges={eff_hippo.edge_counts}"
+                )
+            rec = eff_hippo.retrieve(
                 pub_sigs,
                 task_view={"goal_kind": "scientific_terminal_discovery", "tolerance": 1.0},
                 top_k=3,
             )
             rec_ids = [c["node_id"] for c in rec.get("candidates", ())]
             expanded_ids: list[str] = list(rec_ids)
-            if not bool(forest_archive.get("__disable_wormholes__")):
+            if not disable_wh:
                 for nid in rec_ids:
                     for wh in forest.horizontal_wormhole_edges.values():
                         if wh["node_a_id"] == nid or wh["node_b_id"] == nid:
@@ -2795,11 +2809,19 @@ def run_frontier_episode(
             last_parent = ledger.record_decision(
                 decision_type="D1_WORMHOLE_FOREST_RETRIEVAL",
                 parent_decision_id=last_parent,
-                evidence_inputs={"public_task_signatures": pub_sigs},
+                evidence_inputs={
+                    "public_task_signatures": pub_sigs,
+                    "disable_horizontal_wormholes": disable_wh,
+                    "index_edge_counts": dict(eff_hippo.edge_counts),
+                },
                 candidates_evaluated=[{"node_id": nid} for nid in expanded_ids],
                 chosen_option={"recalled_nodes": expanded_ids},
                 rejection_reasons={},
-                rationale_summary="Retrieve general scientific invariants & Wave-1 consolidated sublations via HippoRAG PPR + 1-hop wormholes.",
+                rationale_summary=(
+                    "Retrieve vertical-only tree invariants (`horizontal_wormhole_edges == 0`)."
+                    if disable_wh
+                    else "Retrieve general scientific invariants & Wave-1 consolidated sublations via HippoRAG PPR + 1-hop wormholes."
+                ),
                 compute_delta=float(rec.get("query_compute_cost", 1.0)),
             )
             if is_exec_wormhole_m6 and recalled_notes and (not is_bm):

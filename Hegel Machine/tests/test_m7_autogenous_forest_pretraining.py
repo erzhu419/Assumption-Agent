@@ -207,9 +207,50 @@ def huber_creep_stiffness(s_app: float, creep_rate: float, unload_rate: float) -
     }
     res2 = consolidate_autogenous_episode_into_forest(forest=forest, archive=archive, compilation=comp2, nogoods_recorded=[])
     assert res2["growth_action"] == "spawned_specialized_mid_node"
-    # Cross-tree operator anti-unification MUST automatically discover SharedBaseSubtree & HorizontalWormholeEdge!
-    assert len(forest.shared_base_subtrees) >= 1
+    # Stage-only cross-tree matches register bounded_trial HorizontalWormholeEdges WITHOUT falsely claiming verified SharedBaseSubtrees!
+    assert len(forest.shared_base_subtrees) == 0
     assert len(forest.horizontal_wormhole_edges) >= 1
+
+    # Now consolidate Episode 3 under a 3rd tree (`tree_A01_conservation`) sharing a GENUINE closed-form algebraic expression with Episode 2!
+    ok3, _, pub3, pkg3 = validate_and_decorate_autogenous_python_code(
+        '''
+def harmonic_flux_conductance(k_left: float, leak_rate: float, drive_rate: float) -> float:
+    """Harmonic resistance subtraction sharing exact closed-form operator skeleton with `huber_creep_stiffness`."""
+    inv_k = (1.0 / max(k_left, 1e-6)) - (leak_rate / max(abs(drive_rate), 1e-6))
+    return 1.0 / max(inv_k, 1e-6)
+''',
+        "autogenous_flux_conductance",
+    )
+    assert ok3
+    comp3 = {
+        "compiled_ok": True,
+        "compilation_mode": "llm_aufhebung_container_verified",
+        "episode_id": "pt03_flux",
+        "module_stem": "autogenous_flux_conductance",
+        "filename": "autogenous_flux_conductance.py",
+        "function_names": pub3,
+        "exported_apis": "harmonic_flux_conductance(k_left, leak_rate, drive_rate)",
+        "packaged_python_code": pkg3,
+        "compiled_code_sha256": "c" * 64,
+        "sublated_methodology_principle": "Preserve harmonic face conductance across sharp discontinuities.",
+        "routed_signatures": ["sig:conservation_and_invariant_flux"],
+        "scope_preconditions": [],
+        "regime_bifurcation": {
+            "should_split_node": False,
+            "regime_axis": "none",
+            "branch_guard_op": ">=",
+            "branch_guard_value": 0.0,
+            "counter_regime_warning": "",
+        },
+        "operator_pipeline_stages": [
+            {"stage_kind": "frontend", "numeric_param": 1.0},
+            {"stage_kind": "robust_inversion", "numeric_param": 1.0},
+        ],
+    }
+    res3 = consolidate_autogenous_episode_into_forest(forest=forest, archive=archive, compilation=comp3, nogoods_recorded=[])
+    assert res3["growth_action"] == "spawned_specialized_mid_node"
+    assert len(forest.shared_base_subtrees) >= 1
+    assert res3["anti_unification_summary"]["ast_verified_subtree_count"] >= 1
 
     # Verify serialization & reload + HippoRAG retrieval
     with tempfile.TemporaryDirectory() as td:

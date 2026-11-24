@@ -146,9 +146,9 @@ def test_e03_symbolic_host_probe_univariate_term_and_sparse_cert_real_schema() -
             json.dumps({"lambda_0": 0.1, "lambda_2": 0.05, "M": 5.0, "epsilon": 1e-4, "max_nodes": 100}),
             encoding="utf-8",
         )
-        # Complete 2-leaf partition of `{0,1}^3` splitting on coordinate 0 (`B0=[0]` and `B1=[0]`)
+        # Complete 2-leaf partition of `{0,1}^3` splitting on coordinate 0 (`B0=[0]` and `B1=[0]`) with exact optimal beta_0 = 2.0 / 1.1
         (sp_p / "results.json").write_text(
-            json.dumps({"support": [0], "coefficients": [1.8], "nodes": [{"B0": [0], "B1": []}, {"B0": [], "B1": [0]}]}),
+            json.dumps({"support": [0], "coefficients": [2.0 / 1.1], "nodes": [{"B0": [0], "B1": []}, {"B0": [], "B1": [0]}]}),
             encoding="utf-8",
         )
         bench_patched = synth.PUBLIC_CONTAINER_CANDIDATE_BENCHMARK_PY.replace("/app", str(sp_p))
@@ -157,7 +157,7 @@ def test_e03_symbolic_host_probe_univariate_term_and_sparse_cert_real_schema() -
         out = json.loads(pr.stdout.strip().splitlines()[-1])
         assert out["sparse_cert_valid"] is True
         assert out["sparse_cert_nodes"] == 2
-        assert out["sparse_cert_status"] == "verified_primal_and_dyadic_partition"
+        assert out["sparse_cert_status"] == "certified_exhaustive_partition_and_dual_gap"
 
 
 def test_e04_contract_validator_digest_recomputation_import_entrypoint_nan_and_verify_cmd() -> None:
