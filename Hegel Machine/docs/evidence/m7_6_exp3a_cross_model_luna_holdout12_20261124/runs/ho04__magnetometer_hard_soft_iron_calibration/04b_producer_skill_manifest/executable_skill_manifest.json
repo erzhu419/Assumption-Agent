@@ -1,0 +1,102 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_c4fe31024d19",
+    "source_hash": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho04__magnetometer_hard_soft_iron_calibration",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/build.py",
+        "archived_relpath": "producers/tmp__build.py",
+        "bytes": 2001,
+        "sha256": "dc8ec5682e5a606793fbedbf74c0ca3be8335f9f22c70fbfa7901dccc1034937"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('/holdout_task/public_mag.pkl','rb'))\nfor root in ('session','gt'):\n d=x[root]; print('\\n',root)\n for k,v in d.items():\n  print(k, type(v).__name__, getattr(v,'shape',None), getattr(v,'dtype',None), repr(v)[:300] if np.isscalar(v) or isinstance(v,(str,tuple,list)) else '')\nPY",
+      "python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('/holdout_task/public_mag.pkl','rb'));s=x['session'];g=x['gt']\nfor k,v in g.items(): print(k, v)\nprint('rp range',s['calib_roll_pitch_rad'].min(0),s['calib_roll_pitch_rad'].max(0))\nprint('raw range',s['calib_m_raw'].min(0),s['calib_m_raw'].max(0))\nPY\nfind /tmp/hegel_wormhole_skills -type f 2>/dev/null | head",
+      "cat > /tmp/build.py <<'PY'\nimport os\nos.makedirs('/holdout_task',exist_ok=True)\ncode=r'''import numpy as np\nfrom scipy.optimize import least_squares\n\ndef _rot_level(v, rp, signs=(1,1)):\n    # Inverse roll/pitch rotation: body vector -> NED-level axes.\n    phi, theta = rp[:,0], rp[:,1]\n    p, t = signs[0]*phi, signs[1]*theta\n    cp,sp,ct,st=np.cos(p),np.sin(p),np.cos(t),np.sin(t)\n    # R_y(theta) R_x(phi) applied to body-to-level (transpose of body_from_ned)\n    x=ct*v[:,0]+st*sp*v[:,1]+st*cp*v[:,2]\n    y=cp*v[:,1]-sp*v[:,2]\n    return np.column_stack((x,y))\n\ndef _fit(raw):\n    # Corrected vect",
+      "cat > /holdout_task/mag_calibrator.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _level(v, rp, roll_sign=1.0, pitch_sign=1.0):\n    p = roll_sign * rp[:, 0]\n    t = pitch_sign * rp[:, 1]\n    cp, sp, ct, st = np.cos(p), np.sin(p), np.cos(t), np.sin(t)\n    return np.column_stack((ct*v[:,0] + st*sp*v[:,1] + st*cp*v[:,2],\n                            cp*v[:,1] - sp*v[:,2],\n                            -st*v[:,0] + ct*sp*v[:,1] + ct*cp*v[:,2]))\n\ndef _fit(raw, rp):\n    raw, rp = np.asarray(raw, float), np.asarray(rp, float)\n    def matrix(q):\n        h = np.array([[q[3],q[6",
+      "set -e\npython3 - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('/holdout_task/public_mag.pkl','rb')); s=x['session']; g=x['gt']\nfor _ in range(2):\n o=calibrate_and_estimate_heading(s)\n d=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\n S=o['S_soft_hat']; b=o['b_hard_hat']; h=o['heading_deg']\n print('heading_rmse_deg',np.sqrt(np.mean(d*d)),'max_abs_deg',np.max(np.abs(d)),'bias_error_uT',np.linalg.norm(b-g['b_hard']),'det_S',np.linalg.det(S),'min_eig_S',np.linalg.eigvalsh(S).min(),'shapes",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import _fit, _level\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\nraw=np.asarray(s['calib_m_raw']); rp=np.asarray(s['calib_roll_pitch_rad']); test=np.asarray(s['test_m_raw']); trp=np.asarray(s['test_roll_pitch_rad'])\n# Stress sensitivity to calibration sample removal across deterministic 80% slices.\nfor seed in range(12):\n    rng=np.random.default_rng(seed); idx=np.sort(rng.choice(len(raw),int(.8*len(raw)),replace=False))\n    b,a=_fit(raw[idx],rp[idx]); lvl=_level((test-b)@a.T,trp)\n ",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import _fit, _level, calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\nraw=np.asarray(s['calib_m_raw']); rp=np.asarray(s['calib_roll_pitch_rad']); test=np.asarray(s['test_m_raw']); trp=np.asarray(s['test_roll_pitch_rad'])\nvals=[]\nfor seed in range(12):\n    rng=np.random.default_rng(seed)\n    idx=np.sort(rng.choice(len(raw),int(.8*len(raw)),replace=False))\n    b,a=_fit(raw[idx],rp[idx])\n    lvl=_level((test-b)@a.T,trp)\n    h=(np.degrees(np.arctan2(-lvl[:,1],",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\no=calibrate_and_estimate_heading(s)\nd=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nrmse=float(np.sqrt(np.mean(d*d))); be=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\nassert rmse <= .45 and be <= .35\nassert abs(np.linalg.det(o['S_soft_hat'])-1)<1e-8 and np.linalg.eigvalsh(o['S_soft_hat']).min()>0\nassert o['heading_deg'].shape == (len(s['test_m_raw']),)\nprint(f'RMSE={rmse:.6f} deg bias_error",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\no=calibrate_and_estimate_heading(s)\nd=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nrmse=float(np.sqrt(np.mean(d*d))); berr=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\nassert rmse <= .45 and berr <= .35\nassert abs(np.linalg.det(o['S_soft_hat'])-1)<1e-8 and np.linalg.eigvalsh(o['S_soft_hat']).min()>0\nassert o['heading_deg'].shape==(len(s['test_m_raw']),)\nprint('rmse_deg',rmse,'bias_error_uT",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\no=calibrate_and_estimate_heading(s)\nd=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nrmse=float(np.sqrt(np.mean(d*d))); berr=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\nS=np.asarray(o['S_soft_hat']); h=np.asarray(o['heading_deg'])\nassert rmse <= .45 and berr <= .35\nassert S.shape==(3,3) and h.shape==(len(s['test_m_raw']),)\nassert np.isfinite(S).all() and np.isfinite(h).all() and np.isfinite",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\n# Minimal final task-specific verification: public held-out accuracy and physical constraints.\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\no=calibrate_and_estimate_heading(s)\nd=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nrmse=float(np.sqrt(np.mean(d*d))); berr=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\nS=np.asarray(o['S_soft_hat'])\nassert rmse<=.45 and berr<=.35\nassert S.shape==(3,3) and np.linalg.eigvalsh(S).min()>0 and abs(np.l",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport inspect, pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading, _fit, _level\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\n# LOPO calibration refits on every omitted sample; score the real held-out headings.\nraw=np.asarray(s['calib_m_raw']); rp=np.asarray(s['calib_roll_pitch_rad']); test=np.asarray(s['test_m_raw']); trp=np.asarray(s['test_roll_pitch_rad'])\nerrs=[]; biaserrs=[]\nfor i in range(len(raw)):\n    keep=np.arange(len(raw)) != i\n    b,a=_fit(raw[keep],rp[keep])\n    lev=_level((test-b)@a.T,trp",
+      "set -e\ncd /holdout_task\nprintf '%s\\n' '--- target ---'\nsed -n '1,220p' mag_calibrator.py\nprintf '%s\\n' '--- applicable wormhole source review ---'\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/hegel_wormhole_skills')\nprint('Available modules:', [x.name for x in p.glob('*.py')])\nfor f in p.glob('*.py'):\n    if f.name != '__init__.py':\n        print(f'--- {f} ---')\n        print(f.read_text()[:4000])\nPY\nprintf '%s\\n' '--- final clean-process contract check ---'\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle,numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\no=calibrate_and_estimate_heading(s)\nd=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nrmse=float(np.sqrt(np.mean(d*d))); berr=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\nS=np.asarray(o['S_soft_hat'])\nassert rmse <= .45 and berr <= .35\nassert np.linalg.eigvalsh(S).min() > 0 and abs(np.linalg.det(S)-1) < 1e-8\nassert o['heading_deg'].shape == (len(s['test_m_raw']),) and np.isfinite(o['heading_d",
+      "set -e\ncd /holdout_task\n# Verify the required artifact in a fresh interpreter against the supplied public measurements.\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('/holdout_task/public_mag.pkl','rb')); s=x['session']; g=x['gt']\no=calibrate_and_estimate_heading(s)\nd=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nrmse=float(np.sqrt(np.mean(d*d))); berr=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\nS=np.asarray(o['S_soft_hat'])\nassert rmse<=.45 and berr<=.35\nassert np.linalg.eigvalsh(S)",
+      "set -e\ncd /holdout_task\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\nfor session in (s, dict(s, calib_m_raw=s['calib_m_raw'][::-1], calib_roll_pitch_rad=s['calib_roll_pitch_rad'][::-1])):\n o=calibrate_and_estimate_heading(session)\n d=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\n rmse=float(np.sqrt(np.mean(d*d))); be=float(np.linalg.norm(o['b_hard_hat']-g['b_hard']))\n S=o['S_soft_hat']\n print('RMSE',rmse,'bias_error',be,'det',np.linalg.det"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__build.py",
+      "primary_producer_container_path": "/tmp/build.py",
+      "selected_channels": [
+        "fam_robust_control_and_safety"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/mag_calibrator.py",
+        "filename": "mag_calibrator.py",
+        "bytes": 1843,
+        "sha256": "298bbab6bb9237d7c126aadbd24b3264959fd76c2063d5c0526889e5a7e84a96",
+        "content_addressed_ref": "content_addressed_blobs/298bbab6bb9237d7c126aadbd24b3264959fd76c2063d5c0526889e5a7e84a96.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/mag_calibrator.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+      "verified_turn": 18,
+      "verification_command": "set -e\ncd /holdout_task\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('public_mag.pkl','rb')); s=x['session']; g=x['gt']\nfor session in (s, ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+        "expected_candidate_sha256": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+        "computed_candidate_sha256": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/mag_calibrator.py",
+            "bytes": 1843
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_c4fe3102"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

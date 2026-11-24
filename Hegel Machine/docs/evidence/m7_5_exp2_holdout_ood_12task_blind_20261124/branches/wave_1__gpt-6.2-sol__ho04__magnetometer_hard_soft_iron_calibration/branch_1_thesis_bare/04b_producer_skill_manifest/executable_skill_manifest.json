@@ -1,0 +1,66 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_46fe9434fc2a",
+    "source_hash": "46fe9434fc2a52dff9cc8d125a0be2e275e29259aeaaaaa6ce350b57e84af4f8",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho04__magnetometer_hard_soft_iron_calibration",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python - <<'PY'\nimport pickle,numpy as np, importlib.util\nwith open('public_mag.pkl','rb') as f: data=pickle.load(f)\ndef show(d,p='',depth=0):\n if isinstance(d,dict) and depth<3:\n  for k,v in d.items(): show(v,p+'/'+str(k),depth+1)\n elif isinstance(d,(list,tuple)) and d and isinstance(d[0],dict) and depth<3:\n  print(p,type(d).__name__,len(d)); show(d[0],p+'/0',depth+1)\n elif hasattr(d,'shape'):\n  print(p,d.shape,d.dtype, np.asarray(d).ravel()[:8])\n else: print(p,type(d).__name__,str(d)[:220])\nshow(data)\nprint('scipy',bool(importlib.util.find_spec('scipy')))\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport importlib.util, pickle\nfor module in ('numpy', 'scipy'):\n    print(module, importlib.util.find_spec(module))\nwith open('public_mag.pkl','rb') as f:\n    data=pickle.load(f)\ndef show(d,p='root'):\n    if isinstance(d,dict):\n        for k,v in d.items(): show(v,p+'/'+str(k))\n    elif isinstance(d,(list,tuple)) and d and isinstance(d[0],dict):\n        print(p,type(d).__name__,len(d)); show(d[0],p+'/0')\n    elif hasattr(d,'shape'):\n        print(p,d.shape,d.dtype,d.ravel()[:8])\n    else: print(p,type(d).__name__,str(d)[:220])\nshow(data)\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_mag.pkl','rb') as f: p=pickle.load(f)\ns,t=p['session'],p['gt']\nfor stage in ('calib','test'):\n m=(s[stage+'_m_raw']-t['b_hard'])@np.linalg.inv(t['S_soft'])\n r,q=s[stage+'_roll_pitch_rad'].T\n x=np.cos(q)*m[:,0]+np.sin(q)*(np.sin(r)*m[:,1]+np.cos(r)*m[:,2]); y=np.cos(r)*m[:,1]-np.sin(r)*m[:,2]; z=-np.sin(q)*m[:,0]+np.cos(q)*(np.sin(r)*m[:,1]+np.cos(r)*m[:,2]); h=np.hypot(x,y)\n print(stage,'angle ranges',np.ptp(r),np.ptp(q),'B medians',np.median(h),np.median(z)); print('radial,down absolute residual percentiles',np.p",
+      "cat > /holdout_task/mag_calibrator.py <<'PY'\n\"\"\"Robust hard- and soft-iron calibration from known roll and pitch.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _level_rotation(roll_pitch):\n    \"\"\"Body to yaw-rotated NED: Ry(pitch) @ Rx(roll).\"\"\"\n    roll, pitch = np.asarray(roll_pitch, dtype=float).T\n    sr, cr = np.sin(roll), np.cos(roll)\n    st, ct = np.sin(pitch), np.cos(pitch)\n    return np.stack(((ct, st * sr, st * cr),\n                     (np.zeros_like(sr), cr, -sr),\n                     (-st, ct * sr, ct * cr)), axis=-1).transpose(1, 0, 2)\n\n\ndef _vertical_start",
+      "cd /holdout_task && sed -i 's/axis=-1).transpose(1, 0, 2)/axis=-1).transpose(1, 2, 0)/' mag_calibrator.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_rotation\nr,p=.3,-.4\nrx=np.array([[1,0,0],[0,np.cos(r),-np.sin(r)],[0,np.sin(r),np.cos(r)]])\nry=np.array([[np.cos(p),0,np.sin(p)],[0,1,0],[-np.sin(p),0,np.cos(p)]])\nnp.testing.assert_allclose(_level_rotation([[r,p]])[0],ry@rx)\nwith open('public_mag.pkl','rb') as f: fixture=pickle.load(f)\na=calibrate_and_estimate_heading(fixture['session']); g=fixture[",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_rotation\nrng = np.random.default_rng(1234)\nfor i in range(16):\n    q, _ = np.linalg.qr(rng.normal(size=(3,3)))\n    e = rng.uniform(-.35,.35,3); e -= e.mean()\n    soft = (q*np.exp(e))@q.T\n    hard = rng.uniform(-65,65,3)\n    hn, bd = rng.uniform(20,34), rng.uniform(-47,47)\n    def observations(n, calibration):\n        rp = rng.uniform([-0.65,-0.55],[0.65,0.55],(n,2))\n        yaw = rng.uniform(-np.pi,np.pi,n)\n        level = np"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/mag_calibrator.py",
+        "filename": "mag_calibrator.py",
+        "bytes": 5586,
+        "sha256": "c42ec5c56709b9b73da1d180c78556a9927ce6e2453b537f2d1023c369867fd2",
+        "content_addressed_ref": "content_addressed_blobs/c42ec5c56709b9b73da1d180c78556a9927ce6e2453b537f2d1023c369867fd2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/mag_calibrator.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "46fe9434fc2a52dff9cc8d125a0be2e275e29259aeaaaaa6ce350b57e84af4f8",
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_rotation\nrng = np.random.default_rng(1234)\nfor i in range(16):\n    q,",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

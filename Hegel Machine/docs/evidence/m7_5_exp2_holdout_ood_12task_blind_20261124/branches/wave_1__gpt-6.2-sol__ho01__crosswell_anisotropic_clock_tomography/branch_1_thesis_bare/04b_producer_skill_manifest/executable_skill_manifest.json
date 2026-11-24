@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_d9d2ceb31237",
+    "source_hash": "d9d2ceb3123747e25a14c92dd8988e7602ca7b20a877f01335f409af5b112d20",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_surveys.pkl','rb') as f: d=pickle.load(f)\ndef describe(d, depth=0):\n print(' '*depth,type(d).__name__,getattr(d,'shape',''))\n if isinstance(d,dict):\n  for k,v in d.items():\n   print(' '*depth,repr(k),end=': ')\n   if isinstance(v,dict): describe(v,depth+2)\n   else:\n    a=np.asarray(v); print(a.shape,a.dtype,str(v)[:320] if a.size<16 else str(a.flat[:6]))\n elif isinstance(d,(tuple,list)):\n  print('length:',len(d))\n  for item in d[:4]: describe(item,depth+2)\ndescribe(d)\nimport scipy\nprint('scipy',scip",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, importlib.util\nfrom pprint import pprint\nwith open('public_surveys.pkl','rb') as f: d=pickle.load(f)\nprint(type(d),len(d))\ndef describe(o,depth=0):\n if isinstance(o,dict):\n  for k,v in o.items():\n   print(' '*depth,k,type(v).__name__,getattr(v,'shape',None),end=' ')\n   if isinstance(v,dict): print(); describe(v,depth+2)\n   else: print(repr(v)[:245])\n elif isinstance(o,(list,tuple)):\n  for v in o[:5]: describe(v,depth+1)\ndescribe(d)\nfor p in ('numpy','scipy'): print(p,importlib.util.find_spec(p))\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.special import erf\nfrom scipy.optimize import least_squares\nfor entry in pickle.load(open('public_surveys.pkl','rb')):\n s,g=entry['survey'],entry['gt']; w=s['W_m']; r=s['R_plume_m']; z=s['z_src_m'][:,None]; d=s['z_rcv_m'][None,:]-z; L=np.hypot(w,d); u=w/L; v=d/L; y=1000*(s['T_obs_s']-g['rcv_clock_bias_s']); x,p=g['plume_xz_m']; a=p-z; q=u*x+v*a; t=u*a-v*x; K=r*np.sqrt(np.pi/2)*np.exp(-.5*(t/r)**2)*(erf((L-q)/(np.sqrt(2)*r))+erf(q/(np.sqrt(2)*r))); A=np.stack([L,L*v*v,K],axis=-1).reshape(-1,3); fit=",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Straight-ray inversion for a Gaussian plume and receiver clock offsets.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\n\n\ndef _bounded_clocks(clocks):\n    \"\"\"Project onto the zero-sum, +/-4 ms clock constraint.\"\"\"\n    if np.max(np.abs(clocks)) <= 4.0:\n        return clocks\n    lo, hi = np.min(clocks) - 4.0, np.max(clocks) + 4.0\n    for _ in range(48):\n        mid = (lo + hi) / 2.0\n        if np.sum(np.clip(clocks - mid, -4.0, 4.0)) > 0:\n            lo = mid\n        else:\n            hi = mid\n    re",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom tomography_solver import invert_plume_and_clocks\ns = pickle.load(open('public_surveys.pkl','rb'))[0]['survey']\na = s['z_src_m'][:,None]; d = s['z_rcv_m'][None,:]-a; w = s['W_m']; L = np.hypot(w,d)\nt = np.linspace(0,1,401); wt = np.ones(t.size); wt[[0,-1]] = .5; wt /= (t.size-1)\nfor seed,(x,z,amp) in enumerate([(3,15,.000075),(37,65,.00009),(11,59,.00013),(30,24,.00013)]):\n rng = np.random.default_rng(seed); c = rng.uniform(-1,1,d.shape[1]); c -= c.mean(); c *= .004/np.max(abs(c));\n g = np.exp(-((w*t-x)**2+(a[...,None]+d"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 4199,
+        "sha256": "32f05f866c114c2654af9ca7579e3ded6acfbeadbc12f1ed2b12c7dc26a794fc",
+        "content_addressed_ref": "content_addressed_blobs/32f05f866c114c2654af9ca7579e3ded6acfbeadbc12f1ed2b12c7dc26a794fc.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d9d2ceb3123747e25a14c92dd8988e7602ca7b20a877f01335f409af5b112d20",
+      "verified_turn": 5,
+      "verification_command": "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom tomography_solver import invert_plume_and_clocks\ns = pickle.load(open('public_surveys.pkl','rb'))[0]['survey']\na = s['z_src_m'][:,None]; d = s['z_rcv_m'][None,:]-a; ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

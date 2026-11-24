@@ -1,0 +1,84 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_facility_bnb_9eb8b37e8a7b",
+    "source_hash": "9eb8b37e8a7baff8cde22bd5f5280ed03094744c086fe85ce76aedeb8196adea",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho11__certified_capacitated_facility_bnb",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle\np='/holdout_task/public_facility.pkl'\nwith open(p,'rb') as f: x=pickle.load(f)\nprint(type(x), repr(x)[:6000])\nPY\nfind /tmp/hegel_wormhole_skills -maxdepth 2 -type f | head",
+      "python3 - <<'PY'\nimport scipy, inspect\nfrom scipy.optimize import milp\nprint('scipy',scipy.__version__)\nPY",
+      "python3 - <<'PY'\nimport pickle, sys, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb'))\nr=solve_and_certify_facilities(x)\nprint('objective',r['upper_bound'],'open',r['open_y'],'leaves',len(r['proof_leaves']))\nprint('flow balance',np.max(np.abs(r['flows_X'].sum(0)-x['demand'])),'cap slack',np.min(x['capacity']*r['open_y']-r['flows_X'].sum(1)))\nprint('min leaf lb',min(z['lower_bound'] for z in r['proof_leaves']))\nPY",
+      "cat > /holdout_task/facility_cert.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import linprog\n\n\ndef solve_and_certify_facilities(instance: dict) -> dict:\n    \"\"\"Solve capacitated facility location and return an LP branch certificate.\"\"\"\n    m, n = int(instance['m']), int(instance['n'])\n    f = np.asarray(instance['fixed_cost'], dtype=float)\n    cap = np.asarray(instance['capacity'], dtype=float)\n    d = np.asarray(instance['demand'], dtype=float)\n    c = np.asarray(instance['cost_matrix'], dtype=float)\n    if f.shape != (m,) or cap.shape != (m,) or d.shape != (n,) or c.shape != (m, n):\n   ",
+      "python3 - <<'PY'\nimport sys,pickle, numpy as np, importlib.util\np='/holdout_task/facility_cert.py'; spec=importlib.util.spec_from_file_location('fc',p); fc=importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=fc.solve_and_certify_facilities(x); m=x['m']; leaves=r['proof_leaves']\nsets=[]\nfor z in leaves:\n C=set(z['fixed_closed']); O=set(z['fixed_open']); assert not C&O\n s={b for b in range(1<<m) if all(not(b>>i&1) for i in C) and all(b>>i&1 for i in O)}; sets.append(s)\nassert sum(map(len,sets))==1<<m and len(set.unio",
+      "PYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import linprog\nfrom facility_cert import solve_and_certify_facilities\np='/holdout_task/public_facility.pkl'\nx=pickle.load(open(p,'rb')); r=solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; f=np.asarray(x['fixed_cost']); cap=np.asarray(x['capacity']); d=np.asarray(x['demand']); c=np.asarray(x['cost_matrix'])\n# Independent exhaustive fixed-opening LP check detects a bad incumbent/objective.\nAeq=np.zeros((n,m*n))\nfor j in range(n): Aeq[j,j::n]=1\nAub=np.zeros((m,m*n))\nfor i in range(m): Aub[i,i*n:(i+1)*n]=1\no",
+      "PYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; leaves=r['proof_leaves']\nassert len(leaves)<=80, ('leaf limit',len(leaves))\nassert all(set(z['fixed_closed']).isdisjoint(z['fixed_open']) for z in leaves), 'contradictory leaf'\n# Exact cube cardinality plus pairwise cube-disjointness proves exact coverage.\nfor i,a in enumerate(leaves):\n ca,oa=set(a['fixed_closed']),set(a['fixed_open'])\n for b in leaves[:i]:\n",
+      "set -e\npython3 - <<'PY'\nimport pickle, sys, numpy as np\nfrom scipy.optimize import linprog\np='/holdout_task/facility_cert.py'\nsys.path.insert(0,'/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; leaves=r['proof_leaves']\n# Validate partial cubes form an exact disjoint cover, and each stored bound clears threshold.\nassert len(leaves)<=80\nfor i,a in enumerate(leaves):\n C,O=set(a['fixed_closed']),set(a['fixed_open']); assert C.isdisjoint(O)\n assert a['lower_bound",
+      "python3 - <<'PY'\np='/holdout_task/facility_cert.py'\nprint(open(p).read())\nPY",
+      "set -e\npython3 - <<'PY'\nimport inspect, sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nfrom hegel_wormhole_skills.autogenous_sparse_ridge_certification import solve_and_certify_l0\nprint('wormhole API source (scope is sparse regression, not facility location):')\nprint(inspect.getsource(solve_and_certify_l0))\n# Small exact stress cases check optimal objective and proof partitions under degenerate ties.\ndef audit(x):\n r=solve_and_certify_facilities(x); m,n=x['m'],x['n']; leaves=r['proof_leaves']\n assert len(leaves)<=80\n for i,a ",
+      "set -e\npython3 - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/facility_cert.py'\nspec=importlib.util.spec_from_file_location('facility_cert_clean',p)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb'))\nr=mod.solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; leaves=r['proof_leaves']\nassert len(leaves)<=80\nfor i,a in enumerate(leaves):\n C,O=set(a['fixed_closed']),set(a['fixed_open'])\n assert C.isdisjoint(O) and a['lower_bound']>=r['upper_bound']-1e-5\n for b in leaves[:i]:\n  C2,O2=set(b['fixed_",
+      "set -e\npython3 - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/facility_cert.py'\ns=importlib.util.spec_from_file_location('facility_cert_final_audit',p); mod=importlib.util.module_from_spec(s); s.loader.exec_module(mod)\ndef audit(x):\n r=mod.solve_and_certify_facilities(x); m=x['m']; L=r['proof_leaves']\n assert len(L)<=80\n for i,a in enumerate(L):\n  C,O=set(a['fixed_closed']),set(a['fixed_open'])\n  assert C.isdisjoint(O) and a['lower_bound']>=r['upper_bound']-1e-5\n  for b in L[:i]:\n   C2,O2=set(b['fixed_closed']),set(b['fixed_open']); assert C&O2 or O&C2\n assert sum(1 << (m",
+      "set -e\npython3 - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/facility_cert.py'\ns=importlib.util.spec_from_file_location('facility_cert_release',p); mod=importlib.util.module_from_spec(s); s.loader.exec_module(mod)\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=mod.solve_and_certify_facilities(x)\n# Recheck the deliverable contract in a fresh interpreter: objective/flows and partition certificate.\nm,n=x['m'],x['n']; L=r['proof_leaves']; assert len(L)<=80\nassert all(set(a['fixed_closed']).isdisjoint(a['fixed_open']) and a['lower_bound'] >= r['upper_bound']"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/facility_cert.py",
+        "filename": "facility_cert.py",
+        "bytes": 4871,
+        "sha256": "6dc0863d7d94c87764e404dc85c3d60c48030ee67686a2238b1c3a54efcdfefe",
+        "content_addressed_ref": "content_addressed_blobs/6dc0863d7d94c87764e404dc85c3d60c48030ee67686a2238b1c3a54efcdfefe.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/facility_cert.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "9eb8b37e8a7baff8cde22bd5f5280ed03094744c086fe85ce76aedeb8196adea",
+      "verified_turn": 16,
+      "verification_command": "set -e\npython3 - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/facility_cert.py'\ns=importlib.util.spec_from_file_location('facility_cert_release',p); mod=importlib.util.module_from_spec(s); s.loader.exec_module(mod)\nx=p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "9eb8b37e8a7baff8cde22bd5f5280ed03094744c086fe85ce76aedeb8196adea",
+        "expected_candidate_sha256": "9eb8b37e8a7baff8cde22bd5f5280ed03094744c086fe85ce76aedeb8196adea",
+        "computed_candidate_sha256": "9eb8b37e8a7baff8cde22bd5f5280ed03094744c086fe85ce76aedeb8196adea",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/facility_cert.py",
+            "bytes": 4871
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_9eb8b37e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

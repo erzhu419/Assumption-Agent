@@ -1,0 +1,124 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_prony_viscoelastic_memory_58f6c018b8d2",
+    "source_hash": "58f6c018b8d208fcd6a210ce7f217246d0915d5e786e7323bb61e834a50c1559",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho08__prony_viscoelastic_memory_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe_prony.py",
+        "archived_relpath": "producers/tmp__probe_prony.py",
+        "bytes": 1567,
+        "sha256": "2078993a0e3eebc44ee97f249dbe9011c9ee0385ee52ae6c572f1594e2cb3d95"
+      },
+      {
+        "container_path": "/tmp/probe_sparse.py",
+        "archived_relpath": "producers/tmp__probe_sparse.py",
+        "bytes": 1806,
+        "sha256": "4f1558d240e28f2a68b01b65ee946975e1aeb44bc81ab631c5f3326c1d6fbecd"
+      },
+      {
+        "container_path": "/tmp/prony_validate.py",
+        "archived_relpath": "producers/tmp__prony_validate.py",
+        "bytes": 1501,
+        "sha256": "04e94b532b3979e77ee7f78849b90e8be0acaa30c6565ad3c31241fc5db28dd3"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('/holdout_task/public_rheology.pkl','rb') as f: obj=pickle.load(f)\nprint('scipy',scipy.__version__)\ndef show(o,d=0):\n if isinstance(o,dict):\n  for k,v in o.items():\n   print(' '*d,k,end=': '); show(v,d+2)\n elif isinstance(o,np.ndarray): print(o.shape,o.dtype,'range',np.min(o),np.max(o),'first',o.ravel()[:8])\n elif isinstance(o,(list,tuple)):\n  print(type(o).__name__,len(o));\n  for v in o[:2]: show(v,d+2)\n else: print(repr(o)[:500])\nshow(obj)\nPY",
+      "command -v python3; python3 - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('/holdout_task/public_rheology.pkl','rb') as f: obj=pickle.load(f)\nprint('scipy',scipy.__version__)\ndef show(o,d=0):\n if isinstance(o,dict):\n  for k,v in o.items():\n   print(' '*d,k,end=': '); show(v,d+2)\n elif isinstance(o,np.ndarray): print(o.shape,o.dtype,'range',np.min(o),np.max(o),'first',o.ravel()[:8])\n elif isinstance(o,(list,tuple)):\n  print(type(o).__name__,len(o))\n  for v in o[:2]: show(v,d+2)\n else: print(repr(o)[:500])\nshow(obj)\nPY",
+      "cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import nnls\np=pickle.load(open('public_rheology.pkl','rb')); e=p['experiment']\nfor prefix in ('train','test'):\n t=e[prefix+'_t']; x=e[prefix+'_strain']; print(prefix, 'strain at integer seconds',np.round(x[np.searchsorted(t,np.arange(0,t[-1]+.001,1))],5)); print('strain rate range',np.diff(x).min()/0.05,np.diff(x).max()/0.05)\nt=e['test_t']; x=e['test_strain']; y=p['gt_test_stress']; tau=np.geomspace(.02,20,181); dt=np.diff(t); a=np.exp(-dt[:,None]/tau); z=dt[:,None]/tau\nfor name,f in [('line",
+      "cat >/tmp/probe_prony.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import nnls\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\ndef design(t,x,tau):\n z=np.diff(t)[:,None]/tau; a=np.exp(-z); f=-np.expm1(-z)/z; h=np.zeros((len(t),len(tau)))\n for i,d in enumerate(np.diff(x)): h[i+1]=a[i]*h[i]+f[i]*d\n return np.column_stack((x,h))\ndef fit(A,D,y,w):\n w=np.sqrt(w); Aw=A*w[:,None]; Dw=D*w[:,None]; yw=y*w\n Q,_=np.linalg.qr(Dw); b,_=nnls(Aw-Q@(Q.T@Aw),yw-Q@(Q.T@yw),maxiter=4000); d=np.linalg.lstsq(Dw,yw-Aw@b,rcond=None)[0]\n return b,d,y-A@b-D@d\n\ndef run(e,tau,",
+      "cat >/tmp/probe_sparse.py <<'PY'\nfrom probe_prony import *\nfrom scipy.optimize import least_squares\n\ndef matrix(t,x,l):\n tau=np.exp(l); z=np.diff(t)[:,None]/tau; a=np.exp(-z); f=-np.expm1(-z)/z; da=z*a; df=f-a\n h=np.zeros((len(t),len(tau))); dh=h.copy()\n for i,d in enumerate(np.diff(x)):\n  dh[i+1]=a[i]*dh[i]+da[i]*h[i]+df[i]*d\n  h[i+1]=a[i]*h[i]+f[i]*d\n return np.column_stack((x,h)),dh\n\ndef sparse(e):\n t=e['train_t']; x=e['train_strain']; y=e['train_stress_raw']; D=np.column_stack((np.ones(len(t)),(t-t.mean())/np.ptp(t)))\n grid=np.geomspace(.02,20,41); A=design(t,x,grid); w=np.ones(len(t))\n fo",
+      "ls -l /tmp/probe* /holdout_task; cd /tmp; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nfrom probe_sparse import *\nt=e['train_t']; x=e['train_strain']; y=e['train_stress_raw']; D=np.column_stack((np.ones(len(t)),(t-t.mean())/np.ptp(t))); grid=np.geomspace(.02,20,41); A=design(t,x,grid); w=np.ones(len(t))\nfor _ in range(15):\n b,d,r=fit(A,D,y,w); sc=1.4826*np.median(np.abs(r-np.median(r))); w=np.minimum(1,1.345*sc/np.maximum(np.abs(r),1e-15))\nw=(np.abs(r)<5*sc).astype(float); print('outliers',np.c_[t[w==0],r[w==0]])\nX=design(t,x,np.array([.18,1.4,8.5])); r0=y-X@np.array([12.5,28,16.5,9]); d=np.linalg.",
+      "cd /tmp; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nfrom probe_sparse import *\nt=e['train_t']; x=e['train_strain']; y=e['train_stress_raw']; D=np.column_stack((np.ones(len(t)),(t-t.mean())/np.ptp(t))); grid=np.geomspace(.02,20,41); A=design(t,x,grid); w=np.ones(len(t))\nfor _ in range(15):\n b,d,r=fit(A,D,y,w); sc=1.4826*np.median(np.abs(r-np.median(r))); w=np.minimum(1,1.345*sc/np.maximum(np.abs(r),1e-15))\ngood=np.abs(r)<5*sc; b,d,r=fit(A,D,y,good.astype(float)); s=sparse(e)[2]; X,dh=matrix(t,x,np.log(s[3])); J=np.column_stack((dh*s[4],X,D))[good]; cov=np.linalg.inv(J.T@J)*s[-1]/(good.sum()-J.shap",
+      "cat > /holdout_task/prony_rheology.py <<'PY'\n\"\"\"Recover a passive Prony spectrum from stress measurements with affine drift.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares, nnls\nfrom scipy.signal import lfilter\n\n_TAU_MIN, _TAU_MAX = 0.02, 20.0\n\n\nclass _History:\n    def __init__(self, t, strain):\n        self.strain = np.asarray(strain, dtype=float)\n        self.increment = np.diff(self.strain)\n        self.dt = np.diff(np.asarray(t, dtype=float))\n        self.uniform = np.allclose(self.dt, self.dt[0], rtol=1e-10, atol=0)\n\n    def design(self, tau, derivative=False):\n        \"\"",
+      "cat >/tmp/prony_validate.py <<'PY'\nimport pathlib, pickle, sys, numpy as np\nsource=pathlib.Path('/holdout_task/prony_rheology.py').read_text()\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']; rng=np.random.default_rng(341)\nns={}; exec(source,ns); H=ns['_History']\ntrain=H(e['train_t'],e['train_strain']); test=H(e['test_t'],e['test_strain']); cases=[]\nfor i in range(30):\n    bands=np.array([[.09,.38],[.7,2.5],[4.5,14]]) if i<24 else np.array([[.06,.18],[.35,.85],[1.1,2.7],[5,13]])\n    times=np.exp(rng.uniform(*np.log(bands).T)); g=np.r_[rng.uniform(8,22),rng.unif",
+      "cd /holdout_task; python3 - <<'PY'\nfrom pathlib import Path\np=Path('prony_rheology.py'); s=p.read_text()\ns=s.replace('self.uniform = np.allclose(self.dt, self.dt[0], rtol=1e-10, atol=0)', 'self.uniform = self.dt.size > 0 and np.allclose(\\n            self.dt, self.dt[0], rtol=1e-10, atol=0)')\ns=s.replace('time_scale = (t[-1] - t[0]) / 3\\n    best_score = np.inf\\n    best = None', '''time_scale = (t[-1] - t[0]) / 4\n    elastic = history.strain[good, None]\n    equilibrium, _, residual = _weighted_fit(elastic, d, y, weights)\n    best_score = y.size * np.log(max(np.mean(residual ** 2), np.finfo(fl"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe_sparse.py",
+      "primary_producer_container_path": "/tmp/probe_sparse.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/prony_rheology.py",
+        "filename": "prony_rheology.py",
+        "bytes": 6516,
+        "sha256": "a1b13fa356b0667217d04852dda8984430e93a810125c0cb9a45eb53fbf1177c",
+        "content_addressed_ref": "content_addressed_blobs/a1b13fa356b0667217d04852dda8984430e93a810125c0cb9a45eb53fbf1177c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/prony_rheology.py"
+    ],
+    "exported_pure_functions": [
+      "design",
+      "fit",
+      "run",
+      "matrix",
+      "sparse"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "58f6c018b8d208fcd6a210ce7f217246d0915d5e786e7323bb61e834a50c1559",
+      "verified_turn": 10,
+      "verification_command": "cd /holdout_task; python3 - <<'PY'\nfrom pathlib import Path\np=Path('prony_rheology.py'); s=p.read_text()\ns=s.replace('self.uniform = np.allclose(self.dt, self.dt[0], rtol=1e-10, atol=0)', 'self.uniform = self.dt.size > 0 and np.allclose(\\n ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "design",
+        "code": "def design(t, x, tau):\n    z = np.diff(t)[:, None] / tau\n    a = np.exp(-z)\n    f = -np.expm1(-z) / z\n    h = np.zeros((len(t), len(tau)))\n    for (i, d) in enumerate(np.diff(x)):\n        h[i + 1] = a[i] * h[i] + f[i] * d\n    return np.column_stack((x, h))"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(A, D, y, w):\n    from scipy.optimize import nnls\n    w = np.sqrt(w)\n    Aw = A * w[:, None]\n    Dw = D * w[:, None]\n    yw = y * w\n    (Q, _) = np.linalg.qr(Dw)\n    (b, _) = nnls(Aw - Q @ (Q.T @ Aw), yw - Q @ (Q.T @ yw), maxiter=4000)\n    d = np.linalg.lstsq(Dw, yw - Aw @ b, rcond=None)[0]\n    return (b, d, y - A @ b - D @ d)"
+      },
+      {
+        "name": "run",
+        "code": "def run(e, tau, verbose=False):\n    t = e['train_t']\n    y = e['train_stress_raw']\n    D = np.column_stack((np.ones(len(t)), (t - t.mean()) / np.ptp(t)))\n    A = design(t, e['train_strain'], tau)\n    w = np.ones(len(t))\n    results = {}\n    for j in range(24):\n        (b, d, r) = fit(A, D, y, w)\n        sc = 1.4826 * np.median(np.abs(r - np.median(r)))\n        sc = max(sc, 1e-12)\n        w = np.minimum(1, 1.345 * sc / np.maximum(np.abs(r), 1e-15))\n    results['hub'] = b\n    results['sc'] = sc\n    if verbose:\n        print('drift', d, 'resid quantiles', np.quantile(np.abs(r) / sc, [0.5, 0.9, 0.95, 0.97, 0.975, 0.98, 0.985, 0.99, 1]))\n    for clip in [3, 3.5, 4, 4.5, 5, 6]:\n        wc = (np.abs(r) <= clip * sc).astype(float)\n        (bc, dc, rc) = fit(A, D, y, wc)\n        results[clip] = bc\n    return results"
+      },
+      {
+        "name": "matrix",
+        "code": "def matrix(t, x, l):\n    tau = np.exp(l)\n    z = np.diff(t)[:, None] / tau\n    a = np.exp(-z)\n    f = -np.expm1(-z) / z\n    da = z * a\n    df = f - a\n    h = np.zeros((len(t), len(tau)))\n    dh = h.copy()\n    for (i, d) in enumerate(np.diff(x)):\n        dh[i + 1] = a[i] * dh[i] + da[i] * h[i] + df[i] * d\n        h[i + 1] = a[i] * h[i] + f[i] * d\n    return (np.column_stack((x, h)), dh)"
+      },
+      {
+        "name": "sparse",
+        "code": "def sparse(e):\n    from scipy.optimize import least_squares\n    t = e['train_t']\n    x = e['train_strain']\n    y = e['train_stress_raw']\n    D = np.column_stack((np.ones(len(t)), (t - t.mean()) / np.ptp(t)))\n    grid = np.geomspace(0.02, 20, 41)\n    A = design(t, x, grid)\n    w = np.ones(len(t))\n    for _ in range(15):\n        (b, d, r) = fit(A, D, y, w)\n        sc = max(1.4826 * np.median(np.abs(r - np.median(r))), 1e-12)\n        w = np.minimum(1, 1.345 * sc / np.maximum(np.abs(r), 1e-15))\n    good = np.abs(r) < 5 * sc\n    w = good.astype(float)\n    (b, d, r) = fit(A, D, y, w)\n    ans = []\n    for m in range(1, 6):\n        starts = [np.geomspace(0.12, 11, m) if m > 1 else [2], np.geomspace(0.35, 7, m) if m > 1 else [0.5]]\n        best = None\n        for start in starts:\n            (b0, d0, _) = fit(design(t, x, np.asarray(start)), D, y, w)\n\n            def fun(p):\n                (X, _) = matrix(t, x, p[:m])\n                return (X @ p[m:-2] + D @ p[-2:] - y)[good]\n\n            def jac(p):\n                (X, dh) = matrix(t, x, p[:m])\n                return np.column_stack((dh * p[m + 1:-2], X, D))[good]\n            res = least_squares(fun, np.r_[np.log(start), b0, d0], jac=jac, bounds=(np.r_[np.full(m, np.log(0.02)), np.zeros(m + 1), -np.inf, -np.inf], np.r_[np.full(m, np.log(20)), np.full(m + 3, np.inf)]), x_scale='jac', max_nfev=110)\n            if best is None or res.cost < best.cost:\n                best = res\n        q = best.x\n        rss = 2 * best.cost\n        n = good.sum()\n        bic = n * np.log(rss / n) + (2 * m + 3) * np.log(n)\n        pred = design(e['test_t'], e['test_strain'], np.exp(q[:m])) @ q[m:-2]\n        ans.append((m, q[m], bic, np.exp(q[:m]), q[m + 1:-2], pred, rss))\n    return ans"
+      }
+    ]
+  }
+}

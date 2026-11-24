@@ -1,0 +1,176 @@
+{
+  "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+  "short_name": "crosswell_anisotropic_tomography",
+  "benchmark": "Hegel-OOD-Holdout-12",
+  "wave": "wave_1",
+  "scientific_domain": "Geophysics / Borehole Traveltime Tomography",
+  "wormhole_family": "fam_guided_wave_shm_localization",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_A_TwoBranch_LiveGPT",
+  "declared_budget_multiplier": "2x_56_turns_plus_synthesis",
+  "selective_router_decision": null,
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 29,
+  "max_turns": 56,
+  "synthesis_decision": {
+    "selected_branch": "antithesis",
+    "selection_mechanism": "dialectical_trajectory_synthesis_medium",
+    "rationale": "[blinded_slot:candidate_a->antithesis] Both artifacts returned the required outputs and met the clock constraints on both public surveys: zero sum to numerical precision and absolute biases no greater than 4 ms. Their worst public errors were essentially identical: 0.112 m for plume location and 12.23 µs for clock RMSE, below the 1.8 m and 250 µs limits. Reported runtimes were 0.0086–0.0088 s for A and 0.0171–0.0193 s for B, both well under 15 s. No mechanical checker result was available for either branch. | A has stronger evidence of generalization: its public source holdouts showed angular-",
+    "synthesized_candidate_sha256": "56c64e26f015452d6fb2bec60c39435db91356cde532a16148d005c5fa5fce3c",
+    "thesis_bundle_tar_sha256": "9f49ad083c293a79fbfc2b891366fac66945e867e42d456e848a11b5d6d7af6f",
+    "antithesis_bundle_tar_sha256": "278b9b1078f14c7828f28dd6df03c9be5652a5e374bb21af801299393f82af5e"
+  },
+  "postlock_branch_outcomes": {
+    "thesis_spawned": true,
+    "thesis_bare_run2_strict_pass": true,
+    "thesis_turns_used": 6,
+    "antithesis_wormhole_strict_pass": true,
+    "antithesis_turns_used": 23,
+    "oracle_either_branch_pass": true
+  },
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "turn_idx": 7,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "assumption_refuted": "More search alone can resolve the synthetic corner failures once cycle skips are removed.",
+      "empirical_witness": "All 13 corner misses had the correct slip mask; in case 2 the truth-start fit still moved 9.73 m, and in cases 28 and 58 the distant fit had lower residual loss than the truth-start fit.",
+      "causal_blanket_diagnosis": "Near a survey corner, few rays cross the plume core, allowing changes in center and amplitude to generate nearly indistinguishable pick times.",
+      "sublated_pivot": "Retain the exact finite-ray model and compare weak, noise-scaled amplitude regularization with the unrestricted fit."
+    },
+    {
+      "turn_idx": 11,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "assumption_refuted": "A globally sparse slip rate is sufficient for per-receiver robust fitting to identify its true clock mode.",
+      "empirical_witness": "At 4% overall corruption, the baseline failed the clock target in 74 of 80 same-sign majority cases and 6 of 80 mixed-sign cases; all center estimates still passed.",
+      "causal_blanket_diagnosis": "When slips dominate one receiver, its fitted offset follows the shifted cluster, and clipping the output afterward cannot recover the correct assignment.",
+      "sublated_pivot": "Keep the physical plume fit and compare both assignments of a visibly split receiver against the joint, zero-sum traveltime fit."
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_06_robust_network_assimilation"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_dispersive_wave_tomography",
+      "source_forest_node": "node_auto_09_dispersive_wave_tomography",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "localize_pitch_catch(sensor_xy: np.ndarray, pairs: np.ndarray, waveforms: np.ndarray, plate_dims: np.ndarray, sample_rate_hz: float, carrier_hz: float, *, thickness: float | None = None, reference_sensor_xy: np.ndarray | None = None, reference_pairs: np.ndarray | None = None, reference_waveforms: np.ndarray | None = None, reference_plate_dims: np.ndarray | None = None, reference_thickness: float | None = None, grid_step: float = 0.009) -> tuple[tuple[float, float], dict]",
+      "scope_preconditions": [
+        {
+          "field": "samples_per_carrier_period",
+          "op": ">",
+          "value": 2
+        },
+        {
+          "field": "unique_unordered_paths",
+          "op": ">=",
+          "value": 3
+        },
+        {
+          "field": "distinct_direct_path_lengths",
+          "op": ">=",
+          "value": 2
+        }
+      ],
+      "provenance_episode_id": "pt01__dispersive_plate_flaw_tomography_v2"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration",
+      "source_forest_node": "node_auto_04_creep_corrected_retraction_c",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "first_loading_slip(force_N: np.ndarray, specimen_displacement_um: np.ndarray, hold_start: int, hold_end: int, *, threshold_um: float = 0.35) -> float | None; calibrate_retraction(times_s: list[np.ndarray], forces_N: list[np.ndarray], raw_displacements_um: list[np.ndarray], frame_compliance_um_per_N: float, *, transition_window_s: float = 0.015, curvature_to_noise: float = 0.8, slip_threshold_um: float = 0.35) -> tuple[float, list[float | None]]",
+      "scope_preconditions": [
+        {
+          "field": "specimen_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "hold_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "post_glitch_unloading_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "unloading_force_rate_magnitude_N_per_s",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "provenance_episode_id": "pt02__viscoelastic_retraction_and_slip_calibration"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "0a28c4c3a00c82733b7cf86ca630ea30d7063a2624b7388468a755d769aaa45b",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_56c64e26f015",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 29,
+    "exported_pure_functions": [
+      "metrics",
+      "_clip_clock"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "antithesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_56c64e26f015",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 29,
+    "exported_pure_functions": [
+      "metrics",
+      "_clip_clock"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "thesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_d9d2ceb31237",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "saved_artifact_snapshots": [
+    "tomography_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 7,
+  "prompt_tokens": 1112725,
+  "cached_tokens": 218240,
+  "completion_tokens": 30412,
+  "total_tokens": 1143137,
+  "effective_billed_tokens": 979457,
+  "wall_ms": 1164741.17,
+  "provenance_verified": true,
+  "terminal_record_sha256": "f89c1529594066020e024d3610e1766e1c56bf9c26e917cb2db4838e2207c285"
+}

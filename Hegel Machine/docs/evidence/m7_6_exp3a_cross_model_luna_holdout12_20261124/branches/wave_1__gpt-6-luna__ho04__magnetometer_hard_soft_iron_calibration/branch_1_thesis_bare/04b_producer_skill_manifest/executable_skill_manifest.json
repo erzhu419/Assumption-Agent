@@ -1,0 +1,66 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_3d1a1384cc1e",
+    "source_hash": "3d1a1384cc1e2f1711f2644a4cfc36a862c073153fc613940b6d3557e8b838f5",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho04__magnetometer_hard_soft_iron_calibration",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport pickle\np='/holdout_task/public_mag.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x)); print(x.keys() if isinstance(x,dict) else len(x))\nif isinstance(x,dict):\n for k,v in x.items():\n  print(k,type(v),getattr(v,'shape',None),repr(v)[:400])\nPY",
+      "python3 - <<'PY'\nimport pickle\np='/holdout_task/public_mag.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x)); print(x.keys() if isinstance(x,dict) else len(x))\nif isinstance(x,dict):\n for k,v in x.items(): print(k,type(v),getattr(v,'shape',None),repr(v)[:400])\nPY",
+      "python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('/holdout_task/public_mag.pkl','rb')); s=x['session'];g=x['gt']\nfor k,v in s.items(): print(k,np.asarray(v).shape)\nfor k,v in g.items(): print('gt',k,np.asarray(v).shape, repr(v)[:120])\nprint('keys',s.keys())\nPY",
+      "python3 - <<'PY'\nimport numpy as np, scipy\nprint(np.__version__,scipy.__version__)\nPY",
+      "ls -l /holdout_task/mag_calibrator.py && python3 -m py_compile /holdout_task/mag_calibrator.py && python3 - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task'); from mag_calibrator import calibrate_and_estimate_heading\nx=pickle.load(open('/holdout_task/public_mag.pkl','rb')); o=calibrate_and_estimate_heading(x['session']); g=x['gt']\ne=(o['heading_deg']-g['gt_heading_deg']+180)%360-180\nprint('bias',o['b_hard'], 'b_err',np.linalg.norm(o['b_hard']-g['b_hard']))\nprint('S_err',np.linalg.norm(o['S_soft']-g['S_soft']))\nprint('heading rmse',np.sqrt(np.mean(e**2)), 'range',e.min(),e",
+      "cat > /holdout_task/mag_calibrator.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _level(v, rp):\n    phi, theta = rp[:, 0], rp[:, 1]\n    c, s = np.cos(phi), np.sin(phi)\n    x = v[:, 0]\n    y = c * v[:, 1] - s * v[:, 2]\n    z = s * v[:, 1] + c * v[:, 2]\n    ct, st = np.cos(theta), np.sin(theta)\n    return np.column_stack((ct * x + st * z, y, -st * x + ct * z))\n\ndef calibrate_and_estimate_heading(session: dict) -> dict:\n    m = np.asarray(session['calib_m_raw'], dtype=float)\n    rp = np.asarray(session['calib_roll_pitch_rad'], dtype=float)\n    def unpack(p):\n        b"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/mag_calibrator.py",
+        "filename": "mag_calibrator.py",
+        "bytes": 1640,
+        "sha256": "c220206ec609a09db10c0ec36787b08e7d9dfe9e45c60f0f98b101ae0a0a0831",
+        "content_addressed_ref": "content_addressed_blobs/c220206ec609a09db10c0ec36787b08e7d9dfe9e45c60f0f98b101ae0a0a0831.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/mag_calibrator.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3d1a1384cc1e2f1711f2644a4cfc36a862c073153fc613940b6d3557e8b838f5",
+      "verified_turn": 6,
+      "verification_command": "cat > /holdout_task/mag_calibrator.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ndef _level(v, rp):\n    phi, theta = rp[:, 0], rp[:, 1]\n    c, s = np.cos(phi), np.sin(phi)\n    x = v[:, 0]\n    y = c * v[:, 1] - s * v",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

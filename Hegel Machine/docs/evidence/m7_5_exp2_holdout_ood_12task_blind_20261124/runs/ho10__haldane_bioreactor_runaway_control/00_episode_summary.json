@@ -1,0 +1,163 @@
+{
+  "task_id": "ho10__haldane_bioreactor_runaway_control",
+  "short_name": "haldane_bioreactor_safety_control",
+  "benchmark": "Hegel-OOD-Holdout-12",
+  "wave": "wave_2",
+  "scientific_domain": "Process Control / Substrate-Inhibited Exothermic Bioreactor",
+  "wormhole_family": "fam_robust_control_and_safety",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_A_TwoBranch_LiveGPT",
+  "declared_budget_multiplier": "2x_56_turns_plus_synthesis",
+  "selective_router_decision": null,
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 18,
+  "max_turns": 56,
+  "synthesis_decision": {
+    "selected_branch": "antithesis",
+    "selection_mechanism": "dialectical_trajectory_synthesis_high",
+    "rationale": "[blinded_slot:candidate_a->antithesis] Both candidates passed the supplied 400-step simulator tests and verified that raw feed and coolant commands stayed within [0, 2.5] L/h and [0, 1]. Across their respective suites, A recorded a minimum final biomass of 116.201 g, a peak temperature of 33.017 °C, and a peak volume of 8.700 L. B recorded 89.192 g, 33.423 °C, and 7.500 L. Both met the 62.0 g biomass floor and the 34.5 °C and 12.0 L safety ceilings in every tested run. No independent same-benchmark mechanical metrics were reported. | A demonstrated more thermal and biomass headroom while remai",
+    "synthesized_candidate_sha256": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+    "thesis_bundle_tar_sha256": "c2f5a7b2cd16ccd43c28af045b96916cb05d1f37e9f929c3e052f7a23d1563eb",
+    "antithesis_bundle_tar_sha256": "da556b1fa4d169bdb8284020c99f7069eaeadef3031c21d8aed74d2162bc4e82"
+  },
+  "postlock_branch_outcomes": {
+    "thesis_spawned": true,
+    "thesis_bare_run2_strict_pass": true,
+    "thesis_turns_used": 5,
+    "antithesis_wormhole_strict_pass": true,
+    "antithesis_turns_used": 13,
+    "oracle_either_branch_pass": true
+  },
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 0,
+  "nogoods_recorded": [],
+  "recalled_node_ids": [
+    "node_auto_13_robust_magnetometer_calibrat",
+    "node_auto_04_creep_corrected_retraction_c",
+    "root_A03_ill_posed_regularization_and_certificates",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_06_robust_network_assimilation"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.wave1_aufhebung_robust_magnetometer_calibration",
+      "source_forest_node": "node_auto_13_robust_magnetometer_calibrat",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "fit_magnetometer(raw: np.ndarray, roll_pitch: np.ndarray, *, bias_tolerance: float) -> tuple[np.ndarray, np.ndarray, dict[str, float | int | np.ndarray]]; magnetic_heading(raw: np.ndarray, roll_pitch: np.ndarray, soft_iron: np.ndarray, bias: np.ndarray) -> np.ndarray",
+      "scope_preconditions": [
+        {
+          "field": "calibration_sample_count",
+          "op": ">=",
+          "value": 10
+        },
+        {
+          "field": "soft_iron_determinant",
+          "op": "==",
+          "value": 1
+        },
+        {
+          "field": "horizontal_field_magnitude",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "robust_field_scale",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "bias_tolerance",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "provenance_episode_id": "wave1_magnetometer_ellipsoid_calibration"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration",
+      "source_forest_node": "node_auto_04_creep_corrected_retraction_c",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "first_loading_slip(force_N: np.ndarray, specimen_displacement_um: np.ndarray, hold_start: int, hold_end: int, *, threshold_um: float = 0.35) -> float | None; calibrate_retraction(times_s: list[np.ndarray], forces_N: list[np.ndarray], raw_displacements_um: list[np.ndarray], frame_compliance_um_per_N: float, *, transition_window_s: float = 0.015, curvature_to_noise: float = 0.8, slip_threshold_um: float = 0.35) -> tuple[float, list[float | None]]",
+      "scope_preconditions": [
+        {
+          "field": "specimen_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "hold_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "post_glitch_unloading_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "unloading_force_rate_magnitude_N_per_s",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "provenance_episode_id": "pt02__viscoelastic_retraction_and_slip_calibration"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_fb518ac4fd09",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "antithesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_fb518ac4fd09",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "thesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_586553377215",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "saved_artifact_snapshots": [
+    "bioreactor_ctrl.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 7,
+  "prompt_tokens": 500649,
+  "cached_tokens": 73600,
+  "completion_tokens": 13149,
+  "total_tokens": 513798,
+  "effective_billed_tokens": 458598,
+  "wall_ms": 436909.04,
+  "provenance_verified": true,
+  "terminal_record_sha256": "c89be2fb15f74a9b682ce7b02c3181d98f50e7afb8538e04efc748baf002c59a"
+}

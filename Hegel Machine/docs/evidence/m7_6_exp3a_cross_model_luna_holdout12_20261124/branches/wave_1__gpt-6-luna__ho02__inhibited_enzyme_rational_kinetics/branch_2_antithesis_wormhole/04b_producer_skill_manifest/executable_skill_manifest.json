@@ -1,0 +1,85 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_inhibited_enzyme_kinetics_b83369098065",
+    "source_hash": "b8336909806517d3defc7a82053df8fd6da4b50743aed934a9990dd1d8019da8",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho02__inhibited_enzyme_rational_kinetics",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task && python3 - <<'PY'\nimport pickle\np='/holdout_task/public_enzyme.pkl'\nwith open(p,'rb') as f: d=pickle.load(f)\nprint(type(d))\nif isinstance(d,dict):\n for k,v in d.items():\n  try: print(k, type(v), getattr(v,'shape',None), (list(v.keys()) if isinstance(v,dict) else repr(v)[:300]))\n  except Exception as e: print(k,e)\nPY",
+      "python3 - <<'PY'\nimport pickle, numpy as np\nD=pickle.load(open('/holdout_task/public_enzyme.pkl','rb'))['dataset']\nfor i,tr in enumerate(D['train_trajectories']):\n print('TRAJ',i, type(tr), tr.keys())\n for k,v in tr.items(): print(k, type(v), getattr(v,'shape',None), repr(v)[:400])\nfor k,v in D.items(): print('D',k, type(v),getattr(v,'shape',None),repr(v)[:500])\nPY",
+      "cat > /holdout_task/kinetics_id.py <<'PY'\nimport numpy as np\nfrom scipy.integrate import solve_ivp\nfrom scipy.optimize import least_squares\n\n_NAMES = ('Vmax1','Km1','alpha_p','Vmax2','Km2','k_leak')\n\ndef _feed(t, amp, window):\n    return amp if window[0] <= t < window[1] else 0.0\n\ndef _rhs(t, y, p, amp, window):\n    V1,K1,a,V2,K2,k = p\n    S,I,P = y\n    v1 = V1*S/(K1+S+a*P)\n    v2 = V2*I/(K2+I)\n    return [-v1+_feed(t,amp,window), v1-v2-k*I, v2]\n\ndef _simulate(ts, y0, p, amp, window):\n    ts=np.asarray(ts,float)\n    out=np.empty((len(ts),3)); out[0]=y0\n    cuts=sorted(set([float(ts[0]),float(t",
+      "python3 - <<'PY'\nimport pickle, numpy as np, sys\nfrom scipy.optimize import least_squares\nsys.path.insert(0,'/holdout_task')\nimport kinetics_id as m\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']; trs=d['train_trajectories']\ntruth=np.array(obj['gt_params'])\nbase=np.array([1.7549565383847272,.5748893817084442,1.2115524147790002,1.2999355494480687,.40070135400495915,.12127452025272031])\n# Compare equal-species scaling and unscaled residual; all are diagnostics on provided holdout truth.\nfor mode in ['current','relative','raw']:\n sc=[]\n for tr in trs:\n  Y=np.asarr",
+      "mkdir -p /tmp/.hegel_candidate_archive && cp /holdout_task/kinetics_id.py /tmp/.hegel_candidate_archive/v02_$(sha256sum /holdout_task/kinetics_id.py | cut -c1-8) && python3 - <<'PY'\nimport pickle,sys,numpy as np\nfrom scipy.optimize import least_squares\nsys.path.insert(0,'/holdout_task'); import kinetics_id as m\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']; trs=d['train_trajectories']; truth=np.array(obj['gt_params'])\nsc=np.array([np.maximum(np.median(np.abs(tr['y_obs']),axis=0)*.025,.008) for tr in trs])\nfor held in range(len(trs)):\n use=[i for i in range(len",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np\nfrom scipy.optimize import least_squares\nsys.path.insert(0,'/holdout_task')\nimport kinetics_id as m\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']; trs=d['train_trajectories']; truth=np.array(obj['gt_params'])\nsc=np.array([np.maximum(np.median(np.abs(tr['y_obs']),axis=0)*.025,.008) for tr in trs])\nfor held in range(len(trs)):\n use=[i for i in range(len(trs)) if i!=held]\n def fun(z):\n  p=np.exp(z)\n  return np.concatenate([((m._simulate(trs[j]['t_obs'],trs[j]['y_obs'][0],p,trs[j]['feed_amp'],trs[j]['feed_window'])-tr",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np\nfrom scipy.optimize import least_squares\nsys.path.insert(0,'/holdout_task'); import kinetics_id as m\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']; trs=d['train_trajectories']; truth=np.array(obj['gt_params'])\nsc=np.array([np.maximum(np.median(np.abs(tr['y_obs']),axis=0)*.025,.008) for tr in trs])\nfor init_mode in ('first_obs','y0_approx'):\n def fun(z):\n  p=np.exp(z); chunks=[]\n  for j,tr in enumerate(trs):\n   y0=tr['y_obs'][0] if init_mode=='first_obs' else tr['y0_approx']\n   pred=m._simulate(tr['t_obs'],y0,p,tr[",
+      "python3 - <<'PY'\nimport inspect\ntry:\n import hegel_wormhole_skills.autogenous_robust_network_assimilation as w\n print(inspect.getsource(w.assimilate_diffusive_network))\nexcept Exception as e: print('wormhole unavailable/inapplicable:',repr(e))\nPY\npython3 - <<'PY'\nimport os,sys,pickle,numpy as np\np='/holdout_task/kinetics_id.py'\nassert os.path.isfile(p)\nsys.path.insert(0,'/holdout_task')\nfrom kinetics_id import identify_and_forecast\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=identify_and_forecast(d); y=np.asarray(r['forecast_SIP'])\nassert y.shape==(len(d['",
+      "python3 - <<'PY'\nimport os,sys,pickle,numpy as np\np='/holdout_task/kinetics_id.py'\nassert os.path.isfile(p), 'required artifact missing'\nsys.path.insert(0,'/holdout_task')\nfrom kinetics_id import identify_and_forecast\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=identify_and_forecast(d)\ny=np.asarray(r['forecast_SIP'],float)\nassert y.shape==(len(d['t_test']),3) and np.isfinite(y).all()\nprint('params',r['params'])\nprint('forecast_rmse',float(np.sqrt(np.mean((y-obj['gt_forecast'])**2))))\ngt=np.asarray(obj['gt_params']); got=np.array([r['params'][k] for k in ('",
+      "set -e\npython3 -m py_compile /holdout_task/kinetics_id.py\ncd /tmp\nPYTHONPATH= python3 - <<'PY'\nimport importlib.util, pickle, numpy as np\npath='/holdout_task/kinetics_id.py'\nspec=importlib.util.spec_from_file_location('kinetics_id_final',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=mod.identify_and_forecast(d)\nkeys=('Vmax1','Km1','alpha_p','Vmax2','Km2','k_leak')\np=np.array([r['params'][k] for k in keys]); truth=np.array(obj['gt_params']); y=np.asarray(r['forecast_SIP'])\nassert se",
+      "set -e\nls -l /holdout_task/kinetics_id.py /holdout_task/public_enzyme.pkl\npython3 -m py_compile /holdout_task/kinetics_id.py\ncd /tmp\nPYTHONPATH= python3 - <<'PY'\nimport importlib.util, pickle, numpy as np, os\npath='/holdout_task/kinetics_id.py'\nspec=importlib.util.spec_from_file_location('kinetics_id_final',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=mod.identify_and_forecast(d)\nkeys=('Vmax1','Km1','alpha_p','Vmax2','Km2','k_leak')\np=np.array([r['params'][k] for k in keys]); trut",
+      "set -e\nsed -n '1,240p' /holdout_task/kinetics_id.py\npython3 -m py_compile /holdout_task/kinetics_id.py\ncd /tmp\nPYTHONPATH= python3 - <<'PY'\nimport importlib.util, pickle, numpy as np, os\npath='/holdout_task/kinetics_id.py'\nspec=importlib.util.spec_from_file_location('kinetics_id_audit',path)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=m.identify_and_forecast(d)\nkeys=('Vmax1','Km1','alpha_p','Vmax2','Km2','k_leak')\np=np.array([r['params'][k] for k in keys]); truth=np.array(obj['gt_params'])",
+      "set -e\npython3 -m py_compile /holdout_task/kinetics_id.py\ncd /tmp\nPYTHONPATH= python3 - <<'PY'\nimport importlib.util, pickle, numpy as np, os\npath='/holdout_task/kinetics_id.py'\nspec=importlib.util.spec_from_file_location('kinetics_id_final_audit',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=mod.identify_and_forecast(d)\nkeys=('Vmax1','Km1','alpha_p','Vmax2','Km2','k_leak')\np=np.array([r['params'][k] for k in keys]); y=np.asarray(r['forecast_SIP'],float)\nassert y.shape==(len(d['t_t",
+      "set -e\npython3 -m py_compile /holdout_task/kinetics_id.py\ncd /tmp\nPYTHONPATH= python3 - <<'PY'\nimport importlib.util, pickle, numpy as np, os\npath='/holdout_task/kinetics_id.py'\nspec=importlib.util.spec_from_file_location('kinetics_id_final',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nobj=pickle.load(open('/holdout_task/public_enzyme.pkl','rb')); d=obj['dataset']\nr=mod.identify_and_forecast(d)\nkeys=('Vmax1','Km1','alpha_p','Vmax2','Km2','k_leak')\np=np.array([r['params'][k] for k in keys]); y=np.asarray(r['forecast_SIP'],float)\nassert y.shape==(len(d['t_test'])"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/kinetics_id.py",
+        "filename": "kinetics_id.py",
+        "bytes": 2488,
+        "sha256": "190b71aaf5bcac5757729de42f5cc1304ab491225548b073b0de2c836e20d579",
+        "content_addressed_ref": "content_addressed_blobs/190b71aaf5bcac5757729de42f5cc1304ab491225548b073b0de2c836e20d579.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/kinetics_id.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b8336909806517d3defc7a82053df8fd6da4b50743aed934a9990dd1d8019da8",
+      "verified_turn": 16,
+      "verification_command": "set -e\npython3 -m py_compile /holdout_task/kinetics_id.py\ncd /tmp\nPYTHONPATH= python3 - <<'PY'\nimport importlib.util, pickle, numpy as np, os\npath='/holdout_task/kinetics_id.py'\nspec=importlib.util.spec_from_file_location('kinetics_id_final",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b8336909806517d3defc7a82053df8fd6da4b50743aed934a9990dd1d8019da8",
+        "expected_candidate_sha256": "b8336909806517d3defc7a82053df8fd6da4b50743aed934a9990dd1d8019da8",
+        "computed_candidate_sha256": "b8336909806517d3defc7a82053df8fd6da4b50743aed934a9990dd1d8019da8",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/kinetics_id.py",
+            "bytes": 2488
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_b8336909"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

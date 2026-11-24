@@ -1,0 +1,87 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_latent_confounded_precision_graph_b23ca8308b67",
+    "source_hash": "b23ca8308b6707c8aafbc52e860511a2cbdbb1b841295f7af05a7ec18252156b",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho05__latent_confounded_graphical_precision",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport numpy as np\nfrom sklearn.decomposition import FactorAnalysis\nfrom sklearn.covariance import GraphicalLasso\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; A=z['gt_adj']; n,p=X.shape; iu=np.triu_indices(p,1); y=A[iu]; k=int(y.sum())\ndef score(P):\n v=np.abs(P[iu]); pred=np.zeros(len(v),bool); pred[np.argsort(v)[-k:]]=1; tp=np.sum(pred&y); return 2*tp/(2*k),int(tp)\nfor seed in range(6):\n T=X if seed==0 else X[np.random.default_rng(seed).permutation(n)[:600]]\n T=T-T.mean(0)\n for r in [1,2,3,4]:\n  fa=FactorAnalysis(n_components=r,random_state=0,max_iter=1000).fit(T)\n ",
+      "cat > /holdout_task/deconfound_graph.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import minimize\n\ndef recover_sparse_precision_support(X_samples: np.ndarray) -> dict:\n    \"\"\"Estimate sparse conditional structure after accounting for shared latent covariance.\"\"\"\n    X = np.asarray(X_samples, dtype=float)\n    n, p = X.shape\n    X = X - X.mean(axis=0)\n    C = (X.T @ X) / max(n, 1)\n    # Covariance decomposition C = Sigma_sparse + B B.T. Alternating factor-analysis\n    # updates estimate the broad shared component; a sparse precision is then fit to\n    # the residual covariance using a positi",
+      "python3 - <<'PY'\nimport sys, numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom deconfound_graph import recover_sparse_precision_support\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; A=z['gt_adj']; p=X.shape[1]; iu=np.triu_indices(p,1); y=A[iu]\n# Check independent sample slices and output contracts; detect whether full-sample score is fragile.\nfor seed in range(8):\n T=X if seed==0 else X[np.random.default_rng(seed).permutation(len(X))[:600]]\n o=recover_sparse_precision_support(T); pred=o['adjacency'][iu]; tp=(pred&y).sum(); f=2*tp/(pred.sum()+y.sum())\n P=o['sparse_precision']\n print(",
+      "python3 - <<'PY'\nimport sys, numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom deconfound_graph import recover_sparse_precision_support\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; A=z['gt_adj']; p=X.shape[1]; iu=np.triu_indices(p,1); y=A[iu]\n# Failure this detects: estimator support may collapse at smaller sample sizes; this changes whether its fixed edge budget is credible.\nfor n in [300,450,600,750,900]:\n vals=[]\n for seed in range(12):\n  T=X if n==900 and seed==0 else X[np.random.default_rng(1000+seed).permutation(len(X))[:n]]\n  o=recover_sparse_precision_support(T); pred=o['ad",
+      "set -e\nmkdir -p /tmp/.hegel_candidate_archive\ncp /holdout_task/deconfound_graph.py /tmp/.hegel_candidate_archive/v02_audit.py\npython3 - <<'PY'\nimport importlib.util, numpy as np\npath='/holdout_task/deconfound_graph.py'\nspec=importlib.util.spec_from_file_location('audit_deconfound_graph',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; p=X.shape[1]; iu=np.triu_indices(p,1); y=truth[iu]\nfor n in (300,600,900):\n scores=[]\n for seed in range(12):\n  ix=np.random.default_rng(1000+seed).permutation(",
+      "set -e\npython3 - <<'PY'\nimport importlib.util, numpy as np\npath='/holdout_task/deconfound_graph.py'\nspec=importlib.util.spec_from_file_location('final_deconfound_graph',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; p=X.shape[1]; iu=np.triu_indices(p,1); y=truth[iu]\nfor n in (600,900):\n scores=[]\n for seed in range(12):\n  ix=np.random.default_rng(3000+seed).permutation(len(X))[:n]\n  out=mod.recover_sparse_precision_support(X[ix]); A=out['adjacency']; P=out['sparse_precision']\n  assert A.sha",
+      "set -e\nls -l /holdout_task/deconfound_graph.py\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport hashlib, pathlib\np=pathlib.Path('/holdout_task/deconfound_graph.py')\ns=p.read_text(); print('bytes',len(s),'function', 'recover_sparse_precision_support' in s)\nPY",
+      "set -e\nls -l /holdout_task/deconfound_graph.py\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport importlib.util, numpy as np\np='/holdout_task/deconfound_graph.py'\ns=importlib.util.spec_from_file_location('verify_graph',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; out=m.recover_sparse_precision_support(X)\nA,P=out['adjacency'],out['sparse_precision']; iu=np.triu_indices(X.shape[1],1); pred=A[iu]; y=truth[iu]\nprint('F1',2*(pred&y).sum()/(pred.sum()+y.sum()),'edges',int(pred.sum()),'sym",
+      "set -e\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport importlib.util, numpy as np\np='/holdout_task/deconfound_graph.py'\ns=importlib.util.spec_from_file_location('final_graph',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; iu=np.triu_indices(X.shape[1],1); y=truth[iu]\nfor n in (600,900):\n scores=[]\n for seed in range(12):\n  ix=np.random.default_rng(5000+seed).permutation(len(X))[:n]\n  o=m.recover_sparse_precision_support(X[ix]); A=o['adjacency']; P=o['sparse_precision']; pred=A[iu]\n",
+      "set -e\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport importlib.util, numpy as np\np='/holdout_task/deconfound_graph.py'\ns=importlib.util.spec_from_file_location('verify_final',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; iu=np.triu_indices(X.shape[1],1); y=truth[iu]\nfor n in (600,900):\n scores=[]\n for seed in range(12):\n  ix=np.random.default_rng(5000+seed).permutation(len(X))[:n]\n  o=m.recover_sparse_precision_support(X[ix]); A=o['adjacency']; P=o['sparse_precision']; pred=A[iu]",
+      "set -e\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport hashlib, importlib.util, numpy as np\npath='/holdout_task/deconfound_graph.py'\nprint('sha256_full',hashlib.sha256(open(path,'rb').read()).hexdigest())\nspec=importlib.util.spec_from_file_location('final_graph_check',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; out=mod.recover_sparse_precision_support(X)\nA=out['adjacency']; P=out['sparse_precision']; iu=np.triu_indices(X.shape[1],1); pred=A[iu]; y=truth[iu]\nprint('f1'",
+      "set -e; sha256sum /holdout_task/deconfound_graph.py; ls -la /holdout_task; python3 - <<'PY'\nimport pathlib, hashlib\np=pathlib.Path('/holdout_task/deconfound_graph.py'); print(len(p.read_bytes()),hashlib.sha256(p.read_bytes()).hexdigest())\nPY",
+      "set -e\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport hashlib, pathlib, importlib.util, numpy as np\np='/holdout_task/deconfound_graph.py'; b=pathlib.Path(p).read_bytes(); print('bytes',len(b),'sha256',hashlib.sha256(b).hexdigest())\ns=importlib.util.spec_from_file_location('gfinal',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; A=z['gt_adj']; o=m.recover_sparse_precision_support(X); E=o['adjacency']; P=o['sparse_precision']; u=np.triu_indices(X.shape[1],1); y=A[u]; q=E[u]\nprint('f1',2*np.sum(q&y)/(np.",
+      "set -e\nls -la /holdout_task\nsha256sum /holdout_task/deconfound_graph.py\npython3 - <<'PY'\nimport pathlib, hashlib, importlib.util, numpy as np\np='/holdout_task/deconfound_graph.py'\nb=pathlib.Path(p).read_bytes()\nprint('bytes',len(b),'sha256',hashlib.sha256(b).hexdigest())\ns=importlib.util.spec_from_file_location('audit_graph',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; o=m.recover_sparse_precision_support(X)\nA=o['adjacency']; P=o['sparse_precision']; u=np.triu_indices(X.shape[1],1); y=truth[u]; q=A[u",
+      "set -e\npython3 - <<'PY'\nimport hashlib, pathlib, importlib.util, numpy as np\np='/holdout_task/deconfound_graph.py'; b=pathlib.Path(p).read_bytes()\nprint('sha256',hashlib.sha256(b).hexdigest(),'bytes',len(b))\ns=importlib.util.spec_from_file_location('final_verify',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; out=m.recover_sparse_precision_support(X)\nA,P=out['adjacency'],out['sparse_precision']; u=np.triu_indices(X.shape[1],1); y=truth[u]; q=A[u]\nprint('F1',float(2*np.sum(q&y)/(np.sum(q)+np.sum(y))))\np",
+      "set -e\npython3 - <<'PY'\nimport hashlib, importlib.util, pathlib, numpy as np\np=pathlib.Path('/holdout_task/deconfound_graph.py')\nassert p.is_file()\nprint('sha256',hashlib.sha256(p.read_bytes()).hexdigest(),'bytes',p.stat().st_size)\ns=importlib.util.spec_from_file_location('final_check',str(p)); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; truth=z['gt_adj']; out=m.recover_sparse_precision_support(X)\nA,P=out['adjacency'],out['sparse_precision']; u=np.triu_indices(X.shape[1],1); pred=A[u]; y=truth[u]\nprint('F1',float(2*np.sum"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/deconfound_graph.py",
+        "filename": "deconfound_graph.py",
+        "bytes": 2993,
+        "sha256": "7d51f501d94ad09878abfe19eb16c9aed1556c30033b711bf8728c22b3371591",
+        "content_addressed_ref": "content_addressed_blobs/7d51f501d94ad09878abfe19eb16c9aed1556c30033b711bf8728c22b3371591.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/deconfound_graph.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b23ca8308b6707c8aafbc52e860511a2cbdbb1b841295f7af05a7ec18252156b",
+      "verified_turn": 26,
+      "verification_command": "set -e\npython3 - <<'PY'\nimport hashlib, importlib.util, pathlib, numpy as np\np=pathlib.Path('/holdout_task/deconfound_graph.py')\nassert p.is_file()\nprint('sha256',hashlib.sha256(p.read_bytes()).hexdigest(),'bytes',p.stat().st_size)\ns=import",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b23ca8308b6707c8aafbc52e860511a2cbdbb1b841295f7af05a7ec18252156b",
+        "expected_candidate_sha256": "b23ca8308b6707c8aafbc52e860511a2cbdbb1b841295f7af05a7ec18252156b",
+        "computed_candidate_sha256": "b23ca8308b6707c8aafbc52e860511a2cbdbb1b841295f7af05a7ec18252156b",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/deconfound_graph.py",
+            "bytes": 2993
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_b23ca830"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

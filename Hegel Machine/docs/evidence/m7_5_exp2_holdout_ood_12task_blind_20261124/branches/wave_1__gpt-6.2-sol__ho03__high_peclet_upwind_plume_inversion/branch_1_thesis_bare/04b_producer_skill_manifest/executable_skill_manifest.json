@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_high_peclet_plume_inversion_6ceb1490b01a",
+    "source_hash": "6ceb1490b01acd22c578bbd634240b195e1fa9831b835fc4fe6ed105dfce26bd",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho03__high_peclet_upwind_plume_inversion",
+    "wormhole_family": "fam_multiscale_pde_and_combinatorial_physics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python - <<'PY'\nimport pickle,numpy as np,scipy\np=pickle.load(open('/holdout_task/public_peclet.pkl','rb'))\nprint('scipy',scipy.__version__)\ndef show(p,level=0):\n if isinstance(p,dict) and level<3:\n  for k,v in p.items():\n   print('  '*level,k,end=': ');show(v,level+1)\n elif isinstance(p,np.ndarray):\n  print(p.shape,p.dtype, p if p.size<=40 else (p.min(),p.max()))\n else:print(str(p)[:500])\nshow(p)\nPY",
+      "command -v python3; python3 - <<'PY'\nimport pickle,numpy as np,scipy\np=pickle.load(open('/holdout_task/public_peclet.pkl','rb'))\nprint('scipy',scipy.__version__)\ndef show(p,level=0):\n if isinstance(p,dict) and level<3:\n  for k,v in p.items():\n   print('  '*level,k,end=': ');show(v,level+1)\n elif isinstance(p,np.ndarray):\n  print(p.shape,p.dtype,p if p.size<=40 else (p.min(),p.max()))\n else:print(str(p)[:500])\nshow(p)\nPY",
+      "cat > /holdout_task/peclet_plume.py <<'PY'\n\"\"\"Exponentially fitted transport and robust inversion of a Gaussian source.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _face_rates(velocity, diffusivity, h):\n    \"\"\"Positive- and negative-direction coefficients of flux divided by h.\"\"\"\n    velocity = np.asarray(velocity, dtype=float)\n    if diffusivity == 0:\n        return np.maximum(velocity, 0) / h, np.maximum(-velocity, 0) / h\n    z = np.abs(velocity) * (h / diffusivity)\n    # B(z) = z exp(-z) / (1-exp(-",
+      "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle, time\nimport numpy as np\nfrom peclet_plume import forward_peclet_field, invert_point_source\nrng = np.random.default_rng(37)\nn,h,d,k=8,.125,.004,.3\nu=rng.normal(size=(n+1,n)); v=rng.normal(size=(n,n+1)); u[2,2]=0; v[2,2]=0\ns=rng.uniform(size=(n,n)); c=forward_peclet_field(u,v,d,k,s,h)\ndef b(p):\n    out=np.ones_like(p); np.divide(p,np.expm1(p),out=out,where=p!=0); return out\ncx=np.pad(c,((1,1),(0,0))); cy=np.pad(c,((0,0),(1,1)))\njx=d/h*(b(-u*h/d)*cx[:-1]-b(u*h/d)*cx[1:]); jy=d/h*(b(-v*h/d)*cy[:,:-1]-b(v*h/d)*cy[:,1:]); ",
+      "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom peclet_plume import forward_peclet_field, invert_point_source, _operator\nfrom scipy.sparse.linalg import splu\nrng=np.random.default_rng(37)\nrng.normal(size=(9,8)); rng.normal(size=(8,9)); rng.uniform(size=(8,8))\np=pickle.load(open('public_peclet.pkl','rb'))['problem']; n,h=p['N'],p['h']; t=(np.arange(n)+.5)*h; ij=tuple(p['sensor_ij'].T); sig=p['sigma_s']\ndef source(x,y,q): return q*np.exp(-.5*((t[:,None]-x)**2+(t[None,:]-y)**2)/sig**2)\nfor x,y,q in [(.24"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/peclet_plume.py",
+        "filename": "peclet_plume.py",
+        "bytes": 6775,
+        "sha256": "88c6c4299bc06c57b87322e0a244c4e4ae5e97e6e1ec75ac4066f4be41afcd5f",
+        "content_addressed_ref": "content_addressed_blobs/88c6c4299bc06c57b87322e0a244c4e4ae5e97e6e1ec75ac4066f4be41afcd5f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/peclet_plume.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_combinatorial_physics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6ceb1490b01acd22c578bbd634240b195e1fa9831b835fc4fe6ed105dfce26bd",
+      "verified_turn": 5,
+      "verification_command": "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom peclet_plume import forward_peclet_field, invert_point_source, _operator\nfrom scipy.sparse.linalg ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

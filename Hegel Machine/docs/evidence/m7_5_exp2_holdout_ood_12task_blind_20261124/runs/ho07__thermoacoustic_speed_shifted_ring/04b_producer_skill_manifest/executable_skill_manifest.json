@@ -1,0 +1,125 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_thermoacoustic_speed_shifted_ring_7baef785ebea",
+    "source_hash": "7baef785ebea9377922d01f7ba581355287240f60d1dc8d452740b4f9b98f3d2",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho07__thermoacoustic_speed_shifted_ring",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_tat.py",
+        "archived_relpath": "producers/tmp__audit_tat.py",
+        "bytes": 2692,
+        "sha256": "17ae4f98a9708e1775c8d8a048bb36a6a78fec54eb9d04040f4911284498e489"
+      },
+      {
+        "container_path": "/tmp/diagnose_tat.py",
+        "archived_relpath": "producers/tmp__diagnose_tat.py",
+        "bytes": 2746,
+        "sha256": "9dac27cc1be7079060741085b6eac45db23cd9529e097797465ed7dac6dc114e"
+      },
+      {
+        "container_path": "/tmp/probe_tat.py",
+        "archived_relpath": "producers/tmp__probe_tat.py",
+        "bytes": 1912,
+        "sha256": "0f00dd15408ebf637ba38cc6bbf22833a3845b206af2404cc1e818f84d73298c"
+      },
+      {
+        "container_path": "/tmp/stress_tat.py",
+        "archived_relpath": "producers/tmp__stress_tat.py",
+        "bytes": 2242,
+        "sha256": "83d7d438cd460cc4d4312daf41b6f1b05e280ac9cbba5b655b90775f2c3f027a"
+      },
+      {
+        "container_path": "/tmp/stress_tat_valid.py",
+        "archived_relpath": "producers/tmp__stress_tat_valid.py",
+        "bytes": 2322,
+        "sha256": "4cc511848880332117962e9c10510da8a4788c550850baa68d35ab5481f6bcf9"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; ls -la /tmp/hegel_wormhole_skills; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\ndef show(x,n='',k=0):\n if isinstance(x,dict):\n  print(n,'dict',list(x));\n  if k<4:\n   for a,b in x.items(): show(b,n+'/'+str(a),k+1)\n elif isinstance(x,(list,tuple)):\n  print(n,type(x).__name__,len(x));\n  for i,v in enumerate(x[:2]): show(v,n+'/'+str(i),k+1)\n elif isinstance(x,np.ndarray): print(n,x.shape,x.dtype, (x.min(),x.max()) if x.size else '', x if x.size<=40 else '')\n else: print(n,type(x).__name__,repr(x)[:250])\nshow(p)\nPY\nif test",
+      "sed -n '1,240p' /tmp/hegel_wormhole_skills/autogenous_dispersive_wave_tomography.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np,pickle\nfrom scipy.ndimage import gaussian_filter1d\nfrom scipy.signal import find_peaks\nfor e in pickle.load(open('/holdout_task/public_tat.pkl','rb')):\n s,g=e['scan'],e['gt']; y=s['signals']; x=s['sensor_xy_mm']; p=s['calib_pin_xy_mm']; q=np.array(g['absorbers_xy_mm']); f=s['fs_hz']/1000/g['sound_speed_m_per_s']; td=np.linalg.norm(x[:,None]-q,axis=2)*f; te=(np.linalg.norm(q-p,axis=1)+np.linalg.norm(x-p,axis=1)[:,None])*f\n print('\\n',g,'noise early',np.",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np, pickle\nfrom scipy.optimize import minimize_scalar\nfrom scipy.ndimage import gaussian_filter1d\nfor i,e in enumerate(pickle.load(open('/holdout_task/public_tat.pkl','rb'))):\n s,g=e['scan'],e['gt']; y=s['signals']; x=s['sensor_xy_mm']; p=s['calib_pin_xy_mm']; q=np.array(g['absorbers_xy_mm']); f=s['fs_hz']/1000/g['sound_speed_m_per_s']; t=np.arange(len(y)); d=np.linalg.norm(x[:,None]-q,axis=2)*f; pin=np.linalg.norm(x-p,axis=1)*f; two=pin[:,None]+np.linalg.norm(q-p,axis=1)*f\n print('scan',i)\n def fit(w, modes):\n  centers=np.column_stack([d",
+      "cat > /tmp/probe_tat.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.ndimage import correlate1d\nfrom scipy.interpolate import CubicSpline\nfrom scipy.optimize import minimize_scalar\ncases=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor i,e in enumerate(cases):\n s=e['scan']; g=e['gt']; y=s['signals']; xy=s['sensor_xy_mm']; pin=s['calib_pin_xy_mm']; scale=s['fs_hz']/1000; j=np.arange(len(xy)); dp=np.linalg.norm(xy-pin,axis=1); t=np.arange(len(y)); u=np.arange(-28,29)/4.4; k=-u*np.exp(-u*u/2); n=k@k\n def matched(y): return CubicSpline(t,correlate1d(y,k,axis=0,mode='constant'))\n m=matched",
+      "cat > /holdout_task/thermoacoustic_recon.py <<'PY'\n\"\"\"Joint time-of-flight reconstruction for a thermoacoustic receiver ring.\"\"\"\n\nimport numpy as np\nfrom scipy.interpolate import CubicSpline\nfrom scipy.ndimage import correlate1d\nfrom scipy.optimize import least_squares, minimize_scalar\n\n\n_SPEED_BOUNDS = (1435.0, 1545.0)\n\n\ndef _pulse(delta, width):\n    u = delta / width\n    return -u * np.exp(-0.5 * u * u)\n\n\ndef _matched(signals, width):\n    radius = int(np.ceil(6 * width))\n    template = _pulse(np.arange(-radius, radius + 1), width)\n    trace = correlate1d(signals, template, axis=0, mode='cons",
+      "cat > /tmp/stress_tat.py <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm as run\npublic=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nrng=np.random.default_rng(615)\n\ndef check(s,c,q):\n out=run(s)\n z=np.asarray(out['absorbers_xy_mm']); d=np.linalg.norm(z[:,None]-q,axis=-1)\n assert set(out)=={'sound_speed_m_per_s','absorbers_xy_mm'} and type(out['sound_speed_m_per_s']) is float\n assert z.shape==(2,2) and np.isfinite(z).all() and z[0,0]<=z[1,0]\n return np.array([abs(out['sound_speed_m_per_s']-c),",
+      "cp /tmp/stress_tat.py /tmp/stress_tat_valid.py\npython3 - <<'PY'\np='/tmp/stress_tat_valid.py'\ns=open(p).read().replace('q[0]=pin+[.15,.35,.7,1.5][i%4]*u; q[1]=-pin/2','a=[-.10,-.03,.03,.10][i%4]; q[0]=[31.95*np.sin(a),-31.95*np.cos(a)]; q[1]=-pin/2').replace('err,z=check({**s0', 'assert (np.linalg.norm(q,axis=1)<32).all()\\n  err,z=check({**s0')\nopen(p,'w').write(s)\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_tat_valid.py\npython3 - <<'PY'\np='/holdout_task/thermoacoustic_recon.py'\ns=open(p).read().replace('from scipy.optimize import least_squares, minimize_scalar','from scipy.optimize import",
+      "python3 - <<'PY'\np='/tmp/stress_tat_valid.py'\ns=open(p).read().replace('from thermoacoustic_recon import reconstruct_two_absorbers_mm as run','from thermoacoustic_recon import reconstruct_two_absorbers_mm as run, _seed, _fit, _pulse, _project')\ns=s.replace(\"if np.any(err>[2.5,.85]): print('miss',name,i,'error',err,'true',q.round(2).tolist(),'fitted',z.round(2).tolist())\", \"\"\"if name=='pin_overlap':\n   pd=np.linalg.norm(xy-pin,axis=1); f=fs/1000\n   seed=_seed(sig,xy,pd,f,4.4)\n   def rms(p):\n    d0=np.linalg.norm(xy[:,None]-np.vstack((p[:4].reshape(2,2),pin)),axis=-1)\n    return np.std(_project(",
+      "python3 - <<'PY'\np='/holdout_task/thermoacoustic_recon.py'\ns=open(p).read(); a=s.index('\\ndef reconstruct_two_absorbers_mm')\ns=s[:a]+'''\ndef _restart(y, xy, pin_distance, factor, result):\n    \"\"\"Reopen the source search only if the joint fit leaves signal above noise.\"\"\"\n    time = np.arange(len(y))[None, :, None]\n    noise = np.median(np.abs(np.diff(y, axis=0))) / (0.67449 * np.sqrt(2.0))\n\n    def direct(points):\n        return np.linalg.norm(xy[:, None, :] - points[None, :, :], axis=2)\n\n    def residual(params):\n        distances = np.column_stack((direct(params[:4].reshape(2, 2)), pin_dista",
+      "set -e\nf=/holdout_task/thermoacoustic_recon.py\ncmp \"$f\" /tmp/.hegel_candidate_archive/v03_7baef785b\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\npath='/holdout_task/thermoacoustic_recon.py'\nspec=importlib.util.spec_from_file_location('thermoacoustic_recon',path)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ncases=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\ndef measure(s,c,q):\n    p=m.reconstruct_two_absorbers_mm(s); z=np.asarray(p['absorbers_xy_mm']); d=np.linalg.norm(z[:,None]-q,axis=-1)\n    assert set(p)",
+      "set -e\nf=/holdout_task/thermoacoustic_recon.py\ncmp \"$f\" /tmp/.hegel_candidate_archive/v03_7baef785\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/thermoacoustic_recon.py'\nspec=importlib.util.spec_from_file_location('thermoacoustic_recon',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('/holdout_task/public_tat.pkl','rb') as f:\n    cases=pickle.load(f)\n\ndef error(s,c,q):\n    out=m.reconstruct_two_absorbers_mm(s)\n    assert set(out)=={'sound_speed_m_per_s','absorbers_xy_mm'}\n    v=out['sound_speed_m",
+      "set -e\nf=/holdout_task/thermoacoustic_recon.py\nread -r actual _ < <(sha256sum \"$f\")\ntest \"$actual\" = 7baef785ebea9377922d01f7ba581355287240f60d1dc8d452740b4f9b98f3d2\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('thermoacoustic_recon','/holdout_task/thermoacoustic_recon.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_tat.pkl','rb') as f: cases=pickle.load(f)\nresults={}\ndef check(label,s,c,q):\n    out=m.reconstruct_two_absorbers_mm(s)\n    asser",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\npath='/holdout_task/thermoacoustic_recon.py'\nspec=importlib.util.spec_from_file_location('thermoacoustic_recon',path)\nm=importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('public_tat.pkl','rb') as f: cases=pickle.load(f)\nresults={}\ndef check(label,s,c,q):\n    out=m.reconstruct_two_absorbers_mm(s)\n    assert set(out)=={'sound_speed_m_per_s','absorbers_xy_mm'}\n    v=out['sound_speed_m_per_s']; z=np.asarray(out['absorbers_xy_mm']); q=np.asarray(q)\n    asse",
+      "set -e\ncat > /tmp/audit_tat.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/thermoacoustic_recon.py'\nspec = importlib.util.spec_from_file_location('thermoacoustic_recon', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_tat.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\nfor i, e in enumerate(cases):\n    s, gt = e['scan'], e['gt']\n    y, xy, pin = map(np.asarray, (s['signals'], s['sensor_xy_mm'], s['calib_pin_xy_mm']))\n    factor = s['fs_hz'] / 1000\n    dp = np.linalg.norm(xy-pin, axis=1)\n    angle_",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\npath='/holdout_task/thermoacoustic_recon.py'\nspec=importlib.util.spec_from_file_location('thermoacoustic_recon',path)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('/holdout_task/public_tat.pkl','rb') as f: cases=pickle.load(f)\nfor i,e in enumerate(cases):\n    s,g=e['scan'],e['gt']; x=np.asarray(s['sensor_xy_mm']); y=np.asarray(s['signals']); pin=np.asarray(s['calib_pin_xy_mm']); t=np.arange(len(y))[None,:,None]; scale=s["
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__diagnose_tat.py",
+      "primary_producer_container_path": "/tmp/diagnose_tat.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/thermoacoustic_recon.py",
+        "filename": "thermoacoustic_recon.py",
+        "bytes": 8415,
+        "sha256": "4cadf13e6e5250f76a9aa23e562ba79494453a73e2c5f19fb85bb319ffc815ff",
+        "content_addressed_ref": "content_addressed_blobs/4cadf13e6e5250f76a9aa23e562ba79494453a73e2c5f19fb85bb319ffc815ff.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/thermoacoustic_recon.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7baef785ebea9377922d01f7ba581355287240f60d1dc8d452740b4f9b98f3d2",
+      "verified_turn": 17,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\npath='/holdout_task/thermoacoustic_recon.py'\nspec=importlib.util.spec_from_file_location('thermoa",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "7baef785ebea9377922d01f7ba581355287240f60d1dc8d452740b4f9b98f3d2",
+        "expected_candidate_sha256": "7baef785ebea9377922d01f7ba581355287240f60d1dc8d452740b4f9b98f3d2",
+        "computed_candidate_sha256": "7baef785ebea9377922d01f7ba581355287240f60d1dc8d452740b4f9b98f3d2",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermoacoustic_recon.py",
+            "bytes": 8415
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_7baef785"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": []
+  }
+}

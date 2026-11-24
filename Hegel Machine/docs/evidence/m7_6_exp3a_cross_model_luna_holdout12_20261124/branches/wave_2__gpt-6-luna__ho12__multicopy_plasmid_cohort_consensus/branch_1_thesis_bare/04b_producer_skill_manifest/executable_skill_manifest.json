@@ -1,0 +1,70 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_multicopy_plasmid_cohort_f2769280cb8a",
+    "source_hash": "f2769280cb8a64716194ee92507a6265540a4b0a16f5f18e7d5f7c915dc3cf78",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho12__multicopy_plasmid_cohort_consensus",
+    "wormhole_family": "fam_biomystery_genomic_homology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cat /holdout_task/public_cohort/reference_panel.json; python - <<'PY'\nimport json,glob\np=glob.glob('/holdout_task/public_cohort/isolate_*.json')[0]\nd=json.load(open(p)); print(type(d), d.keys() if isinstance(d,dict) else len(d)); print(json.dumps(d,indent=2)[:3500])\nPY",
+      "python3 - <<'PY'\nimport json,glob\np=glob.glob('/holdout_task/public_cohort/isolate_*.json')[0]\nd=json.load(open(p)); print(type(d), d.keys() if isinstance(d,dict) else len(d)); print(json.dumps(d,indent=2)[:5000])\nPY",
+      "python3 - <<'PY'\nimport json,glob,os\nfor p in sorted(glob.glob('/holdout_task/public_cohort/isolate_*.json')):\n d=json.load(open(p)); print(os.path.basename(p),len(d['contigs']))\n for c in d['contigs']:\n  if c.get('circular') or c.get('copy_number') is not None or 'AMR' in c.get('family_tag','') or 'PHAGE' in c.get('family_tag',''):\n   print({k:(len(v) if k=='sequence' else v) for k,v in c.items() if k!='sequence'})\nPY",
+      "python3 - <<'PY'\nimport json,glob,os\np='/holdout_task/public_cohort/isolate_03.json'; d=json.load(open(p))\nfor c in d['contigs']:\n print({k:(len(v) if k=='sequence' else v) for k,v in c.items() if k!='sequence'})\n print('keys',list(c))\nPY",
+      "python3 - <<'PY'\nimport json,glob\nfor p in sorted(glob.glob('/holdout_task/public_cohort/isolate_*.json')):\n d=json.load(open(p)); chrom=[c['mean_depth'] for c in d['contigs'] if c['family_tag'].startswith('CHR_SEG')];\n for c in d['contigs']:\n  if c.get('circular') and c.get('family_tag')!='PHAGE_CONTAM_PHI9': print(p.split('/')[-1], c['family_tag'],len(c['sequence']), c['mean_depth'], sorted(chrom)[len(chrom)//2])\nref=json.load(open('/holdout_task/public_cohort/reference_panel.json'))['reference_wildtype_cds']; print('REF',ref,len(ref))\nfor p in ['/holdout_task/public_cohort/isolate_03.json',",
+      "python3 -m py_compile /holdout_task/plasmid_audit.py && python3 - <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nfrom plasmid_audit import audit_outbreak_cohort\nprint(audit_outbreak_cohort('/holdout_task/public_cohort'))\nPY\nls -l /holdout_task/plasmid_audit.py",
+      "cat > /holdout_task/plasmid_audit.py <<'PY'\n\"\"\"Audit a multi-isolate cohort for its shared multicopy AMR plasmid.\"\"\"\nimport glob\nimport json\nimport os\nimport statistics\n\n_CODE = {\n    'TTT':'F','TTC':'F','TTA':'L','TTG':'L','TCT':'S','TCC':'S','TCA':'S','TCG':'S',\n    'TAT':'Y','TAC':'Y','TAA':'*','TAG':'*','TGT':'C','TGC':'C','TGA':'*','TGG':'W',\n    'CTT':'L','CTC':'L','CTA':'L','CTG':'L','CCT':'P','CCC':'P','CCA':'P','CCG':'P',\n    'CAT':'H','CAC':'H','CAA':'Q','CAG':'Q','CGT':'R','CGC':'R','CGA':'R','CGG':'R',\n    'ATT':'I','ATC':'I','ATA':'I','ATG':'M','ACT':'T','ACC':'T','ACA':'T','ACG':",
+      "python3 - <<'PY'\nimport json,glob\nref=json.load(open('/holdout_task/public_cohort/reference_panel.json'))['reference_wildtype_cds']\nfor p in glob.glob('/holdout_task/public_cohort/isolate_*.json'):\n d=json.load(open(p))\n for c in d['contigs']:\n  if c['family_tag']=='IncX4_CTX_PLASMID':\n   s=c['sequence']; i=1300\n   print(p.split('_')[-1], s[i:i+54], [(j,a,b) for j,(a,b) in enumerate(zip(ref,s[i:i+54])) if a!=b])\n   break\nPY",
+      "python3 - <<'PY'\np='/holdout_task/plasmid_audit.py'\ns=open(p).read()\nstart=s.index('    # Find a single-base coding variant relative to the reference, and translate it.')\nend=s.index(\"    if not variants:\\n\",start)\nnew='''    # Align the conserved resistance-core motif; a codon may differ at multiple\n    # nucleotides while encoding one amino-acid substitution.\n    variants = {}\n    n = len(reference)\n    for seq in sequences:\n        for target in (reference, _reverse_complement(reference)):\n            for start in range(len(seq) - n + 1):\n                window = seq[start:start + n]\n      ",
+      "python3 -m py_compile /holdout_task/plasmid_audit.py && python3 - <<'PY'\nimport sys,glob,os\nsys.path.insert(0,'/holdout_task')\nfrom plasmid_audit import audit_outbreak_cohort\nprint(audit_outbreak_cohort('/holdout_task/public_cohort'))\nprint('isolate bundles:',len(glob.glob('/holdout_task/public_cohort/isolate_*.json')))\nprint('script bytes:',os.path.getsize('/holdout_task/plasmid_audit.py'))\nPY"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/plasmid_audit.py",
+        "filename": "plasmid_audit.py",
+        "bytes": 4652,
+        "sha256": "5ba13c28c0223451a40d102ce9b7862c472648e1249defed842b93759118f6fe",
+        "content_addressed_ref": "content_addressed_blobs/5ba13c28c0223451a40d102ce9b7862c472648e1249defed842b93759118f6fe.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/plasmid_audit.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_genomic_homology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f2769280cb8a64716194ee92507a6265540a4b0a16f5f18e7d5f7c915dc3cf78",
+      "verified_turn": 11,
+      "verification_command": "python3 -m py_compile /holdout_task/plasmid_audit.py && python3 - <<'PY'\nimport sys,glob,os\nsys.path.insert(0,'/holdout_task')\nfrom plasmid_audit import audit_outbreak_cohort\nprint(audit_outbreak_cohort('/holdout_task/public_cohort'))\nprint",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

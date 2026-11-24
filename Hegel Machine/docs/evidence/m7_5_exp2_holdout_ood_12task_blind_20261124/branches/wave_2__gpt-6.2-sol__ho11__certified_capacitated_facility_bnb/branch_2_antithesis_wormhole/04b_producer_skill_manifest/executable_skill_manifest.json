@@ -1,0 +1,115 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_facility_bnb_68fb91f2f39c",
+    "source_hash": "68fb91f2f39cce1e08eae870033277b5673dfa4b3799a1d38d4b8d0ef1fcaab5",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho11__certified_capacitated_facility_bnb",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/facility_probe.py",
+        "archived_relpath": "producers/tmp__facility_probe.py",
+        "bytes": 4496,
+        "sha256": "9c0dea6f8e0db4dc77026493c6dd37e51e84b08f4ac6a2d14ecd137b6772a1e8"
+      },
+      {
+        "container_path": "/tmp/facility_stress.py",
+        "archived_relpath": "producers/tmp__facility_stress.py",
+        "bytes": 3115,
+        "sha256": "c524d2c3971074711913af35745649e04461e53ba05e2bca31956d82a6d3b5cb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('/holdout_task/public_facility.pkl','rb') as f: p=pickle.load(f)\nprint('scipy',scipy.__version__,'fixture type',type(p))\nfor k,v in p.items():\n a=np.asarray(v); print(k,a.shape,a.dtype, a.tolist() if a.ndim<2 else (a.min(),a.max()))\nPY\nf=/tmp/hegel_wormhole_skills/autogenous_sparse_ridge_certification.py; if test -r \"$f\"; then grep -nE '^def |compact|disjunct|enumerat' \"$f\"; tail -85 \"$f\"; fi",
+      "cat > /tmp/facility_probe.py <<'PY'\nimport pickle\nimport time\nfrom math import fsum\nimport numpy as np\nfrom scipy.optimize import Bounds, LinearConstraint, linprog, milp\nfrom scipy.sparse import csr_matrix, eye, hstack, kron, vstack, diags\n\nclass Model:\n    def __init__(self, p):\n        self.f = np.asarray(p['fixed_cost'], dtype=float)\n        self.s = np.asarray(p['capacity'], dtype=float)\n        self.d = np.asarray(p['demand'], dtype=float)\n        self.c = np.asarray(p['cost_matrix'], dtype=float)\n        m, n = self.c.shape\n        self.m, self.n = m, n\n        self.total = fsum(self.d)\n",
+      "cat > /holdout_task/facility_cert.py <<'PY'\n\"\"\"Branch-and-bound certificate for splittable capacitated facility location.\"\"\"\nfrom heapq import heappop, heappush\nfrom math import fsum, inf\n\nimport numpy as np\nfrom scipy.optimize import Bounds, LinearConstraint, linprog, milp\nfrom scipy.sparse import csr_matrix, diags, eye, hstack, kron, vstack\n\n\n_TOL = 9.5e-6  # Keep a margin inside the requested 1e-5.\n_LP_OPTIONS = {'primal_feasibility_tolerance': 1e-9,\n               'dual_feasibility_tolerance': 1e-9}\n\n\ndef _capacity_table(capacity, demand):\n    # Binary64 data are dyadic: put all amounts ov",
+      "cat > /tmp/facility_stress.py <<'PY'\nimport pickle, time\nfrom fractions import Fraction\nfrom math import fsum\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom facility_cert import solve_and_certify_facilities\n\np = pickle.load(open('/holdout_task/public_facility.pkl','rb'))\ndef make(seed, mode):\n    rng = np.random.default_rng(seed)\n    d = rng.uniform(0.5, 3, 24)\n    f = rng.uniform(3, 40, 12)\n    s = rng.uniform(3, 15, 12)\n    c = rng.uniform(0, 15, (12, 24))\n    if mode == 'symmetric':\n        f[:] = 15; d[:] = 1; s[:] = 5; c[:] = 2\n    if mode == 'clusters':\n        c = rng.unifor",
+      "set -e\narchive=/tmp/.hegel_candidate_archive/v01_de890064\ncmp /holdout_task/facility_cert.py \"$archive\"\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task:/tmp python3 -I - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task','/tmp']\nfrom facility_stress import p, make, check\nfrom facility_cert import solve_and_certify_facilities\nfrom fractions import Fraction\nfrom math import fsum, inf\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom scipy.sparse import eye, kron\n\nfor name, data in [('public',p), ('symmetric',make(0,'symmetric')), ('clusters',make(6,'clusters')),",
+      "set -e\np=/holdout_task/facility_cert.py\nprintf '%s  %s\\n' de89006433a3ec9579965b32bfc12a7eaa65555d11eb6114a56ce8eaa8b51ee7 \"$p\" | sha256sum -c -\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nfrom facility_stress import p, make, check\nfrom facility_cert import solve_and_certify_facilities\nfrom fractions import Fraction\nfrom math import fsum, inf\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom scipy.sparse import eye, kron\n\nfor name, data in [('public', p), ('symmetric', make(0, 'symmetric')), ('clusters', make(6, 'clusters')), ('fix",
+      "set -e\np=/holdout_task/facility_cert.py\nbefore=$(sha256sum \"$p\")\nprintf 'Testing artifact: %s\\n' \"$before\"\nfind /tmp/.hegel_candidate_archive/v01_de890064 -maxdepth 2 -type f -print\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nimport facility_cert\nassert facility_cert.__file__ == '/holdout_task/facility_cert.py'\nfrom facility_stress import p, make, check\nfrom fractions import Fraction\nfrom math import fsum, inf\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom scipy.sparse import eye, kron\n\ncases = [('public', p), ('symmetric', make",
+      "OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nfrom facility_stress import make, check\nfrom facility_cert import solve_and_certify_facilities\nfrom math import fsum\nimport numpy as np\nfor step in (5e-7, 5e-8, 5e-9):\n    miss = 0.0\n    for seed in range(6):\n        p = make(0, 'symmetric')\n        f = p['fixed_cost']; f[:] += step * np.random.default_rng(seed).permutation(len(f))\n        r = solve_and_certify_facilities(p)\n        check(p, r)\n        opt = fsum([48., *sorted(f)[:5]])\n        miss = max(miss, r['upper_bound'] - opt)\n    print('fi",
+      "set -e\np=/holdout_task/facility_cert.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\nold = '''        if lower < upper - _TOL:\n            rounded = int(bits[y > 0.5].sum())\n            if not len(free) or np.max(np.abs(y - (y > 0.5))) < 1e-7:\n                incumbent(rounded)\n        children = None\n        if lower < upper - _TOL:\n            if not len(free):\n                raise RuntimeError('Fixed-support transport primal and dual did not close the certificate.')\n'''\nnew = '''        # The proof tolerance is for the returned part",
+      "set -e\np=/holdout_task/facility_cert.py\nbefore=$(sha256sum \"$p\")\nprintf 'Verifying %s\\n' \"$before\"\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task python3 /tmp/facility_stress.py\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nimport facility_cert\nassert facility_cert.__file__ == '/holdout_task/facility_cert.py'\nfrom facility_stress import p, make, check\nfrom fractions import Fraction\nfrom math import fsum, inf\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom scipy.sparse import eye, kron\n\nnear = make(0, 'sym",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nimport numpy as np\nfrom facility_stress import p, check\nfrom facility_cert import solve_and_certify_facilities\n\nr = solve_and_certify_facilities(p)\nprint('public objective', r['upper_bound'], 'leaves, gap, residual', check(p, r), flush=True)\nfor step in (1e-7, 1e-9, 1e-10, 1e-11):\n    errors = []\n    for seed in range(4):\n        rng = np.random.default_rng(seed)\n        owner = np.repeat(rng.permutation(12), 2)[rng.permutation(24)]\n        c = np.full((12, 24), 1.0 + step)\n        c[owner,",
+      "set -e\np=/holdout_task/facility_cert.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\ns = s.replace('from math import fsum, inf', 'from math import inf')\nmarker = 'def _capacity_table(capacity, demand):'\nhelper = '''def _dyadic(values):\n    terms = [float(v).as_integer_ratio() for v in values]\n    den = max(q for _, q in terms)\n    return [p * (den // q) for p, q in terms], den\n\n\ndef _transport(ids, capacities, demands, costs):\n    \"\"\"Successive shortest augmenting paths in exact dyadic coordinates.\"\"\"\n    k, n = len(ids), len(demands)\n ",
+      "set -e\np=/holdout_task/facility_cert.py\nbefore=$(sha256sum \"$p\")\nprintf 'Verifying %s\\n' \"$before\"\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task python3 /tmp/facility_stress.py\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nimport facility_cert as fc\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom scipy.sparse import eye, kron\nassert fc.__file__ == '/holdout_task/facility_cert.py'\n# The first cheap path must be undone to avoid the cost-100 arc.\nv, x = fc._transport([0, 1], [1, 1], [1, 1], [[0, 1], [1, 100]])\na",
+      "OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nimport numpy as np\nfrom facility_stress import p, check\nfrom facility_cert import solve_and_certify_facilities\nr = solve_and_certify_facilities(p)\nprint('public objective', r['upper_bound'], 'leaves, gap, residual', check(p, r), flush=True)\n# Adding the same unit cost to every arc adds exactly 24 times that cost\n# without changing any optimal flow or opening pattern.\nfor common in (0., 1e7, 1e9, 1e11):\n    owner = np.arange(24) // 2\n    c = np.full((12,24), common + 2.)\n    c[owner, np.arange(24)]",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\ns = s.replace('from math import inf', 'from math import inf, nextafter')\na = s.index('    fixed_units =')\nb = s.index('    if not feasible[full]:', a)\ns = s[:a] + '''    # Keep LP prices on a fine grid even when all input costs are integers.\n    finer = max(1, (1 << 52) // price_den)\n    price_den *= finer\n    prices = [v * finer for v in prices]\n    fixed_units = [v * quantity_den for v in prices[:m]]\n    cost_units = [prices[m+i*n:m+(i+1)*n] for i in range(m)]\n    offsets = [min(row[",
+      "set -e\np=/holdout_task/facility_cert.py\nbefore=$(sha256sum \"$p\")\nprintf 'Verifying %s\\n' \"$before\"\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport runpy, sys\nsys.path.insert(0, '/holdout_task')\nimport facility_cert\nassert facility_cert.__file__ == '/holdout_task/facility_cert.py'\nrunpy.run_path('/tmp/facility_stress.py', run_name='__main__')\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nsys.path[:0] = ['/holdout_task', '/tmp']\nfrom facility_cert import solve_and_certify_facilities\nfrom facility_stress import p, make, check\nfrom fractions import Fraction\nfrom math import fsum"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__facility_probe.py",
+      "primary_producer_container_path": "/tmp/facility_probe.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/facility_cert.py",
+        "filename": "facility_cert.py",
+        "bytes": 11774,
+        "sha256": "14c99250547958564512ddc219df2b2607ccfe381eb38869d51532349de1d052",
+        "content_addressed_ref": "content_addressed_blobs/14c99250547958564512ddc219df2b2607ccfe381eb38869d51532349de1d052.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/facility_cert.py"
+    ],
+    "exported_pure_functions": [
+      "make"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "68fb91f2f39cce1e08eae870033277b5673dfa4b3799a1d38d4b8d0ef1fcaab5",
+      "verified_turn": 18,
+      "verification_command": "set -e\np=/holdout_task/facility_cert.py\nbefore=$(sha256sum \"$p\")\nprintf 'Verifying %s\\n' \"$before\"\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport runpy, sys\nsys.path.insert(0, '/holdout_task')\nimport facility_cert\nassert facility_cert",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "68fb91f2f39cce1e08eae870033277b5673dfa4b3799a1d38d4b8d0ef1fcaab5",
+        "expected_candidate_sha256": "68fb91f2f39cce1e08eae870033277b5673dfa4b3799a1d38d4b8d0ef1fcaab5",
+        "computed_candidate_sha256": "68fb91f2f39cce1e08eae870033277b5673dfa4b3799a1d38d4b8d0ef1fcaab5",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/facility_cert.py",
+            "bytes": 11774
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_68fb91f2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "make",
+        "code": "def make(seed, mode):\n    rng = np.random.default_rng(seed)\n    d = rng.uniform(0.5, 3, 24)\n    f = rng.uniform(3, 40, 12)\n    s = rng.uniform(3, 15, 12)\n    c = rng.uniform(0, 15, (12, 24))\n    if mode == 'symmetric':\n        f[:] = 15\n        d[:] = 1\n        s[:] = 5\n        c[:] = 2\n    if mode == 'clusters':\n        c = rng.uniform(0, 0.1, (12, 24)) + 30 * (np.arange(12)[:, None] % 4 != np.arange(24)[None, :] % 4)\n        f[:] = 15\n        d[:] = 1\n        s[:] = 5\n    if mode == 'tight':\n        s *= sum(d) * 1.004 / sum(s)\n    if mode == 'loose':\n        s *= 5\n    if mode == 'fixed_dominant':\n        f *= 80\n        c *= 0.01\n    if mode == 'transport_dominant':\n        f *= 0.001\n        c *= 10\n    return dict(fixed_cost=f, capacity=s, demand=d, cost_matrix=c)"
+      }
+    ]
+  }
+}

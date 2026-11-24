@@ -1,0 +1,87 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_cf3c5d397fa2",
+    "source_hash": "cf3c5d397fa23aa06621cb4c62ae185d71e9406d6470712c769e59284139de94",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport ast, pathlib, pickle, sys, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py')\nsource=p.read_text(); ast.parse(source)\nsys.path.insert(0,'/holdout_task')\nfrom tomography_solver import invert_plume_and_clocks\nsurveys=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nerrs=[]; rmses=[]\nfor k,d in enumerate(surveys):\n t0=time.perf_counter(); out=invert_plume_and_clocks(d['survey']); elapsed=time.perf_counter()-t0\n xy=np.asarray(out['plume_xz_m']); clocks=np.asarray(out['rcv_clock_bias_s']); gt=d['gt']\n pe=float(np.linalg.norm(xy-np.asarray(",
+      "cd / && python3 - <<'PY'\nimport ast, importlib.util, pickle, pathlib, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py')\nast.parse(p.read_text())\nspec=importlib.util.spec_from_file_location('tomography_solver_clean',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nerrs=[]; rmses=[]; runtimes=[]\nfor i,d in enumerate(data):\n s=d['survey']; gt=d['gt']; t=time.perf_counter(); out=m.invert_plume_and_clocks(s); runtimes.append(time.perf_counter()-t)\n xy=np.asarray(out['plume_xz_m'],float);",
+      "python3 - <<'PY'\nimport pickle, numpy as np\np='/holdout_task/public_surveys.pkl'\ndata=pickle.load(open(p,'rb'))\nprint('surveys:',len(data))\nfor i,d in enumerate(data):\n s=d['survey']; gt=d['gt']\n print(i,'survey fields:',sorted(s),'dimensions:',np.asarray(s['T_obs_s']).shape,'ground-truth fields:',sorted(gt))\n print('  batch/relay/clock metadata:',{k:v for k,v in s.items() if any(t in k.lower() for t in ('batch','relay','mode','clock'))})\nPY\nsed -n '1,240p' /holdout_task/tomography_solver.py",
+      "python3 - <<'PY'\nimport pickle, numpy as np, inspect, sys\nD=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nfor i,d in enumerate(D):\n s=d['survey']; print(i,'radius=',s.get('R_plume_m'),'shape=',np.asarray(s['T_obs_s']).shape,'span=',s['W_m'],s['H_m'])\nPY",
+      "python3 - <<'PY'\nimport importlib.util, pickle, numpy as np, time\np='/holdout_task/tomography_solver.py'\nspec=importlib.util.spec_from_file_location('solver_audit',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nerrs=[]; rmses=[]; times=[]\nfor i,d in enumerate(data):\n s=d['survey']; gt=d['gt']; t=time.perf_counter(); out=m.invert_plume_and_clocks(s); times.append(time.perf_counter()-t)\n xy=np.asarray(out['plume_xz_m']); c=np.asarray(out['rcv_clock_bias_s']); pe=np.linalg.norm(xy-np.asarray(gt['plume_xz_m'])",
+      "cd / && python3 - <<'PY'\nimport importlib.util,pickle,numpy as np,time\np='/holdout_task/tomography_solver.py'; spec=importlib.util.spec_from_file_location('final_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nerrs=[]; clock=[]; runtimes=[]; rng=np.random.default_rng(73)\nfor k,d in enumerate(data):\n s=d['survey']; gt=d['gt']; t0=time.perf_counter(); out=m.invert_plume_and_clocks(s); runtimes.append(time.perf_counter()-t0)\n xy=np.array(out['plume_xz_m']); c=np.array(out['rcv_clock_bias_s']); pe=np.li",
+      "cd / && python3 - <<'PY'\nimport importlib.util,pickle,numpy as np\np='/holdout_task/tomography_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb')); rng=np.random.default_rng(73)\nfor k,d in enumerate(data):\n s=d['survey']; a=m.invert_plume_and_clocks(s); xy=np.array(a['plume_xz_m']); c=np.array(a['rcv_clock_bias_s'])\n sp=rng.permutation(len(s['z_src_m'])); rp=rng.permutation(len(s['z_rcv_m']))\n ss=dict(s,z_src_m=np.asarray(s['z_src_m'])[sp],z_rcv_m=",
+      "cd / && python3 - <<'PY'\nimport importlib.util,pickle,numpy as np,time\np='/holdout_task/tomography_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb')); rng=np.random.default_rng(73)\nfor k,d in enumerate(data):\n s=d['survey']; gt=d['gt']; t=time.perf_counter(); a=m.invert_plume_and_clocks(s); elapsed=time.perf_counter()-t\n xy=np.array(a['plume_xz_m']); c=np.array(a['rcv_clock_bias_s']); pe=np.linalg.norm(xy-gt['plume_xz_m']); ce=np.sqrt(np.mean((c-",
+      "cd / && python3 - <<'PY'\nimport ast, importlib.util, pathlib, pickle, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py')\nast.parse(p.read_text())\nspec=importlib.util.spec_from_file_location('tomography_solver_clean',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\npe=[]; ce=[]; runtimes=[]\nfor i,item in enumerate(data):\n s=item['survey']; gt=item['gt']; t=time.perf_counter(); out=m.invert_plume_and_clocks(s); runtimes.append(time.perf_counter()-t)\n xy=np.asarray(out['plume_xz_m']); c",
+      "cd / && python3 - <<'PY'\nimport importlib.util,pickle,numpy as np,time\np='/holdout_task/tomography_solver.py'\nspec=importlib.util.spec_from_file_location('clean_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\n# Leave-one-source-out and leave-one-receiver-out jackknives: detect whether a single ray row/column drives the plume or clock solution.\nfor k,item in enumerate(data):\n s=item['survey']; base=m.invert_plume_and_clocks(s); xy=np.asarray(base['plume_xz_m']); c=np.asarray(base['rcv_clock_bias_s'])",
+      "cd / && python3 - <<'PY'\nimport importlib.util,pickle,numpy as np\np='/holdout_task/tomography_solver.py'; sp=importlib.util.spec_from_file_location('m',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\nd=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))[0]; s=d['survey']; gt=d['gt']; base=m.invert_plume_and_clocks(s); print('base',base['plume_xz_m'])\nfor q in range(len(s['z_src_m'])):\n ss=dict(s,z_src_m=np.delete(s['z_src_m'],q),T_obs_s=np.delete(s['T_obs_s'],q,axis=0)); o=m.invert_plume_and_clocks(ss); print('drop_src',q,'z',s['z_src_m'][q],'xy',np.round(o['plume_xz",
+      "python3 - <<'PY'\nimport ast, importlib.util, inspect, pickle, numpy as np\np='/holdout_task/tomography_solver.py'; spec=importlib.util.spec_from_file_location('m',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nprint(inspect.getsource(m.invert_plume_and_clocks))\nd=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))[0]; s=d['survey']; gt=d['gt']\nss=dict(s,z_src_m=np.delete(s['z_src_m'],0),T_obs_s=np.delete(s['T_obs_s'],0,axis=0))\nout=m.invert_plume_and_clocks(ss)\nprint('without_top_source',out['plume_xz_m'],'error',np.linalg.norm(np.asarray(out['plume_xz_m'])-gt['p",
+      "python3 - <<'PY'\np='/holdout_task/tomography_solver.py'\ns=open(p).read()\ns=s.replace(\"    # Broad physical bounds; robust loss suppresses cycle-skipping picks.\\n    p0 = np.r_[0.0005, 0.03, 0.00012, W/2, H*0.6, np.zeros(nr-1)]\\n    lo = np.r_[0.0001, -0.2, 0.0, 0.0, 0.0, np.full(nr-1, -0.004)]\\n    hi = np.r_[0.002, 0.2, 0.002, W, H, np.full(nr-1, 0.004)]\\n    # Start at a smooth center; robust soft-L1 has a scale below the gross outlier amplitude.\\n    fit = least_squares(residual, p0, bounds=(lo, hi), loss='soft_l1', f_scale=0.00012,\\n                        max_nfev=180, x_scale='jac')\\n\", ",
+      "cd / && python3 - <<'PY'\nimport ast, importlib.util, pathlib, pickle, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py')\nast.parse(p.read_text())\nspec=importlib.util.spec_from_file_location('final_clean_solver',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nplume=[]; clocks=[]; runtimes=[]\nfor i,item in enumerate(data):\n s=item['survey']; gt=item['gt']; t=time.perf_counter(); out=m.invert_plume_and_clocks(s); runtimes.append(time.perf_counter()-t)\n xy=np.asarray(out['plume_xz_m'],f",
+      "cd / && python3 - <<'PY'\nimport ast, importlib.util, pathlib, pickle, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py'); ast.parse(p.read_text())\nspec=importlib.util.spec_from_file_location('final_audit_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nworst_p=worst_c=worst_t=0.\nfor i,item in enumerate(data):\n s=item['survey']; gt=item['gt']; t=time.perf_counter(); o=m.invert_plume_and_clocks(s); dt=time.perf_counter()-t\n xy=np.asarray(o['plume_xz_m']); c=np.asarray(o['rcv_c",
+      "cd / && python3 - <<'PY'\nimport ast, importlib.util, pathlib, pickle, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py')\nast.parse(p.read_text())\nspec=importlib.util.spec_from_file_location('final_solver',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ndata=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nplume=[]; clocks=[]; runtimes=[]\nfor i,item in enumerate(data):\n s=item['survey']; gt=item['gt']; t=time.perf_counter(); out=m.invert_plume_and_clocks(s); dt=time.perf_counter()-t\n xy=np.asarray(out['plume_xz_m'],float); c=np.asarray("
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 2152,
+        "sha256": "73742a7fc78d55c093df9728690d195cee52b85f70567935e8a66faced1b7d09",
+        "content_addressed_ref": "content_addressed_blobs/73742a7fc78d55c093df9728690d195cee52b85f70567935e8a66faced1b7d09.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "cf3c5d397fa23aa06621cb4c62ae185d71e9406d6470712c769e59284139de94",
+      "verified_turn": 21,
+      "verification_command": "cd / && python3 - <<'PY'\nimport ast, importlib.util, pathlib, pickle, time\nimport numpy as np\np=pathlib.Path('/holdout_task/tomography_solver.py')\nast.parse(p.read_text())\nspec=importlib.util.spec_from_file_location('final_solver',p)\nm=impo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "cf3c5d397fa23aa06621cb4c62ae185d71e9406d6470712c769e59284139de94",
+        "expected_candidate_sha256": "cf3c5d397fa23aa06621cb4c62ae185d71e9406d6470712c769e59284139de94",
+        "computed_candidate_sha256": "cf3c5d397fa23aa06621cb4c62ae185d71e9406d6470712c769e59284139de94",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tomography_solver.py",
+            "bytes": 2152
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_cf3c5d39"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

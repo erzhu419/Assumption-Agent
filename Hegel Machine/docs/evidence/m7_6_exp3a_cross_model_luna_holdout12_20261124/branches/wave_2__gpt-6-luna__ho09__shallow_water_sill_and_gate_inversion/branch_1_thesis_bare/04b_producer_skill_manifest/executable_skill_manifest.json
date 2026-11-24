@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_shallow_water_sill_inversion_3100c2d6a246",
+    "source_hash": "3100c2d6a2469084cd8b4999d63a288a50119969b3927b2f829b790e18488d74",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho09__shallow_water_sill_and_gate_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport pickle\np='/holdout_task/public_canal.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x))\nprint(x.keys() if isinstance(x,dict) else repr(x)[:2000])\nPY",
+      "python3 - <<'PY'\nimport pickle\np='/holdout_task/public_canal.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x))\nprint(x.keys() if isinstance(x,dict) else repr(x)[:2000])\nPY",
+      "python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_canal.pkl','rb'))[0]\nprint('top keys:',x.keys())\nprint('bundle fields:', {k:(type(v).__name__,getattr(v,'shape',None)) for k,v in x['bundle'].items()})\nfor k,v in x.items():\n if k!='bundle': print('\\n',k, type(v).__name__, str(v)[:4000])\nPY",
+      "python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_canal.pkl','rb'))[0]\nprint(x['bundle']['spec_docstring'])\nPY",
+      "cat > /holdout_task/canal_inversion.py <<'PY'\n\"\"\"Invert sparse downstream free-surface observations for the canal initial mode and sill.\"\"\"\nimport numpy as np\n\n\ndef _simulate(high, sill, T=191):\n    N, dx, dt, g = 80, 10.0, 0.5, 9.81\n    x = (np.arange(N) + 0.5) * dx\n    b = sill * np.exp(-0.5 * ((x - 400.0) / 45.0) ** 2)\n    eta0 = 2.65 if high else 1.45\n    eta = np.full(N, 2.0)\n    eta[:8] = eta0\n    h = np.maximum(eta - b, 1e-8)\n    q = np.zeros(N)\n    out = np.empty((T, N), dtype=float)\n    out[0] = h + b\n    for n in range(1, T):\n        # Reflective ghost states, preserving bed at bound"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/canal_inversion.py",
+        "filename": "canal_inversion.py",
+        "bytes": 3395,
+        "sha256": "47d2bbe7228db4ccba72db486bc1f3328c7885fe16302ee1d1c49298cb2896a2",
+        "content_addressed_ref": "content_addressed_blobs/47d2bbe7228db4ccba72db486bc1f3328c7885fe16302ee1d1c49298cb2896a2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/canal_inversion.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3100c2d6a2469084cd8b4999d63a288a50119969b3927b2f829b790e18488d74",
+      "verified_turn": 5,
+      "verification_command": "cat > /holdout_task/canal_inversion.py <<'PY'\n\"\"\"Invert sparse downstream free-surface observations for the canal initial mode and sill.\"\"\"\nimport numpy as np\n\n\ndef _simulate(high, sill, T=191):\n    N, dx, dt, g = 80, 10.0, 0.5, 9.81\n    x ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

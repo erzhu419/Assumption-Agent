@@ -1,0 +1,94 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_fb518ac4fd09",
+    "source_hash": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho10__haldane_bioreactor_runaway_control",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/check_bioreactor.py",
+        "archived_relpath": "producers/tmp__check_bioreactor.py",
+        "bytes": 848,
+        "sha256": "28b043ce3da9898689e09c4d7cdd537235a0958cc622aac9a91287f2cb3d1ea6"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "set -e\ncd /holdout_task\ncat > bioreactor_ctrl.py <<'PY'\n\"\"\"Delayed feed and temperature feedback for the supplied fed-batch model.\"\"\"\n\nfrom math import exp\n\n\ndef _clip(value, low, high):\n    return min(high, max(low, value))\n\n\ndef compute_control_step(obs: dict, state_memory: dict) -> tuple[dict, dict]:\n    dt = float(obs['dt_h'])\n    volume = float(obs['V_L'])\n    biomass = float(obs['X_meas_g_L'])\n    substrate = float(obs['S_meas_g_L'])\n    temp = float(obs['T_meas_C'])\n    old_feed = state_memory.get('feed', 0.2)\n    old_cool = state_memory.get('cool', 0.3)\n    integral = state_memory.get(",
+      "set -eu\ncd /holdout_task\ncmp bioreactor_ctrl.py /tmp/.hegel_candidate_archive/v01_160d1129\nverify=$(mktemp -d)\ntrap 'rm -rf \"$verify\"' EXIT\ncp bioreactor_ctrl.py plant_sim.py \"$verify/\"\ncd \"$verify\"\nenv -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom random import Random\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nbounds = {'feed_rate_L_per_h': 2.5, 'coolant_flow_frac': 1.0}\ndef checked_control(obs, memory):\n    u, next_memory = compute_control_step(obs, memory)\n    ",
+      "set -eu\ncd /holdout_task\nprintf '%s  %s\\n' 160d112916c36c7c4fb8fdb3c3220f0fe0404e04c53c285ce80d42faa61162c0 bioreactor_ctrl.py | sha256sum -c -\nverify=$(mktemp -d)\ntrap 'rm -rf \"$verify\"' EXIT\ncp bioreactor_ctrl.py plant_sim.py \"$verify/\"\ncd \"$verify\"\nenv -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom random import Random\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nbounds = {'feed_rate_L_per_h': 2.5, 'coolant_flow_frac': 1.0}\ndef checked_control(obs, memory):\n    u,",
+      "set -eu\nsrc=/holdout_task\nverify=$(mktemp -d)\ntrap 'rm -rf \"$verify\"' EXIT\ncp \"$src/bioreactor_ctrl.py\" \"$src/plant_sim.py\" \"$verify/\"\ncd \"$verify\"\nsha256sum bioreactor_ctrl.py\nenv -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom random import Random\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nbounds = {'feed_rate_L_per_h': 2.5, 'coolant_flow_frac': 1.0}\ndef checked_control(obs, memory):\n    u, next_memory = compute_control_step(obs, memory)\n    assert isinstance(next",
+      "cd /holdout_task && env -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nimport ast\nimport inspect\nfrom pathlib import Path\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nsource = inspect.getsource(run_closed_loop)\nfunction = ast.parse(source).body[0]\nouter = next(node for node in function.body if isinstance(node, ast.For))\ninner = next(node for node in outer.body if isinstance(node, ast.For))\nprint('Loaded simulator:', inspect.getsourcefile(run_closed_loop))\nprint('Substep loop body:', [(ast.unparse(node).splitlines()[0]) for nod",
+      "set -eu\nwork=$(mktemp -d /tmp/bioreactor-margin.XXXXXX)\ntrap 'rm -rf \"$work\"' EXIT\ncp /holdout_task/{bioreactor_ctrl,plant_sim}.py \"$work/\"\ncd \"$work\"\nenv -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nfrom itertools import product\nfrom plant_sim import run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\n# The pulse amplitude is unspecified. Measure thermal headroom beyond the 4.4 sweep.\nfor pulse in (6.6, 8.8):\n    rows = []\n    for mu, ks, ki, seed in product((0.357, 0.420, 0.483), (0.8, 0.9), (12., 15., 18.), (10, 263, 987)):\n        scenario = dict(mu0=mu, Ks=ks, Ki=ki,",
+      "set -eu\nwork=$(mktemp -d /tmp/bioreactor-compare.XXXXXX)\ntrap 'rm -rf \"$work\"' EXIT\ncp /holdout_task/{bioreactor_ctrl,plant_sim}.py \"$work/\"\ncd \"$work\"\nenv -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nfrom itertools import product\nfrom pathlib import Path\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nsource = Path('bioreactor_ctrl.py').read_text()\nassert 'target = 31.5' in source and '(8.7 - next_volume)' in source\npolicies = {'current': compute_control_step}\nfor label, target, cap in [('cooler', 30.5, 8.7), ('lower_inventory",
+      "set -eu\nsrc=/holdout_task\nwork=$(mktemp -d /tmp/bioreactor-final.XXXXXX)\ntrap 'rm -rf \"$work\"' EXIT\ncp \"$src/plant_sim.py\" \"$work/\"\ncd \"$work\"\npython3 -B - \"$src/bioreactor_ctrl.py\" <<'PY'\nfrom pathlib import Path\nimport sys\nsource = Path(sys.argv[1]).read_text()\nassert source.count('target = 31.5') == 1\nPath('bioreactor_ctrl.py').write_text(source.replace('target = 31.5', 'target = 30.5'))\nPY\nenv -u PYTHONPATH PYTHONNOUSERSITE=1 python3 -B - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom random import Random\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bi"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__check_bioreactor.py",
+      "primary_producer_container_path": "/tmp/check_bioreactor.py",
+      "selected_channels": [
+        "fam_robust_control_and_safety"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/bioreactor_ctrl.py",
+        "filename": "bioreactor_ctrl.py",
+        "bytes": 1930,
+        "sha256": "d1479aacf13ce821742f9ef09ea16335f54122b6bd93b36bc9b559f424614d67",
+        "content_addressed_ref": "content_addressed_blobs/d1479aacf13ce821742f9ef09ea16335f54122b6bd93b36bc9b559f424614d67.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/bioreactor_ctrl.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+      "verified_turn": 12,
+      "verification_command": "set -eu\nsrc=/holdout_task\nwork=$(mktemp -d /tmp/bioreactor-final.XXXXXX)\ntrap 'rm -rf \"$work\"' EXIT\ncp \"$src/plant_sim.py\" \"$work/\"\ncd \"$work\"\npython3 -B - \"$src/bioreactor_ctrl.py\" <<'PY'\nfrom pathlib import Path\nimport sys\nsource = Path(s",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+        "expected_candidate_sha256": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+        "computed_candidate_sha256": "fb518ac4fd099287a37879acf8d7699f4ae8e1629e7476f12a6eab876a1b1c36",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/bioreactor_ctrl.py",
+            "bytes": 1930
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_fb518ac4"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

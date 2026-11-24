@@ -1,0 +1,87 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_shallow_water_sill_inversion_15bffa8ceedc",
+    "source_hash": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho09__shallow_water_sill_and_gate_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid import solve_darcy_pressure\nprint(inspect.getsource(solve_darcy_pressure)[:3000])\nPY\n# Final production-relevant verification: each real bundle, exact API keys/shapes, values finite, and required accuracy.\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=0.0; max_sill=0.0\nfor i,d in enumerate(cases):\n b,g=d['bundle'],d['gt']; r=invert_canal_regime(b)\n e=float",
+      "ls -l /holdout_task/canal_inversion.py && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom canal_inversion import invert_canal_regime\ncases = pickle.load(open('/holdout_task/public_canal.pkl', 'rb'))\nworst_rmse = max_sill_error = 0.0\nfor i, item in enumerate(cases):\n    b, gt = item['bundle'], item['gt']\n    result = invert_canal_regime(b)\n    rmse = float(np.sqrt(np.mean((result['eta_full'] - gt['eta_full'])**2)))\n    sill_error = abs(result['sill_height_m'] - gt['sill_height_m'])\n    assert result['sluice_high_mode'] == gt['sluice_high_mode']\n    assert sill_error <=",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n rmse=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)))\n se=abs(r['sill_height_m']-g['sill_height_m'])\n print(i, 'mode=',r['sluice_high_mode'],'sill_error=',se,'eta_rmse=',rmse)\n assert r['sluice_high_mode']==g['sluice_high_mode'] and se<=.035 and rmse<=.012\n assert r['eta_ful",
+      "set -e\n# Archive the current candidate, then run a focused real-bundle audit and clean-process API check.\nmkdir -p /tmp/.hegel_candidate_archive\nsha=$(sha256sum /holdout_task/canal_inversion.py | cut -c1-8)\ncp /holdout_task/canal_inversion.py \"/tmp/.hegel_candidate_archive/v02_${sha}\"\nPYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, numpy as np\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=0.; max_sill=0.\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n rmse=float(np.sqrt(np.",
+      "set -e\n# Detect stale/missing artifact or regression against the two real labeled bundles; if either fails, edit the inverse rather than submit.\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=0.0; max_sill=0.0\nfor i,item in enumerate(cases):\n    b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n    e=float(np.sqrt(np.mean((r['e",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases = pickle.load(open('/holdout_task/public_canal.pkl', 'rb'))\nworst_rmse = max_sill_error = 0.0\nfor i, item in enumerate(cases):\n    b, gt = item['bundle'], item['gt']\n    r = invert_canal_regime(b)\n    rmse = float(np.sqrt(np.mean((r['eta_full'] - gt['eta_full'])**2)))\n    sill_error = abs(float(r['sill_height_m']) - float(gt['sill_height_m'])",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst_rmse=max_sill_error=0.0\nfor i,item in enumerate(cases):\n    b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n    rmse=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)))\n    sill_error=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n    assert r['sluice_high_",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=0.; max_sill=0.\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n e=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2))); se=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n assert r['sluice_high_mode']==g['sluice_high_mode'] and ",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases = pickle.load(open('/holdout_task/public_canal.pkl', 'rb'))\nworst = max_sill = 0.0\nfor i, item in enumerate(cases):\n    b, gt = item['bundle'], item['gt']\n    r = invert_canal_regime(b)\n    rmse = float(np.sqrt(np.mean((r['eta_full'] - gt['eta_full'])**2)))\n    se = abs(float(r['sill_height_m']) - float(gt['sill_height_m']))\n    assert r['slu",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst_rmse=max_sill_error=0.0\nfor i,item in enumerate(cases):\n    b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n    rmse=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)))\n    se=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n    assert r['sluice_high_mode']==g['sluice_high_mode'] and se<=.035 and rmse",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst_rmse=max_sill_error=0.0\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n rmse=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)))\n se=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n assert r['sluice_high_mode']==g['sluice_high_",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=0.; max_sill=0.\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n e=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2))); se=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n assert r['sluice_high_mode']==g['sluice_high_mode'] and ",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases = pickle.load(open('/holdout_task/public_canal.pkl', 'rb'))\nworst_rmse = max_sill_error = 0.0\nfor i, item in enumerate(cases):\n    b, gt = item['bundle'], item['gt']\n    r = invert_canal_regime(b)\n    rmse = float(np.sqrt(np.mean((r['eta_full'] - gt['eta_full'])**2)))\n    sill_error = abs(float(r['sill_height_m']) - float(gt['sill_height_m'])",
+      "set -e\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=max_sill=0.0\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n e=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)))\n se=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n assert r['sluice_high_mode']==g['sluice_high_mode'] and se<=.035 and e<=.012\n assert r['eta_full']",
+      "set -e\nls -l /holdout_task/canal_inversion.py\nsha256sum /holdout_task/canal_inversion.py\nPYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst_rmse=max_sill_error=0.0\nfor i,item in enumerate(cases):\n b,g=item['bundle'],item['gt']; r=invert_canal_regime(b)\n rmse=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)))\n se=abs(float(r['sill_height_m'])-float(g['sill_height_m']))\n assert r['sluice_high_mode']==g['sluice_high_",
+      "set -e; sha256sum /holdout_task/canal_inversion.py; PYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\nworst=maxerr=0.\nfor i,d in enumerate(cases):\n b,g=d['bundle'],d['gt'];r=invert_canal_regime(b)\n e=float(np.sqrt(np.mean((r['eta_full']-g['eta_full'])**2)));s=abs(r['sill_height_m']-g['sill_height_m'])\n assert r['sluice_high_mode']==g['sluice_high_mode'] and s<=.035 and e<=.012\n assert r['eta_full'].shape==(b['T_steps'],b['N']"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/canal_inversion.py",
+        "filename": "canal_inversion.py",
+        "bytes": 2615,
+        "sha256": "eb3580cb7c26c8315c1bc7a741af70494b7f46e528a2ef85783efd4aaa46eec8",
+        "content_addressed_ref": "content_addressed_blobs/eb3580cb7c26c8315c1bc7a741af70494b7f46e528a2ef85783efd4aaa46eec8.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/canal_inversion.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+      "verified_turn": 27,
+      "verification_command": "set -e; sha256sum /holdout_task/canal_inversion.py; PYTHONPATH=/holdout_task python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom canal_inversion import invert_canal_regime\ncases=pickle.load(open('/holdo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+        "expected_candidate_sha256": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+        "computed_candidate_sha256": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/canal_inversion.py",
+            "bytes": 2615
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_15bffa8c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

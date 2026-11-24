@@ -1,0 +1,159 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_cb5202c98693",
+    "source_hash": "cb5202c986933c2e79565457701dbe57b79920319bda0f5ec934dc9027aad0f2",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/compare.py",
+        "archived_relpath": "producers/tmp__compare.py",
+        "bytes": 1532,
+        "sha256": "6c6c1d037402493f60b1b704f5e3d0d9cb00d3244489d3237e40a4a0aaa5dd9c"
+      },
+      {
+        "container_path": "/tmp/diag.py",
+        "archived_relpath": "producers/tmp__diag.py",
+        "bytes": 629,
+        "sha256": "e3c006e9ff62d7823138d3bf95a2296c7a8ccf89e76f58531495d9ea47bbf87c"
+      },
+      {
+        "container_path": "/tmp/fit_test.py",
+        "archived_relpath": "producers/tmp__fit_test.py",
+        "bytes": 819,
+        "sha256": "0799806a9f12ca5fd211e39567adcb12142fec6742d0974d06eb7891bdbd8610"
+      },
+      {
+        "container_path": "/tmp/joint.py",
+        "archived_relpath": "producers/tmp__joint.py",
+        "bytes": 1984,
+        "sha256": "df43d092696998ef39adccb8de4516e37af1de8094022220aa3f978cd388f56d"
+      },
+      {
+        "container_path": "/tmp/next.py",
+        "archived_relpath": "producers/tmp__next.py",
+        "bytes": 1656,
+        "sha256": "4efdcd0092ef77aa16f3bfe261c163e424f99811dca61a4d6cbce04d286c7186"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1509,
+        "sha256": "6802aff2bc9e56cbe416627a997a0ba15f81ffc8a4e59aebe87fd097ae1da269"
+      },
+      {
+        "container_path": "/tmp/sweep.py",
+        "archived_relpath": "producers/tmp__sweep.py",
+        "bytes": 1589,
+        "sha256": "927c79c4ca35dbb33d6cb39fd98ee09faafaddeeaabef23d544bfbbb65d7cd75"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task && python3 - <<'PY'\nimport pickle\np='/holdout_task/public_screen.pkl'\nwith open(p,'rb') as f: x=pickle.load(f)\nprint(type(x), (list(x)[:10] if isinstance(x,dict) else len(x)))\nprint(repr(x)[:8000])\nPY\nls -la /tmp/hegel_wormhole_skills 2>/dev/null || true",
+      "python3 - <<'PY'\nimport pickle, collections, numpy as np\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); print('gt',x['gt']);\nfor p in x['plates']:\n w=p['wells']; print(p['plate_id'],len(w),collections.Counter(z['well_type'] for z in w), collections.Counter(z['compound_id'] for z in w if z['compound_id']))\n for typ in ['DMSO','POS_KILL']:\n  a=[z['fluorescence'] for z in w if z['well_type']==typ]; print(typ,'n',len(a),'median',np.median(a),'range',np.percentile(a,[5,95]))\nPY\npython3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_control_panel_deconfounding import ali",
+      "mkdir -p /holdout_task; cat > /tmp/probe.py <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\n# Fit a smooth quadratic surface to DMSO controls, subtract plate background from robust POS median.\ndef surf(r,c):\n r=np.asarray(r)/15*2-1; c=np.asarray(c)/23*2-1\n return np.column_stack([np.ones(len(r)),r,c,r*r,c*c,r*c])\nallv={k:[] for k in gt}; allc={k:[] for k in gt}\nfor p in x['plates']:\n w=p['wells']; pos=[z for z in w if z['well_type']=='POS_KILL']; bg=np.median([z['fluorescence'] for z in pos])\n dm",
+      "cat > /tmp/diag.py <<'PY'\nexec(open('/tmp/probe.py').read().split('for k in gt:')[0])\nfrom scipy.optimize import least_squares\n# diagnostics per compound, direct robust non-linear fits, compare dropping residual outliers and Huber losses\nfor k in gt:\n y=np.array(allv[k]); c=np.array(allc[k]); ok=np.isfinite(y)&(y>-0.3)&(y<1.5)\n for lo,hi in [(-.3,1.5),(0,1),(0.03,.97)]:\n  use=ok&(y>lo)&(y<hi)\n  def f(q): return np.clip(y[use],0,1)-1/(1+10**(q[1]*(c[use]-q[0])))\n  r=least_squares(f,[-.3,1.1],bounds=([-4,.2],[3,3]),loss='soft_l1',f_scale=.04)\n  print(k,(lo,hi),len(c[use]),np.round(r.x,3),np.roun",
+      "cat > /tmp/compare.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\ndef basis(r,c,deg):\n r=np.asarray(r)/15*2-1;c=np.asarray(c)/23*2-1\n cols=[np.ones(len(r)),r,c,r*r,c*c,r*c]\n if deg>=3: cols += [r**3,c**3,r*r*c,r*c*c]\n if deg>=4: cols += [r**4,c**4,r**3*c,r*c**3,r*r*c*c]\n return np.column_stack(cols)\nfor deg in (2,3,4):\n allv={k:[] for k in gt};allc={k:[] for k in gt}\n for p in x['plates']:\n  w=p['wells']; pos=[z for z in w if z['well_type']=='POS_KILL']; bg=np.median([z['fluorescence'] for z i",
+      "cat > /tmp/next.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\ndef b(r,c):\n r=np.asarray(r)/15*2-1;c=np.asarray(c)/23*2-1\n return np.column_stack([np.ones(len(r)),r,c,r*r,c*c,r*c,r**4,c**4,r**3*c,r*c**3,r*r*c*c])\n# fit Hill to control-normalized responses; compare background estimation and robust loss / weight by plate\nfor bgmode in ['median','min','fit']:\n V={k:[] for k in gt}; C={k:[] for k in gt}; P={k:[] for k in gt}\n for pi,p in enumerate(x['plates']):\n  w=p['wells']; pos=[z for z in w if",
+      "cat > /tmp/sweep.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\ndef b(r,c,terms):\n r=np.asarray(r)/15*2-1;c=np.asarray(c)/23*2-1\n cols=[np.ones(len(r)),r,c,r*r,c*c,r*c]\n if terms>=7: cols += [r**4,c**4,r**3*c,r*c**3,r*r*c*c]\n return np.column_stack(cols)\nfor deg in [2,4]:\n for loss in ['linear','soft_l1','huber','cauchy']:\n  for scale in [.04,.08,.15]:\n   V={k:[] for k in gt};C={k:[] for k in gt}\n   for p in x['plates']:\n    w=p['wells'];pos=[z for z in w if z['well_type']=='POS_KILL'];dm=[z f",
+      "cat > /tmp/joint.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\ndef b(r,c):\n r=np.asarray(r)/15*2-1;c=np.asarray(c)/23*2-1\n return np.column_stack([np.ones(len(r)),r,c,r*r,c*c,r*c,r**4,c**4,r**3*c,r*c**3,r*r*c*c])\n# DMSO-derived smooth gain map normalized to mean 1; fit baseline/surface using robust control residuals.\nplates=[]\nfor p in x['plates']:\n w=p['wells']; dm=[z for z in w if z['well_type']=='DMSO']; pos=[z for z in w if z['well_type']=='POS_KILL']\n bg=np.median([z['fluorescence'] for ",
+      "cat > /tmp/fit_test.py <<'PY'\nexec(open('/tmp/joint.py').read().split(\"for bgshift\")[0])\n# evaluate joint fit per compound, report errors\nerrs=[]\nfor k in gt:\n cs=[];ys=[];pis=[];gs=[]\n for pi,(w,bg,co) in enumerate(plates):\n  for z in w:\n   if z['well_type']=='COMPOUND' and z['compound_id']==k:\n    cs.append(z['log10_conc_uM']);ys.append(z['fluorescence']-bg);pis.append(pi);gs.append((b([z['row']],[z['col']])@co)[0])\n c=np.array(cs);y=np.array(ys);pi=np.array(pis);g=np.array(gs)\n def pred(q): return g*q[2:][pi]/(1+10**(q[1]*(c-q[0])))\n q0=np.r_[[-.3,1.05],[2200,2500,2800,3100]]\n fit=least_squ",
+      "set -e\npython3 - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom assay_ic50 import estimate_compound_hill_parameters\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nfor name,plates in [('full',x['plates']),('first3',x['plates'][:3]),('last3',x['plates'][1:])]:\n p=estimate_compound_hill_parameters(plates)\n print(name,'n=',len(p),'finite=',all(np.isfinite(v[k]) for v in p.values() for k in ('log10_ic50_uM','hill_slope')))\n if name=='full':\n  e=np.array([[p[k]['log10_ic50_uM']-x['gt'][k]['log10_ic50_uM'],p[k]['hill_slope']-x['gt'][k]['hill_slope']] for k i",
+      "set -e\ncd /tmp\npython3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\npath='/holdout_task/assay_ic50.py'\nspec=importlib.util.spec_from_file_location('assay_ic50_clean',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\npred=mod.estimate_compound_hill_parameters(x['plates'])\nassert set(pred)==set(x['gt'])\nassert all(np.isfinite(v['log10_ic50_uM']) and np.isfinite(v['hill_slope']) for v in pred.values())\ne=np.array([[pred[k]['log10_ic50_uM']-x['gt'][k]['log10_ic50_uM'],pred[k]['hill_slope']-x['gt'][k][",
+      "set -e\npython3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_control_panel_deconfounding import align_control_panel, fit_predict_neutral\nprint('align scope: control-panel alignment assumes usable control features and positive shared gain')\nprint(inspect.getsource(align_control_panel))\nprint(inspect.getsource(fit_predict_neutral))\nPY\ncd /tmp\npython3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\npath='/holdout_task/assay_ic50.py'\nspec=importlib.util.spec_from_file_location('assay_ic50_final',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nx=p",
+      "set -e\npython3 - <<'PY'\nimport importlib.util,pickle,numpy as np\np='/holdout_task/assay_ic50.py'; sp=importlib.util.spec_from_file_location('assay',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\nfor label, plates in [('all',x['plates'])]+[(f'omit_{i}',x['plates'][:i]+x['plates'][i+1:]) for i in range(len(x['plates']))]:\n pred=m.estimate_compound_hill_parameters(plates)\n e=np.array([[pred[k]['log10_ic50_uM']-gt[k]['log10_ic50_uM'],pred[k]['hill_slope']-gt[k]['hill_slope']] for k in sorted(gt)])\n print(l",
+      "set -e\ncd /tmp\npython3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\npath='/holdout_task/assay_ic50.py'\nspec=importlib.util.spec_from_file_location('assay_final',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb')); gt=x['gt']\nfor label,plates in [('all',x['plates'])]+[(f'omit_{i}',x['plates'][:i]+x['plates'][i+1:]) for i in range(len(x['plates']))]:\n pred=mod.estimate_compound_hill_parameters(plates)\n assert set(pred)==set(gt)\n e=np.array([[pred[k]['log10_ic50_uM']-gt[k]['log10_ic50_uM'],pred[k]['hill_",
+      "set -e\npython3 - <<'PY'\nimport importlib.util, pickle, numpy as np\npath='/holdout_task/assay_ic50.py'\nspec=importlib.util.spec_from_file_location('assay_audit', path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nplates=x['plates']; gt=x['gt']\n# Applicable stress slices: leave each plate out and evaluate against supplied truth.\nfor label, subset in [('all', plates)] + [(f'omit_{i}', plates[:i]+plates[i+1:]) for i in range(len(plates))]:\n    pred=mod.estimate_compound_hill_parameters(subset)\n    assert set(pre"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__joint.py",
+      "primary_producer_container_path": "/tmp/joint.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 3833,
+        "sha256": "51807179f64c92d64db46f0eb19320191c1a1ecbbb72ab09c7e698c35f6f9a5a",
+        "content_addressed_ref": "content_addressed_blobs/51807179f64c92d64db46f0eb19320191c1a1ecbbb72ab09c7e698c35f6f9a5a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "basis",
+      "b",
+      "surf",
+      "hill"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "cb5202c986933c2e79565457701dbe57b79920319bda0f5ec934dc9027aad0f2",
+      "verified_turn": 17,
+      "verification_command": "set -e\npython3 - <<'PY'\nimport importlib.util, pickle, numpy as np\npath='/holdout_task/assay_ic50.py'\nspec=importlib.util.spec_from_file_location('assay_audit', path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nx",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "cb5202c986933c2e79565457701dbe57b79920319bda0f5ec934dc9027aad0f2",
+        "expected_candidate_sha256": "cb5202c986933c2e79565457701dbe57b79920319bda0f5ec934dc9027aad0f2",
+        "computed_candidate_sha256": "cb5202c986933c2e79565457701dbe57b79920319bda0f5ec934dc9027aad0f2",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 3833
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_cb5202c9"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": [
+      {
+        "name": "basis",
+        "code": "def basis(r, c, deg):\n    r = np.asarray(r) / 15 * 2 - 1\n    c = np.asarray(c) / 23 * 2 - 1\n    cols = [np.ones(len(r)), r, c, r * r, c * c, r * c]\n    if deg >= 3:\n        cols += [r ** 3, c ** 3, r * r * c, r * c * c]\n    if deg >= 4:\n        cols += [r ** 4, c ** 4, r ** 3 * c, r * c ** 3, r * r * c * c]\n    return np.column_stack(cols)"
+      },
+      {
+        "name": "b",
+        "code": "def b(r, c):\n    r = np.asarray(r) / 15 * 2 - 1\n    c = np.asarray(c) / 23 * 2 - 1\n    return np.column_stack([np.ones(len(r)), r, c, r * r, c * c, r * c, r ** 4, c ** 4, r ** 3 * c, r * c ** 3, r * r * c * c])"
+      },
+      {
+        "name": "surf",
+        "code": "def surf(r, c):\n    r = np.asarray(r) / 15 * 2 - 1\n    c = np.asarray(c) / 23 * 2 - 1\n    return np.column_stack([np.ones(len(r)), r, c, r * r, c * c, r * c])"
+      },
+      {
+        "name": "hill",
+        "code": "def hill(q, c):\n    (ic, s) = q\n    return 1 / (1 + 10 ** (s * (c - ic)))"
+      }
+    ]
+  }
+}

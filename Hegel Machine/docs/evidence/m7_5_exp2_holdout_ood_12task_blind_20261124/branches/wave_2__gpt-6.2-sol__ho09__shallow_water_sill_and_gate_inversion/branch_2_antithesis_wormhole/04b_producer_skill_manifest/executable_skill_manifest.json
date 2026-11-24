@@ -1,0 +1,94 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_shallow_water_sill_inversion_16ed5bef41cb",
+    "source_hash": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho09__shallow_water_sill_and_gate_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/canal_baseline_v01.py",
+        "archived_relpath": "producers/tmp__canal_baseline_v01.py",
+        "bytes": 3783,
+        "sha256": "1baea2422f536969b56f43e25a6b17e16d9c02ccd64aaf64a4e9539cf20ed97a"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nwith open('public_canal.pkl','rb') as f:\n    obj=pickle.load(f)\ndef describe(x, name='bundle', depth=0):\n    if isinstance(x,dict) and depth<4:\n        print(name, 'keys:', list(x))\n        for k,v in x.items(): describe(v,f'{name}.{k}',depth+1)\n    elif hasattr(x,'shape'):\n        print(name,type(x).__name__,x.shape,x.dtype,'sample:',x.ravel()[:8])\n    elif isinstance(x,(tuple,list)):\n        print(name,type(x).__name__,len(x))\n        for i,v in enumerate(x[:4]): describe(v,f'{name}[{i}]',depth+1)\n    else:\n        print(name,type(x).__name_",
+      "set -e\ncd /holdout_task\ncat > canal_inversion.py <<'PY'\n\"\"\"Invert the downstream gauge records with the specified finite-volume model.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\n\n\nclass _Canal:\n    def __init__(self, bundle):\n        self.n = bundle['N']\n        self.steps = bundle['T_steps']\n        self.ratio = bundle['dt'] / bundle['dx']\n        x = (np.arange(self.n) + 0.5) * bundle['dx']\n        self.bed_shape = np.exp(-0.5 * ((x - 400.0) / 45.0)**2)\n        self.bay = x < 80.0\n        self.gauges = np.asarray(bundle['gauge_cells'], dtype=int)\n        self.indices =",
+      "set -e\ncd /holdout_task\nsha256sum canal_inversion.py\ncmp canal_inversion.py /tmp/.hegel_candidate_archive/v01_ce2b2c81\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom canal_inversion import _Canal, invert_canal_regime\n\ncases = pickle.load(open('public_canal.pkl', 'rb'))\n\ndef evaluate(b, g):\n    p = invert_canal_regime(b)\n    assert set(p) == {'sluice_high_mode', 'sill_height_m', 'eta_full'}\n    assert type(p['sluice_high_mode']) is bool and type(p['sill_height_m']) is float\n    assert 0 <= p['sill_height_m'] <= 0.75 and p['eta_full'].shape == ",
+      "set -e\ncd /holdout_task\nsha256sum canal_inversion.py\nsed -n '1,180p' canal_inversion.py\nfind /tmp/.hegel_candidate_archive -maxdepth 2 -type f -printf '%p\\n' | head -20\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom canal_inversion import _Canal, invert_canal_regime\n\ncases = pickle.load(open('public_canal.pkl', 'rb'))\ndef check(b, mode, height, truth):\n    p = invert_canal_regime(b)\n    assert set(p) == {'sluice_high_mode', 'sill_height_m', 'eta_full'}\n    assert type(p['sluice_high_mode']) is bool and type(p['sill_height_m']) is float\n    f ",
+      "set -e\ncd /holdout_task\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.special import ndtr\nfrom canal_inversion import _Canal\n\ncases=pickle.load(open('public_canal.pkl','rb'))\nb=cases[0]['bundle']; model=_Canal(b)\ngrid=np.linspace(0,.75,301); n=len(grid)\nA=model.simulate(np.tile(grid,2),np.repeat([False,True],n))-2\nnoises=np.array([c['bundle']['eta_obs']-c['gt']['eta_full'][np.ix_(b['obs_step_indices'],b['gauge_cells'])] for c in cases])\nsigma=np.sqrt(np.mean(noises**2)); rng=np.random.default_rng(51027)\n# A pai",
+      "set -e\ncd /holdout_task\ncmp canal_inversion.py /tmp/.hegel_candidate_archive/v01_ce2b2c81/canal_inversion.py\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom canal_inversion import _Canal, invert_canal_regime\n\ncases = pickle.load(open('public_canal.pkl','rb'))\nb0 = cases[0]['bundle']\nrest = _Canal(b0)\nrest.bay[:] = False\nerr = np.max(np.abs(rest.simulate([0., .375, .75], True, full=True) - 2.))\nprint('lake-at-rest maximum error', err)\nassert err < 1e-12\n\ndef center(a):\n    return a - a.mean(axis=-2, ke",
+      "set -e\ncd /holdout_task\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom canal_inversion import _Canal, invert_canal_regime\n\nwith open('public_canal.pkl','rb') as f:\n    cases=pickle.load(f)\nb=cases[0]['bundle']; ix=np.ix_(b['obs_step_indices'],b['gauge_cells'])\nnoise=np.stack([c['bundle']['eta_obs']-c['gt']['eta_full'][ix] for c in cases])\nscales=np.sqrt(np.mean(noise**2,axis=1)); model=_Canal(b)\ngrid=np.linspace(0,.75,751); n=len(grid); tau=.035\nA=(model.simulate(np.tile(grid,2),np.repeat([False,True],n))-2).reshape(2*n,-1)\nenergy=np.einsum('",
+      "set -e\ncd /holdout_task\ncp canal_inversion.py /tmp/canal_baseline_v01.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('canal_inversion.py')\ns = p.read_text()\nold = \"    _, height, mode = best\\n    return {'sluice_high_mode': mode, 'sill_height_m': float(height),\\n\"\nnew = \"    _, height, mode = best\\n    # Within one tolerance of an endpoint, report the center of a tolerance\\n    # interval covering that endpoint. This retains all previously covered\\n    # physical heights. Mode selection still uses the entire physical range.\\n    tolerance = 0.035\\n    upper = np.nextafter(0.75 - toleran"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__canal_baseline_v01.py",
+      "primary_producer_container_path": "/tmp/canal_baseline_v01.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/canal_inversion.py",
+        "filename": "canal_inversion.py",
+        "bytes": 4129,
+        "sha256": "8e1cceb31feef7a0676f1836a377431ec93e8ae49650f3ff05f46c1c76e912bb",
+        "content_addressed_ref": "content_addressed_blobs/8e1cceb31feef7a0676f1836a377431ec93e8ae49650f3ff05f46c1c76e912bb.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/canal_inversion.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\ncp canal_inversion.py /tmp/canal_baseline_v01.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('canal_inversion.py')\ns = p.read_text()\nold = \"    _, height, mode = best\\n    return {'sluice_high_mode': mode, 'si",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+        "expected_candidate_sha256": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+        "computed_candidate_sha256": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/canal_inversion.py",
+            "bytes": 4129
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_16ed5bef"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

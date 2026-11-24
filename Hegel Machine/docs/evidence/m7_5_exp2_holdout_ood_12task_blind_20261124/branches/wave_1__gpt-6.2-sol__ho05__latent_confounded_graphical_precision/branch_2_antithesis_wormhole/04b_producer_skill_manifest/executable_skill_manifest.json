@@ -1,0 +1,172 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_latent_confounded_precision_graph_8c8649839dfb",
+    "source_hash": "8c8649839dfbe782249d8e9155ab7479038710cf02a6db0d71d636e09c0df0e6",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho05__latent_confounded_graphical_precision",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/graph_equivariant.py",
+        "archived_relpath": "producers/tmp__graph_equivariant.py",
+        "bytes": 2900,
+        "sha256": "6118b7084fd2164aba54a7e864a28ed3dd581ec6dc3051ebe63b7657e93ae6e8"
+      },
+      {
+        "container_path": "/tmp/graph_leverage.py",
+        "archived_relpath": "producers/tmp__graph_leverage.py",
+        "bytes": 2458,
+        "sha256": "d4682e4848143c4149e6d6509cb6a6ac7ebf5e561a5940deb59ff1114a762d5f"
+      },
+      {
+        "container_path": "/tmp/graph_margin.py",
+        "archived_relpath": "producers/tmp__graph_margin.py",
+        "bytes": 2377,
+        "sha256": "563ad1f091d6e261fb413b7ae95ab94f5e31d180a619fb498e309606321edf7b"
+      },
+      {
+        "container_path": "/tmp/graph_probe.py",
+        "archived_relpath": "producers/tmp__graph_probe.py",
+        "bytes": 4506,
+        "sha256": "986b07e24f6d263b059ca308944774e61d374eb0c54f627ccc82d958ca7bfae3"
+      },
+      {
+        "container_path": "/tmp/graph_scaling.py",
+        "archived_relpath": "producers/tmp__graph_scaling.py",
+        "bytes": 2473,
+        "sha256": "9151f1a634c0917f9a95909c91f4582a17a756921f7a53ecf633cbb642d5dbe5"
+      },
+      {
+        "container_path": "/tmp/graph_select.py",
+        "archived_relpath": "producers/tmp__graph_select.py",
+        "bytes": 2550,
+        "sha256": "660df7de8ac8893d704ff4d95496d200ef1f094612d9e17d4b0612cd7352e6c1"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport importlib.util\nimport numpy as np\nwith np.load('public_graph.npz', allow_pickle=False) as f:\n    for k in f.files:\n        a = f[k]\n        print(k, a.shape, a.dtype)\n        if a.ndim == 2 and min(a.shape) > 1 and max(a.shape) > 30 and np.issubdtype(a.dtype, np.number):\n            x = a if a.shape[0] > a.shape[1] else a.T\n            if np.isfinite(x).all():\n                s = np.cov(x, rowvar=False)\n                print('covariance spectrum:', np.round(np.linalg.eigvalsh(s), 4))\n        elif a.size <= 12:\n       ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np\nfrom sklearn.covariance import graphical_lasso\nz=np.load('public_graph.npz'); x=z['X']; T=z['gt_S']; A=z['gt_adj']; p=x.shape[1]; ij=np.triu_indices(p,1); truth=A[ij]; n=len(x)\nprint('edges',truth.sum(),'degrees',A.sum(0),'diag range',np.diag(T).min(),np.diag(T).max())\nprint('edge weights',np.round(np.sort(np.abs(T[ij][truth])),3)); print('partial truth sorted',np.round(np.sort((np.abs(T)/np.sqrt(np.outer(T.diagonal(),T.diagonal())))[ij][truth]),3))\nprint('S cov eig',np.round(np.linalg.eigvalsh(np.linalg.inv(T)),3))",
+      "cat > /tmp/graph_probe.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import eigh\nfrom scipy.optimize import minimize\n\n\ndef fit_profile(C, a, start=None, support=None, steps=120):\n    p=len(C); eye=np.eye(p); penalty=np.broadcast_to(a,(p,p)).copy(); np.fill_diagonal(penalty,0)\n    d,U=eigh(C); H=(U*np.sqrt(d))@U.T\n    def evaluate(S):\n        try: R=np.linalg.cholesky(S)\n        except np.linalg.LinAlgError: return np.inf,None\n        V=H@S@H\n        v,W=eigh(V,subset_by_index=[p-2,p-1],check_finite=False)\n        v=np.maximum(v,1); B=H@W\n        f=-2*np.log(R.diagonal()).sum()+np.trace(V)-np.",
+      "cat > /tmp/graph_select.py <<'PY'\nimport numpy as np\nfrom collections import defaultdict\nfrom graph_probe import generate, fit_profile\n\n\ndef candidates(x):\n    c=np.cov(x,rowvar=False,bias=True)\n    d,u=np.linalg.eigh(c); v=u[:,-2:]; w=u[:,:-2]\n    z=(w*w)@(1/d[:-2]); scale=np.sqrt(z/(1-(v*v).sum(axis=1)))\n    k=c*np.outer(scale,scale)\n    n=len(x); p=len(c)\n    base=.045*np.sqrt(900/n)\n    hc=(u*np.sqrt(d))@u.T; hi=(u/np.sqrt(d))@u.T\n    m=np.linalg.inv(c)\n    j=np.triu_indices(p,1)\n    def partial(s): return np.abs(s[j])/np.sqrt(s[j[0],j[0]]*s[j[1],j[1]])\n    for factor in [.65,1.,1.35]:\n   ",
+      "set -e\ncat > /holdout_task/deconfound_graph.py <<'PY'\n\"\"\"Sparse conditional precision estimation with two Gaussian latent factors.\"\"\"\nimport numpy as np\nfrom scipy.linalg import cho_solve, eigh\n\n\ndef _profile(cov):\n    \"\"\"Profile out the optimal PSD rank-two covariance addition for each S.\"\"\"\n    d, u = eigh(cov, check_finite=False)\n    root = (u * np.sqrt(d)) @ u.T\n    eye = np.eye(len(cov))\n\n    def evaluate(s):\n        try:\n            chol = np.linalg.cholesky(s)\n        except np.linalg.LinAlgError:\n            return np.inf, None\n        # In coordinates whitened by S, the optimal covari",
+      "cat > /tmp/graph_margin.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import eigh\nfrom graph_probe import generate\nfrom deconfound_graph import _profile, _fit, recover_sparse_precision_support\n\ndef candidates(x):\n    n,p=x.shape; z=x-x.mean(0); c=z.T@z/n\n    d,u=eigh(c); w=u[:,:-2]**2\n    scale=np.sqrt((w@(1/d[:-2]))/w.sum(1)); e=_profile(c*np.outer(scale,scale))\n    ii,jj=np.triu_indices(p,1); pc=[]\n    for alpha in (.70,.8775,1.10,1.35):\n        s=_fit(e,np.eye(p),penalty=alpha/np.sqrt(n))\n        pc.append(np.abs(s[ii,jj])/np.sqrt(s[ii,ii]*s[jj,jj])*np.sqrt(n))\n    return np.array(pc)\n\ndef",
+      "cat > /tmp/graph_scaling.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import eigh\nfrom graph_probe import generate\nfrom deconfound_graph import _fit, _profile\n\nmodes = ('ring', 'sign', 'random', 'weak', 'hubs', 'coherent', 'hetero', 'weaker_factors', 'hetero_coherent')\n\ndef estimate(x, method):\n    n, p = x.shape\n    z = x - x.mean(0)\n    c = z.T @ z / n\n    if method != 'original':\n        sd = np.sqrt(c.diagonal())\n        c = c / np.outer(sd, sd)\n    d, u = eigh(c, check_finite=False)\n    w = u[:, :-2] ** 2\n    scale = np.sqrt((w @ (1 / d[:-2])) / w.sum(1))\n    if method == 'corr_inverse_",
+      "cat > /tmp/graph_equivariant.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import eigh\nfrom graph_probe import generate\nfrom deconfound_graph import _fit, _profile\n\n\ndef residual_scale(c):\n    d, u = eigh(c, check_finite=False)\n    w = u[:, :-2] ** 2\n    return np.sqrt((w @ (1 / d[:-2])) / w.sum(axis=1))\n\n\ndef candidates(x):\n    n, p = x.shape\n    x = x - x.mean(axis=0)\n    c = x.T @ x / n\n    corr = c / np.sqrt(np.outer(c.diagonal(), c.diagonal()))\n    eye = np.eye(p)\n    penalty = .8775 / np.sqrt(n)\n    ij = np.triu_indices(p, 1)\n    def scores(s):\n        return np.abs(s[ij]) / np.sqrt(s[i",
+      "cat > /tmp/graph_leverage.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import eigh\nfrom graph_equivariant import case, residual_scale\nfrom deconfound_graph import _fit, _profile\n\nI,J=np.triu_indices(24,1)\nNAMES=('five','five270','avg','avg270','lev mild','lev strong','adaptive','adaptive lev','adaptive avg')\n\ndef predictions(x):\n    n,p=x.shape\n    z=x-x.mean(axis=0)\n    z=z/np.sqrt(np.mean(z*z,axis=0))\n    corr=z.T@z/n\n    d0=residual_scale(corr)\n    d=d0.copy()\n    for _ in range(5):\n        d*=residual_scale(corr*np.outer(d,d))**.75\n    c=corr*np.outer(d,d)\n    evaluate=_profile(c)\n    al",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/deconfound_graph.py')\ns = p.read_text().replace('def recover_sparse_precision_support', '''def _residual_scale(cov):\n    d, u = eigh(cov, check_finite=False)\n    w = u[:, :-2] ** 2\n    return np.sqrt((w @ (1 / d[:-2])) / w.sum(axis=1))\n\n\ndef recover_sparse_precision_support''')\na = s.index('    cov = centered.T @ centered / n')\nb = s.index('    np.fill_diagonal(adjacency, False)', a)\ns = s[:a] + '''    sd = np.sqrt(np.mean(centered**2, axis=0))\n    standardized = centered / sd\n    corr = standardized.T @ standardized / n\n",
+      "set -e\nfind /tmp/.hegel_candidate_archive -maxdepth 3 -name '*deconfound_graph*' -print\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task:/tmp python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib\nimport numpy as np\nfrom deconfound_graph import recover_sparse_precision_support as new\nfrom graph_equivariant import case\nfrom graph_probe import generate\n\narchive = Path('/tmp/.hegel_candidate_archive/v01_c3ac5ab3')\nlegacy = archive if archive.is_file() else next(p for p in archive.rglob('deconfound_graph.py') if hashlib.sha256(p.read_bytes()).hexdigest(",
+      "set -e\nfile=/holdout_task/deconfound_graph.py\nsha256sum \"$file\"\narchive=/tmp/.hegel_candidate_archive/v02_8c864983\nfor candidate in \"$archive\" \"$archive/deconfound_graph.py\" \"$archive/slot_00__deconfound_graph.py\"; do\n  if [ -f \"$candidate\" ] && cmp -s \"$file\" \"$candidate\"; then printf 'Live source matches archive: %s\\n' \"$candidate\"; fi\ndone\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport numpy as np\n\npath = '/holdout_task/deconfound_graph.py'\nspec = importlib.util.spec_from_file_location('submitted_graph', path)\nmod = importlib.util",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.linalg import eigh\n\nspec = importlib.util.spec_from_file_location('audit_graph', '/holdout_task/deconfound_graph.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith np.load('public_graph.npz', allow_pickle=False) as z:\n    x, truth = z['X'], z['gt_adj']\n    print('Public archive fields:', z.files)\n\ndef fit_and_score(rows):\n    out = m.recover_sparse_precision_support(rows)\n    b, s = out['adjacency'], out['sparse_precision']\n    assert",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.linalg import eigh\n\nspec = importlib.util.spec_from_file_location('submitted_graph', '/holdout_task/deconfound_graph.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith np.load('public_graph.npz', allow_pickle=False) as z:\n    x, truth = z['X'], z['gt_adj']\n\n# All nuisance directions and precision parameters are estimated on training rows.\ndef marginal_losses(c_train, c_test, s):\n    d, u = eigh(c_train)\n    root = (u * np.sqrt(d))"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__graph_probe.py",
+      "primary_producer_container_path": "/tmp/graph_probe.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/deconfound_graph.py",
+        "filename": "deconfound_graph.py",
+        "bytes": 4629,
+        "sha256": "f9affe33f4a4b2bbffeeecf8377f4b9caa42349f11c1eb5c8bf7f4bbdd6484c9",
+        "content_addressed_ref": "content_addressed_blobs/f9affe33f4a4b2bbffeeecf8377f4b9caa42349f11c1eb5c8bf7f4bbdd6484c9.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/deconfound_graph.py"
+    ],
+    "exported_pure_functions": [
+      "residual_scale",
+      "fit_profile",
+      "models",
+      "generate",
+      "scores",
+      "case",
+      "candidates",
+      "report"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8c8649839dfbe782249d8e9155ab7479038710cf02a6db0d71d636e09c0df0e6",
+      "verified_turn": 16,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.linalg import eigh\n\nspec = importlib.util.spec_from_file_location('submitted_graph', '/holdout_task/deconf",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8c8649839dfbe782249d8e9155ab7479038710cf02a6db0d71d636e09c0df0e6",
+        "expected_candidate_sha256": "8c8649839dfbe782249d8e9155ab7479038710cf02a6db0d71d636e09c0df0e6",
+        "computed_candidate_sha256": "8c8649839dfbe782249d8e9155ab7479038710cf02a6db0d71d636e09c0df0e6",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/deconfound_graph.py",
+            "bytes": 4629
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_8c864983"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "residual_scale",
+        "code": "def residual_scale(c):\n    from scipy.linalg import eigh\n    (d, u) = eigh(c, check_finite=False)\n    w = u[:, :-2] ** 2\n    return np.sqrt(w @ (1 / d[:-2]) / w.sum(axis=1))"
+      },
+      {
+        "name": "fit_profile",
+        "code": "def fit_profile(C, a, start=None, support=None, steps=120):\n    from scipy.linalg import eigh\n    from scipy.optimize import minimize\n    p = len(C)\n    eye = np.eye(p)\n    penalty = np.broadcast_to(a, (p, p)).copy()\n    np.fill_diagonal(penalty, 0)\n    (d, U) = eigh(C)\n    H = U * np.sqrt(d) @ U.T\n\n    def evaluate(S):\n        try:\n            R = np.linalg.cholesky(S)\n        except np.linalg.LinAlgError:\n            return (np.inf, None)\n        V = H @ S @ H\n        (v, W) = eigh(V, subset_by_index=[p - 2, p - 1], check_finite=False)\n        v = np.maximum(v, 1)\n        B = H @ W\n        f = -2 * np.log(R.diagonal()).sum() + np.trace(V) - np.sum(v - 1 - np.log(v))\n        g = C - B * (1 - 1 / v) @ B.T - np.linalg.solve(S, eye)\n        return (f, g)\n    if support is not None:\n        (i, j) = np.where(np.triu(support | np.eye(p, dtype=bool)))\n        scale = np.where(i == j, 1.0, 2.0 ** 0.5)\n\n        def unpack(b):\n            S = np.zeros_like(C)\n            S[i, j] = S[j, i] = b / scale\n            return S\n\n        def obj(b):\n            (f, g) = evaluate(unpack(b))\n            return (f, g[i, j] * scale) if g is not None else (1000000.0, np.zeros_like(b))\n        res = minimize(obj, start[i, j] * scale, method='L-BFGS-B', jac=True, options={'maxiter': steps, 'ftol': 1e-11, 'gtol': 1e-07})\n        return unpack(res.x)\n    S = np.eye(p) if start is None else start.copy()\n    Y = S.copy()\n    t = 1.0\n    step = 1.0\n    for _ in range(steps):\n        (fy, g) = evaluate(Y)\n        if g is None:\n            Y = S\n            t = 1.0\n            (fy, g) = evaluate(Y)\n        while True:\n            Z = Y - step * g\n            Z = np.sign(Z) * np.maximum(np.abs(Z) - step * penalty, 0)\n            (fz, _) = evaluate(Z)\n            delta = Z - Y\n            if fz <= fy + np.sum(g * delta) + np.sum(delta ** 2) / (2 * step) + 1e-12:\n                break\n            step *= 0.5\n        if np.max(np.abs(Z - S)) < 2e-06:\n            return Z\n        tt = (1 + np.sqrt(1 + 4 * t * t)) / 2\n        Y = Z + (t - 1) / tt * (Z - S)\n        S = Z\n        t = tt\n        step = min(step * 1.12, 4.0)\n    return S"
+      },
+      {
+        "name": "models",
+        "code": "def models(X):\n    from scipy.linalg import eigh\n    C = np.cov(X, rowvar=False, bias=True)\n    (d, U) = eigh(C)\n    V = U[:, -2:]\n    R = U[:, :-2] * d[:-2] @ U[:, :-2].T\n    P = U[:, :-2] / d[:-2] @ U[:, :-2].T\n    q = np.sqrt(np.diag(P) / (1 - np.sum(V ** 2, axis=1)))\n    K = C * np.outer(q, q)\n    yield ('raw', np.linalg.inv(C))\n    for m in [0.75, 1.0, 1.25]:\n        yield (f'restuff{m}', P + V @ np.linalg.inv(m * (V.T @ (1 / q[:, None] ** 2 * V))) @ V.T)\n    for a in [0.025, 0.045, 0.065, 0.085]:\n        S = fit_profile(K, a)\n        yield (f'profile{a}', S)\n        Q = np.abs(S) / np.sqrt(np.outer(S.diagonal(), S.diagonal()))\n        np.fill_diagonal(Q, 0)\n        for fraction in [0.7]:\n            weights = a * np.clip(1 - Q / 0.17, fraction, 1.0)\n            S2 = fit_profile(K, weights, start=S, steps=70)\n            yield (f'adapt{a}', S2)"
+      },
+      {
+        "name": "generate",
+        "code": "def generate(seed, mode, n=900):\n    rng = np.random.default_rng(seed)\n    p = 24\n    ix = rng.permutation(p)\n    A = np.zeros((p, p), bool)\n\n    def put(i, j):\n        A[i, j] = A[j, i] = True\n    if mode in ('ring', 'sign', 'weak', 'coherent', 'hetero', 'weaker_factors'):\n        for i in range(p):\n            put(ix[i], ix[(i + 1) % p])\n        for (i, j) in rng.choice(p, size=(4, 2), replace=False):\n            put(ix[i], ix[j])\n    else:\n        while A.sum() < 2 * (23 + seed % 10):\n            (i, j) = rng.choice(p, 2, replace=False)\n            if A.sum(0)[[i, j]].max() < (5 if mode == 'hubs' else 4):\n                put(i, j)\n    S = 2.2 * np.eye(p)\n    (i, j) = np.where(np.triu(A, 1))\n    weights = np.full(len(i), 0.52)\n    if mode in ('weak', 'hubs'):\n        weights = rng.uniform(0.34, 0.59, len(i))\n    if mode != 'ring':\n        weights *= rng.choice([-1.0, 1.0], len(i))\n    S[i, j] = S[j, i] = -weights\n    if mode == 'hetero':\n        sc = np.exp(rng.uniform(-0.55, 0.55, p))\n        S *= np.outer(sc, sc)\n    B = rng.normal(size=(p, 2)) * 0.9\n    if mode == 'coherent':\n        B[:5] *= 3\n    if mode == 'weaker_factors':\n        B *= 0.4\n    X = rng.standard_normal((n, p)) @ np.linalg.cholesky(np.linalg.inv(S)).T + rng.standard_normal((n, 2)) @ B.T\n    return (X, A, S)"
+      },
+      {
+        "name": "scores",
+        "code": "def scores(S, A):\n    (i, j) = np.triu_indices(len(A), 1)\n    y = A[i, j]\n    Q = np.abs(S[i, j]) / np.sqrt(S[i, i] * S[j, j])\n    idx = np.argsort(-Q)\n    t = np.cumsum(y[idx])\n    f = 2 * t / (np.arange(len(y)) + 1 + y.sum())\n    z = [f.max(), f[25]]\n    for cut in [0.06, 0.08, 0.1, 0.12, 0.14, 0.16]:\n        pred = Q >= cut\n        z.append(2 * (pred & y).sum() / (pred.sum() + y.sum()))\n    return z"
+      },
+      {
+        "name": "case",
+        "code": "def case(seed, mode):\n    if mode != 'hetero_coherent':\n        return generate(seed, mode)[:2]\n    (_, y, t) = generate(seed, 'hetero')\n    rng = np.random.default_rng(seed + 800)\n    b = rng.normal(size=(24, 2)) * 0.9\n    b[:5] *= 2.5\n    x = rng.normal(size=(900, 24)) @ np.linalg.cholesky(np.linalg.inv(t)).T + rng.normal(size=(900, 2)) @ b.T\n    return (x, y)"
+      },
+      {
+        "name": "candidates",
+        "code": "def candidates(x):\n    c = np.cov(x, rowvar=False, bias=True)\n    (d, u) = np.linalg.eigh(c)\n    v = u[:, -2:]\n    w = u[:, :-2]\n    z = w * w @ (1 / d[:-2])\n    scale = np.sqrt(z / (1 - (v * v).sum(axis=1)))\n    k = c * np.outer(scale, scale)\n    n = len(x)\n    p = len(c)\n    base = 0.045 * np.sqrt(900 / n)\n    hc = u * np.sqrt(d) @ u.T\n    hi = u / np.sqrt(d) @ u.T\n    m = np.linalg.inv(c)\n    j = np.triu_indices(p, 1)\n\n    def partial(s):\n        return np.abs(s[j]) / np.sqrt(s[j[0], j[0]] * s[j[1], j[1]])\n    for factor in [0.65, 1.0, 1.35]:\n        s = fit_profile(k, base * factor)\n        q = partial(s)\n        for cut in [2.2, 2.5, 2.8, 3.1, 3.4]:\n            yield (f'profile {factor} {cut}', q >= cut / np.sqrt(n))\n        r = s * np.outer(scale, scale)\n        (e, b) = np.linalg.eigh(hc @ r @ hc)\n        b = hi @ b[:, -2:]\n        corrected = m + b * np.maximum(e[-2:] - 1, 0) @ b.T\n        for cut in [3.2, 3.5, 3.8, 4.1, 4.4]:\n            yield (f'correct {factor} {cut}', partial(corrected) >= cut / np.sqrt(n))\n    for cut in [3.2, 3.5, 3.8, 4.1, 4.4]:\n        yield (f'restuff {cut}', partial(w / d[:-2] @ w.T + v @ np.linalg.inv(v.T @ (1 / scale[:, None] ** 2 * v)) @ v.T) >= cut / np.sqrt(n))"
+      },
+      {
+        "name": "report",
+        "code": "def report(cases):\n    ij = np.triu_indices(24, 1)\n    results = []\n    for (x, a) in cases:\n        y = a[ij]\n        q = np.array(list(candidates(x)))\n        votes = q[:, None, :] >= np.array([2.3, 2.5, 2.7])[None, :, None]\n        results.append(2 * (votes & y).sum(axis=2) / (y.sum() + votes.sum(axis=2)))\n    v = np.array(results)\n    return (np.round(v.min(axis=0), 3).tolist(), np.round(v[:, :, 1].mean(axis=0), 3).tolist())"
+      }
+    ]
+  }
+}

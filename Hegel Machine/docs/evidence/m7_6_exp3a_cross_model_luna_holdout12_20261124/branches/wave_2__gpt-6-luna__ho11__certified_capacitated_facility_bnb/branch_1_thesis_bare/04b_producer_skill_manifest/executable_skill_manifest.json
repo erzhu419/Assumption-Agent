@@ -1,0 +1,67 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_facility_bnb_7c9328f4e795",
+    "source_hash": "7c9328f4e795e108f74612bd71699ee178dc5967fb2180c6f508ee438789e2df",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho11__certified_capacitated_facility_bnb",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task && python - <<'PY'\nimport pickle\np='/holdout_task/public_facility.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x),repr(x))\nPY",
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle\np='/holdout_task/public_facility.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x), repr(x))\nPY",
+      "python3 - <<'PY'\nimport scipy, numpy\nprint('scipy',scipy.__version__)\nPY",
+      "cat > /holdout_task/facility_cert.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import linprog\n\ndef solve_and_certify_facilities(instance):\n    m, n = int(instance['m']), int(instance['n'])\n    f=np.asarray(instance['fixed_cost'],float); cap=np.asarray(instance['capacity'],float)\n    d=np.asarray(instance['demand'],float); c=np.asarray(instance['cost_matrix'],float)\n    nv=m+m*n; obj=np.r_[f,c.ravel()]\n    Aeq=np.zeros((n,nv));\n    for j in range(n):\n        for i in range(m): Aeq[j,m+i*n+j]=1\n    Aub=np.zeros((m,nv))\n    for i in range(m): Aub[i,i]=-cap[i]; Aub[i,m+i*n:m+(i+1)*n]=1\n    def",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np, math\nsys.path.insert(0,'/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; y=np.array(r['open_y']); X=np.asarray(r['flows_X'])\nassert X.shape==(m,n) and np.all((y==0)|(y==1))\nassert np.all(X>=-1e-8) and np.allclose(X.sum(axis=0),x['demand'],atol=1e-7)\nassert np.all(X.sum(axis=1)<=x['capacity']*y+1e-7)\nobj=x['fixed_cost']@y+np.sum(x['cost_matrix']*X); assert abs(obj-r['upper_bound'])<1e-7\nP=r['proof_leaves']; asse",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np, math\nsys.path.insert(0,'/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; y=np.array(r['open_y']); X=np.asarray(r['flows_X']); P=r['proof_leaves']\nprint('result',r['upper_bound'],len(P),'mass',sum(2**(m-len(z['fixed_closed'])-len(z['fixed_open'])) for z in P))\nprint('feasibility',X.shape,np.min(X),np.max(abs(X.sum(0)-x['demand'])),np.max(X.sum(1)-x['capacity']*y))\nprint('objective discrepancy',x['fixed_cost']@y+",
+      "sed -n '1,260p' /holdout_task/facility_cert.py && python3 - <<'PY'\nimport pickle,sys,numpy as np, math, os\nsys.path.insert(0,'/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_facility.pkl','rb')); r=solve_and_certify_facilities(x)\nm,n=x['m'],x['n']; y=np.asarray(r['open_y']); X=np.asarray(r['flows_X']); P=r['proof_leaves']\nassert X.shape==(m,n) and y.shape==(m,) and np.all((y==0)|(y==1))\nassert np.all(X>=-1e-9) and np.allclose(X.sum(0),x['demand'],atol=1e-7)\nassert np.all(X.sum(1)<=x['capacity']*y+1e-7)\nobj=x['fixed_cost']@y+np.sum"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/facility_cert.py",
+        "filename": "facility_cert.py",
+        "bytes": 2764,
+        "sha256": "c9db7fe98e51a1514573965672e5a75a248d5f4a3999228b0e01883fe63eda08",
+        "content_addressed_ref": "content_addressed_blobs/c9db7fe98e51a1514573965672e5a75a248d5f4a3999228b0e01883fe63eda08.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/facility_cert.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7c9328f4e795e108f74612bd71699ee178dc5967fb2180c6f508ee438789e2df",
+      "verified_turn": 7,
+      "verification_command": "sed -n '1,260p' /holdout_task/facility_cert.py && python3 - <<'PY'\nimport pickle,sys,numpy as np, math, os\nsys.path.insert(0,'/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nx=pickle.load(open('/holdout_task/public_fa",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

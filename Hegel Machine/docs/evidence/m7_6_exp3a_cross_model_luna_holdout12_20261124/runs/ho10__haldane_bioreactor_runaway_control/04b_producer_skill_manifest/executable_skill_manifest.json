@@ -1,0 +1,87 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_63edb4b0fad8",
+    "source_hash": "63edb4b0fad87ec6047c06744218f311c5506ea28ef686ba1fbee4b49b73d024",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho10__haldane_bioreactor_runaway_control",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "set -e\npython3 - <<'PY'\nimport hashlib, pathlib, sys\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\narchive=pathlib.Path('/tmp/.hegel_candidate_archive/v01_11458ef7')\nprint('target_sha256',hashlib.sha256(p.read_bytes()).hexdigest())\nprint('archive_files',[(str(x),hashlib.sha256(x.read_bytes()).hexdigest()) for x in archive.rglob('*') if x.is_file()])\nPY\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport itertools, math, pathlib, ast, hashlib\nfrom plant_sim import run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(p.read_text())\n# Detect a combined heat-pulse/fouling/growth-parameter interaction missed by separate summaries.\nrows=[]\nfor mu,ks,ki,ua,pulse in itertools.product([.357,.483],[.68,.92],[9.6,18.0],[.75,1.0],[0.0,2.2]):\n    s={'name':'joint-corner','mu0':mu,'Ks':ks,'Ki':ki,'ua_scale':ua,'heat_pulse':pulse}\n    r=run_closed_loop(compute_control_s",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\n# Detect a real integrated failure mode not captured by endpoint metrics: inadequate\n# substrate uptake or feed shutoff causing low final biomass despite acceptable peak safety.\nimport pathlib, ast, hashlib, sys\nfrom plant_sim import run_closed_loop, NOMINAL_SCENARIOS\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py'); ast.parse(p.read_text())\n# Evaluate documented adverse parameter combination and seeds; all plant evolution\n# and noisy observations come from the supplied harness.\nsc={'",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nassert p.is_file() and p.stat().st_size > 0\nast.parse(p.read_text())\nfor sc in NOMINAL_SCENARIOS:\n    r=run_closed_loop(compute_control_step, sc, seed=10)\n    assert r['safe'] and r['final_biomass_g'] >= 62.0, (sc,r)\n    print(sc['name'], r)\nsc={'name':'low_growth_corner','mu0':.357,'Ks':.92,'Ki':9.6,'ua_scale':1.0,'heat_pulse':0.0}\nr=run_closed_loop(compute_co",
+      "set -e\nsed -n '1,180p' /holdout_task/plant_sim.py\nprintf '\\n--- controller ---\\n'\ncat /holdout_task/bioreactor_ctrl.py\npython3 - <<'PY'\nimport sys\nsys.path.insert(0,'/holdout_task')\nimport plant_sim\nprint('sim module:', plant_sim.__file__)\nPY",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\n# Detect whether raising the substrate target to gain biomass would instead\n# cause delayed feed to exceed the volume limit in low-growth / high-volume slices.\nfrom plant_sim import run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\ndef policy(target,gain,cap):\n    def f(obs,mem):\n        S=float(obs['S_meas_g_L']); T=float(obs['T_meas_C']); V=float(obs['V_L']); t=float(obs['t_h'])\n        feed=max(0.,min(cap,gain*(target-S)))\n        if S>2.15: feed=0.\n        if V>=11.35 or t>=19.: feed=0.\n        elif V>=10.8: feed=m",
+      "set -e\npython3 - <<'PY'\np='/holdout_task/bioreactor_ctrl.py'\ns=open(p).read().replace(\"target_s = 1.65\", \"target_s = 2.4\")\nopen(p,'w').write(s)\nPY\nh=$(sha256sum /holdout_task/bioreactor_ctrl.py | cut -c1-8)\nmkdir -p \"/tmp/.hegel_candidate_archive/v02_$h\"\ncp /holdout_task/bioreactor_ctrl.py \"/tmp/.hegel_candidate_archive/v02_$h/bioreactor_ctrl.py\"\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport itertools, pathlib, ast, hashlib\nfrom plant_sim import run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py'); ast.parse(p.read_te",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, itertools, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(p.read_text())\nassert 'target_s = 2.4' in p.read_text()\nrows=[]\n# Target interior perturbations/noise as well as provided scenarios; breach means revert candidate.\nscenarios=list(NOMINAL_SCENARIOS)\nfor i in range(160):\n    f=[((i*k)%173)/172 for k in (37,67,97,137)]\n    scenarios.append({'name':f'interior-{i}','mu0':.357+.126*f[0],",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, itertools, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nsrc=p.read_text(); ast.parse(src)\nassert 'target_s = 2.4' in src\n# Check the upgraded controller on a fresh set of seeds at every stated parameter corner.\nrows=[]\nfor mu,ks,ki,ua,pulse in itertools.product([.357,.483],[.68,.92],[9.6,18.],[.75,1.],[0.,2.2]):\n    sc={'name':'corner','mu0':mu,'Ks':ks,'Ki':ki,'ua_scale':ua,'heat_pulse':pulse}\n  ",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, itertools, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nsrc=p.read_text(); ast.parse(src)\nassert 'target_s = 2.4' in src\nrows=[]\nfor mu,ks,ki,ua,pulse in itertools.product([.357,.483],[.68,.92],[9.6,18.],[.75,1.],[0.,2.2]):\n    sc={'name':'corner','mu0':mu,'Ks':ks,'Ki':ki,'ua_scale':ua,'heat_pulse':pulse}\n    for seed in range(700,750):\n        r=run_closed_loop(compute_control_step,sc,seed=seed)",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, itertools, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nsrc=p.read_text(); ast.parse(src)\nassert 'target_s = 2.4' in src\nrows=[]\n# Check the accepted higher setpoint on fresh, bounded interior scenarios; a\n# violation would require reverting or revising this candidate.\nfor i in range(100):\n    q=[((i*k)%101)/100 for k in (37,61,79,97)]\n    s={'name':f'final-interior-{i}', 'mu0':.357+.126*q[0], 'K",
+      "set -e\nprintf '%s\\n' '--- current artifact ---'\ncat /holdout_task/bioreactor_ctrl.py\nprintf '%s\\n' '--- hash ---'\nsha256sum /holdout_task/bioreactor_ctrl.py\nprintf '%s\\n' '--- final clean-process verification ---'\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(p.read_text())\nassert 'target_s = 2.4' in p.read_text()\nresults=[run_closed_loop(compute_control_step,s,seed=10) for s in NOMINAL_SCENARI",
+      "set -e\nprintf '%s\\n' '--- artifact ---'\nsha256sum /holdout_task/bioreactor_ctrl.py\ncat /holdout_task/bioreactor_ctrl.py\nprintf '%s\\n' '--- clean-process verification ---'\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(p.read_text())\nassert callable(compute_control_step)\nresults=[run_closed_loop(compute_control_step,s,seed=10) for s in NOMINAL_SCENARIOS]\nassert all(r['safe'] and r['final_biomass_",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, itertools, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nsrc=p.read_text(); ast.parse(src)\nassert 'target_s = 2.4' in src\nrows=[]\n# Detect safety/productivity regressions for the current exact artifact across all stated parameter corners.\nfor mu,ks,ki,ua,pulse in itertools.product([.357,.483],[.68,.92],[9.6,18.],[.75,1.],[0.,2.2]):\n    sc={'name':'corner','mu0':mu,'Ks':ks,'Ki':ki,'ua_scale':ua,'he",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, itertools, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(p.read_text())\nrows=[]\nfor mu,ks,ki,ua,pulse in itertools.product([.357,.483],[.68,.92],[9.6,18.],[.75,1.],[0.,2.2]):\n    sc={'name':'corner','mu0':mu,'Ks':ks,'Ki':ki,'ua_scale':ua,'heat_pulse':pulse}\n    for seed in range(775,800):\n        r=run_closed_loop(compute_control_step,sc,seed=seed)\n        assert r['safe'] and r['final_b",
+      "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl.py')\nast.parse(p.read_text())\nassert 'target_s = 2.4' in p.read_text()\nrs=[run_closed_loop(compute_control_step,s,seed=10) for s in NOMINAL_SCENARIOS]\nassert all(r['safe'] and r['final_biomass_g']>=62 for r in rs),rs\nprint('sha256',hashlib.sha256(p.read_bytes()).hexdigest(),'bytes',p.stat().st_size,'nominal',rs)\nPY\nsha=$(sha256sum /holdout_task/bioreactor_c"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/bioreactor_ctrl.py",
+        "filename": "bioreactor_ctrl.py",
+        "bytes": 1024,
+        "sha256": "9a7f282db2422cf813f955850d1da47bf9441e0c2aa8ec2a6d15648097185ad9",
+        "content_addressed_ref": "content_addressed_blobs/9a7f282db2422cf813f955850d1da47bf9441e0c2aa8ec2a6d15648097185ad9.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/bioreactor_ctrl.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "63edb4b0fad87ec6047c06744218f311c5506ea28ef686ba1fbee4b49b73d024",
+      "verified_turn": 27,
+      "verification_command": "set -e\ncd /tmp && PYTHONPATH=/holdout_task python3 - <<'PY'\nimport ast, hashlib, pathlib\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\np=pathlib.Path('/holdout_task/bioreactor_ctrl",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "63edb4b0fad87ec6047c06744218f311c5506ea28ef686ba1fbee4b49b73d024",
+        "expected_candidate_sha256": "63edb4b0fad87ec6047c06744218f311c5506ea28ef686ba1fbee4b49b73d024",
+        "computed_candidate_sha256": "63edb4b0fad87ec6047c06744218f311c5506ea28ef686ba1fbee4b49b73d024",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/bioreactor_ctrl.py",
+            "bytes": 1024
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_63edb4b0"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

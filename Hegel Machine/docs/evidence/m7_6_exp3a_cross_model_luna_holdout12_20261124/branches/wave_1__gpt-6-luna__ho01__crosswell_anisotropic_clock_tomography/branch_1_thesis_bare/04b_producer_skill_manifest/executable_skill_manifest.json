@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_a43992a30260",
+    "source_hash": "a43992a30260b86d59c7bba707f73dee3b56fc828bee1e8510e4fa6856e33e8a",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task && python - <<'PY'\nimport pickle\np='/holdout_task/public_surveys.pkl'\nd=pickle.load(open(p,'rb'))\nprint(type(d)); print(repr(d)[:10000])\nPY",
+      "python3 - <<'PY'\nimport pickle\np='/holdout_task/public_surveys.pkl'; d=pickle.load(open(p,'rb'))\nprint(type(d)); print(repr(d)[:16000])\nPY",
+      "python3 - <<'PY'\np='/holdout_task/tomography_solver.py'\ns=open(p).read()\n# Remove unused intermediate quadrature arrays; retain the source/receiver/ray arrays used by the solver.\ns=s.replace(\"    xx=dx*u[:,None,None]\\n    zz=zs[None,:,None]+dz.T[None,:,:]*u[:,None,None]\\n    # shapes integration u, receiver, source\\n    xx=dx*u[:,None,None]\\n    zz=zs[None,None,:]+dz.T[None,:, :][None,:,:]*u[:,None,None]\\n    # recast ray arrays [src,rcv,quad]\\n\", \"    # Ray coordinates are arranged [source, receiver, quadrature point].\\n\")\nopen(p,'w').write(s)\nPY\npython3 - <<'PY'\nimport sys,pickle,numpy as np",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef invert_plume_and_clocks(survey: dict) -> dict:\n    \"\"\"Estimate a Gaussian plume and zero-mean receiver clock offsets.\"\"\"\n    W = float(survey['W_m'])\n    H = float(survey['H_m'])\n    zs = np.asarray(survey['z_src_m'], dtype=float)\n    zr = np.asarray(survey['z_rcv_m'], dtype=float)\n    T = np.asarray(survey['T_obs_s'], dtype=float)\n    ns, nr = T.shape\n    R = float(survey.get('R_plume_m', 5.5))\n    dz = zr[None, :] - zs[:, None]\n    L = np.hypot(W, dz)\n    sintheta2 = (dz / L) ** ",
+      "python3 - <<'PY'\nimport pickle,sys,time,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom tomography_solver import invert_plume_and_clocks\nD=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nt=time.time()\nfor d in D:\n o=invert_plume_and_clocks(d['survey']); gt=d['gt']\n print('estimate',o['plume_xz_m'],'center_err',np.linalg.norm(np.array(o['plume_xz_m'])-gt['plume_xz_m']),'clock_rmse',np.sqrt(np.mean((np.array(o['rcv_clock_bias_s'])-gt['rcv_clock_bias_s'])**2)))\nprint('seconds',time.time()-t)\nPY"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 1863,
+        "sha256": "ccf066d052df59599b61f0326667c68717fa0761e2634445f20439082d9ebd50",
+        "content_addressed_ref": "content_addressed_blobs/ccf066d052df59599b61f0326667c68717fa0761e2634445f20439082d9ebd50.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a43992a30260b86d59c7bba707f73dee3b56fc828bee1e8510e4fa6856e33e8a",
+      "verified_turn": 5,
+      "verification_command": "python3 - <<'PY'\nimport pickle,sys,time,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom tomography_solver import invert_plume_and_clocks\nD=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nt=time.time()\nfor d in D:\n o=invert_pl",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

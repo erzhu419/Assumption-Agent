@@ -1,0 +1,80 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_latent_confounded_precision_graph_b85cf7406c33",
+    "source_hash": "b85cf7406c33ec7b5d99c0d882ce04cececcb1949c36ec1127b9fe67e31cf1ca",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho05__latent_confounded_graphical_precision",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/test.py",
+        "archived_relpath": "producers/tmp__test.py",
+        "bytes": 785,
+        "sha256": "b232f5151ea6568c532d48932a15dfd9bdbb8826b25d956468bf33906cdc0a6c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task && python - <<'PY'\nimport numpy as np\nf=np.load('/holdout_task/public_graph.npz')\nprint(f.files)\nfor k in f.files:\n a=f[k]; print(k,a.shape,a.dtype); print(a if a.size<60 else '')\nPY",
+      "ls -lah /holdout_task && python3 - <<'PY'\nimport numpy as np\nf=np.load('/holdout_task/public_graph.npz')\nprint(f.files)\nfor k in f.files:\n a=f[k]; print(k,a.shape,a.dtype)\n if a.size<60: print(a)\nPY",
+      "python3 - <<'PY'\nimport numpy as np\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; S=z['gt_S']; A=z['gt_adj'];\nprint('edges',A.sum()//2,'S diag',np.diag(S));\nC=np.cov(X,rowvar=False); P=np.linalg.inv(C); mask=~np.eye(24,dtype=bool)\nprint('precision abs quantiles',np.quantile(abs(P[mask]),[.5,.8,.9,.95,.98,.99,1]));\nprint('S offdiag true quantiles',np.quantile(abs(S[mask]),[.5,.8,.9,.95,.98,.99,1]));\nprint('nonzero S values',S[np.triu(A,1)])\nPY",
+      "cat > /tmp/test.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import minimize\nz=np.load('/holdout_task/public_graph.npz'); X=z['X']; A=z['gt_adj']; S0=z['gt_S']; n,p=X.shape\nC=np.cov(X,rowvar=False); P=np.linalg.inv(C)\ndef obj(v):\n U=v.reshape(p,2); H=P+U@U.T\n return np.sum(np.abs(H[np.triu_indices(p,1)])) + .001*np.sum(U*U)\nfor seed in range(3):\n res=minimize(obj,np.random.default_rng(seed).normal(0,.3,(p,2)).ravel(),method='L-BFGS-B',options={'maxiter':3000,'ftol':1e-12})\n U=res.x.reshape(p,2); H=P+U@U.T\n vals=np.abs(H[np.triu_indices(p,1)]); print(res.fun,res.success,np.quantile(vals,[.5",
+      "cat > /holdout_task/deconfound_graph.py <<'PY'\n\"\"\"Recover sparse precision support under a small number of latent factors.\"\"\"\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef recover_sparse_precision_support(X_samples: np.ndarray) -> dict:\n    \"\"\"Estimate sparse precision S in Cov(X)^-1 = S - L, with L PSD low-rank.\n\n    Fits a rank-two PSD correction by minimizing the off-diagonal L1 norm of\n    the corrected precision. The returned support uses a conservative cutoff\n    to distinguish sparse graph edges from residual factor-fit noise.\n    \"\"\"\n    X = np.asarray(X_samples, dtype=f"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__test.py",
+      "primary_producer_container_path": "/tmp/test.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/deconfound_graph.py",
+        "filename": "deconfound_graph.py",
+        "bytes": 1796,
+        "sha256": "dd9044705e1bc010636fcc0ea0543d6870e730bee3dbe7764f0c0b46c28ee83b",
+        "content_addressed_ref": "content_addressed_blobs/dd9044705e1bc010636fcc0ea0543d6870e730bee3dbe7764f0c0b46c28ee83b.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/deconfound_graph.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b85cf7406c33ec7b5d99c0d882ce04cececcb1949c36ec1127b9fe67e31cf1ca",
+      "verified_turn": 5,
+      "verification_command": "cat > /holdout_task/deconfound_graph.py <<'PY'\n\"\"\"Recover sparse precision support under a small number of latent factors.\"\"\"\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef recover_sparse_precision_support(X_samples: np.ndarra",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

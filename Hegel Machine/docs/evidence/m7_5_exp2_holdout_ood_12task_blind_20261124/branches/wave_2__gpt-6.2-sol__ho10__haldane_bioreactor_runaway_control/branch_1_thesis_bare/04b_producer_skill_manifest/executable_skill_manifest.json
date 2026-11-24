@@ -1,0 +1,63 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_586553377215",
+    "source_hash": "586553377215e5b82bacbb3a57014cc8e75180802f8bded00530b3fc7b3ce7fa",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho10__haldane_bioreactor_runaway_control",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cat > /holdout_task/bioreactor_ctrl.py <<'PY'\n\"\"\"Feedback control for the supplied delayed fed-batch simulator.\"\"\"\n\nfrom math import exp\n\n\ndef compute_control_step(obs: dict, state_memory: dict) -> tuple[dict, dict]:\n    \"\"\"Return the next feed and coolant commands and one-step memory.\"\"\"\n    dt = obs['dt_h']\n    volume = obs['V_L']\n    biomass = obs['X_meas_g_L']\n    substrate = obs['S_meas_g_L']\n    temp = obs['T_meas_C']\n    pending_feed = state_memory.get('feed', 0.2)\n    actuation_volume = volume + dt * pending_feed\n\n    # Use the growth model to replace substrate as it is consumed, with\n",
+      "cd /holdout_task && python3 - <<'PY'\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\nfor scenario in NOMINAL_SCENARIOS:\n    for seed in (10, 123):\n        print(scenario['name'], seed, run_closed_loop(compute_control_step, scenario, seed))\nPY",
+      "cd /holdout_task && ls -l bioreactor_ctrl.py && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\n# Check the command contract as well as the simulator results; the simulator clips commands.\ndef checked_step(obs, memory):\n    command, memory = compute_control_step(obs, memory)\n    assert isinstance(memory, dict)\n    assert set(command) == {'feed_rate_L_per_h', 'coolant_flow_frac'}\n    for key, upper in [('feed_rate_L_per_h', 2.5), ('coolant"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/bioreactor_ctrl.py",
+        "filename": "bioreactor_ctrl.py",
+        "bytes": 1751,
+        "sha256": "6e4df82151bc7ada639131583f79b02432ef707b607860112404642c1e1db180",
+        "content_addressed_ref": "content_addressed_blobs/6e4df82151bc7ada639131583f79b02432ef707b607860112404642c1e1db180.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/bioreactor_ctrl.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "586553377215e5b82bacbb3a57014cc8e75180802f8bded00530b3fc7b3ce7fa",
+      "verified_turn": 4,
+      "verification_command": "cd /holdout_task && ls -l bioreactor_ctrl.py && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

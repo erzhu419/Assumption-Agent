@@ -1,0 +1,87 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_high_peclet_plume_inversion_5cabe2aef134",
+    "source_hash": "5cabe2aef1345196f62201ce78edbb54b7fa304574d6eb7049c436b75d58cdd8",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho03__high_peclet_upwind_plume_inversion",
+    "wormhole_family": "fam_multiscale_pde_and_combinatorial_physics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport pickle,numpy as np,sys\nsys.path.insert(0,'/holdout_task')\nfrom peclet_plume import _matrix\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; n=p['N']; h=p['h']; f=z['gt_field']; A=_matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h)\nX=(np.arange(n)[:,None]+.5)*h;Y=(np.arange(n)[None,:]+.5)*h\nsrc=z['gt_Q']*np.exp(-.5*((X-z['gt_source_xy'][0])**2+(Y-z['gt_source_xy'][1])**2)/p['sigma_s']**2)\nr=(A@f.ravel()).reshape(n,n)-src\nprint('r stats',np.quantile(r,[0,.01,.5,.99,1]),'src',src.max(),'normratio',np.linalg.norm(r)/np.linalg.norm(src))\nprint(",
+      "python3 - <<'PY'\nimport pickle,numpy as np,sys\nsys.path.insert(0,'/holdout_task')\nfrom peclet_plume import _matrix\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb'));p=z['problem'];n=p['N'];h=p['h'];f=z['gt_field'];A=_matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h)\nX=(np.arange(n)[:,None]+.5)*h;Y=(np.arange(n)[None,:]+.5)*h\nsrc=z['gt_Q']*np.exp(-.5*((X-z['gt_source_xy'][0])**2+(Y-z['gt_source_xy'][1])**2)/p['sigma_s']**2)\naf=(A@f.ravel()).reshape(n,n)\nfor fac in [1,h,h*h,1/h]: print(fac,np.linalg.norm(fac*af-src)/np.linalg.norm(src), np.max(fac*af))\nr=af*h-src;ij=np.unravel_inde",
+      "python3 - <<'PY'\nimport pickle,numpy as np,sys\nsys.path.insert(0,'/holdout_task')\nfrom peclet_plume import _matrix\nfrom scipy.sparse.linalg import splu\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb'));p=z['problem'];n=p['N'];h=p['h'];D=p['D'];X=(np.arange(n)[:,None]+.5)*h;Y=(np.arange(n)[None,:]+.5)*h\nsrc=z['gt_Q']*np.exp(-.5*((X-z['gt_source_xy'][0])**2+(Y-z['gt_source_xy'][1])**2)/p['sigma_s']**2)\nA=_matrix(p['ux_face'],p['uy_face'],D,p['kappa'],h); f=z['gt_field']; r=(A@f.ravel()).reshape(n,n)\nfor fac in [1,h,1/h]:\n e=fac*r-src; print('factor',fac,'relative residual',np.linalg.no",
+      "python3 - <<'PY'\nimport pickle,numpy as np,sys\nsys.path.insert(0,'/holdout_task')\nfrom peclet_plume import _matrix\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb'));p=z['problem'];n=p['N'];h=p['h'];f=z['gt_field'];ij=p['sensor_ij']\nprint('truth-field sensor agreement',np.corrcoef(f[ij[:,0],ij[:,1]],p['c_obs'])[0,1])\nA=_matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h)\nX=(np.arange(n)[:,None]+.5)*h;Y=(np.arange(n)[None,:]+.5)*h;x,y=z['gt_source_xy'];G=np.exp(-.5*((X-x)**2+(Y-y)**2)/p['sigma_s']**2)\nfor order,F in [('ij',f),('ji',f.T)]:\n for name,S in [('G',G),('Gnorm',G/(2*np.pi*p",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nimport peclet_plume as m\nfrom scipy.sparse.linalg import splu\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb'));p=z['problem']; n=p['N']; h=p['h']; lu=splu(m._matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h)); ij=p['sensor_ij']; obs=p['c_obs']; X=(np.arange(n)[:,None]+.5)*h; Y=(np.arange(n)[None,:]+.5)*h; sig=p['sigma_s']\ndef pred(x,y):\n s=np.exp(-.5*((X-x)**2+(Y-y)**2)/sig**2); return lu.solve(s.ravel()).reshape(n,n)[ij[:,0],ij[:,1]]\nbest=(1e99,None)\nfor x in np.linspace(.05,.95,37):\n for y in np.",
+      "python3 - <<'PY'\np='/holdout_task/peclet_plume.py'\ns=open(p).read()\nstart=s.index('    scale = max(float(np.nanmedian(np.abs(obs))), 0.02)')\nend=s.index(\"    return {'source_xy'\", start)\nend=s.index('\\n', end)\nnew='''    X = (np.arange(n)[:, None] + .5) * h\n    Y = (np.arange(n)[None, :] + .5) * h\n    def unit_predict(x, y):\n        src = np.exp(-.5*((X-x)**2+(Y-y)**2)/sig**2)\n        return lu.solve(src.ravel()).reshape(n,n)[rows, cols]\n    def score(x, y):\n        a = unit_predict(x, y)\n        q = max(0.0, float(np.dot(a, obs) / max(np.dot(a, a), 1e-30)))\n        r = (q*a-obs)**2\n        re",
+      "python3 - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nimport peclet_plume as m\nfrom scipy.sparse.linalg import splu\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; n=p['N']; h=p['h']; lu=splu(m._matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h)); ij=p['sensor_ij']; X=(np.arange(n)[:,None]+.5)*h; Y=(np.arange(n)[None,:]+.5)*h\nfor x,y,q in [(0.28,0.36,4.2),(0.73,0.47,42.27)]:\n src=q*np.exp(-.5*((X-x)**2+(Y-y)**2)/p['sigma_s']**2); f=lu.solve(src.ravel()).reshape(n,n); print((x,y,q),f[ij[:,0],ij[:,1]])\nprint('obs',p['c_obs']); print('fi",
+      "python3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_peclet.pkl','rb'))\nq=p['problem']\nprint('problem keys',q.keys())\nprint('gt xy',p['gt_source_xy'],'Q',p['gt_Q'])\nprint('field shape',p['gt_field'].shape)\nPY",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np\nfrom scipy.sparse.linalg import splu\nsys.path.insert(0,'/holdout_task')\nimport peclet_plume as m\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; n=p['N']; h=p['h']; D=p['D']; A=m._matrix(p['ux_face'],p['uy_face'],D,p['kappa'],h); f=z['gt_field']; ij=p['sensor_ij']; obs=p['c_obs']; X=(np.arange(n)[:,None]+.5)*h; Y=(np.arange(n)[None,:]+.5)*h; x,y=z['gt_source_xy']; G=z['gt_Q']*np.exp(-.5*((X-x)**2+(Y-y)**2)/p['sigma_s']**2)\nprint('A@truth relative residual',np.linalg.norm((A@f.ravel()).reshape(n,n)-G)/np.linalg.norm(G))",
+      "python3 - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nimport peclet_plume as m\nfrom scipy.sparse.linalg import splu\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb'));p=z['problem'];n=p['N'];h=p['h'];x,y=z['gt_source_xy'];sig=p['sigma_s'];ij=p['problem']['sensor_ij'] if False else p['sensor_ij'];obs=p['c_obs'];X=(np.arange(n)[:,None]+.5)*h;Y=(np.arange(n)[None,:]+.5)*h\nA=m._matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h); lu=splu(A)\nfor xy in [(x,y),(y,x)]:\n for fac in [1,h,1/h,1/(h*h)]:\n  src=z['gt_Q']*fac*np.exp(-.5*((X-xy[0])**2+(Y-xy[1])**2)/sig**",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nimport peclet_plume as m\nfrom scipy.sparse.linalg import splu\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; n=p['N']; h=p['h']; ij=p['sensor_ij']; obs=p['c_obs']; X=(np.arange(n)[:,None]+.5)*h; Y=(np.arange(n)[None,:]+.5)*h; sig=p['sigma_s']; L=p['L']\n# Compare reachable velocity/sign and sensor index conventions by best trimmed fit on coarse spatial grid.\nfor sx,sy,swap in [(1,1,False),(-1,-1,False),(1,-1,False),(-1,1,False),(1,1,True),(-1,-1,True)]:\n A=m._matrix(sx*p['ux_face'],sy",
+      "python3 - <<'PY'\nimport pickle,sys,numpy as np\nfrom scipy.sparse.linalg import splu\nsys.path.insert(0,'/holdout_task'); import peclet_plume as m\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; n=p['N']; h=p['h']; ij=p['sensor_ij']; obs=p['c_obs']; X=(np.arange(n)[:,None]+.5)*h; Y=(np.arange(n)[None,:]+.5)*h; sig=p['sigma_s']; lu=splu(m._matrix(p['ux_face'],p['uy_face'],p['D'],p['kappa'],h))\n# Compare robust losses over source space; this detects whether trimming is selecting the wrong sensors rather than an operator defect.\nfor keep in (18,16,14,12):\n best=(1e99,No",
+      "python3 - <<'PY'\np='/holdout_task/peclet_plume.py'\ns=open(p).read()\ns=s.replace(\"src = np.exp(-.5*((X-x)**2+(Y-y)**2)/sig**2)\\n        return lu.solve\", \"src = np.exp(-.5*((X-x)**2+(Y-y)**2)/sig**2) / (2.0*np.pi*sig**2)\\n        return lu.solve\")\na=s.index('    def residual(p):',s.index('def invert_point_source'))\nb=s.index(\"    return {'source_xy'\",a)\ns=s[:a]+'''    def residual(p):\n        a = unit_predict(p[0], p[1])\n        r = p[2] * a - obs\n        return r[np.argsort(np.abs(r))[:14]]\n    fit = least_squares(residual, [best[1], best[2], best[3]],\n                        bounds=([0.,0.,0.",
+      "python3 - <<'PY'\np='/holdout_task/peclet_plume.py'\ns=open(p).read()\ns=s.replace('src = np.exp(-.5*((X-x)**2+(Y-y)**2)/sig**2) / (2.0*np.pi*sig**2)', 'src = np.exp(-.5*((X-x)**2+(Y-y)**2)/sig**2)')\nopen(p,'w').write(s)\nPY\npython3 - <<'PY'\nimport sys,pickle,time,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom peclet_plume import *\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; t=time.time(); print('fit',invert_point_source(p),'time',time.time()-t,'truth',z['gt_source_xy'],z['gt_Q'])\n# Operator conservation/sign smoke test: zero source maps to zero field and outp",
+      "python3 - <<'PY'\nimport sys,pickle,time,numpy as np,hashlib\nsys.path.insert(0,'/holdout_task')\nfrom peclet_plume import invert_point_source,forward_peclet_field\nz=pickle.load(open('/holdout_task/public_peclet.pkl','rb')); p=z['problem']; t=time.time(); r=invert_point_source(p); dt=time.time()-t\npos=np.linalg.norm(np.asarray(r['source_xy'])-z['gt_source_xy'])/p['L']; qerr=abs(r['strength_Q']-z['gt_Q'])/abs(z['gt_Q'])\nzero=forward_peclet_field(p['ux_face'],p['uy_face'],p['D'],p['kappa'],np.zeros((p['N'],p['N'])),p['h'])\nprint('fit',r,'position_error_over_L',pos,'relative_Q_error',qerr,'seconds',",
+      "sed -n '1,220p' /holdout_task/peclet_plume.py; python3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_peclet.pkl','rb'))['problem']\nfor k,v in p.items():\n if not hasattr(v,'shape'): print(k,repr(v))\nPY"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/peclet_plume.py",
+        "filename": "peclet_plume.py",
+        "bytes": 4201,
+        "sha256": "4ffbda2f9f8eb93168a225b6ac4292ec77dc51db88a0960770b233cf30ed0fe4",
+        "content_addressed_ref": "content_addressed_blobs/4ffbda2f9f8eb93168a225b6ac4292ec77dc51db88a0960770b233cf30ed0fe4.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/peclet_plume.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_combinatorial_physics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "5cabe2aef1345196f62201ce78edbb54b7fa304574d6eb7049c436b75d58cdd8",
+      "verified_turn": 28,
+      "verification_command": "sed -n '1,220p' /holdout_task/peclet_plume.py; python3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_peclet.pkl','rb'))['problem']\nfor k,v in p.items():\n if not hasattr(v,'shape'): print(k,repr(v))\nPY",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "5cabe2aef1345196f62201ce78edbb54b7fa304574d6eb7049c436b75d58cdd8",
+        "expected_candidate_sha256": "5cabe2aef1345196f62201ce78edbb54b7fa304574d6eb7049c436b75d58cdd8",
+        "computed_candidate_sha256": "5cabe2aef1345196f62201ce78edbb54b7fa304574d6eb7049c436b75d58cdd8",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/peclet_plume.py",
+            "bytes": 4201
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v06_5cabe2ae"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

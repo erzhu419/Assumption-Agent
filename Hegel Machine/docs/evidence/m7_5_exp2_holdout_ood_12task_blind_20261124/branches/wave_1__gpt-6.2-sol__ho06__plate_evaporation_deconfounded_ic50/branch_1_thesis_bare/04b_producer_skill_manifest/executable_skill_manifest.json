@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_194ae61cbfb3",
+    "source_hash": "194ae61cbfb36a4a4b85038386b7ba45fa3679be1aa82540a602a52833836ab7",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task; python - <<'PY'\nimport pickle,importlib.util\np=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\ndef describe(x,depth=0):\n print(' '*depth,type(x),getattr(x,'shape',''),len(x) if hasattr(x,'__len__') else '',str(x)[:180] if not isinstance(x,(dict,list,tuple)) else '')\n if depth>=4:return\n if isinstance(x,dict):\n  for k,v in list(x.items())[:16]: print(' '*depth,repr(k));describe(v,depth+1)\n elif isinstance(x,(list,tuple)) and x:describe(x[0],depth+1)\ndescribe(p)\nprint('scientific packages:', {m: bool(importlib.util.find_spec(m)) for m in ('numpy','scipy','pandas')}",
+      "cd /holdout_task; python3 - <<'PY'\nimport pickle, importlib.util\nprint('packages:', {m: bool(importlib.util.find_spec(m)) for m in ('numpy','scipy','pandas')})\np=pickle.load(open('public_screen.pkl','rb'))\ndef describe(x,d=0):\n print(' '*d,type(x).__name__,getattr(x,'shape',''),len(x) if hasattr(x,'__len__') else '',repr(x)[:130] if not isinstance(x,(dict,list,tuple)) else '')\n if d>=5:return\n if isinstance(x,dict):\n  for k,v in list(x.items())[:20]: print(' '*d,repr(k));describe(v,d+1)\n elif isinstance(x,(list,tuple)) and x:describe(x[0],d+1)\ndescribe(p)\nPY",
+      "cd /holdout_task; python3 - <<'PY'\nimport pickle,collections,numpy as np\np=pickle.load(open('public_screen.pkl','rb'))\nfor q in p['plates']:\n w=q['wells']; print(q['plate_id'],collections.Counter(x['well_type'] for x in w)); print('coords',len({(x['row'],x['col']) for x in w}),min(x['row'] for x in w),max(x['row'] for x in w),min(x['col'] for x in w),max(x['col'] for x in w));\n for t in ('DMSO','POS_KILL'):\n  a=[x for x in w if x['well_type']==t]; print(t,np.round(np.percentile([x['fluorescence'] for x in a],[0,5,25,50,75,95,100]),1));\n  print('row edge distance, count, median:',[(d,len(v),rou",
+      "cd /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_screen.pkl','rb'))['plates']\nfor q in p[:2]:\n print(q['plate_id']); b=np.median([w['fluorescence'] for w in q['wells'] if w['well_type']=='POS_KILL']);\n for w in q['wells']:\n  if w['well_type']=='DMSO':\n   r,c=w['row'],w['col']; print(r,c,min(r,15-r,c,23-c),round(w['fluorescence']-b,1))\nPY",
+      "cd /holdout_task && cat > assay_ic50.py <<'PY'\n\"\"\"Robust, spatially corrected Hill fits for a 384-well viability assay.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\n\n_LN10 = np.log(10.0)\n\n\ndef _coordinates(wells):\n    row = np.array([w['row'] for w in wells], dtype=float)\n    col = np.array([w['col'] for w in wells], dtype=float)\n    distance = np.minimum.reduce([row, 15 - row, col, 23 - col])\n    return distance, (row - 7.5) / 7.5, (col - 11.5) / 11.5\n\n\ndef _gain(coordinates, params):\n    distance, row, col = coordinates\n    interior, edge, "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 2872,
+        "sha256": "3ceeca638c725e4536c6241597a9dfc4c58f321e104c5a7840a275b1faa3332a",
+        "content_addressed_ref": "content_addressed_blobs/3ceeca638c725e4536c6241597a9dfc4c58f321e104c5a7840a275b1faa3332a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "194ae61cbfb36a4a4b85038386b7ba45fa3679be1aa82540a602a52833836ab7",
+      "verified_turn": 5,
+      "verification_command": "cd /holdout_task && cat > assay_ic50.py <<'PY'\n\"\"\"Robust, spatially corrected Hill fits for a 384-well viability assay.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\n\n_LN10 = np.log(10.0)\n\n",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

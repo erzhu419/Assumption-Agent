@@ -1,0 +1,142 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_f86c4f80b3e6",
+    "source_hash": "f86c4f80b3e63b95a22c10fa81e497c6a3d6cf46ca0ce6bf0320b6a86cf27cc0",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/compare_ic50.py",
+        "archived_relpath": "producers/tmp__compare_ic50.py",
+        "bytes": 3615,
+        "sha256": "4b58e8f437a57bb8dd6d9eb570ecfa6f292d497c24c0859b4825aacc83017048"
+      },
+      {
+        "container_path": "/tmp/diagnose_ic50.py",
+        "archived_relpath": "producers/tmp__diagnose_ic50.py",
+        "bytes": 2521,
+        "sha256": "537b741d0625cc696bc3097ec47bd8c9a46f46287abb6206a1de01a1571cc170"
+      },
+      {
+        "container_path": "/tmp/screen_controls_ic50.py",
+        "archived_relpath": "producers/tmp__screen_controls_ic50.py",
+        "bytes": 2417,
+        "sha256": "ad93216e349c12d1519720c27feae4cf7b1c603c509f6e1646796494df1ae069"
+      },
+      {
+        "container_path": "/tmp/stress_ic50.py",
+        "archived_relpath": "producers/tmp__stress_ic50.py",
+        "bytes": 2344,
+        "sha256": "6316ed1fbcf8cf5dcccc551708153d3eaaf0d680e3fe28a6d6296def727899f8"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python3 - <<'PY'\nimport pickle\nwith open('public_screen.pkl','rb') as f: d=pickle.load(f)\ndef peek(obj, depth=0):\n    print('  '*depth, type(obj), getattr(obj,'shape',None), str(repr(obj))[:550] if depth>=2 else '')\n    if depth>=2:return\n    if isinstance(obj,dict):\n        for k,v in list(obj.items())[:20]: print('  '*depth,k);peek(v,depth+1)\n    elif isinstance(obj,(list,tuple)):\n        print('  '*depth,len(obj))\n        if obj:peek(obj[0],depth+1)\npeek(d)\nPY\nif [ -f /tmp/hegel_wormhole_skills/autogenous_control_panel_deconfounding.py ]; then sed -n '1,145p' /",
+      "cd /holdout_task && python3 - <<'PY'\nfrom collections import Counter, defaultdict\nimport pickle\nimport numpy as np\nimport scipy\nfrom hegel_wormhole_skills.autogenous_control_panel_deconfounding import align_control_panel\nprint('SciPy', scipy.__version__)\nd=pickle.load(open('public_screen.pkl','rb'))\nby_compound=defaultdict(list)\nfor p in d['plates']:\n    wells=p['wells']\n    print('\\n',p['plate_id'], Counter(w['well_type'] for w in wells))\n    for kind in ('DMSO','POS_KILL'):\n        for edge in range(8):\n            a=[w['fluorescence'] for w in wells if w['well_type']==kind and min(w['row'],",
+      "cat > /tmp/compare_ic50.py <<'PY'\nimport pickle\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom scipy.special import expit\nD=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nP=D['plates']; truth=D['gt']\n\ndef coordinates(wells):\n    return np.array([(w['row'],w['col']) for w in wells],float).T\n\ndef basis(rc,kind,t):\n    r,c=rc\n    a,b=r/15,c/23\n    dr,dc=np.minimum(r,15-r),np.minimum(c,23-c)\n    d=np.minimum(dr,dc)\n    one=np.ones_like(r)\n    if kind=='scalar': return one[:,None]\n    if kind=='poly': return np.array(",
+      "cat > /holdout_task/assay_ic50.py <<'PY'\n\"\"\"Control-calibrated Hill fits for 384-well fluorescence viability screens.\"\"\"\n\nfrom collections import defaultdict\n\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom scipy.special import expit\n\n\ndef _spatial_basis(row, col, decay):\n    depth = np.minimum.reduce((row, 15 - row, col, 23 - col))\n    return np.column_stack((np.ones_like(row), np.exp(-depth / decay),\n                            row / 15 - 0.5, col / 23 - 0.5))\n\n\ndef _fit_control_gain(row, col, signal, decay):\n    design = _spatial_basis(row, col, decay)\n    ",
+      "cat > /tmp/stress_ic50.py <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nfrom assay_ic50 import estimate_compound_hill_parameters as estimate\nimport numpy as np\nfrom scipy.special import expit\n\ndef simulate(seed, varied):\n    rng=np.random.default_rng(seed)\n    r,c=np.indices((16,24)).reshape(2,-1)\n    depth=np.minimum.reduce([r,15-r,c,23-c])\n    border=np.flatnonzero(depth<=1); inner=np.flatnonzero(depth>=2)\n    doses=np.linspace(-3,2,8)\n    truth={f'S{i:02d}': (potency, rng.uniform(.7,1.65)) for i,potency in enumerate(np.linspace(-2.35,1.63,12))}\n    plates=[]\n    for j in range(4):\n ",
+      "cat > /tmp/diagnose_ic50.py <<'PY'\nimport sys\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nsys.path.insert(0, '/holdout_task')\nimport assay_ic50 as base\n\nsource = Path(base.__file__).read_text()\nshared = '''    decay = minimize_scalar(profile, bounds=(0.5, 8.), method='bounded',\n                            options={'xatol': 0.005}).x'''\nloop = '    for wells, row, col, kind, signal, dmso, reference in prepared:\\n        coef ='\nassert shared in source and loop in source\n\ndef adaptive(penalty):\n    code = source.replace(shared, shared + '\\n    common_de",
+      "cat > /tmp/screen_controls_ic50.py <<'PY'\nfrom pathlib import Path\nimport numpy as np\nimport pickle\n\n# Reuse the same simulated plates and oracle fitting setup for paired comparisons.\nsetup = Path('/tmp/diagnose_ic50.py').read_text().split('for name, estimator in ')[0]\nexec(compile(setup, '/tmp/diagnose_ic50.py', 'exec'))\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    public = pickle.load(f)\nneedle = '        signal = fluorescence - background\\n        reference = np.median(signal[positive])'\nassert needle in source\n\ndef candidate(penalty, cutoff, ctrl_scale):\n    code = source.r",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/assay_ic50.py')\ns = p.read_text()\nold = '''        signal = fluorescence - background\n        reference = np.median(signal[positive])'''\nnew = '''        signal = fluorescence - background\n        # A failed DMSO well loses signal on a scale much larger than the\n        # spatial gain variation; exclude it before fitting the gain field.\n        positive &= signal > 0.5 * np.median(signal[positive])\n        reference = np.median(signal[positive])'''\nassert old in s\ns = s.replace(old, new, 1)\na = s.index('    # Share the pe",
+      "set -e\ncd /\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\n\npath = '/holdout_task/assay_ic50.py'\nspec = importlib.util.spec_from_file_location('assay_ic50', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    data = pickle.load(f)\nprepared = []\nfor plate in data['plates']:\n    wells = plate['wells']\n    r, c = np.array([(w['row'], w['col']) for w in wells], float).T\n    y = np.array",
+      "set -e\ncd /tmp\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport hashlib\nimport importlib.util\nfrom pathlib import Path\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom scipy.special import expit\n\npath = Path('/holdout_task/assay_ic50.py')\nassert hashlib.sha256(path.read_bytes()).hexdigest() == 'f86c4f80b3e63b95a22c10fa81e497c6a3d6cf46ca0ce6bf0320b6a86cf27cc0'\nspec = importlib.util.spec_from_file_location('assay_ic50', path)\nmodel = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(model)\nwith open('/holdout_task/public_screen.pkl',",
+      "set -e\ncd /tmp\nsha256sum /holdout_task/assay_ic50.py\nfind /tmp/.hegel_candidate_archive/v02_f86c4f80 -maxdepth 3 -type f -name 'assay_ic50.py' -exec cmp /holdout_task/assay_ic50.py '{}' \\; -print\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom scipy.special import expit\n\npath = '/holdout_task/assay_ic50.py'\nspec = importlib.util.spec_from_file_location('assay_ic50', path)\nmodel = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(model)\nwith open('/holdout_task/public_"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__compare_ic50.py",
+      "primary_producer_container_path": "/tmp/compare_ic50.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 3664,
+        "sha256": "2203467cd05f60ff606af0cfccf87750a552ebc3433aa227900090681cde0597",
+        "content_addressed_ref": "content_addressed_blobs/2203467cd05f60ff606af0cfccf87750a552ebc3433aa227900090681cde0597.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "coordinates",
+      "basis",
+      "compute",
+      "get_keep",
+      "fitcurve"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f86c4f80b3e63b95a22c10fa81e497c6a3d6cf46ca0ce6bf0320b6a86cf27cc0",
+      "verified_turn": 13,
+      "verification_command": "set -e\ncd /tmp\nsha256sum /holdout_task/assay_ic50.py\nfind /tmp/.hegel_candidate_archive/v02_f86c4f80 -maxdepth 3 -type f -name 'assay_ic50.py' -exec cmp /holdout_task/assay_ic50.py '{}' \\; -print\nenv -u PYTHONPATH OPENBLAS_NUM_THREADS=1 pyt",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f86c4f80b3e63b95a22c10fa81e497c6a3d6cf46ca0ce6bf0320b6a86cf27cc0",
+        "expected_candidate_sha256": "f86c4f80b3e63b95a22c10fa81e497c6a3d6cf46ca0ce6bf0320b6a86cf27cc0",
+        "computed_candidate_sha256": "f86c4f80b3e63b95a22c10fa81e497c6a3d6cf46ca0ce6bf0320b6a86cf27cc0",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 3664
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_f86c4f80"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "coordinates",
+        "code": "def coordinates(wells):\n    return np.array([(w['row'], w['col']) for w in wells], float).T"
+      },
+      {
+        "name": "basis",
+        "code": "def basis(rc, kind, t):\n    (r, c) = rc\n    (a, b) = (r / 15, c / 23)\n    (dr, dc) = (np.minimum(r, 15 - r), np.minimum(c, 23 - c))\n    d = np.minimum(dr, dc)\n    one = np.ones_like(r)\n    if kind == 'scalar':\n        return one[:, None]\n    if kind == 'poly':\n        return np.array([one, a, b, (a - 0.5) ** 2, (b - 0.5) ** 2, (a - 0.5) * (b - 0.5)]).T\n    (er, ec) = (np.exp(-dr / t), np.exp(-dc / t))\n    em = np.exp(-d / t)\n    ss = np.exp(-r / t) + np.exp(-(15 - r) / t) + np.exp(-c / t) + np.exp(-(23 - c) / t)\n    extras = {'min': [em], 'min_rc': [em, a, b], 'sum_rc': [ss, a, b], 'split_rc': [er, ec, a, b], 'corner_rc': [er, ec, er * ec, a, b], 'min_corner_rc': [em, er * ec, a, b], 'min_cross': [em, a, b, a * b], 'min_quad': [em, a, b, (a - 0.5) ** 2, (b - 0.5) ** 2]}[kind]\n    return np.array([one] + extras).T"
+      },
+      {
+        "name": "compute",
+        "code": "def compute(p, kind, t, keep):\n    from scipy.optimize import least_squares\n    w = p['wells']\n    rc = coordinates(w)\n    y = np.array([q['fluorescence'] for q in w])\n    ty = np.array([q['well_type'] for q in w])\n    x = basis(rc, kind, t)\n    bg = np.median(y[ty == 'POS_KILL'])\n    sel = (ty == 'DMSO') & keep\n    X = x[sel]\n    Y = y[sel] - bg\n    scale = np.median(Y)\n    z = np.linalg.lstsq(X, Y / scale, rcond=None)[0]\n    fit = least_squares(lambda z: X @ z - Y / scale, z, loss='cauchy', f_scale=0.035)\n    gain = x @ fit.x * scale\n    return ((y - bg) / gain, gain, y - bg, ty)"
+      },
+      {
+        "name": "get_keep",
+        "code": "def get_keep(p, fold):\n    w = p['wells']\n    rc = coordinates(w)\n    return (rc[0] * 2 + rc[1] // 3) % 4 != fold if fold is not None else np.ones(len(w), bool)"
+      },
+      {
+        "name": "fitcurve",
+        "code": "def fitcurve(x, y, g):\n    from scipy.special import expit\n    from scipy.optimize import least_squares\n    start = x[np.argmin(np.abs(y - 0.5))]\n    w = g / np.median(g)\n    f = lambda z: (expit(np.log(10) * z[1] * (z[0] - x)) - y) * w\n    return least_squares(f, [start, 1.0], bounds=([x.min() - 4, 0.1], [x.max() + 4, 8]), loss='cauchy', f_scale=0.035).x"
+      }
+    ]
+  }
+}

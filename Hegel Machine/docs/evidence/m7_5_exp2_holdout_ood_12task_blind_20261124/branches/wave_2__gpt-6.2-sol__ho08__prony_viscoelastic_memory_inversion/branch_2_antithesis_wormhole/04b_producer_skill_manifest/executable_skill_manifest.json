@@ -1,0 +1,186 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_prony_viscoelastic_memory_849c940de0cf",
+    "source_hash": "849c940de0cf6a94da8c82deaafc8511ba6e56f86ab15572174f19af199f1015",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho08__prony_viscoelastic_memory_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/prony_adaptive_center.py",
+        "archived_relpath": "producers/tmp__prony_adaptive_center.py",
+        "bytes": 2617,
+        "sha256": "3b637cce33a8a59e87478b6889ff84fb19f8d5071f5a7b3ffd31c91ffec804d3"
+      },
+      {
+        "container_path": "/tmp/prony_adaptive_slow.py",
+        "archived_relpath": "producers/tmp__prony_adaptive_slow.py",
+        "bytes": 1659,
+        "sha256": "4be5b949062908f066432b892c2166c469179e0b76f62b2c0ea93a4b99d72e16"
+      },
+      {
+        "container_path": "/tmp/prony_grid_prior.py",
+        "archived_relpath": "producers/tmp__prony_grid_prior.py",
+        "bytes": 4208,
+        "sha256": "5624b28e41fde9551ef967edba1b8d7ba5e7660157f8bf64df8ee3c7f75bffee"
+      },
+      {
+        "container_path": "/tmp/prony_profile.py",
+        "archived_relpath": "producers/tmp__prony_profile.py",
+        "bytes": 1755,
+        "sha256": "a72124f094d734bce885ea9917dc11ccfb0b17517b33851330514771418951d3"
+      },
+      {
+        "container_path": "/tmp/prony_profile_center.py",
+        "archived_relpath": "producers/tmp__prony_profile_center.py",
+        "bytes": 2474,
+        "sha256": "96ba25dd76368c18d6f9cfcf0119ba28ddf0173b1339908579c8b47be169c930"
+      },
+      {
+        "container_path": "/tmp/prony_reference_spectrum.py",
+        "archived_relpath": "producers/tmp__prony_reference_spectrum.py",
+        "bytes": 1345,
+        "sha256": "0212fbb2ed602fd73ff6a3cb19fbc772da682095d197ff22fd0467a2e6894e9d"
+      },
+      {
+        "container_path": "/tmp/prony_regularization.py",
+        "archived_relpath": "producers/tmp__prony_regularization.py",
+        "bytes": 3350,
+        "sha256": "f14a8aff5f8279036dd094840804f50c1fd162ec9d1ccf85b03560898cd0fbff"
+      },
+      {
+        "container_path": "/tmp/prony_slow_marginal.py",
+        "archived_relpath": "producers/tmp__prony_slow_marginal.py",
+        "bytes": 1966,
+        "sha256": "f75e45bf19a8dc8d39c92b49ab14d47c13b7fc32e3acc1208d58800886dcb6e7"
+      },
+      {
+        "container_path": "/tmp/prony_slow_penalty_shape.py",
+        "archived_relpath": "producers/tmp__prony_slow_penalty_shape.py",
+        "bytes": 1538,
+        "sha256": "0af35183bb44a5941f0527ead608257b71e97c3a3d3c8c75c5ae0b19b79e919f"
+      },
+      {
+        "container_path": "/tmp/prony_slow_profile.py",
+        "archived_relpath": "producers/tmp__prony_slow_profile.py",
+        "bytes": 2185,
+        "sha256": "30db1da0d908d7f392a205f38394d4b9b900dee1870534f38ee84c5bab3635a8"
+      },
+      {
+        "container_path": "/tmp/prony_sparse.py",
+        "archived_relpath": "producers/tmp__prony_sparse.py",
+        "bytes": 5621,
+        "sha256": "207f6f55e24b8f19ca2b2d180fcb3451eb09de934371bf8cfa4c57e3f4518a9f"
+      },
+      {
+        "container_path": "/tmp/prony_sparse_fast.py",
+        "archived_relpath": "producers/tmp__prony_sparse_fast.py",
+        "bytes": 6116,
+        "sha256": "e28cb71b908fc47c28beaad1a30ee5fa3c3b5dfea051ace8aba2fe80dc7072aa"
+      },
+      {
+        "container_path": "/tmp/prony_sparse_matched.py",
+        "archived_relpath": "producers/tmp__prony_sparse_matched.py",
+        "bytes": 5909,
+        "sha256": "b36c16fa2aaaacafba876662b300a6e612352a0301aeb9c1f4345ea2d1811a01"
+      },
+      {
+        "container_path": "/tmp/prony_tail_ablation.py",
+        "archived_relpath": "producers/tmp__prony_tail_ablation.py",
+        "bytes": 1599,
+        "sha256": "0672418636f3b4447ee1125667a04bc404d741cda4763755e19e9e9ac891e50a"
+      },
+      {
+        "container_path": "/tmp/prony_worst_diagnosis.py",
+        "archived_relpath": "producers/tmp__prony_worst_diagnosis.py",
+        "bytes": 4399,
+        "sha256": "340c8387acb4bc3ac6e2ca7f8d66d59805e176415ed64319ad02ecc4da4ca469"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_grid_prior.py <<'PY'\nimport pickle\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.optimize import nnls\nfrom prony_sparse import design\nimport prony_rheology as p\n\nTAU = np.geomspace(.02, 20, 60)\nSPEC = [('grid',0,0,0), ('slow6',6,0,0), ('slow12',12,0,0), ('curved12',0,12,0), ('curved16',0,16,0), ('curved20',0,20,0), ('both',5,10,0)]\nSPEC += [(f'{name}_mass{mass}',a,b,mass) for name,a,b,_ in SPEC if name in ('grid','slow6','curved16','both') for mass in (0.5,1.5,3.)]\n\ndef estimate(t,s,y):\n    d=np.c_[np.ones_like(t),(t-t.mean())/np.ptp",
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_tail_ablation.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nimport prony_grid_prior as bench\nimport prony_rheology as p\n\n# All penalties are in units of the measured noise. An ultra-fast mode\n# contributes very little to a training ramp, even at substantial modulus.\nspec = [(0, 0, 0), (6, 0, 0), (12, 0, 0), (10, .5, 0)]\nspec += [(k, 0, f) for k in (6, 9, 12) for f in (.5, 1., 2.)]\nspec += [(k, .5, 1.) for k in (6, 9, 12)]\n\ndef estimate(t, s, y):\n    tau = bench.TAU\n    drift = np.c_[np.ones_like(t), (t-t.mean())/np.ptp(t)]\n    a = bench.d",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('prony_rheology.py')\ns = p.read_text()\ni = s.index('def fit_prony_and_predict_stress')\ns = s[:i] + '''def _estimate(t, strain, y):\n    tau = np.geomspace(0.02, 20.0, 60)\n    design = _design(t, strain, tau)\n    duration = np.ptp(t)\n    drift = np.column_stack((np.ones_like(t), (t - t.mean()) / duration))\n    baseline, residual = _calibrate(design, drift, y)\n    noise = _noise(residual)\n    keep = np.abs(residual - np.median(residual)) <= 4.5 * noise\n\n    q = np.linalg.qr(drift[keep], mode='reduced')[0]\n    a = design[ke",
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_slow_penalty_shape.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nimport prony_grid_prior as bench\nimport prony_rheology as p\n\n\ndef estimate(t, s, y):\n    tau = bench.TAU\n    duration = np.ptp(t)\n    drift = np.c_[np.ones_like(t), (t-t.mean())/duration]\n    a = bench.design(t, s, tau)\n    g, r = p._calibrate(a, drift, y)\n    noise = p._noise(r)\n    keep = abs(r-np.median(r)) <= 4.5*noise\n    q = np.linalg.qr(drift[keep], mode='reduced')[0]\n    b = y[keep] - q@(q.T@y[keep]); ap = a[keep] - q@(q.T@a[keep])\n    mag = np.linalg.norm(ap@g)/np.l",
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_profile_center.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nimport prony_grid_prior as bench\nimport prony_rheology as p\n\n\ndef estimate(t,s,y):\n    tau=bench.TAU\n    duration=np.ptp(t)\n    d=np.c_[np.ones_like(t),(t-t.mean())/duration]\n    a=bench.design(t,s,tau)\n    base,r=p._calibrate(a,d,y)\n    sig=p._noise(r)\n    keep=np.abs(r-np.median(r))<=4.5*sig\n    q=np.linalg.qr(d[keep],mode='reduced')[0]\n    a=a[keep]-q@(q.T@a[keep]); b=y[keep]-q@(q.T@y[keep])\n    mag=np.linalg.norm(a@base)/np.linalg.norm(s[keep]-s[keep].mean())\n    fast=1/(1+(",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/prony_sparse.py')\ns = p.read_text()\ns = s.replace(\"result = {'grid': [(1, grid,g0)]}\", \"v02_tau, v02_g = p._estimate(t, s, y)\\n    result = {'grid': [(1, grid,g0)], 'v02': [(1, v02_tau, v02_g)]}\")\na = s.index('        for k in (2., 4., np.log(len(b)), 10.):')\nb = s.index('    return result,keep', a)\ns = s[:a] + '''        for label, k in (('aic', 4.), ('bic', 2*np.log(len(b)))):\n            score = np.array([loss/sig**2+k*n for n,(_,_,loss,_) in enumerate(fits,1)])\n            models = [(w,tau,g) for w,(tau,g,_,_)",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/prony_sparse_matched.py').read_text()\ns = s.replace('for strength in (0, 6, 12):', 'for strength in (0, 6, 12):')\ns = s.replace('        row = (strength*sig/magnitude)*np.r_[0.,tau/np.ptp(t)]\\n        A = np.vstack((c,row))', '        fast = 1 / (1 + (tau / (2 * np.median(np.diff(t))))**2)\\n        rows = (sig/magnitude)*np.c_[np.zeros(2), np.stack((strength*tau/np.ptp(t), fast))]\\n        A = np.vstack((c,rows))')\ns = s.replace('nnls(A/norms, np.r_[b,0.],maxiter=100)', 'nnls(A/norms, np.r_[b,0.,0.],maxiter=100)')",
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_adaptive_slow.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nimport prony_grid_prior as bench\nimport prony_rheology as p\n\n\ndef estimate(t, s, y):\n    tau = bench.TAU\n    duration = np.ptp(t)\n    drift = np.c_[np.ones_like(t), (t-t.mean())/duration]\n    a = bench.design(t,s,tau)\n    g, r = p._calibrate(a,drift,y)\n    sig = p._noise(r)\n    keep = abs(r-np.median(r)) <= 4.5*sig\n    q = np.linalg.qr(drift[keep],mode='reduced')[0]\n    b = y[keep] - q@(q.T@y[keep])\n    ap = a[keep] - q@(q.T@a[keep])\n    mag = np.linalg.norm(ap@g)/np.linalg.norm(",
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_slow_marginal.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nfrom scipy.special import softmax\nimport prony_grid_prior as bench\nimport prony_rheology as p\n\n\ndef estimate(t, s, y):\n    duration = np.ptp(t)\n    tau = bench.TAU\n    drift = np.c_[np.ones_like(t), (t-t.mean())/duration]\n    a = bench.design(t, s, tau)\n    g, r = p._calibrate(a, drift, y)\n    noise = p._noise(r)\n    keep = abs(r-np.median(r)) <= 4.5*noise\n    q = np.linalg.qr(drift[keep], mode='reduced')[0]\n    b = y[keep] - q@(q.T@y[keep]); ap = a[keep] - q@(q.T@a[keep])\n    ma",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/prony_grid_prior.py').read_text()\ns = s.replace('out=defaultdict(list); pub={}; oracle=[]', 'out=defaultdict(list); pub={}; oracle=[]; diagnostics=[]')\ns = s.replace('vals,keep=estimate(tt,st,yy)', 'vals,keep=estimate(tt,st,yy)\\n                ts, final = p._estimate(tt,st,yy)')\ns = s.replace('oracle.append((slow,j,abs(go[0]/g[0]-1),*errs,int(np.sum(keep!=clean))))', '''oracle.append((slow,j,abs(go[0]/g[0]-1),*errs,int(np.sum(keep!=clean))))\n                pred = [design(u,w,ts)@final for w in (v,step)]\n        ",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/prony_profile_center.py').read_text()\ns = s.replace('for penalty in (0,6,12):', 'for penalty in (12,):').replace('for cutoff in (1.,4.,9.):', 'for cutoff in (4.,9.):')\na = s.index('            midpoint=(lo+hi)/2')\nb = s.index('    return out,keep', a)\ns = s[:a] + '''            width = (hi[0] - lo[0]) / max(g[0], 1e-12 * mag)\n            for threshold in (.10, .20, .35):\n                fraction = .75 * width**2 / (width**2 + threshold**2)\n                mid = (lo+hi)/2\n                out[f'adaptive_{cutoff:g}_{",
+      "set -e\ncd /holdout_task\ncat > /tmp/prony_reference_spectrum.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nimport prony_grid_prior as bench\nimport prony_rheology as p\n\ndef estimate(t,s,y):\n    tau=bench.TAU\n    duration=np.ptp(t)\n    drift=np.c_[np.ones_like(t),(t-t.mean())/duration]\n    a=bench.design(t,s,tau)\n    base,r=p._calibrate(a,drift,y)\n    sig=p._noise(r)\n    keep=abs(r-np.median(r))<=4.5*sig\n    q=np.linalg.qr(drift[keep],mode='reduced')[0]\n    a=a[keep]-q@(q.T@a[keep]); b=y[keep]-q@(q.T@y[keep])\n    mag=np.linalg.norm(a@base)/np.linalg.norm(s[keep]-s[keep].mean())\n   ",
+      "set -e\ncd /holdout_task\nartifact=prony_rheology.py\ncmp \"$artifact\" /tmp/.hegel_candidate_archive/v02_849c940d\nclean=$(mktemp -d)\ntrap 'rm -rf \"$clean\"' EXIT\ncp \"$artifact\" \"$clean/\"\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/prony_grid_prior.py').read_text()\na = s.index('from prony_sparse import design')\nb = s.index('\\ndef run():', a)\ns = s[:a] + '''import prony_rheology as p\n\nTAU = np.geomspace(.02, 20., 60)\n\ndef design(t, strain, tau):\n    # Independent direct quadrature of the interpolated strain history.\n    t = np.asarray(t)\n    increments = (np.diff(strain) / np.diff(t))[:,",
+      "set -e\nartifact=/holdout_task/prony_rheology.py\n# Verify against the recorded digest; the orchestrator's archive entry is a directory.\nprintf '%s  %s\\n' 849c940de0cf6a94da8c82deaafc8511ba6e56f86ab15572174f19af199f1015 \"$artifact\" | sha256sum -c -\nclean=$(mktemp -d)\ntrap 'rm -rf \"$clean\"' EXIT\ncp \"$artifact\" \"$clean/\"\ncd \"$clean\"\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys, pickle\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, str(Path.cwd()))\nfrom prony_rheology import fit_prony_and_predict_stress as fit\nimport prony_rheology as module\nassert Path(module.__file__).",
+      "set -e\nartifact=/holdout_task/prony_rheology.py\narchive=/tmp/.hegel_candidate_archive/v02_849c940d\nsha256sum \"$artifact\"\nfind \"$archive\" -maxdepth 4 -type f -printf '%P\\n'\nif archived=$(find \"$archive\" -maxdepth 4 -type f -name prony_rheology.py -print -quit) && [ -n \"$archived\" ]; then\n  cmp \"$artifact\" \"$archived\"\nfi\nclean=$(mktemp -d)\ntrap 'rm -rf \"$clean\"' EXIT\ncp \"$artifact\" \"$clean/\"\ncd \"$clean\"\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport pickle, sys\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, str(Path.cwd()))\nimport prony_rheology as p\nassert Path(p.__file__)",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport prony_rheology as p\nwith open('public_rheology.pkl','rb') as f:\n    data=pickle.load(f)\ne=data['experiment']; t,s,y,u,v=[e[k] for k in ('train_t','train_strain','train_stress_raw','test_t','test_strain')]\ntau=np.geomspace(.02,20,60); a=p._design(t,s,tau); test=p._design(u,v,tau)\nz=(t-t.mean())/np.ptp(t); d=np.c_[np.ones_like(t),z]\n# Adjacent secant-slope differences annihilate affine drift, even on a nonuniform grid.\ndef contrast(x):\n    return np.diff(np.diff(x,axi"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__prony_sparse_fast.py",
+      "primary_producer_container_path": "/tmp/prony_sparse_fast.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/prony_rheology.py",
+        "filename": "prony_rheology.py",
+        "bytes": 3772,
+        "sha256": "997d1ecdaf33c82a33acbba7b36373239d6a38eeb160c9c0a1ed9a69495a91bd",
+        "content_addressed_ref": "content_addressed_blobs/997d1ecdaf33c82a33acbba7b36373239d6a38eeb160c9c0a1ed9a69495a91bd.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/prony_rheology.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "849c940de0cf6a94da8c82deaafc8511ba6e56f86ab15572174f19af199f1015",
+      "verified_turn": 23,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport prony_rheology as p\nwith open('public_rheology.pkl','rb') as f:\n    data=pickle.load(f)\ne=data['experiment']; ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "849c940de0cf6a94da8c82deaafc8511ba6e56f86ab15572174f19af199f1015",
+        "expected_candidate_sha256": "849c940de0cf6a94da8c82deaafc8511ba6e56f86ab15572174f19af199f1015",
+        "computed_candidate_sha256": "849c940de0cf6a94da8c82deaafc8511ba6e56f86ab15572174f19af199f1015",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/prony_rheology.py",
+            "bytes": 3772
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_849c940d"
+    }
+  },
+  "structure": {
+    "full_producer_count": 15,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_multicopy_plasmid_cohort_196eeb369ed3",
+    "source_hash": "196eeb369ed3492b1925ae659e17b2b4855b5800379143715bf22fb20e0daf1a",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho12__multicopy_plasmid_cohort_consensus",
+    "wormhole_family": "fam_biomystery_genomic_homology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task && find /holdout_task/public_cohort -maxdepth 1 -type f -printf '%f\\n' | sort | head -30 && python3 - <<'PY'\nimport json,glob,os\nfor f in glob.glob('/holdout_task/public_cohort/*')[:3]:\n print('\\nFILE',os.path.basename(f)); d=json.load(open(f)); print(json.dumps(d,indent=2)[:3500])\nPY\nfind /tmp/hegel_wormhole_skills -maxdepth 2 -type f 2>/dev/null | head",
+      "python3 - <<'PY'\nimport json,glob,os\np='/holdout_task/public_cohort'\nr=json.load(open(p+'/reference_panel.json'))\nprint('REF', {k:(v if not isinstance(v,(list,dict)) else (len(v) if isinstance(v,list) else list(v))) for k,v in r.items()})\nfor f in sorted(glob.glob(p+'/isolate_*.json')):\n d=json.load(open(f)); print(os.path.basename(f),[(c.get('contig_id'),c.get('family_tag'),c.get('circular'),c.get('mean_depth'),len(c.get('sequence','')), sorted(k for k in c if k!='sequence')) for c in d.get('contigs',[]) if c.get('circular') or 'plasm' in str(c.get('family_tag','')).lower() or 'phage' in str(",
+      "python3 - <<'PY'\nimport json,glob,os\np='/holdout_task/public_cohort'\nfor fn in ['/holdout_task/public_cohort/isolate_03.json','/holdout_task/public_cohort/isolate_09.json']:\n d=json.load(open(fn)); print('\\n',os.path.basename(fn),d.keys());\n for c in d['contigs']:\n  print(c['family_tag'],len(c['sequence']),c['mean_depth'],c['sequence'].find(''))\n  if c.get('circular') and 'PLASMID' in c['family_tag']:\n   print('sequence start',c['sequence'][:100])\n# print CDS-ish reference and motif occurrences in plasmid(s)\nr=json.load(open(p+'/reference_panel.json'))['reference_wildtype_cds']; print('referen",
+      "python3 - <<'PY'\nimport json,glob,statistics\np='/holdout_task/public_cohort'; ref=json.load(open(p+'/reference_panel.json'))['reference_wildtype_cds']\nprint('ref len',len(ref),'codons',[ref[i:i+3] for i in range(0,len(ref),3)])\nfor f in sorted(glob.glob(p+'/isolate_*.json')):\n d=json.load(open(f)); chrom=[c['mean_depth'] for c in d['contigs'] if c['family_tag'].startswith('CHR_')]; med=statistics.median(chrom)\n for c in d['contigs']:\n  if c['family_tag']=='IncX4_CTX_PLASMID':\n   s=c['sequence']; best=(0,None,None)\n   # longest exact shared run against reference CDS\n   for i in range(len(ref)):",
+      "mkdir -p /holdout_task && cat > /holdout_task/plasmid_audit.py <<'PY'\n\"\"\"Cohort-wide audit of a conserved multicopy resistance plasmid.\"\"\"\nimport glob, json, os, statistics\n_CODE = {\n'TTT':'F','TTC':'F','TTA':'L','TTG':'L','TCT':'S','TCC':'S','TCA':'S','TCG':'S','TAT':'Y','TAC':'Y','TAA':'*','TAG':'*','TGT':'C','TGC':'C','TGA':'*','TGG':'W',\n'CTT':'L','CTC':'L','CTA':'L','CTG':'L','CCT':'P','CCC':'P','CCA':'P','CCG':'P','CAT':'H','CAC':'H','CAA':'Q','CAG':'Q','CGT':'R','CGC':'R','CGA':'R','CGG':'R',\n'ATT':'I','ATC':'I','ATA':'I','ATG':'M','ACT':'T','ACC':'T','ACA':'T','ACG':'T','AAT':'N','AAC'",
+      "set -e\npython3 - <<'PY'\nimport json, runpy, tempfile, shutil, os\nns=runpy.run_path('/holdout_task/plasmid_audit.py')\nfn=ns['audit_outbreak_cohort']\nresult=fn('/holdout_task/public_cohort')\nassert result['shared_plasmid_family_tag']=='IncX4_CTX_PLASMID'\nassert result['amino_acid_substitution']=='S7L'\nassert 3.2 <= result['median_plasmid_copy_number'] <= 7.5\n# Recheck with an independent process to catch import/path state dependencies.\nprint(json.dumps(result, sort_keys=True))\nPY\npython3 -m py_compile /holdout_task/plasmid_audit.py\nsha256sum /holdout_task/plasmid_audit.py\nls -l /holdout_task/pla",
+      "set -e\n# Stress-test the stated cohort boundaries: the missing-plasmid isolate must not\n# change the ≥90% family call, and a cohort with too few qualifying plasmids must fail.\npython3 - <<'PY'\nimport json, os, runpy, tempfile, shutil\nfn=runpy.run_path('/holdout_task/plasmid_audit.py')['audit_outbreak_cohort']\nbase='/holdout_task/public_cohort'\nassert fn(base)['amino_acid_substitution']=='S7L'\nwith tempfile.TemporaryDirectory() as d:\n    shutil.copy(os.path.join(base,'reference_panel.json'),d)\n    for i in range(1,15):\n        src=os.path.join(base,f'isolate_{i:02d}.json')\n        shutil.copy(s",
+      "set -e\npython3 - <<'PY'\nimport runpy, json\np='/holdout_task/plasmid_audit.py'\nfn=runpy.run_path(p)['audit_outbreak_cohort']\nr=fn('/holdout_task/public_cohort')\nassert r == {'shared_plasmid_family_tag':'IncX4_CTX_PLASMID','median_plasmid_copy_number':r['median_plasmid_copy_number'],'amino_acid_substitution':'S7L'}\nassert 3.2 <= r['median_plasmid_copy_number'] <= 7.5\nprint(json.dumps(r,sort_keys=True))\nPY\npython3 -m py_compile /holdout_task/plasmid_audit.py\nsha256sum /holdout_task/plasmid_audit.py\nls -l /holdout_task/plasmid_audit.py",
+      "set -e\npython3 - <<'PY'\nimport runpy, json, pathlib\np=pathlib.Path('/holdout_task/plasmid_audit.py')\nassert p.is_file()\nf=runpy.run_path(str(p))['audit_outbreak_cohort']\nr=f('/holdout_task/public_cohort')\nassert r['shared_plasmid_family_tag']=='IncX4_CTX_PLASMID'\nassert r['amino_acid_substitution']=='S7L'\nassert 3.2 <= r['median_plasmid_copy_number'] <= 7.5\nprint(json.dumps(r, sort_keys=True))\nPY\npython3 -m py_compile /holdout_task/plasmid_audit.py\nsha256sum /holdout_task/plasmid_audit.py\nls -l /holdout_task/plasmid_audit.py",
+      "set -e\npython3 - <<'PY'\nimport json, runpy, shutil, tempfile, os\npath='/holdout_task/plasmid_audit.py'\nfn=runpy.run_path(path)['audit_outbreak_cohort']\nr=fn('/holdout_task/public_cohort')\nassert r['shared_plasmid_family_tag']=='IncX4_CTX_PLASMID'\nassert r['amino_acid_substitution']=='S7L'\nassert 3.2 <= r['median_plasmid_copy_number'] <= 7.5\n# Relevant worst-case check: losing more plasmid-bearing isolates must not yield a false family call.\nwith tempfile.TemporaryDirectory() as d:\n    src='/holdout_task/public_cohort'\n    shutil.copy(os.path.join(src,'reference_panel.json'),d)\n    for i in ran",
+      "set -e\npython3 - <<'PY'\nimport json, runpy, pathlib\np=pathlib.Path('/holdout_task/plasmid_audit.py')\nassert p.is_file(), 'required artifact missing'\nfn=runpy.run_path(str(p))['audit_outbreak_cohort']\nr=fn('/holdout_task/public_cohort')\nassert r['shared_plasmid_family_tag']=='IncX4_CTX_PLASMID'\nassert r['amino_acid_substitution']=='S7L'\nassert 3.2 <= r['median_plasmid_copy_number'] <= 7.5\nprint(json.dumps(r,sort_keys=True))\nPY\npython3 -m py_compile /holdout_task/plasmid_audit.py\nsha256sum /holdout_task/plasmid_audit.py\nls -l /holdout_task/plasmid_audit.py",
+      "set -e\npython3 - <<'PY'\nimport json, runpy, tempfile, shutil, os, statistics\nfn=runpy.run_path('/holdout_task/plasmid_audit.py')['audit_outbreak_cohort']\nsrc='/holdout_task/public_cohort'\nbase=fn(src)\nwith tempfile.TemporaryDirectory() as d:\n    shutil.copy(os.path.join(src,'reference_panel.json'),d)\n    for i in range(1,15): shutil.copy(os.path.join(src,f'isolate_{i:02d}.json'),d)\n    p=os.path.join(d,'isolate_14.json')\n    obj=json.load(open(p)); obj['contigs']=[c for c in obj['contigs'] if c.get('family_tag')!='IncX4_CTX_PLASMID']\n    json.dump(obj,open(p,'w'))\n    r=fn(d)\n    assert r['sha",
+      "set -e\npython3 - <<'PY'\nimport json, runpy, tempfile, shutil, os, statistics\nfn=runpy.run_path('/holdout_task/plasmid_audit.py')['audit_outbreak_cohort']\nsrc='/holdout_task/public_cohort'\nbase=fn(src)\nwith tempfile.TemporaryDirectory() as d:\n    shutil.copy(os.path.join(src,'reference_panel.json'),d)\n    for i in range(1,15): shutil.copy(os.path.join(src,f'isolate_{i:02d}.json'),d)\n    # Public data has 13 plasmid-positive isolates of 14; retain that 13/14 passing boundary.\n    r=fn(d)\n    assert r['shared_plasmid_family_tag']=='IncX4_CTX_PLASMID'\n    assert r['amino_acid_substitution']=='S7L'"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/plasmid_audit.py",
+        "filename": "plasmid_audit.py",
+        "bytes": 3054,
+        "sha256": "f13665c6b33cf65626e0b582eddf65affe764c529d4c8582caacdacb93ef8fa0",
+        "content_addressed_ref": "content_addressed_blobs/f13665c6b33cf65626e0b582eddf65affe764c529d4c8582caacdacb93ef8fa0.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/plasmid_audit.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_genomic_homology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "196eeb369ed3492b1925ae659e17b2b4855b5800379143715bf22fb20e0daf1a",
+      "verified_turn": 15,
+      "verification_command": "set -e\npython3 - <<'PY'\nimport json, runpy, tempfile, shutil, os, statistics\nfn=runpy.run_path('/holdout_task/plasmid_audit.py')['audit_outbreak_cohort']\nsrc='/holdout_task/public_cohort'\nbase=fn(src)\nwith tempfile.TemporaryDirectory() as d",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "196eeb369ed3492b1925ae659e17b2b4855b5800379143715bf22fb20e0daf1a",
+        "expected_candidate_sha256": "196eeb369ed3492b1925ae659e17b2b4855b5800379143715bf22fb20e0daf1a",
+        "computed_candidate_sha256": "196eeb369ed3492b1925ae659e17b2b4855b5800379143715bf22fb20e0daf1a",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/plasmid_audit.py",
+            "bytes": 3054
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_196eeb36"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

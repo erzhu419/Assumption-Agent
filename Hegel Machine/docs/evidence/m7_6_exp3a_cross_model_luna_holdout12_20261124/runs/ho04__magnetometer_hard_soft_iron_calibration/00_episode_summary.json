@@ -1,0 +1,172 @@
+{
+  "task_id": "ho04__magnetometer_hard_soft_iron_calibration",
+  "short_name": "magnetometer_ellipsoid_calibration",
+  "benchmark": "Hegel-OOD-Holdout-12",
+  "wave": "wave_1",
+  "scientific_domain": "Navigation & Sensor Fusion / Ellipsoid Calibration",
+  "wormhole_family": "fam_robust_control_and_safety",
+  "model": "gpt-6-luna",
+  "returned_model": "gpt-6-luna",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_A_TwoBranch_LiveGPT",
+  "declared_budget_multiplier": "2x_56_turns_plus_synthesis",
+  "selective_router_decision": null,
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "NUMERICAL_ACCURACY_OR_MECHANISTIC_MODEL_DEFECT",
+  "ended_by_finish": true,
+  "turns_used": 26,
+  "max_turns": 56,
+  "synthesis_decision": {
+    "selected_branch": "antithesis",
+    "selection_mechanism": "dialectical_trajectory_synthesis_medium",
+    "rationale": "[blinded_slot:candidate_a->antithesis] Both candidates cleared the stated held-out thresholds. Candidate A reported 0.1353° heading RMSE and 0.0999 µT hard-iron bias error, plus LOPO worst cases of 0.1384° and 0.1370 µT; its output also had determinant 1 and positive minimum eigenvalue. Candidate B reported slightly lower headline errors (0.1345° and 0.0424 µT), but did not provide comparable held-out perturbation checks or explicit SPD/determinant verification. Mechanical public metrics are null for both. | Candidate A has broader concrete validation, including LOPO, subsample, and row-order ",
+    "synthesized_candidate_sha256": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+    "thesis_bundle_tar_sha256": "57961a9dfef3e29e6eaf0da57065fb6c6868be8a94135b7cd5e57bfdd56d940d",
+    "antithesis_bundle_tar_sha256": "bcc7c36aca8cec2f87b0964b6ee06bea9e50d560967db2c49637a5c5a96d320b"
+  },
+  "postlock_branch_outcomes": {
+    "thesis_spawned": true,
+    "thesis_bare_run2_strict_pass": true,
+    "thesis_turns_used": 7,
+    "antithesis_wormhole_strict_pass": false,
+    "antithesis_turns_used": 19,
+    "oracle_either_branch_pass": true
+  },
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "assumption_refuted": "Raw-vector spherical norm invariance alone sufficiently identifies the SPD correction and hard-iron bias.",
+      "empirical_witness": "Public test measurements produced 63.31° circular heading RMSE and 30.43 μT bias error.",
+      "causal_blanket_diagnosis": "The sphere-only fit discarded known roll/pitch projection constraints.",
+      "sublated_pivot": "Fit the constant leveled vertical component and horizontal magnitude with calibration roll/pitch."
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_04_creep_corrected_retraction_c",
+    "root_A03_ill_posed_regularization_and_certificates",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_06_robust_network_assimilation",
+    "node_auto_07_control_panel_deconfounding"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration",
+      "source_forest_node": "node_auto_04_creep_corrected_retraction_c",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "first_loading_slip(force_N: np.ndarray, specimen_displacement_um: np.ndarray, hold_start: int, hold_end: int, *, threshold_um: float = 0.35) -> float | None; calibrate_retraction(times_s: list[np.ndarray], forces_N: list[np.ndarray], raw_displacements_um: list[np.ndarray], frame_compliance_um_per_N: float, *, transition_window_s: float = 0.015, curvature_to_noise: float = 0.8, slip_threshold_um: float = 0.35) -> tuple[float, list[float | None]]",
+      "scope_preconditions": [
+        {
+          "field": "specimen_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "hold_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "post_glitch_unloading_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "unloading_force_rate_magnitude_N_per_s",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "provenance_episode_id": "pt02__viscoelastic_retraction_and_slip_calibration"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid",
+      "source_forest_node": "node_auto_05_conservative_elliptic_multig",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float = 1e-8) -> np.ndarray",
+      "scope_preconditions": [
+        {
+          "field": "minimum_grid_axis_length",
+          "op": ">=",
+          "value": 2
+        },
+        {
+          "field": "minimum_permeability",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "grid_spacing",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": "<",
+          "value": 1
+        }
+      ],
+      "provenance_episode_id": "pt03__high_contrast_darcy_multigrid"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "c4fe31024d194ab6811ce5b1afc820d1d2e0ea0b05e2a4a17a786dd0ee141897",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_c4fe31024d19",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "antithesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_c4fe31024d19",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "thesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_3d1a1384cc1e",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "saved_artifact_snapshots": [
+    "mag_calibrator.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 7,
+  "prompt_tokens": 1198165,
+  "cached_tokens": 641280,
+  "completion_tokens": 22256,
+  "total_tokens": 1220421,
+  "effective_billed_tokens": 739461,
+  "wall_ms": 620587.52,
+  "provenance_verified": true,
+  "terminal_record_sha256": "614f95ee0e0822057588d3f870f8e16d94678582417eda0db224449043c85c38"
+}

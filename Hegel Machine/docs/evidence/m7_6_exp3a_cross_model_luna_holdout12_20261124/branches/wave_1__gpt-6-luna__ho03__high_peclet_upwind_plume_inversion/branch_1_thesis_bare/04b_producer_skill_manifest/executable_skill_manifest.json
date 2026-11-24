@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_high_peclet_plume_inversion_7e2027a1f362",
+    "source_hash": "7e2027a1f362eac8c14a066fbfa119a05a775ff463657ab898804b6b1c048817",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho03__high_peclet_upwind_plume_inversion",
+    "wormhole_family": "fam_multiscale_pde_and_combinatorial_physics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task && python - <<'PY'\nimport pickle\np='/holdout_task/public_peclet.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x))\nprint(x.keys() if isinstance(x,dict) else repr(x)[:2000])\nif isinstance(x,dict):\n for k,v in x.items(): print(k, type(v), getattr(v,'shape',None), repr(v)[:300] if not hasattr(v,'shape') else '')\nPY",
+      "python3 - <<'PY'\nimport pickle\np='/holdout_task/public_peclet.pkl'\nx=pickle.load(open(p,'rb'))\nprint(type(x))\nprint(x.keys() if isinstance(x,dict) else repr(x)[:2000])\nif isinstance(x,dict):\n for k,v in x.items(): print(k, type(v), getattr(v,'shape',None), repr(v)[:300] if not hasattr(v,'shape') else '')\nPY",
+      "python3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_peclet.pkl','rb'))['problem']\nfor k,v in p.items():\n print(k, type(v).__name__, getattr(v,'shape',None), repr(v)[:180] if not hasattr(v,'shape') else '')\nPY",
+      "cat > /holdout_task/peclet_plume.py <<'PY'\n\"\"\"Scharfetter-Gummel finite-volume model and robust point-source inversion.\"\"\"\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import splu\nfrom scipy.optimize import least_squares\n\n\ndef _bernoulli(z):\n    z = np.asarray(z, dtype=float)\n    out = np.empty_like(z)\n    small = np.abs(z) < 1.e-5\n    out[small] = 1. - z[small]/2. + z[small]**2/12. - z[small]**4/720.\n    pos = z > 50.\n    out[pos] = z[pos]*np.exp(-z[pos])\n    neg = z < -50.\n    out[neg] = -z[neg]\n    mid = ~(small | pos | neg)\n    out[mid] = z[mid]/np.expm1(",
+      "set -e\npython3 -m py_compile /holdout_task/peclet_plume.py\npython3 - <<'PY'\nimport pickle, sys, time, numpy as np\nsys.path.insert(0, '/holdout_task')\nimport peclet_plume as m\np = pickle.load(open('/holdout_task/public_peclet.pkl','rb'))\nq = p['problem']\nt0=time.perf_counter(); est=m.invert_point_source(q); elapsed=time.perf_counter()-t0\npos=np.linalg.norm(np.asarray(est['source_xy'])-p['gt_source_xy'])\nqerr=abs(est['strength_Q']-p['gt_Q'])/p['gt_Q']\nprint('estimate',est,'position_error',pos,'relative_Q_error',qerr,'runtime_s',elapsed)\n# Verify forward solver reproduces the provided truth field"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/peclet_plume.py",
+        "filename": "peclet_plume.py",
+        "bytes": 3220,
+        "sha256": "f9e76a8275b61e716d48bb29df92be4ae0f15d629e9312161acc50648524f7ea",
+        "content_addressed_ref": "content_addressed_blobs/f9e76a8275b61e716d48bb29df92be4ae0f15d629e9312161acc50648524f7ea.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/peclet_plume.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_combinatorial_physics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7e2027a1f362eac8c14a066fbfa119a05a775ff463657ab898804b6b1c048817",
+      "verified_turn": 6,
+      "verification_command": "set -e\npython3 -m py_compile /holdout_task/peclet_plume.py\npython3 - <<'PY'\nimport pickle, sys, time, numpy as np\nsys.path.insert(0, '/holdout_task')\nimport peclet_plume as m\np = pickle.load(open('/holdout_task/public_peclet.pkl','rb'))\nq =",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

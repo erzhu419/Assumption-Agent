@@ -1,0 +1,108 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_thermoacoustic_speed_shifted_ring_e35e7fd577f9",
+    "source_hash": "e35e7fd577f9525a82d24cb9729f7177109a3ab4c7fe2c271fd4a3895d28928d",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho07__thermoacoustic_speed_shifted_ring",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 886,
+        "sha256": "e4dad43e7aa9c717206b83d3ba189af36a1749edd2cc170e978d3bef635b611c"
+      },
+      {
+        "container_path": "/tmp/testfit.py",
+        "archived_relpath": "producers/tmp__testfit.py",
+        "bytes": 1185,
+        "sha256": "7d2b6e03dc4d77ad2ada935328a73c57493817965719fafdeec2610d984e7c39"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport pickle, numpy as np\np='/holdout_task/public_tat.pkl'\nwith open(p,'rb') as f:d=pickle.load(f)\nprint(type(d)); print(d.keys() if isinstance(d,dict) else len(d))\nif isinstance(d,dict):\n for k,v in d.items(): print(k, type(v), getattr(v,'shape',None), repr(v)[:500])\nPY\nls -la /holdout_task; find /tmp/hegel_wormhole_skills -maxdepth 2 -type f",
+      "python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_tat.pkl','rb') as f:d=pickle.load(f)\nfor i,s in enumerate(d):\n print('\\nSCAN',i,type(s), s.keys() if isinstance(s,dict) else '')\n if isinstance(s,dict):\n  for k,v in s.items(): print(k,type(v),getattr(v,'shape',None),repr(v)[:600])\nPY\npython3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_dispersive_wave_tomography import localize_pitch_catch\nprint(inspect.getsource(localize_pitch_catch))\nPY",
+      "python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_tat.pkl','rb') as f: data=pickle.load(f)\nfor j,item in enumerate(data):\n s=item['scan']; print('\\nSCAN',j)\n for k,v in s.items():\n  print(k, type(v).__name__, getattr(v,'shape',None), getattr(v,'dtype',None))\n  if isinstance(v,np.ndarray):\n   if v.size<100: print(v)\n   else: print('min/max/mean/std',np.nanmin(v),np.nanmax(v),np.nanmean(v),np.nanstd(v))\n  elif not isinstance(v,(int,float,str)): print(repr(v)[:200])\n print('truth',item['gt'])\nPY",
+      "python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.signal import find_peaks\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor k,item in enumerate(D):\n s=item['scan']; X=s['signals']; fs=s['fs_hz']; sens=s['sensor_xy_mm']; pin=s['calib_pin_xy_mm']\n print('\\nSCAN',k,'fs',fs,'c_nom',s['c_nominal_m_per_s'])\n for i,x in enumerate(X.T):\n  peaks,_=find_peaks(abs(x),distance=5,prominence=max(abs(x).max()*.08,.03))\n  peaks=sorted(peaks,key=lambda p:abs(x[p]),reverse=True)[:8]\n  peaks=sorted(peaks)\n  print(i, 'max',round(abs(x).max(),2),'peaks',[(int(p),round(x[p],2)) for p in peaks])\n pri",
+      "python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.signal import correlate\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor si,it in enumerate(D):\n s=it['scan']; X=s['signals']; xy=s['sensor_xy_mm']; pin=s['calib_pin_xy_mm']; fs=s['fs_hz']\n print('SCAN',si)\n # fit arrivals from high magnitude derivative peak pairs: pulse template derivative Gaussian centered arrival\n for i,x in enumerate(X.T):\n  # centers around prominent extrema adjacent pulse pairs; report strongest pair midpoint\n  dx=np.diff(x); inds=np.argsort(abs(dx))[-12:]; inds=sorted(inds)\n  print(i,[(j+1,round(float(dx[",
+      "python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import minimize_scalar\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor k,it in enumerate(D):\n s=it['scan']; X=s['signals']; fs=s['fs_hz']; d=np.linalg.norm(s['sensor_xy_mm']-s['calib_pin_xy_mm'],axis=1)\n t=d*fs/(1480*1000)\n centers=[]\n for i,x in enumerate(X.T):\n  lo=max(4,int(t[i]-12)); hi=min(len(x)-8,int(t[i]+12)); tt=np.arange(lo,hi,dtype=float)\n  best=(-1,None)\n  for sig in (2.,2.5,3.,3.5,4.):\n   for c in np.arange(lo,hi,.1):\n    z=np.arange(len(x)); q=-(z-c)*np.exp(-.5*((z-c)/sig)**2)\n    # local least squares in",
+      "cat > /tmp/explore.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.signal import correlate\nfrom scipy.optimize import differential_evolution\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor it in D:\n s=it['scan']; X=s['signals']; sens=s['sensor_xy_mm']; fs=s['fs_hz']; pin=s['calib_pin_xy_mm']; n=len(X)\n z=np.arange(-12,13); sig=3.0; tpl=-z*np.exp(-.5*(z/sig)**2); tpl/=np.linalg.norm(tpl)\n C=np.array([correlate(x,tpl,mode='same',method='fft') for x in X.T]).T\n def score(x,y,c):\n  d=np.linalg.norm(sens-[x,y],axis=1)*fs/(c*1000); idx=np.arange(16); a=np.clip(d.astype(int),0,n-1); f=d-a",
+      "cat > /tmp/testfit.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.signal import correlate\nfrom scipy.optimize import differential_evolution\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor it in D:\n s=it['scan']; X=s['signals']; sens=s['sensor_xy_mm']; fs=s['fs_hz']; n=len(X)\n z=np.arange(-12,13); tpl=-z*np.exp(-.5*(z/3.)**2); tpl/=np.linalg.norm(tpl)\n C=np.array([correlate(x,tpl,mode='same',method='fft') for x in X.T]).T\n def field(x,y,c):\n  d=np.linalg.norm(sens-[x,y],axis=1)*fs/(c*1000); a=np.floor(d).astype(int); f=d-a; ix=np.arange(16)\n  return C[a,ix]*(1-f)+C[np.minimum(a+1,n",
+      "cat > /holdout_task/thermoacoustic_recon.py <<'PY'\n\"\"\"Two-absorber localization for calibrated ring thermoacoustic measurements.\"\"\"\nimport numpy as np\nfrom scipy.signal import correlate\nfrom scipy.optimize import differential_evolution\n\n\ndef reconstruct_two_absorbers_mm(scan: dict) -> dict:\n    signals = np.asarray(scan['signals'], dtype=float)\n    sensors = np.asarray(scan['sensor_xy_mm'], dtype=float)\n    fs = float(scan['fs_hz'])\n    n, m = signals.shape\n    if m != len(sensors):\n        raise ValueError('signals must have one column per sensor')\n    # The bipolar N-wave is proportional to ",
+      "set -e\nmkdir -p /tmp/.hegel_candidate_archive/v02_e35e7fd5\ncp /holdout_task/thermoacoustic_recon.py /tmp/.hegel_candidate_archive/v02_e35e7fd5/thermoacoustic_recon.py\npython3 - <<'PY'\nimport hashlib, pickle, subprocess, sys\nfrom pathlib import Path\np=Path('/holdout_task/thermoacoustic_recon.py')\nprint('sha256',hashlib.sha256(p.read_bytes()).hexdigest())\n# Clean interpreter evaluates each supplied measurement and verifies schema, finite output, and tolerances.\ncode=r'''import pickle,sys,numpy as np\nsys.path.insert(0,\"/holdout_task\")\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm\n",
+      "set -e\npython3 - <<'PY'\nimport pickle, sys, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\n# Repeat exact measurements, then test modest independent gain/polarity changes and additive noise.\nfor i,item in enumerate(D):\n s=item['scan']; gt=item['gt']; base=reconstruct_two_absorbers_mm(s)\n q=np.asarray(gt['absorbers_xy_mm'],float)\n def metrics(r):\n  p=np.asarray(r['absorbers_xy_mm'],float); d=np.linalg.norm(p[:,None]-q[None,:],axis=2)\n  return max(d.min(axis=1).max(),d.min(axis",
+      "set -e\npython3 - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor si,item in enumerate(D):\n s=item['scan']; gt=item['gt']; q=np.asarray(gt['absorbers_xy_mm'])\n def haus(p):\n  d=np.linalg.norm(p[:,None,:]-q[None,:,:],axis=2); return max(d.min(1).max(),d.min(0).max())\n r0=reconstruct_two_absorbers_mm(s); print('scan',si,'baseline',haus(np.asarray(r0['absorbers_xy_mm'])),abs(r0['sound_speed_m_per_s']-gt['sound_speed_m_per_s']))\n for noise in (.05,.10):\n",
+      "set -e\npython3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_dispersive_wave_tomography import localize_pitch_catch\nprint('wormhole scope/operator:', inspect.signature(localize_pitch_catch))\nprint(inspect.getsource(localize_pitch_catch)[:1200])\nPY\npython3 - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor i,it in enumerate(D):\n s=it['scan']; gt=it['gt']; r=reconstruct_two_absorbers_mm(s)\n q=np.asarray(gt['absorbers_xy_mm'],float); p=n",
+      "set -e\npython3 - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm\nD=pickle.load(open('/holdout_task/public_tat.pkl','rb'))\nfor i,it in enumerate(D):\n s=it['scan']; gt=it['gt']; base=reconstruct_two_absorbers_mm(s)\n rng=np.random.default_rng(938+i); perm=rng.permutation(len(s['sensor_xy_mm']))\n z=dict(s); z['sensor_xy_mm']=np.asarray(s['sensor_xy_mm'])[perm]; z['signals']=np.asarray(s['signals'])[:,perm]\n r=reconstruct_two_absorbers_mm(z)\n p=np.asarray(r['absorbers_xy_mm']); q=np.asarray(gt['absorbers_xy_mm']);",
+      "set -e\npython3 - <<'PY'\nimport inspect\nimport hegel_wormhole_skills.wave1_aufhebung_crosswell_plume_tomography as w\nprint('crosswell scope does not match ring acoustics; signature:', inspect.signature(w.invert_gaussian_slowness_plume))\nprint('ring target bytes:', __import__('pathlib').Path('/holdout_task/thermoacoustic_recon.py').stat().st_size)\nPY\n# Verify final artifact in an isolated interpreter against both supplied measurements.\npython3 - <<'PY'\nimport pickle, subprocess, sys\ncode = r'''import pickle,sys,numpy as np\nsys.path.insert(0,\"/holdout_task\")\nfrom thermoacoustic_recon import recon",
+      "set -e\npython3 - <<'PY'\nimport hashlib, pickle, subprocess, sys\nfrom pathlib import Path\np=Path('/holdout_task/thermoacoustic_recon.py')\nassert p.is_file()\nprint('sha256',hashlib.sha256(p.read_bytes()).hexdigest())\ncode=r'''import pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom thermoacoustic_recon import reconstruct_two_absorbers_mm\nfor i,item in enumerate(pickle.load(open('/holdout_task/public_tat.pkl','rb'))):\n r=reconstruct_two_absorbers_mm(item['scan']); gt=item['gt']\n p=np.asarray(r['absorbers_xy_mm'],float); q=np.asarray(gt['absorbers_xy_mm'],float)\n assert set(r)=={'soun"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__testfit.py",
+      "primary_producer_container_path": "/tmp/testfit.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/thermoacoustic_recon.py",
+        "filename": "thermoacoustic_recon.py",
+        "bytes": 2170,
+        "sha256": "1283edc4a94078df4d26c3f53c0d32b4800c9e2700e9a74fbd6aff2c352b31e9",
+        "content_addressed_ref": "content_addressed_blobs/1283edc4a94078df4d26c3f53c0d32b4800c9e2700e9a74fbd6aff2c352b31e9.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/thermoacoustic_recon.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e35e7fd577f9525a82d24cb9729f7177109a3ab4c7fe2c271fd4a3895d28928d",
+      "verified_turn": 17,
+      "verification_command": "set -e\npython3 - <<'PY'\nimport hashlib, pickle, subprocess, sys\nfrom pathlib import Path\np=Path('/holdout_task/thermoacoustic_recon.py')\nassert p.is_file()\nprint('sha256',hashlib.sha256(p.read_bytes()).hexdigest())\ncode=r'''import pickle,sy",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e35e7fd577f9525a82d24cb9729f7177109a3ab4c7fe2c271fd4a3895d28928d",
+        "expected_candidate_sha256": "e35e7fd577f9525a82d24cb9729f7177109a3ab4c7fe2c271fd4a3895d28928d",
+        "computed_candidate_sha256": "e35e7fd577f9525a82d24cb9729f7177109a3ab4c7fe2c271fd4a3895d28928d",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermoacoustic_recon.py",
+            "bytes": 2170
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_e35e7fd5"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

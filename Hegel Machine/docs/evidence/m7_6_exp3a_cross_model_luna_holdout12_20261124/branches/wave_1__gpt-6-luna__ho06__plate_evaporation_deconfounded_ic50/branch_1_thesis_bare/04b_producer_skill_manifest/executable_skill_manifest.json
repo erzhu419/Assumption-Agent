@@ -1,0 +1,128 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_26e005869ce3",
+    "source_hash": "26e005869ce31e0f81ee41c3ab63d55a6b7fbeb95c479367ff8cb1cea2048589",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/eval.py",
+        "archived_relpath": "producers/tmp__eval.py",
+        "bytes": 1187,
+        "sha256": "6d1f9f5f475d00c2ec45a3022fa524b3b99250aacfdf6fb33c0d39c55f96859e"
+      },
+      {
+        "container_path": "/tmp/eval_surface.py",
+        "archived_relpath": "producers/tmp__eval_surface.py",
+        "bytes": 1186,
+        "sha256": "bc760a1797e4da225d0b062c1c6b362241249beed2b1918920ebe2ebe2cc0e44"
+      },
+      {
+        "container_path": "/tmp/joint.py",
+        "archived_relpath": "producers/tmp__joint.py",
+        "bytes": 2160,
+        "sha256": "21743864f77759ae493802c06af36a74a6e4ab7810f73e331e34060bd061c919"
+      },
+      {
+        "container_path": "/tmp/joint2.py",
+        "archived_relpath": "producers/tmp__joint2.py",
+        "bytes": 2200,
+        "sha256": "baba2d9a410b1a490a4cedc36570cfdf5785e6f4ac204eb8f5e57743014da1fb"
+      },
+      {
+        "container_path": "/tmp/model.py",
+        "archived_relpath": "producers/tmp__model.py",
+        "bytes": 1124,
+        "sha256": "a77ee03dee0ea73047e517a91c15fe8b1221beb33257397935d6f5d545e96142"
+      },
+      {
+        "container_path": "/tmp/test.py",
+        "archived_relpath": "producers/tmp__test.py",
+        "bytes": 160,
+        "sha256": "aa11610bcfc7ca15424c60653daf9e0f7489f9b4ff1a903338dae98eb0325686"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nprint(x.keys(),len(x['plates']))\nfor p in x['plates']:\n w=p['wells']; print(p['plate_id'],len(w),{t:sum(a['well_type']==t for a in w) for t in set(a['well_type'] for a in w)},len(set(a['compound_id'] for a in w if a['compound_id'])))\n print('keys',p.keys())\nPY",
+      "python3 - <<'PY'\nimport pickle, numpy as np\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nprint('gt type/keys:',type(x.get('gt')), list(x.get('gt',{}))[:3] if isinstance(x.get('gt'),dict) else '')\nfor p in x['plates']:\n for t in ('DMSO','POS_KILL'):\n  a=[w for w in p['wells'] if w['well_type']==t]\n  print(p['plate_id'],t,'median',np.median([w['fluorescence'] for w in a]),'range',round(min(w['fluorescence'] for w in a),1),round(max(w['fluorescence'] for w in a),1))\nPY\npython3 - <<'PY'\nimport scipy; print('scipy',scipy.__version__)\nPY",
+      "python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nprint(x['gt'])\nPY",
+      "python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nfor p in x['plates']:\n print(p['plate_id'])\n for w in p['wells']:\n  if w['well_type']=='COMPOUND' and w['row']<2: print(w)\nPY",
+      "python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nfor p in x['plates']:\n print(p['plate_id'],[(w['row'],w['col'],w['well_type']) for w in p['wells'] if w['well_type']!='COMPOUND'])\nPY",
+      "cat <<'PY' > /tmp/test.py\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nprint('loaded',len(x['plates']))\nPY\npython3 /tmp/test.py",
+      "cat <<'PY' > /tmp/model.py\nimport pickle, numpy as np\nfrom scipy.interpolate import Rbf\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nfor p in x['plates']:\n w=p['wells']; dm=[a for a in w if a['well_type']=='DMSO']; pk=[a for a in w if a['well_type']=='POS_KILL']\n # interpolate control surfaces separately with smooth thin plate spline\n def surf(arr):\n  r=np.array([a['row'] for a in arr]); c=np.array([a['col'] for a in arr]); v=np.array([a['fluorescence'] for a in arr]);\n  return Rbf(r,c,v,function='thin_plate',smooth=100)\n ds=surf(dm); ps=",
+      "cat <<'PY' > /tmp/inspect.py\nimport pickle,numpy as np\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nfor p in x['plates']:\n print(p['plate_id'])\n for k in ['DMSO','POS_KILL']:\n  a=[w for w in p['wells'] if w['well_type']==k]\n  print(k,[(w['row'],w['col'],round(w['fluorescence'])) for w in a])\n for cid in ['CMP_00','CMP_05','CMP_11']:\n  z=[w for w in p['wells'] if w['compound_id']==cid]\n  print(cid,[(round(np.mean([w['fluorescence'] for w in z if w['log10_conc_uM']==c]))) for c in sorted(set(w['log10_conc_uM'] for w in z))])\nPY\npython3 /tmp/inspect.py",
+      "cat > /holdout_task/assay_ic50.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef estimate_compound_hill_parameters(plates: list[dict]) -> dict[str, dict[str, float]]:\n    observations = {}\n    for plate in plates:\n        wells = plate['wells']\n        dmso = [w for w in wells if w.get('well_type') == 'DMSO']\n        kill = [w for w in wells if w.get('well_type') == 'POS_KILL']\n\n        def design(items):\n            r = np.array([w['row'] for w in items], dtype=float) / 15.0\n            c = np.array([w['col'] for w in items], dtype=float) / 23.0\n            return np",
+      "cat > /tmp/eval.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\ndef des(items):\n r=np.array([w['row'] for w in items],float)/15;c=np.array([w['col'] for w in items],float)/23\n return np.column_stack((np.ones(len(r)),r,c,r*r,c*c,r*c))\nobs={}\nfor p in x['plates']:\n ws=p['wells']; dm=[w for w in ws if w['well_type']=='DMSO']; kill=[w for w in ws if w['well_type']=='POS_KILL']; b=np.median([w['fluorescence'] for w in kill]); Xd=des(dm); dd=np.array([w['fluorescence'] for w in dm]); coef=np.linalg.lstsq(Xd,dd-b",
+      "rm -f /tmp/inspect.py /tmp/__pycache__/inspect*.pyc\ncat > /tmp/eval_surface.py <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\ndef des(items):\n r=np.array([w['row'] for w in items],float)/15;c=np.array([w['col'] for w in items],float)/23\n return np.column_stack((np.ones(len(r)),r,c,r*r,c*c,r*c))\nobs={}\nfor p in x['plates']:\n ws=p['wells']; dm=[w for w in ws if w['well_type']=='DMSO']; kill=[w for w in ws if w['well_type']=='POS_KILL']\n b=np.median([w['fluorescence'] for w in kill]); X=des(dm); y=np.array([w[",
+      "cat > /tmp/joint.py <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nplates=x['plates']; ids=sorted({w['compound_id'] for p in plates for w in p['wells'] if w['well_type']=='COMPOUND'}); ci={k:i for i,k in enumerate(ids)}\nR=[]; Y=[]; typ=[]; cidx=[]; dose=[]; pidx=[]\nfor pi,p in enumerate(plates):\n for w in p['wells']:\n  r=w['row']/15.; c=w['col']/23.\n  R.append([1,4*r*(1-r),4*c*(1-c),(r-.5)*(c-.5),(r-.5)**2,(c-.5)**2])\n  Y.append(w['fluorescence']); typ.append(w['well_type']); pidx.append(pi)\n  if w['well_ty",
+      "cp /tmp/joint.py /tmp/joint2.py && python3 - <<'PY'\np='/tmp/joint2.py'\ns=open(p).read()\ns=s.replace(\"R.append([1,4*r*(1-r),4*c*(1-c),(r-.5)*(c-.5),(r-.5)**2,(c-.5)**2])\", \"R.append([1,4*r*(1-r),4*c*(1-c),(r-.5)*(c-.5),(r-.5)**2,(c-.5)**2,(4*r*(1-r))**2,(4*c*(1-c))**2])\")\ns=s.replace('npl*7+len(ids)*2','npl*9+len(ids)*2').replace('7*j','9*j').replace('q[9*j+2:9*j+7]','q[9*j+2:9*j+9]').replace('np.tile([0,np.log(100),-1,-1,-1,-1,-1],npl)','np.tile([0,np.log(100),-1,-1,-1,-1,-1,-1,-1],npl)').replace('np.tile([1000,np.log(10000),1,1,1,1,1],npl)','np.tile([1000,np.log(10000),1,1,1,1,1,1,1],npl)').r",
+      "python3 - <<'PY'\np='/tmp/joint2.py'; s=open(p).read(); s=s.replace('q0[npl*7::2]','q0[npl*9::2]').replace('q0[npl*7+1::2]','q0[npl*9+1::2]'); open(p,'w').write(s)\nPY\npython3 /tmp/joint2.py",
+      "cat > /holdout_task/assay_ic50.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef estimate_compound_hill_parameters(plates: list[dict]) -> dict[str, dict[str, float]]:\n    ids = sorted({w['compound_id'] for p in plates for w in p['wells'] if w.get('well_type') == 'COMPOUND'})\n    ci = {k: i for i, k in enumerate(ids)}\n    rows, values, types, cidx, doses, pidx = [], [], [], [], [], []\n    for pi, plate in enumerate(plates):\n        for w in plate['wells']:\n            r, c = w['row'] / 15.0, w['col'] / 23.0\n            rows.append([1.0, 4*r*(1-r), 4*c*(1-c), (r-.5)*(c-",
+      "ls -l /holdout_task/assay_ic50.py && python3 -m py_compile /holdout_task/assay_ic50.py && python3 - <<'PY'\nimport sys,pickle\nsys.path.insert(0,'/holdout_task')\nfrom assay_ic50 import estimate_compound_hill_parameters\nx=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\nr=estimate_compound_hill_parameters(x['plates'])\nprint('compound_count',len(r),'keys_ok',all(set(v)=={'log10_ic50_uM','hill_slope'} for v in r.values()))\nPY"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__joint2.py",
+      "primary_producer_container_path": "/tmp/joint2.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 2875,
+        "sha256": "afd8d08679410855757c7481f477e92a4a505534f556f4cc8489e3e9b78a64e6",
+        "content_addressed_ref": "content_addressed_blobs/afd8d08679410855757c7481f477e92a4a505534f556f4cc8489e3e9b78a64e6.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "des"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "26e005869ce31e0f81ee41c3ab63d55a6b7fbeb95c479367ff8cb1cea2048589",
+      "verified_turn": 19,
+      "verification_command": "ls -l /holdout_task/assay_ic50.py && python3 -m py_compile /holdout_task/assay_ic50.py && python3 - <<'PY'\nimport sys,pickle\nsys.path.insert(0,'/holdout_task')\nfrom assay_ic50 import estimate_compound_hill_parameters\nx=pickle.load(open('/ho",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "des",
+        "code": "def des(items):\n    r = np.array([w['row'] for w in items], float) / 15\n    c = np.array([w['col'] for w in items], float) / 23\n    return np.column_stack((np.ones(len(r)), r, c, r * r, c * c, r * c))"
+      }
+    ]
+  }
+}

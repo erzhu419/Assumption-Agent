@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_inhibited_enzyme_kinetics_7e72e41b6c49",
+    "source_hash": "7e72e41b6c499221caf608af80638d80782e0e83e7ee69a7d84e0753603cb74e",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho02__inhibited_enzyme_rational_kinetics",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_enzyme.pkl', 'rb') as f:\n    data = pickle.load(f)\ndef describe(x, indent=''):\n    if isinstance(x, dict):\n        for k, v in x.items():\n            print(indent + str(k) + ':')\n            describe(v, indent + '  ')\n    elif isinstance(x, (list, tuple)) and any(isinstance(v, dict) for v in x):\n        for i, v in enumerate(x):\n            print(indent + str(i) + ':')\n            describe(v, indent + '  ')\n    else:\n        a = np.asarray(x)\n        print(indent, type(x).__name__, a.shape, a.dtype, a if a.s",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nwith open('public_enzyme.pkl', 'rb') as f:\n    data = pickle.load(f)\ndef describe(x, key='data'):\n    if isinstance(x, dict):\n        for k, v in x.items():\n            describe(v, f'{key}.{k}')\n    elif isinstance(x, (list, tuple)) and any(isinstance(v, dict) for v in x):\n        for i, v in enumerate(x):\n            describe(v, f'{key}[{i}]')\n    else:\n        a = np.asarray(x)\n        print(key, a.shape, a.dtype, a if a.size <= 20 else ('head', a[:3], 'tail', a[-2:]))\ndescribe(data)\nprint('SciPy', scipy.__ver",
+      "cd /holdout_task && cat > kinetics_id.py <<'PY'\n\"\"\"Identify a shared product-inhibited enzymatic cascade from trajectories.\"\"\"\n\nimport numpy as np\nfrom scipy.integrate import solve_ivp\nfrom scipy.optimize import least_squares\nfrom scipy.special import log_ndtr\n\n_NAMES = ('Vmax1', 'Km1', 'alpha_p', 'Vmax2', 'Km2', 'k_leak')\n\n\ndef _simulate(params, y0, t, amp, window):\n    \"\"\"Integrate each constant-feed segment separately at its actual breakpoints.\"\"\"\n    vmax1, km1, alpha, vmax2, km2, leak = params\n    start, stop = map(float, window)\n    breaks = [t[0], *sorted({x for x in (start, stop) if am",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import log_ndtr\nfrom kinetics_id import _fit, _simulate\nwith open('public_enzyme.pkl','rb') as f:\n    traces=pickle.load(f)['dataset']['train_trajectories']\nfor mode,floor,censor in [('constant',1,False),('constant',1,True),('point',1,True),('trace',1,True)]:\n    scores=[]\n    for j,tr in enumerate(traces):\n        p,_,_=_fit([x for i,x in enumerate(traces) if i!=j],floor,censor,mode)\n        t,z,amp,win=(tr[k] for k in ('t_obs','y_obs','feed_",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom kinetics_id import _fit, _simulate\nwith open('public_enzyme.pkl','rb') as f:\n    d=pickle.load(f)['dataset']\ntr=d['train_trajectories']\nbase, y0s, _=_fit(tr,1,True,'constant')\nblocks=[(_simulate(base,y0,z['t_obs'],z['feed_amp'],z['feed_window']),z['y_obs']) for z,y0 in zip(tr,y0s)]\npred, obs=(np.concatenate(a).ravel() for a in zip(*blocks))\nfor lo,hi in [(.075,.5),(.5,1.5),(1.5,3),(3,np.inf)]:\n    mask=(pred>=lo)&(pred<hi)\n    print('observed residual band',lo,hi,'n',mask.sum(),'centered sd',round",
+      "set -eu\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\npath = Path('kinetics_id.py')\ns = path.read_text()\ns = s.replace('def _fit(traces, noise_floor=1., censored=True, weighting=\\'point\\'):', 'def _fit(traces):\\n    \"\"\"Fit shared rates and latent starts under additive, zero-clipped noise.\"\"\"')\nstart = s.index(\"            if weighting == 'point':\")\nend = s.index('            errors.append', start)\ns = s[:start] + '''            r = (pred - obs) / .025\n            # A recorded zero means the pre-clipping measurement was nonpositive.\n            z = obs == 0\n            r[z] = np.sq",
+      "set -eu\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport inspect\nimport pickle\nimport numpy as np\nimport kinetics_id as model\n\nwith open('public_enzyme.pkl', 'rb') as stream:\n    public = pickle.load(stream)\ndata = public['dataset']\ntraces = data['train_trajectories']\nprint('Dataset fields:', sorted(data))\nfor j, tr in enumerate(traces):\n    print('Trace', j, 'fields:', sorted(tr), 'samples:', len(tr['t_obs']), 'initial observation:', tr['y0_approx'], 'feed:', tr['feed_amp'], tr['feed_window'])\nprint('Forward operator:\\n' + inspect.getsource(model._simu"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/kinetics_id.py",
+        "filename": "kinetics_id.py",
+        "bytes": 3138,
+        "sha256": "65c176db81c23edcaf971cf20a432a5023adadc61026f8cd11171f198a42603d",
+        "content_addressed_ref": "content_addressed_blobs/65c176db81c23edcaf971cf20a432a5023adadc61026f8cd11171f198a42603d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/kinetics_id.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7e72e41b6c499221caf608af80638d80782e0e83e7ee69a7d84e0753603cb74e",
+      "verified_turn": 8,
+      "verification_command": "set -eu\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport inspect\nimport pickle\nimport numpy as np\nimport kinetics_id as model\n\nwith open('public_enzyme.pkl', 'rb') as stream:\n    public = pickle.load",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "7e72e41b6c499221caf608af80638d80782e0e83e7ee69a7d84e0753603cb74e",
+        "expected_candidate_sha256": "7e72e41b6c499221caf608af80638d80782e0e83e7ee69a7d84e0753603cb74e",
+        "computed_candidate_sha256": "7e72e41b6c499221caf608af80638d80782e0e83e7ee69a7d84e0753603cb74e",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/kinetics_id.py",
+            "bytes": 3138
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_7e72e41b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

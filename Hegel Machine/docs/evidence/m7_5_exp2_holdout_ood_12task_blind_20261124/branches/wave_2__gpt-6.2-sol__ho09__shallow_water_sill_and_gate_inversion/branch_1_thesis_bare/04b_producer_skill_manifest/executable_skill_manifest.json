@@ -1,0 +1,63 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_shallow_water_sill_inversion_a4df142d359a",
+    "source_hash": "a4df142d359ae2a9ea981fc6bb0265343386a3c08e09f5a3bb1abaceca434e75",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho09__shallow_water_sill_and_gate_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\ndef show(x,depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print('  '*depth, k, end=': '); show(v,depth+1)\n elif hasattr(x,'shape'): print(type(x),x.shape,x.dtype, x.ravel()[:12])\n elif isinstance(x,(tuple,list)):\n  print(type(x),len(x));\n  for v in x[:2]: show(v,depth+1)\n else: print(repr(x)[:15000])\nshow(p)\nPY",
+      "python3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_canal.pkl','rb'))\ndef show(x,depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print('  '*depth, k, end=': '); show(v,depth+1)\n elif hasattr(x,'shape'): print(type(x),x.shape,x.dtype, x.ravel()[:12])\n elif isinstance(x,(tuple,list)):\n  print(type(x),len(x))\n  for v in x[:2]: show(v,depth+1)\n else: print(repr(x)[:22000])\nshow(p)\nPY",
+      "cat > /holdout_task/canal_inversion.py <<'PY'\n\"\"\"Infer canal parameters by matching downstream gauges to a finite-volume model.\"\"\"\n\nimport numpy as np\n\n\ndef _simulate(heights, modes, n, steps, dt, dx, times, cells):\n    \"\"\"Advance a batch of canals and retain only the requested samples.\"\"\"\n    g = 9.81\n    ratio = dt / dx\n    x = (np.arange(n) + 0.5) * dx\n    bed = np.asarray(heights)[:, None] * np.exp(-0.5 * ((x - 400.) / 45.) ** 2)\n    # Each interface sees the cell on each side, including reflected ghosts.\n    left = np.r_[0, np.arange(n)]\n    right = np.r_[np.arange(n), n - 1]\n    crest = "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/canal_inversion.py",
+        "filename": "canal_inversion.py",
+        "bytes": 3396,
+        "sha256": "cc1a558fee86f27c2e20f98da3c044b805837d1cdcecf3c3d75019a3eca48142",
+        "content_addressed_ref": "content_addressed_blobs/cc1a558fee86f27c2e20f98da3c044b805837d1cdcecf3c3d75019a3eca48142.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/canal_inversion.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a4df142d359ae2a9ea981fc6bb0265343386a3c08e09f5a3bb1abaceca434e75",
+      "verified_turn": 3,
+      "verification_command": "cat > /holdout_task/canal_inversion.py <<'PY'\n\"\"\"Infer canal parameters by matching downstream gauges to a finite-volume model.\"\"\"\n\nimport numpy as np\n\n\ndef _simulate(heights, modes, n, steps, dt, dx, times, cells):\n    \"\"\"Advance a batch o",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

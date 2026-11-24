@@ -1,0 +1,83 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_facility_bnb_1b0a7680939c",
+    "source_hash": "1b0a7680939cd7a5dee8c7fc8f2cb377e0440c34a45b9461e202b91b1777eaa4",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho11__certified_capacitated_facility_bnb",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/facility_cert_v1.py",
+        "archived_relpath": "producers/tmp__facility_cert_v1.py",
+        "bytes": 5599,
+        "sha256": "1b7fdc4762589302389ffb7de55fa4b05ab921660156d601af14cd86cb69b4d4"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('public_facility.pkl','rb') as f: d=pickle.load(f)\nprint('scipy:',scipy.__version__,'keys:',list(d))\nfor k,v in d.items():\n a=np.asarray(v); print(k,a.shape,a.dtype, a if a.size<=24 else (a.min(),a.max()))\nPY",
+      "cd /holdout_task && command -v python3 && python3 - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('public_facility.pkl','rb') as f: d=pickle.load(f)\nprint('scipy:',scipy.__version__,'keys:',list(d))\nfor k,v in d.items():\n a=np.asarray(v); print(k,a.shape,a.dtype, a if a.size<=24 else (a.min(),a.max()))\nPY",
+      "ls -la /pretrain_task /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_facility.pkl','rb') as f: d=pickle.load(f)\nprint('Total capacity and demand:',sum(d['capacity']),sum(d['demand']))\nPY",
+      "cat > /holdout_task/facility_cert.py <<'PY'\n\"\"\"Branch-and-bound for capacitated facility location with splittable demand.\"\"\"\nimport math\n\nimport numpy as np\nfrom scipy.optimize import Bounds, LinearConstraint, linprog, milp\nfrom scipy.sparse import csr_matrix\n\n\nclass _Problem:\n    def __init__(self, instance):\n        self.fixed = np.asarray(instance['fixed_cost'], dtype=float)\n        self.cap = np.asarray(instance['capacity'], dtype=float)\n        self.demand = np.asarray(instance['demand'], dtype=float)\n        self.cost = np.asarray(instance['cost_matrix'], dtype=float)\n        self.m, sel",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import linprog\nfrom facility_cert import solve_and_certify_facilities\np=pickle.load(open('public_facility.pkl','rb')); s=solve_and_certify_facilities(p)\nf,a,d,c=(p[k] for k in ('fixed_cost','capacity','demand','cost_matrix')); m,n=c.shape\nbits=(np.arange(1<<m)[:,None] >> np.arange(m)) & 1\nopt=np.full(1<<m,np.inf)\nfor k in np.flatnonzero(bits @ a >= d.sum()):\n    idx=bits[k].astype(bool); r=idx.sum()\n    lp=linprog(c[idx].ravel(),A_eq=np.tile(np.eye(n),(1,r)),b_eq=d,A_ub=np.kron(np.eye(r),",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np, time\nfrom facility_cert import solve_and_certify_facilities\nfor seed, style in enumerate(('public-like','uniform','almost-flat','tight','high-fixed','low-fixed','sparse-cheap','heterogeneous')):\n    rng=np.random.default_rng(seed)\n    f=rng.uniform(14,25,12); a=rng.uniform(8,12,12); d=rng.uniform(1,3,24); c=rng.uniform(.1,12,(12,24))\n    if style=='uniform': f[:]=20; a[:]=10; d[:]=2\n    if style=='almost-flat': c=3+rng.uniform(0,.1,(12,24))\n    if style=='tight': a*=d.sum()/a.sum()*1.05\n    if style=='high-fixed': ",
+      "cd /holdout_task && cp facility_cert.py /tmp/facility_cert_v1.py && python3 - <<'PY'\np='facility_cert.py'\ns=open(p).read().replace('import math','from fractions import Fraction\\nfrom heapq import heappop, heappush\\nimport math')\ns=s.replace('class _Problem:', '''def _dyadic(values):\n    ratios = [float(v).as_integer_ratio() for v in values]\n    scale = max(q for _, q in ratios)\n    return [p * (scale // q) for p, q in ratios], scale\n\n\ndef _round_down(value):\n    result = float(value)\n    return math.nextafter(result, -math.inf) if result > value else result\n\n\nclass _Problem:''')\na=s.index('   ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom facility_cert import _Problem, solve_and_certify_facilities\n\nrng = np.random.default_rng(4)\nhard = dict(fixed_cost=10*rng.uniform(14,25,12), capacity=rng.uniform(8,12,12), demand=rng.uniform(1,3,24), cost_matrix=rng.uniform(.1,12,(12,24)))\nclass CountedProblem(_Problem):\n    @staticmethod\n    def compact(tree):\n        def count(node):\n            return 1 if len(node) == 3 else count(node[3]) + count(node[4])\n        result = _Problem.compact(tree)\n "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__facility_cert_v1.py",
+      "primary_producer_container_path": "/tmp/facility_cert_v1.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/facility_cert.py",
+        "filename": "facility_cert.py",
+        "bytes": 10300,
+        "sha256": "e3730e6460e370a525948efcded2f456eb05e012ce2c20ba8e1f40eabbc337ca",
+        "content_addressed_ref": "content_addressed_blobs/e3730e6460e370a525948efcded2f456eb05e012ce2c20ba8e1f40eabbc337ca.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/facility_cert.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "1b0a7680939cd7a5dee8c7fc8f2cb377e0440c34a45b9461e202b91b1777eaa4",
+      "verified_turn": 9,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom facility_cert import _Problem, solve_and_certify_facilities\n\nrng = np.random.default_rng(4)\nhar",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

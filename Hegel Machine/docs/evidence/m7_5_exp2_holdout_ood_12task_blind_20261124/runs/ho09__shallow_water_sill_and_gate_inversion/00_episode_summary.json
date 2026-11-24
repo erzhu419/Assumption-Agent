@@ -1,0 +1,207 @@
+{
+  "task_id": "ho09__shallow_water_sill_and_gate_inversion",
+  "short_name": "shallow_water_sill_inversion",
+  "benchmark": "Hegel-OOD-Holdout-12",
+  "wave": "wave_2",
+  "scientific_domain": "Environmental Fluid Mechanics / Hyperbolic Conservation Inversion",
+  "wormhole_family": "fam_symbolic_and_operator_dynamics",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_A_TwoBranch_LiveGPT",
+  "declared_budget_multiplier": "2x_56_turns_plus_synthesis",
+  "selective_router_decision": null,
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 15,
+  "max_turns": 56,
+  "synthesis_decision": {
+    "selected_branch": "antithesis",
+    "selection_mechanism": "dialectical_trajectory_synthesis_high",
+    "rationale": "[blinded_slot:candidate_b->antithesis] Both candidates recovered the correct sluice mode in both public cases and met the 0.035 m sill-error and 0.012 m full-field RMSE limits. Candidate A had slightly lower worst-case errors on those cases: 0.01195 m and 0.0001093 m, versus B’s 0.01209 m and 0.0001106 m. Both reproduced the reference trajectories to roundoff at the known parameters. The mechanical metrics provide no independent result for this task, and there is no runtime cap. | B’s endpoint adjustment is the deciding improvement: it brings additional sill estimates within tolerance near the",
+    "synthesized_candidate_sha256": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+    "thesis_bundle_tar_sha256": "120a0eb094f2a1bea777d1823b3ded656cfac6ea6abb1397d0f6ab14d8508485",
+    "antithesis_bundle_tar_sha256": "a0dc499d220d5d14039787d81193d61c375b5a4c4d02b556b9da4be7d3490b7e"
+  },
+  "postlock_branch_outcomes": {
+    "thesis_spawned": true,
+    "thesis_bare_run2_strict_pass": true,
+    "thesis_turns_used": 4,
+    "antithesis_wormhole_strict_pass": true,
+    "antithesis_turns_used": 11,
+    "oracle_either_branch_pass": true
+  },
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 0,
+  "nogoods_recorded": [],
+  "recalled_node_ids": [
+    "node_auto_12_split_exponential_flux_source_inve",
+    "root_A01_conservation_and_operator_symmetry",
+    "node_auto_11_censored_cascade_identificat",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_07_control_panel_deconfounding"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid",
+      "source_forest_node": "node_auto_12_split_exponential_flux_source_inve",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float = 1e-8) -> np.ndarray",
+      "scope_preconditions": [
+        {
+          "field": "minimum_grid_axis_length",
+          "op": ">=",
+          "value": 2
+        },
+        {
+          "field": "minimum_permeability",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "grid_spacing",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": "<",
+          "value": 1
+        }
+      ],
+      "provenance_episode_id": "pt03__high_contrast_darcy_multigrid"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.wave1_aufhebung_exponential_flux_source_inversion",
+      "source_forest_node": "node_auto_12_split_exponential_flux_source_inve",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "exponential_flux_operator(ux_face: np.ndarray, uy_face: np.ndarray, diffusivity: float, decay_rate: float, cell_spacing: float) -> csc_matrix; solve_steady_transport(ux_face: np.ndarray, uy_face: np.ndarray, diffusivity: float, decay_rate: float, source: np.ndarray, cell_spacing: float) -> np.ndarray; invert_gaussian_source(ux_face: np.ndarray, uy_face: np.ndarray, diffusivity: float, decay_rate: float, cell_spacing: float, sensor_indices: np.ndarray, readings: np.ndarray, source_width: float, *, fault_count: int = 2, strength_penalty: float = 12.0, noise_std: float | None = None, position_tolerance: float = 0.025) -> tuple[np.ndarray, float, np.ndarray, float | None, bool]",
+      "scope_preconditions": [
+        {
+          "field": "diffusivity",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "cell_spacing",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "decay_rate",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "source_width_over_domain_scale",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "fault_count",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "fault_count",
+          "op": "<=",
+          "value": 2
+        },
+        {
+          "field": "retained_sensor_count",
+          "op": ">=",
+          "value": 4
+        }
+      ],
+      "provenance_episode_id": "wave1_high_peclet_plume_inversion"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.wave1_aufhebung_censored_cascade_identification",
+      "source_forest_node": "node_auto_11_censored_cascade_identificat",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "simulate_cascade(parameters: np.ndarray, initial_state: np.ndarray, times: np.ndarray, switches: np.ndarray, feed_rates: np.ndarray) -> np.ndarray; fit_cascade(times: list[np.ndarray], observations: list[np.ndarray], switches: list[np.ndarray], feed_rates: list[np.ndarray], noise_std: float | np.ndarray, *, parameter_guess: np.ndarray | None = None, initial_states: np.ndarray | None = None, clip_at_zero: bool = True) -> tuple[np.ndarray, np.ndarray, dict]",
+      "scope_preconditions": [
+        {
+          "field": "training_trajectory_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "minimum_training_trajectory_duration",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "minimum_observation_noise_std",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "minimum_feed_rate",
+          "op": ">=",
+          "value": 0
+        }
+      ],
+      "provenance_episode_id": "wave1_inhibited_enzyme_kinetics"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "16ed5bef41cb15b708894e9e63078657f83b35e03ced89b8277ef5cc22cf848a",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_shallow_water_sill_inversion_16ed5bef41cb",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "antithesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_shallow_water_sill_inversion_16ed5bef41cb",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "thesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_shallow_water_sill_inversion_a4df142d359a",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "saved_artifact_snapshots": [
+    "canal_inversion.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 7,
+  "prompt_tokens": 448634,
+  "cached_tokens": 73600,
+  "completion_tokens": 16674,
+  "total_tokens": 465308,
+  "effective_billed_tokens": 410108,
+  "wall_ms": 514286.44,
+  "provenance_verified": true,
+  "terminal_record_sha256": "8ff146005b4d3ef8665859546fc7f360c0642cbd399f72a629a7c285af13b18c"
+}

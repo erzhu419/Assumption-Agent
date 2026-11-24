@@ -1,0 +1,150 @@
+{
+  "task_id": "ho09__shallow_water_sill_and_gate_inversion",
+  "short_name": "shallow_water_sill_inversion",
+  "benchmark": "Hegel-OOD-Holdout-12",
+  "wave": "wave_2",
+  "scientific_domain": "Environmental Fluid Mechanics / Hyperbolic Conservation Inversion",
+  "wormhole_family": "fam_symbolic_and_operator_dynamics",
+  "model": "gpt-6-luna",
+  "returned_model": "gpt-6-luna",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_A_TwoBranch_LiveGPT",
+  "declared_budget_multiplier": "2x_56_turns_plus_synthesis",
+  "selective_router_decision": null,
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 34,
+  "max_turns": 56,
+  "synthesis_decision": {
+    "selected_branch": "antithesis",
+    "selection_mechanism": "dialectical_trajectory_synthesis_high",
+    "rationale": "[blinded_slot:candidate_b->antithesis] The task requires exact mode recovery, sill error ≤0.035 m, and full-field eta RMSE ≤0.012 m. Candidate A reports one public case passing (sill error ≈0.0031 m; RMSE ≈5.12e-5 m). Candidate B reports both supplied cases passing: maximum sill error 0.0121 m and worst RMSE 1.11e-4 m, with expected output shape and finite values. Mechanical public metrics are null for both. | Candidate B has stronger evidence against the task’s explicit requirements because it verifies both supplied regimes, including the depressed sluice mode, and meets every stated toleranc",
+    "synthesized_candidate_sha256": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+    "thesis_bundle_tar_sha256": "a562691352ae018d067a3a303ed240434f77a56a0e031a44ce44547adbcddf89",
+    "antithesis_bundle_tar_sha256": "ae47ee0d8c1174c56fca95973bb78e599d23b0fa86648f3bc82df0935c078a7f"
+  },
+  "postlock_branch_outcomes": {
+    "thesis_spawned": true,
+    "thesis_bare_run2_strict_pass": true,
+    "thesis_turns_used": 6,
+    "antithesis_wormhole_strict_pass": true,
+    "antithesis_turns_used": 28,
+    "oracle_either_branch_pass": true
+  },
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 0,
+  "nogoods_recorded": [],
+  "recalled_node_ids": [
+    "node_auto_05_conservative_elliptic_multig",
+    "root_A01_conservation_and_operator_symmetry",
+    "node_auto_10_inhibited_enzyme_kinetics",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_07_control_panel_deconfounding"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid",
+      "source_forest_node": "node_auto_05_conservative_elliptic_multig",
+      "origin": "llm_aufhebung_container_verified",
+      "exported_apis": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float = 1e-8) -> np.ndarray",
+      "scope_preconditions": [
+        {
+          "field": "minimum_grid_axis_length",
+          "op": ">=",
+          "value": 2
+        },
+        {
+          "field": "minimum_permeability",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "grid_spacing",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": "<",
+          "value": 1
+        }
+      ],
+      "provenance_episode_id": "pt03__high_contrast_darcy_multigrid"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.wave1_aufhebung_high_peclet_plume_inversion",
+      "source_forest_node": "node_auto_05_conservative_elliptic_multig",
+      "origin": "composite_ast_fallback",
+      "exported_apis": "forward_peclet_field, invert_point_source",
+      "scope_preconditions": [],
+      "provenance_episode_id": "wave1_high_peclet_plume_inversion"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.wave1_aufhebung_inhibited_enzyme_kinetics",
+      "source_forest_node": "node_auto_10_inhibited_enzyme_kinetics",
+      "origin": "composite_ast_fallback",
+      "exported_apis": "_simulate",
+      "scope_preconditions": [],
+      "provenance_episode_id": "wave1_inhibited_enzyme_kinetics"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "15bffa8ceedc1dd006144930dc5b35c8de1ad8d11bdee88ee3189997866a5438",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_shallow_water_sill_inversion_15bffa8ceedc",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "antithesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_shallow_water_sill_inversion_15bffa8ceedc",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "thesis_producer_skill_manifest_summary": {
+    "artifact_id": "skill_shallow_water_sill_inversion_3100c2d6a246",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "saved_artifact_snapshots": [
+    "canal_inversion.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 7,
+  "prompt_tokens": 1810489,
+  "cached_tokens": 949120,
+  "completion_tokens": 23798,
+  "total_tokens": 1834287,
+  "effective_billed_tokens": 1122447,
+  "wall_ms": 729986.58,
+  "provenance_verified": true,
+  "terminal_record_sha256": "70d22f2aed79ff72a4fe42017dffa7dbf20f1dad9e6a169455392d79373440c9"
+}

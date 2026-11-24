@@ -1,0 +1,137 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_latent_confounded_precision_graph_5b3d1166279c",
+    "source_hash": "5b3d1166279c85d4a3485fb26f305581f6021aa16466a9596adb2f6b497620f0",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho05__latent_confounded_graphical_precision",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/graph_study.py",
+        "archived_relpath": "producers/tmp__graph_study.py",
+        "bytes": 2093,
+        "sha256": "7098f0b2443bf4e0a418c56115f3183a0cf6f5b9d0e127e14559ab8ebbd0bcee"
+      },
+      {
+        "container_path": "/tmp/profile_graph.py",
+        "archived_relpath": "producers/tmp__profile_graph.py",
+        "bytes": 2207,
+        "sha256": "85d24d78ca3f55ad937281c395ba344a90aafd90f67c904503e383ce6b05f724"
+      },
+      {
+        "container_path": "/tmp/select_graph.py",
+        "archived_relpath": "producers/tmp__select_graph.py",
+        "bytes": 1037,
+        "sha256": "a8a77bd862ba2be44489983b3abb0d5523d5d0178fcad2eda8471f8fcdb917b3"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python - <<'PY'\nimport numpy as np\nz=np.load('/holdout_task/public_graph.npz');print([(k,z[k].shape,z[k].dtype) for k in z.files]);print('numpy',np.__version__)\nimport scipy;print('scipy',scipy.__version__)\nPY",
+      "command -v python3; python3 - <<'PY'\nimport zipfile, importlib.util\nwith zipfile.ZipFile('/holdout_task/public_graph.npz') as z:\n for f in z.namelist():\n  with z.open(f) as s: print(f,s.read(128))\nfor m in ('numpy','scipy','sklearn','cvxpy'): print(m,importlib.util.find_spec(m))\nPY",
+      "cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np\nz=np.load('public_graph.npz'); x=z['X']; S=z['gt_S']; a=z['gt_adj']; C=np.cov(x,rowvar=False); T=np.linalg.inv(C); L=S-T\nnp.set_printoptions(precision=3,suppress=True,linewidth=180)\nprint('edges',np.argwhere(np.triu(a,1)).tolist()); print('coefficients',S[np.triu(a,1)]); print('diag',S.diagonal()); print('degree',a.sum(0));print('cov diag',C.diagonal());\nfor name,M in [('S',S),('C',C),('T',T),('S-T',L),('C-inv(S)',C-np.linalg.inv(S))]:print(name,np.linalg.eigvalsh(M))\nv,u=np.linalg.eigh(C-np.linalg.inv(S));print('fact",
+      "cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np\nz=np.load('public_graph.npz'); x=z['X']; a=z['gt_adj']; C=np.cov(x,rowvar=False); T=np.linalg.inv(C); p=len(C); u=np.triu_indices(p,1); y=a[u];\ndef assess(k,A):\n s=np.abs(A[u]); print(k,'true range',np.quantile(s[y],[0,.25,.5,1]),'null range',np.quantile(s[~y],[.5,.9,.95,.99,1]),'top28 true',y[np.argsort(s)[-28:]].sum())\nassess('raw inv',T)\nD=np.diag(T).copy(); E=np.zeros_like(T)\nfor it in range(40):\n V=np.diag(D)+E-T; l,q=np.linalg.eigh(V); L=(q[:,-2:]*np.maximum(l[-2:],0))@q[:,-2:].T; F=T+L\n D=np.diag(F).copy(); E=n",
+      "cat > /tmp/graph_study.py <<'PY'\nimport numpy as np\n\ndef data(seed, mode):\n r=np.random.default_rng(seed); p=24; i,j=np.triu_indices(p,1)\n if mode in ('publiclike','uneven','weakfactor','mixed'):\n  a=np.eye(p,k=1,dtype=bool); a[0,-1]=True; pool=np.where(~a[i,j])[0]; ex=r.choice(pool,4,replace=False); a[i[ex],j[ex]]=True; a|=a.T\n else:\n  a=np.zeros((p,p),bool); ex=r.choice(len(i),26,replace=False); a[i[ex],j[ex]]=True; a|=a.T\n S=np.eye(p)*2.2\n w=np.full(a[i,j].sum(),.52) if mode not in ('mixed','random') else r.uniform(.32,.69,a[i,j].sum())\n S[i[a[i,j]],j[a[i,j]]]=w*r.choice([-1,1],len(w)); S+=",
+      "cat > /tmp/profile_graph.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import cholesky, cho_solve, solve_triangular, eigh\nfrom scipy.optimize import minimize\nfrom graph_study import data, base, evalf\n\ndef profile(C, S):\n p=len(S)\n try: H=cholesky(S,lower=True,check_finite=False)\n except np.linalg.LinAlgError: return None\n D=cho_solve((H,True),np.eye(p),check_finite=False)\n eig,Q=eigh(H.T@C@H,subset_by_index=(p-2,p-1),check_finite=False)\n V=solve_triangular(H.T,Q,check_finite=False)\n t=np.maximum(eig-1,0)\n R=C-(V*t)@V.T\n obj=np.sum(S*C)-2*np.log(H.diagonal()).sum()+sum(np.log1p(t)-t)\n return o",
+      "cat > /tmp/select_graph.py <<'PY'\nimport numpy as np\nfrom graph_study import data,base\nfrom profile_graph import profile,fit\n\ndef trial(C,n):\n F=base(C,.06,'raw'); G=base(C,0,'cov'); p=len(C); i,j=np.triu_indices(p,1)\n for name,U in [('prec',F),('cov',G)]:\n  S=fit(C,U,.019); f,_,R=profile(C,S); T=np.linalg.inv(R)\n  obj=f+2*.019*np.sum(np.hypot(S[i,j],.012)-.012)\n  yield name,obj,T\n\ndef stats(T,truth,n=900):\n i,j=np.triu_indices(len(T),1); y=truth[i,j]; v=np.abs(T[i,j])/np.sqrt(T[i,i]*T[j,j]); order=np.argsort(v)[::-1];\n return [2*y[v>t].sum()/(y.sum()+(v>t).sum()) for t in (.102,.112,.122,.132",
+      "cat > /holdout_task/deconfound_graph.py <<'PY'\n\"\"\"Sparse precision estimation with two unobserved Gaussian factors.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import cho_solve, cholesky, eigh, solve_triangular\nfrom scipy.optimize import minimize\n\n\ndef _profile(cov, precision, identity):\n    \"\"\"Profile the likelihood of cov(X) = precision^-1 + B B.T over B.\"\"\"\n    chol = cholesky(precision, lower=True, check_finite=False)\n    conditional_cov = cho_solve((chol, True), identity, check_finite=False)\n    p = len(cov)\n    values, vectors = eigh(chol.T @ cov @ chol,\n                           subset_by"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__profile_graph.py",
+      "primary_producer_container_path": "/tmp/profile_graph.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/deconfound_graph.py",
+        "filename": "deconfound_graph.py",
+        "bytes": 3797,
+        "sha256": "c2f7f0f559c1a721d976d4d345d07edeb9ed8d8a3b060727e9a524903b89f356",
+        "content_addressed_ref": "content_addressed_blobs/c2f7f0f559c1a721d976d4d345d07edeb9ed8d8a3b060727e9a524903b89f356.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/deconfound_graph.py"
+    ],
+    "exported_pure_functions": [
+      "data",
+      "base",
+      "evalf",
+      "profile",
+      "fit",
+      "methods",
+      "trial",
+      "stats"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "5b3d1166279c85d4a3485fb26f305581f6021aa16466a9596adb2f6b497620f0",
+      "verified_turn": 8,
+      "verification_command": "cat > /holdout_task/deconfound_graph.py <<'PY'\n\"\"\"Sparse precision estimation with two unobserved Gaussian factors.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import cho_solve, cholesky, eigh, solve_triangular\nfrom scipy.optimize import minim",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "data",
+        "code": "def data(seed, mode):\n    r = np.random.default_rng(seed)\n    p = 24\n    (i, j) = np.triu_indices(p, 1)\n    if mode in ('publiclike', 'uneven', 'weakfactor', 'mixed'):\n        a = np.eye(p, k=1, dtype=bool)\n        a[0, -1] = True\n        pool = np.where(~a[i, j])[0]\n        ex = r.choice(pool, 4, replace=False)\n        a[i[ex], j[ex]] = True\n        a |= a.T\n    else:\n        a = np.zeros((p, p), bool)\n        ex = r.choice(len(i), 26, replace=False)\n        a[i[ex], j[ex]] = True\n        a |= a.T\n    S = np.eye(p) * 2.2\n    w = np.full(a[i, j].sum(), 0.52) if mode not in ('mixed', 'random') else r.uniform(0.32, 0.69, a[i, j].sum())\n    S[i[a[i, j]], j[a[i, j]]] = w * r.choice([-1, 1], len(w))\n    S += np.triu(S, 1).T\n    if mode == 'random':\n        S += np.diag(r.uniform(-0.28, 0.28, p))\n        S += np.eye(p) * max(0, 0.55 - np.linalg.eigvalsh(S)[0])\n    B = r.normal(size=(p, 2)) * 0.9\n    if mode == 'uneven':\n        B[:, 0] *= np.exp(r.normal(scale=0.7, size=p))\n        B[:, 1] *= np.exp(r.normal(scale=0.7, size=p))\n    if mode == 'weakfactor':\n        B[:, 1] *= 0.25\n    X = r.normal(size=(900, p)) @ np.linalg.cholesky(np.linalg.inv(S)).T + r.normal(size=(900, 2)) @ B.T\n    return (X, a, S)"
+      },
+      {
+        "name": "base",
+        "code": "def base(C, lam, typ):\n    T = np.linalg.inv(C)\n    p = len(T)\n    d = np.diag(T).copy()\n    E = np.zeros_like(T)\n    k = np.median(d)\n    if typ == 'cov':\n        (l, q) = np.linalg.eigh(C)\n        return np.linalg.inv(C - q[:, -2:] * (l[-2:] - 1 / k) @ q[:, -2:].T)\n    for it in range(65):\n        V = np.diag(d) + E - T\n        (l, q) = np.linalg.eigh(V)\n        L = q[:, -2:] * np.maximum(l[-2:], 0) @ q[:, -2:].T\n        F = T + L\n        d = np.diag(F).copy()\n        if typ == 'norm':\n            th = lam * np.sqrt(np.outer(d, d))\n        else:\n            th = lam * k\n        E = np.sign(F) * np.maximum(np.abs(F) - th, 0)\n        np.fill_diagonal(E, 0)\n    return F"
+      },
+      {
+        "name": "evalf",
+        "code": "def evalf(M, a):\n    (i, j) = np.triu_indices(len(M), 1)\n    d = np.diag(M)\n    v = np.abs(M[i, j]) / np.sqrt(d[i] * d[j])\n    y = a[i, j]\n    fs = []\n    for pred in [v > t for t in (0.105, 0.12, 0.135, 0.15)] + [v >= np.partition(v, -k)[-k] for k in (26, y.sum())]:\n        fs.append(2 * (y & pred).sum() / (y.sum() + pred.sum()))\n    return fs"
+      },
+      {
+        "name": "profile",
+        "code": "def profile(C, S):\n    from scipy.linalg import cho_solve\n    from scipy.linalg import cholesky\n    from scipy.linalg import eigh\n    from scipy.linalg import solve_triangular\n    p = len(S)\n    try:\n        H = cholesky(S, lower=True, check_finite=False)\n    except np.linalg.LinAlgError:\n        return None\n    D = cho_solve((H, True), np.eye(p), check_finite=False)\n    (eig, Q) = eigh(H.T @ C @ H, subset_by_index=(p - 2, p - 1), check_finite=False)\n    V = solve_triangular(H.T, Q, check_finite=False)\n    t = np.maximum(eig - 1, 0)\n    R = C - V * t @ V.T\n    obj = np.sum(S * C) - 2 * np.log(H.diagonal()).sum() + sum(np.log1p(t) - t)\n    return (obj, R - D, R)"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(C, S, lam, mask=None):\n    from scipy.optimize import minimize\n    p = len(C)\n    d = np.arange(p)\n    (i, j) = np.triu_indices(p, 1)\n    if mask is not None:\n        (i, j) = (i[mask], j[mask])\n\n    def unpack(x):\n        out = np.diag(x[:p])\n        out[i, j] = out[j, i] = x[p:]\n        return out\n\n    def f(x):\n        q = profile(C, unpack(x))\n        if q is None:\n            return (100000000.0, np.zeros_like(x))\n        (y, g, _) = q\n        t = x[p:]\n        v = np.hypot(t, 0.012)\n        return (y + 2 * lam * np.sum(v - 0.012), np.r_[g[d, d], 2 * (g[i, j] + lam * t / v)])\n    x = np.r_[S.diagonal(), S[i, j]]\n    S0 = unpack(x)\n    gap = np.linalg.eigvalsh(S0)[0]\n    if gap < 0.15:\n        x[:p] += 0.15 - gap\n    opt = minimize(f, x, method='L-BFGS-B', jac=True, options=dict(maxiter=120, ftol=2e-11, gtol=2e-06))\n    return unpack(opt.x)"
+      },
+      {
+        "name": "methods",
+        "code": "def methods(C):\n    F = base(C, 0.06, 'raw')\n    G = base(C, 0, 'cov')\n    p = len(C)\n    (i, j) = np.triu_indices(p, 1)\n    for (n, U) in [('prec', F), ('cov', G)]:\n        for lam in (0.019, 0.028, 0.037):\n            S = fit(C, U, lam)\n            (_, _, R) = profile(C, S)\n            T = np.linalg.inv(R)\n            yield (f'{n}{lam}S', S)\n            yield (f'{n}{lam}T', T)\n            yield (f'{n}{lam}blend', 0.7 * S + 0.3 * T)"
+      },
+      {
+        "name": "trial",
+        "code": "def trial(C, n):\n    F = base(C, 0.06, 'raw')\n    G = base(C, 0, 'cov')\n    p = len(C)\n    (i, j) = np.triu_indices(p, 1)\n    for (name, U) in [('prec', F), ('cov', G)]:\n        S = fit(C, U, 0.019)\n        (f, _, R) = profile(C, S)\n        T = np.linalg.inv(R)\n        obj = f + 2 * 0.019 * np.sum(np.hypot(S[i, j], 0.012) - 0.012)\n        yield (name, obj, T)"
+      },
+      {
+        "name": "stats",
+        "code": "def stats(T, truth, n=900):\n    (i, j) = np.triu_indices(len(T), 1)\n    y = truth[i, j]\n    v = np.abs(T[i, j]) / np.sqrt(T[i, i] * T[j, j])\n    order = np.argsort(v)[::-1]\n    return [2 * y[v > t].sum() / (y.sum() + (v > t).sum()) for t in (0.102, 0.112, 0.122, 0.132)] + [2 * y[order[:k]].sum() / (y.sum() + k) for k in (26, 28, 30)]"
+      }
+    ]
+  }
+}

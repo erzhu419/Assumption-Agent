@@ -1,0 +1,126 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_prony_viscoelastic_memory_388fc93dc93a",
+    "source_hash": "388fc93dc93aded590f84113f630415172dc470e1cb9bf77dc6f647739d459d3",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho08__prony_viscoelastic_memory_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/candidate.py",
+        "archived_relpath": "producers/tmp__candidate.py",
+        "bytes": 1328,
+        "sha256": "be3c79c5685c9a87ba69eaed0be45db931e550943ace257fa575648349443a4a"
+      },
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 1018,
+        "sha256": "7b74f0c04d1079d01e9cb1a12ecf6dffb9d2b5c8c51e4adc711a8080d843d44a"
+      },
+      {
+        "container_path": "/tmp/tryfit.py",
+        "archived_relpath": "producers/tmp__tryfit.py",
+        "bytes": 1041,
+        "sha256": "56bb05051fd12a7a91286124e980c2765e9f1906112de789a8981961da2ce5a1"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'))\nprint(type(p))\nprint(p.keys() if isinstance(p,dict) else len(p))\nif isinstance(p,dict):\n for k,v in p.items():\n  print(k, type(v), getattr(v,'shape',None), repr(v)[:500] if not hasattr(v,'shape') else '')\nPY\nfind /tmp/hegel_wormhole_skills -maxdepth 2 -type f 2>/dev/null | head -50",
+      "python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\nfor k,v in e.items():\n a=np.asarray(v); print(k,a.shape,a.dtype, a[:12] if a.ndim else v, a[-6:] if a.ndim and len(a)>12 else '')\nprint('GT stress range',np.min(p['gt_test_stress']),np.max(p['gt_test_stress']))\nPY\npython3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration import calibrate_retraction\nprint(inspect.getsource(calibrate_retraction))\nPY",
+      "python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'));e=p['experiment']\nfor k,v in e.items():\n a=np.asarray(v);print(k,a.shape, np.min(a),np.max(a))\nPY",
+      "mkdir -p /holdout_task; cat > /holdout_task/prony_rheology.py <<'PY'\n\"\"\"Robust nonnegative Prony-spectrum identification for sampled strain histories.\"\"\"\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\n\ndef _memory_design(t, strain, taus):\n    \"\"\"Exact interval-constant strain-rate convolution at sample times.\"\"\"\n    t = np.asarray(t, float)\n    e = np.asarray(strain, float)\n    dt = np.diff(t)\n    if np.any(dt <= 0):\n        raise ValueError(\"time must be strictly increasing\")\n    rate = np.diff(e) / dt\n    # Each interval contributes rate*tau*(1-exp(-dt/tau)), then decays.\n    out ",
+      "python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'));e=p['experiment']; t=e['train_t']; x=e['train_strain']; y=e['train_stress_raw']\nprint('strain spectrum', sorted(zip(np.abs(np.fft.rfft(x-np.mean(x))),np.fft.rfftfreq(len(x),.05)),reverse=True)[:12])\nprint('strain head/tail',x[:30],x[-30:])\nPY",
+      "cat > /tmp/explore.py <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom prony_rheology import _memory_design\nfrom scipy.optimize import lsq_linear\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment'];t=e['train_t'];x=e['train_strain'];y=e['train_stress_raw'];tx=e['test_t'];xx=e['test_strain'];truth=p['gt_test_stress']\nfor n in [10,20,40,80,160,300]:\n taus=np.geomspace(.02,20,n);D=_memory_design(t,x,taus); A=np.c_[x,D,np.ones(len(t)),t]; Dx=_memory_design(tx,xx,taus); Ax=np.c_[xx,Dx]\n for mode in ['ls','huber']:\n  w=np.ones(len(y))\n  for it",
+      "cat > /tmp/tryfit.py <<'PY'\nimport pickle,sys,numpy as np\nfrom scipy.optimize import nnls\nsys.path.insert(0,'/holdout_task')\nfrom prony_rheology import _memory_design\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'));e=p['experiment'];t=e['train_t'];x=e['train_strain'];y=e['train_stress_raw'];tx=e['test_t'];xx=e['test_strain'];truth=p['gt_test_stress']\nfor n in [8,12,20,32,48]:\n taus=np.geomspace(.02,20,n);D=_memory_design(t,x,taus);A=np.c_[x,D,np.ones(len(t)),t];Ax=np.c_[xx,_memory_design(tx,xx,taus)]\n Q=np.c_[np.ones(len(t)),t];P=np.eye(len(t))-Q@np.linalg.pinv(Q);B=P@A[:,:n+1];z",
+      "cat > /tmp/candidate.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\n\ndef mem(t,e,taus):\n t=np.asarray(t,float); e=np.asarray(e,float); dt=np.diff(t)\n if np.any(dt<=0): raise ValueError('time must be strictly increasing')\n r=np.diff(e)/dt; D=np.zeros((len(t),len(taus)))\n for i,(h,v) in enumerate(zip(dt,r),1): D[i]=D[i-1]*np.exp(-h/taus)+v*taus*(-np.expm1(-h/taus))\n return D\n\ndef fit(t,e,y,taus):\n D=np.c_[e,mem(t,e,taus)]; Q=np.c_[np.ones(len(t)),t]\n P=lambda z: z-Q@np.linalg.lstsq(Q,z,rcond=None)[0]\n B=P(D); z=P(y); w=np.ones(len(y)); b=None\n for _ in range(12):\n  sw=np.sqrt(w); n",
+      "cat /tmp/candidate.py | head -100; ls -l /holdout_task/prony_rheology.py; python3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills import autogenous_creep_corrected_retraction_calibration as m\nprint(inspect.getsource(m.calibrate_retraction))\nPY",
+      "cat > /holdout_task/prony_rheology.py <<'PY'\n\"\"\"Identify a nonnegative Prony relaxation spectrum from a noisy strain trace.\"\"\"\nimport numpy as np\nfrom scipy.optimize import nnls\n\n\ndef _memory_design(t, strain, taus):\n    \"\"\"Sampled hereditary convolution for piecewise-constant strain rate.\"\"\"\n    t = np.asarray(t, dtype=float)\n    strain = np.asarray(strain, dtype=float)\n    taus = np.asarray(taus, dtype=float)\n    if t.ndim != 1 or strain.shape != t.shape or len(t) < 2 or np.any(~np.isfinite(t)) or np.any(~np.isfinite(strain)):\n        raise ValueError(\"time and strain must be finite aligned ",
+      "set -e\npython3 - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'))\nr=fit_prony_and_predict_stress(p['experiment']); y=p['gt_test_stress']; pred=r['test_stress']\nrel=lambda a,b: float(np.sqrt(np.mean((a-b)**2)/np.mean(b*b)))\nprint('all',rel(pred,y),'Ginf_rel',abs(r['G_inf']-p['gt_G_inf'])/p['gt_G_inf'])\nfor name,mask in [('early',p['experiment']['test_t']<4),('middle',(p['experiment']['test_t']>=4)&(p['experiment']['test_t']<16)),('late',p['experiment']['te",
+      "set -e\ncd /\nsha256sum /holdout_task/prony_rheology.py\npython3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np = pickle.load(open('/holdout_task/public_rheology.pkl', 'rb'))\nr = fit_prony_and_predict_stress(p['experiment'])\ny = p['gt_test_stress']; pred = np.asarray(r['test_stress'])\nprint('rel_rmse', np.sqrt(np.mean((pred-y)**2)/np.mean(y*y)))\nprint('G_inf_relative_error', abs(r['G_inf']-p['gt_G_inf'])/p['gt_G_inf'])\nprint('finite_prediction', bool(np.all(np.isfinite(pred))), 'nonnegative_moduli', bool(np",
+      "set -e\n# Recheck the final artifact on the supplied real measurement, including temporal slices.\ncd /\npython3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'))\ne=p['experiment']; r=fit_prony_and_predict_stress(e)\ny=np.asarray(p['gt_test_stress']); pred=np.asarray(r['test_stress'])\nrel=lambda a,b: float(np.sqrt(np.mean((a-b)**2)/np.mean(b*b)))\nprint('overall_rel_rmse',rel(pred,y))\nfor name,m in [('early',e['test_t']<4),('middle',(e['test_t']>=4)&(e[",
+      "set -e\ncd /\npython3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\nr=fit_prony_and_predict_stress(e); y=p['gt_test_stress']; pred=np.asarray(r['test_stress'])\nrel=lambda a,b: float(np.sqrt(np.mean((a-b)**2)/np.mean(b*b)))\nslices=[rel(pred[m],y[m]) for m in [e['test_t']<4,(e['test_t']>=4)&(e['test_t']<16),e['test_t']>=16]]\nprint('overall',rel(pred,y),'slices',slices,'G_inf_rel',abs(r['G_inf']-p['gt_G_inf'])/p['gt_G_inf'])\nassert r",
+      "set -e\ncd /\npython3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np = pickle.load(open('/holdout_task/public_rheology.pkl', 'rb'))\ne = p['experiment']; r = fit_prony_and_predict_stress(e)\ny = np.asarray(p['gt_test_stress']); pred = np.asarray(r['test_stress'])\nrel = lambda a, b: float(np.sqrt(np.mean((a-b)**2) / np.mean(b*b)))\nmasks = [e['test_t'] < 4, (e['test_t'] >= 4) & (e['test_t'] < 16), e['test_t'] >= 16]\nerrs = [rel(pred[m], y[m]) for m in masks]\ngerr = abs(r['G_inf'] - p['gt_G_inf']) / p['gt_G_inf",
+      "set -e\ncd /\ntest -s /holdout_task/prony_rheology.py\nsha256sum /holdout_task/prony_rheology.py\npython3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\nr=fit_prony_and_predict_stress(e); pred=np.asarray(r['test_stress']); truth=np.asarray(p['gt_test_stress'])\nrel=lambda a,b: float(np.sqrt(np.mean((a-b)**2)/np.mean(b*b)))\nerrs=[rel(pred[m],truth[m]) for m in [e['test_t']<4,(e['test_t']>=4)&(e['test_t']<16),e['test_t']>=16]]\ngerr=a"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__candidate.py",
+      "primary_producer_container_path": "/tmp/candidate.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/prony_rheology.py",
+        "filename": "prony_rheology.py",
+        "bytes": 2999,
+        "sha256": "4d1520469d04a08e4613be3d2fd03c3b39007565d2bf8a0c93d0f1d3d887cc58",
+        "content_addressed_ref": "content_addressed_blobs/4d1520469d04a08e4613be3d2fd03c3b39007565d2bf8a0c93d0f1d3d887cc58.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/prony_rheology.py"
+    ],
+    "exported_pure_functions": [
+      "mem",
+      "fit"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "388fc93dc93aded590f84113f630415172dc470e1cb9bf77dc6f647739d459d3",
+      "verified_turn": 18,
+      "verification_command": "set -e\ncd /\ntest -s /holdout_task/prony_rheology.py\nsha256sum /holdout_task/prony_rheology.py\npython3 -I - <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\np=",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "388fc93dc93aded590f84113f630415172dc470e1cb9bf77dc6f647739d459d3",
+        "expected_candidate_sha256": "388fc93dc93aded590f84113f630415172dc470e1cb9bf77dc6f647739d459d3",
+        "computed_candidate_sha256": "388fc93dc93aded590f84113f630415172dc470e1cb9bf77dc6f647739d459d3",
+        "digest_verified": true,
+        "validator_sha256_16": "283278abd26744b6",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/prony_rheology.py",
+            "bytes": 2999
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_388fc93d"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "mem",
+        "code": "def mem(t, e, taus):\n    t = np.asarray(t, float)\n    e = np.asarray(e, float)\n    dt = np.diff(t)\n    if np.any(dt <= 0):\n        raise ValueError('time must be strictly increasing')\n    r = np.diff(e) / dt\n    D = np.zeros((len(t), len(taus)))\n    for (i, (h, v)) in enumerate(zip(dt, r), 1):\n        D[i] = D[i - 1] * np.exp(-h / taus) + v * taus * -np.expm1(-h / taus)\n    return D"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(t, e, y, taus):\n    from scipy.optimize import nnls\n    D = np.c_[e, mem(t, e, taus)]\n    Q = np.c_[np.ones(len(t)), t]\n    P = lambda z: z - Q @ np.linalg.lstsq(Q, z, rcond=None)[0]\n    B = P(D)\n    z = P(y)\n    w = np.ones(len(y))\n    b = None\n    for _ in range(12):\n        sw = np.sqrt(w)\n        norms = np.maximum(np.linalg.norm(B * sw[:, None], axis=0), 1e-12)\n        (c, _) = nnls(B * sw[:, None] / norms, z * sw, maxiter=5000)\n        b = c / norms\n        r = y - D @ b - Q @ np.linalg.lstsq(Q, y - D @ b, rcond=None)[0]\n        s = 1.4826 * np.median(abs(r - np.median(r))) + 1e-10\n        nw = np.minimum(1, 1.345 * s / np.maximum(abs(r), 1e-12))\n        if np.max(abs(nw - w)) < 1e-05:\n            break\n        w = nw\n    return b"
+      }
+    ]
+  }
+}
