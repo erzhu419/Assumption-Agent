@@ -1657,8 +1657,11 @@ def stage_recalled_executable_wormholes_in_container(
                         "module_import": f"hegel_wormhole_skills.{Path(af_name).stem}",
                         "source_forest_node": nid,
                         "origin": auto_mod.get("origin", "autogenous_aufhebung_compiled"),
+                        "unit_test_verified": bool(auto_mod.get("unit_test_verified", auto_mod.get("origin") == "llm_aufhebung_container_verified")),
+                        "source_qualification_status": str(auto_mod.get("source_qualification_status", "public_episode")),
                         "exported_apis": auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", [])),
                         "scope_preconditions": auto_mod.get("scope_preconditions", []),
+                        "counter_regime_guards": note.get("counter_regime_guards", []),
                         "provenance_episode_id": auto_mod.get("provenance_episode_id", ""),
                     }
                 )

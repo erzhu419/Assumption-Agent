@@ -55,6 +55,7 @@ from hegel_machine.cognition.m7_autogenous_forest_pretraining import (
     load_autogenous_forest_bundle,
     serialize_autogenous_forest_bundle,
 )
+from hegel_machine.cognition import m7_holdout_ood_blind_benchmark as m7_ho
 from hegel_machine.cognition.m7_holdout_ood_blind_benchmark import (
     compute_holdout_suite_preregistration_sha256,
     holdout_tasks_as_frontier_waves,
@@ -66,21 +67,25 @@ def install_quiet_timing_locks(*, max_containers: int = 8) -> None:
 
     Decouples high LLM worker concurrency (`--max-workers 16`) from host RAM container pressure (`--max-containers`)
     so 16-thread runs do not OOM a 43 GiB host with 32 simultaneous heavy Docker containers!
+    Wraps BOTH `run_tb_separate_verifier` AND `run_holdout_private_verifier` with `in_verifier_tls.active = True`
+    so nested verifier containers never deadlock against `container_sem` (`M7.7` `holdout_nested_container` fix).
     """
     rw_lock = HeavyTimingRWLock()
-    verifier_sem = threading.Semaphore(min(4, max(2, max_containers // 2)))
-    container_sem = threading.Semaphore(max(2, int(max_containers)))
+    cap_c = max(1, int(max_containers))
+    verifier_sem = threading.Semaphore(min(4, max(1, (cap_c + 1) // 2)))
+    container_sem = threading.Semaphore(cap_c)
     in_verifier_tls = threading.local()
     active_cids: set[str] = set()
     active_cids_lock = threading.Lock()
     orig_exec_bash = m6f.exec_container_bash
     orig_tb_verifier = m6f.run_tb_separate_verifier
+    orig_ho_verifier = m7_ho.run_holdout_private_verifier
     orig_start_container = m6f.start_detached_container
     orig_stop_container = m6f.stop_container_safely
 
     def _capped_start_container(*args: Any, **kwargs: Any) -> str:
-        # Deadlock prevention: `run_tb_separate_verifier` boots a short-lived `verifier_cid` WHILE the caller
-        # already holds `agent_cid`! Bypass `container_sem` inside `_quiet_tb_verifier` (bounded separately by `verifier_sem`).
+        # Deadlock prevention: `run_tb_separate_verifier` & `run_holdout_private_verifier` boot a short-lived
+        # `verifier_cid` WHILE the caller already holds `agent_cid`! Bypass `container_sem` inside verifiers.
         if getattr(in_verifier_tls, "active", False):
             return orig_start_container(*args, **kwargs)
         container_sem.acquire()
@@ -130,10 +135,23 @@ def install_quiet_timing_locks(*, max_containers: int = 8) -> None:
         finally:
             in_verifier_tls.active = False
 
+    def _quiet_ho_verifier(task: m7_ho.HoldoutOODTask, submitted_tar_path: Path) -> dict[str, Any]:
+        in_verifier_tls.active = True
+        try:
+            with verifier_sem:
+                rw_lock.acquire_read()
+                try:
+                    return orig_ho_verifier(task, submitted_tar_path)
+                finally:
+                    rw_lock.release_read()
+        finally:
+            in_verifier_tls.active = False
+
     m6f.start_detached_container = _capped_start_container  # type: ignore[assignment]
     m6f.stop_container_safely = _capped_stop_container  # type: ignore[assignment]
     m6f.exec_container_bash = _quiet_exec_bash  # type: ignore[assignment]
     m6f.run_tb_separate_verifier = _quiet_tb_verifier  # type: ignore[assignment]
+    m7_ho.run_holdout_private_verifier = _quiet_ho_verifier  # type: ignore[assignment]
 
 
 def get_git_head_sha() -> str:
@@ -216,6 +234,19 @@ def run_two_wave_autogenous_suite(
 
     forest, archive, meta_dag, bundle_meta = load_autogenous_forest_bundle(pretrained_bundle_path)
     run_id = f"{suite_dir.name}__{model}"
+    suite_cfg_fp = hashlib.sha256(
+        json.dumps(
+            {
+                "model": model,
+                "bundle_sha256": bundle_meta["bundle_sha256"],
+                "max_turns": int(max_turns),
+                "reasoning_effort": str(reasoning_effort),
+                "online_wave1_aufhebung": bool(online_wave1_aufhebung),
+                "selective_online": bool(selective_online),
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()[:16]
 
     def _run_wave(wave_name: str, cur_forest: Any, cur_archive: dict[str, Any]) -> list[dict[str, Any]]:
         w_tasks = [t for t in waves[wave_name] if (not task_filter or t.task_id in task_filter)]
@@ -229,8 +260,15 @@ def run_two_wave_autogenous_suite(
             sum_fp = ep_dir / "00_episode_summary.json"
             if sum_fp.is_file():
                 s = json.loads(sum_fp.read_text(encoding="utf-8"))
-                print(f"[SKIP-DONE] `{task.task_id}`: SYNTH={s['strict_pass']} | {s['postlock_branch_outcomes']}", flush=True)
-                return s
+                cfg_matches = (
+                    s.get("model") == model
+                    and bool(s.get("selective_second_branch", False)) == bool(selective_online)
+                    and s.get("suite_config_fingerprint", suite_cfg_fp) == suite_cfg_fp
+                )
+                if cfg_matches:
+                    print(f"[SKIP-DONE] `{task.task_id}`: SYNTH={s['strict_pass']} | {s['postlock_branch_outcomes']}", flush=True)
+                    return s
+                print(f"[RE-RUN CONFIG-MISMATCH] `{task.task_id}` (cached fingerprint != `{suite_cfg_fp}`)...", flush=True)
             print(f"[START {wave_name}] `{task.task_id}` ({model})...", flush=True)
             s = run_m6_9_a_two_branch_episode(
                 task=task,
@@ -247,6 +285,8 @@ def run_two_wave_autogenous_suite(
                 reasoning_effort=reasoning_effort,
                 selective_second_branch=selective_online,
             )
+            s["suite_config_fingerprint"] = suite_cfg_fp
+            sum_fp.write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             print(
                 f"[DONE {wave_name}] `{task.task_id}`: SYNTH={s['strict_pass']} | "
                 f"Thesis(Bare1x)={s['postlock_branch_outcomes']['thesis_bare_run2_strict_pass']} | "
@@ -311,7 +351,14 @@ def run_two_wave_autogenous_suite(
         selective_rows.append({"task_id": s["task_id"], **sel})
 
     n_tot = len(all_summaries)
-    bare_1x_passes = sum(1 for s in all_summaries if s["postlock_branch_outcomes"]["thesis_bare_run2_strict_pass"])
+    any_bare_not_run = any(
+        s["postlock_branch_outcomes"].get("thesis_bare_run2_strict_pass") is None for s in all_summaries
+    )
+    bare_1x_passes = (
+        None
+        if any_bare_not_run
+        else sum(1 for s in all_summaries if s["postlock_branch_outcomes"]["thesis_bare_run2_strict_pass"])
+    )
     anti_1x_passes = sum(1 for s in all_summaries if s["postlock_branch_outcomes"]["antithesis_wormhole_strict_pass"])
     sel_passes = sum(1 for r in selective_rows if r["selective_strict_pass"])
     twobranch_passes = sum(1 for s in all_summaries if s["strict_pass"])
@@ -323,8 +370,10 @@ def run_two_wave_autogenous_suite(
         "model": model,
         "auth_mode": codex_info["auth_mode"],
         "pretrained_bundle_sha256": bundle_meta["bundle_sha256"],
+        "suite_config_fingerprint": suite_cfg_fp,
         "handcrafted_domain_skills_mounted": 0,
         "total_tasks": n_tot,
+        "bare_react_1x_status": "NOT_EVALUATED_IN_SELECTIVE_ONLINE_MODE" if any_bare_not_run else "EVALUATED",
         "bare_react_1x_passes": bare_1x_passes,
         "autogenous_forest_1x_passes": anti_1x_passes,
         "autogenous_forest_selective_passes": sel_passes,
@@ -332,7 +381,9 @@ def run_two_wave_autogenous_suite(
         "selective_second_branch_spawn_rate": round(
             sum(1 for r in selective_rows if r["spawn_second_branch"]) / max(n_tot, 1), 4
         ),
-        "selective_turn_multiplier_vs_bare_1x": round(sel_turns / max(bare_turns, 1), 4),
+        "selective_turn_multiplier_vs_bare_1x": (
+            None if (any_bare_not_run or bare_turns <= 0) else round(sel_turns / bare_turns, 4)
+        ),
         "total_autogenous_skill_calls": sum(int(s.get("skill_activation_count", 0)) for s in all_summaries),
         "wave1_aufhebung_consolidation": w1_cons,
         "per_task": [

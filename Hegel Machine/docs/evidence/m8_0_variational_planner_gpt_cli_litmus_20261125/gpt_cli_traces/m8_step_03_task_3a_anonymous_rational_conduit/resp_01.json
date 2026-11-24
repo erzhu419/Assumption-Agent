@@ -1,0 +1,6 @@
+{
+  "concept_name": "centered_rational_gain",
+  "python_expression": "8.0 * np.tanh(x['f0'] / 8.0) * (1.0 / (0.60 + np.sqrt(x['f1']**2 + 0.02**2)) - 0.59)",
+  "mechanistic_rationale": "The residual follows the sign of f0 when f1 is near zero, weakens as |f1| grows, and can reverse in the tails. An additive branch cannot make the f0 slope depend on |f1|, and f0*f1 changes sign across f1=0. The centered reciprocal instead gives f0 a strong, nearly symmetric gain near zero and lets that gain cross zero near |f1|=1.1.",
+  "domain_guard_note": "Use the training feature scales. The denominator is at least 0.62, the square-root smoothing removes the cusp at f1=0, and the tanh factor keeps the basis bounded while remaining nearly linear over the observed f0 range. Tail behavior beyond the sampled range is unvalidated."
+}

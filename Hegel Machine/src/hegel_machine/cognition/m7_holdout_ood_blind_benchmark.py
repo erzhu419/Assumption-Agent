@@ -1341,13 +1341,12 @@ def parse_authenticated_grader_stdout(stdout: str, sentinel_prefix: str) -> dict
 def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path) -> dict[str, Any]:
     """Grade `submitted_tar_path` inside an air-gapped (`network_mode='none'`) `hegel_clean_scipy_sandbox:v1` container.
 
-    Hardened against M7-Audit boundary controls:
+    Hardened against M7 / M7.7 boundary controls:
       1. `network_mode='none'` blocks all outbound network exfiltration/lookup.
-      2. `/tmp/_verify.py` is read into memory and unlinked BEFORE executing user code so candidates cannot read `/tmp/_verify.py`.
-      3. Candidate stdout is redirected during execution, and ONLY the cryptographic `sentinel_prefix` line emitted
-         by the outer wrapper is trusted (`parse_authenticated_grader_stdout`).
-      Boundary note: Candidate module import still executes inside the same Python process within the fresh container
-      (so full hostile-adversary stack-frame isolation would additionally require a child worker subprocess + IPC pipe).
+      2. `/tmp/_verify.py` is read into parent runner memory and unlinked BEFORE spawning a separate child `python3 -I -`
+         worker process, so neither `/tmp/_verify.py` nor `sentinel_prefix` exists in the candidate's address space/stack!
+      3. `json` is wrapped in a read-only module proxy AND the final `json.dumps(...)` call uses a pre-captured builtin
+         closure (`_hegel_orig_json_dumps`), blocking `json.dumps` monkeypatching (`stdout_same_process` control fix).
     """
     import secrets
 
@@ -1363,18 +1362,31 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
     try:
         m6f.exec_container_bash(vcid, "mkdir -p /holdout_task /tmp", timeout_sec=10)
         wrapper_py = (
-            "import contextlib, io, json, os, sys\n"
+            "import json, os, subprocess, sys\n"
             "v_src = open('/tmp/_verify.py', 'r', encoding='utf-8').read()\n"
             "os.unlink('/tmp/_verify.py')\n"
             f"sentinel = {sentinel_prefix!r}\n"
-            "_real_stdout = sys.stdout\n"
-            "_cap = io.StringIO()\n"
-            "with contextlib.redirect_stdout(_cap):\n"
-            "    exec(compile(v_src, '<isolated_holdout_verifier>', 'exec'), {'__name__': '__main__'})\n"
-            "lines = [ln.strip() for ln in _cap.getvalue().splitlines() if ln.strip().startswith('{')]\n"
-            "ver_json = lines[-1] if lines else json.dumps({'strict_pass': False})\n"
-            "_real_stdout.write(sentinel + ver_json + '\\n')\n"
-            "_real_stdout.flush()\n"
+            "extra_paths = [p for p in sys.path if p]\n"
+            "guard_hdr = (\n"
+            "    'import json as _j, sys as _s, types as _t\\n'\n"
+            "    f'for _p in reversed({extra_paths!r}):\\n'\n"
+            "    '    if _p not in _s.path: _s.path.insert(0, _p)\\n'\n"
+            "    '_hegel_orig_json_dumps = _j.dumps\\n'\n"
+            "    'class _FrozenJson(_t.ModuleType):\\n'\n"
+            "    '    def __setattr__(self, k, v): raise PermissionError(\"read-only verifier json module\")\\n'\n"
+            "    '    def __delattr__(self, k): raise PermissionError(\"read-only verifier json module\")\\n'\n"
+            "    '_fj = _FrozenJson(\"json\")\\n'\n"
+            "    '_fj.__dict__.update(_j.__dict__)\\n'\n"
+            "    '_s.modules[\"json\"] = _fj\\n'\n"
+            ")\n"
+            "hardened_v = guard_hdr + v_src.replace('print(json.dumps(', 'print(_hegel_orig_json_dumps(')\n"
+            "proc = subprocess.run([sys.executable, '-I', '-'], input=hardened_v, capture_output=True, text=True)\n"
+            "if proc.stderr:\n"
+            "    sys.stderr.write(proc.stderr)\n"
+            "lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip().startswith('{')]\n"
+            "ver_json = lines[-1] if (proc.returncode == 0 and lines) else json.dumps({'strict_pass': False, 'child_rc': proc.returncode})\n"
+            "sys.stdout.write(sentinel + ver_json + '\\n')\n"
+            "sys.stdout.flush()\n"
         )
         with tempfile.TemporaryDirectory(prefix="hegel_ho_ver_") as td:
             td_p = Path(td)

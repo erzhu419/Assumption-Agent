@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_multicopy_plasmid_cohort_a08c98faa071",
+    "source_hash": "a08c98faa071b1d8934e092d31b77715c3282d15c3916ca82469e7de594afd43",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho12__multicopy_plasmid_cohort_consensus",
+    "wormhole_family": "fam_biomystery_genomic_homology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; ls -lh /holdout_task/public_cohort; python - <<'PY'\nimport json\nfrom pathlib import Path\np = Path('/holdout_task/public_cohort')\nfor name in ('reference_panel.json', 'isolate_01.json', 'isolate_03.json'):\n    obj = json.loads((p/name).read_text())\n    def shape(v, level=0):\n        if isinstance(v, dict) and level < 4:\n            return {k:shape(x, level+1) for k,x in v.items()}\n        if isinstance(v,list):\n            return (len(v), [shape(x,level+1) for x in v[:2]])\n        if isinstance(v,str) and len(v)>100:\n            return f'<string: {len(v)} chars>'\n        r",
+      "python3 - <<'PY'\nimport json\nfrom pathlib import Path\np = Path('/holdout_task/public_cohort')\nfor name in ('reference_panel.json', 'isolate_01.json', 'isolate_03.json', 'isolate_09.json'):\n    obj = json.loads((p/name).read_text())\n    def shape(v):\n        if isinstance(v, dict):\n            return {k:shape(x) for k,x in v.items()}\n        if isinstance(v,list):\n            return (len(v), [shape(x) for x in v[:2]])\n        if isinstance(v,str) and len(v)>100:\n            return f'<string: {len(v)} chars>'\n        return v\n    print(name, shape(obj))\nPY",
+      "python3 - <<'PY'\nfrom pathlib import Path\nimport json\nfrom statistics import median\np = Path('/holdout_task/public_cohort')\nfor f in sorted(p.glob('isolate_*.json')):\n    bundle = json.loads(f.read_text())\n    cs = bundle['contigs']\n    baseline = median(c['mean_depth'] for c in cs if c['family_tag'].startswith('CHR_'))\n    print(f.name, baseline, [(c['contig_id'], c['family_tag'], c['circular'], len(c['sequence']), round(c['mean_depth']/baseline, 3)) for c in cs])\nPY",
+      "python3 - <<'PY'\nfrom pathlib import Path\nimport json\np=Path('/holdout_task/public_cohort')\nref=json.loads((p/'reference_panel.json').read_text())['reference_wildtype_cds']\nprint('CDS length:',len(ref))\ncomp=str.maketrans('ACGT','TGCA')\nfor f in sorted(p.glob('isolate_*.json')):\n    for c in json.loads(f.read_text())['contigs']:\n        if not c['circular']:\n            continue\n        hits=set()\n        for strand,seq in (('+',c['sequence']),('-',c['sequence'].translate(comp)[::-1])):\n            n=len(seq)\n            seq+=seq[:len(ref)-1]\n            for span in (len(ref),36):\n            ",
+      "cat > /holdout_task/plasmid_audit.py <<'PY'\n\"\"\"Identify a shared multicopy plasmid from isolate assembly and depth data.\"\"\"\n\nimport json\nfrom collections import defaultdict\nfrom itertools import product\nfrom pathlib import Path\nfrom statistics import median\n\n\n_CORE_LENGTH = 36\n_COMPLEMENT = str.maketrans('ACGT', 'TGCA')\n_CODE = dict(zip(\n    (''.join(bases) for bases in product('TCAG', repeat=3)),\n    'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',\n))\n\n\ndef _core_queries(reference):\n    \"\"\"Split each in-frame core around the one codon allowed to differ.\"\"\"\n    for start in "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/plasmid_audit.py",
+        "filename": "plasmid_audit.py",
+        "bytes": 3998,
+        "sha256": "741278f588b8d143a8d370fd5d34b8a05d70eb67e291885c2da4cacf8f8bdd17",
+        "content_addressed_ref": "content_addressed_blobs/741278f588b8d143a8d370fd5d34b8a05d70eb67e291885c2da4cacf8f8bdd17.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/plasmid_audit.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_genomic_homology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a08c98faa071b1d8934e092d31b77715c3282d15c3916ca82469e7de594afd43",
+      "verified_turn": 5,
+      "verification_command": "cat > /holdout_task/plasmid_audit.py <<'PY'\n\"\"\"Identify a shared multicopy plasmid from isolate assembly and depth data.\"\"\"\n\nimport json\nfrom collections import defaultdict\nfrom itertools import product\nfrom pathlib import Path\nfrom statist",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

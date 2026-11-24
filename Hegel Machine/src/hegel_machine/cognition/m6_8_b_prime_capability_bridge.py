@@ -937,19 +937,49 @@ def lift_python_scientific_expressions_to_programs(
     *,
     max_programs: int = 4,
 ) -> list[tuple[str, Program]]:
-    """Lift real mathematical expressions from pure Python AST closures into typed `Program` trees (`K02` + `M7-Audit` Fix).
+    """Lift pure-Python mathematical expressions into safe-totalized domain-interior `Program` skeletons (`K02` + `M7.7` Fix).
 
-    Preserves exact mathematical semantics:
-      - `log1p(u)` -> `log(1 + u)` and `expm1(u)` -> `exp(u) - 1` (never conflated with `log(u)`!),
-      - strict vs non-strict inequalities (`>` -> `lt(r, l)`, `>=` -> `ge(l, r)`, `<` -> `lt(l, r)`, `<=` -> `ge(r, l)`),
-      - rejects functions containing imperative loops/mutations (`For`, `While`, `AugAssign`, `If`, `Try`, `With`) so
-        procedural operators remain honest opaque closures rather than emitting stale unmutated return expressions!
+    Guarantees & explicit domain scope:
+      - `EvaluationContext` evaluates `Program` trees with totalized safe operators on moderate interior probes
+        (clamped `exp`, guarded `div` floor, totalized `log`/`sqrt`; `log1p(u)` -> `log(1 + u)`, `expm1(u)` -> `exp(u) - 1`
+        valid away from sub-machine-epsilon cancellation).
+      - Strict vs non-strict inequalities (`>` -> `lt(r, l)`, `>=` -> `ge(l, r)`, `<` -> `lt(l, r)`, `<=` -> `ge(r, l)`).
+      - Module & lexical symbol resolution (`M7.7` `shadowed_sin` fix): tracks module-level `def`/`class`/assignment/import
+        bindings and local variables so user-redefined primitives (e.g. `def sin(x): return x + 100`) inline their lifted
+        definition or abort cleanly, NEVER colliding with standard `math`/`numpy` primitives!
+      - Rejects imperative loops/mutations (`For`, `While`, `AugAssign`, `If`, `Try`, `With`).
     """
     import math
 
     lifted: list[tuple[str, Program]] = []
 
-    def _lift_expr(node: ast.AST, env: dict[str, Program], depth: int) -> Program | None:
+    def _subst_arg_features(prog: Program, bound_args: list[Program]) -> Program:
+        if prog.op == "feature" and prog.name and prog.name.startswith("x_") and "_idx" not in prog.name:
+            try:
+                idx = int(prog.name.split("_", 1)[1])
+                if 0 <= idx < len(bound_args):
+                    return bound_args[idx]
+            except ValueError:
+                pass
+        if not prog.children:
+            return prog
+        return Program(
+            op=prog.op,
+            value=prog.value,
+            name=prog.name,
+            lag=prog.lag,
+            children=tuple(_subst_arg_features(ch, bound_args) for ch in prog.children),
+            definition=prog.definition,
+        )
+
+    def _lift_expr(
+        node: ast.AST,
+        env: dict[str, Program],
+        depth: int,
+        shadowed_bare: set[str],
+        valid_mod_aliases: set[str],
+        module_fn_progs: dict[str, tuple[int, Program]],
+    ) -> Program | None:
         if depth > 14:
             return None
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
@@ -958,12 +988,20 @@ def lift_python_scientific_expressions_to_programs(
         if isinstance(node, ast.Name):
             if node.id in env:
                 return env[node.id]
+            if node.id in shadowed_bare:
+                return None
             if node.id == "pi":
                 return Program("const", value=round(math.pi, 8))
             if node.id == "e":
                 return Program("const", value=round(math.e, 8))
             return None
-        if isinstance(node, ast.Attribute) and node.attr in {"pi", "e"}:
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in valid_mod_aliases
+            and node.value.id not in env
+            and node.attr in {"pi", "e"}
+        ):
             return Program("const", value=round(math.pi if node.attr == "pi" else math.e, 8))
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in env:
             base_p = env[node.value.id]
@@ -971,7 +1009,7 @@ def lift_python_scientific_expressions_to_programs(
                 return Program("feature", name=f"{base_p.name}_idx{node.slice.value}")
             return None
         if isinstance(node, ast.UnaryOp):
-            ch = _lift_expr(node.operand, env, depth + 1)
+            ch = _lift_expr(node.operand, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
             if ch is None:
                 return None
             if isinstance(node.op, ast.UAdd):
@@ -982,8 +1020,8 @@ def lift_python_scientific_expressions_to_programs(
                 return Program("neg", children=(ch,))
             return None
         if isinstance(node, ast.BinOp):
-            left = _lift_expr(node.left, env, depth + 1)
-            right = _lift_expr(node.right, env, depth + 1)
+            left = _lift_expr(node.left, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+            right = _lift_expr(node.right, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
             if left is None:
                 return None
             if isinstance(node.op, ast.Add) and right is not None:
@@ -1006,42 +1044,68 @@ def lift_python_scientific_expressions_to_programs(
                     return Program("div", children=(Program("const", value=1.0), left))
             return None
         if isinstance(node, ast.Call):
+            if node.keywords:
+                return None
             fn_name = ""
             if isinstance(node.func, ast.Name):
-                fn_name = node.func.id
+                cname = node.func.id
+                if cname in env:
+                    return None
+                if cname in shadowed_bare:
+                    if cname in module_fn_progs:
+                        arity, helper_prog = module_fn_progs[cname]
+                        if len(node.args) == arity:
+                            lifted_args: list[Program] = []
+                            for a_node in node.args:
+                                ap = _lift_expr(a_node, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                                if ap is None:
+                                    return None
+                                lifted_args.append(ap)
+                            inlined = _subst_arg_features(helper_prog, lifted_args)
+                            return inlined if inlined.size <= 35 else None
+                    return None
+                fn_name = cname
             elif isinstance(node.func, ast.Attribute):
+                if not (
+                    isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in valid_mod_aliases
+                    and node.func.value.id not in env
+                ):
+                    return None
                 fn_name = node.func.attr
+            else:
+                return None
             if fn_name in {"asarray", "array", "float", "real", "ravel"} and len(node.args) >= 1:
-                return _lift_expr(node.args[0], env, depth + 1)
+                return _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
             if fn_name == "square" and len(node.args) == 1:
-                ch = _lift_expr(node.args[0], env, depth + 1)
+                ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program("mul", children=(ch, ch)) if ch is not None else None
             if fn_name == "log1p" and len(node.args) == 1:
-                ch = _lift_expr(node.args[0], env, depth + 1)
+                ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program("log", children=(Program("add", children=(Program("const", value=1.0), ch)),)) if ch is not None else None
             if fn_name == "expm1" and len(node.args) == 1:
-                ch = _lift_expr(node.args[0], env, depth + 1)
+                ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program("sub", children=(Program("exp", children=(ch,)), Program("const", value=1.0))) if ch is not None else None
             if fn_name == "clip" and len(node.args) == 3:
-                x_c = _lift_expr(node.args[0], env, depth + 1)
-                lo_c = _lift_expr(node.args[1], env, depth + 1)
-                hi_c = _lift_expr(node.args[2], env, depth + 1)
+                x_c = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                lo_c = _lift_expr(node.args[1], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                hi_c = _lift_expr(node.args[2], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 if x_c is not None and lo_c is not None and hi_c is not None:
                     return Program("min", children=(Program("max", children=(x_c, lo_c)), hi_c))
                 return None
             if fn_name in _UNARY_CALL_MAP and len(node.args) == 1:
-                ch = _lift_expr(node.args[0], env, depth + 1)
+                ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program(_UNARY_CALL_MAP[fn_name], children=(ch,)) if ch is not None else None
             if fn_name in _BINARY_CALL_MAP and len(node.args) == 2:
-                a0 = _lift_expr(node.args[0], env, depth + 1)
-                a1 = _lift_expr(node.args[1], env, depth + 1)
+                a0 = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                a1 = _lift_expr(node.args[1], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program(_BINARY_CALL_MAP[fn_name], children=(a0, a1)) if (a0 is not None and a1 is not None) else None
         if isinstance(node, ast.IfExp):
-            body_p = _lift_expr(node.body, env, depth + 1)
-            else_p = _lift_expr(node.orelse, env, depth + 1)
+            body_p = _lift_expr(node.body, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+            else_p = _lift_expr(node.orelse, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
             if isinstance(node.test, ast.Compare) and len(node.test.ops) == 1 and len(node.test.comparators) == 1:
-                cl = _lift_expr(node.test.left, env, depth + 1)
-                cr = _lift_expr(node.test.comparators[0], env, depth + 1)
+                cl = _lift_expr(node.test.left, env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                cr = _lift_expr(node.test.comparators[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 if cl is not None and cr is not None and body_p is not None and else_p is not None:
                     op0 = node.test.ops[0]
                     if isinstance(op0, ast.GtE):
@@ -1061,6 +1125,41 @@ def lift_python_scientific_expressions_to_programs(
             tree = ast.parse(code_str)
         except SyntaxError:
             continue
+        module_shadowed: set[str] = set()
+        valid_mod_aliases: set[str] = {"math", "numpy", "np"}
+        for m_stmt in tree.body:
+            if isinstance(m_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                module_shadowed.add(m_stmt.name)
+                valid_mod_aliases.discard(m_stmt.name)
+            elif isinstance(m_stmt, ast.Assign):
+                for tgt in m_stmt.targets:
+                    if isinstance(tgt, ast.Name):
+                        module_shadowed.add(tgt.id)
+                        valid_mod_aliases.discard(tgt.id)
+            elif isinstance(m_stmt, ast.AnnAssign) and isinstance(m_stmt.target, ast.Name):
+                module_shadowed.add(m_stmt.target.id)
+                valid_mod_aliases.discard(m_stmt.target.id)
+            elif isinstance(m_stmt, ast.Import):
+                for alias in m_stmt.names:
+                    bound_nm = alias.asname or alias.name.split(".")[0]
+                    if alias.name in {"math", "numpy"}:
+                        valid_mod_aliases.add(bound_nm)
+                    else:
+                        module_shadowed.add(bound_nm)
+                        valid_mod_aliases.discard(bound_nm)
+            elif isinstance(m_stmt, ast.ImportFrom):
+                if m_stmt.module in {"math", "numpy"} and (m_stmt.level or 0) == 0:
+                    for alias in m_stmt.names:
+                        if alias.asname and alias.asname != alias.name:
+                            module_shadowed.add(alias.asname)
+                else:
+                    for alias in m_stmt.names:
+                        bound_nm = alias.asname or alias.name
+                        if bound_nm != "track_wormhole_skill":
+                            module_shadowed.add(bound_nm)
+                            valid_mod_aliases.discard(bound_nm)
+
+        module_fn_progs: dict[str, tuple[int, Program]] = {}
         for stmt in tree.body:
             if not isinstance(stmt, ast.FunctionDef):
                 continue
@@ -1079,19 +1178,19 @@ def lift_python_scientific_expressions_to_programs(
                     if len(b_stmt.targets) != 1 or not isinstance(b_stmt.targets[0], ast.Name):
                         aborted_imperative = True
                         break
-                    rhs_p = _lift_expr(b_stmt.value, env, 0)
+                    rhs_p = _lift_expr(b_stmt.value, env, 0, module_shadowed, valid_mod_aliases, module_fn_progs)
                     if rhs_p is None or rhs_p.size > 25:
                         aborted_imperative = True
                         break
                     env[b_stmt.targets[0].id] = rhs_p
                 elif isinstance(b_stmt, ast.AnnAssign) and isinstance(b_stmt.target, ast.Name) and b_stmt.value is not None:
-                    rhs_p = _lift_expr(b_stmt.value, env, 0)
+                    rhs_p = _lift_expr(b_stmt.value, env, 0, module_shadowed, valid_mod_aliases, module_fn_progs)
                     if rhs_p is None or rhs_p.size > 25:
                         aborted_imperative = True
                         break
                     env[b_stmt.target.id] = rhs_p
                 elif isinstance(b_stmt, ast.Return) and b_stmt.value is not None:
-                    ret_p = _lift_expr(b_stmt.value, env, 0)
+                    ret_p = _lift_expr(b_stmt.value, env, 0, module_shadowed, valid_mod_aliases, module_fn_progs)
                     if ret_p is not None and ret_p.op not in {"const", "feature"}:
                         best_fn_prog = ret_p
                     break
@@ -1099,6 +1198,8 @@ def lift_python_scientific_expressions_to_programs(
                     aborted_imperative = True
                     break
             if (not aborted_imperative) and best_fn_prog is not None:
+                if not stmt.args.vararg and not stmt.args.kwarg and not stmt.args.defaults:
+                    module_fn_progs[stmt.name] = (len(all_args), best_fn_prog)
                 lifted.append((fn_name, best_fn_prog))
                 if len(lifted) >= max_programs:
                     return lifted

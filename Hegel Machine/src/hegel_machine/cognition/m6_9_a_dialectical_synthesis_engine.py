@@ -267,9 +267,9 @@ if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.jso
                 check_ids = range(n_nodes) if exhaustive else np.unique(np.linspace(0, n_nodes - 1, 96, dtype=int))
                 dual_ok = np.isfinite(U_obj)
                 worst_gap = 0.0
-                tol_abs = max(eps, 1e-6) * max(1.0, abs(U_obj)) if prob.get("relative_gap", False) else (eps + 1e-6)
-                # Support both relative and absolute gap specs cleanly: check both `U - L <= eps * max(1, |U|)` and `U - L <= eps`
-                eff_tol = max(eps * max(1.0, abs(U_obj)) * 1.02, eps + 1e-6)
+                use_rel = bool(prob.get("relative_gap")) or ("gap_tol" in prob)
+                add_tol = float(prob.get("gap_tol", 1e-6 if use_rel else 1e-9))
+                eff_tol = (eps + add_tol) * max(abs(U_obj), 1e-12) if use_rel else (eps + add_tol)
                 for li in check_ids:
                     b0_s, b1_s = parsed_leaves[int(li)]
                     z0 = np.fromiter(b0_s, dtype=int)
@@ -283,11 +283,13 @@ if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.jso
                     else:
                         r_l = y_v
                     q_l = X_m.T @ r_l
-                    pen = np.maximum(np.abs(q_l) - slope, 0.0) * M
+                    # Exact bounded L0+L2 1D Fenchel conjugate on [-M, M] including interior optimum t* = min(|q|/(2*l2), M)
+                    t_free = np.minimum(np.abs(q_l) / max(2.0 * l2, 1e-12), M) if l2 > 0.0 else np.full_like(q_l, M)
+                    pen = np.maximum(0.0, np.abs(q_l) * t_free - l2 * (t_free ** 2) - l0)
                     if len(z0) > 0:
                         pen[z0] = 0.0
                     if len(z1) > 0:
-                        t_st = np.minimum(np.abs(q_l[z1]) / max(2.0 * l2, 1e-12), M)
+                        t_st = np.minimum(np.abs(q_l[z1]) / max(2.0 * l2, 1e-12), M) if l2 > 0.0 else np.full(len(z1), M)
                         pen[z1] = np.abs(q_l[z1]) * t_st - l2 * (t_st ** 2) - l0
                     dl_quick = float(y_v @ r_l - 0.5 * (r_l @ r_l) - np.sum(pen))
                     if not np.isfinite(dl_quick):
@@ -300,16 +302,20 @@ if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.jso
                 gap_satisfied = bool(dual_ok and np.isfinite(worst_gap) and worst_gap <= eff_tol)
                 if exhaustive and gap_satisfied:
                     out["sparse_cert_valid"] = True
+                    out["sparse_cert_verification_state"] = "VERIFIED"
                     out["sparse_cert_status"] = "certified_exhaustive_partition_and_dual_gap"
                 elif (not exhaustive) and gap_satisfied:
                     out["sparse_cert_valid"] = False
                     out["sparse_cert_sampled_diagnostic"] = True
+                    out["sparse_cert_verification_state"] = "UNKNOWN"
                     out["sparse_cert_status"] = "sampled_diagnostic_dual_ok_not_exhaustive"
                 else:
                     out["sparse_cert_valid"] = False
+                    out["sparse_cert_verification_state"] = "REFUTED"
                     out["sparse_cert_status"] = "failed_dual_gap_certificate"
             else:
                 out["sparse_cert_valid"] = False
+                out["sparse_cert_verification_state"] = "UNKNOWN" if out["sparse_partition_valid"] else "REFUTED"
                 out["sparse_cert_status"] = "partition_only_no_data_unverified" if out["sparse_partition_valid"] else "invalid_box_or_partition"
         elif "upper_bound" in res or "lower_bound" in res:
             ub = float(res.get("upper_bound", res.get("objective", res.get("best_objective"))))
@@ -320,15 +326,18 @@ if os.path.isfile("/app/data/problem.json") and os.path.isfile("/app/results.jso
             gap = abs(ub - lb) if finite_bounds else 999999.0
             out["sparse_cert_gap"] = round(gap, 9)
             out["sparse_cert_nodes"] = n_nodes
-            # Claimed scalar bounds without verifiable leaf witnesses are diagnostic only, never certified!
             out["sparse_cert_valid"] = False
-            out["sparse_cert_sampled_diagnostic"] = bool(finite_bounds and gap <= float(prob.get("opt_tol", 1e-5)) + 1e-6 and (n_nodes <= max_nodes if n_nodes > 0 else True))
+            diag_ok = bool(finite_bounds and gap <= float(prob.get("opt_tol", 1e-5)) + 1e-6 and (n_nodes <= max_nodes if n_nodes > 0 else True))
+            out["sparse_cert_sampled_diagnostic"] = diag_ok
+            out["sparse_cert_verification_state"] = "UNKNOWN" if diag_ok else "REFUTED"
             out["sparse_cert_status"] = "unverified_claimed_scalar_bounds"
         else:
             out["sparse_cert_valid"] = False
+            out["sparse_cert_verification_state"] = "REFUTED"
             out["sparse_cert_status"] = "unsupported_schema"
     except Exception as exc:
         out["sparse_cert_valid"] = False
+        out["sparse_cert_verification_state"] = "REFUTED"
         out["sparse_cert_status"] = f"error:{type(exc).__name__}:{str(exc)[:100]}"
 
 # 4. Spin-Glass Groundstate public Ising energy evaluation (`/root/data/instance_*.json` + `/root/artifacts/spins_*.txt`)
@@ -953,7 +962,11 @@ def should_spawn_dialectical_second_branch(
         triggers.append("failed_public_checker_script")
     if pub.get("amr_solve_ok") is False:
         triggers.append("failed_public_amr_residual")
-    if pub.get("sparse_cert_valid") is False:
+    if pub.get("sparse_cert_verification_state") == "REFUTED" or (
+        pub.get("sparse_cert_valid") is False
+        and pub.get("sparse_cert_verification_state") != "UNKNOWN"
+        and not bool(pub.get("sparse_cert_sampled_diagnostic"))
+    ):
         triggers.append("invalid_sparse_certificate")
     if pub.get("traffic_delayed_ok") is False or pub.get("traffic_ordinary_ok") is False:
         triggers.append("failed_conservation_delayed_rollout")
@@ -1107,6 +1120,7 @@ def reconcile_thesis_and_antithesis_publicly(
     client: m6f.FrontierCodexClient,
     stage_subdir: str,
     forest_archive: dict[str, dict[str, Any]] | None = None,
+    use_m8_minimax_variational_tiebreak: bool = False,
 ) -> dict[str, Any]:
     """Blind Public Synthesis (`Zero` `/tests`, `Zero` `answer_rubric`, `Zero` verifier access, A/B label-blinded!)."""
     is_bm = task.benchmark == "BioMysteryBench-Preview"
@@ -1537,6 +1551,18 @@ def reconcile_thesis_and_antithesis_publicly(
             if dt < 0.70 * da and pt <= 1.08 * pa and at <= 1.08 * aa:
                 return _finalize_choice("thesis", f"public_navigation_calibration_invariance({dt}<{da})")
 
+    # 3j. Optional M8 Minimax Tail-Risk + Verified Skill Grounding Tie-Break on unresolved dual gaps
+    if use_m8_minimax_variational_tiebreak:
+        from .m8_offline_container_planner import adjudicate_minimax_variational_tiebreak
+
+        m8_tb = adjudicate_minimax_variational_tiebreak(
+            pub_thesis=pub_t,
+            pub_antithesis=pub_a,
+            antithesis_skill_calls=int(antithesis_summary.get("skill_activation_count") or 0),
+        )
+        if m8_tb is not None:
+            return _finalize_choice(str(m8_tb["selected_branch"]), str(m8_tb["selection_mechanism"]))
+
     # Layer 4: Label-Blinded Dialectical Trajectory Synthesis Reconciler (`1` structured LLM call, ZERO private truth, ZERO ideological arm labels!)
     ev_t = _extract_trajectory_evidence_digest(thesis_dir, thesis_summary)
     ev_a = _extract_trajectory_evidence_digest(antithesis_dir, antithesis_summary)
@@ -1580,6 +1606,10 @@ def reconcile_thesis_and_antithesis_publicly(
         output_schema=DIALECTICAL_SYNTHESIS_DECISION_SCHEMA,
         stage_subdir=f"{stage_subdir}__tb_synthesis",
     )
+    accum_llm_tok["prompt"] += int(llm_res.get("prompt_tokens", 0))
+    accum_llm_tok["cached"] += int(llm_res.get("cached_tokens", 0))
+    accum_llm_tok["completion"] += int(llm_res.get("completion_tokens", 0))
+    accum_llm_tok["wall_ms"] += float(llm_res.get("wall_ms", 0.0))
     if llm_res.get("ok"):
         parsed = llm_res["parsed"]
         raw_pick = str(parsed["selected_branch"])
@@ -1588,12 +1618,6 @@ def reconcile_thesis_and_antithesis_publicly(
             pick,
             f"dialectical_trajectory_synthesis_{parsed.get('confidence', 'high')}",
             rationale=f"[blinded_slot:{raw_pick}->{pick}] {parsed.get('key_public_evidence_comparison', '')} | {parsed.get('synthesis_rationale', '')}",
-            llm_tok={
-                "prompt": int(llm_res.get("prompt_tokens", 0)),
-                "cached": int(llm_res.get("cached_tokens", 0)),
-                "completion": int(llm_res.get("completion_tokens", 0)),
-                "wall_ms": float(llm_res.get("wall_ms", 0.0)),
-            },
         )
     return _finalize_choice("thesis", "fallback_thesis_on_synthesis_llm_error")
 
@@ -1681,6 +1705,7 @@ def run_m6_9_a_two_branch_episode(
     cmd_timeout_sec: int = 180,
     reasoning_effort: str = "medium",
     selective_second_branch: bool = False,
+    m8_container_planner: Any | None = None,
 ) -> dict[str, Any]:
     """Execute one `Hegel_M6_9_A_TwoBranch_LiveGPT` (or `selective_second_branch=True` `~1.3x` selective) episode."""
     ep_t0 = monotonic()
@@ -1732,7 +1757,8 @@ def run_m6_9_a_two_branch_episode(
 
     selective_decision: dict[str, Any] | None = None
     thesis_sum: dict[str, Any] | None = None
-    if selective_second_branch:
+    use_m8_planner = m8_container_planner is not None
+    if selective_second_branch or use_m8_planner:
         anti_sum = _exec_antithesis()
         chk_sel: dict[str, Any] = {"accepted": True}
         pub_sel: dict[str, Any] = {}
@@ -1754,9 +1780,22 @@ def run_m6_9_a_two_branch_episode(
                     pub_sel = _run_public_container_candidate_benchmark(probe_cid)
             finally:
                 m6f.stop_container_safely(probe_cid)
-        selective_decision = should_spawn_dialectical_second_branch(
-            task=task, primary_summary=anti_sum, contract_check=chk_sel, public_metrics=pub_sel
-        )
+        if use_m8_planner:
+            from .m8_offline_container_planner import build_container_pre_action_state
+
+            pre_st = build_container_pre_action_state(
+                task_id=task.task_id,
+                benchmark=task.benchmark,
+                wave=task.wave,
+                primary_summary=anti_sum,
+                contract_check=chk_sel,
+                public_metrics=pub_sel,
+            )
+            selective_decision = m8_container_planner.decide_second_branch(pre_st, record_to_ledger=False)
+        else:
+            selective_decision = should_spawn_dialectical_second_branch(
+                task=task, primary_summary=anti_sum, contract_check=chk_sel, public_metrics=pub_sel
+            )
         selective_decision["primary_public_metrics"] = {k: v for k, v in pub_sel.items() if v is not None}
         if selective_decision.get("spawn_second_branch"):
             thesis_sum = _exec_thesis()
@@ -1871,6 +1910,7 @@ def run_m6_9_a_two_branch_episode(
                 client=synth_client,
                 stage_subdir=stage_sub,
                 forest_archive=forest_archive,
+                use_m8_minimax_variational_tiebreak=use_m8_planner,
             )
         s_tok = synth_res["llm_tokens"]
         last_p = ledger.record_decision(

@@ -1,0 +1,52 @@
+{
+  "git_commit": "49445e561d8338485bf8bf9181e9e263eaeb5d57",
+  "model": "gpt-6.2-sol",
+  "auth_mode": "chatgpt",
+  "total_wall_ms": 46233.08,
+  "persistent_forest_node_count": 15,
+  "persistent_mechanism_count": 15,
+  "decision_ledger_count": 5,
+  "prefix_clean_verified": true,
+  "unrelated_sentinel_rmse_initial": 0.116414,
+  "unrelated_sentinel_rmse_final": 0.116414,
+  "unrelated_sentinel_abs_drift": 0.0,
+  "scenarios": {
+    "step1_shared_upstream_shift": {
+      "selected_action": "AncestorReweight",
+      "unseen_task_1c_zero_shot_rmse_before": 3.34439,
+      "unseen_task_1c_zero_shot_rmse_after": 0.10208,
+      "unrelated_drift": 0.0
+    },
+    "step2_localized_exception": {
+      "selected_action": "LocalSplit",
+      "scope_guard": {
+        "field": "regime_sensor",
+        "op": ">",
+        "value": 1.08023
+      },
+      "val_log_predictive_gain": 1.243218
+    },
+    "step3_live_gpt_cli_concept_lift": {
+      "selected_action": "ConceptLift",
+      "source": "gpt_cli_codex",
+      "synthesized_expression": "8.0 * np.tanh(x['f0'] / 8.0) * (1.0 / (0.60 + np.sqrt(x['f1']**2 + 0.02**2)) - 0.59)",
+      "llm_rationale": "The residual follows the sign of f0 when f1 is near zero, weakens as |f1| grows, and can reverse in the tails. An additive branch cannot make the f0 slope depend on |f1|, and f0*f1 changes sign across f1=0. The centered reciprocal instead gives f0 a strong, nearly symmetric gain near zero and lets that gain cross zero near |f1|=1.1.",
+      "empirical_lipschitz": 4.240655369467714,
+      "prompt_tokens": 38978,
+      "completion_tokens": 1743,
+      "task_3a_val_rmse_before": 0.76435,
+      "task_3a_val_rmse_after": 0.09144,
+      "unseen_sister_3b_rmse_without_lift": 0.85821,
+      "unseen_sister_3b_rmse_with_persisted_gpt_conduit": 0.13982
+    },
+    "step4_nonmarkovian_memory": {
+      "selected_action": "ChangeMemory",
+      "temporal_tau": 2.0,
+      "val_log_predictive_gain": 2.857667
+    },
+    "step5_heteroscedastic_noise_guard": {
+      "selected_action": "NoChange",
+      "residual_diagnostic_status": "HETEROSCEDASTIC_OR_UNRESOLVED_NOISE"
+    }
+  }
+}

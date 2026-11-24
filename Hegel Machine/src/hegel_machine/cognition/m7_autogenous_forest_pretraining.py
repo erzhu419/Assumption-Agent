@@ -628,6 +628,32 @@ def discover_cross_tree_operator_wormholes(
                 )
                 created_wormholes.append(wh_id)
 
+    # Sweep & prune stale/legacy operator wormhole edges and shared-base subtrees no longer backed by live non-stub code (`M7.7` Fix)!
+    valid_wh_ids = {
+        f"wh_auto_{str(next(e['mid_anchor_id'] for e in node_entries if e['nid'] == s['node_a_id']))[:18]}__"
+        f"{str(next(e['mid_anchor_id'] for e in node_entries if e['nid'] == s['node_b_id']))[:18]}_{s['subtree_id'].replace('sub_opdag_', '')[:6]}"
+        for s in shared_subtrees
+    }
+    valid_verified_sub_ids = {s["subtree_id"] for s in shared_subtrees if s["mechanism_stability_verified"]}
+    pruned_wormholes: list[str] = []
+    for existing_wh_id, existing_wh in list(forest.horizontal_wormhole_edges.items()):
+        rmap_kind = str((existing_wh.get("role_and_observation_map") or {}).get("kind") or "")
+        is_operator_wh = existing_wh_id.startswith("wh_auto_") or rmap_kind in {
+            "typed_operator_pipeline_isomorphism",
+            "ast_differential_isomorphism",
+            "code_backed_stage_prior_candidate",
+        }
+        if is_operator_wh and existing_wh_id not in valid_wh_ids:
+            forest.horizontal_wormhole_edges.pop(existing_wh_id, None)
+            pruned_wormholes.append(existing_wh_id)
+
+    pruned_subtrees: list[str] = []
+    for existing_sub_id, existing_sb in list(forest.shared_base_subtrees.items()):
+        sb_kind = str((existing_sb.get("role_and_scale_schema") or {}).get("kind") or "")
+        if (existing_sub_id.startswith("sub_opdag_") or sb_kind == "typed_scientific_operator_dag") and existing_sub_id not in valid_verified_sub_ids:
+            forest.shared_base_subtrees.pop(existing_sub_id, None)
+            pruned_subtrees.append(existing_sub_id)
+
     meta = archive.setdefault("__autogenous_blank_seed__", {})
     meta["shared_operator_subtrees"] = shared_subtrees
     return {
@@ -637,6 +663,8 @@ def discover_cross_tree_operator_wormholes(
         "stage_prior_candidate_count": sum(1 for s in shared_subtrees if not s["mechanism_stability_verified"]),
         "shared_subtrees": shared_subtrees,
         "created_wormhole_ids": created_wormholes,
+        "pruned_wormhole_ids": pruned_wormholes,
+        "pruned_subtree_ids": pruned_subtrees,
     }
 
 
@@ -1488,8 +1516,15 @@ def serialize_autogenous_forest_bundle(
 
 def load_autogenous_forest_bundle(
     bundle_path: Path,
+    *,
+    migrate_legacy_wormholes: bool = True,
 ) -> tuple[PhilosophicalForest, dict[str, dict[str, Any]], list[tuple[str, str]], dict[str, Any]]:
-    """Load an immutable pretrained `PhilosophicalForest` bundle and verify zero hand-authored skills."""
+    """Load an immutable pretrained `PhilosophicalForest` bundle and verify zero hand-authored skills.
+
+    When `migrate_legacy_wormholes=True` (default), automatically re-runs `discover_cross_tree_operator_wormholes`
+    in memory if the bundle snapshot contains legacy `typed_operator_pipeline_isomorphism` wormholes, without
+    mutating the sealed bundle file on disk (`M7.7` `default_bundle_legacy_graph_not_migrated` fix).
+    """
     raw = bundle_path.read_bytes()
     bundle_sha = hashlib.sha256(raw).hexdigest()
     data = json.loads(raw.decode("utf-8"))
@@ -1511,6 +1546,11 @@ def load_autogenous_forest_bundle(
     archive: dict[str, dict[str, Any]] = dict(data["archive"])
     archive.setdefault("__autogenous_blank_seed__", {})["loaded_bundle_sha256"] = bundle_sha
     meta_dag = [(str(a), str(b)) for a, b in data.get("meta_dag", [])]
+    if migrate_legacy_wormholes and any(
+        (wh.get("role_and_observation_map") or {}).get("kind") == "typed_operator_pipeline_isomorphism"
+        for wh in forest.horizontal_wormhole_edges.values()
+    ):
+        discover_cross_tree_operator_wormholes(forest, archive)
     return forest, archive, meta_dag, {"bundle_sha256": bundle_sha, **dict(data.get("metadata", {}))}
 
 
