@@ -1,0 +1,85 @@
+{
+  "commit": "948e2d57a48b74369158ba2fbdee87bd32102403",
+  "no_model_or_docker_calls": true,
+  "verification_string_checks": [
+    {
+      "command": "true",
+      "accepted": false
+    },
+    {
+      "command": "python3 -c \"print('solver.py')\"",
+      "accepted": true
+    },
+    {
+      "command": "pytest -q /tmp/test_unrelated.py",
+      "accepted": true
+    },
+    {
+      "command": "python3 /tmp/validate_saved_candidate.py",
+      "accepted": false
+    }
+  ],
+  "run_frontier_episode_controls": [
+    {
+      "case": "repeat_submit_without_verification",
+      "max_turns": 5,
+      "steps": [
+        [
+          "submit_completed_task",
+          null
+        ],
+        [
+          "submit_completed_task",
+          null
+        ]
+      ],
+      "ended_by_finish": true,
+      "turns_used": 2,
+      "pullback_gate_triggered": true,
+      "strict_pass": false,
+      "provenance_verified": true
+    },
+    {
+      "case": "unrelated_print_clears_verification",
+      "max_turns": 5,
+      "steps": [
+        [
+          "execute_in_remote_docker",
+          "python3 -c \"print('solver.py')\""
+        ],
+        [
+          "submit_completed_task",
+          null
+        ]
+      ],
+      "ended_by_finish": true,
+      "turns_used": 2,
+      "pullback_gate_triggered": false,
+      "strict_pass": false,
+      "provenance_verified": true
+    },
+    {
+      "case": "last_turn_bypasses_gate",
+      "max_turns": 1,
+      "steps": [
+        [
+          "submit_completed_task",
+          null
+        ]
+      ],
+      "ended_by_finish": true,
+      "turns_used": 1,
+      "pullback_gate_triggered": false,
+      "strict_pass": false,
+      "provenance_verified": true
+    }
+  ],
+  "nested_reader_lock_control": {
+    "outer_reader_count": 1,
+    "writers_waiting": 1,
+    "nested_read_acquired": false,
+    "writer_acquired": false,
+    "deadlock_condition": true,
+    "scope": "latent deterministic interleaving; no claim it occurred in saved completed studies"
+  }
+}

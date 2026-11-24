@@ -1,0 +1,16 @@
+{
+  "exact_shell_replay": [
+    {
+      "exact_command": "PYTHONPATH=/tmp python3 -c \"import importlib, json, os, sys\\nos.environ['HEGEL_SKILL_CALLER_ROLE'] = 'smoke_test'\\nmods = json.loads(sys.argv[1])\\nout = []\\nfor mn in mods:\\n    try:\\n        m = importlib.import_module(mn)\\n        fns = [k for k, v in vars(m).items() if callable(v) and not k.startswith('_')]\\n        out.append({'module_import': mn, 'lifecycle_state': 'bound_and_import_qualified', 'callable_count': len(fns)})\\n    except Exception as exc:\\n        out.append({'module_import': mn, 'lifecycle_state': 'failed_import', 'error': f'{type(exc).__name__}:{exc}'})\\nprint(json.dumps(out))\\n\" \"[\\\"math\\\"]\"",
+      "returncode": 1,
+      "stderr": "  File \"<string>\", line 1\n    import importlib, json, os, sys\\nos.environ['HEGEL_SKILL_CALLER_ROLE'] = 'smoke_test'\\nmods = json.loads(sys.argv[1])\\nout = []\\nfor mn in mods:\\n    try:\\n        m = importlib.import_module(mn)\\n        fns = [k for k, v in vars(m).items() if callable(v) and not k.startswith('_')]\\n        out.append({'module_import': mn, 'lifecycle_state': 'bound_and_import_qualified', 'callable_count': len(fns)})\\n    except Exception as exc:\\n        out.append({'module_import': mn, 'lifecycle_state': 'failed_import', 'error': f'{type(exc).__name__}:{exc}'})\\nprint(json.dumps(out))\\n\n                                    ^\nSyntaxError: unexpected character after line continuation character\n",
+      "stdout": ""
+    }
+  ],
+  "returned_qualification": [
+    {
+      "module_import": "math",
+      "lifecycle_state": "qualification_exec_failed"
+    }
+  ]
+}
