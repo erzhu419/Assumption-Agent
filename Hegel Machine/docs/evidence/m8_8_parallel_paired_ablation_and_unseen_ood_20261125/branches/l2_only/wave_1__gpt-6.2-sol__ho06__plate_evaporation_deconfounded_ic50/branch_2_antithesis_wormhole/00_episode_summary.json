@@ -1,0 +1,425 @@
+{
+  "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+  "short_name": "plate_evaporation_ic50_assay",
+  "benchmark": "Hegel-OOD-Holdout-12",
+  "wave": "wave_1",
+  "scientific_domain": "Quantitative Pharmacology / Confounded High-Throughput Assay",
+  "wormhole_family": "fam_biomystery_structural_and_regulatory",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": false,
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 12,
+  "max_turns": 18,
+  "final_candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+  "validated_incumbent_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "b5dddb71967b3239d716e795ba487b4cf75122991e049fe66b641c0523df355d",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cp /holdout_task/assay_ic50.py /tmp/assay_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/assay_baseline.py').read_text()\ns = s.replace('def _design(distance, row, col, decay):\\n    return np.column_stack((np.ones_like(",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b5dddb71967b3239d716e795ba487b4cf75122991e049fe66b641c0523df355d",
+        "expected_candidate_sha256": "b5dddb71967b3239d716e795ba487b4cf75122991e049fe66b641c0523df355d",
+        "computed_candidate_sha256": "b5dddb71967b3239d716e795ba487b4cf75122991e049fe66b641c0523df355d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 3507
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_b5dddb71"
+    },
+    {
+      "candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && env -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.special import expit\nfrom assay_ic50 import estimate_compound_hill_parameters, ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+        "expected_candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+        "computed_candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 5569
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a9e11123"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t05",
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "spatial confounding and corner extrapolation",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": "ng_t10",
+      "resolves_nogood_ids": [],
+      "assumption_refuted": "A constant gain or sum of independent row- and column-edge exponentials adequately represents the plate perimeter.",
+      "empirical_witness": "At decay length 2, held-out DMSO 90th-percentile absolute residual was 0.2891 for flat gain and 0.0533 for summed edge terms, versus 0.0107 for the nearest-perimeter exponential.",
+      "causal_blanket_diagnosis": "A flat gain leaves perimeter bias unresolved; summing axis-wise edge signals overcounts exposure near the intersection of two edges.",
+      "sublated_pivot": "Use a nearest-edge exponential with two illumination gradients; estimate its decay length from DMSO while retaining plate-specific calibration.",
+      "resolved_at_turn": 10,
+      "resolved_candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57"
+    },
+    {
+      "nogood_id": "ng_t07",
+      "turn_idx": 7,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "spatial gain interpolation under profile shift",
+      "candidate_sha256": "b5dddb71967b3239d716e795ba487b4cf75122991e049fe66b641c0523df355d",
+      "resolved": true,
+      "superseded_by": "ng_t10",
+      "resolves_nogood_ids": [],
+      "assumption_refuted": "A single exponential perimeter profile suffices across the smooth edge profiles tested.",
+      "empirical_witness": "The alternate smooth profile exceeded the slope tolerance of 0.18 in 2 of 24 simulated screens; the worst error was 0.18439.",
+      "causal_blanket_diagnosis": "The public control grid skips edge distances 1 and 2, so different perimeter curvatures can yield different gains in treatment rows even when both describe the broad border-to-center trend.",
+      "sublated_pivot": "Compare the exponential with a bounded rational perimeter profile, choosing between them using DMSO residuals alone.",
+      "resolved_at_turn": 10,
+      "resolved_candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_control_panel_deconfounding",
+      "source_forest_node": "node_auto_07_control_panel_deconfounding",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "aa502f6d83a30b6babf8dcdff2012cefc7cf8ce998e199d66c4221b48051b07f",
+      "exported_apis": "align_control_panel(X: np.ndarray, centers: np.ndarray, signal_columns: tuple[int, ...], control_columns: tuple[int, ...] | None = None) -> np.ndarray; fit_predict_neutral(X_train: np.ndarray, y_train: np.ndarray, center_train: np.ndarray, X_test: np.ndarray, center_test: np.ndarray, signal_columns: tuple[int, int, int, int, int], control_columns: tuple[int, ...] | None = None, *, C: float = 3.0) -> np.ndarray",
+      "api_quick_reference": [
+        {
+          "function": "align_control_panel",
+          "signature": "align_control_panel(X: np.ndarray, centers: np.ndarray, signal_columns: tuple[int, ...], control_columns: tuple[int, ...] | None=None) -> np.ndarray",
+          "doc_summary": "Return signal values in control-referenced coordinates, in input row order.",
+          "mathematical_preconditions": [
+            "{\"field\": \"observations_per_contributing_control\", \"op\": \">=\", \"value\": 2}",
+            "{\"field\": \"usable_control_features_per_center\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"estimated_shared_scanner_gain\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"observations_per_training_center_class_cell\", \"op\": \">=\", \"value\": 1}"
+          ]
+        },
+        {
+          "function": "fit_predict_neutral",
+          "signature": "fit_predict_neutral(X_train: np.ndarray, y_train: np.ndarray, center_train: np.ndarray, X_test: np.ndarray, center_test: np.ndarray, signal_columns: tuple[int, int, int, int, int], control_columns: tuple[int, ...] | None=None, *, C: float=3.0) -> np.ndarray",
+          "doc_summary": "Fit equal-prior logistic probabilities for a prespecified signal basis.",
+          "mathematical_preconditions": [
+            "{\"field\": \"observations_per_contributing_control\", \"op\": \">=\", \"value\": 2}",
+            "{\"field\": \"usable_control_features_per_center\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"estimated_shared_scanner_gain\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"observations_per_training_center_class_cell\", \"op\": \">=\", \"value\": 1}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "observations_per_contributing_control",
+          "op": ">=",
+          "value": 2
+        },
+        {
+          "field": "usable_control_features_per_center",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "estimated_shared_scanner_gain",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "observations_per_training_center_class_cell",
+          "op": ">=",
+          "value": 1
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt05__confounded_multicenter_deconfounding"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_dispersive_wave_tomography",
+      "source_forest_node": "node_auto_09_dispersive_wave_tomography",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "fbf620dbe52e77ff5571790c043d1908fdba8681dfd061ec4133b6962d3a0cb4",
+      "exported_apis": "localize_pitch_catch(sensor_xy: np.ndarray, pairs: np.ndarray, waveforms: np.ndarray, plate_dims: np.ndarray, sample_rate_hz: float, carrier_hz: float, *, thickness: float | None = None, reference_sensor_xy: np.ndarray | None = None, reference_pairs: np.ndarray | None = None, reference_waveforms: np.ndarray | None = None, reference_plate_dims: np.ndarray | None = None, reference_thickness: float | None = None, grid_step: float = 0.009) -> tuple[tuple[float, float], dict]",
+      "api_quick_reference": [
+        {
+          "function": "localize_pitch_catch",
+          "signature": "localize_pitch_catch(sensor_xy: np.ndarray, pairs: np.ndarray, waveforms: np.ndarray, plate_dims: np.ndarray, sample_rate_hz: float, carrier_hz: float, *, thickness: float | None=None, reference_sensor_xy: np.ndarray | None=None, reference_pairs: np.ndarray | None=None, reference_waveforms: np.ndarray | None=None, reference_plate_dims: np.ndarray | None=None, reference_thickness: float | None=None, grid_step: float=0.009) -> tuple[tuple[float, float], dict]",
+          "doc_summary": "Locate one localized flaw in a rectangular plate; return (xy, diagnostics).",
+          "mathematical_preconditions": [
+            "{\"field\": \"samples_per_carrier_period\", \"op\": \">\", \"value\": 2}",
+            "{\"field\": \"unique_unordered_paths\", \"op\": \">=\", \"value\": 3}",
+            "{\"field\": \"distinct_direct_path_lengths\", \"op\": \">=\", \"value\": 2}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "samples_per_carrier_period",
+          "op": ">",
+          "value": 2
+        },
+        {
+          "field": "unique_unordered_paths",
+          "op": ">=",
+          "value": 3
+        },
+        {
+          "field": "distinct_direct_path_lengths",
+          "op": ">=",
+          "value": 2
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt01__dispersive_plate_flaw_tomography_v2"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_robust_network_assimilation",
+      "source_forest_node": "node_auto_08_split_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "2262dea7fb83d907b5e4ba036cab3459cc080447cbb668b784227f746f8023d6",
+      "exported_apis": "assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int = 5, valve_levels: tuple[float, float] = (0.35, 1.0), gain_floor: float = 0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray]",
+      "api_quick_reference": [
+        {
+          "function": "assimilate_diffusive_network",
+          "signature": "assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int=5, valve_levels: tuple[float, float]=(0.35, 1.0), gain_floor: float=0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray]",
+          "doc_summary": "Infer constant transmission and forecast a forward-Euler network.",
+          "mathematical_preconditions": [
+            "{\"field\": \"dt\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"observation_sample_count\", \"op\": \">=\", \"value\": 3}",
+            "{\"field\": \"forecast_sample_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"harmonic_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"twice_harmonic_count_over_horizon\", \"op\": \"<\", \"value\": 1}",
+            "{\"field\": \"gain_floor\", \"op\": \">\", \"value\": 0}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "dt",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "observation_sample_count",
+          "op": ">=",
+          "value": 3
+        },
+        {
+          "field": "forecast_sample_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "harmonic_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "twice_harmonic_count_over_horizon",
+          "op": "<",
+          "value": 1
+        },
+        {
+          "field": "gain_floor",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt04__network_varproj_and_valve_assimilation"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_sparse_ridge_certification",
+      "source_forest_node": "node_auto_08_split_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "770f6644bb1fd8eb49dbacf51ffa3405a9ca876974e0021d66415d9014d8dfb9",
+      "exported_apis": "solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float = 1e-6, *, max_leaves: int = 90) -> dict",
+      "api_quick_reference": [
+        {
+          "function": "solve_and_certify_l0",
+          "signature": "solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float=1e-06, *, max_leaves: int=90) -> dict",
+          "doc_summary": "Certify boxed sparse ridge regression with at most 16 real predictors.",
+          "mathematical_preconditions": [
+            "{\"field\": \"n_samples\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"n_features\", \"op\": \"<=\", \"value\": 16}",
+            "{\"field\": \"lam0\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"lam2\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"M\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"eps\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"max_leaves\", \"op\": \">=\", \"value\": 1}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "n_samples",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "n_features",
+          "op": "<=",
+          "value": 16
+        },
+        {
+          "field": "lam0",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "lam2",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "M",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "eps",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "max_leaves",
+          "op": ">=",
+          "value": 1
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt06__exact_l0_l2_compacted_certificate"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_a9e1112382d4",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 5,
+    "exported_pure_functions": [
+      "_coordinates",
+      "_design",
+      "_calibrate",
+      "basis",
+      "hill"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": false,
+    "recalled_node_count": 5,
+    "staged_module_count": 4,
+    "staged_l1_primitive_count": 0,
+    "inspected_in_bash": false,
+    "inspected_source_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "a9e1112382d4ff60b9dc8d2f106f151d8ed5a5cda87355b634e3e0154d486a57",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "assay_ic50.py",
+          "final_file_sha256": "f283176573a7288619ae7287e4b88b77bf94c597a637463966ba3397d490cf57",
+          "public_entrypoints": [
+            "estimate_compound_hill_parameters"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "assay_ic50.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 31,
+  "prompt_tokens": 359663,
+  "cached_tokens": 60544,
+  "completion_tokens": 12833,
+  "total_tokens": 372496,
+  "effective_billed_tokens": 327088,
+  "wall_ms": 494416.28,
+  "provenance_verified": true,
+  "terminal_record_sha256": "88ca7ffc87a40148d70bf56853e68d05835157e09f8622944c0d25ea553e65a2"
+}

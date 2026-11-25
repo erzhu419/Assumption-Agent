@@ -1,0 +1,183 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_robin_heat_sink_pde_inversion_ba46821fc6d4",
+    "source_hash": "ba46821fc6d44fda40da36ca207f3bffb354138f51726f390aa4434020715d85",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf03__orthotropic_robin_heat_sink_inversion",
+    "wormhole_family": "fam_unseen_elliptic_robin_inversion"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/thermal_edge_oracle.py",
+        "archived_relpath": "producers/tmp__thermal_edge_oracle.py",
+        "bytes": 1019,
+        "sha256": "69afcee1ff6015be3b46e9eeb7fd3402a00e37e19106dec07ea57f723ff02648"
+      },
+      {
+        "container_path": "/tmp/thermal_fresh.py",
+        "archived_relpath": "producers/tmp__thermal_fresh.py",
+        "bytes": 821,
+        "sha256": "bdcccead09bd1512b46aa8d846ab7769da2f956ca149035b3085fe2a84174dab"
+      },
+      {
+        "container_path": "/tmp/thermal_identifiability.py",
+        "archived_relpath": "producers/tmp__thermal_identifiability.py",
+        "bytes": 2911,
+        "sha256": "c465535f408ae2ee6b24955dec817b4cf75422da21f77a3b217e730fa1ecaef3"
+      },
+      {
+        "container_path": "/tmp/thermal_oracle.py",
+        "archived_relpath": "producers/tmp__thermal_oracle.py",
+        "bytes": 3073,
+        "sha256": "86e59bce6b6392122957659d68873cfaacbac068e7a781e02bc37c85fa22e3a2"
+      },
+      {
+        "container_path": "/tmp/thermal_validate.py",
+        "archived_relpath": "producers/tmp__thermal_validate.py",
+        "bytes": 3627,
+        "sha256": "4d494e06f023aee4cdaf7a0449efe6395f577395b5fd923f17b6e5d1e3b34b51"
+      },
+      {
+        "container_path": "/tmp/thermal_v03/thermal_sink_solver.py",
+        "archived_relpath": "producers/tmp__thermal_v03__thermal_sink_solver.py",
+        "bytes": 9226,
+        "sha256": "d798bf466281d86f19d3261aa546394ef282fb2b0651f8677a63aa781ed37df7"
+      },
+      {
+        "container_path": "/tmp/thermal_v02/thermal_sink_solver.py",
+        "archived_relpath": "producers/tmp__thermal_v02__thermal_sink_solver.py",
+        "bytes": 7432,
+        "sha256": "574ffe92a17739318075be0058384d39562311e58a0be1898aec55b1264c017a"
+      },
+      {
+        "container_path": "/tmp/thermal_verify.XbHojp/thermal_sink_solver.py",
+        "archived_relpath": "producers/tmp__thermal_verify.XbHojp__thermal_sink_solver.py",
+        "bytes": 9226,
+        "sha256": "d798bf466281d86f19d3261aa546394ef282fb2b0651f8677a63aa781ed37df7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python - <<'PY'\nimport pickle, numpy as np\nwith open('public_thermal_cases.pkl','rb') as f: cases=pickle.load(f)\ndef inspect(x, depth=0):\n    pre='  '*depth\n    if isinstance(x,dict):\n        print(pre,'dict',list(x)[:30]);\n        for k,v in list(x.items())[:15]:\n            print(pre,k); inspect(v,depth+1)\n    elif isinstance(x,np.ndarray):\n        print(pre,'array',x.shape,x.dtype,'range', (x.min(),x.max()) if x.size and x.dtype.kind in 'if' else None,'head',x.ravel()[:5])\n    elif isinstance(x,(list,tuple)):\n        print(pre,type(x).__name__,len(x));\n        for v in x",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nprint('NumPy', np.__version__, 'SciPy', scipy.__version__)\nwith open('public_thermal_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\ndef inspect(x, depth=0):\n    pre = '  ' * depth\n    if isinstance(x, dict):\n        print(pre, 'dict', list(x)[:20])\n        if depth < 4:\n            for k, v in list(x.items())[:20]:\n                print(pre, k)\n                inspect(v, depth + 1)\n    elif isinstance(x, np.ndarray):\n        print(pre, x.shape, x.dtype, 'range', (x.min(), x.max()) if x.size and x.dtype.kind ",
+      "cat > /holdout_task/thermal_sink_solver.py <<'PY'\n\"\"\"Invert sparse thermistor measurements on a cell-centered Robin plate.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _thermal_operator(kappa, gamma):\n    n = kappa.shape[0]\n    h = 1.0 / n\n    cells = np.arange(n * n).reshape(n, n)\n    p = np.r_[cells[:-1, :].ravel(), cells[:, :-1].ravel()]\n    q = np.r_[cells[1:, :].ravel(), cells[:, 1:].ravel()]\n    k = kappa.ravel()\n    g = 2 * k[p] * k[q] / (k[p] + k[q])\n    robin = np.zeros_like(kappa)\n    ro",
+      "cat > /tmp/thermal_validate.py <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nfrom thermal_sink_solver import localize_thermal_source\n\nLIMIT = np.array([.035, .08, .008])\n\ndef errors(p, g):\n    assert set(p) == {'source_xy', 'amplitude', 'junction_offset'}\n    assert len(p['source_xy']) == 2 and all(type(v) is float for v in [*p['source_xy'], p['amplitude'], p['junction_offset']])\n    assert p['amplitude'] > 0\n    return np.array([np.linalg.norm(np.subtract(p['source_xy'], g['source_xy'])), abs(p['amplitude']/g['a",
+      "cat > /tmp/thermal_oracle.py <<'PY'\nimport pathlib\nfrom scipy.optimize import least_squares\nfrom scipy.sparse.linalg import splu\nfrom thermal_sink_solver import _thermal_operator, _mad\nsrc=pathlib.Path('/tmp/thermal_validate.py').read_text()\nexec(src.split('cases = pickle.load',1)[0])\nfor c in pickle.load(open('/holdout_task/public_thermal_cases.pkl','rb')):\n    m,g=c['measurement'],c['gt']; n=m['N']; h=1/n; axis=(np.arange(n)+.5)*h\n    q=g['amplitude']*h*h*np.exp(-((axis[:,None]-g['source_xy'][0])**2+(axis[None,:]-g['source_xy'][1])**2)/(2*m['sigma_m']**2))\n    u=spsolve(_thermal_operator(m['",
+      "cat > /tmp/thermal_identifiability.py <<'PY'\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import ndtr\nfrom scipy.sparse.linalg import splu\nfrom thermal_sink_solver import _thermal_operator\nsrc = Path('/tmp/thermal_validate.py').read_text()\nexec(src.split('cases = pickle.load',1)[0])\nexec(src[src.index('def truth_grid'):src.index('\\nfor name,n,m,gamma,sigma,spread')])\n\ndef simulate(n,m,gamma,sigma,spread,xy,seed,noise,corruption):\n    rng = np.random.default_rng(seed)\n    x=(np.arange(n)+.5)/n\n    k=np.exp(spread*(np.sin(2*np.pi*x[:,Non",
+      "cat > /tmp/thermal_edge_oracle.py <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/thermal_oracle.py').read_text()\nexec(s[:s.index('for c in pickle.load')])\nexec(s[s.index('def compare'):s.index('part=src')])\ns = Path('/tmp/thermal_identifiability.py').read_text()\nexec(s[s.index('exec(src[src.index'):s.index(\"for label,center\")])\nfor corruption in ('gross', 'moderate'):\n    results = []\n    for seed in range(48):\n        rng = np.random.default_rng(19020+seed)\n        xy = np.array([rng.uniform(.02,.16),rng.uniform(.16,.84)])\n        d,g,bad,_ = simulate(22,52,2.2,.085,.6,xy,29020+seed,.0013,cor",
+      "mkdir -p /tmp/thermal_v02; cp /holdout_task/thermal_sink_solver.py /tmp/thermal_v02/thermal_sink_solver.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/thermal_v02/thermal_sink_solver.py')\ns = p.read_text()\na = s.index('    r = params[2] * prediction(params[:2]) + params[3] - obs\\n    keep =')\ns = s[:a] + '''    def residuals(z):\n        return z[2] * prediction(z[:2]) + z[3] - obs\n\n    noise = max(_mad(residuals(params)), floor)\n    cutoff = 3.3 * noise\n\n    def refine(z):\n        # Compare fits with the same bounded loss; a stuck sensor cannot win\n        # simply because fitting",
+      "set -e\np=/holdout_task/thermal_sink_solver.py\ncp /tmp/thermal_v02/thermal_sink_solver.py \"$p\"\nsha=$(sha256sum \"$p\" | cut -c1-8)\ncp \"$p\" /tmp/.hegel_candidate_archive/v02_$sha\nOPENBLAS_NUM_THREADS=1 PYTHONPATH=/holdout_task python3 -u /tmp/thermal_edge_oracle.py\ncat > /tmp/thermal_fresh.py <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/thermal_identifiability.py').read_text()\nexec(src[:src.index('for label,center')])\nfor label in ('interior', 'edge', 'corner'):\n    results = []\n    for seed in range(36):\n        rng = np.random.default_rng(70170+seed)\n        axis = rng.uniform(.025,.15)\n    ",
+      "set -e\nmkdir -p /tmp/thermal_v03\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/holdout_task/thermal_sink_solver.py').read_text()\npos = s.index('    params = winner[0]')\ns = s[:pos] + '''    # A trimmed fit uses the nominal contamination count to avoid rejecting\n    # extra clean readings when a bad reading pulls a weakly observed fit.\n    retained = len(obs) - int(round(.06 * len(obs)))\n    if retained >= 5 and retained < len(obs):\n        def trimmed(z):\n            previous = None\n            for _ in range(12):\n                r = residuals(z)\n                ids = np.argpartition(np",
+      "set -euo pipefail\np=/holdout_task/thermal_sink_solver.py\ncp /tmp/thermal_v03/thermal_sink_solver.py \"$p\"\nsha=$(sha256sum \"$p\" | cut -c1-8)\narchive=/tmp/.hegel_candidate_archive/v03_$sha\ncp \"$p\" \"$archive\"\nprintf 'Final candidate: %s\\n' \"$sha\"\nclean=$(mktemp -d /tmp/thermal_verify.XXXXXX)\ncp \"$p\" \"$clean/thermal_sink_solver.py\"\ncd \"$clean\"\nunset OPENBLAS_NUM_THREADS OMP_NUM_THREADS MKL_NUM_THREADS\nexport PYTHONPATH=\"$clean\" PYTHONDONTWRITEBYTECODE=1\npython3 -u /tmp/thermal_validate.py | grep -v '^ miss'\npython3 -u /tmp/thermal_fresh.py | grep '^fresh '\ncmp \"$p\" \"$archive\"\ncmp \"$p\" \"$clean/therm",
+      "set -euo pipefail\ncd /holdout_task\np=thermal_sink_solver.py\nsha=$(sha256sum \"$p\" | cut -d' ' -f1)\nprintf 'Installed solver SHA-256: %s\\n' \"$sha\"\nif ! cmp -s \"$p\" /tmp/thermal_v03/thermal_sink_solver.py; then\n  diff -u /tmp/thermal_v03/thermal_sink_solver.py \"$p\" | head -n 75 || true\n  unset OPENBLAS_NUM_THREADS OMP_NUM_THREADS MKL_NUM_THREADS\n  export PYTHONPATH=/holdout_task PYTHONDONTWRITEBYTECODE=1\n  python3 -B -u /tmp/thermal_validate.py | grep -v '^ miss'\n  python3 -B -u /tmp/thermal_fresh.py | grep '^fresh '\nelse\n  echo 'Installed solver matches the candidate tested in the clean process."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__thermal_verify.XbHojp__thermal_sink_solver.py",
+      "primary_producer_container_path": "/tmp/thermal_verify.XbHojp/thermal_sink_solver.py",
+      "selected_channels": [
+        "fam_unseen_elliptic_robin_inversion"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/thermal_sink_solver.py",
+        "filename": "thermal_sink_solver.py",
+        "bytes": 9226,
+        "sha256": "d798bf466281d86f19d3261aa546394ef282fb2b0651f8677a63aa781ed37df7",
+        "content_addressed_ref": "content_addressed_blobs/d798bf466281d86f19d3261aa546394ef282fb2b0651f8677a63aa781ed37df7.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/thermal_sink_solver.py"
+    ],
+    "exported_pure_functions": [
+      "errors",
+      "truth_grid",
+      "_thermal_operator",
+      "_mad",
+      "_affine",
+      "localize_thermal_source",
+      "simulate",
+      "compare"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_elliptic_robin_inversion",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ba46821fc6d44fda40da36ca207f3bffb354138f51726f390aa4434020715d85",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -euo pipefail\ncd /holdout_task\np=thermal_sink_solver.py\nsha=$(sha256sum \"$p\" | cut -d' ' -f1)\nprintf 'Installed solver SHA-256: %s\\n' \"$sha\"\nif ! cmp -s \"$p\" /tmp/thermal_v03/thermal_sink_solver.py; then\n  diff -u /tmp/thermal_v03/therm",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ba46821fc6d44fda40da36ca207f3bffb354138f51726f390aa4434020715d85",
+        "expected_candidate_sha256": "ba46821fc6d44fda40da36ca207f3bffb354138f51726f390aa4434020715d85",
+        "computed_candidate_sha256": "ba46821fc6d44fda40da36ca207f3bffb354138f51726f390aa4434020715d85",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermal_sink_solver.py",
+            "bytes": 9226
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_ba46821f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": [
+      {
+        "name": "errors",
+        "code": "def errors(p, g):\n    assert set(p) == {'source_xy', 'amplitude', 'junction_offset'}\n    assert len(p['source_xy']) == 2 and all((type(v) is float for v in [*p['source_xy'], p['amplitude'], p['junction_offset']]))\n    assert p['amplitude'] > 0\n    return np.array([np.linalg.norm(np.subtract(p['source_xy'], g['source_xy'])), abs(p['amplitude'] / g['amplitude'] - 1), abs(p['junction_offset'] - g['junction_offset'])])"
+      },
+      {
+        "name": "truth_grid",
+        "code": "def truth_grid(n, k, gamma, sigma, center, amp):\n    from scipy.sparse import lil_matrix\n    from scipy.sparse.linalg import spsolve\n    A = lil_matrix((n * n, n * n))\n    q = np.empty(n * n)\n    for i in range(n):\n        for j in range(n):\n            p = i * n + j\n            q[p] = amp / n ** 2 * np.exp(-(((i + 0.5) / n - center[0]) ** 2 + ((j + 0.5) / n - center[1]) ** 2) / (2 * sigma ** 2))\n            for (a, b) in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):\n                if not (0 <= a < n and 0 <= b < n):\n                    A[p, p] += gamma / n\n                else:\n                    w = 2 / (1 / k[i, j] + 1 / k[a, b])\n                    A[p, p] += w\n                    A[p, a * n + b] = -w\n    u = spsolve(A.tocsc(), q).reshape(n, n)\n    edge_heat = (u[0, :].sum() + u[-1, :].sum() + u[:, 0].sum() + u[:, -1].sum()) * gamma / n\n    assert abs(edge_heat / q.sum() - 1) < 1e-09\n    return u"
+      },
+      {
+        "name": "_thermal_operator",
+        "code": "def _thermal_operator(kappa, gamma):\n    from scipy.sparse import coo_matrix\n    n = kappa.shape[0]\n    h = 1.0 / n\n    cells = np.arange(n * n).reshape(n, n)\n    p = np.r_[cells[:-1, :].ravel(), cells[:, :-1].ravel()]\n    q = np.r_[cells[1:, :].ravel(), cells[:, 1:].ravel()]\n    k = kappa.ravel()\n    g = 2 * k[p] * k[q] / (k[p] + k[q])\n    robin = np.zeros_like(kappa)\n    robin[0, :] += gamma * h\n    robin[-1, :] += gamma * h\n    robin[:, 0] += gamma * h\n    robin[:, -1] += gamma * h\n    diag = robin.ravel() + np.bincount(p, g, minlength=k.size) + np.bincount(q, g, minlength=k.size)\n    ids = cells.ravel()\n    return coo_matrix((np.r_[-g, -g, diag], (np.r_[p, q, ids], np.r_[q, p, ids])), shape=(k.size, k.size)).tocsc()"
+      },
+      {
+        "name": "_mad",
+        "code": "def _mad(values):\n    return 1.4826 * np.median(np.abs(values - np.median(values)))"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(pred, measured, weights):\n    \"\"\"Profile a nonnegative amplitude and a free common offset per column.\"\"\"\n    total = weights.sum(axis=0)\n    pred_mean = (weights * pred).sum(axis=0) / total\n    obs_mean = (weights * measured).sum(axis=0) / total\n    centered = pred - pred_mean\n    variance = (weights * centered ** 2).sum(axis=0)\n    cov = (weights * centered * (measured - obs_mean)).sum(axis=0)\n    gain = np.maximum(0.0, cov / np.maximum(variance, np.finfo(float).tiny))\n    return (gain, obs_mean - gain * pred_mean)"
+      },
+      {
+        "name": "localize_thermal_source",
+        "code": "def localize_thermal_source(measurement: dict) -> dict:\n    \"\"\"Fit source center and strength, allowing for gross errors at individual sensors.\"\"\"\n    from scipy.optimize import least_squares\n    from scipy.sparse.linalg import splu\n    n = int(measurement['N'])\n    kappa = np.asarray(measurement['kappa'], dtype=float)\n    sigma = float(measurement['sigma_m'])\n    ij = np.asarray(measurement['sensor_ij'], dtype=int)\n    obs = np.asarray(measurement['T_obs'], dtype=float).ravel()\n    lu = splu(_thermal_operator(kappa, float(measurement['gamma_robin'])))\n    idx = n * ij[:, 0] + ij[:, 1]\n    rhs = np.zeros((n * n, len(idx)), order='F')\n    rhs[idx, np.arange(len(idx))] = 1.0\n    greens = np.ascontiguousarray(np.concatenate([lu.solve(rhs[:, j:j + 8]) for j in range(0, len(idx), 8)], axis=1).T)\n    axis = (np.arange(n) + 0.5) / n\n    coords = np.stack(np.meshgrid(axis, axis, indexing='ij'), axis=-1).reshape(-1, 2)\n    var = sigma ** 2\n    magnitude = max(_mad(obs), np.finfo(float).eps * max(1.0, np.max(np.abs(obs))))\n    floor = magnitude * 1e-09\n    step_count = min(33, max(13, int(np.ceil(0.7 / sigma)) + 1))\n    axis0 = np.linspace(0.0, 1.0, step_count)\n    grid = np.stack(np.meshgrid(axis0, axis0, indexing='ij'), axis=-1).reshape(-1, 2)\n    scale = 0.1 * magnitude\n\n    def basis(xy):\n        delta = coords - xy\n        q = np.exp(-0.5 * np.sum(delta ** 2, axis=-1) / var) / n ** 2\n        return (delta, q)\n    roughness = []\n    coefficients = []\n    y = obs[:, None]\n    for start in range(0, len(grid), 32):\n        xy = grid[start:start + 32]\n        (_, q) = basis(xy[:, None, :])\n        pred = np.einsum('ij,kj->ik', greens, q, optimize=False)\n        weights = np.ones_like(pred)\n        for _ in range(12):\n            (a, b) = _affine(pred, y, weights)\n            r = (pred * a + b - y) / scale\n            weights = 1.0 / np.sqrt(1.0 + r * r)\n        roughness.extend(np.sum(np.hypot(1.0, r) - 1.0, axis=0))\n        coefficients.extend(zip(a, b))\n\n    def prediction(xy, jacobian=False):\n        (delta, q) = basis(xy)\n        if jacobian:\n            return np.einsum('ij,jk->ik', greens, q[:, None] * delta / var, optimize=False)\n        return np.einsum('ij,j->i', greens, q, optimize=False)\n\n    def fit(initial, loss, noise, keep):\n        gain_scale = magnitude / max(np.std(prediction(initial[:2])), np.finfo(float).tiny)\n        unit = np.array([1.0, 1.0, gain_scale, magnitude])\n\n        def residual(z):\n            return (z[2] * gain_scale * prediction(z[:2]) + z[3] * magnitude - obs)[keep]\n\n        def jac(z):\n            return np.column_stack((z[2] * gain_scale * prediction(z[:2], True), gain_scale * prediction(z[:2]), np.full(len(obs), magnitude)))[keep]\n        result = least_squares(residual, initial / unit, jac=jac, loss=loss, f_scale=noise, bounds=([0.0, 0.0, 0.0, -np.inf], [1.0, 1.0, np.inf, np.inf]), gtol=1e-11, max_nfev=80)\n        return (result.x * unit, result.cost)\n    order = np.argsort(roughness)\n    starts = []\n    all_sensors = np.ones(len(obs), dtype=bool)\n    prelim = []\n    for i in order:\n        if any((np.linalg.norm(grid[i] - p) < 0.16 for p in starts)):\n            continue\n        starts.append(grid[i])\n        guess = np.r_[grid[i], coefficients[i]]\n        prelim.append(fit(guess, 'soft_l1', scale, all_sensors))\n        if len(starts) == 3:\n            break\n    params = min(prelim, key=lambda result: result[1])[0]\n    for _ in range(3):\n        r = params[2] * prediction(params[:2]) + params[3] - obs\n        noise = max(_mad(r), floor)\n        (params, _) = fit(params, 'cauchy', 2.5 * noise, all_sensors)\n\n    def residuals(z):\n        return z[2] * prediction(z[:2]) + z[3] - obs\n    noise = max(_mad(residuals(params)), floor)\n    cutoff = 3.3 * noise\n\n    def refine(z):\n        for _ in range(5):\n            keep = np.abs(residuals(z)) < cutoff\n            if keep.sum() < 5:\n                return (z, np.sum(np.minimum((residuals(z) / cutoff) ** 2, 1.0)))\n            (z, _) = fit(z, 'linear', 1.0, keep)\n            if np.array_equal(np.abs(residuals(z)) < cutoff, keep):\n                break\n        return (z, np.sum(np.minimum((residuals(z) / cutoff) ** 2, 1.0)))\n    roots = [params]\n    for (z, _) in prelim:\n        (z, _) = fit(z, 'cauchy', 2.5 * noise, all_sensors)\n        if all((np.linalg.norm(z[:2] - r[:2]) > 0.015 for r in roots)):\n            roots.append(z)\n    winner = min((refine(z) for z in roots), key=lambda r: r[1])\n    for _ in range(2):\n        (z, score) = winner\n        r = residuals(z)\n        keep = np.abs(r) < cutoff\n        indices = np.flatnonzero(keep)\n        if len(indices) < 6:\n            break\n        design = np.column_stack((z[2] * prediction(z[:2], True), prediction(z[:2]), np.ones(len(obs))))[keep]\n        leverage = np.sum(np.linalg.svd(design, full_matrices=False)[0] ** 2, axis=1)\n        rank = leverage + 0.4 * np.minimum(np.abs(r[keep]) / cutoff, 1.0)\n        for j in indices[np.argsort(rank)[-8:]]:\n            subset = keep.copy()\n            subset[j] = False\n            (trial, _) = fit(z, 'linear', 1.0, subset)\n            (trial, trial_score) = refine(trial)\n            if trial_score < winner[1]:\n                winner = (trial, trial_score)\n        if winner[1] >= score - 1e-08:\n            break\n    retained = len(obs) - int(round(0.06 * len(obs)))\n    if retained >= 5 and retained < len(obs):\n\n        def trimmed(z):\n            previous = None\n            for _ in range(12):\n                r = residuals(z)\n                ids = np.argpartition(np.abs(r), retained - 1)[:retained]\n                mask = np.zeros(len(obs), dtype=bool)\n                mask[ids] = True\n                if np.array_equal(mask, previous):\n                    break\n                previous = mask\n                (z, _) = fit(z, 'linear', 1.0, mask)\n            score = np.partition(residuals(z) ** 2, retained - 1)[:retained].sum()\n            return (z, score)\n        candidates = [trimmed(z) for z in [winner[0], *roots, *(r[0] for r in prelim)]]\n        best = min(candidates, key=lambda item: item[1])\n        for _ in range(2):\n            (z, score) = best\n            r = residuals(z)\n            ids = np.argpartition(np.abs(r), retained - 1)[:retained]\n            design = np.column_stack((z[2] * prediction(z[:2], True), prediction(z[:2]), np.ones(len(obs))))[ids]\n            leverage = np.sum(np.linalg.svd(design, full_matrices=False)[0] ** 2, axis=1)\n            rank = leverage + 0.4 * np.minimum(np.abs(r[ids]) / cutoff, 1.0)\n            for j in ids[np.argsort(rank)[-8:]]:\n                mask = np.zeros(len(obs), dtype=bool)\n                mask[ids] = True\n                mask[j] = False\n                (trial, _) = fit(z, 'linear', 1.0, mask)\n                trial = trimmed(trial)\n                if trial[1] < best[1]:\n                    best = trial\n            if best[1] >= score:\n                break\n        winner = refine(best[0])\n    params = winner[0]\n    return {'source_xy': params[:2].tolist(), 'amplitude': float(params[2]), 'junction_offset': float(params[3])}"
+      },
+      {
+        "name": "simulate",
+        "code": "def simulate(n, m, gamma, sigma, spread, xy, seed, noise, corruption):\n    rng = np.random.default_rng(seed)\n    x = (np.arange(n) + 0.5) / n\n    k = np.exp(spread * (np.sin(2 * np.pi * x[:, None] + 1.4 * seed) * np.cos(2 * np.pi * x[None, :]) + 0.4 * np.cos(4 * np.pi * x[:, None] + 3 * x[None, :])))\n    amp = rng.uniform(15.0, 29.0)\n    offset = rng.uniform(-0.07, 0.07)\n    (i, j) = np.unravel_index(rng.choice(n * n, m, replace=False), (n, n))\n    ij = np.column_stack((i, j))\n    clean = truth_grid(n, k, gamma, sigma, xy, amp)[i, j] + offset\n    obs = clean + rng.normal(0, noise, m)\n    order = np.argsort(np.linalg.norm((ij + 0.5) / n - xy, axis=1))\n    bad = order[:round(0.06 * m)]\n    if corruption == 'moderate':\n        obs[bad] += rng.choice([-1.0, 1.0], len(bad)) * rng.uniform(5, 20, len(bad)) * noise\n    else:\n        obs[bad] += rng.choice([-1.0, 1.0], len(bad)) * rng.uniform(0.16, 0.26, len(bad))\n    d = dict(N=n, kappa=k, gamma_robin=gamma, sigma_m=sigma, sensor_ij=ij, T_obs=obs)\n    g = dict(source_xy=xy, amplitude=amp, junction_offset=offset)\n    return (d, g, bad, clean)"
+      },
+      {
+        "name": "compare",
+        "code": "def compare(m, g, bad):\n    from scipy.optimize import least_squares\n    from scipy.sparse.linalg import splu\n    n = m['N']\n    (i, j) = m['sensor_ij'].T\n    ids = i * n + j\n    obs = m['T_obs']\n    sigma = m['sigma_m']\n    kappa = m['kappa']\n    x = (np.arange(n) + 0.5) / n\n    (X, Y) = np.meshgrid(x, x, indexing='ij')\n    coords = np.column_stack([X.ravel(), Y.ravel()])\n    eye = np.zeros((n * n, len(ids)))\n    eye[ids, np.arange(len(ids))] = 1\n    G = splu(_thermal_operator(kappa, m['gamma_robin'])).solve(eye).T\n\n    def predict(z):\n        d = coords - z[:2]\n        q = np.exp(-0.5 * np.sum(d * d, axis=1) / sigma ** 2) / n ** 2\n        b = np.einsum('ij,j->i', G, q)\n        J = np.column_stack((np.einsum('ij,jk->ik', G, q[:, None] * d / sigma ** 2) * z[2], b, np.ones(len(b))))\n        return (z[2] * b + z[3], J)\n\n    def vec(p):\n        return np.r_[p['source_xy'], p['amplitude'], p['junction_offset']]\n\n    def unpack(z):\n        return dict(source_xy=z[:2].tolist(), amplitude=float(z[2]), junction_offset=float(z[3]))\n    z = vec(localize_thermal_source(m))\n    t = vec(g)\n    keep = np.ones(len(obs), bool)\n    keep[bad] = False\n    residual = lambda z: (predict(z)[0] - obs)[keep]\n    jac = lambda z: predict(z)[1][keep]\n    kwargs = dict(jac=jac, bounds=([0, 0, 0, -np.inf], [1, 1, np.inf, np.inf]), gtol=1e-12)\n    o = least_squares(residual, t, **kwargs).x\n    a = least_squares(residual, z, **kwargs).x\n    J = jac(t)\n    err = np.array([errors(unpack(v), g) for v in (z, o, a)])\n    rr = predict(z)[0] - obs\n    est = np.abs(rr - np.median(rr)) <= 3.8 * _mad(rr)\n    sd = np.sqrt(np.diag(np.linalg.pinv(J.T @ J))) * 0.0013\n    return (err, [int(np.sum(est[bad])), int(np.sum(~est[keep]))], sd, np.linalg.norm(residual(o)))"
+      }
+    ]
+  }
+}

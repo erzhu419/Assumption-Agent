@@ -1,0 +1,151 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_robin_heat_sink_pde_inversion_f750abda5fb8",
+    "source_hash": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf03__orthotropic_robin_heat_sink_inversion",
+    "wormhole_family": "fam_unseen_elliptic_robin_inversion"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/check_thermal.py",
+        "archived_relpath": "producers/tmp__check_thermal.py",
+        "bytes": 3351,
+        "sha256": "8509f106586a69d3d24957a08beff8b0593596d2ffb1b32894085dca4c2699a3"
+      },
+      {
+        "container_path": "/tmp/diagnose_thermal.py",
+        "archived_relpath": "producers/tmp__diagnose_thermal.py",
+        "bytes": 2113,
+        "sha256": "7e4f6cc496a0896873832a0c098c2a1094a901b64f206eb9141a1c3f58d2fdb7"
+      },
+      {
+        "container_path": "/tmp/thermal_gate_validation.py",
+        "archived_relpath": "producers/tmp__thermal_gate_validation.py",
+        "bytes": 2576,
+        "sha256": "2b0362b64944dc28dc3a99c665c438bf9d343fc81676ed07fdde2ce8ac681c5d"
+      },
+      {
+        "container_path": "/tmp/thermal_identifiability.py",
+        "archived_relpath": "producers/tmp__thermal_identifiability.py",
+        "bytes": 2295,
+        "sha256": "c31186b43a5ecb4aa36d53056b67073cbeacdf8eaab892e9ab9c2619d6d28975"
+      },
+      {
+        "container_path": "/tmp/thermal_margin.py",
+        "archived_relpath": "producers/tmp__thermal_margin.py",
+        "bytes": 2300,
+        "sha256": "206f0c6705399d168d4b797d20424f1acdf570119f3c44e2359f51def8b6a195"
+      },
+      {
+        "container_path": "/tmp/thermal_wider_gate.py",
+        "archived_relpath": "producers/tmp__thermal_wider_gate.py",
+        "bytes": 5921,
+        "sha256": "d383ff6d2bc5415e075297d81253051673cf91d1ca9c5073d01f300d65a20870"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_thermal_cases.pkl','rb') as f: data=pickle.load(f)\nprint('SciPy',scipy.__version__)\ndef describe(x,depth=0):\n    if isinstance(x,dict):\n        for k,v in x.items():\n            print('  '*depth,repr(k),end=': ')\n            if isinstance(v,(dict,list,tuple)): print(); describe(v,depth+1)\n            else: describe(v,0)\n    elif isinstance(x,(list,tuple)):\n        print('  '*depth,type(x).__name__,len(x))\n        for v in x[:8]: describe(v,depth+1)\n    elif isinstance(x,np.ndarray):\n        print('  '*depth",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_thermal_cases.pkl','rb') as f: data=pickle.load(f)\nprint('SciPy',scipy.__version__)\ndef describe(x,depth=0):\n    p='  '*depth\n    if isinstance(x,dict):\n        for k,v in x.items():\n            print(p+str(k)+':',end=' ')\n            if isinstance(v,(dict,list,tuple)):\n                print(); describe(v,depth+1)\n            else: describe(v)\n    elif isinstance(x,(list,tuple)):\n        print(p,type(x).__name__,len(x))\n        for v in x[:12]: describe(v,depth+1)\n    elif isinstance(x,np.ndarray): print(x",
+      "cat > /holdout_task/thermal_sink_solver.py <<'PY'\n\"\"\"Localize a Gaussian heat source from sparse plate thermistors.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _plate_operator(kappa, gamma):\n    n = kappa.shape[0]\n    cells = np.arange(n*n).reshape(n, n)\n    left = np.r_[cells[:-1, :].ravel(), cells[:, :-1].ravel()]\n    right = np.r_[cells[1:, :].ravel(), cells[:, 1:].ravel()]\n    k = kappa.ravel()\n    g = 2*k[left]*k[right]/(k[left]+k[right])\n    boundary = np.r_[cells[0], cells[-1], cells[:, 0]",
+      "cat > /tmp/check_thermal.py <<'PY'\nimport pickle, sys, time\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nsys.path.insert(0, '/holdout_task')\nfrom thermal_sink_solver import localize_thermal_source, _plate_operator\n\nLIMIT = np.array([.035, .08, .008, 15])\ndef check(m, gt):\n    start = time.perf_counter()\n    fit = localize_thermal_source(m)\n    elapsed = time.perf_counter()-start\n    assert set(fit) == {'source_xy', 'amplitude', 'junction_offset'}\n    assert isinstance(fit['source_xy'], list) and len(fit['source_xy']) == 2\n    assert all(type(x)",
+      "cat > /tmp/diagnose_thermal.py <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nfrom scipy.optimize import least_squares\nimport thermal_sink_solver as solver\n# Load the independent forward generator without rerunning the completed sweeps.\ntext = open('/tmp/check_thermal.py').read()\nexec(text[text.index('def synthetic('):text.index('\\nfor label, args in')])\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nfrom thermal_sink_solver import _plate_operator\n\ndef check(m, gt):\n    y = m['T_obs']; bank = solver._response_bank(m); n = m['N']\n    c = (n",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\npath = Path('/holdout_task/thermal_sink_solver.py')\ns = path.read_text()\nold = '''    # Recover valid sensors trimmed along with the stuck sensors. Freeze the\n    # robust noise estimate while polishing the three physical quantities.\n    p = best.x\n    r, _ = residual_and_jac(p)\n    center = np.median(r)\n    scale = max(1.4826*np.median(np.abs(r-center)), 1e-12)\n    for _ in range(3):\n'''\nnew = '''    # Trimming can discard the clean readings nearest a boundary source.\n    # Reintroduce all readings with bounded residual influence before decidin",
+      "cat > /tmp/thermal_margin.py <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nfrom thermal_sink_solver import localize_thermal_source, _plate_operator, _response_bank\n\n# Use the independent forward generator from the first verification run.\nwith open('/tmp/check_thermal.py') as f:\n    text = f.read()\nexec(text[text.index('def synthetic('):text.index('\\nfor label, args in')])\n\ndef check(m, gt):\n    truth = np.r_[gt['source_xy'], gt['amplitude'], gt['juncti",
+      "set -e\nsed -i 's/^    rows = np.array(\\[synthetic(\\*args, seed) for seed in seeds\\])/    rows = []\\n    for seed in seeds:\\n        rows.append(synthetic(*args, seed))\\n    rows = np.array(rows)/' /tmp/thermal_margin.py\ncd / && python3 -I /tmp/thermal_margin.py",
+      "set -e\nsed 's/<= 3\\.5\\*scale/<= 4.25*scale/' /holdout_task/thermal_sink_solver.py > /tmp/thermal_wider_gate.py\ncat > /tmp/thermal_identifiability.py <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nfrom thermal_sink_solver import localize_thermal_source, _plate_operator, _response_bank\nfrom thermal_wider_gate import localize_thermal_source as wider\nwith open('/tmp/check_thermal.py') as f:\n    text = f.read()\nexec(text[text.index('def synthetic('):text.ind",
+      "set -e\nsed -i \"/^sys.path.insert(0, '\\/holdout_task')/a sys.path.append('/tmp')\" /tmp/thermal_identifiability.py\ncd / && python3 -I /tmp/thermal_identifiability.py",
+      "set -e\ncat > /tmp/thermal_gate_validation.py <<'PY'\nimport pickle\nimport sys\nimport time\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nsys.path[:0] = ['/holdout_task', '/tmp']\nfrom thermal_sink_solver import localize_thermal_source as baseline, _plate_operator\nfrom thermal_wider_gate import localize_thermal_source as wider\n\nlimits = np.array([.035, .08, .008, 15.])\n\ndef check(m, gt):\n    rows = []\n    for solve in (baseline, wider):\n        t = time.perf_counter()\n        p = solve(m)\n        dt = time.perf_counter() - t\n        assert set(p) ==",
+      "set -e\np=/holdout_task/thermal_sink_solver.py\nsed 's/<= 3\\.5\\*scale/<= 4.25*scale/' \"$p\" | cmp - /tmp/thermal_wider_gate.py\ncp /tmp/thermal_wider_gate.py \"$p\"\nsha=$(sha256sum \"$p\" | cut -c1-8)\ncp \"$p\" \"/tmp/.hegel_candidate_archive/v03_$sha\"\ncd /\npython3 -I -B /tmp/check_thermal.py"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__thermal_wider_gate.py",
+      "primary_producer_container_path": "/tmp/thermal_wider_gate.py",
+      "selected_channels": [
+        "fam_unseen_elliptic_robin_inversion"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/thermal_sink_solver.py",
+        "filename": "thermal_sink_solver.py",
+        "bytes": 5921,
+        "sha256": "d383ff6d2bc5415e075297d81253051673cf91d1ca9c5073d01f300d65a20870",
+        "content_addressed_ref": "content_addressed_blobs/d383ff6d2bc5415e075297d81253051673cf91d1ca9c5073d01f300d65a20870.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/thermal_sink_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_plate_operator",
+      "_response_bank",
+      "_coarse_fit",
+      "localize_thermal_source"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_elliptic_robin_inversion",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\np=/holdout_task/thermal_sink_solver.py\nsed 's/<= 3\\.5\\*scale/<= 4.25*scale/' \"$p\" | cmp - /tmp/thermal_wider_gate.py\ncp /tmp/thermal_wider_gate.py \"$p\"\nsha=$(sha256sum \"$p\" | cut -c1-8)\ncp \"$p\" \"/tmp/.hegel_candidate_archive/v03_$sha",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+        "expected_candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+        "computed_candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermal_sink_solver.py",
+            "bytes": 5921
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_f750abda"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_plate_operator",
+        "code": "def _plate_operator(kappa, gamma):\n    from scipy.sparse import coo_matrix\n    n = kappa.shape[0]\n    cells = np.arange(n * n).reshape(n, n)\n    left = np.r_[cells[:-1, :].ravel(), cells[:, :-1].ravel()]\n    right = np.r_[cells[1:, :].ravel(), cells[:, 1:].ravel()]\n    k = kappa.ravel()\n    g = 2 * k[left] * k[right] / (k[left] + k[right])\n    boundary = np.r_[cells[0], cells[-1], cells[:, 0], cells[:, -1]]\n    diag = np.bincount(left, g, minlength=n * n) + np.bincount(right, g, minlength=n * n) + gamma / n * np.bincount(boundary, minlength=n * n)\n    return coo_matrix((np.r_[-g, -g, diag], (np.r_[left, right, cells.ravel()], np.r_[right, left, cells.ravel()])), shape=(n * n, n * n)).tocsc()"
+      },
+      {
+        "name": "_response_bank",
+        "code": "def _response_bank(measurement):\n    from scipy.sparse.linalg import splu\n    n = int(measurement['N'])\n    sensor = np.asarray(measurement['sensor_ij'], dtype=int)\n    (cells, inverse) = np.unique(sensor[:, 0] * n + sensor[:, 1], return_inverse=True)\n    lu = splu(_plate_operator(np.asarray(measurement['kappa'], dtype=float), float(measurement['gamma_robin'])))\n    bank = np.empty((len(cells), n * n))\n    rhs = np.zeros(n * n)\n    for (row, cell) in enumerate(cells):\n        rhs[cell] = 1.0 / (n * n)\n        bank[row] = lu.solve(rhs, trans='T')\n        rhs[cell] = 0.0\n    return bank[inverse].reshape(-1, n, n)"
+      },
+      {
+        "name": "_coarse_fit",
+        "code": "def _coarse_fit(templates, y, keep):\n    w = np.ones_like(templates)\n    for step in range(12):\n        count = w.sum(axis=1)\n        xbar = np.sum(w * templates, axis=1) / count\n        ybar = np.sum(w * y, axis=1) / count\n        x = templates - xbar[:, None]\n        a = np.maximum(0.0, np.sum(w * x * (y - ybar[:, None]), axis=1) / np.maximum(np.sum(w * x * x, axis=1), np.finfo(float).tiny))\n        b = ybar - a * xbar\n        r = a[:, None] * templates + b[:, None] - y\n        if step < 6:\n            center = np.median(r, axis=1, keepdims=True)\n            mad = np.median(np.abs(r - center), axis=1, keepdims=True)\n            w = np.minimum(1.0, np.maximum(1.6 * mad, 1e-14) / np.maximum(np.abs(r), 1e-14))\n        else:\n            ix = np.argpartition(np.abs(r), keep - 1, axis=1)[:, :keep]\n            w.fill(0.0)\n            np.put_along_axis(w, ix, 1.0, axis=1)\n    score = np.sort(r * r, axis=1)[:, :keep].sum(axis=1)\n    return (score, a, b)"
+      },
+      {
+        "name": "localize_thermal_source",
+        "code": "def localize_thermal_source(measurement: dict) -> dict:\n    \"\"\"Return source coordinates, volumetric amplitude and shared offset.\"\"\"\n    from scipy.optimize import least_squares\n    y = np.asarray(measurement['T_obs'], dtype=float)\n    sigma = float(measurement['sigma_m'])\n    n = int(measurement['N'])\n    bank = _response_bank(measurement)\n    coord = (np.arange(n) + 0.5) / n\n    grid = np.linspace(0.0, 1.0, int(np.clip(np.ceil(1.8 / sigma) + 1, 19, 49)))\n    e = np.exp(-0.5 * ((coord[None, :] - grid[:, None]) / sigma) ** 2)\n    mids = np.einsum('mij,xi->mxj', bank, e)\n    templates = np.einsum('mxj,yj->xym', mids, e).reshape(-1, y.size)\n    xy = np.stack(np.meshgrid(grid, grid, indexing='ij'), axis=-1).reshape(-1, 2)\n    keep = max(4, y.size - int(np.ceil(0.1 * y.size)))\n    (scores, amplitude, offset) = _coarse_fit(templates, y, keep)\n\n    def residual_and_jac(p):\n        (x, z, a, b) = p\n        (dx, dz) = (coord - x, coord - z)\n        (ex, ez) = (np.exp(-0.5 * (dx / sigma) ** 2), np.exp(-0.5 * (dz / sigma) ** 2))\n        u = np.einsum('mij,j->mi', bank, ez)\n        uz = np.einsum('mij,j->mi', bank, ez * dz / sigma ** 2)\n        t = np.einsum('mi,i->m', u, ex)\n        tx = np.einsum('mi,i->m', u, ex * dx / sigma ** 2)\n        tz = np.einsum('mi,i->m', uz, ex)\n        return (a * t + b - y, np.column_stack((a * tx, a * tz, t, np.ones_like(y))))\n    bounds = ([0.0, 0.0, 0.0, -np.inf], [1.0, 1.0, np.inf, np.inf])\n\n    def trimmed(p, jac=False):\n        (r, j) = residual_and_jac(p)\n        ix = np.argpartition(np.abs(r), keep - 1)[keep:]\n        if jac:\n            j[ix] = 0.0\n            return j\n        r[ix] = 0.0\n        return r\n    starts = []\n    best = None\n    for i in np.argsort(scores):\n        if any((np.linalg.norm(xy[i] - s) < max(2.1 * (grid[1] - grid[0]), sigma) for s in starts)):\n            continue\n        starts.append(xy[i])\n        p0 = np.r_[xy[i], max(amplitude[i], 1e-08), offset[i]]\n        fit = least_squares(trimmed, p0, jac=lambda p: trimmed(p, True), bounds=bounds, x_scale='jac', max_nfev=60, ftol=1e-10, gtol=1e-12)\n        if best is None or fit.cost < best.cost:\n            best = fit\n        if len(starts) == 8:\n            break\n\n    def noise_scale(r):\n        return max(1.4826 * np.median(np.abs(r - np.median(r))), 1e-12)\n    scale = noise_scale(residual_and_jac(best.x)[0])\n    robust = least_squares(lambda q: residual_and_jac(q)[0], best.x, jac=lambda q: residual_and_jac(q)[1], bounds=bounds, x_scale='jac', loss='huber', f_scale=1.5 * scale, max_nfev=100, gtol=1e-12)\n    p = robust.x\n    (r, _) = residual_and_jac(p)\n    scale = noise_scale(r)\n    for _ in range(3):\n        good = np.abs(r - np.median(r)) <= 4.25 * scale\n        if np.count_nonzero(good) < keep:\n            good = np.argpartition(np.abs(r), keep - 1)[:keep]\n        fit = least_squares(lambda q: residual_and_jac(q)[0][good], p, jac=lambda q: residual_and_jac(q)[1][good], bounds=bounds, x_scale='jac', gtol=1e-12)\n        p = fit.x\n        (r, _) = residual_and_jac(p)\n    return {'source_xy': [float(p[0]), float(p[1])], 'amplitude': float(p[2]), 'junction_offset': float(p[3])}"
+      }
+    ]
+  }
+}

@@ -1,0 +1,384 @@
+{
+  "task_id": "uf02__batch_drifted_substrate_inhibition_kinetics",
+  "short_name": "substrate_inhibition_plate_kinetics",
+  "benchmark": "Hegel-Unseen-PostFreeze-4",
+  "wave": "wave_1",
+  "scientific_domain": "Systems Enzymology / Spatial Plate Deconfounding",
+  "wormhole_family": "fam_unseen_enzymology_deconfounding",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": false,
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 13,
+  "max_turns": 18,
+  "final_candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+  "validated_incumbent_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "bd2cf64075f5e75125b3cb38df93f63f60cde8758d7ea53d49662d6c88b07255",
+      "verified_post_package": true,
+      "verified_turn": 3,
+      "verification_command": "set -e\ncd /holdout_task\ncat > enzyme_plate_solver.py <<'PY'\n\"\"\"Recover Haldane kinetics from blank- and reference-calibrated plates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _mad(x):\n    return 1.4826 * np.media",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "bd2cf64075f5e75125b3cb38df93f63f60cde8758d7ea53d49662d6c88b07255",
+        "expected_candidate_sha256": "bd2cf64075f5e75125b3cb38df93f63f60cde8758d7ea53d49662d6c88b07255",
+        "computed_candidate_sha256": "bd2cf64075f5e75125b3cb38df93f63f60cde8758d7ea53d49662d6c88b07255",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/enzyme_plate_solver.py",
+            "bytes": 2342
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_bd2cf640"
+    },
+    {
+      "candidate_sha256": "4e4602f6a97d34095b8bf715ffd19aa5dc90eb2182e7cbc68d138e3a23c10270",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "set -e\ncat > /tmp/compare_enzyme.py <<'PY'\nimport copy\nimport json\nimport sys\nimport time\nfrom pathlib import Path\n\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nimport enzyme_plate_solver as base\n\nsource = Path(base.__file__).rea",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4e4602f6a97d34095b8bf715ffd19aa5dc90eb2182e7cbc68d138e3a23c10270",
+        "expected_candidate_sha256": "4e4602f6a97d34095b8bf715ffd19aa5dc90eb2182e7cbc68d138e3a23c10270",
+        "computed_candidate_sha256": "4e4602f6a97d34095b8bf715ffd19aa5dc90eb2182e7cbc68d138e3a23c10270",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/enzyme_plate_solver.py",
+            "bytes": 2349
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_4e4602f6"
+    },
+    {
+      "candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/holdout_task/enzyme_plate_solver.py').read_text()\nstart = s.index('def estimate_variant_haldane_parameters(')\ns = s[:start] + '''def _contamination_loss(z):\n    # Gaussian inliers ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+        "expected_candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+        "computed_candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/enzyme_plate_solver.py",
+            "bytes": 4858
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_964e26e2"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": false,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t12",
+      "turn_idx": 12,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "Parameter recovery under noisy or sparse plate coverage",
+      "candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+      "resolved": false,
+      "superseded_by": null,
+      "resolves_nogood_ids": [],
+      "assumption_refuted": "Residual bubble influence alone explains the remaining parameter errors above 12%.",
+      "empirical_witness": "A two-plate K_m error rose from 12.26% to 12.74% after removing only the simulated bubbles; in a deliberately noisier batch, worst error remained 27.40% without bubbles.",
+      "causal_blanket_diagnosis": "Ordinary measurement noise can drive errors even with no gross contamination, while bubbles account for part of the error on other batches.",
+      "sublated_pivot": "Keep the exact quadratic and Haldane models; compare a contamination loss that preserves nearly Gaussian weighting for inliers while rejecting gross residuals."
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_04_creep_corrected_retraction_c"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_robust_network_assimilation",
+      "source_forest_node": "node_auto_08_split_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "2262dea7fb83d907b5e4ba036cab3459cc080447cbb668b784227f746f8023d6",
+      "exported_apis": "assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int = 5, valve_levels: tuple[float, float] = (0.35, 1.0), gain_floor: float = 0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray]",
+      "api_quick_reference": [
+        {
+          "function": "assimilate_diffusive_network",
+          "signature": "assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int=5, valve_levels: tuple[float, float]=(0.35, 1.0), gain_floor: float=0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray]",
+          "doc_summary": "Infer constant transmission and forecast a forward-Euler network.",
+          "mathematical_preconditions": [
+            "{\"field\": \"dt\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"observation_sample_count\", \"op\": \">=\", \"value\": 3}",
+            "{\"field\": \"forecast_sample_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"harmonic_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"twice_harmonic_count_over_horizon\", \"op\": \"<\", \"value\": 1}",
+            "{\"field\": \"gain_floor\", \"op\": \">\", \"value\": 0}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "dt",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "observation_sample_count",
+          "op": ">=",
+          "value": 3
+        },
+        {
+          "field": "forecast_sample_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "harmonic_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "twice_harmonic_count_over_horizon",
+          "op": "<",
+          "value": 1
+        },
+        {
+          "field": "gain_floor",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt04__network_varproj_and_valve_assimilation"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_sparse_ridge_certification",
+      "source_forest_node": "node_auto_08_split_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "770f6644bb1fd8eb49dbacf51ffa3405a9ca876974e0021d66415d9014d8dfb9",
+      "exported_apis": "solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float = 1e-6, *, max_leaves: int = 90) -> dict",
+      "api_quick_reference": [
+        {
+          "function": "solve_and_certify_l0",
+          "signature": "solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float=1e-06, *, max_leaves: int=90) -> dict",
+          "doc_summary": "Certify boxed sparse ridge regression with at most 16 real predictors.",
+          "mathematical_preconditions": [
+            "{\"field\": \"n_samples\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"n_features\", \"op\": \"<=\", \"value\": 16}",
+            "{\"field\": \"lam0\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"lam2\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"M\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"eps\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"max_leaves\", \"op\": \">=\", \"value\": 1}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "n_samples",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "n_features",
+          "op": "<=",
+          "value": 16
+        },
+        {
+          "field": "lam0",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "lam2",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "M",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "eps",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "max_leaves",
+          "op": ">=",
+          "value": 1
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt06__exact_l0_l2_compacted_certificate"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid",
+      "source_forest_node": "node_auto_05_conservative_elliptic_multig",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "92bea0176feade861567a46e591b9a65361378ad69d34d0dd481388fe0846f86",
+      "exported_apis": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float = 1e-8) -> np.ndarray",
+      "api_quick_reference": [
+        {
+          "function": "solve_darcy_pressure",
+          "signature": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float=1e-08) -> np.ndarray",
+          "doc_summary": "Solve -div(K grad(p)) = source on a uniform cell-centered 2D grid.",
+          "mathematical_preconditions": [
+            "{\"field\": \"minimum_grid_axis_length\", \"op\": \">=\", \"value\": 2}",
+            "{\"field\": \"minimum_permeability\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"grid_spacing\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"relative_residual_tolerance\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"relative_residual_tolerance\", \"op\": \"<\", \"value\": 1}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "minimum_grid_axis_length",
+          "op": ">=",
+          "value": 2
+        },
+        {
+          "field": "minimum_permeability",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "grid_spacing",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": "<",
+          "value": 1
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt03__high_contrast_darcy_multigrid"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_substrate_inhibition_plate_kinetics_964e26e2dae1",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 10,
+    "exported_pure_functions": [
+      "_mad",
+      "_basis",
+      "_rate",
+      "_raw",
+      "_calibrate",
+      "estimate_variant_haldane_parameters"
+    ],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": false,
+    "recalled_node_count": 5,
+    "staged_module_count": 3,
+    "staged_l1_primitive_count": 0,
+    "inspected_in_bash": false,
+    "inspected_source_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "enzyme_plate_solver.py",
+          "final_file_sha256": "f1c3f08737693d4d7f8b0ff7b29c0ebc71abf2d520956f2dcd29eba4b960dcff",
+          "public_entrypoints": [
+            "estimate_variant_haldane_parameters"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "enzyme_plate_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 33,
+  "prompt_tokens": 391861,
+  "cached_tokens": 76544,
+  "completion_tokens": 12278,
+  "total_tokens": 404139,
+  "effective_billed_tokens": 346731,
+  "wall_ms": 625966.17,
+  "provenance_verified": true,
+  "terminal_record_sha256": "711fe003994daaf70cb3eff0c7ef1a1949a5649b70d6fa9bdf513d0dcfbdd6e1"
+}

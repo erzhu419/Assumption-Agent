@@ -1,0 +1,104 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_facility_bnb_4380b1065cd7",
+    "source_hash": "4380b1065cd7968e006d7429d3fbf8c9a4a80b36a74262412a324c4e2dbcf132",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho11__certified_capacitated_facility_bnb",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/facility_probe.py",
+        "archived_relpath": "producers/tmp__facility_probe.py",
+        "bytes": 4961,
+        "sha256": "45c079a740797dfb5e1b7232b267cbb79affa1b92b0d644ab9bb2a4661a2475b"
+      },
+      {
+        "container_path": "/tmp/verify_facility.py",
+        "archived_relpath": "producers/tmp__verify_facility.py",
+        "bytes": 3008,
+        "sha256": "6a3986ed0f4d4dcde234412dfc5566ca7830e9c54445f93036c0e3358574ccc0"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_facility.pkl','rb') as f: obj=pickle.load(f)\nprint('scipy', scipy.__version__, 'payload', type(obj).__name__)\nfor k,v in obj.items():\n a=np.asarray(v); print(k,a.shape,a.dtype, (float(a.min()),float(a.max()),float(a.sum())) if a.dtype.kind in 'fiu' and a.size else '')\n if a.ndim==1 and a.size<=24: print(a)\nPY\nls -la /holdout_task",
+      "set -e\ncd /holdout_task\ncommand -v python3\npython3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_facility.pkl','rb') as f: obj=pickle.load(f)\nprint('scipy', scipy.__version__, 'payload', type(obj).__name__)\nfor k,v in obj.items():\n a=np.asarray(v); print(k,a.shape,a.dtype,(float(a.min()),float(a.max()),float(a.sum())) if a.dtype.kind in 'fiu' and a.size else '')\n if a.ndim==1 and a.size<=24: print(a)\ntry:\n import highspy\n print('highspy available')\nexcept ImportError:\n print('highspy unavailable; scipy.optimize.linprog available')\nPY",
+      "cat > /tmp/facility_probe.py <<'PY'\nimport pickle, time\nimport numpy as np\nfrom scipy.optimize import Bounds, LinearConstraint, linprog, milp\nfrom scipy.sparse import coo_matrix, vstack\n\nclass Model:\n    def __init__(self, obj):\n        self.f, self.u, self.d, self.c = (np.asarray(obj[k], dtype=float) for k in ('fixed_cost','capacity','demand','cost_matrix'))\n        self.m, self.n = m, n = self.c.shape\n        i = np.repeat(np.arange(m), n)\n        j = np.tile(np.arange(n), m)\n        x = m + np.arange(m*n)\n        shape = (n,m+m*n)\n        self.eq = coo_matrix((np.ones(m*n),(j,x)), shape=sha",
+      "set -e\ncat > /holdout_task/facility_cert.py <<'PY'\n\"\"\"Branch-and-bound for capacitated facility location with splittable demand.\"\"\"\nimport math\n\nimport numpy as np\nfrom scipy.optimize import Bounds, LinearConstraint, linprog, milp\nfrom scipy.sparse import coo_matrix, vstack\n\n\n_LP_OPTIONS = {'primal_feasibility_tolerance': 1e-9,\n               'dual_feasibility_tolerance': 1e-9}\n\n\ndef _dyadics(values):\n    \"\"\"Represent binary64 data exactly with one power-of-two denominator.\"\"\"\n    ratios = [float(v).as_integer_ratio() for v in values]\n    den = max(q for _, q in ratios)\n    return [p * (den //",
+      "set -e\ncat > /tmp/verify_facility.py <<'PY'\nimport math, pickle, sys, time\nimport numpy as np\nfrom scipy.optimize import linprog\nfrom scipy.sparse import eye, kron\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\n\nBITS = (np.arange(4096)[:, None] >> np.arange(12)) & 1\n\ndef verify(name, case, reference=None):\n    t = time.monotonic()\n    f,u,d,c = (np.asarray(case[k]) for k in ('fixed_cost','capacity','demand','cost_matrix'))\n    ans = solve_and_certify_facilities(case)\n    y = np.asarray(ans['open_y']); x = ans['flows_X']; ub = ans['upper_bound']; leav",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/facility_cert.py')\ns=p.read_text().replace('import math\\n','import math\\nfrom heapq import heappop, heappush\\n')\ns=s.replace('        need = sum(self.dem)','        self.need = need = sum(self.dem)\\n        costs, self.cost_den = _dyadics(np.r_[self.f, self.c.ravel()])\\n        self.fixed = costs[:m]\\n        self.cost = [costs[m+i*n:m+(i+1)*n] for i in range(m)]\\n        self.scale = self.cost_den*self.quantity_den')\ns=s.replace('        self.best_bound = np.full(1 << m, -np.inf)','        self.best_bound = np.full(1 << m,",
+      "set -e\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import _FacilityProblem, solve_and_certify_facilities\nwith open('/holdout_task/public_facility.pkl','rb') as f:\n    public = pickle.load(f)\n\n# Exercise the very same bottom-up price-bundle merge used at the 80-leaf cap.\np = _FacilityProblem(public)\np.seed()\nroot = p.branch(0, 0, p.feasible)\np.finish_exact()\nsingle_price, bundle = p.compact(root), p.compact(root, disjunctive=True)\nassert len(single_price) > 1 and len(bundle) == 1\nasser",
+      "set -e\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport sys, time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import _FacilityProblem, solve_and_certify_facilities\n\n# Four independent service regions; any two of three local facilities suffice.\n# A region with at most one open facility incurs at least 150 in transport,\n# so an optimum opens exactly eight facilities at total cost 80.\nc = np.full((12, 24), 100.)\nfor k in range(4):\n    c[3*k:3*k+3, 6*k:6*k+6] = 0.\ncase = dict(fixed_cost=np.full(12, 10.), capacity=np.full(12, 3.),\n            demand",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport pickle, sys\nfrom fractions import Fraction\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, str(Path.cwd()))\nfrom facility_cert import solve_and_certify_facilities\nwith open('public_facility.pkl', 'rb') as f:\n    case = pickle.load(f)\nbase = solve_and_certify_facilities(case)\nrng = np.random.default_rng(1701)\nmasks = (np.arange(4096)[:, None] >> np.arange(12)) & 1\nf, u, d, c = (np.asarray(case[k]) for k in ('fixed_cost', 'capacity', 'demand', 'cost_matrix'))\nfidx, didx = rng.permutation(1",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -IB - <<'PY'\nimport pickle, sys, time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\nwith open('public_facility.pkl', 'rb') as f:\n    case = pickle.load(f)\nref = solve_and_certify_facilities(case)\nfor exponent in (-40, 48):\n    q = 2.0 ** exponent\n    scaled = dict(case, capacity=case['capacity'] * q, demand=case['demand'] * q,\n                  cost_matrix=case['cost_matrix'] / q)\n    t = time.monotonic()\n    try:\n        ans = solve_and_certify_facilities(sc",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\na = '''        i = np.repeat(np.arange(m), n)\n'''\nb = '''        # HiGHS sees flows in demand-sized units; the exact solver and\n        # certificate continue to use the original dyadic data.\n        self.lp_exponent = math.frexp(float(self.d.max()))[1] - 2\n        lp_u = np.ldexp(self.u, -self.lp_exponent)\n        self.lp_d = np.ldexp(self.d, -self.lp_exponent)\n        lp_c = np.ldexp(self.c, self.lp_exponent)\n        i = np.repeat(np.arange(m), n)\n'''\nassert s.count(a) == 1\ns = s.rep"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__facility_probe.py",
+      "primary_producer_container_path": "/tmp/facility_probe.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/facility_cert.py",
+        "filename": "facility_cert.py",
+        "bytes": 12922,
+        "sha256": "8a351a7255bfcce4c9b913ea231d1fafa481d348b5d224157a609bb6d2abaf6e",
+        "content_addressed_ref": "content_addressed_blobs/8a351a7255bfcce4c9b913ea231d1fafa481d348b5d224157a609bb6d2abaf6e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/facility_cert.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4380b1065cd7968e006d7429d3fbf8c9a4a80b36a74262412a324c4e2dbcf132",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\na = '''        i = np.repeat(np.arange(m), n)\n'''\nb = '''        # HiGHS sees flows in demand-sized units; the exact solver and\n  ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4380b1065cd7968e006d7429d3fbf8c9a4a80b36a74262412a324c4e2dbcf132",
+        "expected_candidate_sha256": "4380b1065cd7968e006d7429d3fbf8c9a4a80b36a74262412a324c4e2dbcf132",
+        "computed_candidate_sha256": "4380b1065cd7968e006d7429d3fbf8c9a4a80b36a74262412a324c4e2dbcf132",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/facility_cert.py",
+            "bytes": 12922
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_4380b106"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

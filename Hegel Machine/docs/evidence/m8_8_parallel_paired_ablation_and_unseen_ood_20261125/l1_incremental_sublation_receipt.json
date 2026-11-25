@@ -1,0 +1,3270 @@
+{
+  "compiled_primitive_count": 6,
+  "retained_existing_count": 4,
+  "newly_compiled_count": 2,
+  "total_source_l2_modules": 6,
+  "require_pretraining_only": true,
+  "source_qualification_status": "pretraining_only_l1_primitive_sublation",
+  "contract_enrichment": {
+    "preconditions_populated_modules": [
+      "autogenous_prim_conservative_spd_solve",
+      "autogenous_prim_box_ridge_bounds",
+      "autogenous_prim_robust_affine_projection",
+      "autogenous_prim_ridge_profiled_matching"
+    ],
+    "minorant_hardened_nodes": [
+      "node_auto_06_robust_network_assimilation",
+      "node_auto_08_split_sparse_ridge_certification"
+    ]
+  },
+  "events": [
+    {
+      "source_l2_module": "autogenous_conservative_elliptic_multigrid.py",
+      "source_provenance_episode_id": "pt03__high_contrast_darcy_multigrid",
+      "representative_node_id": "node_auto_05_conservative_elliptic_multig",
+      "recomputed_source_sha256": "92bea0176feade861567a46e591b9a65361378ad69d34d0dd481388fe0846f86",
+      "status": "retained_existing_verified_l1",
+      "compiled_ok": true,
+      "primitive_filename": "autogenous_prim_conservative_spd_solve.py",
+      "exported_functions": [
+        "conservative_grid_operator",
+        "galerkin_preconditioner",
+        "solve_residual_checked_cg"
+      ],
+      "exported_apis": "conservative_grid_operator(cell_coeff: np.ndarray, *, spacing: float | np.ndarray = 1.0) -> sparse.csr_matrix; galerkin_preconditioner(operator: sparse.spmatrix | sparse.sparray, *, strength_cutoff: float = 0.08, max_coarse_fraction: float = 0.76, coarse_size: int = 64, seed: int = 12) -> LinearOperator; solve_residual_checked_cg(operator: np.ndarray | sparse.spmatrix | sparse.sparray | LinearOperator, rhs: np.ndarray, *, preconditioner: LinearOperator | None = None, tol: float = 1e-8, maxiter: int = 450, refinements: int = 4) -> tuple[np.ndarray, float]",
+      "mathematical_preconditions": [
+        "cell_coeff > 0 and spacing > 0 everywhere on finite grid (guarantees symmetric positive-semidefinite/SPD flux operator).",
+        "operator must be square symmetric positive-definite (or consistent on orthogonal complement) for conjugate-gradient convergence."
+      ],
+      "compiled_code_sha256": "05cb43874c69c581254da5e047677fef497419a66702569fb3116d30795fc24f",
+      "synthetic_unit_test_sha256": "bcfdda33cdf84e73f85c49ed6e9f7ab4ae353f6c1824868f302c9f1221a1383f",
+      "attempts": [],
+      "llm_tokens": {
+        "prompt": 0,
+        "cached": 0,
+        "completion": 0,
+        "wall_ms": 0.0
+      }
+    },
+    {
+      "source_l2_module": "autogenous_control_panel_deconfounding.py",
+      "source_provenance_episode_id": "pt05__confounded_multicenter_deconfounding",
+      "representative_node_id": "node_auto_07_control_panel_deconfounding",
+      "recomputed_source_sha256": "aa502f6d83a30b6babf8dcdff2012cefc7cf8ce998e199d66c4221b48051b07f",
+      "status": "compiled_new_verified_l1",
+      "compiled_ok": true,
+      "attempts": [
+        {
+          "attempt_index": 1,
+          "llm_ok": true,
+          "proposed_stem": "autogenous_prim_reference_panel_balancing",
+          "ast_gate_ok": true,
+          "ast_gate_reason": "ok",
+          "exported_functions": [
+            "align_reference_panel",
+            "balanced_cell_weights",
+            "weighted_column_fill"
+          ],
+          "candidate_python_code": "import numpy as np\n\n\n__all__ = ['align_reference_panel', 'balanced_cell_weights', 'weighted_column_fill']\n\n\ndef _real_array(x: np.ndarray, name: str) -> np.ndarray:\n    x = np.asarray(x)\n    if x.dtype.kind not in 'biuf':\n        raise ValueError(f'{name} must be a real numeric array')\n    return x\n\n\ndef align_reference_panel(values: np.ndarray, controls: np.ndarray, groups: np.ndarray) -> np.ndarray:\n    \"\"\"Return aligned real values (n, p) using real controls (n, q) and finite real groups (n,), with nonempty columns and a supported positive control gain per group.\"\"\"\n    values = _real_array(values, 'values').astype(float, copy=False)\n    controls = _real_array(controls, 'controls').astype(float, copy=False)\n    groups = _real_array(groups, 'groups')\n    if values.ndim != 2 or controls.ndim != 2 or not values.shape[1] or not controls.shape[1]:\n        raise ValueError('values and controls must be matrices with nonempty columns')\n    n = values.shape[0]\n    if controls.shape[0] != n or groups.shape != (n,) or not np.isfinite(groups).all():\n        raise ValueError('controls and finite one-dimensional groups must match value rows')\n    levels, codes = np.unique(groups, return_inverse=True)\n    result = np.full(values.shape, np.nan)\n    for code, level in enumerate(levels):\n        rows = codes == code\n        panel = controls[rows]\n        observed = np.isfinite(panel)\n        counts = observed.sum(axis=0)\n        keep = counts >= 2\n        if not keep.any():\n            raise ValueError(f'group {level!r} has no control with two finite observations')\n        panel, observed, counts = panel[:, keep], observed[:, keep], counts[keep]\n        means = np.where(observed, panel, 0.0).sum(axis=0) / counts\n        residuals = np.where(observed, panel, means) - means\n        spreads = np.sqrt(np.sum(residuals ** 2, axis=0) / counts)\n        offset, gain = np.median(means), np.median(spreads)\n        if not np.isfinite(offset) or not np.isfinite(gain) or gain <= 0:\n            raise ValueError(f'group {level!r} requires a finite offset and positive finite gain')\n        block = values[rows]\n        result[rows] = (np.where(np.isfinite(block), block, np.nan) - offset) / gain\n    return result\n\n\ndef balanced_cell_weights(groups: np.ndarray, strata: np.ndarray) -> np.ndarray:\n    \"\"\"Return positive mean-one weights (n,) from nonempty finite real vectors groups (n,) and strata (n,) with every observed group–stratum combination present.\"\"\"\n    groups = _real_array(groups, 'groups')\n    strata = _real_array(strata, 'strata')\n    if groups.ndim != 1 or not groups.size or strata.shape != groups.shape:\n        raise ValueError('groups and strata must be matching nonempty vectors')\n    if not np.isfinite(groups).all() or not np.isfinite(strata).all():\n        raise ValueError('groups and strata must be finite')\n    group_levels, group_codes = np.unique(groups, return_inverse=True)\n    stratum_levels, stratum_codes = np.unique(strata, return_inverse=True)\n    pairs = np.column_stack((group_codes, stratum_codes))\n    _, inverse, counts = np.unique(pairs, axis=0, return_inverse=True, return_counts=True)\n    if counts.size != group_levels.size * stratum_levels.size:\n        raise ValueError('every group must contain every observed stratum')\n    return (groups.size / counts.size) / counts[inverse.reshape(-1)]\n\n\ndef weighted_column_fill(values: np.ndarray, weights: np.ndarray) -> np.ndarray:\n    \"\"\"Return finite-entry weighted means (p,) for a nonempty real matrix values (n, p) with finite positive weights (n,), using zero for unobserved columns.\"\"\"\n    values = _real_array(values, 'values').astype(float, copy=False)\n    weights = _real_array(weights, 'weights').astype(float, copy=False)\n    if values.ndim != 2 or not values.shape[0] or not values.shape[1]:\n        raise ValueError('values must be a nonempty matrix')\n    if weights.shape != (values.shape[0],):\n        raise ValueError('weights must be a vector matching value rows')\n    if not np.isfinite(weights).all() or np.any(weights <= 0):\n        raise ValueError('weights must be finite and strictly positive')\n    observed = np.isfinite(values)\n    support = weights @ observed\n    numerator = weights @ np.where(observed, values, 0.0)\n    if not np.isfinite(support).all() or not np.isfinite(numerator).all():\n        raise ValueError('weighted column sums must be finite')\n    return np.divide(numerator, support, out=np.zeros(values.shape[1]), where=support > 0)\n",
+          "packaged_python_code": "\"\"\"Autogenously Sublated Scientific Wormhole Module `autogenous_prim_reference_panel_balancing` (Container Unit-Tested, Zero Path Leakage).\"\"\"\nfrom __future__ import annotations\nimport math\nimport numpy as np\nimport numpy as np\nfrom . import track_wormhole_skill\n\n__all__ = ['align_reference_panel', 'balanced_cell_weights', 'weighted_column_fill']\n\ndef _real_array(x: np.ndarray, name: str) -> np.ndarray:\n    x = np.asarray(x)\n    if x.dtype.kind not in 'biuf':\n        raise ValueError(f'{name} must be a real numeric array')\n    return x\n\n\n@track_wormhole_skill(\"autogenous_prim_reference_panel_balancing\")\ndef align_reference_panel(values: np.ndarray, controls: np.ndarray, groups: np.ndarray) -> np.ndarray:\n    \"\"\"Return aligned real values (n, p) using real controls (n, q) and finite real groups (n,), with nonempty columns and a supported positive control gain per group.\"\"\"\n    values = _real_array(values, 'values').astype(float, copy=False)\n    controls = _real_array(controls, 'controls').astype(float, copy=False)\n    groups = _real_array(groups, 'groups')\n    if values.ndim != 2 or controls.ndim != 2 or (not values.shape[1]) or (not controls.shape[1]):\n        raise ValueError('values and controls must be matrices with nonempty columns')\n    n = values.shape[0]\n    if controls.shape[0] != n or groups.shape != (n,) or (not np.isfinite(groups).all()):\n        raise ValueError('controls and finite one-dimensional groups must match value rows')\n    (levels, codes) = np.unique(groups, return_inverse=True)\n    result = np.full(values.shape, np.nan)\n    for (code, level) in enumerate(levels):\n        rows = codes == code\n        panel = controls[rows]\n        observed = np.isfinite(panel)\n        counts = observed.sum(axis=0)\n        keep = counts >= 2\n        if not keep.any():\n            raise ValueError(f'group {level!r} has no control with two finite observations')\n        (panel, observed, counts) = (panel[:, keep], observed[:, keep], counts[keep])\n        means = np.where(observed, panel, 0.0).sum(axis=0) / counts\n        residuals = np.where(observed, panel, means) - means\n        spreads = np.sqrt(np.sum(residuals ** 2, axis=0) / counts)\n        (offset, gain) = (np.median(means), np.median(spreads))\n        if not np.isfinite(offset) or not np.isfinite(gain) or gain <= 0:\n            raise ValueError(f'group {level!r} requires a finite offset and positive finite gain')\n        block = values[rows]\n        result[rows] = (np.where(np.isfinite(block), block, np.nan) - offset) / gain\n    return result\n\n\n@track_wormhole_skill(\"autogenous_prim_reference_panel_balancing\")\ndef balanced_cell_weights(groups: np.ndarray, strata: np.ndarray) -> np.ndarray:\n    \"\"\"Return positive mean-one weights (n,) from nonempty finite real vectors groups (n,) and strata (n,) with every observed group–stratum combination present.\"\"\"\n    groups = _real_array(groups, 'groups')\n    strata = _real_array(strata, 'strata')\n    if groups.ndim != 1 or not groups.size or strata.shape != groups.shape:\n        raise ValueError('groups and strata must be matching nonempty vectors')\n    if not np.isfinite(groups).all() or not np.isfinite(strata).all():\n        raise ValueError('groups and strata must be finite')\n    (group_levels, group_codes) = np.unique(groups, return_inverse=True)\n    (stratum_levels, stratum_codes) = np.unique(strata, return_inverse=True)\n    pairs = np.column_stack((group_codes, stratum_codes))\n    (_, inverse, counts) = np.unique(pairs, axis=0, return_inverse=True, return_counts=True)\n    if counts.size != group_levels.size * stratum_levels.size:\n        raise ValueError('every group must contain every observed stratum')\n    return groups.size / counts.size / counts[inverse.reshape(-1)]\n\n\n@track_wormhole_skill(\"autogenous_prim_reference_panel_balancing\")\ndef weighted_column_fill(values: np.ndarray, weights: np.ndarray) -> np.ndarray:\n    \"\"\"Return finite-entry weighted means (p,) for a nonempty real matrix values (n, p) with finite positive weights (n,), using zero for unobserved columns.\"\"\"\n    values = _real_array(values, 'values').astype(float, copy=False)\n    weights = _real_array(weights, 'weights').astype(float, copy=False)\n    if values.ndim != 2 or not values.shape[0] or (not values.shape[1]):\n        raise ValueError('values must be a nonempty matrix')\n    if weights.shape != (values.shape[0],):\n        raise ValueError('weights must be a vector matching value rows')\n    if not np.isfinite(weights).all() or np.any(weights <= 0):\n        raise ValueError('weights must be finite and strictly positive')\n    observed = np.isfinite(values)\n    support = weights @ observed\n    numerator = weights @ np.where(observed, values, 0.0)\n    if not np.isfinite(support).all() or not np.isfinite(numerator).all():\n        raise ValueError('weighted column sums must be finite')\n    return np.divide(numerator, support, out=np.zeros(values.shape[1]), where=support > 0)\n",
+          "compiled_code_sha256": "a0bd4b961c67e2ccad723d94cee31eee33e031d5925b39c96b71ace643383209",
+          "synthetic_unit_test_code": "import numpy as np\nfrom hegel_wormhole_skills.autogenous_prim_reference_panel_balancing import (\n    align_reference_panel, balanced_cell_weights, weighted_column_fill,\n)\n\n\ndef run_self_test():\n    def check(actual, expected):\n        assert np.array_equal(np.isnan(actual), np.isnan(expected))\n        assert np.isfinite(actual[~np.isnan(expected)]).all()\n        np.testing.assert_allclose(actual, expected, rtol=1e-13, atol=1e-13)\n\n    groups = np.array([4, 9, 4, 9, 4, 9])\n    gains = np.array([2, 4, 2, 4, 2, 4])[:, None]\n    offsets = np.array([10, -5, 10, -5, 10, -5])[:, None]\n    base_controls = np.repeat([[-3, 1, 99], [-1, 3, np.nan],\n                               [np.nan, np.nan, np.nan]], 2, axis=0)\n    base_values = np.array([[0], [1], [2], [-3], [np.inf], [4]])\n    check(align_reference_panel(offsets + gains * base_values,\n                                offsets + gains * base_controls, groups),\n          [[0], [1], [2], [-3], [np.nan], [4]])\n    check(align_reference_panel(np.array([[1, 3], [5, 7]]),\n                                np.array([[1], [5]]), np.array([0, 0])),\n          [[-1, 0], [1, 2]])\n\n    w = balanced_cell_weights(np.array([0, 0, 0, 1, 1]), np.array([0, 1, 1, 0, 1]))\n    check(w, [1.25, 0.625, 0.625, 1.25, 1.25])\n    v = balanced_cell_weights(np.array([9, 9, 9, 9]), np.array([10, 20, 30, 10]))\n    check(v, [2/3, 4/3, 4/3, 2/3])\n\n    data = np.array([[0, np.nan, np.nan], [2, np.inf, np.nan], [4, 8, np.nan],\n                     [6, 4, np.nan], [8, np.nan, np.nan]])\n    check(weighted_column_fill(data, w), [4.25, 16/3, 0.0])\n    check(weighted_column_fill(np.array([[2], [3], [np.nan], [8]]), v), [4.0])\n\n    with np.testing.assert_raises(ValueError):\n        align_reference_panel(np.ones((2, 1)), np.ones((2, 1)), np.zeros(2))\n    with np.testing.assert_raises(ValueError):\n        balanced_cell_weights(np.array([0, 0, 1]), np.array([0, 1, 0]))\n    with np.testing.assert_raises(ValueError):\n        weighted_column_fill(np.ones((2, 1)), np.array([0.0, 1.0]))\n\n\nrun_self_test()\n",
+          "synthetic_unit_test_sha256": "558124e7e51c552a37aa6d9ab292e6e512caa54cc83d793e0017b38614aaa16e",
+          "mathematical_preconditions": [
+            "Alignment accepts real numeric arrays of shapes (n, p) and (n, q), with p, q > 0, and a finite real group vector of shape (n,). Nonfinite panel entries are treated as missing. Each group must have at least one control with two finite observations, a finite median control mean, and a finite, strictly positive median control population standard deviation. A constant control can contribute; a zero median gain raises ValueError.",
+            "Interpreting alignment as removal of a nuisance transform assumes a shared additive offset and positive multiplicative gain for signals and controls within each group. The control panel must have comparable baseline location and spread across groups, independent of sample composition. These scientific assumptions cannot be verified by shape or moment checks.",
+            "Cell weighting requires two nonempty, finite real vectors of matching shape (n,). Every combination of an observed group and an observed stratum must be present. If there are K such cells, each row in a cell of size m receives weight n/(K*m).",
+            "Column fill requires a nonempty real matrix of shape (n, p) and finite, strictly positive row weights of shape (n,). Nonfinite entries are excluded from both numerator and denominator; a column with no finite observations returns zero. Numeric panel and fill arithmetic use float64 and assume intermediate sums, squares, and ratios are within usable float64 range."
+          ],
+          "unit_test_receipt": {
+            "passed": true,
+            "exit_code": 0,
+            "stdout": "AUTOGENOUS_SELF_TEST_OK\n",
+            "stderr": "",
+            "telemetry_verified": true,
+            "called_function_counts": {
+              "align_reference_panel": 2,
+              "balanced_cell_weights": 2,
+              "weighted_column_fill": 2
+            },
+            "uncalled_public_functions": [],
+            "has_substantive_assertion": true
+          },
+          "llm_tokens": {
+            "prompt": 13633,
+            "cached": 0,
+            "completion": 3233,
+            "wall_ms": 82366.11
+          }
+        }
+      ],
+      "llm_tokens": {
+        "prompt": 13633,
+        "cached": 0,
+        "completion": 3233,
+        "wall_ms": 82366.11
+      },
+      "primitive_filename": "autogenous_prim_reference_panel_balancing.py",
+      "exported_functions": [
+        "align_reference_panel",
+        "balanced_cell_weights",
+        "weighted_column_fill"
+      ],
+      "exported_apis": "def align_reference_panel(values: np.ndarray, controls: np.ndarray, groups: np.ndarray) -> np.ndarray; def balanced_cell_weights(groups: np.ndarray, strata: np.ndarray) -> np.ndarray; def weighted_column_fill(values: np.ndarray, weights: np.ndarray) -> np.ndarray",
+      "mathematical_preconditions": [
+        "Alignment accepts real numeric arrays of shapes (n, p) and (n, q), with p, q > 0, and a finite real group vector of shape (n,). Nonfinite panel entries are treated as missing. Each group must have at least one control with two finite observations, a finite median control mean, and a finite, strictly positive median control population standard deviation. A constant control can contribute; a zero median gain raises ValueError.",
+        "Interpreting alignment as removal of a nuisance transform assumes a shared additive offset and positive multiplicative gain for signals and controls within each group. The control panel must have comparable baseline location and spread across groups, independent of sample composition. These scientific assumptions cannot be verified by shape or moment checks.",
+        "Cell weighting requires two nonempty, finite real vectors of matching shape (n,). Every combination of an observed group and an observed stratum must be present. If there are K such cells, each row in a cell of size m receives weight n/(K*m).",
+        "Column fill requires a nonempty real matrix of shape (n, p) and finite, strictly positive row weights of shape (n,). Nonfinite entries are excluded from both numerator and denominator; a column with no finite observations returns zero. Numeric panel and fill arithmetic use float64 and assume intermediate sums, squares, and ratios are within usable float64 range."
+      ],
+      "compiled_code_sha256": "a0bd4b961c67e2ccad723d94cee31eee33e031d5925b39c96b71ace643383209",
+      "synthetic_unit_test_sha256": "558124e7e51c552a37aa6d9ab292e6e512caa54cc83d793e0017b38614aaa16e",
+      "attached_to_nodes": [
+        "node_auto_07_control_panel_deconfounding"
+      ]
+    },
+    {
+      "source_l2_module": "autogenous_creep_corrected_retraction_calibration.py",
+      "source_provenance_episode_id": "pt02__viscoelastic_retraction_and_slip_calibration",
+      "representative_node_id": "node_auto_04_creep_corrected_retraction_c",
+      "recomputed_source_sha256": "cab6fbef9073cb8c49dc0dbe60378f11effbf77dbb388c1ec88a3236bf555616",
+      "status": "compiled_new_verified_l1",
+      "compiled_ok": true,
+      "attempts": [
+        {
+          "attempt_index": 1,
+          "llm_ok": true,
+          "proposed_stem": "autogenous_prim_robust_trend_decomposition",
+          "ast_gate_ok": true,
+          "ast_gate_reason": "ok",
+          "exported_functions": [
+            "cauchy_linear_fit",
+            "fit_anchored_relaxation",
+            "fit_local_level_step"
+          ],
+          "candidate_python_code": "import numpy as np\nfrom scipy.optimize import least_squares\n\n__all__ = ['cauchy_linear_fit', 'fit_anchored_relaxation', 'fit_local_level_step']\n\n\ndef _real(value: object) -> np.ndarray:\n    array = np.asarray(value)\n    if array.dtype.kind not in 'iuf':\n        raise ValueError('Expected real numeric input.')\n    array = array.astype(np.float64, copy=False)\n    if not np.all(np.isfinite(array)):\n        raise ValueError('Expected finite float64 input.')\n    return array\n\n\ndef _scalar(value: float) -> float:\n    array = _real(value)\n    if array.ndim != 0:\n        raise ValueError('Expected a scalar.')\n    return float(array)\n\n\ndef _mad(residual: np.ndarray) -> float:\n    return float(1.4826 * np.median(np.abs(residual - np.median(residual))))\n\n\ndef cauchy_linear_fit(design: np.ndarray, values: np.ndarray, *, scale: float | None = None, noise_floor: float = 1e-8) -> tuple[np.ndarray, float]:\n    \"\"\"Fit finite design (n,p) and values (n,) with n >= p >= 1, full column rank before and after weighting, and positive scale if supplied and positive floor, returning (coefficients (p,), floored residual MAD).\"\"\"\n    a, y = _real(design), _real(values)\n    noise_floor = _scalar(noise_floor)\n    if scale is not None:\n        scale = _scalar(scale)\n    if a.ndim != 2 or not 1 <= a.shape[1] <= a.shape[0] or y.shape != (a.shape[0],):\n        raise ValueError('Expected design (n,p) and values (n,), with n >= p >= 1.')\n    if noise_floor <= 0 or (scale is not None and scale <= 0):\n        raise ValueError('Scale and noise floor must be positive.')\n    beta, _, rank, _ = np.linalg.lstsq(a, y, rcond=None)\n    if rank != a.shape[1]:\n        raise ValueError('Design must have full column rank.')\n    if scale is None:\n        scale = max(noise_floor, _mad(y - a @ beta))\n    # Apply square roots of the Cauchy weights to the least-squares rows.\n    for _ in range(12):\n        root_weight = scale / np.hypot(scale, y - a @ beta)\n        beta, _, rank, _ = np.linalg.lstsq(a * root_weight[:, None], y * root_weight, rcond=None)\n        if rank != a.shape[1]:\n            raise ValueError('Weighted design must have full column rank.')\n    return beta, max(noise_floor, _mad(y - a @ beta))\n\n\ndef fit_anchored_relaxation(time: np.ndarray, predictor: np.ndarray, values: np.ndarray, *, onset_rate: float, noise_scale: float, curvature_ratio: float, bins: int, tau_bounds: tuple[float, float]) -> tuple[float, float, float | None]:\n    \"\"\"Fit finite vectors time, predictor, and values (n,) with n >= 4, increasing nonnegative times, a predictor independent of the intercept, nonnegative rate and curvature ratio, positive noise scale, 2 <= bins <= n, and ordered positive tau bounds, returning (offset, positive slope, tau or None for constant rate) with a locally identifiable saturation fit when used.\"\"\"\n    t, x, y = _real(time), _real(predictor), _real(values)\n    onset_rate, noise_scale, curvature_ratio = map(_scalar, (onset_rate, noise_scale, curvature_ratio))\n    bounds = _real(tau_bounds)\n    if t.ndim != 1 or t.size < 4 or x.shape != t.shape or y.shape != t.shape:\n        raise ValueError('Expected aligned vectors with at least four samples.')\n    if t[0] < 0 or np.any(t[1:] <= t[:-1]):\n        raise ValueError('Times must increase from a nonnegative elapsed time.')\n    if onset_rate < 0 or noise_scale <= 0 or curvature_ratio < 0:\n        raise ValueError('Expected nonnegative rate and curvature ratio and positive noise scale.')\n    if not isinstance(bins, (int, np.integer)) or not 2 <= bins <= t.size:\n        raise ValueError('Expected between two and n bins.')\n    if bounds.shape != (2,) or not 0 < bounds[0] < bounds[1]:\n        raise ValueError('Expected ordered, distinct, positive tau bounds.')\n    a = np.column_stack((np.ones_like(x), x))\n    corrected = y - onset_rate * t\n    beta, _ = cauchy_linear_fit(a, corrected, scale=noise_scale)\n    medians = np.array([np.median(part) for part in np.array_split(corrected - a @ beta, bins)])\n    coherent = np.sqrt(np.mean(medians ** 2))\n    if beta[1] > 0 and coherent <= curvature_ratio * noise_scale:\n        return float(beta[0]), float(beta[1]), None\n    if onset_rate == 0:\n        raise ValueError('Saturation cannot resolve a failed constant-rate fit with zero onset rate.')\n    lo, hi = np.log(bounds)\n    start = (lo + hi) / 2\n\n    def relaxation(log_tau: float) -> np.ndarray:\n        tau = np.exp(log_tau)\n        return onset_rate * (tau * -np.expm1(-t / tau))\n\n    def residual(params: np.ndarray) -> np.ndarray:\n        return a @ params[:2] + relaxation(params[2]) - y\n\n    seed, _ = cauchy_linear_fit(a, y - relaxation(start), scale=noise_scale)\n    fit = least_squares(residual, [seed[0], max(0.0, seed[1]), start],\n                        bounds=([-np.inf, 0.0, lo], [np.inf, np.inf, hi]),\n                        loss='soft_l1', f_scale=noise_scale, x_scale='jac')\n    if not fit.success:\n        raise RuntimeError('Anchored relaxation fit did not converge.')\n    if fit.active_mask[1] != 0 or np.linalg.matrix_rank(fit.jac) < 3:\n        raise ValueError('Saturation fit needs a positive interior slope and full-rank Jacobian.')\n    return float(fit.x[0]), float(fit.x[1]), float(np.exp(fit.x[2]))\n\n\ndef fit_local_level_step(predictor: np.ndarray, values: np.ndarray, splits: np.ndarray, *, scale: float, loss_clip: float) -> tuple[int, float]:\n    \"\"\"Fit finite predictor and values (n,) and integer splits (k,) with k >= 1, at least three samples per side, full-rank split designs, and positive scale and loss clip, returning (best split index, signed level change).\"\"\"\n    x, y = _real(predictor), _real(values)\n    splits = np.asarray(splits)\n    scale, loss_clip = _scalar(scale), _scalar(loss_clip)\n    if x.ndim != 1 or y.shape != x.shape or x.size < 6:\n        raise ValueError('Expected aligned vectors with at least six samples.')\n    if splits.ndim != 1 or not splits.size or splits.dtype.kind not in 'iu':\n        raise ValueError('Expected a nonempty vector of integer splits.')\n    if np.any(splits < 3) or np.any(splits > x.size - 3):\n        raise ValueError('Each split must leave at least three samples per side.')\n    if scale <= 0 or loss_clip <= 0:\n        raise ValueError('Scale and loss clip must be positive.')\n    indices = np.arange(x.size)\n    a = np.column_stack((np.ones_like(x), x - np.median(x), np.zeros_like(x)))\n    best_loss = np.inf\n    best_split, best_step = int(splits[0]), 0.0\n    for j in splits:\n        a[:, 2] = indices >= j\n        beta, _ = cauchy_linear_fit(a, y, scale=scale)\n        loss = np.minimum(np.abs(y - a @ beta), loss_clip).mean()\n        if loss < best_loss:  # Break exact ties in caller order.\n            best_loss = loss\n            best_split, best_step = int(j), float(beta[2])\n    return best_split, best_step\n",
+          "packaged_python_code": "\"\"\"Autogenously Sublated Scientific Wormhole Module `autogenous_prim_robust_trend_decomposition` (Container Unit-Tested, Zero Path Leakage).\"\"\"\nfrom __future__ import annotations\nimport math\nimport numpy as np\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom . import track_wormhole_skill\n\n__all__ = ['cauchy_linear_fit', 'fit_anchored_relaxation', 'fit_local_level_step']\n\ndef _real(value: object) -> np.ndarray:\n    array = np.asarray(value)\n    if array.dtype.kind not in 'iuf':\n        raise ValueError('Expected real numeric input.')\n    array = array.astype(np.float64, copy=False)\n    if not np.all(np.isfinite(array)):\n        raise ValueError('Expected finite float64 input.')\n    return array\n\n\ndef _scalar(value: float) -> float:\n    array = _real(value)\n    if array.ndim != 0:\n        raise ValueError('Expected a scalar.')\n    return float(array)\n\n\ndef _mad(residual: np.ndarray) -> float:\n    return float(1.4826 * np.median(np.abs(residual - np.median(residual))))\n\n\n@track_wormhole_skill(\"autogenous_prim_robust_trend_decomposition\")\ndef cauchy_linear_fit(design: np.ndarray, values: np.ndarray, *, scale: float | None=None, noise_floor: float=1e-08) -> tuple[np.ndarray, float]:\n    \"\"\"Fit finite design (n,p) and values (n,) with n >= p >= 1, full column rank before and after weighting, and positive scale if supplied and positive floor, returning (coefficients (p,), floored residual MAD).\"\"\"\n    (a, y) = (_real(design), _real(values))\n    noise_floor = _scalar(noise_floor)\n    if scale is not None:\n        scale = _scalar(scale)\n    if a.ndim != 2 or not 1 <= a.shape[1] <= a.shape[0] or y.shape != (a.shape[0],):\n        raise ValueError('Expected design (n,p) and values (n,), with n >= p >= 1.')\n    if noise_floor <= 0 or (scale is not None and scale <= 0):\n        raise ValueError('Scale and noise floor must be positive.')\n    (beta, _, rank, _) = np.linalg.lstsq(a, y, rcond=None)\n    if rank != a.shape[1]:\n        raise ValueError('Design must have full column rank.')\n    if scale is None:\n        scale = max(noise_floor, _mad(y - a @ beta))\n    for _ in range(12):\n        root_weight = scale / np.hypot(scale, y - a @ beta)\n        (beta, _, rank, _) = np.linalg.lstsq(a * root_weight[:, None], y * root_weight, rcond=None)\n        if rank != a.shape[1]:\n            raise ValueError('Weighted design must have full column rank.')\n    return (beta, max(noise_floor, _mad(y - a @ beta)))\n\n\n@track_wormhole_skill(\"autogenous_prim_robust_trend_decomposition\")\ndef fit_anchored_relaxation(time: np.ndarray, predictor: np.ndarray, values: np.ndarray, *, onset_rate: float, noise_scale: float, curvature_ratio: float, bins: int, tau_bounds: tuple[float, float]) -> tuple[float, float, float | None]:\n    \"\"\"Fit finite vectors time, predictor, and values (n,) with n >= 4, increasing nonnegative times, a predictor independent of the intercept, nonnegative rate and curvature ratio, positive noise scale, 2 <= bins <= n, and ordered positive tau bounds, returning (offset, positive slope, tau or None for constant rate) with a locally identifiable saturation fit when used.\"\"\"\n    (t, x, y) = (_real(time), _real(predictor), _real(values))\n    (onset_rate, noise_scale, curvature_ratio) = map(_scalar, (onset_rate, noise_scale, curvature_ratio))\n    bounds = _real(tau_bounds)\n    if t.ndim != 1 or t.size < 4 or x.shape != t.shape or (y.shape != t.shape):\n        raise ValueError('Expected aligned vectors with at least four samples.')\n    if t[0] < 0 or np.any(t[1:] <= t[:-1]):\n        raise ValueError('Times must increase from a nonnegative elapsed time.')\n    if onset_rate < 0 or noise_scale <= 0 or curvature_ratio < 0:\n        raise ValueError('Expected nonnegative rate and curvature ratio and positive noise scale.')\n    if not isinstance(bins, (int, np.integer)) or not 2 <= bins <= t.size:\n        raise ValueError('Expected between two and n bins.')\n    if bounds.shape != (2,) or not 0 < bounds[0] < bounds[1]:\n        raise ValueError('Expected ordered, distinct, positive tau bounds.')\n    a = np.column_stack((np.ones_like(x), x))\n    corrected = y - onset_rate * t\n    (beta, _) = cauchy_linear_fit(a, corrected, scale=noise_scale)\n    medians = np.array([np.median(part) for part in np.array_split(corrected - a @ beta, bins)])\n    coherent = np.sqrt(np.mean(medians ** 2))\n    if beta[1] > 0 and coherent <= curvature_ratio * noise_scale:\n        return (float(beta[0]), float(beta[1]), None)\n    if onset_rate == 0:\n        raise ValueError('Saturation cannot resolve a failed constant-rate fit with zero onset rate.')\n    (lo, hi) = np.log(bounds)\n    start = (lo + hi) / 2\n\n    def relaxation(log_tau: float) -> np.ndarray:\n        tau = np.exp(log_tau)\n        return onset_rate * (tau * -np.expm1(-t / tau))\n\n    def residual(params: np.ndarray) -> np.ndarray:\n        return a @ params[:2] + relaxation(params[2]) - y\n    (seed, _) = cauchy_linear_fit(a, y - relaxation(start), scale=noise_scale)\n    fit = least_squares(residual, [seed[0], max(0.0, seed[1]), start], bounds=([-np.inf, 0.0, lo], [np.inf, np.inf, hi]), loss='soft_l1', f_scale=noise_scale, x_scale='jac')\n    if not fit.success:\n        raise RuntimeError('Anchored relaxation fit did not converge.')\n    if fit.active_mask[1] != 0 or np.linalg.matrix_rank(fit.jac) < 3:\n        raise ValueError('Saturation fit needs a positive interior slope and full-rank Jacobian.')\n    return (float(fit.x[0]), float(fit.x[1]), float(np.exp(fit.x[2])))\n\n\n@track_wormhole_skill(\"autogenous_prim_robust_trend_decomposition\")\ndef fit_local_level_step(predictor: np.ndarray, values: np.ndarray, splits: np.ndarray, *, scale: float, loss_clip: float) -> tuple[int, float]:\n    \"\"\"Fit finite predictor and values (n,) and integer splits (k,) with k >= 1, at least three samples per side, full-rank split designs, and positive scale and loss clip, returning (best split index, signed level change).\"\"\"\n    (x, y) = (_real(predictor), _real(values))\n    splits = np.asarray(splits)\n    (scale, loss_clip) = (_scalar(scale), _scalar(loss_clip))\n    if x.ndim != 1 or y.shape != x.shape or x.size < 6:\n        raise ValueError('Expected aligned vectors with at least six samples.')\n    if splits.ndim != 1 or not splits.size or splits.dtype.kind not in 'iu':\n        raise ValueError('Expected a nonempty vector of integer splits.')\n    if np.any(splits < 3) or np.any(splits > x.size - 3):\n        raise ValueError('Each split must leave at least three samples per side.')\n    if scale <= 0 or loss_clip <= 0:\n        raise ValueError('Scale and loss clip must be positive.')\n    indices = np.arange(x.size)\n    a = np.column_stack((np.ones_like(x), x - np.median(x), np.zeros_like(x)))\n    best_loss = np.inf\n    (best_split, best_step) = (int(splits[0]), 0.0)\n    for j in splits:\n        a[:, 2] = indices >= j\n        (beta, _) = cauchy_linear_fit(a, y, scale=scale)\n        loss = np.minimum(np.abs(y - a @ beta), loss_clip).mean()\n        if loss < best_loss:\n            best_loss = loss\n            (best_split, best_step) = (int(j), float(beta[2]))\n    return (best_split, best_step)\n",
+          "compiled_code_sha256": "1f45421a8333556429368c35d8a5b22f50bd1579b5b8fc36d84a03d897875134",
+          "synthetic_unit_test_code": "import numpy as np\nfrom hegel_wormhole_skills.autogenous_prim_robust_trend_decomposition import (\n    cauchy_linear_fit, fit_anchored_relaxation, fit_local_level_step,\n)\n\n\ndef run_self_test():\n    for n, p in ((20, 2), (31, 3)):\n        x = np.linspace(-1.0, 1.0, n)\n        design = np.vander(x, N=p, increasing=True)\n        expected = np.arange(1, p + 1, dtype=float) / 3\n        clean = design @ expected\n        coef, noise = cauchy_linear_fit(design, clean, noise_floor=1e-7)\n        assert np.all(np.isfinite(coef)) and np.isfinite(noise)\n        np.testing.assert_allclose(coef, expected, atol=1e-12)\n        np.testing.assert_allclose(noise, 1e-7, rtol=0, atol=1e-15)\n        contaminated = clean.copy()\n        contaminated[n // 3] += 4.0\n        coef, noise = cauchy_linear_fit(design, contaminated, scale=0.02)\n        assert np.all(np.isfinite(coef)) and np.isfinite(noise)\n        np.testing.assert_allclose(coef, expected, rtol=0, atol=1e-4)\n\n    for n, tau_ref in ((24, 0.45), (41, 0.65)):\n        t = np.linspace(0.03, 1.6, n)\n        x = -2.0 * t\n        offset, slope, rate = 0.7, 0.45, 0.6\n        settings = dict(onset_rate=rate, noise_scale=1e-4,\n                        curvature_ratio=0.8, bins=n // 5, tau_bounds=(0.125, 2.0))\n        o, s, tau = fit_anchored_relaxation(t, x, offset + slope * x + rate * t, **settings)\n        assert tau is None and np.all(np.isfinite([o, s]))\n        np.testing.assert_allclose([o, s], [offset, slope], atol=1e-12)\n        relaxation = -rate * tau_ref * np.expm1(-t / tau_ref)\n        fit = fit_anchored_relaxation(t, x, offset + slope * x + relaxation, **settings)\n        assert fit[2] is not None and np.all(np.isfinite(fit))\n        np.testing.assert_allclose(fit, [offset, slope, tau_ref], rtol=1e-5, atol=1e-7)\n        # A permissive curvature gate cannot rescue a negative corrected slope.\n        x = -x\n        settings['curvature_ratio'] = 1e6\n        fit = fit_anchored_relaxation(t, x, offset + 0.04 * x + relaxation, **settings)\n        assert fit[2] is not None and np.all(np.isfinite(fit))\n        np.testing.assert_allclose(fit, [offset, 0.04, tau_ref], rtol=1e-5, atol=1e-7)\n\n    for n in (18, 27):\n        x = np.linspace(-1.0, 1.0, n)\n        j = n // 2\n        candidates = np.arange(j - 2, j + 3)\n        trend = 0.4 + 0.3 * x\n        y = trend + 0.8 * (np.arange(n) >= j)\n        fit = fit_local_level_step(x, y, candidates, scale=0.03, loss_clip=0.2)\n        assert fit[0] == j and np.all(np.isfinite(fit))\n        np.testing.assert_allclose(fit, [j, 0.8], rtol=0, atol=1e-12)\n        spike_only = trend.copy()\n        spike_only[j] += 3.0\n        _, step = fit_local_level_step(x, spike_only, candidates, scale=0.03, loss_clip=0.2)\n        assert np.isfinite(step)\n        np.testing.assert_allclose(step, 0.0, rtol=0, atol=2e-3)\n\n\nrun_self_test()\n",
+          "synthetic_unit_test_sha256": "9f3966b3c5e0efe6172f3d1e86219f9f165f7622795032de00fb28d7cc65fc62",
+          "mathematical_preconditions": [
+            "Inputs are finite real arrays convertible to float64, with magnitudes that keep intermediate residuals, model evaluations, and least-squares calculations representable. The linear fit requires a nonempty (n,p) design and an (n,) response with n >= p >= 1 and numerical full column rank, including after Cauchy row weighting. Supplied scale and noise_floor must be positive finite scalars.",
+            "The relaxation fit requires aligned length-n vectors, n >= 4, strictly increasing nonnegative times measured from the supplied onset, and a predictor numerically independent of the intercept. The onset rate is independently specified and nonnegative, noise_scale is positive, curvature_ratio is nonnegative, 2 <= bins <= n, and 0 < tau_min < tau_max. The saturation branch requires a positive onset rate, a numerically full-rank fitted Jacobian, and a positive slope not active at its lower bound.",
+            "The step fit requires aligned length-n vectors and a nonempty integer vector of candidate split indices, each leaving at least three samples on either side. Each candidate design must have full column rank: the predictor cannot be constant within both segments. The scale and loss_clip are positive finite scalars. Interpretation as a level step assumes a shared local trend on both sides."
+          ],
+          "unit_test_receipt": {
+            "passed": true,
+            "exit_code": 0,
+            "stdout": "AUTOGENOUS_SELF_TEST_OK\n",
+            "stderr": "",
+            "telemetry_verified": true,
+            "called_function_counts": {
+              "cauchy_linear_fit": 34,
+              "fit_anchored_relaxation": 6,
+              "fit_local_level_step": 4
+            },
+            "uncalled_public_functions": [],
+            "has_substantive_assertion": true
+          },
+          "llm_tokens": {
+            "prompt": 29385,
+            "cached": 14208,
+            "completion": 5660,
+            "wall_ms": 134407.93
+          }
+        }
+      ],
+      "llm_tokens": {
+        "prompt": 29385,
+        "cached": 14208,
+        "completion": 5660,
+        "wall_ms": 134407.93
+      },
+      "primitive_filename": "autogenous_prim_robust_trend_decomposition.py",
+      "exported_functions": [
+        "cauchy_linear_fit",
+        "fit_anchored_relaxation",
+        "fit_local_level_step"
+      ],
+      "exported_apis": "def cauchy_linear_fit(design: np.ndarray, values: np.ndarray, *, scale: float | None = None, noise_floor: float = 1e-8) -> tuple[np.ndarray, float]; def fit_anchored_relaxation(time: np.ndarray, predictor: np.ndarray, values: np.ndarray, *, onset_rate: float, noise_scale: float, curvature_ratio: float, bins: int, tau_bounds: tuple[float, float]) -> tuple[float, float, float | None]; def fit_local_level_step(predictor: np.ndarray, values: np.ndarray, splits: np.ndarray, *, scale: float, loss_clip: float) -> tuple[int, float]",
+      "mathematical_preconditions": [
+        "Inputs are finite real arrays convertible to float64, with magnitudes that keep intermediate residuals, model evaluations, and least-squares calculations representable. The linear fit requires a nonempty (n,p) design and an (n,) response with n >= p >= 1 and numerical full column rank, including after Cauchy row weighting. Supplied scale and noise_floor must be positive finite scalars.",
+        "The relaxation fit requires aligned length-n vectors, n >= 4, strictly increasing nonnegative times measured from the supplied onset, and a predictor numerically independent of the intercept. The onset rate is independently specified and nonnegative, noise_scale is positive, curvature_ratio is nonnegative, 2 <= bins <= n, and 0 < tau_min < tau_max. The saturation branch requires a positive onset rate, a numerically full-rank fitted Jacobian, and a positive slope not active at its lower bound.",
+        "The step fit requires aligned length-n vectors and a nonempty integer vector of candidate split indices, each leaving at least three samples on either side. Each candidate design must have full column rank: the predictor cannot be constant within both segments. The scale and loss_clip are positive finite scalars. Interpretation as a level step assumes a shared local trend on both sides."
+      ],
+      "compiled_code_sha256": "1f45421a8333556429368c35d8a5b22f50bd1579b5b8fc36d84a03d897875134",
+      "synthetic_unit_test_sha256": "9f3966b3c5e0efe6172f3d1e86219f9f165f7622795032de00fb28d7cc65fc62",
+      "attached_to_nodes": [
+        "node_auto_04_creep_corrected_retraction_c"
+      ]
+    },
+    {
+      "source_l2_module": "autogenous_dispersive_wave_tomography.py",
+      "source_provenance_episode_id": "pt01__dispersive_plate_flaw_tomography_v2",
+      "representative_node_id": "node_auto_09_dispersive_wave_tomography",
+      "recomputed_source_sha256": "fbf620dbe52e77ff5571790c043d1908fdba8681dfd061ec4133b6962d3a0cb4",
+      "status": "retained_existing_verified_l1",
+      "compiled_ok": true,
+      "primitive_filename": "autogenous_prim_ridge_profiled_matching.py",
+      "exported_functions": [
+        "fit_ridge_nuisance",
+        "profile_candidate_amplitudes"
+      ],
+      "exported_apis": "fit_ridge_nuisance(design: np.ndarray, values: np.ndarray, *, ridge: float | np.ndarray = 1e-6) -> tuple[np.ndarray, np.ndarray, np.ndarray]; profile_candidate_amplitudes(residual_dot: np.ndarray, candidate_energy: np.ndarray, nuisance_cross: np.ndarray, whitener: np.ndarray, *, rtol: float = 1e-12) -> tuple[np.ndarray, np.ndarray]",
+      "mathematical_preconditions": [
+        "design (n, p) and values (n,) or (n, q) share leading axis n; ridge >= 0 finite scalar or (p,) vector.",
+        "whitener (r, p) must match the SVD Gram whitener of the same weighted design matrix; candidate_energy >= 0."
+      ],
+      "compiled_code_sha256": "dfdf7838f3618f600b4d7d7df948af526e9de4b41cbe0e429a9a76032e691078",
+      "synthetic_unit_test_sha256": "16ef3ed20763d9105b7adc167291303e2040207ba1c7fa32d57b58007949ad21",
+      "attempts": [],
+      "llm_tokens": {
+        "prompt": 0,
+        "cached": 0,
+        "completion": 0,
+        "wall_ms": 0.0
+      }
+    },
+    {
+      "source_l2_module": "autogenous_robust_network_assimilation.py",
+      "source_provenance_episode_id": "pt04__network_varproj_and_valve_assimilation",
+      "representative_node_id": "node_auto_06_robust_network_assimilation",
+      "recomputed_source_sha256": "2262dea7fb83d907b5e4ba036cab3459cc080447cbb668b784227f746f8023d6",
+      "status": "retained_existing_verified_l1",
+      "compiled_ok": true,
+      "primitive_filename": "autogenous_prim_robust_affine_projection.py",
+      "exported_functions": [
+        "propagate_linear_basis",
+        "profile_weighted_affine",
+        "robust_residual_weights"
+      ],
+      "exported_apis": "propagate_linear_basis(transition: np.ndarray, initial: np.ndarray, increments: np.ndarray) -> np.ndarray; profile_weighted_affine(predictor: np.ndarray, sensitivity: np.ndarray, target: np.ndarray, *, weights: np.ndarray | None = None, gain_floor: float = 0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]; robust_residual_weights(residual: np.ndarray, scale: float | np.ndarray, *, loss: str = 'cauchy') -> np.ndarray",
+      "mathematical_preconditions": [
+        "scale > 0 finite scalar or broadcastable array; loss in {'huber', 'cauchy'}.",
+        "weights >= 0 when provided; sensitivity must have nonzero weighted norm above gain_floor for identifiable slope."
+      ],
+      "compiled_code_sha256": "abc35d3defaecd9adc5e1091c1b53ab480677bd3aac9cbe7e691e6bd41e49062",
+      "synthetic_unit_test_sha256": "d3a8830101aa9ce93073bddf35475962c6f79ee33b5efca93d95802787770dcb",
+      "attempts": [],
+      "llm_tokens": {
+        "prompt": 0,
+        "cached": 0,
+        "completion": 0,
+        "wall_ms": 0.0
+      }
+    },
+    {
+      "source_l2_module": "autogenous_sparse_ridge_certification.py",
+      "source_provenance_episode_id": "pt06__exact_l0_l2_compacted_certificate",
+      "representative_node_id": "node_auto_06_robust_network_assimilation",
+      "recomputed_source_sha256": "770f6644bb1fd8eb49dbacf51ffa3405a9ca876974e0021d66415d9014d8dfb9",
+      "status": "retained_existing_verified_l1",
+      "compiled_ok": true,
+      "primitive_filename": "autogenous_prim_box_ridge_bounds.py",
+      "exported_functions": [
+        "row_incidence_blocks",
+        "gram_diagonal_minorant",
+        "box_ridge_cube_lower_bound"
+      ],
+      "exported_apis": "row_incidence_blocks(design: np.ndarray) -> tuple[list[tuple[np.ndarray, np.ndarray]], np.ndarray]; gram_diagonal_minorant(design: np.ndarray) -> np.ndarray; box_ridge_cube_lower_bound(design: np.ndarray, target: np.ndarray, center: np.ndarray, box: float, activation_cost: float, *, ridge: float = 0.0, fixed_zero: np.ndarray | None = None, fixed_active: np.ndarray | None = None, diagonal: np.ndarray | None = None) -> float",
+      "mathematical_preconditions": [
+        "box >= 0, activation_cost >= 0, ridge >= 0; design (n, p) and target (n,) finite.",
+        "diagonal (if supplied) MUST be a valid PSD diagonal minorant satisfying (X.T @ X + ridge * I) - diag(diagonal) >= 0 (prefer gram_diagonal_minorant(design))."
+      ],
+      "compiled_code_sha256": "49a7b6742bdbf889e9b3f3bed46f9e439e084676f41d306c39b44540580d70dc",
+      "synthetic_unit_test_sha256": "7fc3920876af6a738adc1a9e0f97801dd4161e8791e92b22e60f9cae4261bd63",
+      "attempts": [],
+      "llm_tokens": {
+        "prompt": 0,
+        "cached": 0,
+        "completion": 0,
+        "wall_ms": 0.0
+      }
+    }
+  ],
+  "anti_unification_summary": {
+    "evaluated_node_count": 6,
+    "shared_subtree_count": 11,
+    "ast_verified_subtree_count": 0,
+    "stage_prior_candidate_count": 11,
+    "shared_subtrees": [
+      {
+        "subtree_id": "sub_opdag_cd332a9ef6d4",
+        "node_a_id": "node_auto_04_creep_corrected_retraction_c",
+        "node_b_id": "node_auto_05_conservative_elliptic_multig",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "metric_norm"
+        ],
+        "code_ast_digests": [
+          "4cc2a8241bb0",
+          "5049c95d528a"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_frontend_representation",
+        "skeleton_size": 5,
+        "parameter_slot_count": 1,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              1
+            ],
+            "value_a": 0.015,
+            "value_b": 0.0
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_frontend_representation",
+          "lag": 0,
+          "children": [
+            {
+              "op": "feature",
+              "value": null,
+              "name": "obs_signal",
+              "lag": 0,
+              "children": []
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_0",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_84ca6bd221b8",
+        "node_a_id": "node_auto_04_creep_corrected_retraction_c",
+        "node_b_id": "node_auto_06_robust_network_assimilation",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "exp_log_kernel",
+          "linear_system",
+          "metric_norm",
+          "nonlinear_opt",
+          "robust_stat"
+        ],
+        "code_ast_digests": [
+          "4cc2a8241bb0",
+          "99502c737d45"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.015,
+            "value_b": 5.0
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 1.0,
+            "value_b": 0.2
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 1.4826,
+            "value_b": 1.5
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 0.8,
+            "value_b": 0.0
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_537a741827c1",
+        "node_a_id": "node_auto_04_creep_corrected_retraction_c",
+        "node_b_id": "node_auto_07_control_panel_deconfounding",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "robust_stat"
+        ],
+        "code_ast_digests": [
+          "4cc2a8241bb0",
+          "4e76b4a78d90"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.015,
+            "value_b": 2.0
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 1.0,
+            "value_b": 0.0
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 1.4826,
+            "value_b": 3.0
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 0.8,
+            "value_b": 0.84
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_84ca6bd221b8",
+        "node_a_id": "node_auto_04_creep_corrected_retraction_c",
+        "node_b_id": "node_auto_08_split_sparse_ridge_certification",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "exp_log_kernel",
+          "linear_system",
+          "metric_norm",
+          "nonlinear_opt",
+          "robust_stat"
+        ],
+        "code_ast_digests": [
+          "4cc2a8241bb0",
+          "99502c737d45"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.015,
+            "value_b": 16.0
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 1.0,
+            "value_b": 0.0
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 1.4826,
+            "value_b": 8.0
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 0.8,
+            "value_b": 90.0
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_b6be55ffcc2e",
+        "node_a_id": "node_auto_04_creep_corrected_retraction_c",
+        "node_b_id": "node_auto_09_dispersive_wave_tomography",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "exp_log_kernel",
+          "linear_system",
+          "metric_norm",
+          "nonlinear_opt",
+          "robust_stat"
+        ],
+        "code_ast_digests": [
+          "4cc2a8241bb0",
+          "d7f688d8f757"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.015,
+            "value_b": 1.3
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 1.0,
+            "value_b": 1.8
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 1.4826,
+            "value_b": 0.009
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 0.8,
+            "value_b": 0.78
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_01126f8b40a6",
+        "node_a_id": "node_auto_05_conservative_elliptic_multig",
+        "node_b_id": "node_auto_07_control_panel_deconfounding",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [],
+        "code_ast_digests": [
+          "5049c95d528a",
+          "4e76b4a78d90"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_frontend_representation",
+        "skeleton_size": 5,
+        "parameter_slot_count": 1,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              1
+            ],
+            "value_a": 0.0,
+            "value_b": 2.0
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_frontend_representation",
+          "lag": 0,
+          "children": [
+            {
+              "op": "feature",
+              "value": null,
+              "name": "obs_signal",
+              "lag": 0,
+              "children": []
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_0",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_86f224936492",
+        "node_a_id": "node_auto_05_conservative_elliptic_multig",
+        "node_b_id": "node_auto_09_dispersive_wave_tomography",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "metric_norm"
+        ],
+        "code_ast_digests": [
+          "5049c95d528a",
+          "d7f688d8f757"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_frontend_representation",
+        "skeleton_size": 5,
+        "parameter_slot_count": 1,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              1
+            ],
+            "value_a": 0.0,
+            "value_b": 1.3
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_frontend_representation",
+          "lag": 0,
+          "children": [
+            {
+              "op": "feature",
+              "value": null,
+              "name": "obs_signal",
+              "lag": 0,
+              "children": []
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_0",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_0a51fed7666a",
+        "node_a_id": "node_auto_06_robust_network_assimilation",
+        "node_b_id": "node_auto_07_control_panel_deconfounding",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "robust_stat"
+        ],
+        "code_ast_digests": [
+          "99502c737d45",
+          "4e76b4a78d90"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 5.0,
+            "value_b": 2.0
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.2,
+            "value_b": 0.0
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 1.5,
+            "value_b": 3.0
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 0.0,
+            "value_b": 0.84
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_3380b38ccd49",
+        "node_a_id": "node_auto_06_robust_network_assimilation",
+        "node_b_id": "node_auto_09_dispersive_wave_tomography",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "exp_log_kernel",
+          "linear_system",
+          "metric_norm",
+          "nonlinear_opt",
+          "robust_stat",
+          "spectral_subspace"
+        ],
+        "code_ast_digests": [
+          "99502c737d45",
+          "d7f688d8f757"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 5.0,
+            "value_b": 1.3
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.2,
+            "value_b": 1.8
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 1.5,
+            "value_b": 0.009
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 0.0,
+            "value_b": 0.78
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_66ed0a0135dd",
+        "node_a_id": "node_auto_07_control_panel_deconfounding",
+        "node_b_id": "node_auto_08_split_sparse_ridge_certification",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "robust_stat"
+        ],
+        "code_ast_digests": [
+          "4e76b4a78d90",
+          "99502c737d45"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 3,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 2.0,
+            "value_b": 16.0
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 3.0,
+            "value_b": 8.0
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              1
+            ],
+            "value_a": 0.84,
+            "value_b": 90.0
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "const",
+                      "value": 0.0,
+                      "name": null,
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_1",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_2",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      },
+      {
+        "subtree_id": "sub_opdag_3380b38ccd49",
+        "node_a_id": "node_auto_08_split_sparse_ridge_certification",
+        "node_b_id": "node_auto_09_dispersive_wave_tomography",
+        "verification_tier": "code_backed_stage_prior_candidate",
+        "mechanism_stability_verified": false,
+        "shared_ast_operator_families": [
+          "exp_log_kernel",
+          "linear_system",
+          "metric_norm",
+          "nonlinear_opt",
+          "robust_stat",
+          "spectral_subspace"
+        ],
+        "code_ast_digests": [
+          "99502c737d45",
+          "d7f688d8f757"
+        ],
+        "skeleton_op": "call",
+        "skeleton_name": "op_cross_slice_falsification_gate",
+        "skeleton_size": 20,
+        "parameter_slot_count": 4,
+        "slots": [
+          {
+            "slot": "theta_0",
+            "path": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "value_a": 16.0,
+            "value_b": 1.3
+          },
+          {
+            "slot": "theta_1",
+            "path": [
+              0,
+              0,
+              1
+            ],
+            "value_a": 0.0,
+            "value_b": 1.8
+          },
+          {
+            "slot": "theta_2",
+            "path": [
+              0,
+              1
+            ],
+            "value_a": 8.0,
+            "value_b": 0.009
+          },
+          {
+            "slot": "theta_3",
+            "path": [
+              1
+            ],
+            "value_a": 90.0,
+            "value_b": 0.78
+          }
+        ],
+        "program_dict": {
+          "op": "call",
+          "value": null,
+          "name": "op_cross_slice_falsification_gate",
+          "lag": 0,
+          "children": [
+            {
+              "op": "call",
+              "value": null,
+              "name": "op_robust_mechanistic_inversion",
+              "lag": 0,
+              "children": [
+                {
+                  "op": "call",
+                  "value": null,
+                  "name": "op_nuisance_subspace_projection",
+                  "lag": 0,
+                  "children": [
+                    {
+                      "op": "call",
+                      "value": null,
+                      "name": "op_frontend_representation",
+                      "lag": 0,
+                      "children": [
+                        {
+                          "op": "feature",
+                          "value": null,
+                          "name": "obs_signal",
+                          "lag": 0,
+                          "children": []
+                        },
+                        {
+                          "op": "arg",
+                          "value": null,
+                          "name": "theta_0",
+                          "lag": 0,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "op": "arg",
+                      "value": null,
+                      "name": "theta_1",
+                      "lag": 0,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "op": "arg",
+                  "value": null,
+                  "name": "theta_2",
+                  "lag": 0,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "arg",
+              "value": null,
+              "name": "theta_3",
+              "lag": 0,
+              "children": []
+            }
+          ],
+          "definitions": {
+            "op_frontend_representation": {
+              "definition_id": "op_frontend_representation",
+              "arguments": [
+                "obs_in",
+                "frontend_code"
+              ],
+              "body": {
+                "op": "add",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "obs_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "mul",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 0.01,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "frontend_code",
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_nuisance_subspace_projection": {
+              "definition_id": "op_nuisance_subspace_projection",
+              "arguments": [
+                "feat_in",
+                "ridge_reg"
+              ],
+              "body": {
+                "op": "div",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "feat_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "add",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "const",
+                        "value": 1.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "abs",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "arg",
+                            "value": null,
+                            "name": "ridge_reg",
+                            "lag": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_robust_mechanistic_inversion": {
+              "definition_id": "op_robust_mechanistic_inversion",
+              "arguments": [
+                "clean_in",
+                "robust_scale"
+              ],
+              "body": {
+                "op": "tanh",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "div",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "clean_in",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "max",
+                        "value": null,
+                        "name": null,
+                        "lag": 0,
+                        "children": [
+                          {
+                            "op": "const",
+                            "value": 0.001,
+                            "name": null,
+                            "lag": 0,
+                            "children": []
+                          },
+                          {
+                            "op": "abs",
+                            "value": null,
+                            "name": null,
+                            "lag": 0,
+                            "children": [
+                              {
+                                "op": "arg",
+                                "value": null,
+                                "name": "robust_scale",
+                                "lag": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            },
+            "op_cross_slice_falsification_gate": {
+              "definition_id": "op_cross_slice_falsification_gate",
+              "arguments": [
+                "cand_in",
+                "min_slices"
+              ],
+              "body": {
+                "op": "mul",
+                "value": null,
+                "name": null,
+                "lag": 0,
+                "children": [
+                  {
+                    "op": "arg",
+                    "value": null,
+                    "name": "cand_in",
+                    "lag": 0,
+                    "children": []
+                  },
+                  {
+                    "op": "ge",
+                    "value": null,
+                    "name": null,
+                    "lag": 0,
+                    "children": [
+                      {
+                        "op": "arg",
+                        "value": null,
+                        "name": "min_slices",
+                        "lag": 0,
+                        "children": []
+                      },
+                      {
+                        "op": "const",
+                        "value": 2.0,
+                        "name": null,
+                        "lag": 0,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "source_concept_id": "m7_canonical_operator_stage"
+            }
+          }
+        }
+      }
+    ],
+    "created_wormhole_ids": [
+      "wh_auto_node_auto_04_creep__node_auto_05_conse_cd332a",
+      "wh_auto_node_auto_04_creep__node_auto_06_robus_84ca6b",
+      "wh_auto_node_auto_04_creep__node_auto_07_contr_537a74",
+      "wh_auto_node_auto_04_creep__node_auto_09_dispe_b6be55",
+      "wh_auto_node_auto_05_conse__node_auto_07_contr_01126f",
+      "wh_auto_node_auto_06_robus__node_auto_07_contr_0a51fe",
+      "wh_auto_node_auto_06_robus__node_auto_09_dispe_3380b3",
+      "wh_auto_node_auto_07_contr__node_auto_06_robus_66ed0a"
+    ],
+    "pruned_wormhole_ids": [
+      "wh_auto_node_auto_04_creep__node_auto_05_conse_e670ac",
+      "wh_auto_node_auto_04_creep__node_auto_06_robus_95ba09",
+      "wh_auto_node_auto_04_creep__node_auto_07_contr_f857fc",
+      "wh_auto_node_auto_04_creep__node_auto_09_dispe_ed8ca6",
+      "wh_auto_node_auto_05_conse__node_auto_07_contr_252d89",
+      "wh_auto_node_auto_06_robus__node_auto_07_contr_a98484",
+      "wh_auto_node_auto_06_robus__node_auto_09_dispe_6057a3",
+      "wh_auto_node_auto_07_contr__node_auto_06_robus_0827a1"
+    ],
+    "pruned_subtree_ids": []
+  },
+  "llm_tokens": {
+    "prompt": 43018,
+    "cached": 14208,
+    "completion": 8893,
+    "wall_ms": 216774.03999999998
+  },
+  "stage_wall_ms": 138126.71
+}

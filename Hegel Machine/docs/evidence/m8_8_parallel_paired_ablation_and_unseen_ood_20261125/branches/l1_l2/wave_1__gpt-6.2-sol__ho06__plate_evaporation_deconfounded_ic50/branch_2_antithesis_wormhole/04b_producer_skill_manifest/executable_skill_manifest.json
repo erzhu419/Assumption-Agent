@@ -1,0 +1,120 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_da1b26b616a9",
+    "source_hash": "da1b26b616a920a30792b93c224f02eb1114d2ca1b16ba10d9f0490f5624af63",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/assay_diagnostic.py",
+        "archived_relpath": "producers/tmp__assay_diagnostic.py",
+        "bytes": 2574,
+        "sha256": "6dcacab1fd1608a6cf93b6ac9a97ad651f0f0afaef8c9a5845b6c994837eb207"
+      },
+      {
+        "container_path": "/tmp/stress_assay.py",
+        "archived_relpath": "producers/tmp__stress_assay.py",
+        "bytes": 2507,
+        "sha256": "915b1a96cd0ba823ab78808335d3e7c94ffffc52694289724957d4022d76e8f5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle, numpy as np\nwith open('public_screen.pkl','rb') as f: data=pickle.load(f)\ndef describe(x, depth=0):\n    if isinstance(x,dict):\n        print('  '*depth,'dict keys',list(x)[:20]);\n        if depth<3:\n            for k,v in list(x.items())[:15]:\n                if isinstance(v,(dict,list,tuple,np.ndarray)) or hasattr(v,'shape'):\n                    print('  '*depth,str(k)+':',end=' '); describe(v,depth+1)\n                else: print('  '*depth,k,repr(v)[:140])\n    elif isinstance(x,(list,tuple)):\n        print('  '*depth,type(x).__name",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\n\ndef describe(x, depth=0):\n    prefix = '  ' * depth\n    if isinstance(x, dict):\n        print(prefix, 'dict:', list(x)[:20])\n        if depth < 4:\n            for k, v in list(x.items())[:16]:\n                print(prefix, repr(k))\n                describe(v, depth + 1)\n    elif isinstance(x, (list, tuple)):\n        print(prefix, type(x).__name__, len(x))\n        if x and depth < 4:\n            describe(x[0], depth + 1)\n    elif hasattr(x, 'shape'):\n        print(prefix, type(x).__name__, x.shape, getattr(x, 'dtype', None))\n        if hasattr",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nfrom collections import Counter, defaultdict\nimport numpy as np\nwith open('public_screen.pkl', 'rb') as f:\n    plates = pickle.load(f)['plates']\nfor p in plates:\n    w = p['wells']\n    cells = Counter((a['row'], a['col']) for a in w)\n    print(p['plate_id'], 'types', Counter(a['well_type'] for a in w), 'coordinates', (min(r for r,c in cells),max(r for r,c in cells),min(c for r,c in cells),max(c for r,c in cells)), 'duplicate coordinates', sum(v-1 for v in cells.values()))\n    for t in sorted({a['well_type'] for a in w}):\n        s = [a for a i",
+      "cd /holdout_task && cat >/tmp/assay_diagnostic.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    data = pickle.load(f)\nplates, truth = data['plates'], data['gt']\n\ndef features(r, c, model, decay):\n    x, y = (r-7.5)/7.5, (c-11.5)/11.5\n    dr, dc = np.minimum(r, 15-r), np.minimum(c, 23-c)\n    er, ec = np.exp(-dr/decay), np.exp(-dc/decay)\n    base = [np.ones_like(x), x, y]\n    if model == 'flat': return np.array(base[:1]).T\n    if model == 'nearest': base += [np.maximum",
+      "cd /holdout_task && cat > assay_ic50.py <<'PY'\n\"\"\"Control-calibrated Hill fits for a 384-well viability assay.\"\"\"\n\nfrom collections import defaultdict\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\n\n_LOG10 = np.log(10.0)\n\n\ndef _geometry(rows, cols):\n    distance = np.minimum.reduce((rows, 15 - rows, cols, 23 - cols))\n    return (rows - 7.5) / 7.5, (cols - 11.5) / 11.5, distance\n\n\ndef _gain_basis(geometry, decay):\n    row, col, distance = geometry\n    return np.column_stack((np.ones_like(row), row, col, np.exp(-distance / decay)))\n\n\ndef _calibrate(",
+      "cd /holdout_task && cat >/tmp/stress_assay.py <<'PY'\nimport pickle\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.special import expit\nfrom assay_ic50 import estimate_compound_hill_parameters\n\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    public = pickle.load(f)\nlayout = public['plates']\nkeys = ('log10_ic50_uM', 'hill_slope')\n\ndef simulate(seed, regime):\n    rng = np.random.default_rng(seed)\n    ids = list(public['gt'])\n    truth = {k: (v, rng.uniform(.75, 1.5)) for k, v in zip(ids, np.sort(rng.uniform(-2.3, 1.8, len(ids))))}\n    plates = []\n    common_decay =",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\npath = Path('/holdout_task/assay_ic50.py')\nassert path.read_bytes() == Path('/tmp/.hegel_candidate_archive/v01_da1b26b6').read_bytes()\nspec = importlib.util.spec_from_file_location('assay_ic50', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_screen.pkl', 'rb') as stream:\n    data = pickle.load(stream)\nplates, truth = data['plates'], data['gt']\nparams = ('log10_ic50_uM', 'hill_slope')",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport hashlib\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\npath = Path('/holdout_task/assay_ic50.py')\nsource = path.read_bytes()\nassert hashlib.sha256(source).hexdigest() == 'da1b26b616a920a30792b93c224f02eb1114d2ca1b16ba10d9f0490f5624af63', 'Target differs from the stress-tested candidate'\nnamespace = {'__name__': 'assay_ic50', '__file__': str(path)}\nexec(compile(source, str(path), 'exec'), namespace)\nestimate = namespace['estimate_compound_hill_parameters']\nwith open('public_screen.pkl', 'rb') as stream:\n    data =",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport pickle\nimport runpy\nimport sys\nimport types\nfrom pathlib import Path\nimport numpy as np\n\npath = Path('/holdout_task/assay_ic50.py')\nsource = path.read_bytes()\nmodule = types.ModuleType('assay_ic50')\nmodule.__file__ = str(path)\nexec(compile(source, str(path), 'exec'), module.__dict__)\nsys.modules[module.__name__] = module\nstress = runpy.run_path('/tmp/stress_assay.py')\nscore, simulate = stress['score'], stress['simulate']\nwith open('public_screen.pkl', 'rb') as stream:\n    data = pickle.load(stream)\nplates, truth = data['p",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\nfrom assay_ic50 import _calibrate, _geometry, _gain_basis, estimate_compound_hill_parameters\n\nwith open('public_screen.pkl', 'rb') as f:\n    data = pickle.load(f)\nplates = data['plates']\n\ndef arrays(wells):\n    return _geometry(np.array([w['row'] for w in wells]), np.array([w['col'] for w in wells])), np.array([w['fluorescence'] for w in wells])\n\ndef basis(geo, decay, model):\n    X = _gain_basis(geo, decay)\n    x, y, d = geo\n  "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__assay_diagnostic.py",
+      "primary_producer_container_path": "/tmp/assay_diagnostic.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 3621,
+        "sha256": "3beb965e775da0abf37b80049a263ba5c4b0fd848d6d5beb3a447f6ed6b12994",
+        "content_addressed_ref": "content_addressed_blobs/3beb965e775da0abf37b80049a263ba5c4b0fd848d6d5beb3a447f6ed6b12994.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "features",
+      "fit_gain",
+      "calibrate"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "da1b26b616a920a30792b93c224f02eb1114d2ca1b16ba10d9f0490f5624af63",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\nfrom assay_ic50 import _calibrate, _geometry, _gain_basis, estimate_com",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "da1b26b616a920a30792b93c224f02eb1114d2ca1b16ba10d9f0490f5624af63",
+        "expected_candidate_sha256": "da1b26b616a920a30792b93c224f02eb1114d2ca1b16ba10d9f0490f5624af63",
+        "computed_candidate_sha256": "da1b26b616a920a30792b93c224f02eb1114d2ca1b16ba10d9f0490f5624af63",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 3621
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_da1b26b6"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "features",
+        "code": "def features(r, c, model, decay):\n    (x, y) = ((r - 7.5) / 7.5, (c - 11.5) / 11.5)\n    (dr, dc) = (np.minimum(r, 15 - r), np.minimum(c, 23 - c))\n    (er, ec) = (np.exp(-dr / decay), np.exp(-dc / decay))\n    base = [np.ones_like(x), x, y]\n    if model == 'flat':\n        return np.array(base[:1]).T\n    if model == 'nearest':\n        base += [np.maximum(er, ec)]\n    if model == 'sum':\n        base += [er + ec]\n    if model == 'separate':\n        base += [er, ec]\n    if model == 'corner':\n        base += [er, ec, er * ec]\n    if model == 'cross':\n        base += [np.maximum(er, ec), x * y]\n    return np.array(base).T"
+      },
+      {
+        "name": "fit_gain",
+        "code": "def fit_gain(X, y, scale):\n    from scipy.optimize import least_squares\n    beta = np.linalg.lstsq(X, y, rcond=None)[0]\n    return least_squares(lambda b: X @ b - y, beta, loss='cauchy', f_scale=scale).x"
+      },
+      {
+        "name": "calibrate",
+        "code": "def calibrate(plate, model, decay):\n    w = plate['wells']\n    t = np.array([a['well_type'] for a in w])\n    f = np.array([a['fluorescence'] for a in w])\n    X = features(np.array([a['row'] for a in w]), np.array([a['col'] for a in w]), model, decay)\n    b = np.median(f[t == 'POS_KILL'])\n    idx = np.flatnonzero(t == 'DMSO')\n    scale = 0.015 * np.median(f[idx] - b)\n    g = X @ fit_gain(X[idx], f[idx] - b, scale)\n    loo = []\n    for j in idx:\n        k = idx[idx != j]\n        loo.append((f[j] - b - X[j] @ fit_gain(X[k], f[k] - b, scale)) / np.median(g[idx]))\n    return ([(a['compound_id'], a['log10_conc_uM'], v) for (a, v) in zip(w, (f - b) / g) if a['well_type'] == 'COMPOUND'], loo)"
+      }
+    ]
+  }
+}

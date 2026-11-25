@@ -1,0 +1,139 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_box_l0_selection_13a052216665",
+    "source_hash": "13a05221666558c940013f0cca9d8e3398f5a73f28d4f17f2c599b65cbef4f0b",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf04__certified_box_l0_sensor_selection",
+    "wormhole_family": "fam_unseen_certified_box_l0"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/inspect_l0_blocks.py",
+        "archived_relpath": "producers/tmp__inspect_l0_blocks.py",
+        "bytes": 755,
+        "sha256": "4fd43e89ed962f03f21926ba79eea45d2e7b251930ee788d6728a83b93bcdb5f"
+      },
+      {
+        "container_path": "/tmp/l0_card_probe.py",
+        "archived_relpath": "producers/tmp__l0_card_probe.py",
+        "bytes": 2463,
+        "sha256": "bef84911b2132cc69da071c3f392d3342ba8b0e773487586dd85416b0ae59aaf"
+      },
+      {
+        "container_path": "/tmp/l0_coupling_stress.py",
+        "archived_relpath": "producers/tmp__l0_coupling_stress.py",
+        "bytes": 1629,
+        "sha256": "12da4a9552fc18c562e343d91cdca5899c34d47c78e6dd5cb565727c61a2efd1"
+      },
+      {
+        "container_path": "/tmp/l0_mixed_stress.py",
+        "archived_relpath": "producers/tmp__l0_mixed_stress.py",
+        "bytes": 1007,
+        "sha256": "97e71ac2d978c7caa7451f3acbfeefe7247f4b86555afa39c74a6b18802b20e8"
+      },
+      {
+        "container_path": "/tmp/stress_l0.py",
+        "archived_relpath": "producers/tmp__stress_l0.py",
+        "bytes": 2761,
+        "sha256": "b682f385f16c15d8d3301b184016c6a8d2230a2949fd695afb9574842157d1db"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "set -e; cd /holdout_task; command -v python3; python3 - <<'PY'\nimport pickle, numpy as np, scipy\nprint('NumPy', np.__version__, 'SciPy', scipy.__version__)\nwith open('public_box_l0_instances.pkl','rb') as f:\n    data = pickle.load(f)\ndef inspect(obj, path='public'):\n    if isinstance(obj, dict) and 'X' in obj:\n        X = np.asarray(obj['X']); y = np.asarray(obj['y']); s = np.linalg.svd(X, compute_uv=False)\n        print(path, list(obj), X.shape, 'ridge/box/penalty', [obj.get(k) for k in ('ridge','box','l0_penalty')], 'ynorm', np.linalg.norm(y), 'zeros', np.count_nonzero(X==0), 'singular extre",
+      "set -e\ncd /holdout_task\ncat > certified_l0_solver.py <<'PY'\n\"\"\"Certified branch-and-bound for box-constrained sparse ridge regression.\"\"\"\nimport heapq\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\n_THRESHOLD = 1e-9\n_GAP = 9.8e-6\n\n\nclass _Problem:\n    def __init__(self, X, y, ridge, box, penalty):\n        self.X, self.y = X, y\n        self.box, self.pen, self.ridge = box, penalty, ridge\n        self.t = min(box, _THRESHOLD)\n        self.p = X.shape[1]\n        self.H = X.T @ X + ridge * np.eye(self.p)\n        self.c = X.T @ y\n        self.ldX, self.ldy = X.astype(np.longdouble), y.ast",
+      "set -e; cd /holdout_task; cat > /tmp/stress_l0.py <<'PY'\nimport sys, time, itertools, pickle\nimport numpy as np\nfrom scipy.optimize import lsq_linear\nsys.path.insert(0, '/holdout_task')\nfrom certified_l0_solver import solve_certified_box_l0\n\ndef inst(X,y,r,b,l): return dict(X=X,y=y,ridge=r,box=b,l0_penalty=l)\ndef oracle(a):\n X,y,r,b,l=[a[k] for k in ('X','y','ridge','box','l0_penalty')]; p=X.shape[1]\n A=np.vstack((X,np.sqrt(r)*np.eye(p))); d=np.r_[y,np.zeros(p)]\n lower=upper=np.inf\n for mask in itertools.product((False,True),repeat=p):\n  lim=np.where(mask,b,min(b,1e-9))\n  z=np.clip(lsq_linear(",
+      "set -e; cd /holdout_task; cat >/tmp/inspect_l0_blocks.py <<'PY'\nimport glob,pickle,numpy as np\nfrom scipy.linalg import eigvalsh\nfor f in sorted(glob.glob('/tmp/l0_failed_*.pkl')):\n a=pickle.load(open(f,'rb')); X=a['X']; H=X.T@X+a['ridge']*np.eye(X.shape[1]); s=np.sqrt(H.diagonal()); C=H/s[:,None]/s[None,:]; V=np.abs(C.copy()); np.fill_diagonal(V,0); groups=[]; unused=set(range(len(s)))\n while unused:\n  j,k=np.unravel_index(V.argmax(),V.shape)\n  if V[j,k]<.85: groups.extend([[i] for i in sorted(unused)]); break\n  groups.append([j,k]); unused.difference_update((j,k)); V[[j,k],:]=0;V[:,[j,k]]=0\n",
+      "set -e; cd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('certified_l0_solver.py'); s=p.read_text(); s=s.replace('    def search(self):','    def search(self, tolerance=_GAP, budget=600):'); a=s.index('    def search'); b=s.index('\\ndef solve_certified',a); s=s[:a]+s[a:b].replace('nodes < 600','nodes < budget').replace(' - _GAP',' - tolerance').replace('> 1e-5','> tolerance + 2e-7')+s[b:]; s=s[:s.index('\\ndef solve_certified')]+'''\n\ndef _components(X):\n    \"\"\"Partition columns by exact overlap of nonzero rows.\"\"\"\n    incidence = X != 0\n    remaining = np.ones(X.shape[1], dtype",
+      "set -e; cd /holdout_task\ncat >/tmp/l0_pair_impl <<'PY'\n\nclass _PairedProblem(_Problem):\n    \"\"\"Keep the joint choice and curvature of strongly correlated pairs.\"\"\"\n\n    def setup_pairs(self):\n        norms = np.sqrt(np.diag(self.H))\n        scores = np.abs(self.H / norms[:, None] / norms[None, :])\n        np.fill_diagonal(scores, 0.)\n        pairs = []\n        unused = set(range(self.p))\n        while scores.max() >= .85:\n            j, k = np.unravel_index(scores.argmax(), scores.shape)\n            pairs.append((j, k))\n            unused.difference_update((j, k))\n            scores[[j,k], :] ",
+      "set -e\ncd /holdout_task\ncat >/tmp/l0_coupling_stress.py <<'PY'\nimport concurrent.futures as cf\nimport sys\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom stress_l0 import check, inst, oracle\n\ndef run(task):\n    kind, seed = task\n    rng = np.random.default_rng(seed)\n    p = 6 if kind == 'oracle' else 15\n    n = 24\n    if kind == 'triples':\n        X = np.repeat(rng.normal(size=(n, 5)), 3, axis=1) + .015*rng.normal(size=(n, p))\n        y = X[:, ::3]@rng.uniform(.4, 1.5, 5) + .15*rng.normal(size=n)\n    elif kind == 'common':\n        X = rng.normal(size=(n, 1)) + .015*rng.normal(size=(n, p))\n ",
+      "set -e; cd /holdout_task\ncat >/tmp/l0_triple_impl <<'PY'\n\nclass _TripleProblem(_PairedProblem):\n    \"\"\"Joint disjunctions for complete groups of three interchangeable columns.\"\"\"\n\n    def setup_triples(self):\n        from itertools import product\n        if self.p < 3 or self.box <= self.t:\n            return False\n        norms = np.sqrt(self.H.diagonal())\n        corr = np.abs(self.H / norms[:, None] / norms[None, :])\n        unused = set(range(self.p))\n        groups = []\n        while len(unused) >= 3:\n            j, k, l = max(combinations(sorted(unused), 3),\n                          key",
+      "set -e; cd /holdout_task\ncat >/tmp/l0_card_probe.py <<'PY'\nimport glob, pickle, sys, time\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\nsys.path.insert(0, '/holdout_task')\nfrom certified_l0_solver import _Problem\n\ndef cardinality_probe(a):\n    X,y,r,b,pen = (a[k] for k in ('X','y','ridge','box','l0_penalty'))\n    q = _Problem(X,y,r,b,pen)\n    p = q.p\n    state = np.full(p,-1,dtype=np.int8)\n    lower = []\n    start = np.r_[np.zeros(p),0.]\n    corr = np.argsort(-abs(q.c))\n    for k in range(p+1):\n        initial = np.zeros(p,dtype=bool); initial[corr[:k]]",
+      "set -e; cd /holdout_task\ncat >/tmp/l0_card_impl <<'PY'\n\nclass _CardinalityProblem(_Problem):\n    \"\"\"Branch on activation count, then on indicators within surviving counts.\"\"\"\n\n    def search(self, tolerance=_GAP, budget=600):\n        from scipy.special import expit\n\n        p = self.p\n        root = np.full(p, -1, dtype=np.int8)\n        pq = [(-np.inf, k, k, root.copy(), np.zeros(p+1)) for k in range(p+1)]\n        serial, nodes, closed = p, 0, np.inf\n        order = np.argsort(-abs(self.c))\n        for k in range(p+1):\n            mask = np.zeros(p, dtype=bool)\n            mask[order[:k]] = Tr",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\nsha256sum certified_l0_solver.py\ncat >/tmp/l0_mixed_stress.py <<'PY'\nfrom concurrent.futures import ProcessPoolExecutor\nimport pickle\nimport numpy as np\nfrom stress_l0 import check, inst, oracle\n\ndef run(seed):\n    rng = np.random.default_rng(seed)\n    sizes = (3, 2, 1) if seed < 830 else (3, 3, 2, 2, 2, 1, 1, 1)\n    n = 26\n    group = rng.normal(size=(n, len(sizes))) + .28*rng.normal(size=(n,1))\n    signs = rng.choice([-1,1], size=sum(sizes))\n    X = (np.repeat(group, sizes, axis=1) + .025*rng.no",
+      "set -e; cd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('certified_l0_solver.py'); s=p.read_text(); i=s.index('class _TripleProblem'); j=s.index('class _CardinalityProblem',i); t=s[i:j]; t=t.replace('        if not groups:\\n            return False\\n        B =', '''        if not groups:\n            return False\n        while len(unused) >= 2:\n            j,k = max(combinations(sorted(unused),2), key=lambda q: corr[q])\n            if corr[j,k] < .85:\n                break\n            groups.append((j,k))\n            unused.difference_update((j,k))\n        B ='''); t=t.replac",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('certified_l0_solver.py')\ns = p.read_text()\nold = '        v = np.clip(v, -self.limits, self.limits)'\nnew = '        v = np.clip(v, -self.limits[:, None, :, :], self.limits[:, None, :, :])'\nassert s.count(old) == 1\np.write_text(s.replace(old, new))\nPY\nf=certified_l0_solver.py; cp \"$f\" \"/tmp/.hegel_candidate_archive/v08_$(sha256sum \"$f\" | cut -c1-8)\"\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\ntimeout 125s python3 -u /tmp/l0_mixed_stress.py",
+      "set -eu\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\ncmp certified_l0_solver.py /tmp/.hegel_candidate_archive/v08_13a05221\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/certified_l0_solver.py'\nspec = importlib.util.spec_from_file_location('certified_l0_solver', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_box_l0_instances.pkl', 'rb') as f:\n    instances = pickle.load(f)\nfor i, a in enumerate(instances):\n    out = module.solve_c",
+      "set -eu\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\nprintf '%s  %s\\n' '13a05221666558c940013f0cca9d8e3398f5a73f28d4f17f2c599b65cbef4f0b' certified_l0_solver.py | sha256sum -c -\npython3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/certified_l0_solver.py'\nspec = importlib.util.spec_from_file_location('certified_l0_solver', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_box_l0_instances.pkl', 'rb') as f:\n    instances = pickle.load(f)\nfor i, a in enumerate(inst",
+      "set -eu\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/certified_l0_solver.py'\nspec = importlib.util.spec_from_file_location('certified_l0_solver', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_box_l0_instances.pkl', 'rb') as f:\n    instances = pickle.load(f)\nfor i, a in enumerate(instances):\n    out = module.solve_certified_box_l0(a)\n    assert set(out) == {'weights', 'objective', 'certified_lower_bound', '"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_l0.py",
+      "primary_producer_container_path": "/tmp/stress_l0.py",
+      "selected_channels": [
+        "fam_unseen_certified_box_l0"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_l0_solver.py",
+        "filename": "certified_l0_solver.py",
+        "bytes": 30685,
+        "sha256": "23e9acbe341c91bd0d84c19e1b12eac9214adc771e5a049114f151a80a70bb25",
+        "content_addressed_ref": "content_addressed_blobs/23e9acbe341c91bd0d84c19e1b12eac9214adc771e5a049114f151a80a70bb25.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_l0_solver.py"
+    ],
+    "exported_pure_functions": [
+      "inst",
+      "oracle"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_certified_box_l0",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "13a05221666558c940013f0cca9d8e3398f5a73f28d4f17f2c599b65cbef4f0b",
+      "verified_post_package": true,
+      "verified_turn": 17,
+      "verification_command": "set -eu\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/certified_l0_solver.py'\nspec = importlib.util.spec_from_file_locati",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "13a05221666558c940013f0cca9d8e3398f5a73f28d4f17f2c599b65cbef4f0b",
+        "expected_candidate_sha256": "13a05221666558c940013f0cca9d8e3398f5a73f28d4f17f2c599b65cbef4f0b",
+        "computed_candidate_sha256": "13a05221666558c940013f0cca9d8e3398f5a73f28d4f17f2c599b65cbef4f0b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/certified_l0_solver.py",
+            "bytes": 30685
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v08_13a05221"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "inst",
+        "code": "def inst(X, y, r, b, l):\n    return dict(X=X, y=y, ridge=r, box=b, l0_penalty=l)"
+      },
+      {
+        "name": "oracle",
+        "code": "def oracle(a):\n    import itertools\n    from scipy.optimize import lsq_linear\n    (X, y, r, b, l) = [a[k] for k in ('X', 'y', 'ridge', 'box', 'l0_penalty')]\n    p = X.shape[1]\n    A = np.vstack((X, np.sqrt(r) * np.eye(p)))\n    d = np.r_[y, np.zeros(p)]\n    lower = upper = np.inf\n    for mask in itertools.product((False, True), repeat=p):\n        lim = np.where(mask, b, min(b, 1e-09))\n        z = np.clip(lsq_linear(A, d, bounds=(-lim, lim), tol=1e-13).x, -lim, lim)\n        res = A @ z - d\n        g = A.T @ res\n        loss = 0.5 * (res @ res)\n        lower = min(lower, loss - g @ z - abs(g) @ lim + l * sum(mask))\n        upper = min(upper, loss + l * np.count_nonzero(abs(z) > 1e-09))\n    return (lower, upper)"
+      }
+    ]
+  }
+}

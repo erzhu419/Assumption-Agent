@@ -1,0 +1,167 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_ert_electrode_contact_tomography_1de20404c5ce",
+    "source_hash": "1de20404c5ce7a88e08a29e2ec402b0da5422d7c98e8006f2231718c5879a2f8",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf01__electrical_resistivity_electrode_contact_tomography",
+    "wormhole_family": "fam_unseen_geoelectrical_tomography"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/ert_compare.py",
+        "archived_relpath": "producers/tmp__ert_compare.py",
+        "bytes": 2807,
+        "sha256": "2567bad3038ab3e6a1860a74375d2b35a975d496cdac0a356397e18f140b1b2f"
+      },
+      {
+        "container_path": "/tmp/ert_compare_coherent.py",
+        "archived_relpath": "producers/tmp__ert_compare_coherent.py",
+        "bytes": 2877,
+        "sha256": "68ba9fb7e28eddf017e9cc614c9c579878e61c82a1a7a01260b9ef0222381d5b"
+      },
+      {
+        "container_path": "/tmp/ert_compare_pooled.py",
+        "archived_relpath": "producers/tmp__ert_compare_pooled.py",
+        "bytes": 2803,
+        "sha256": "67765cb2fced2f3bf105bef7cb772ffd856a694419219da02a45ca884015683c"
+      },
+      {
+        "container_path": "/tmp/ert_oracle.py",
+        "archived_relpath": "producers/tmp__ert_oracle.py",
+        "bytes": 2870,
+        "sha256": "a0815947784a68eef75ef1d15554025f4f7b890ddec14ef28a1ccdcd50ef465b"
+      },
+      {
+        "container_path": "/tmp/ert_stress.py",
+        "archived_relpath": "producers/tmp__ert_stress.py",
+        "bytes": 2526,
+        "sha256": "8979939c05e5235da7e14742b131ebc6242c0c9bb0012fd7ac8707f5fc5c1473"
+      },
+      {
+        "container_path": "/tmp/ert_challenger/ert_solver.py",
+        "archived_relpath": "producers/tmp__ert_challenger__ert_solver.py",
+        "bytes": 3667,
+        "sha256": "b4ceeb550d5f966ea5086a2b5299e86340f2d7bad06eae60eea1a6cc9949ce8b"
+      },
+      {
+        "container_path": "/tmp/ert_coherent_avg/ert_solver.py",
+        "archived_relpath": "producers/tmp__ert_coherent_avg__ert_solver.py",
+        "bytes": 5042,
+        "sha256": "ae216797fb444bf9852f695da799d9e5973a9dfd2d2f3fd329d58a0682946b82"
+      },
+      {
+        "container_path": "/tmp/ert_pooled/ert_solver.py",
+        "archived_relpath": "producers/tmp__ert_pooled__ert_solver.py",
+        "bytes": 5136,
+        "sha256": "8c2ec85a2fb0fc2c9d956b2e26325d4b8334ce429ac694bcf6fcfd9d24261071"
+      },
+      {
+        "container_path": "/tmp/ert_likelihood/ert_solver.py",
+        "archived_relpath": "producers/tmp__ert_likelihood__ert_solver.py",
+        "bytes": 4792,
+        "sha256": "b247357bd0c39f66f12b0ffa23b685424d3f6037a2e57f1572c5acedcc145082"
+      },
+      {
+        "container_path": "/tmp/ert_clean_avg/ert_solver.py",
+        "archived_relpath": "producers/tmp__ert_clean_avg__ert_solver.py",
+        "bytes": 4198,
+        "sha256": "de919504241c9f94c1dd8d212ec068e17b8e1c024ffb3ecbb5e586dee2cfa090"
+      },
+      {
+        "container_path": "/tmp/ert_coherent/ert_solver.py",
+        "archived_relpath": "producers/tmp__ert_coherent__ert_solver.py",
+        "bytes": 3917,
+        "sha256": "1a20d5abbfa0ab8241e13bfafc46e075d02fda7bc8e0aa4eced4efbd8ea01186"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_ert_surveys.pkl','rb') as f: data=pickle.load(f)\ndef show(d, depth=0):\n p='  '*depth\n if isinstance(d,dict):\n  for k,v in d.items():\n   print(p,k,end=': ')\n   if isinstance(v,dict): print(); show(v,depth+1)\n   else:\n    a=np.asarray(v); print(type(v).__name__,a.shape,a.dtype, a if a.size<=30 else (np.min(a),np.max(a)) if a.dtype.kind in 'fiu' else '')\n else: print(type(d),repr(d)[:300])\nprint(type(data),len(data))\nif isinstance(data,dict): show(data)\nelse:\n for d in data: show(d); print()\nPY",
+      "set -e\ncommand -v python3\npython3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nprint('NumPy', np.__version__, 'SciPy', scipy.__version__)\nwith open('/holdout_task/public_ert_surveys.pkl','rb') as f:\n    data = pickle.load(f)\ndef show(obj, path='public'):\n    if isinstance(obj, dict):\n        print(path, 'keys:', list(obj))\n        for k,v in obj.items():\n            show(v, f'{path}.{k}')\n    elif isinstance(obj, (list,tuple)) and any(isinstance(v, dict) for v in obj):\n        for i,v in enumerate(obj):\n            show(v, f'{path}[{i}]')\n    else:\n        a = np.asarray(obj)\n       ",
+      "set -e\nmkdir -p /tmp/.hegel_candidate_archive\ncat > /holdout_task/ert_solver.py <<'PY'\n\"\"\"Invert a borehole voltage survey with additive electrode contacts.\"\"\"\nimport numpy as np\nfrom scipy.linalg import helmert, qr, solve_triangular\nfrom scipy.optimize import least_squares\n\n\ndef invert_ert_anomaly(survey: dict) -> dict:\n    \"\"\"Return the anomaly coordinates and zero-sum receiver voltages.\"\"\"\n    L, D = float(survey['L_m']), float(survey['D_m'])\n    a = float(survey.get('a0_m', 6.0))\n    tx = np.asarray(survey['z_tx_m'], dtype=float)\n    rx = np.asarray(survey['z_rx_m'], dtype=float)\n    y = n",
+      "set -e\ncat >/tmp/ert_stress.py <<'PY'\nimport pickle, time\nimport numpy as np\nfrom scipy.linalg import helmert\nfrom ert_solver import invert_ert_anomaly\n\nitems=pickle.load(open('/holdout_task/public_ert_surveys.pkl','rb'))\nrng=np.random.default_rng(927)\ndef assess(s,p,r):\n    t=time.monotonic(); a=invert_ert_anomaly(s)\n    return [np.linalg.norm(a['anomaly_xz_m']-p), np.sqrt(np.mean((a['rx_contact_offset_v']-r)**2)), time.monotonic()-t]\nfor k,d in enumerate(items):\n    s,g=d['survey'],d['gt']; L,D,a=s['L_m'],s['D_m'],s['a0_m']\n    tt,rr=s['z_tx_m'],s['z_rx_m']; y=s['V_obs']; m,n=y.shape\n    p=n",
+      "set -e\nsed -i \"s/a\\['anomaly_xz_m'\\]-p/np.asarray(a['anomaly_xz_m'])-p/\" /tmp/ert_stress.py\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task python3 /tmp/ert_stress.py\nPYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle, time\nfrom ert_solver import invert_ert_anomaly\nfor i, item in enumerate(pickle.load(open('/holdout_task/public_ert_surveys.pkl','rb'))):\n    t=time.monotonic(); invert_ert_anomaly(item['survey']); print('public',i,'default-thread runtime',time.monotonic()-t)\nPY",
+      "set -e\nmkdir -p /tmp/ert_challenger\npython3 - <<'PY'\nfrom pathlib import Path\nsrc=Path('/holdout_task/ert_solver.py').read_text()\nneedle='    offsets = Hr @ coeff[2 + m - 1:]'\nassert src.count(needle)==1\nsrc=src.replace(needle,'''    # Recover channels when the rejected residuals match the specified\n    # signed 60 mV jump at the observed clean-channel noise scale.\n    if np.any(~mask):\n        clean_residual = residual[mask]\n        sigma = 1.4826 * np.median(np.abs(clean_residual - np.median(clean_residual)))\n        jump = .06 * np.sign(residual)\n        mismatch = np.abs(residual - jump)\n ",
+      "set -e\nmkdir -p /tmp/ert_likelihood\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/ert_challenger/ert_solver.py').read_text()\ns=s.replace('            p, coeff, residual = fit(mask | recovered)', '            mask = mask | recovered\\n            p, coeff, residual = fit(mask)')\npos='    offsets = Hr @ coeff[2 + m - 1:]'\ns=s.replace(pos,'''    # Average over the local position likelihood only away from the walls,\n    # where truncating the likelihood would bias the estimate inward.\n    if 4 < p[0] < L-4 and 4 < p[1] < D-4:\n        Q, T = qr(background[mask], mode='economic')\n        yy ",
+      "set -e\ncat >/tmp/ert_compare.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.linalg import helmert\n\ndef load(path):\n    spec=importlib.util.spec_from_file_location('candidate',path+'/ert_solver.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n    return mod.invert_ert_anomaly\n\nnames=['reject','recover','average']\nfit=[load(p) for p in ['/holdout_task','/tmp/ert_challenger','/tmp/ert_likelihood']]\nitems=pickle.load(open('/holdout_task/public_ert_surveys.pkl','rb'))\nrng=np.random.default_rng(380491)\nrows={key:[] for key in ('middle','interior','",
+      "set -e\nmkdir -p /tmp/ert_coherent /tmp/ert_coherent_avg\npython3 - <<'PY'\nfrom pathlib import Path\nfor src, dst in [('challenger','coherent'), ('likelihood','coherent_avg')]:\n    text=Path(f'/tmp/ert_{src}/ert_solver.py').read_text()\n    text=text.replace('        recovered = (~mask) & (mismatch < 3.5 * max(sigma, 1e-5))', '''        # Test for a common fixed jump before treating individual channels\n        # as clean; selection by residual alone can admit variable jumps.\n        scale = max(sigma, 1e-5)\n        spread = np.sqrt(np.mean(mismatch[~mask]**2))\n        recovered = (~mask) & (mismat",
+      "set -e\nmkdir -p /tmp/ert_clean_avg /tmp/ert_pooled\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/ert_coherent_avg/ert_solver.py').read_text()\na=s.index('    # Recover channels'); b=s.index('    # Average over',a)\nPath('/tmp/ert_clean_avg/ert_solver.py').write_text(s[:a]+s[b:])\ns=s[:a]+'''    # If the whole spike population is consistent with signed 60 mV\n    # jumps, reuse those channels at reduced precision. This allows some\n    # uncertainty in the jump size without treating it as clean noise.\n    weights = np.ones(y.size)\n    if np.any(~mask):\n        sigma = np.sqrt((residual[mask",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/ert_compare.py').read_text()\ns=s.replace(\"names=['reject','recover','average']\", \"names=['reject','oracle']\")\ns=s.replace(\"fit=[load(p) for p in ['/holdout_task','/tmp/ert_challenger','/tmp/ert_likelihood']]\", \"fit=load('/holdout_task')\")\ns=s.replace('            ix=rng.choice(y.size,10,replace=False);', '            clean=y.copy(); ix=rng.choice(y.size,10,replace=False);')\ns=s.replace(\"            for fn in fit:\\n                ans=fn(s0);\", \"            for survey in (s0, dict(s0,V_obs=clean)):\\n                ans=fit(survey);\")",
+      "set -e\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/holdout_task python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import helmert, qr\nfrom scipy.special import ndtr\nfrom ert_solver import invert_ert_anomaly\nfor i, item in enumerate(pickle.load(open('/holdout_task/public_ert_surveys.pkl','rb'))):\n    s, gt = item['survey'], item['gt']\n    L, D, a = s['L_m'], s['D_m'], s['a0_m']\n    t, r = s['z_tx_m'][:,None], s['z_rx_m'][None,:]\n    m, n = s['V_obs'].shape\n    dz = r-t\n    R = np.hypot(L,dz)\n    B = np.column_stack(((1/R).ravel(), (dz**2/R**3).ravel(), np.repea",
+      "set -e\ncd /holdout_task\nPYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nfrom time import monotonic\nimport numpy as np\nfrom ert_solver import invert_ert_anomaly\n\ndef run(s):\n    start = monotonic()\n    ans = invert_ert_anomaly(s)\n    elapsed = monotonic() - start\n    assert set(ans) == {'anomaly_xz_m', 'rx_contact_offset_v'}\n    p, r = ans['anomaly_xz_m'], ans['rx_contact_offset_v']\n    assert isinstance(p, list) and isinstance(r, list)\n    assert len(p) == 2 and len(r) == len(s['z_rx_m'])\n    assert all(type(x) is float and np.isfinite(x) for x in p+r)\n    assert 0 <= p[0] <= s['L_m']"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__ert_pooled__ert_solver.py",
+      "primary_producer_container_path": "/tmp/ert_pooled/ert_solver.py",
+      "selected_channels": [
+        "fam_unseen_geoelectrical_tomography"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/ert_solver.py",
+        "filename": "ert_solver.py",
+        "bytes": 3097,
+        "sha256": "2465f346e002fae1dbeab8f0ddd975e1de6a54d8e2fe265ff9b38605d216d33d",
+        "content_addressed_ref": "content_addressed_blobs/2465f346e002fae1dbeab8f0ddd975e1de6a54d8e2fe265ff9b38605d216d33d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/ert_solver.py"
+    ],
+    "exported_pure_functions": [
+      "invert_ert_anomaly"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_geoelectrical_tomography",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "1de20404c5ce7a88e08a29e2ec402b0da5422d7c98e8006f2231718c5879a2f8",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\ncd /holdout_task\nPYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nfrom time import monotonic\nimport numpy as np\nfrom ert_solver import invert_ert_anomaly\n\ndef run(s):\n    start = monotonic()\n    ans = invert_ert_anomaly(s)\n  ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1de20404c5ce7a88e08a29e2ec402b0da5422d7c98e8006f2231718c5879a2f8",
+        "expected_candidate_sha256": "1de20404c5ce7a88e08a29e2ec402b0da5422d7c98e8006f2231718c5879a2f8",
+        "computed_candidate_sha256": "1de20404c5ce7a88e08a29e2ec402b0da5422d7c98e8006f2231718c5879a2f8",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/ert_solver.py",
+            "bytes": 3097
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1de20404"
+    }
+  },
+  "structure": {
+    "full_producer_count": 11,
+    "reusable_ast_function_closures": [
+      {
+        "name": "invert_ert_anomaly",
+        "code": "def invert_ert_anomaly(survey: dict) -> dict:\n    \"\"\"Return the anomaly coordinates and zero-sum receiver voltages.\"\"\"\n    from scipy.linalg import helmert\n    from scipy.optimize import least_squares\n    from scipy.linalg import qr\n    from scipy.linalg import solve_triangular\n    (L, D) = (float(survey['L_m']), float(survey['D_m']))\n    a = float(survey.get('a0_m', 6.0))\n    tx = np.asarray(survey['z_tx_m'], dtype=float)\n    rx = np.asarray(survey['z_rx_m'], dtype=float)\n    y = np.asarray(survey['V_obs'], dtype=float).ravel()\n    (m, n) = (len(tx), len(rx))\n    dz = rx[None, :] - tx[:, None]\n    R = np.hypot(L, dz)\n    (Ht, Hr) = (helmert(m).T, helmert(n).T)\n    background = np.column_stack(((L / R).ravel(), (L * dz ** 2 / R ** 3).ravel(), np.repeat(Ht, n, axis=0), np.tile(Hr, (m, 1))))\n    (ii, jj) = (np.repeat(tx, n), np.tile(rx, m))\n\n    def kernel(p, i, j):\n        (x, z) = p\n        return L ** 2 / np.sqrt((x * x + (z - i) ** 2 + a * a) * ((L - x) ** 2 + (z - j) ** 2 + a * a))\n    (gx, gz) = np.meshgrid(np.linspace(0, L, 23), np.linspace(0, D, 43))\n    grid = np.array([gx.ravel(), gz.ravel()])\n    K = kernel(grid[:, None, :], ii[:, None], jj[:, None])\n\n    def fit(mask):\n        (Q, T) = qr(background[mask], mode='economic')\n        yw = y[mask]\n        yp = yw - Q @ (Q.T @ yw)\n        kw = K[mask]\n        kp = kw - Q @ (Q.T @ kw)\n        num = np.maximum(yp @ kp, 0.0)\n        denom = np.einsum('ij,ij->j', kp, kp)\n        score = num / np.sqrt(np.maximum(denom, 1e-30))\n        (i, j) = (ii[mask], jj[mask])\n\n        def profile(p):\n            k = kernel(p, i, j)\n            proj = k - Q @ (Q.T @ k)\n            amp = max(0.0, proj @ yp / max(proj @ proj, 1e-30))\n            return (amp * proj - yp, amp, k)\n\n        def objective(p):\n            return profile(p)[0]\n        starts = []\n        for idx in np.argsort(score)[::-1]:\n            p = grid[:, idx]\n            if all((np.linalg.norm((p - q) / (L, D)) >= 0.12 for q in starts)):\n                starts.append(p)\n                if len(starts) == 4:\n                    break\n        results = [least_squares(objective, p, bounds=([0.0, 0.0], [L, D]), x_scale=[L, D], max_nfev=50, ftol=1e-10, gtol=1e-10) for p in starts]\n        best = min(results, key=lambda s: s.cost)\n        (_, amp, k) = profile(best.x)\n        coeff = solve_triangular(T, Q.T @ (yw - amp * k))\n        residual = y - background @ coeff - amp * kernel(best.x, ii, jj)\n        return (best.x, coeff, residual)\n    mask = np.ones(y.size, dtype=bool)\n    (p, coeff, residual) = fit(mask)\n    for _ in range(4):\n        clean = np.abs(residual) < 0.03\n        if np.array_equal(clean, mask):\n            break\n        mask = clean\n        (p, coeff, residual) = fit(mask)\n    if np.any(~mask):\n        clean_residual = residual[mask]\n        sigma = 1.4826 * np.median(np.abs(clean_residual - np.median(clean_residual)))\n        jump = 0.06 * np.sign(residual)\n        mismatch = np.abs(residual - jump)\n        recovered = ~mask & (mismatch < 3.5 * max(sigma, 1e-05))\n        if np.any(recovered):\n            y = y - np.where(recovered, jump, 0.0)\n            (p, coeff, residual) = fit(mask | recovered)\n    offsets = Hr @ coeff[2 + m - 1:]\n    return {'anomaly_xz_m': p.tolist(), 'rx_contact_offset_v': offsets.tolist()}"
+      }
+    ]
+  }
+}

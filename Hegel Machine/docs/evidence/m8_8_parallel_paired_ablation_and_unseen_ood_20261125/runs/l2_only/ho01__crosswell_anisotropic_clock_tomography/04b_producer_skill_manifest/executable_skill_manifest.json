@@ -1,0 +1,177 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_eba157d15a53",
+    "source_hash": "eba157d15a5369c1ffd199cc19106f7e4d51c85fa5029e1baa292a91e226998e",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/burst_tomo.py",
+        "archived_relpath": "producers/tmp__burst_tomo.py",
+        "bytes": 1177,
+        "sha256": "787c5725069f5682bf4b0b9c9e3b0fcdc02af50f5e14a4b42b5003ae90323b79"
+      },
+      {
+        "container_path": "/tmp/diagnose_tomo.py",
+        "archived_relpath": "producers/tmp__diagnose_tomo.py",
+        "bytes": 3595,
+        "sha256": "bc880d03f73c0446149be953d0f0802c0a2af9ce313786da575a98ab5439c72f"
+      },
+      {
+        "container_path": "/tmp/public_tomo.py",
+        "archived_relpath": "producers/tmp__public_tomo.py",
+        "bytes": 678,
+        "sha256": "f635576f8aa37c7ad5a99418fa8d12c69a8dbf9097e97d73582fda3a4a012fff"
+      },
+      {
+        "container_path": "/tmp/stress_tomo.py",
+        "archived_relpath": "producers/tmp__stress_tomo.py",
+        "bytes": 3827,
+        "sha256": "10da3937af840a39102f43bc5c095a485a1d61db12bf79746d1109d813c5824f"
+      },
+      {
+        "container_path": "/tmp/tomo_baseline.py",
+        "archived_relpath": "producers/tmp__tomo_baseline.py",
+        "bytes": 4586,
+        "sha256": "4cf6c760f65472c075e9a7b41abad0150696dfab7c48b8454dc045df81be9d9e"
+      },
+      {
+        "container_path": "/tmp/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomography_solver.py",
+        "bytes": 6179,
+        "sha256": "1f159721a8831c776c8d636b131ea08949916abb959e02da28f289b4bf30db9c"
+      },
+      {
+        "container_path": "/tmp/tomo_band/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_band__tomography_solver.py",
+        "bytes": 8124,
+        "sha256": "f1107d9e143fb952e4e0d661f1615a76a6404dc789af8bda6ffbc7383b2a78a1"
+      },
+      {
+        "container_path": "/tmp/tomo_burst/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_burst__tomography_solver.py",
+        "bytes": 8185,
+        "sha256": "9a08c3b83d7a5f7bb49a9e8011c8a292a04d652cc0305d01b5f02787be6b4330"
+      },
+      {
+        "container_path": "/tmp/tomo_profile/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_profile__tomography_solver.py",
+        "bytes": 9276,
+        "sha256": "9f7e335494a60bd00895e2c3964b9fc927bf837349a2dac1dfd57ab2081547e7"
+      },
+      {
+        "container_path": "/tmp/tomo_contrast/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_contrast__tomography_solver.py",
+        "bytes": 9596,
+        "sha256": "93f2d1b47ab3cb96aa3318d7e91d17d32335c4dc80c48bc229aa9b595bbcddc8"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_surveys.pkl','rb') as f: x=pickle.load(f)\ndef show(x,d=0):\n p='  '*d\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(p,repr(k)); show(v,d+1)\n elif isinstance(x,(tuple,list)) and len(x) and isinstance(x[0],(tuple,list,dict,np.ndarray)):\n  print(p,type(x).__name__,len(x));\n  for a in x[:5]: show(a,d+1)\n elif isinstance(x,np.ndarray): print(p,x.shape,x.dtype,'range', (np.nanmin(x),np.nanmax(x)) if x.size and np.issubdtype(x.dtype,np.number) else None,'head',x.ravel()[:6])\n else: print(p,repr(x)[:500])\nshow(x)\nPY",
+      "command -v python3; ls -la /holdout_task; python3 - <<'PY'\nimport pickle, numpy as np, scipy\nprint('numpy', np.__version__, 'scipy', scipy.__version__)\nwith open('/holdout_task/public_surveys.pkl','rb') as f:\n    obj = pickle.load(f)\ndef show(x, depth=0):\n    p = '  ' * depth\n    if isinstance(x, dict):\n        for k, v in x.items():\n            print(p + str(k) + ':'); show(v, depth+1)\n    elif isinstance(x, (list, tuple)) and (not x or isinstance(x[0], (dict, list, tuple, np.ndarray))):\n        print(p, type(x).__name__, len(x))\n        for v in x[:5]: show(v, depth+1)\n    else:\n        a = ",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Straight-ray inversion of cross-well first arrivals.\"\"\"\nimport numpy as np\nfrom scipy.linalg import helmert, qr\nfrom scipy.optimize import brentq, least_squares\nfrom scipy.special import ndtr\n\n\nclass _Rays:\n    def __init__(self, width, source, receiver, radius):\n        dz = receiver[None, :] - source[:, None]\n        length = np.hypot(width, dz)\n        self.ux = (width / length).ravel()\n        self.uz = (dz / length).ravel()\n        self.source = np.broadcast_to(source[:, None], dz.shape).ravel()\n        self.length = length.ravel()\n      ",
+      "cat > /tmp/stress_tomo.py <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom numpy.polynomial.legendre import leggauss\nfrom tomography_solver import _fit, invert_plume_and_clocks\n\nsamples = pickle.load(open('/holdout_task/public_surveys.pkl', 'rb'))\n\ndef errors(xz, clocks, gt_xz, gt_clocks):\n    return np.linalg.norm(np.subtract(xz, gt_xz)), np.sqrt(np.mean(np.subtract(clocks, gt_clocks)**2))\n\nfor i, item in enumerate(samples):\n    survey, gt = item['survey'], item['gt']\n    t, clean_predictions = np.asarray(survey['T_obs_s']), []\n    worst = [[], []]\n    for j in range(t.shape[0]):\n    ",
+      "cp /tmp/stress_tomo.py /tmp/diagnose_tomo.py\npython3 - <<'PY'\np='/tmp/diagnose_tomo.py'\ns=open(p).read(); i=s.index('for i, item in enumerate(samples):'); j=s.index('rng =',i); s=s[:i]+s[j:]; s=s.replace('start = time.monotonic(); result', '''if regime in ('near-well', 'end-depth', 'weak'):\n            rays, p, residual = _fit(survey)\n            good = abs(residual) < 2\n            a = rays.design[good]\n            g, gx, gz = [v[good] for v in rays.plume(*p[:2], derivative=True)]\n            X = np.column_stack((p[2]*gx,p[2]*gz,g,a))\n            sigma = np.linalg.norm(residual[good])/np.sqrt",
+      "cp /holdout_task/tomography_solver.py /tmp/tomo_baseline.py\npython3 - <<'PY'\np='/tmp/tomo_baseline.py'\ns=open(p).read().replace('from scipy.optimize import brentq, least_squares','from scipy.optimize import brentq, least_squares, minimize, LinearConstraint, Bounds')\ns=s.replace('    p = min(candidates, key=lambda item: item[0])[1]\\n    return rays, p, y - prediction(p)', '''    p = min(candidates, key=lambda item: item[0])[1]\n    e = y - prediction(p)\n    clean = abs(e) < 2.\n    col = np.column_stack((np.zeros((rcv.size, 5)), rays.clocks))\n    constraint = LinearConstraint(col, -4., 4.)\n\n    d",
+      "set -e\ncp /tmp/tomography_solver.py /holdout_task/tomography_solver.py\nmkdir -p /tmp/tomo_clean_verify\ncd /tmp/tomo_clean_verify\nenv -u PYTHONPATH python3 -I - <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\npath = '/holdout_task/tomography_solver.py'\nspec = importlib.util.spec_from_file_location('tomography_solver', path)\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('/holdout_task/public_surveys.pkl', 'rb') as file:\n    samples = pickle.load(file)\nfor index, item in enumerate(samples):\n    survey, truth = item['survey'], item['gt']\n   ",
+      "cd /tmp && env -u PYTHONPATH python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom numpy.polynomial.legendre import leggauss\nfrom scipy.optimize import least_squares\nspec = importlib.util.spec_from_file_location('tomo_audit', '/holdout_task/tomography_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    samples = pickle.load(f)\nu, weights = leggauss(64)\nu = (1+u)/2\nfor i, item in enumerate(samples):\n    s = item['survey']\n    src, rcv = s['z_src_m'], s['z_rcv_m']\n    w, h, radius =",
+      "cd /tmp && env -u PYTHONPATH OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('tomo', '/holdout_task/tomography_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    items = pickle.load(f)\nfor k, item in enumerate(items):\n    s, gt = item['survey'], item['gt']\n    obs = np.asarray(s['T_obs_s'])\n    _, _, e = m._fit(s)\n    e = e.reshape(obs.shape)\n    bad = abs(e) > 2\n    base = obs.copy()\n    base[bad] -= np.median(abs",
+      "mkdir -p /tmp/tomo_burst\npython3 - <<'PY'\ns=open('/holdout_task/tomography_solver.py').read().replace('def _fit(survey):','def _fit_once(survey):')\npos=s.index('\\ndef invert_plume_and_clocks')\ns=s[:pos]+'''\ndef _fit(survey):\n    rays, p, residual = _fit_once(survey)\n    times = np.asarray(survey['T_obs_s'], dtype=float)\n    e = residual.reshape(times.shape)\n    best = (rays, p, residual)\n    best_cost = np.inf\n    for j in range(e.shape[1]):\n        order = np.argsort(e[:, j])\n        values = e[order, j]\n        split = np.argmax(np.diff(values)) + 1\n        low, high = values[:split], values",
+      "mkdir -p /tmp/tomo_band\npython3 - <<'PY'\ns=open('/holdout_task/tomography_solver.py').read().replace('def _fit(survey):','def _fit_once(survey):')\npos=s.index('\\ndef invert_plume_and_clocks')\ns=s[:pos]+'''\ndef _fit(survey):\n    best = _fit_once(survey)\n    times = np.asarray(survey['T_obs_s'], dtype=float)\n    rays, p, residual = best\n    # Remove only the smooth background before looking for two timing bands.\n    # An additive clock translates both bands and cannot change their separation.\n    background = rays.design[:, :2] @ p[3:5]\n    bands = times * 1000 - background.reshape(times.shape)\n",
+      "mkdir -p /tmp/tomo_profile\npython3 - <<'PY'\ns=open('/holdout_task/tomography_solver.py').read().replace('def _fit(survey):','def _fit_once(survey):')\npos=s.index('\\ndef invert_plume_and_clocks')\ns=s[:pos]+'''\ndef _fit(survey):\n    best = _fit_once(survey)\n    rays, p, residual = best\n    times = np.asarray(survey['T_obs_s'], dtype=float)\n    nr, nc = times.shape\n    y = (1000. * times).ravel()\n    a = rays.design\n    def prediction(b):\n        return a @ b[3:] + b[2] * rays.plume(*b[:2])\n    # Screen for a second populated timing band without using the fitted\n    # receiver offset. Confirm it ",
+      "set -e\nmkdir -p /tmp/tomo_contrast\npython3 - <<'PY'\ns=open('/tmp/tomo_profile/tomography_solver.py').read()\na=s.index('    # Screen for a second populated')\nb=s.index('    def split(column, gap):',a)\ns=s[:a]+'''    # Adjacent source differences cancel clocks. Robustly fitting the two\n    # background columns here also avoids letting a majority skip band set\n    # the clock or warp the background used to detect that band.\n    dy = np.diff(1000. * times, axis=0).ravel()\n    da = np.diff(a[:, :2].reshape(nr, nc, 2), axis=0).reshape(-1, 2)\n    coef = p[3:5]\n    for _ in range(8):\n        weight = ",
+      "set -e\ninstall -m 644 /tmp/tomo_contrast/tomography_solver.py /holdout_task/tomography_solver.py\ncd /tmp\nenv -u PYTHONPATH python3 -I - <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\nspec = importlib.util.spec_from_file_location('tomography_solver', '/holdout_task/tomography_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    items = pickle.load(f)\nfor i, item in enumerate(items):\n    s, gt = item['survey'], item['gt']\n    raw = np.asarray(s['T_obs_s'])\n    _, _, residual = m._fit(s)\n    s"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tomo_contrast__tomography_solver.py",
+      "primary_producer_container_path": "/tmp/tomo_contrast/tomography_solver.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 9596,
+        "sha256": "93f2d1b47ab3cb96aa3318d7e91d17d32335c4dc80c48bc229aa9b595bbcddc8",
+        "content_addressed_ref": "content_addressed_blobs/93f2d1b47ab3cb96aa3318d7e91d17d32335c4dc80c48bc229aa9b595bbcddc8.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": [
+      "errors",
+      "_linear",
+      "_band_cost",
+      "_cycle_cost"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "eba157d15a5369c1ffd199cc19106f7e4d51c85fa5029e1baa292a91e226998e",
+      "verified_post_package": true,
+      "verified_turn": 16,
+      "verification_command": "set -e\ninstall -m 644 /tmp/tomo_contrast/tomography_solver.py /holdout_task/tomography_solver.py\ncd /tmp\nenv -u PYTHONPATH python3 -I - <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\nspec = importlib.util.spec_from_file_locat",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "eba157d15a5369c1ffd199cc19106f7e4d51c85fa5029e1baa292a91e226998e",
+        "expected_candidate_sha256": "eba157d15a5369c1ffd199cc19106f7e4d51c85fa5029e1baa292a91e226998e",
+        "computed_candidate_sha256": "eba157d15a5369c1ffd199cc19106f7e4d51c85fa5029e1baa292a91e226998e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tomography_solver.py",
+            "bytes": 9596
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_eba157d1"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": [
+      {
+        "name": "errors",
+        "code": "def errors(xz, clocks, gt_xz, gt_clocks):\n    return (np.linalg.norm(np.subtract(xz, gt_xz)), np.sqrt(np.mean(np.subtract(clocks, gt_clocks) ** 2)))"
+      },
+      {
+        "name": "_linear",
+        "code": "def _linear(design, y, weights):\n    return np.linalg.lstsq(design * weights[:, None], y * weights, rcond=None)[0]"
+      },
+      {
+        "name": "_band_cost",
+        "code": "def _band_cost(residual):\n    e = np.abs(residual)\n    skip = e > 3.0\n    if np.any(skip):\n        period = np.clip(np.median(e[skip]), 4.5, 7.5)\n        e[skip] -= period\n    return np.minimum(e ** 2, 0.35 ** 2).sum() + 0.02 * skip.sum()"
+      },
+      {
+        "name": "_cycle_cost",
+        "code": "def _cycle_cost(rays, p, residual, shape):\n    absolute = np.abs(residual)\n    skip = absolute > 3.0\n    error = absolute.copy()\n    if np.any(skip):\n        period = np.clip(np.median(absolute[skip]), 4.5, 7.5)\n        error[skip] -= period\n    clock_excess = np.maximum(np.abs(rays.clocks @ p[5:]) - 4.0, 0.0)\n    return np.minimum(error ** 2, 0.35 ** 2).sum() + 0.005 * skip.sum() + shape[0] * (clock_excess @ clock_excess)"
+      }
+    ]
+  }
+}

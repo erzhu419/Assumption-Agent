@@ -1,0 +1,80 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_0e7eb009e891",
+    "source_hash": "0e7eb009e891ed5a4688ea9ef50bd08438712760a66ec4275d5445d77a514fc5",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe_tomo.py",
+        "archived_relpath": "producers/tmp__probe_tomo.py",
+        "bytes": 981,
+        "sha256": "e29b1b5697ed7eb35aac6177b50c8c5ca68f7086a8c6af7aad7551128af4de11"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && python - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_surveys.pkl','rb') as f: p=pickle.load(f)\nprint('scipy', scipy.__version__)\ndef show(o,depth=0):\n if isinstance(o,dict):\n  for k,v in o.items():\n   if isinstance(v,(list,tuple,dict,np.ndarray)): print(' '*depth,k);show(v,depth+1)\n   else: print(' '*depth,k,repr(v))\n elif isinstance(o,(list,tuple)) and o and isinstance(o[0],dict):\n  print(' '*depth,type(o),len(o))\n  for v in o: show(v,depth+1)\n else:\n  a=np.asarray(o); print(' '*depth,a.shape,a.dtype,a.ravel()[:12]);\n  if a.size and np.issubdtype(a.",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\ntry:\n import scipy\n print('scipy', scipy.__version__)\nexcept ImportError:\n print('no scipy')\nwith open('public_surveys.pkl','rb') as f: p=pickle.load(f)\ndef show(o,depth=0):\n if isinstance(o,dict):\n  for k,v in o.items():\n   print(' '*depth,k); show(v,depth+1)\n elif isinstance(o,(list,tuple)) and o and isinstance(o[0],dict):\n  print(' '*depth,type(o),len(o))\n  for v in o: show(v,depth+1)\n else:\n  a=np.asarray(o); print(' '*depth,a.shape,a.dtype,a.ravel()[:12]);\n  if a.size and np.issubdtype(a.dtype,np.number): print(' '*depth,'ran",
+      "cd /holdout_task && cat >/tmp/probe_tomo.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.special import erf\nfrom scipy.optimize import least_squares\nP=pickle.load(open('/holdout_task/public_surveys.pkl','rb'))\nfor p in P:\n s=p['survey']; gt=p['gt']; W=s['W_m']; R=s['R_plume_m']; a=s['z_src_m'][:,None]; b=s['z_rcv_m'][None,:]; dz=b-a; L=np.hypot(W,dz); sn=dz/L; cs=W/L; x,z=gt['plume_xz_m']; u=x*cs+(z-a)*sn; v=(z-a)*cs-x*sn\n g=R*np.sqrt(np.pi/2)*np.exp(-v*v/(2*R*R))*(erf((L-u)/(np.sqrt(2)*R))+erf(u/(np.sqrt(2)*R)))\n X=np.stack([L,-L*sn**2,g],axis=-1).reshape(-1,3)\n y=(s['T_obs_s']-gt['rcv_clock_b",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Joint inversion of straight-ray traveltimes for a Gaussian plume and receiver statics.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\n\n\nclass _SurveyModel:\n    def __init__(self, survey):\n        self.w = float(survey['W_m'])\n        self.h = float(survey['H_m'])\n        self.r = float(survey['R_plume_m'])\n        source = np.asarray(survey['z_src_m'], dtype=float)\n        receiver = np.asarray(survey['z_rcv_m'], dtype=float)\n        dz = (receiver[None, :] - source[:, None]).ravel()\n        self."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe_tomo.py",
+      "primary_producer_container_path": "/tmp/probe_tomo.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 6740,
+        "sha256": "f511212e7886f99603fbb7585f53909610eff047db40ffd3f577cc1f3fc28ddb",
+        "content_addressed_ref": "content_addressed_blobs/f511212e7886f99603fbb7585f53909610eff047db40ffd3f577cc1f3fc28ddb.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "0e7eb009e891ed5a4688ea9ef50bd08438712760a66ec4275d5445d77a514fc5",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Joint inversion of straight-ray traveltimes for a Gaussian plume and receiver statics.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\n\n\nclass ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

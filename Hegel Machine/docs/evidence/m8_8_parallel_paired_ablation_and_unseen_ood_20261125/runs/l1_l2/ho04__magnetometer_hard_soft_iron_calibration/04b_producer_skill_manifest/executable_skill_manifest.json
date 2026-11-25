@@ -1,0 +1,170 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_3548258bc903",
+    "source_hash": "3548258bc903550782f8a1640cc877189fcbf1e8a3b717be38ac2c94227c76be",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho04__magnetometer_hard_soft_iron_calibration",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/mag_excitation_audit.py",
+        "archived_relpath": "producers/tmp__mag_excitation_audit.py",
+        "bytes": 2021,
+        "sha256": "da4d4c88473f9d09e7947105c4d9c115c459d0a4284388bd8c41235ffb4a2a1d"
+      },
+      {
+        "container_path": "/tmp/mag_joint_corners.py",
+        "archived_relpath": "producers/tmp__mag_joint_corners.py",
+        "bytes": 2687,
+        "sha256": "381af977d5743a63ba136215c6f81c1cd218102034bc7f381dc22ed89a685473"
+      },
+      {
+        "container_path": "/tmp/mag_paired_oracle.py",
+        "archived_relpath": "producers/tmp__mag_paired_oracle.py",
+        "bytes": 3177,
+        "sha256": "8a1e40e1f0d5601f28dbddc007c02df8cf218e01685a5b1e618de54957430aed"
+      },
+      {
+        "container_path": "/tmp/mag_stress.py",
+        "archived_relpath": "producers/tmp__mag_stress.py",
+        "bytes": 3027,
+        "sha256": "ad46dce9b52aa109d13c1f19e00dc71b0aa5b750efc3675e5d7bc31870e0b737"
+      },
+      {
+        "container_path": "/tmp/mag_transient_audit.py",
+        "archived_relpath": "producers/tmp__mag_transient_audit.py",
+        "bytes": 1635,
+        "sha256": "c2fe41c49cfc4fa238b87924328f69dfd58f2e0bd69c38e2e527a9bc7cc605c1"
+      },
+      {
+        "container_path": "/tmp/mag_v1.py",
+        "archived_relpath": "producers/tmp__mag_v1.py",
+        "bytes": 3926,
+        "sha256": "74e4e7bedcd6bea96672df525eea38d9bfcac745b6a17911e64c673f83d71abd"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle,numpy as np\nwith open('public_mag.pkl','rb') as f: d=pickle.load(f)\ndef show(d,p=''):\n if isinstance(d,dict):\n  for k,v in d.items(): show(v,p+'/'+str(k))\n elif isinstance(d,(list,tuple)) and d and isinstance(d[0],dict):\n  print(p,type(d).__name__,len(d)); show(d[0],p+'/0')\n elif isinstance(d,np.ndarray):\n  print(p,d.shape,d.dtype, np.round(d[:3],5) if d.ndim and d.dtype.kind in 'fiu' else repr(d)[:140])\n else: print(p,type(d).__name__,repr(d)[:200])\nshow(d)\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nprint('numpy', np.__version__, 'scipy', scipy.__version__)\nwith open('public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ndef show(value, path=''):\n    if isinstance(value, dict):\n        for key, item in value.items():\n            show(item, f'{path}/{key}')\n    elif isinstance(value, (list, tuple)):\n        print(path, type(value).__name__, len(value))\n        if value:\n            show(value[0], path + '/0')\n    elif isinstance(value, np.ndarray):\n        print(path, value.shape, value.dtype, np.array2stri",
+      "cat > /holdout_task/mag_calibrator.py <<'PY'\n\"\"\"Robust calibration of a three-axis magnetometer from known roll and pitch.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _level_axes(roll_pitch):\n    roll, pitch = np.asarray(roll_pitch, dtype=float).T\n    cr, sr, cp, sp = np.cos(roll), np.sin(roll), np.cos(pitch), np.sin(pitch)\n    z = np.zeros_like(roll)\n    return (np.column_stack((cp, sp * sr, sp * cr)),\n            np.column_stack((z, cr, -sr)),\n            np.column_stack((-sp, cp * sr, cp * cr)))\n\n\ndef _mad(x):\n    return 1.4826 * np.median(np.abs(x - np.median(x)))\n",
+      "cat > /tmp/mag_stress.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_axes\n\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    p = pickle.load(f)\ns, g = p['session'], p['gt']\n\ndef score(session, truth):\n    o = calibrate_and_estimate_heading(session)\n    A = o['S_soft']\n    assert np.allclose(A, A.T) and np.linalg.eigvalsh(A).min() > 0\n    assert np.isclose(np.linalg.det(A), 1, atol=1e-10)\n    yaw = o['heading_deg']\n    assert yaw.shape == truth['gt_heading_deg'].shape and np.all(",
+      "cp /holdout_task/mag_calibrator.py /tmp/mag_v1.py\npython3 - <<'PY'\nfrom pathlib import Path\nf = Path('/holdout_task/mag_calibrator.py')\ns = f.read_text()\na = s.index('    weight = np.ones(len(x))')\nb = s.index('\\n\\ndef _pack', a)\ns = s[:a] + '''    def matrix(p):\n        a, b, c, d, e = p[:5]\n        return np.array([[a,c,d], [c,b,e], [d,e,3-a-b]])\n\n    def rank_seed(p):\n        A = matrix(p)\n        if np.linalg.eigvalsh(A)[0] <= 0.05:\n            return np.inf\n        e = (design @ p - y) / np.linalg.norm(v @ A, axis=1)\n        return np.median(np.abs(e))\n\n    p = np.linalg.lstsq(design, y, ",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/mag_stress.py').read_text()\np = p[:p.index(\"print('columns:\")] + p[p.index('def forward('):p.index('for coverage,')]\nPath('/tmp/mag_joint_corners.py').write_text(p + '''\nprint('columns: circular RMSE, worst test quartile RMSE, bias L2')\nfor count, coverage, ratio, cond, spike, sigma in [(420,.25,.30,2.8,150,.085), (220,.50,.30,2.8,100,.085), (220,.25,.45,2.8,150,.085), (420,.5,.30,2.8,100,.10)]:\n    vals, oracle = [], []\n    for seed in range(40):\n        rng = np.random.default_rng(1700 + seed)\n        q, _ = np.linalg.qr(rng.normal(siz",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/mag_joint_corners.py').read_text()\np = p.replace('vals, oracle = [], []', 'vals, oracle, clean = [], [], []')\np = p.replace('        z = (tm-b)', '        clean_rows = np.ones(count, dtype=bool)\\n        clean_rows[ii] = False\\n        clean.append(score(dict(calib_m_raw=m[clean_rows],calib_roll_pitch_rad=ca[clean_rows],test_m_raw=tm,test_roll_pitch_rad=ta),dict(b_hard=b,gt_heading_deg=np.rad2deg(ty))))\\n        z = (tm-b)')\np = p[:p.index('    vals = np.array(vals)')] + '''    vals, clean, oracle = np.array(vals), np.array(clean), np.ar",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('mag_calibrator', '/holdout_task/mag_calibrator.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ns, gt = data['session'], data['gt']\no = module.calibrate_and_estimate_heading(s)\nS, b, h = (o[k] for k in ('S_soft', 'b_hard', 'heading_deg'))\nassert S.shape == (3, 3) and b.shape == (3,) and h.",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_axes\nwith open('public_mag.pkl','rb') as f:\n    p=pickle.load(f)\ns,g=p['session'],p['gt']\no=calibrate_and_estimate_heading(s)\nA=np.linalg.inv(o['S_soft']); x=s['calib_m_raw']-o['b_hard']; m=x@A\nu,v,w=_level_axes(s['calib_roll_pitch_rad'])\nz=np.einsum('ij,ij->i',m,w); h=np.hypot(np.sum(m*u,axis=1),np.sum(m*v,axis=1)); H,D=np.median(h),np.median(z)\nr=np.column_stack((h-H,z-D)); sig=1.4826*np.median(abs(r),axis=0); good=np.linalg.norm(r/",
+      "cat > /tmp/mag_excitation_audit.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_axes\n\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ns, gt = data['session'], data['gt']\nangles = s['calib_roll_pitch_rad']\nraw = s['calib_m_raw']\nn = len(raw)\n# Select calibration rows using only acquisition order and measured roll/pitch.\n# None of these selections uses the labeled test headings or calibration truth.\norder = np.arange(n)\nroll, pitch = angles.T\ntilt = np.arcc",
+      "cat > /tmp/mag_transient_audit.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_axes\n\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ns, gt = data['session'], data['gt']\nraw, angles = s['calib_m_raw'], s['calib_roll_pitch_rad']\nref = (raw-gt['b_hard']) @ np.linalg.inv(gt['S_soft'])\nu, v, w = _level_axes(angles)\nh = np.hypot(np.sum(u*ref, axis=1), np.sum(v*ref, axis=1))\nd = np.sum(w*ref, axis=1)\nr = np.column_stack((h-np.median(h), d-np.median(d)))\nscale = "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__mag_v1.py",
+      "primary_producer_container_path": "/tmp/mag_v1.py",
+      "selected_channels": [
+        "fam_robust_control_and_safety"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/mag_calibrator.py",
+        "filename": "mag_calibrator.py",
+        "bytes": 4511,
+        "sha256": "eb61acf4a357549757a06a6c2205cd0cd0f1ea742c7ddd45b079842afc85865c",
+        "content_addressed_ref": "content_addressed_blobs/eb61acf4a357549757a06a6c2205cd0cd0f1ea742c7ddd45b079842afc85865c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/mag_calibrator.py"
+    ],
+    "exported_pure_functions": [
+      "_level_axes",
+      "_mad",
+      "_vertical_seed",
+      "_pack",
+      "_unpack",
+      "_fit",
+      "calibrate_and_estimate_heading",
+      "score"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3548258bc903550782f8a1640cc877189fcbf1e8a3b717be38ac2c94227c76be",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "cat > /tmp/mag_transient_audit.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nfrom mag_calibrator import calibrate_and_estimate_heading, _level_axes\n\nwith open('/holdout_task/public_mag.pkl', 'rb'",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "3548258bc903550782f8a1640cc877189fcbf1e8a3b717be38ac2c94227c76be",
+        "expected_candidate_sha256": "3548258bc903550782f8a1640cc877189fcbf1e8a3b717be38ac2c94227c76be",
+        "computed_candidate_sha256": "3548258bc903550782f8a1640cc877189fcbf1e8a3b717be38ac2c94227c76be",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/mag_calibrator.py",
+            "bytes": 4511
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_3548258b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_level_axes",
+        "code": "def _level_axes(roll_pitch):\n    (roll, pitch) = np.asarray(roll_pitch, dtype=float).T\n    (cr, sr, cp, sp) = (np.cos(roll), np.sin(roll), np.cos(pitch), np.sin(pitch))\n    z = np.zeros_like(roll)\n    return (np.column_stack((cp, sp * sr, sp * cr)), np.column_stack((z, cr, -sr)), np.column_stack((-sp, cp * sr, cp * cr)))"
+      },
+      {
+        "name": "_mad",
+        "code": "def _mad(x):\n    return 1.4826 * np.median(np.abs(x - np.median(x)))"
+      },
+      {
+        "name": "_vertical_seed",
+        "code": "def _vertical_seed(x, v):\n    (a, b, c) = x.T\n    (u, w, t) = v.T\n    design = np.column_stack((u * a - t * c, w * b - t * c, u * b + w * a, u * c + t * a, w * c + t * b, -v, -np.ones(len(x))))\n    y = -3 * t * c\n    weight = np.ones(len(x))\n    for _ in range(9):\n        p = np.linalg.lstsq(design * weight[:, None], y * weight, rcond=None)[0]\n        e = design @ p - y\n        scale = max(_mad(e), 1e-05)\n        weight = 1 / np.sqrt(1 + (e / (2.5 * scale)) ** 2)\n    (a, b, c, d, e) = p[:5]\n    A = np.array([[a, c, d], [c, b, e], [d, e, 3 - a - b]])\n    if np.linalg.eigvalsh(A)[0] < 0.15:\n        return (np.eye(3), np.zeros(3))\n    return (A / np.cbrt(np.linalg.det(A)), np.linalg.solve(A, p[5:8]))"
+      },
+      {
+        "name": "_pack",
+        "code": "def _pack(A, bias, H, D):\n    L = np.linalg.cholesky(A)\n    return np.r_[bias, np.log(L[0, 0]), np.log(L[1, 1]), L[1, 0], L[2, 0], L[2, 1], H, D]"
+      },
+      {
+        "name": "_unpack",
+        "code": "def _unpack(p):\n    (a, b, c, d, e) = p[3:8]\n    L = np.array([[np.exp(a), 0, 0], [c, np.exp(b), 0], [d, e, np.exp(-a - b)]])\n    return L @ L.T"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(raw, angles):\n    from scipy.optimize import least_squares\n    v = _level_axes(angles)[2]\n    center = np.median(raw, axis=0)\n    unit = np.median(np.linalg.norm(raw - center, axis=1))\n    x = (raw - center) / unit\n    (A, b) = _vertical_seed(x, v)\n    z = (x - b) @ A\n    vert = np.sum(z * v, axis=1)\n    hor = np.linalg.norm(z - vert[:, None] * v, axis=1)\n    p = _pack(A, b, np.median(hor), np.median(vert))\n\n    def residual(p):\n        A = _unpack(p)\n        z = (x - p[:3]) @ A\n        vert = np.sum(z * v, axis=1)\n        hvec = z - vert[:, None] * v\n        hor = np.linalg.norm(hvec, axis=1)\n        gv = v @ A\n        gh = hvec / np.maximum(hor, 1e-12)[:, None] @ A\n        nv = np.linalg.norm(gv, axis=1)\n        parallel = np.sum(gh * gv, axis=1) / nv\n        nh = np.linalg.norm(gh - (parallel / nv)[:, None] * gv, axis=1)\n        rv = (vert - p[9]) / nv\n        rh = (hor - p[8] - parallel * rv) / np.maximum(nh, 1e-12)\n        return np.column_stack((rv, rh))\n    weight = np.ones(len(x))\n    for _ in range(7):\n        p = least_squares(lambda q: (weight[:, None] * residual(q)).ravel(), p, x_scale='jac', max_nfev=45).x\n        r = residual(p)\n        scale = max(_mad(r.ravel()), 1e-07)\n        weight = 1 / np.sqrt(1 + np.sum(r * r, axis=1) / (2.5 * scale) ** 2)\n    for _ in range(2):\n        r = residual(p)\n        scale = max(_mad(r.ravel()), 1e-07)\n        keep = np.linalg.norm(r, axis=1) < 4.3 * scale\n        p = least_squares(lambda q: residual(q)[keep].ravel(), p, x_scale='jac', max_nfev=45).x\n    return (_unpack(p), center + unit * p[:3])"
+      },
+      {
+        "name": "calibrate_and_estimate_heading",
+        "code": "def calibrate_and_estimate_heading(session: dict) -> dict:\n    \"\"\"Return hard/soft-iron calibration and tilt-compensated magnetic yaw.\"\"\"\n    (A, bias) = _fit(np.asarray(session['calib_m_raw'], dtype=float), session['calib_roll_pitch_rad'])\n    corrected = (np.asarray(session['test_m_raw'], dtype=float) - bias) @ A\n    (x, y, _) = _level_axes(session['test_roll_pitch_rad'])\n    yaw = np.rad2deg(np.arctan2(-np.sum(y * corrected, axis=1), np.sum(x * corrected, axis=1)))\n    yaw[yaw <= -180.0] = 180.0\n    return {'S_soft': np.linalg.inv(A), 'b_hard': bias, 'heading_deg': yaw}"
+      },
+      {
+        "name": "score",
+        "code": "def score(session, truth):\n    o = calibrate_and_estimate_heading(session)\n    A = o['S_soft']\n    assert np.allclose(A, A.T) and np.linalg.eigvalsh(A).min() > 0\n    assert np.isclose(np.linalg.det(A), 1, atol=1e-10)\n    yaw = o['heading_deg']\n    assert yaw.shape == truth['gt_heading_deg'].shape and np.all((yaw > -180) & (yaw <= 180))\n    e = (yaw - truth['gt_heading_deg'] + 180) % 360 - 180\n    return np.r_[np.sqrt(np.mean(e ** 2)), max((np.sqrt(np.mean(x ** 2)) for x in np.array_split(e, 4))), np.linalg.norm(o['b_hard'] - truth['b_hard'])]"
+      }
+    ]
+  }
+}

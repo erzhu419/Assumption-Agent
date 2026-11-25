@@ -1,0 +1,104 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_magnetometer_ellipsoid_calibration_9701f4a89dde",
+    "source_hash": "9701f4a89ddea30fd580f8c5b3c95dee34eaebaef0e32b6886999c3a28862248",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho04__magnetometer_hard_soft_iron_calibration",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/mag_stress.py",
+        "archived_relpath": "producers/tmp__mag_stress.py",
+        "bytes": 3118,
+        "sha256": "75cdabd1a8f2363b46cfc039c0ef6f82bad4d451cbc813f3747e801befacbb77"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy import __version__ as scipy_version\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\nprint('SciPy', scipy_version)\ndef inspect(obj, path='public', depth=0):\n    if isinstance(obj, dict) and depth < 4:\n        for key, value in obj.items():\n            inspect(value, f'{path}.{key}', depth + 1)\n    elif isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict) and depth < 4:\n        print(path, type(obj).__name__, len(obj))\n        for i, value in enumerate(obj[:3]):\n      ",
+      "command -v python3; python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ndef inspect(obj, path='public'):\n    if isinstance(obj, dict):\n        for key, value in obj.items():\n            inspect(value, f'{path}.{key}')\n    elif isinstance(obj, np.ndarray):\n        print(path, obj.shape, obj.dtype)\n        if obj.size <= 12:\n            print(obj)\n        elif obj.dtype.kind in 'fiu':\n            print('  min/median/max:', np.min(obj, axis=0), np.median(obj, axis=0), np.max(obj, axis=0))\n    elif isinstance(obj, (list,",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_mag.pkl','rb')); s=p['session']; g=p['gt']; A=np.linalg.inv(g['S_soft']); b=g['b_hard']\nfor split in ('calib','test'):\n    x=(s[split+'_m_raw']-b)@A\n    r,t=s[split+'_roll_pitch_rad'].T; cr,sr,ct,st=np.cos(r),np.sin(r),np.cos(t),np.sin(t)\n    u=np.array([ct,st*sr,st*cr]).T; v=np.array([0*r,cr,-sr]).T; d=np.array([-st,ct*sr,ct*cr]).T\n    h1,h2,z=[np.sum(x*j,axis=1) for j in (u,v,d)]; h=np.hypot(h1,h2)\n    rr=np.column_stack((h-np.median(h),z-np.median(z))); err=np.linalg.norm(rr,axis=1)\n  ",
+      "set -e\ncat > /holdout_task/mag_calibrator.py <<'PY'\n\"\"\"Robust hard- and soft-iron calibration from tilt-tagged magnetometer data.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _level_axes(roll_pitch):\n    roll, pitch = np.asarray(roll_pitch, dtype=float).T\n    sr, cr = np.sin(roll), np.cos(roll)\n    st, ct = np.sin(pitch), np.cos(pitch)\n    return (np.column_stack((ct, st * sr, st * cr)),\n            np.column_stack((np.zeros_like(cr), cr, -sr)),\n            np.column_stack((-st, ct * sr, ct * cr)))\n\n\ndef _initial_inverse(x, down):\n    # A has trace 3 at this stage; the",
+      "set -e\ncat > /tmp/mag_stress.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nfrom scipy.spatial.transform import Rotation\nsys.path.insert(0, '/holdout_task')\nfrom mag_calibrator import calibrate_and_estimate_heading\n\n\ndef evaluate(session, truth):\n    out = calibrate_and_estimate_heading(session)\n    e = (out['heading_deg'] - truth['gt_heading_deg'] + 180) % 360 - 180\n    assert out['heading_deg'].shape == e.shape\n    assert np.all((-180 < out['heading_deg']) & (out['heading_deg'] <= 180))\n    S = out['S_soft']\n    assert np.allclose(S, S.T) and min(np.linalg.eigvalsh(S)) > 0\n    assert ",
+      "set -e\nf=/holdout_task/mag_calibrator.py\nprintf '%s  %s\\n' '9701f4a89ddea30fd580f8c5b3c95dee34eaebaef0e32b6886999c3a28862248' \"$f\" | sha256sum -c -\ncd /tmp\npython3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/mag_calibrator.py'\nspec = importlib.util.spec_from_file_location('mag_calibrator', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ns, gt = data['session'], data['gt']\nout = module.calibrate_and_estimate_heading(s)\nheading, sof",
+      "set -e\nf=/holdout_task/mag_calibrator.py\narchive=/tmp/.hegel_candidate_archive/v01_9701f4a8\nif ! cmp -s \"$f\" \"$archive\"; then\n    echo 'Target differs from the archived stress-tested candidate (or archive is unavailable).'\n    sha256sum \"$f\"\n    if test -f \"$archive\"; then diff -u \"$archive\" \"$f\" | head -n 80 || true; fi\n    exit 1\nfi\nprintf 'Archived target matches byte for byte: '\nsha256sum \"$f\"\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/mag_calibrator.py'\nspec = importlib.util.spec_from_file_location('ma",
+      "set -e\nf=/holdout_task/mag_calibrator.py\narchive=/tmp/.hegel_candidate_archive/v01_9701f4a8\nold=$(find \"$archive\" -type f -name mag_calibrator.py -print -quit)\nif [ -n \"$old\" ]; then\n    (diff -u \"$old\" \"$f\" || true) | head -n 100\nelse\n    find \"$archive\" -maxdepth 2 -type f -printf '%P\\n' | head -n 20\nfi\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys\nimport pickle\nimport numpy as np\nsys.path[:0] = ['/holdout_task', '/tmp']\nimport mag_calibrator\nfrom mag_stress import evaluate, synthetic\nassert mag_calibrator.__file__ == '/holdout_task/mag_calibrator.py'\nwith open('/holdout_t",
+      "set -e\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport sys, pickle\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport mag_calibrator as mag\np = pickle.load(open('/holdout_task/public_mag.pkl', 'rb'))\ns, gt = p['session'], p['gt']\nraw, rp = s['calib_m_raw'], s['calib_roll_pitch_rad']\n\ndef measure(o):\n    e = (o['heading_deg'] - gt['gt_heading_deg'] + 180) % 360 - 180\n    yaw = gt['gt_heading_deg']\n    sectors = [e[(yaw >= k) & (yaw < k+90)] for k in (-180, -90, 0, 90)]\n    rmse = lambda a: np.sqrt(np.mean(a**2))\n    return rmse(e), max(map(rmse, sectors)), np.linalg.norm",
+      "set -e\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport mag_calibrator as mag\nassert mag.__file__ == '/holdout_task/mag_calibrator.py'\nwith open('/holdout_task/public_mag.pkl', 'rb') as f:\n    data = pickle.load(f)\ns, gt = data['session'], data['gt']\nx, rp = s['calib_m_raw'], s['calib_roll_pitch_rad']\nu, v, d = mag._level_axes(rp)\n# The public reference defines validation strata only; it is never passed to the estimator.\nref = np.linalg.solve(gt['S_soft'], (x - gt['b_hard']).T).T\ndot = lambda a, b: np.e"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__mag_stress.py",
+      "primary_producer_container_path": "/tmp/mag_stress.py",
+      "selected_channels": [
+        "fam_robust_control_and_safety"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/mag_calibrator.py",
+        "filename": "mag_calibrator.py",
+        "bytes": 4716,
+        "sha256": "4e9193028bcf25281a99568ba058fdef8d4456659850c2735ae05352e0d3ba59",
+        "content_addressed_ref": "content_addressed_blobs/4e9193028bcf25281a99568ba058fdef8d4456659850c2735ae05352e0d3ba59.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/mag_calibrator.py"
+    ],
+    "exported_pure_functions": [
+      "synthetic"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "9701f4a89ddea30fd580f8c5b3c95dee34eaebaef0e32b6886999c3a28862248",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport mag_calibrator as mag\nassert mag.__file__ == '/holdout_task/mag_calibrator.py'\nwith open('/h",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "9701f4a89ddea30fd580f8c5b3c95dee34eaebaef0e32b6886999c3a28862248",
+        "expected_candidate_sha256": "9701f4a89ddea30fd580f8c5b3c95dee34eaebaef0e32b6886999c3a28862248",
+        "computed_candidate_sha256": "9701f4a89ddea30fd580f8c5b3c95dee34eaebaef0e32b6886999c3a28862248",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/mag_calibrator.py",
+            "bytes": 4716
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_9701f4a8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "synthetic",
+        "code": "def synthetic(seed, n, tilt, h, d, sigma, condition, narrow_spikes):\n    from scipy.spatial.transform import Rotation\n    rng = np.random.default_rng(seed)\n    q = Rotation.random(random_state=rng).as_matrix()\n    S = q * np.array([1 / np.sqrt(condition), 1.0, np.sqrt(condition)]) @ q.T\n    b = rng.uniform(-80, 80, 3)\n    field = np.array([h, 0, d])\n\n    def sample(count, limit, noise):\n        (r, p) = rng.uniform(-limit, limit, (2, count))\n        y = rng.uniform(-np.pi, np.pi, count)\n        R = Rotation.from_euler('ZYX', np.column_stack((y, p, r))).as_matrix()\n        raw = field @ R @ S + b + rng.normal(0, noise, (count, 3))\n        return (raw, np.column_stack((r, p)), np.rad2deg(y))\n    (cal, cal_rp, _) = sample(n, tilt, sigma)\n    ind = rng.choice(n, round(0.04 * n), replace=False)\n    directions = rng.normal(size=(len(ind), 3))\n    if narrow_spikes:\n        directions[:, 1:] *= 0.04\n    directions /= np.linalg.norm(directions, axis=1)[:, None]\n    cal[ind] += directions * rng.uniform(12, 54, (len(ind), 1))\n    (test, test_rp, yaw) = sample(240, 0.45, 0.065)\n    return (dict(calib_m_raw=cal, calib_roll_pitch_rad=cal_rp, test_m_raw=test, test_roll_pitch_rad=test_rp), dict(b_hard=b, gt_heading_deg=yaw))"
+      }
+    ]
+  }
+}

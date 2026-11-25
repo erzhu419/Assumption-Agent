@@ -1,0 +1,94 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_box_l0_selection_193aada5410e",
+    "source_hash": "193aada5410e90ceff6fe9619a3d9603e83a0c8cff51326fba74d85b4b9b3e17",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "uf04__certified_box_l0_sensor_selection",
+    "wormhole_family": "fam_unseen_certified_box_l0"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/certified_l0_solver_before_fit.py",
+        "archived_relpath": "producers/tmp__certified_l0_solver_before_fit.py",
+        "bytes": 11780,
+        "sha256": "f3bc638c132238cd38fa67e51495206a5c32bebc13663ad09a617093a06a89c1"
+      },
+      {
+        "container_path": "/tmp/certified_l0_solver_before_terminal.py",
+        "archived_relpath": "producers/tmp__certified_l0_solver_before_terminal.py",
+        "bytes": 11637,
+        "sha256": "ea37347a2e3df2c828306ba24129adc78b161ae786dc01a9f482ac42958eb475"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('public_box_l0_instances.pkl','rb') as f: d=pickle.load(f)\nprint(type(d), 'scipy', scipy.__version__)\nif isinstance(d,dict): print(d.keys()); seq=d.values()\nelse: seq=d\nfor a in seq:\n if isinstance(a,dict): print({k:(v.shape if hasattr(v,'shape') else v) for k,v in a.items()})\n else: print(type(a),repr(a)[:200])\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\ntry:\n import scipy\n print('scipy',scipy.__version__)\nexcept ImportError:\n print('no scipy')\nwith open('public_box_l0_instances.pkl','rb') as f: d=pickle.load(f)\nprint(type(d), list(d) if isinstance(d,dict) else len(d)) if isinstance(d,dict) else print(type(d),len(d))\ndef show(d):\n if isinstance(d,dict) and 'X' in d:\n  print({k:(v.shape,float(np.linalg.norm(v))) if hasattr(v,'shape') else v for k,v in d.items()})\n elif isinstance(d,dict):\n  for v in d.values(): show(v)\n elif isinstance(d,(tuple,list)):\n  for v in d: show(v)\n else: ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfor a in pickle.load(open('public_box_l0_instances.pkl','rb')):\n X,y=a['X'],a['y']; H=X.T@X+a['ridge']*np.eye(X.shape[1]); g=X.T@y\n print('eig',np.linalg.eigvalsh(H).round(3)); print('diag',H.diagonal().round(2)); print('full',np.linalg.solve(H,g).round(4)); print('corr',g.round(2)); print('max off',np.max(abs(H-np.diag(H.diagonal())))); print('box,penalty',a['box'],a['l0_penalty'])\nPY",
+      "ls -la /holdout_task /pretrain_task; python3 - <<'PY'\nfrom importlib.util import find_spec\nfor x in ('numpy','scipy','cvxpy','osqp','clarabel','threadpoolctl'):\n print(x, bool(find_spec(x)))\nPY",
+      "cat > /holdout_task/certified_l0_solver.py <<'PY'\n\"\"\"Best-bound search with diagonal-perspective dual certificates.\"\"\"\nimport heapq\nimport itertools\n\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\n_EPS = 1e-9\n_TOL = 9e-6\n\n\nclass _Problem:\n    def __init__(self, instance):\n        self.X = np.asarray(instance['X'], dtype=float)\n        self.y = np.asarray(instance['y'], dtype=float)\n        self.ridge = float(instance['ridge'])\n        self.box = float(instance['box'])\n        self.lam = float(instance['l0_penalty'])\n        self.n, self.p = self.X.shape\n        self.e = min(_EPS, sel",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np, time\nfrom certified_l0_solver import solve_certified_box_l0\nrng=np.random.default_rng(234)\nfor mode in range(5):\n results=[]\n for k in range(18):\n  n,p=(42,15) if mode!=3 else (10,15)\n  X=rng.normal(size=(n,p)); X/=np.linalg.norm(X,axis=0)/6\n  if mode in (2,3): X+=rng.normal(size=(n,3))@rng.normal(size=(3,p))*(.7 if mode==2 else 1.5)\n  y=X@(rng.normal(size=p)*(rng.random(p)<(.4 if mode!=1 else .8))*.5)+rng.normal(size=n)*(1 if mode!=1 else 2.)\n  a=dict(X=X,y=y,ridge=.35,box=(.18 if mode==4 else 1.5),l0_penalty=.85)",
+      "cd /holdout_task && cp certified_l0_solver.py /tmp/certified_l0_solver_before_fit.py && python3 - <<'PY'\nfrom pathlib import Path\np = Path('certified_l0_solver.py')\ns = p.read_text().replace('from scipy.optimize import minimize','from scipy.optimize import lsq_linear')\ns = s.replace('        self.best = np.inf','        self.design = np.vstack((self.X, np.sqrt(self.ridge) * np.eye(self.p)))\\n        self.target = np.concatenate((self.y, np.zeros(self.p)))\\n        self.best = np.inf')\na = s.index('            w = np.clip(w, -bounds, bounds)')\nb = s.index('            value = self.objective(w)'",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np,time\nfrom certified_l0_solver import solve_certified_box_l0\nrng=np.random.default_rng(503)\nfor mode in range(6):\n worst=[]\n for k in range(10):\n  n,p=(42,15) if mode in (0,1,2) else (7,15)\n  Z=rng.normal(size=(n,p))\n  if mode in (1,2,4,5): Z=(.2 if mode in (2,5) else 1)*Z+rng.normal(size=(n,3))@rng.normal(size=(3,p))\n  X=6*Z/np.linalg.norm(Z,axis=0)\n  y=X@(rng.normal(size=p)*(rng.random(p)<.5)*.4)+rng.normal(size=n)*1.8\n  a=dict(X=X,y=y,ridge=(1e-6 if mode in (2,5) else .35),box=1.5,l0_penalty=.85)\n  r=solve_certifi",
+      "cd /holdout_task && cp certified_l0_solver.py /tmp/certified_l0_solver_before_terminal.py && python3 - <<'PY'\nfrom pathlib import Path\np=Path('certified_l0_solver.py'); s=p.read_text()\ns=s.replace('        self.c = float(self.cx)\\n', '')\ns=s.replace('            if len(J):\\n                w[J] = np.linalg.solve(self.H[np.ix_(J, J)], self.g[J])','            # Poorly conditioned normal equations are only a shortcut.\\n            A = self.H[np.ix_(J, J)]\\n            fallback = False\\n            if len(J):\\n                try:\\n                    w[J] = np.linalg.solve(A, self.g[J])\\n       ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np, time\nfrom certified_l0_solver import solve_certified_box_l0\nrng=np.random.default_rng(643)\nfor mode in range(4):\n worst=[]\n for k in range(12):\n  n,p= (5+mode,15)\n  X=rng.normal(size=(n,p))\n  if mode==3: X=np.repeat(rng.normal(size=(n,5)),3,axis=1)+.03*X\n  X*=6/np.linalg.norm(X,axis=0)\n  y=rng.normal(size=n)*3\n  a=dict(X=X,y=y,ridge=.35,box=1.5,l0_penalty=.85)\n  r=solve_certified_box_l0(a); gap=r['objective']-r['certified_lower_bound']; worst.append((gap,r['nodes_explored'],k))\n  if gap>1e-5: np.savez(f'/tmp/l0-cap",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('certified_l0_solver.py')\ns = p.read_text()\ns = s.replace('    def split(self, H, undecided, weights=None):','    def split(self, H, undecided):')\ns = s.replace(\"        if weights is not None:\\n            order = np.argsort(-weights[U], kind='stable')\\n\", '')\ns = s.replace('    def relax(self, status, warm, cutoff, weights=None):','    def relax(self, status, warm, cutoff):')\ns = s.replace('self.split(H, U, weights)','self.split(H, U)')\ns = s.replace('        a, b = conjugate(e), conjugate(box) - lam', '        # For an u",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('certified_l0_solver.py')\ns = p.read_text()\na = s.index('        # Remove the curvature already belonging')\nb = s.index('        # Prove positivity', a)\nbody = s[a:b]\ns = s[:a] + '        try:\\n' + ''.join('    ' + line if line.strip() else line for line in body.splitlines(keepends=True)) + '''        except np.linalg.LinAlgError:\n            # The ridge can disappear in rounded normal equations. A failed\n            # Schur solve does not affect the exact ridge-based split.\n            d[undecided] = self.ridge / 2\n       "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__certified_l0_solver_before_fit.py",
+      "primary_producer_container_path": "/tmp/certified_l0_solver_before_fit.py",
+      "selected_channels": [
+        "fam_unseen_certified_box_l0"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_l0_solver.py",
+        "filename": "certified_l0_solver.py",
+        "bytes": 13287,
+        "sha256": "7c5a76673f5623d6dfc90f9963c2a2eddc447f765853b7380abdaab2e963e72c",
+        "content_addressed_ref": "content_addressed_blobs/7c5a76673f5623d6dfc90f9963c2a2eddc447f765853b7380abdaab2e963e72c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_l0_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_certified_box_l0",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "193aada5410e90ceff6fe9619a3d9603e83a0c8cff51326fba74d85b4b9b3e17",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('certified_l0_solver.py')\ns = p.read_text()\na = s.index('        # Remove the curvature already belonging')\nb = s.index('        # Prove positivity', a)\nbody = s[a:b]\ns ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

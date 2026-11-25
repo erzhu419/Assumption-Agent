@@ -1,0 +1,185 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_substrate_inhibition_plate_kinetics_964e26e2dae1",
+    "source_hash": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf02__batch_drifted_substrate_inhibition_kinetics",
+    "wormhole_family": "fam_unseen_enzymology_deconfounding"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/compare_enzyme.py",
+        "archived_relpath": "producers/tmp__compare_enzyme.py",
+        "bytes": 3530,
+        "sha256": "08f2d9772237ead1fedbeade94f3f335813402ad2306bd2d287daab110637d4a"
+      },
+      {
+        "container_path": "/tmp/compare_enzyme_fresh.py",
+        "archived_relpath": "producers/tmp__compare_enzyme_fresh.py",
+        "bytes": 2723,
+        "sha256": "1ff70cd96e01aa8909d4f272b6379e63907ecedfe7fb8dc81fd17d33143b03a3"
+      },
+      {
+        "container_path": "/tmp/compare_enzyme_joint.py",
+        "archived_relpath": "producers/tmp__compare_enzyme_joint.py",
+        "bytes": 2556,
+        "sha256": "5faaece91a469efd1c9902fe016cd7685bbbc102da8fd05ca846d09903e47235"
+      },
+      {
+        "container_path": "/tmp/compare_enzyme_mixture.py",
+        "archived_relpath": "producers/tmp__compare_enzyme_mixture.py",
+        "bytes": 2525,
+        "sha256": "9033008e4a1f1850d2173e1ebfe9206e3083db1ea0d340440973ec087947e5ee"
+      },
+      {
+        "container_path": "/tmp/compare_enzyme_robust.py",
+        "archived_relpath": "producers/tmp__compare_enzyme_robust.py",
+        "bytes": 2626,
+        "sha256": "95b72ad2e163da22a67f3b325ccfe14be5963a23b2cbbd98be931593dff42ec7"
+      },
+      {
+        "container_path": "/tmp/diagnose_enzyme_tail.py",
+        "archived_relpath": "producers/tmp__diagnose_enzyme_tail.py",
+        "bytes": 2989,
+        "sha256": "352ffd7285825635bb3cac728cf9772cb914fbfb5eaa6ecaf2034ad36b4e2781"
+      },
+      {
+        "container_path": "/tmp/enzyme_clip.py",
+        "archived_relpath": "producers/tmp__enzyme_clip.py",
+        "bytes": 3013,
+        "sha256": "e538896cd0259298206b719c3321ef5e3d4a3dabd969feb81cc17e16deaad2fe"
+      },
+      {
+        "container_path": "/tmp/enzyme_joint.py",
+        "archived_relpath": "producers/tmp__enzyme_joint.py",
+        "bytes": 2721,
+        "sha256": "fb6f91356c9785af4c0c925e8e93991b0cede5db929a0ad9c69a61573719c197"
+      },
+      {
+        "container_path": "/tmp/enzyme_mixture.py",
+        "archived_relpath": "producers/tmp__enzyme_mixture.py",
+        "bytes": 5123,
+        "sha256": "5e5aa80410af00dc382ea038a7f2d4fecfdfcd8066cadcd02f2606a34e57994c"
+      },
+      {
+        "container_path": "/tmp/verify_enzyme_stress.py",
+        "archived_relpath": "producers/tmp__verify_enzyme_stress.py",
+        "bytes": 2495,
+        "sha256": "d34773c20f1c873efb4066a361b0b55d6b7ab175df7b54353f6f1e68ebf42736"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport json, collections\np='/holdout_task/public_enzyme_plates.json'\nx=json.load(open(p))\nprint('root:', type(x).__name__, 'size:', len(x))\nif isinstance(x,dict):\n print('fields:',[(k,type(v).__name__,len(v) if isinstance(v,(dict,list)) else v) for k,v in x.items()]); x=x.get('plates',x)\nif isinstance(x,list):\n for q in x:\n  if not isinstance(q,dict): print(type(q),str(q)[:250]); continue\n  print('plate:',[(k, (len(v),str(v[:2])[:500]) if isinstance(v,list) else str(v)[:200]) for k,v in q.items()]);\n  if isinstance(q.get('wells'),list):\n   w=q['wells']; print('well keys',list(w",
+      "python3 - <<'PY'\nimport json, collections, importlib.util\nprint('libraries:', {k: importlib.util.find_spec(k) is not None for k in ('numpy','scipy')})\nx=json.load(open('/holdout_task/public_enzyme_plates.json'))\nprint('root:', type(x).__name__, len(x))\nif isinstance(x,dict):\n print('fields:', [(k,type(v).__name__,len(v) if isinstance(v,(dict,list)) else str(v)[:100]) for k,v in x.items()]); x=x.get('plates',x)\nfor i,p in enumerate(x):\n print('plate',i,[(k,len(v) if isinstance(v,(dict,list)) else str(v)[:100]) for k,v in p.items()]); w=p.get('wells',[])\n if not w: continue\n if i==0: print('samp",
+      "set -e\ncd /holdout_task\ncat > enzyme_plate_solver.py <<'PY'\n\"\"\"Recover Haldane kinetics from blank- and reference-calibrated plates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _mad(x):\n    return 1.4826 * np.median(np.abs(x - np.median(x)))\n\n\ndef _basis(row, col):\n    r, c = (row - 3.5) / 3.5, (col - 5.5) / 5.5\n    return (1., r, c, r*r, r*c, c*c)\n\n\ndef _rate(s, log_params):\n    vmax, km, ki = np.exp(log_params)\n    return vmax * s / (km + s + s*s/ki)\n\n\ndef _raw(w):\n    return w['raw_rate'] if 'raw_rate' in w else w['rate_raw']\n\n\ndef _calibrate(wells):\n    blanks = n",
+      "set -e\ncd /holdout_task\nsed -i 's/jac=lambda p: x,/jac=lambda p: x.copy(),/' enzyme_plate_solver.py\nsha=$(sha256sum enzyme_plate_solver.py | cut -c1-8); cp enzyme_plate_solver.py /tmp/.hegel_candidate_archive/v02_$sha\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport json,time,numpy as np\nfrom scipy.optimize import least_squares\nfrom enzyme_plate_solver import estimate_variant_haldane_parameters,_calibrate,_basis,_raw,_rate,_mad\nj=json.load(open('public_enzyme_plates.json')); ps=j['plates']; truth=j['ground_truth']\nfor label,plates in [('full',ps)]+[(f'without {p[\"plate_id\"]}',ps[:i]+ps[i+1:]) fo",
+      "set -e\ncat > /tmp/compare_enzyme.py <<'PY'\nimport copy\nimport json\nimport sys\nimport time\nfrom pathlib import Path\n\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nimport enzyme_plate_solver as base\n\nsource = Path(base.__file__).read_text()\nsource = source.replace('    scale = max(_mad(np.r_[blanks-offset, x @ gain-y]), floor)', '''    residual = x @ gain - y\n    scale = max(_mad(np.r_[blanks-offset, residual]), floor)\n    keep = np.abs(residual - np.median(residual)) <= 4.5 * scale\n    if not keep.all() and np.linalg.matrix_rank(x[keep]) == x.shape[1]:\n        gain = np.linalg.lstsq(x",
+      "set -e\ncat > /tmp/enzyme_joint.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom enzyme_plate_solver import _basis, _calibrate, _raw, estimate_variant_haldane_parameters as baseline\n\nKEYS = ('V_max', 'K_m', 'K_i')\n\ndef estimate(plates, proportional=0.):\n    start = baseline(plates)\n    ids = {v:i for i,v in enumerate(start)}\n    if not ids:\n        return {}\n    params = []\n    plate_index, variant_index, x, s, rate, y, sigma = [], [], [], [], [], [], []\n    for i, plate in enumerate(plates):\n        wells = plate['wells']\n        offset, gain, scale = _calibrate(wells",
+      "set -e\nsed -i 's/v, g, _, _ = model(params)/v, g, _, _ = model(np.asarray(params))/' /tmp/enzyme_joint.py\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare_enzyme_joint.py",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/enzyme_joint.py'); s=p.read_text().replace('def estimate(plates, proportional=0.):','def estimate(plates, proportional=0., loss=\"soft_l1\", f_scale=1.5, pool=0.):').replace('    weight = 1/np.hypot(sigma, proportional*g*v)','    sigma = np.exp((1-pool)*np.log(sigma) + pool*np.log(np.median(sigma)))\\n    weight = 1/np.hypot(sigma, proportional*g*v)').replace(\"loss='soft_l1', f_scale=1.5\",'loss=loss, f_scale=f_scale'); p.write_text(s)\np=Path('/tmp/compare_enzyme_joint.py'); s=p.read_text(); a=s.index('methods ='); b=s.index('\\n',a); s=",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/compare_enzyme_joint.py').read_text()\na = p.index('methods ='); b = p.index('\\n', a)\np = p[:a] + '''methods = [lambda ps: joint.estimate(ps,.008), lambda ps: joint.estimate(ps,.008,f_scale=2.5), lambda ps: joint.estimate(ps,.012), lambda ps: joint.estimate(ps,.012,'cauchy',3.)]''' + p[b:]\np = p.replace(\"('baseline','joint','joint weighted')\", \"('weighted .008','weighted .008 wider loss','weighted .012','weighted .012 cauchy')\")\np = p.replace('rng = np.random.default_rng(191265)', 'rng = np.random.default_rng(int(sys.argv[1]))')\np ",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('enzyme_plate_solver.py')\ns = p.read_text().replace('def estimate_variant_haldane_parameters(plates: list[dict]) -> dict[str, dict[str, float]]:', 'def _initial_kinetics(plates):').replace('    \"\"\"Estimate positive V_max, K_m, and K_i for each variant across plates.\"\"\"\\n', '')\nj = Path('/tmp/enzyme_joint.py').read_text()\nj = j[j.index('KEYS = '):]\nj = j.replace('def estimate(plates, proportional=0., loss=\"soft_l1\", f_scale=1.5, pool=0.):\\n    start = baseline(plates)', 'def estimate_variant_haldane_parameters(plates: li",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/verify_enzyme_stress.py').read_text()\ns=s.replace('        for p in data:', '        clean = []\\n        for p in data:\\n            clean_plate = {**p, \"wells\": []}\\n            clean.append(clean_plate)')\ns=s.replace(\"                if rng.random() < bubble_rate:\", \"                clean_plate['wells'].append({**w, 'raw_rate': raw})\\n                if rng.random() < bubble_rate:\")\ns=s.replace('        err.append([errors(m(data),expected) for m in methods])','''        e = errors(methods[0](data),expected)\n        err.append([e])",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/holdout_task/enzyme_plate_solver.py').read_text()\nstart = s.index('def estimate_variant_haldane_parameters(')\ns = s[:start] + '''def _contamination_loss(z):\n    # Gaussian inliers plus a locally flat gross-error density.\n    log_odds = -6.0\n    t = np.logaddexp(-0.5*z, log_odds)\n    w = np.exp(-0.5*z - t)\n    return np.vstack((2*(np.logaddexp(0., log_odds)-t), w, -0.5*w*(1-w)))\n\n\n''' + s[start:]\ns = s.replace(\"loss='cauchy', f_scale=3.0\", 'loss=_contamination_loss, f_scale=1.0')\nPath('/tmp/enzyme_mixture.py').write_text(s)\nt = Path('/"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__enzyme_mixture.py",
+      "primary_producer_container_path": "/tmp/enzyme_mixture.py",
+      "selected_channels": [
+        "fam_unseen_enzymology_deconfounding"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/enzyme_plate_solver.py",
+        "filename": "enzyme_plate_solver.py",
+        "bytes": 4858,
+        "sha256": "f1c3f08737693d4d7f8b0ff7b29c0ebc71abf2d520956f2dcd29eba4b960dcff",
+        "content_addressed_ref": "content_addressed_blobs/f1c3f08737693d4d7f8b0ff7b29c0ebc71abf2d520956f2dcd29eba4b960dcff.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/enzyme_plate_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_mad",
+      "_basis",
+      "_rate",
+      "_raw",
+      "_calibrate",
+      "estimate_variant_haldane_parameters"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_enzymology_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\ns = Path('/holdout_task/enzyme_plate_solver.py').read_text()\nstart = s.index('def estimate_variant_haldane_parameters(')\ns = s[:start] + '''def _contamination_loss(z):\n    # Gaussian inliers ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+        "expected_candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+        "computed_candidate_sha256": "964e26e2dae12f7fe35fe19a6bfb233a7774888a77b1b1880165697ac74d2cf0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/enzyme_plate_solver.py",
+            "bytes": 4858
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_964e26e2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_mad",
+        "code": "def _mad(x):\n    return 1.4826 * np.median(np.abs(x - np.median(x)))"
+      },
+      {
+        "name": "_basis",
+        "code": "def _basis(row, col):\n    (r, c) = ((row - 3.5) / 3.5, (col - 5.5) / 5.5)\n    return (1.0, r, c, r * r, r * c, c * c)"
+      },
+      {
+        "name": "_rate",
+        "code": "def _rate(s, log_params):\n    (vmax, km, ki) = np.exp(log_params)\n    return vmax * s / (km + s + s * s / ki)"
+      },
+      {
+        "name": "_raw",
+        "code": "def _raw(w):\n    return w['raw_rate'] if 'raw_rate' in w else w['rate_raw']"
+      },
+      {
+        "name": "_calibrate",
+        "code": "def _calibrate(wells):\n    from scipy.optimize import least_squares\n    blanks = np.array([_raw(w) for w in wells if w['well_type'] == 'BLANK'])\n    refs = [w for w in wells if w['well_type'] == 'REF_WT']\n    x = np.array([_basis(w['row'], w['col']) for w in refs])\n    offset = np.median(blanks)\n    y = np.array([_raw(w) for w in refs]) - offset\n    initial = np.linalg.lstsq(x, y, rcond=None)[0]\n    floor = max(1e-08, 1e-06 * np.median(np.abs(y)))\n    scale = max(_mad(blanks), floor)\n    gain = least_squares(lambda p: x @ p - y, initial, jac=lambda p: x.copy(), loss='soft_l1', f_scale=1.5 * scale).x\n    residual = x @ gain - y\n    scale = max(_mad(np.r_[blanks - offset, residual]), floor)\n    keep = np.abs(residual - np.median(residual)) <= 4.5 * scale\n    if not keep.all() and np.linalg.matrix_rank(x[keep]) == x.shape[1]:\n        gain = np.linalg.lstsq(x[keep], y[keep], rcond=None)[0]\n        scale = max(_mad(np.r_[blanks - offset, x @ gain - y]), floor)\n    return (offset, gain, scale)"
+      },
+      {
+        "name": "estimate_variant_haldane_parameters",
+        "code": "def estimate_variant_haldane_parameters(plates: list[dict]) -> dict[str, dict[str, float]]:\n    \"\"\"Estimate positive V_max, K_m, and K_i for each variant across plates.\"\"\"\n    from scipy.optimize import least_squares\n    groups = {}\n    for plate in plates:\n        wells = plate['wells']\n        (offset, gain, scale) = _calibrate(wells)\n        for w in wells:\n            if w['well_type'] == 'VARIANT':\n                g = np.dot(_basis(w['row'], w['col']), gain)\n                groups.setdefault(w['variant_id'], []).append((w['substrate_mM'], _raw(w) - offset, g, scale))\n    results = {}\n    for (variant, rows) in groups.items():\n        (s, y, g, scale) = np.asarray(rows).T\n        (lo, hi) = (min(s[s > 0]), max(s))\n        v = max(np.percentile(y / g, 85), 1e-06)\n        initial = np.log([2 * v, np.sqrt(lo * hi) / 2, np.sqrt(lo * hi) * 2])\n        lower = np.log([v * 0.0001, lo * 1e-05, lo * 1e-05])\n        upper = np.log([v * 100000.0, hi * 100000.0, hi * 100000.0])\n        fit = least_squares(lambda p: (g * _rate(s, p) - y) / scale, initial, bounds=(lower, upper), loss='soft_l1', f_scale=1.5)\n        residual = (g * _rate(s, fit.x) - y) / scale\n        keep = np.abs(residual - np.median(residual)) <= 4.5 * max(1.0, _mad(residual))\n        if not keep.all() and np.unique(s[keep & (s > 0)]).size >= 3:\n            fit = least_squares(lambda p: ((g * _rate(s, p) - y) / scale)[keep], fit.x, bounds=(lower, upper), loss='soft_l1', f_scale=2.5)\n        results[variant] = dict(zip(('V_max', 'K_m', 'K_i'), map(float, np.exp(fit.x))))\n    return results"
+      }
+    ]
+  }
+}

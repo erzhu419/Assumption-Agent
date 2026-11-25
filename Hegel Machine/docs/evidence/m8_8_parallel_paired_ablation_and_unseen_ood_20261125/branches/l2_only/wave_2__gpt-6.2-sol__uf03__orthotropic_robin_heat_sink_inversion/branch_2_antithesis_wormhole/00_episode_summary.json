@@ -1,0 +1,456 @@
+{
+  "task_id": "uf03__orthotropic_robin_heat_sink_inversion",
+  "short_name": "robin_heat_sink_pde_inversion",
+  "benchmark": "Hegel-Unseen-PostFreeze-4",
+  "wave": "wave_2",
+  "scientific_domain": "Thermal Physics / Conservative Finite-Volume PDE Inversion",
+  "wormhole_family": "fam_unseen_elliptic_robin_inversion",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": false,
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 13,
+  "max_turns": 18,
+  "final_candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+  "validated_incumbent_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "eac1e47ff134aa019365afabecbd63b4a412fe51ae0a6221fc107ce74f6c4dbf",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "cat > /tmp/diagnose_thermal.py <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nfrom scipy.optimize import least_squares\nimport thermal_sink_solver as solver\n# Load the independent forward generator without rerunning",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "eac1e47ff134aa019365afabecbd63b4a412fe51ae0a6221fc107ce74f6c4dbf",
+        "expected_candidate_sha256": "eac1e47ff134aa019365afabecbd63b4a412fe51ae0a6221fc107ce74f6c4dbf",
+        "computed_candidate_sha256": "eac1e47ff134aa019365afabecbd63b4a412fe51ae0a6221fc107ce74f6c4dbf",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermal_sink_solver.py",
+            "bytes": 5485
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_eac1e47f"
+    },
+    {
+      "candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncat > /tmp/thermal_gate_validation.py <<'PY'\nimport pickle\nimport sys\nimport time\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\nsys.path[:0] = ['/holdout_task', '/tmp']\nfrom thermal_si",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2",
+        "expected_candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2",
+        "computed_candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermal_sink_solver.py",
+            "bytes": 5920
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_94087512"
+    },
+    {
+      "candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\np=/holdout_task/thermal_sink_solver.py\nsed 's/<= 3\\.5\\*scale/<= 4.25*scale/' \"$p\" | cmp - /tmp/thermal_wider_gate.py\ncp /tmp/thermal_wider_gate.py \"$p\"\nsha=$(sha256sum \"$p\" | cut -c1-8)\ncp \"$p\" \"/tmp/.hegel_candidate_archive/v03_$sha",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+        "expected_candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+        "computed_candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermal_sink_solver.py",
+            "bytes": 5921
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_f750abda"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": false,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t06",
+      "turn_idx": 6,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "Clean-sensor masking at a strongly cooled corner",
+      "candidate_sha256": "eac1e47ff134aa019365afabecbd63b4a412fe51ae0a6221fc107ce74f6c4dbf",
+      "resolved": true,
+      "superseded_by": "ng_t07",
+      "resolves_nogood_ids": [],
+      "assumption_refuted": "After the stuck thermistors are excluded, the additional readings discarded by fixed trimming do not materially affect source recovery.",
+      "empirical_witness": "All five stuck thermistors were already trimmed, but the nearest clean thermistor was discarded with a fitted residual of 0.0566 versus 0.000946 at truth. Huber and known-inlier fits from the same displaced estimate recovered the corner source.",
+      "causal_blanket_diagnosis": "Near a strongly cooled corner, the nearest clean reading helps distinguish source displacement from changes in amplitude; hard trimming suppresses that signal.",
+      "sublated_pivot": "Keep trimming for initialization, then restore all readings with a Huber fit before identifying inliers for the final polish.",
+      "resolved_at_turn": 7,
+      "resolved_candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2"
+    },
+    {
+      "nogood_id": "ng_t09",
+      "turn_idx": 9,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "Weak amplitude identifiability near cooled corners",
+      "candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2",
+      "resolved": false,
+      "superseded_by": null,
+      "resolves_nogood_ids": [],
+      "assumption_refuted": "Correctly identifying stuck thermistors is sufficient to reach the amplitude tolerance across cooled-corner layouts.",
+      "empirical_witness": "For strong-Robin corner seed 11, the solver and a known-inlier fit initialized at truth both missed amplitude by 62.1%.",
+      "causal_blanket_diagnosis": "When clean thermistors are distant from the corner, shifts in source location can compensate for changes in amplitude. Residual gating can add error, but it cannot explain failures that persist with known inliers.",
+      "sublated_pivot": "Measure how well clean sensors separate amplitudes with nonoverlapping tolerance bands, and separately test whether a wider inlier gate recovers clean readings without introducing new misses."
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_07_control_panel_deconfounding"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid",
+      "source_forest_node": "node_auto_05_conservative_elliptic_multig",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "92bea0176feade861567a46e591b9a65361378ad69d34d0dd481388fe0846f86",
+      "exported_apis": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float = 1e-8) -> np.ndarray",
+      "api_quick_reference": [
+        {
+          "function": "solve_darcy_pressure",
+          "signature": "solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float=1e-08) -> np.ndarray",
+          "doc_summary": "Solve -div(K grad(p)) = source on a uniform cell-centered 2D grid.",
+          "mathematical_preconditions": [
+            "{\"field\": \"minimum_grid_axis_length\", \"op\": \">=\", \"value\": 2}",
+            "{\"field\": \"minimum_permeability\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"grid_spacing\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"relative_residual_tolerance\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"relative_residual_tolerance\", \"op\": \"<\", \"value\": 1}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "minimum_grid_axis_length",
+          "op": ">=",
+          "value": 2
+        },
+        {
+          "field": "minimum_permeability",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "grid_spacing",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "relative_residual_tolerance",
+          "op": "<",
+          "value": 1
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt03__high_contrast_darcy_multigrid"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_robust_network_assimilation",
+      "source_forest_node": "node_auto_08_split_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "2262dea7fb83d907b5e4ba036cab3459cc080447cbb668b784227f746f8023d6",
+      "exported_apis": "assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int = 5, valve_levels: tuple[float, float] = (0.35, 1.0), gain_floor: float = 0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray]",
+      "api_quick_reference": [
+        {
+          "function": "assimilate_diffusive_network",
+          "signature": "assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int=5, valve_levels: tuple[float, float]=(0.35, 1.0), gain_floor: float=0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray]",
+          "doc_summary": "Infer constant transmission and forecast a forward-Euler network.",
+          "mathematical_preconditions": [
+            "{\"field\": \"dt\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"observation_sample_count\", \"op\": \">=\", \"value\": 3}",
+            "{\"field\": \"forecast_sample_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"harmonic_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"twice_harmonic_count_over_horizon\", \"op\": \"<\", \"value\": 1}",
+            "{\"field\": \"gain_floor\", \"op\": \">\", \"value\": 0}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "dt",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "observation_sample_count",
+          "op": ">=",
+          "value": 3
+        },
+        {
+          "field": "forecast_sample_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "harmonic_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "twice_harmonic_count_over_horizon",
+          "op": "<",
+          "value": 1
+        },
+        {
+          "field": "gain_floor",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt04__network_varproj_and_valve_assimilation"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_sparse_ridge_certification",
+      "source_forest_node": "node_auto_08_split_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "770f6644bb1fd8eb49dbacf51ffa3405a9ca876974e0021d66415d9014d8dfb9",
+      "exported_apis": "solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float = 1e-6, *, max_leaves: int = 90) -> dict",
+      "api_quick_reference": [
+        {
+          "function": "solve_and_certify_l0",
+          "signature": "solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float=1e-06, *, max_leaves: int=90) -> dict",
+          "doc_summary": "Certify boxed sparse ridge regression with at most 16 real predictors.",
+          "mathematical_preconditions": [
+            "{\"field\": \"n_samples\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"n_features\", \"op\": \"<=\", \"value\": 16}",
+            "{\"field\": \"lam0\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"lam2\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"M\", \"op\": \">=\", \"value\": 0}",
+            "{\"field\": \"eps\", \"op\": \">\", \"value\": 0}",
+            "{\"field\": \"max_leaves\", \"op\": \">=\", \"value\": 1}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "n_samples",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "n_features",
+          "op": "<=",
+          "value": 16
+        },
+        {
+          "field": "lam0",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "lam2",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "M",
+          "op": ">=",
+          "value": 0
+        },
+        {
+          "field": "eps",
+          "op": ">",
+          "value": 0
+        },
+        {
+          "field": "max_leaves",
+          "op": ">=",
+          "value": 1
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt06__exact_l0_l2_compacted_certificate"
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration",
+      "source_forest_node": "node_auto_04_creep_corrected_retraction_c",
+      "granularity_tier": "L2_domain_operator",
+      "origin": "llm_aufhebung_container_verified",
+      "unit_test_verified": true,
+      "source_qualification_status": "public_episode",
+      "compiled_code_sha256": "cab6fbef9073cb8c49dc0dbe60378f11effbf77dbb388c1ec88a3236bf555616",
+      "exported_apis": "first_loading_slip(force_N: np.ndarray, specimen_displacement_um: np.ndarray, hold_start: int, hold_end: int, *, threshold_um: float = 0.35) -> float | None; calibrate_retraction(times_s: list[np.ndarray], forces_N: list[np.ndarray], raw_displacements_um: list[np.ndarray], frame_compliance_um_per_N: float, *, transition_window_s: float = 0.015, curvature_to_noise: float = 0.8, slip_threshold_um: float = 0.35) -> tuple[float, list[float | None]]",
+      "api_quick_reference": [
+        {
+          "function": "first_loading_slip",
+          "signature": "first_loading_slip(force_N: np.ndarray, specimen_displacement_um: np.ndarray, hold_start: int, hold_end: int, *, threshold_um: float=0.35) -> float | None",
+          "doc_summary": "Return force at the first persistent positive loading step, or None.",
+          "mathematical_preconditions": [
+            "{\"field\": \"specimen_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"hold_sample_count\", \"op\": \">=\", \"value\": 5}",
+            "{\"field\": \"post_glitch_unloading_sample_count\", \"op\": \">=\", \"value\": 5}",
+            "{\"field\": \"unloading_force_rate_magnitude_N_per_s\", \"op\": \">\", \"value\": 0}"
+          ]
+        },
+        {
+          "function": "calibrate_retraction",
+          "signature": "calibrate_retraction(times_s: list[np.ndarray], forces_N: list[np.ndarray], raw_displacements_um: list[np.ndarray], frame_compliance_um_per_N: float, *, transition_window_s: float=0.015, curvature_to_noise: float=0.8, slip_threshold_um: float=0.35) -> tuple[float, list[float | None]]",
+          "doc_summary": "Return median elastic stiffness (N/µm) and first loading slip forces (N).",
+          "mathematical_preconditions": [
+            "{\"field\": \"specimen_count\", \"op\": \">=\", \"value\": 1}",
+            "{\"field\": \"hold_sample_count\", \"op\": \">=\", \"value\": 5}",
+            "{\"field\": \"post_glitch_unloading_sample_count\", \"op\": \">=\", \"value\": 5}",
+            "{\"field\": \"unloading_force_rate_magnitude_N_per_s\", \"op\": \">\", \"value\": 0}"
+          ]
+        }
+      ],
+      "scope_preconditions": [
+        {
+          "field": "specimen_count",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "field": "hold_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "post_glitch_unloading_sample_count",
+          "op": ">=",
+          "value": 5
+        },
+        {
+          "field": "unloading_force_rate_magnitude_N_per_s",
+          "op": ">",
+          "value": 0
+        }
+      ],
+      "counter_regime_guards": [],
+      "provenance_episode_id": "pt02__viscoelastic_retraction_and_slip_calibration"
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "94087512143017a5c11ce7436c0a7a3a747a974b9d0016fa9f464f9691a515e2",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_robin_heat_sink_pde_inversion_f750abda5fb8",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 6,
+    "exported_pure_functions": [
+      "_plate_operator",
+      "_response_bank",
+      "_coarse_fit",
+      "localize_thermal_source"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": false,
+    "recalled_node_count": 5,
+    "staged_module_count": 4,
+    "staged_l1_primitive_count": 0,
+    "inspected_in_bash": false,
+    "inspected_source_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "f750abda5fb81fd6b333e95ac07e2c2eb0e908b9396a4a40b0f600d3f07efbc2",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "thermal_sink_solver.py",
+          "final_file_sha256": "d383ff6d2bc5415e075297d81253051673cf91d1ca9c5073d01f300d65a20870",
+          "public_entrypoints": [
+            "localize_thermal_source"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "thermal_sink_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 33,
+  "prompt_tokens": 392285,
+  "cached_tokens": 56192,
+  "completion_tokens": 13114,
+  "total_tokens": 405399,
+  "effective_billed_tokens": 363255,
+  "wall_ms": 514910.61,
+  "provenance_verified": true,
+  "terminal_record_sha256": "f60cee75ed54ac1bd74cbc7062f5c9e9f0aaa4967f987026858519c4ff84f78b"
+}

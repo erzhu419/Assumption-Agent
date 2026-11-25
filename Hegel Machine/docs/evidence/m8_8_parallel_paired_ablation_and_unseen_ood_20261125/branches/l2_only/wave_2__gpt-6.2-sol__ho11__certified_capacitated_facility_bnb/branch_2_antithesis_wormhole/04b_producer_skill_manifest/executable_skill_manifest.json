@@ -1,0 +1,131 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_facility_bnb_6cb77362166f",
+    "source_hash": "6cb77362166fbef17bd40315510a6dbaf0ddeeef603318d265186458e9a623a8",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho11__certified_capacitated_facility_bnb",
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe_facility.py",
+        "archived_relpath": "producers/tmp__probe_facility.py",
+        "bytes": 1849,
+        "sha256": "65917d7b04ee3885d7d4fff91fd929a28d1a6020d34904241c068652a45ef89b"
+      },
+      {
+        "container_path": "/tmp/probe_facility_compact.py",
+        "archived_relpath": "producers/tmp__probe_facility_compact.py",
+        "bytes": 1190,
+        "sha256": "3127fb795b0de4235c2f0dcb8dd2f78d859df0c2f6b7e5648a3245c9c80d3db7"
+      },
+      {
+        "container_path": "/tmp/stress_facility.py",
+        "archived_relpath": "producers/tmp__stress_facility.py",
+        "bytes": 3505,
+        "sha256": "226f9daa7b58851605b2f15d2d98dacb3862813e6653d659b2473871c59f2f86"
+      },
+      {
+        "container_path": "/tmp/stress_facility_oversized.py",
+        "archived_relpath": "producers/tmp__stress_facility_oversized.py",
+        "bytes": 1384,
+        "sha256": "59542d1fb04b1cdbec849730ad7c09706629590a623545b1db4ac9bfbb455cf9"
+      },
+      {
+        "container_path": "/tmp/stress_facility_units.py",
+        "archived_relpath": "producers/tmp__stress_facility_units.py",
+        "bytes": 1610,
+        "sha256": "c8515e5be155540eb4401a12c9491dc9260824873523c4a31a46611a3a81eec5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && OPENBLAS_NUM_THREADS=1 python - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_facility.pkl','rb') as f: p=pickle.load(f)\nprint('scipy',scipy.__version__,'type',type(p))\nfor k,v in p.items():\n a=np.asarray(v); print(k,a.shape,a.dtype,'min/max/sum', (a.min(),a.max(),a.sum()) if a.dtype.kind in 'iuf' else repr(v)[:300]);\n if a.ndim==1: print(a)\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nfrom scipy.optimize import linprog\nwith open('public_facility.pkl', 'rb') as f:\n    p = pickle.load(f)\nprint('SciPy:', scipy.__version__)\nfor key, value in p.items():\n    a = np.asarray(value)\n    print(key, a.shape, a.dtype, (a.min(), a.max(), a.sum()) if a.size and a.dtype.kind in 'iuf' else str(value)[:120])\n    if a.ndim == 1 and a.size <= 24:\n        print(a)\nPY",
+      "cat > /tmp/probe_facility.py <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import linprog\n\nwith open('/holdout_task/public_facility.pkl', 'rb') as stream:\n    p = pickle.load(stream)\nf, a, d, c = (p[k] for k in ('fixed_cost', 'capacity', 'demand', 'cost_matrix'))\nm,n=c.shape\nbits=((np.arange(1<<m)[:,None] >> np.arange(m))&1).astype(float)\nfeasible=bits@a>=sum(d)\nfixed=bits@f\nE=np.tile(np.eye(n),(1,m)); A=np.kron(np.eye(m),np.ones((1,n)))\n\ndef lp(mask):\n    rows=np.flatnonzero(bits[mask]); cols=(rows[:,None]*n+np.arange(n)).ravel()\n    sol=linprog(c[rows].ravel(), A_ub",
+      "cat > /tmp/probe_facility_compact.py <<'PY'\nexec(open('/tmp/probe_facility.py').read().split('start=time.perf_counter()')[0])\nK=[scores(c.min(axis=0))]; B=K[0].copy(); B[~feasible]=np.inf\nub=np.inf; solved=np.zeros(len(B),bool)\nwhile True:\n    i=int(np.argmin(np.where(solved,np.inf,B)))\n    if B[i]>=ub-1e-8: break\n    s=lp(i); solved[i]=True; ub=min(ub,s.fun+fixed[i]); K.append(scores(s.eqlin.marginals)); B=np.maximum(B,K[-1])\nK=np.asarray(K); K[:,~feasible]=np.inf\nall_masks=np.arange(1<<m)\ndef compact(order, mode):\n    def descend(j, ids):\n        if j==m: return 1\n        if mode=='cut' and ",
+      "cat > /holdout_task/facility_cert.py <<'PY'\n\"\"\"Certified capacitated facility location with splittable customer demand.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import linprog\n\n\n_CERT_TOL = 1e-5\n\n\ndef _capacity_feasible(capacity, demand):\n    \"\"\"Compare subset capacities and total demand exactly for binary64 inputs.\"\"\"\n    m = len(capacity)\n    ratios = [float(x).as_integer_ratio() for x in (*capacity, *demand)]\n    denominator = max(q for _, q in ratios)\n    units = [p * (denominator // q) for p, q in ratios]\n    required = sum(units[m:])\n    totals = [0]\n    for amount in units[:m]:\n      ",
+      "cat > /tmp/stress_facility.py <<'PY'\nimport pickle\nimport sys\nimport time\nimport numpy as np\nfrom scipy.optimize import linprog\nsys.path.insert(0, '/holdout_task')\nfrom facility_cert import solve_and_certify_facilities\n\nwith open('/holdout_task/public_facility.pkl','rb') as stream:\n    public = pickle.load(stream)\nrng = np.random.default_rng(8081)\nm,n=12,24\nbits=((np.arange(1<<m)[:,None] >> np.arange(m))&1).astype(int)\n\ndef instance(f,a,d,c):\n    return dict(fixed_cost=np.asarray(f,float),capacity=np.asarray(a,float),demand=np.asarray(d,float),cost_matrix=np.asarray(c,float))\n\ndef exhaustive(p",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\npath = Path('/holdout_task/facility_cert.py')\nassert path.read_bytes() == Path('/tmp/.hegel_candidate_archive/v01_7b8cd854').read_bytes()\nspec = importlib.util.spec_from_file_location('facility_cert', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_facility.pkl', 'rb') as stream:\n    public = pickle.load(stream)\nf, a, d, c = (public[k] for k in ('fixed_cost', 'capacity', 'demand', 'cost_m",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('facility_cert', '/holdout_task/facility_cert.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_facility.pkl', 'rb') as stream:\n    public = pickle.load(stream)\nf, a, d, c = (public[k] for k in ('fixed_cost', 'capacity', 'demand', 'cost_matrix'))\nref = 195.79165557696302\nbaseline = module.solve_and_certify_facilities(public)\ni, j = np.unravel_index(np.argmax(np.wh",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\nold = '''        # Allow for rounding in the individual products and in both sums.\n        scale = np.abs(p) @ dwide + fwide.sum() + awide @ (np.abs(p).max() + cwide.max(axis=1))'''\nnew = '''        # The positive-part maximum inherits the relative error of the\n        # differences p[j] - cost[i,j]. Bound rounding by the terms that\n        # enter the cut, not by raw costs on arcs with zero contribution.\n        scale = np.abs(p) @ dwide + fwide.sum() + awide @ q'''\nassert s.count(old",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('facility_cert', '/holdout_task/facility_cert.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('public_facility.pkl', 'rb') as stream:\n    public = pickle.load(stream)\nref = 195.79165557696302\nf, a, d, c = (public[k] for k in ('fixed_cost', 'capacity', 'demand', 'cost_matrix'))\nfailed = []\nfor exponent in (0, -36, -48, 36, 48):\n    # Binary rescaling leaves every opening pattern's obj",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\nanchor = '    eq = np.tile(np.eye(n), (1, m))'\nassert s.count(anchor) == 1\ns = s.replace(anchor, '''    # Express the LP in units of a typical demand. A power of two\n    # preserves binary inputs and keeps the solver tolerances independent\n    # of the physical unit used for flows.\n    flow_exp = int(np.frexp(np.sort(d)[n // 2])[1])\n    a_lp = np.ldexp(a, -flow_exp)\n    d_lp = np.ldexp(d, -flow_exp)\n    c_lp = np.ldexp(c, flow_exp)\n    eq = np.tile(np.eye(n), (1, m))''')\nfor old, new i",
+      "cat > /tmp/stress_facility_oversized.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('facility_cert', '/holdout_task/facility_cert.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('/holdout_task/public_facility.pkl', 'rb') as stream:\n    public = pickle.load(stream)\nref = 195.79165557696302\nbaseline = solver.solve_and_certify_facilities(public)\ni = baseline['open_y'].index(0)\nf = public['fixed_cost'].copy()\nf[i] = 1e6\n# The public incumbent leaves i closed. Any solution opening it now c",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\nold = '''    fixed = indicators @ fwide\n    width = np.finfo(np.longdouble).eps'''\nnew = '''    fixed = indicators @ fwide\n    width = np.finfo(np.longdouble).eps\n\n    # No facility can ship more than total demand. Round that total\n    # upward so tightening the row bounds cannot remove feasible flows.\n    demand_upper = np.longdouble(0)\n    for quantity in dwide:\n        demand_upper = np.nextafter(demand_upper + quantity, np.longdouble(np.inf))\n    usable = np.minimum(awide, demand_u"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_facility.py",
+      "primary_producer_container_path": "/tmp/stress_facility.py",
+      "selected_channels": [
+        "fam_sparse_assimilation_and_latent_recovery"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/facility_cert.py",
+        "filename": "facility_cert.py",
+        "bytes": 5809,
+        "sha256": "fa1d425cf20066df131fc73a5d030f4207c22d8e92b7a5cc874fdff6a0a11dde",
+        "content_addressed_ref": "content_addressed_blobs/fa1d425cf20066df131fc73a5d030f4207c22d8e92b7a5cc874fdff6a0a11dde.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/facility_cert.py"
+    ],
+    "exported_pure_functions": [
+      "instance"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_assimilation_and_latent_recovery",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6cb77362166fbef17bd40315510a6dbaf0ddeeef603318d265186458e9a623a8",
+      "verified_post_package": true,
+      "verified_turn": 15,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/facility_cert.py')\ns = p.read_text()\nold = '''    fixed = indicators @ fwide\n    width = np.finfo(np.longdouble).eps'''\nnew = '''    fixed = indicators @ fwide\n    wid",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6cb77362166fbef17bd40315510a6dbaf0ddeeef603318d265186458e9a623a8",
+        "expected_candidate_sha256": "6cb77362166fbef17bd40315510a6dbaf0ddeeef603318d265186458e9a623a8",
+        "computed_candidate_sha256": "6cb77362166fbef17bd40315510a6dbaf0ddeeef603318d265186458e9a623a8",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/facility_cert.py",
+            "bytes": 5809
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_6cb77362"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "instance",
+        "code": "def instance(f, a, d, c):\n    return dict(fixed_cost=np.asarray(f, float), capacity=np.asarray(a, float), demand=np.asarray(d, float), cost_matrix=np.asarray(c, float))"
+      }
+    ]
+  }
+}

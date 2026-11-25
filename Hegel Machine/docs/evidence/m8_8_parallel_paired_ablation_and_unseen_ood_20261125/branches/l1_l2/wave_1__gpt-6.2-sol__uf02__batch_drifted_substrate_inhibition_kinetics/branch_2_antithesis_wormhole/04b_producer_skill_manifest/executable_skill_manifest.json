@@ -1,0 +1,96 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_substrate_inhibition_plate_kinetics_b9952d76f26a",
+    "source_hash": "b9952d76f26ab8dadd2a23bbdae4cab89a5eff3f96a0427f5ca91778bd44f939",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf02__batch_drifted_substrate_inhibition_kinetics",
+    "wormhole_family": "fam_unseen_enzymology_deconfounding"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/enzyme_plate_stress.py",
+        "archived_relpath": "producers/tmp__enzyme_plate_stress.py",
+        "bytes": 2960,
+        "sha256": "5f7ca7a8a46b49751e11edbd330cfec652ccf8dcaabd0e588db476585731839d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport json, collections\nx=json.load(open('/holdout_task/public_enzyme_plates.json'))\nprint(type(x).__name__)\nif isinstance(x,dict):\n for k,v in x.items(): print(k,type(v).__name__,len(v) if isinstance(v,(dict,list)) else repr(v)[:300])\n p=x.get('plates',x)\nelse: p=x\nif isinstance(p,list):\n print('plates',len(p))\n for a in p[:8]:\n  if not isinstance(a,dict): print(str(a)[:500]); continue\n  print({k:(len(v) if isinstance(v,list) else str(v)[:300]) for k,v in a.items()})\n  for k,v in a.items():\n   if isinstance(v,list) and v: print('sample',k,v[:2])\nPY",
+      "ls -la /holdout_task; python3 - <<'PY'\nimport collections, json\nx=json.load(open('/holdout_task/public_enzyme_plates.json'))\nif isinstance(x,dict):\n print('top-level:',[(k,type(v).__name__,len(v) if isinstance(v,(dict,list)) else v) for k,v in x.items()]); p=x['plates']\nelse: p=x\nprint('plate count',len(p))\nfor a in p[:6]:\n print('plate',[(k,len(v) if isinstance(v,list) else v) for k,v in a.items()]);\n for k,v in a.items():\n  if isinstance(v,list) and v and isinstance(v[0],dict):\n   print(k,'sample',v[:2]); print('type counts',collections.Counter(next((q for q in w.values() if q in ('BLANK','R",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport collections, json\nimport numpy as np\nfrom scipy.optimize import least_squares\nx=json.load(open('public_enzyme_plates.json'))\nprint('public truth:', x['ground_truth'])\ndef mad(a): return 1.4826*np.median(np.abs(a-np.median(a)))\nfor p in x['plates']:\n print('\\n',p['plate_id'])\n def design(w):\n  r=(w['row']-3.5)/3.5; c=(w['col']-5.5)/5.5\n  return [1,r,c,r*r,r*c,c*c]\n w=p['wells']; b=np.array([z['raw_rate'] for z in w if z['well_type']=='BLANK']); ref=[z for z in w if z['well_type']=='REF_WT']; f=np.array([design(z) for z in ref]);",
+      "cat > /holdout_task/enzyme_plate_solver.py <<'PY'\n\"\"\"Control-anchored inference for substrate-inhibition assay plates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import csr_matrix\n\n\ndef _mad(x):\n    return float(1.4826 * np.median(np.abs(x - np.median(x))))\n\n\ndef _surface(wells):\n    r = (np.array([w['row'] for w in wells]) - 3.5) / 3.5\n    c = (np.array([w['col'] for w in wells]) - 5.5) / 5.5\n    return np.column_stack((np.ones(len(r)), r, c, r*r, r*c, c*c))\n\n\ndef _calibrate(f, y, blank, ref):\n    b = np.median(y[blank])\n    fr, yr = f[ref], y[ref]\n    q",
+      "set -e\np=/holdout_task/enzyme_plate_solver.py\nsed -i 's/jac=lambda a: fr, /jac=lambda a: fr.copy(), /g' \"$p\"\nh=$(sha256sum \"$p\" | cut -c1-8); cp \"$p\" /tmp/.hegel_candidate_archive/v02_$h\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools, json, time\nimport numpy as np\nfrom enzyme_plate_solver import _fit, _surface, _calibrate, _mad\nx=json.load(open('public_enzyme_plates.json')); truth=x['ground_truth']; ps=x['plates']\nfor p in ps:\n w=p['wells']; f=_surface(w); y=np.array([a['raw_rate'] for a in w]); ty=np.array([a['well_type'] for a in w]); m=ty=='REF_WT'; b,q,scale=_cal",
+      "cat > /tmp/enzyme_plate_stress.py <<'PY'\nimport json\nimport sys\nimport time\nfrom collections import defaultdict\n\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nfrom enzyme_plate_solver import _fit, _surface\n\npublic = json.load(open('/holdout_task/public_enzyme_plates.json'))\nkeys = ('V_max', 'K_m', 'K_i')\nnames = tuple(public['ground_truth'])\nbase = np.array([[public['ground_truth'][v][k] for k in keys] for v in names])\n\ndef simulate(seed, n, regime):\n    rng = np.random.default_rng(seed)\n    truth = base * np.exp(rng.uniform(-0.30, 0.30, size=base.shape))\n    if regime == 'weak_curva",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport importlib.util, itertools, json, math, sys, time\nspec = importlib.util.spec_from_file_location('enzyme_plate_solver', '/holdout_task/enzyme_plate_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nfit = solver.estimate_variant_haldane_parameters\nwith open('/holdout_task/public_enzyme_plates.json') as f:\n    public = json.load(f)\ntruth = public['ground_truth']\ndef check_schema(result, names):\n    assert result.keys() == set(names)\n    for values in result.values():\n        assert values.keys() == {'V_max', 'K",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport copy, json\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom enzyme_plate_solver import _calibrate, _fit, _kinetics, _mad, _surface\npublic = json.load(open('public_enzyme_plates.json'))\nplates = public['plates']\nkeys = ('V_max', 'K_m', 'K_i')\nfor p in plates:\n    w = p['wells']; f = _surface(w)\n    y = np.array([a['raw_rate'] for a in w]); t = np.array([a['well_type'] for a in w]); s = np.array([a['substrate_mM'] for a in w])\n    b, q, sigma = _calibrate(f, y, (t == 'BLANK') & (s == 0), t == 'REF_WT')\n    rate = ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools, json\nimport numpy as np\nfrom enzyme_plate_solver import estimate_variant_haldane_parameters as fit\nwith open('public_enzyme_plates.json') as f:\n    public = json.load(f)\ntruth = public['ground_truth']\nkeys = tuple((v,k) for v in truth for k in truth[v])\nactual = np.array([truth[v][k] for v,k in keys])\ndef vector(result):\n    return np.array([result[v][k] for v,k in keys])\nfor batch in itertools.combinations(public['plates'],2):\n    baseline = vector(fit(list(batch)))\n    worst = {}\n    for i,p in enumerate(batch):\n  "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__enzyme_plate_stress.py",
+      "primary_producer_container_path": "/tmp/enzyme_plate_stress.py",
+      "selected_channels": [
+        "fam_unseen_enzymology_deconfounding"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/enzyme_plate_solver.py",
+        "filename": "enzyme_plate_solver.py",
+        "bytes": 5739,
+        "sha256": "58e9fac9436927298832cffe38bfb7cbaa76a2d139149251e38136566366ace1",
+        "content_addressed_ref": "content_addressed_blobs/58e9fac9436927298832cffe38bfb7cbaa76a2d139149251e38136566366ace1.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/enzyme_plate_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_enzymology_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b9952d76f26ab8dadd2a23bbdae4cab89a5eff3f96a0427f5ca91778bd44f939",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools, json\nimport numpy as np\nfrom enzyme_plate_solver import estimate_variant_haldane_parameters as fit\nwith open('public_enzyme_plates.json') as f:\n    public = json.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b9952d76f26ab8dadd2a23bbdae4cab89a5eff3f96a0427f5ca91778bd44f939",
+        "expected_candidate_sha256": "b9952d76f26ab8dadd2a23bbdae4cab89a5eff3f96a0427f5ca91778bd44f939",
+        "computed_candidate_sha256": "b9952d76f26ab8dadd2a23bbdae4cab89a5eff3f96a0427f5ca91778bd44f939",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/enzyme_plate_solver.py",
+            "bytes": 5739
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_b9952d76"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}
