@@ -159,6 +159,27 @@ def get_git_head_sha() -> str:
     return proc.stdout.strip()
 
 
+def episode_summary_matches_suite_cache(
+    s: dict[str, Any],
+    *,
+    expected_model: str,
+    suite_cfg_fp: str,
+    selective_online: bool,
+) -> bool:
+    """Strict fingerprint & selective-mode cache match (`M8.2` Fix: rejects un-fingerprinted legacy summaries!)."""
+    return bool(
+        s.get("model") == expected_model
+        and isinstance(s.get("suite_config_fingerprint"), str)
+        and s.get("suite_config_fingerprint") == suite_cfg_fp
+        and bool(
+            s["selective_second_branch"]
+            if "selective_second_branch" in s
+            else (s.get("selective_router_decision") is not None)
+        )
+        == bool(selective_online)
+    )
+
+
 def write_sha256_manifest(evidence_root: Path) -> int:
     lines: list[str] = []
     for fp in sorted(evidence_root.rglob("*")):
@@ -234,12 +255,19 @@ def run_two_wave_autogenous_suite(
 
     forest, archive, meta_dag, bundle_meta = load_autogenous_forest_bundle(pretrained_bundle_path)
     run_id = f"{suite_dir.name}__{model}"
+    code_tree_hasher = hashlib.sha256()
+    for py_fp in sorted((REPO_ROOT / "src/hegel_machine/cognition").glob("*.py")):
+        code_tree_hasher.update(py_fp.name.encode("utf-8"))
+        code_tree_hasher.update(py_fp.read_bytes())
+    code_tree_sha16 = code_tree_hasher.hexdigest()[:16]
     suite_cfg_fp = hashlib.sha256(
         json.dumps(
             {
+                "code_tree_sha16": code_tree_sha16,
                 "model": model,
                 "bundle_sha256": bundle_meta["bundle_sha256"],
                 "max_turns": int(max_turns),
+                "cmd_timeout_sec": int(cmd_timeout_sec),
                 "reasoning_effort": str(reasoning_effort),
                 "online_wave1_aufhebung": bool(online_wave1_aufhebung),
                 "selective_online": bool(selective_online),
@@ -260,10 +288,11 @@ def run_two_wave_autogenous_suite(
             sum_fp = ep_dir / "00_episode_summary.json"
             if sum_fp.is_file():
                 s = json.loads(sum_fp.read_text(encoding="utf-8"))
-                cfg_matches = (
-                    s.get("model") == model
-                    and bool(s.get("selective_second_branch", False)) == bool(selective_online)
-                    and s.get("suite_config_fingerprint", suite_cfg_fp) == suite_cfg_fp
+                cfg_matches = episode_summary_matches_suite_cache(
+                    s,
+                    expected_model=model,
+                    suite_cfg_fp=suite_cfg_fp,
+                    selective_online=selective_online,
                 )
                 if cfg_matches:
                     print(f"[SKIP-DONE] `{task.task_id}`: SYNTH={s['strict_pass']} | {s['postlock_branch_outcomes']}", flush=True)

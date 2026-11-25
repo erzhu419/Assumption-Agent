@@ -1382,10 +1382,14 @@ def consolidate_autogenous_episode_into_forest(
                     "epistemic_rung": "L3_BIFURCATED_REGIME_LAW",
                     "supported_by": [ep_id, f"sha256:{code_sha16}"],
                 },
-                protocol_spec={"epistemic_rung": "L3_BIFURCATED_REGIME_LAW", "bifurcated_from": existing_mid_nid},
+                protocol_spec={
+                    "epistemic_rung": "L3_BIFURCATED_REGIME_LAW",
+                    "bifurcated_from": existing_mid_nid,
+                    "unit_test_verified": ut_verified,
+                },
                 tolerance=1.0,
-                evidence_status="SUPPORTED_IN_SCOPE",
-                permission_tier="local_solver_guidance",
+                evidence_status="SUPPORTED_IN_SCOPE" if ut_verified else "CANDIDATE_SYNTAX_ONLY",
+                permission_tier="local_solver_guidance" if ut_verified else "bounded_trial",
             ),
             probe_signatures=merged_sigs,
             support_paths=[[root_nid, existing_mid_nid, split_nid]],
@@ -1546,11 +1550,44 @@ def load_autogenous_forest_bundle(
     archive: dict[str, dict[str, Any]] = dict(data["archive"])
     archive.setdefault("__autogenous_blank_seed__", {})["loaded_bundle_sha256"] = bundle_sha
     meta_dag = [(str(a), str(b)) for a, b in data.get("meta_dag", [])]
-    if migrate_legacy_wormholes and any(
-        (wh.get("role_and_observation_map") or {}).get("kind") == "typed_operator_pipeline_isomorphism"
-        for wh in forest.horizontal_wormhole_edges.values()
-    ):
-        discover_cross_tree_operator_wormholes(forest, archive)
+    if migrate_legacy_wormholes and (forest.horizontal_wormhole_edges or forest.shared_base_subtrees):
+        needs_rediscovery = any(
+            (wh.get("role_and_observation_map") or {}).get("kind") == "typed_operator_pipeline_isomorphism"
+            for wh in forest.horizontal_wormhole_edges.values()
+        )
+        if not needs_rediscovery:
+            # Verify all stored operator-wormhole / shared-base source nodes still carry matching valid non-stub AST digests (`M8.2` Fix)
+            live_node_digests: dict[str, str] = {}
+            for nid, rec in iter_live_archive_nodes(archive):
+                digs = []
+                for m in rec.get("autogenous_wormhole_modules") or []:
+                    prof = _extract_code_ast_operator_profile(str(m.get("python_code") or ""))
+                    if prof["valid"] and not prof["is_constant_stub"]:
+                        digs.append(prof["ast_sha12"])
+                if digs:
+                    live_node_digests[nid] = hashlib.sha256("|".join(sorted(digs)).encode("utf-8")).hexdigest()[:12]
+            for sb in forest.shared_base_subtrees.values():
+                for src_rec in sb.get("supporting_sources") or []:
+                    sid = str(src_rec.get("source_id") or "")
+                    if sid and live_node_digests.get(sid) != src_rec.get("code_ast_digest"):
+                        needs_rediscovery = True
+                        break
+            for wh in forest.horizontal_wormhole_edges.values():
+                endpoint_ids = [
+                    wh.get("source_node_id"),
+                    wh.get("target_node_id"),
+                    *((wh.get("role_and_observation_map") or {}).get("origin_node_ids") or []),
+                ]
+                for ep_nid in endpoint_ids:
+                    if ep_nid and str(ep_nid) in archive and str(ep_nid) not in live_node_digests:
+                        needs_rediscovery = True
+                        break
+        if needs_rediscovery:
+            forest.horizontal_wormhole_edges = {}
+            forest.wormhole_history = {}
+            forest.shared_base_subtrees = {}
+            forest.shared_base_subtree_history = {}
+            discover_cross_tree_operator_wormholes(forest, archive)
     return forest, archive, meta_dag, {"bundle_sha256": bundle_sha, **dict(data.get("metadata", {}))}
 
 

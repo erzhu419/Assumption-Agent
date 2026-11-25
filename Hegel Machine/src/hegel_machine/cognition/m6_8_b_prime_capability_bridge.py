@@ -1163,6 +1163,18 @@ def lift_python_scientific_expressions_to_programs(
         for stmt in tree.body:
             if not isinstance(stmt, ast.FunctionDef):
                 continue
+            # Reject non-telemetry decorators (`M8.2` `decorator_semantics` fix: e.g. `@shift` alters Python semantics!)
+            has_unknown_decorator = False
+            for dec in stmt.decorator_list:
+                is_telemetry_dec = (
+                    (isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "track_wormhole_skill")
+                    or (isinstance(dec, ast.Name) and dec.id == "track_wormhole_skill")
+                )
+                if not is_telemetry_dec:
+                    has_unknown_decorator = True
+                    break
+            if has_unknown_decorator:
+                continue
             env: dict[str, Program] = {}
             all_args = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
             for idx, arg in enumerate(all_args):
@@ -1197,6 +1209,38 @@ def lift_python_scientific_expressions_to_programs(
                 else:
                     aborted_imperative = True
                     break
+            if (not aborted_imperative) and best_fn_prog is not None:
+                # Domain-interior Python-vs-IR consistency check on scalar pure functions (`M8.2` differential check)
+                uses_idx_subscript = "_idx" in json.dumps(best_fn_prog.to_dict())
+                if (
+                    not uses_idx_subscript
+                    and len(all_args) >= 1
+                    and not stmt.args.vararg
+                    and not stmt.args.kwarg
+                    and not stmt.args.kwonlyargs
+                ):
+                    try:
+                        from .language import EvaluationContext
+                        from .models import Observation
+
+                        sanitized_lines = [
+                            ln for ln in code_str.splitlines()
+                            if not ln.lstrip().startswith(("@track_wormhole_skill", "from . import track_wormhole_skill"))
+                        ]
+                        py_ns: dict[str, Any] = {"math": math, "np": np, "numpy": np}
+                        exec(compile("\n".join(sanitized_lines), "<ast_ir_check>", "exec"), py_ns)
+                        py_fn = py_ns.get(stmt.name)
+                        if callable(py_fn):
+                            for probe_base in (0.35, 0.85):
+                                p_vals = [probe_base + 0.17 * j for j in range(len(all_args))]
+                                py_out = float(py_fn(*p_vals))
+                                obs_p = Observation({f"x_{j}": p_vals[j] for j in range(len(all_args))}, 0.0)
+                                ir_out = float(EvaluationContext(obs_p).evaluate(best_fn_prog))
+                                if not (math.isfinite(py_out) and math.isfinite(ir_out) and math.isclose(py_out, ir_out, rel_tol=1e-4, abs_tol=1e-4)):
+                                    best_fn_prog = None
+                                    break
+                    except Exception:
+                        best_fn_prog = None
             if (not aborted_imperative) and best_fn_prog is not None:
                 if not stmt.args.vararg and not stmt.args.kwarg and not stmt.args.defaults:
                     module_fn_progs[stmt.name] = (len(all_args), best_fn_prog)

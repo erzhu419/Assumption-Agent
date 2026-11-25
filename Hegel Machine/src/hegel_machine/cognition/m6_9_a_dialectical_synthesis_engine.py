@@ -1054,7 +1054,11 @@ def _public_benchmark_has_unresolved_gap(pub_t: dict[str, Any], pub_a: dict[str,
         return True, "both_failed_public_checker_script"
     if pub_t.get("amr_solve_ok") is False and pub_a.get("amr_solve_ok") is False:
         return True, "both_failed_amr_canonical_residual"
-    if pub_t.get("sparse_cert_valid") is False and pub_a.get("sparse_cert_valid") is False:
+    st_t = pub_t.get("sparse_cert_verification_state")
+    st_a = pub_a.get("sparse_cert_verification_state")
+    t_sparse_refuted = st_t == "REFUTED" or (st_t is None and pub_t.get("sparse_cert_valid") is False)
+    a_sparse_refuted = st_a == "REFUTED" or (st_a is None and pub_a.get("sparse_cert_valid") is False)
+    if t_sparse_refuted and a_sparse_refuted:
         return True, "both_failed_sparse_certificate_validity"
     if (
         (pub_t.get("traffic_delayed_ok") is not None or pub_a.get("traffic_delayed_ok") is not None)
@@ -1799,6 +1803,20 @@ def run_m6_9_a_two_branch_episode(
         selective_decision["primary_public_metrics"] = {k: v for k, v in pub_sel.items() if v is not None}
         if selective_decision.get("spawn_second_branch"):
             thesis_sum = _exec_thesis()
+        if use_m8_planner:
+            from .m8_offline_container_planner import finalize_container_decision_record
+
+            extra_p = int((thesis_sum or {}).get("prompt_tokens") or 0)
+            extra_c = int((thesis_sum or {}).get("completion_tokens") or 0)
+            extra_w = float((thesis_sum or {}).get("wall_ms") or 0.0)
+            finalize_container_decision_record(
+                selective_decision,
+                executed_ok=bool(thesis_sum is None or thesis_sum.get("ended_by_finish")),
+                actual_cost=(2.0 if thesis_sum is not None else 1.0),
+                prompt_tokens=int(anti_sum.get("prompt_tokens") or 0) + extra_p,
+                completion_tokens=int(anti_sum.get("completion_tokens") or 0) + extra_c,
+                wall_ms=float(anti_sum.get("wall_ms") or 0.0) + extra_w,
+            )
     else:
         with ThreadPoolExecutor(max_workers=2) as branch_pool:
             fut_t = branch_pool.submit(_exec_thesis)
@@ -2058,9 +2076,10 @@ def run_m6_9_a_two_branch_episode(
         "arm": ("Hegel_M6_9_2_Selective_LiveGPT" if selective_second_branch else "Hegel_M6_9_A_TwoBranch_LiveGPT"),
         "declared_budget_multiplier": (
             ("selective_2x_spawned_synthesis" if thesis_sum else "selective_1x_single_branch")
-            if selective_second_branch
+            if (selective_second_branch or use_m8_planner)
             else "2x_56_turns_plus_synthesis"
         ),
+        "selective_second_branch": bool(selective_second_branch or use_m8_planner),
         "selective_router_decision": selective_decision,
         "strict_pass": strict_pass,
         "reward": reward_val,
