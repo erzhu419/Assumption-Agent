@@ -1210,7 +1210,7 @@ def lift_python_scientific_expressions_to_programs(
                     aborted_imperative = True
                     break
             if (not aborted_imperative) and best_fn_prog is not None:
-                # Domain-interior Python-vs-IR consistency check on scalar pure functions (`M8.2` differential check)
+                # Pure side-effect-free AST scalar differential check (`M8.4` Fix: ZERO host `exec`/`eval`!)
                 uses_idx_subscript = "_idx" in json.dumps(best_fn_prog.to_dict())
                 if (
                     not uses_idx_subscript
@@ -1223,22 +1223,132 @@ def lift_python_scientific_expressions_to_programs(
                         from .language import EvaluationContext
                         from .models import Observation
 
-                        sanitized_lines = [
-                            ln for ln in code_str.splitlines()
-                            if not ln.lstrip().startswith(("@track_wormhole_skill", "from . import track_wormhole_skill"))
-                        ]
-                        py_ns: dict[str, Any] = {"math": math, "np": np, "numpy": np}
-                        exec(compile("\n".join(sanitized_lines), "<ast_ir_check>", "exec"), py_ns)
-                        py_fn = py_ns.get(stmt.name)
-                        if callable(py_fn):
-                            for probe_base in (0.35, 0.85):
-                                p_vals = [probe_base + 0.17 * j for j in range(len(all_args))]
-                                py_out = float(py_fn(*p_vals))
-                                obs_p = Observation({f"x_{j}": p_vals[j] for j in range(len(all_args))}, 0.0)
-                                ir_out = float(EvaluationContext(obs_p).evaluate(best_fn_prog))
-                                if not (math.isfinite(py_out) and math.isfinite(ir_out) and math.isclose(py_out, ir_out, rel_tol=1e-4, abs_tol=1e-4)):
-                                    best_fn_prog = None
-                                    break
+                        fn_defs_by_name = {
+                            s.name: s
+                            for s in tree.body
+                            if isinstance(s, ast.FunctionDef)
+                            and all(
+                                (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "track_wormhole_skill")
+                                or (isinstance(d, ast.Name) and d.id == "track_wormhole_skill")
+                                for d in s.decorator_list
+                            )
+                        }
+
+                        def _eval_pure_ast_expr(node: ast.AST, loc_env: dict[str, float], depth: int = 0) -> float:
+                            if depth > 24:
+                                raise ValueError("max_ast_eval_depth")
+                            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+                                return float(node.value)
+                            if isinstance(node, ast.Name):
+                                if node.id in loc_env:
+                                    return float(loc_env[node.id])
+                                raise ValueError(f"unknown_name:{node.id}")
+                            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in valid_mod_aliases:
+                                if node.attr == "pi":
+                                    return math.pi
+                                if node.attr == "e":
+                                    return math.e
+                                raise ValueError(f"unknown_const_attr:{node.attr}")
+                            if isinstance(node, ast.UnaryOp):
+                                v = _eval_pure_ast_expr(node.operand, loc_env, depth + 1)
+                                if isinstance(node.op, ast.USub):
+                                    return -v
+                                if isinstance(node.op, ast.UAdd):
+                                    return v
+                                raise ValueError("unsupported_unary")
+                            if isinstance(node, ast.BinOp):
+                                lv = _eval_pure_ast_expr(node.left, loc_env, depth + 1)
+                                rv = _eval_pure_ast_expr(node.right, loc_env, depth + 1)
+                                if isinstance(node.op, ast.Add):
+                                    return lv + rv
+                                if isinstance(node.op, ast.Sub):
+                                    return lv - rv
+                                if isinstance(node.op, ast.Mult):
+                                    return lv * rv
+                                if isinstance(node.op, ast.Div):
+                                    return lv / rv
+                                if isinstance(node.op, ast.Pow):
+                                    return float(lv ** rv)
+                                raise ValueError("unsupported_binop")
+                            if isinstance(node, ast.IfExp):
+                                cond_node = node.test
+                                if not isinstance(cond_node, ast.Compare) or len(cond_node.ops) != 1 or len(cond_node.comparators) != 1:
+                                    raise ValueError("unsupported_ifexp_test")
+                                cl = _eval_pure_ast_expr(cond_node.left, loc_env, depth + 1)
+                                cr = _eval_pure_ast_expr(cond_node.comparators[0], loc_env, depth + 1)
+                                cop = cond_node.ops[0]
+                                c_ok = (
+                                    (cl > cr) if isinstance(cop, ast.Gt) else
+                                    (cl >= cr) if isinstance(cop, ast.GtE) else
+                                    (cl < cr) if isinstance(cop, ast.Lt) else
+                                    (cl <= cr) if isinstance(cop, ast.LtE) else
+                                    (cl == cr) if isinstance(cop, ast.Eq) else
+                                    (cl != cr) if isinstance(cop, ast.NotEq) else False
+                                )
+                                return _eval_pure_ast_expr(node.body if c_ok else node.orelse, loc_env, depth + 1)
+                            if isinstance(node, ast.Call) and not node.keywords:
+                                c_args = [_eval_pure_ast_expr(a, loc_env, depth + 1) for a in node.args]
+                                if isinstance(node.func, ast.Name):
+                                    fn_id = node.func.id
+                                    if fn_id == "abs" and len(c_args) == 1:
+                                        return abs(c_args[0])
+                                    if fn_id == "min" and len(c_args) >= 2:
+                                        return min(c_args)
+                                    if fn_id == "max" and len(c_args) >= 2:
+                                        return max(c_args)
+                                    if fn_id == "float" and len(c_args) == 1:
+                                        return float(c_args[0])
+                                    if fn_id in fn_defs_by_name and fn_id != stmt.name:
+                                        return _eval_pure_ast_fn(fn_defs_by_name[fn_id], c_args, depth + 1)
+                                elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id in valid_mod_aliases:
+                                    anm = node.func.attr
+                                    _PURE_UNARY = {
+                                        "sin": math.sin, "cos": math.cos, "tan": math.tan, "tanh": math.tanh,
+                                        "exp": math.exp, "expm1": math.expm1, "log": math.log, "log1p": math.log1p,
+                                        "sqrt": math.sqrt, "abs": abs, "fabs": math.fabs, "square": lambda z: z * z,
+                                    }
+                                    if anm in _PURE_UNARY and len(c_args) == 1:
+                                        return float(_PURE_UNARY[anm](c_args[0]))
+                                    if anm == "maximum" and len(c_args) == 2:
+                                        return max(c_args[0], c_args[1])
+                                    if anm == "minimum" and len(c_args) == 2:
+                                        return min(c_args[0], c_args[1])
+                                    if anm == "hypot" and len(c_args) == 2:
+                                        return math.hypot(c_args[0], c_args[1])
+                                    if anm == "atan2" and len(c_args) == 2:
+                                        return math.atan2(c_args[0], c_args[1])
+                                    if anm == "clip" and len(c_args) == 3:
+                                        return min(max(c_args[0], c_args[1]), c_args[2])
+                            raise ValueError("unsupported_ast_call_or_node")
+
+                        def _eval_pure_ast_fn(fdef: ast.FunctionDef, vals: list[float], depth: int = 0) -> float:
+                            f_args = [*fdef.args.posonlyargs, *fdef.args.args]
+                            if len(f_args) != len(vals):
+                                raise ValueError("arity_mismatch")
+                            loc: dict[str, float] = {a.arg: float(v) for a, v in zip(f_args, vals)}
+                            for bs in fdef.body:
+                                if isinstance(bs, ast.Expr) and isinstance(bs.value, ast.Constant) and isinstance(bs.value.value, str):
+                                    continue
+                                if isinstance(bs, ast.Pass):
+                                    continue
+                                if isinstance(bs, ast.Assign) and len(bs.targets) == 1 and isinstance(bs.targets[0], ast.Name):
+                                    loc[bs.targets[0].id] = _eval_pure_ast_expr(bs.value, loc, depth + 1)
+                                elif isinstance(bs, ast.AnnAssign) and isinstance(bs.target, ast.Name) and bs.value is not None:
+                                    loc[bs.target.id] = _eval_pure_ast_expr(bs.value, loc, depth + 1)
+                                elif isinstance(bs, ast.Return) and bs.value is not None:
+                                    return _eval_pure_ast_expr(bs.value, loc, depth + 1)
+                                else:
+                                    raise ValueError("imperative_stmt")
+                            raise ValueError("missing_return")
+
+                        for probe_base in (0.35, 0.85):
+                            p_vals = [probe_base + 0.17 * j for j in range(len(all_args))]
+                            py_out = float(_eval_pure_ast_fn(stmt, p_vals))
+                            obs_p = Observation({f"x_{j}": p_vals[j] for j in range(len(all_args))}, 0.0)
+                            ir_out = float(EvaluationContext(obs_p).evaluate(best_fn_prog))
+                            if not (math.isfinite(py_out) and math.isfinite(ir_out) and math.isclose(py_out, ir_out, rel_tol=1e-4, abs_tol=1e-4)):
+                                best_fn_prog = None
+                                break
                     except Exception:
                         best_fn_prog = None
             if (not aborted_imperative) and best_fn_prog is not None:

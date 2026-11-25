@@ -47,6 +47,22 @@ CONTAINER_STATE_FEATURE_NAMES: tuple[str, ...] = (
 )
 
 
+def _has_unresolved_target_identifiability_nogood(nogoods: list[dict[str, Any]] | None) -> bool:
+    """Detect active RUNG_3 physical/identifiability nogoods warning that a target parameter remains under-identified."""
+    for ng in nogoods or []:
+        if not isinstance(ng, dict):
+            continue
+        rung = str(ng.get("nogood_rung") or "")
+        refuted = str(ng.get("assumption_refuted") or "").lower()
+        witness = " ".join(str(ng.get(k) or "") for k in ("empirical_witness", "causal_blanket_diagnosis")).lower()
+        if rung.startswith("RUNG_3") and (
+            ("identified" in refuted or "identifiable" in refuted)
+            and any(kw in witness for kw in ("trades off", "collinear", "unidentifiable", "shifts the fitted"))
+        ):
+            return True
+    return False
+
+
 def classify_public_container_verification_state(
     *,
     benchmark: str,
@@ -56,6 +72,7 @@ def classify_public_container_verification_state(
     skill_activation_count: int,
     nogood_count: int,
     submitted_final_answer: str | None = None,
+    nogoods_recorded: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[str]]:
     """Classify pre-lock primary container state into 4 honest epistemic tiers:
     `VERIFIED`, `SUPPORTED_IN_PARTIAL_SCOPE`, `UNKNOWN`, `REFUTED`.
@@ -76,6 +93,8 @@ def classify_public_container_verification_state(
         return "UNKNOWN", ["unverified_single_trace_text_answer"]
 
     pub = public_metrics or {}
+    has_ident_warn = bool(pub.get("identifiability_warning"))
+    has_target_nogood = _has_unresolved_target_identifiability_nogood(nogoods_recorded)
 
     # 1. Explicit public refutations -> `REFUTED`
     if pub.get("public_checker_passed") is False:
@@ -99,13 +118,13 @@ def classify_public_container_verification_state(
     if isinstance(pub.get("nano_missing_popins"), list) and len(pub["nano_missing_popins"]) > 0:
         reasons.append("missing_public_popin_events")
     if pub.get("symbolic_oof_status") == "unsupported_interface" or (
-        pub.get("symbolic_oof_f1") is not None and float(pub["symbolic_oof_f1"]) < 0.72
+        pub.get("symbolic_oof_f1") is not None and not (float(pub["symbolic_oof_f1"]) >= 0.72)
     ):
         reasons.append("low_or_unsupported_public_oof_f1")
     for wk, st_k in (("gw_cross_worst_mm", "gw_probe_status"), ("vb_cross_worst_mm", "vb_probe_status")):
         if str(pub.get(st_k) or "").startswith(("timeout", "error", "rc_")):
             reasons.append(f"{st_k}_failed")
-        elif pub.get(wk) is not None and float(pub[wk]) > 20.0:
+        elif pub.get(wk) is not None and not (float(pub[wk]) <= 20.0):
             reasons.append(f"{wk}_exceeds_20mm")
     if pub.get("nav_schema_ok") is False:
         reasons.append("failed_navigation_cli_holdout")
@@ -113,7 +132,7 @@ def classify_public_container_verification_state(
     if reasons:
         return "REFUTED", reasons
 
-    # 2. Explicit quantitative domain target benchmark passed -> `VERIFIED`
+    # 2. Explicit quantitative domain target benchmark passed WITHOUT identifiability warnings -> `VERIFIED`
     verified_receipts: list[str] = []
     if pub.get("amr_solve_ok") is True:
         verified_receipts.append("amr_solve_ok")
@@ -129,17 +148,28 @@ def classify_public_container_verification_state(
         verified_receipts.append("spin_glass_hamiltonian_verified")
     if pub.get("nav_schema_ok") is True:
         verified_receipts.append("navigation_holdout_verified")
-    if pub.get("public_output_contract_ok") is True and pub.get("id_renaming_invariant_ok") is True:
-        verified_receipts.append("public_output_and_renaming_invariance_verified")
+    if (
+        pub.get("public_output_contract_ok") is True
+        and pub.get("id_renaming_invariant_ok") is True
+        and pub.get("public_calibration_ok") is True
+    ):
+        verified_receipts.append("public_calibration_and_symmetry_envelope_verified")
     for wk, st_k in (("gw_cross_worst_mm", "gw_probe_status"), ("vb_cross_worst_mm", "vb_probe_status")):
         if pub.get(st_k) == "ok" and pub.get(wk) is not None and float(pub[wk]) <= 20.0:
             verified_receipts.append(f"{wk}_verified_le_20mm")
 
-    if verified_receipts:
+    if verified_receipts and not has_ident_warn and not has_target_nogood:
         return "VERIFIED", verified_receipts
 
-    # 3. Partial-scope / indirect empirical checks (`skill >= 1`, `nogood >= 1`, or generic checker) -> `SUPPORTED_IN_PARTIAL_SCOPE`
+    # 3. Partial-scope / metamorphic-only / identifiability-warned checks -> `SUPPORTED_IN_PARTIAL_SCOPE`
     partial_receipts: list[str] = []
+    if verified_receipts and (has_ident_warn or has_target_nogood):
+        if has_ident_warn:
+            partial_receipts.append("public_calibrated_with_identifiability_warning")
+        if has_target_nogood:
+            partial_receipts.append("unresolved_rung3_target_identifiability_nogood")
+    if pub.get("public_output_contract_ok") is True and pub.get("id_renaming_invariant_ok") is True and pub.get("public_calibration_ok") is not True:
+        partial_receipts.append("public_contract_and_renaming_supported_without_target_calibration")
     if pub.get("public_checker_passed") is True:
         partial_receipts.append("generic_public_checker_passed")
     if isinstance(pub.get("nano_missing_popins"), list) and len(pub["nano_missing_popins"]) == 0:
@@ -163,16 +193,20 @@ def build_pre_action_feature_vector(pre_state: dict[str, Any]) -> np.ndarray:
     sk_cnt = int(pre_state["skill_activation_count"])
     ng_cnt = int(pre_state["nogood_count"])
     is_bm = str(pre_state.get("benchmark") or "") == "BioMysteryBench-Preview"
+    ident_risk = bool(pre_state.get("identifiability_warning") or pre_state.get("unresolved_target_identifiability_nogood"))
 
     f_refuted = 1.0 if (ver_state == "REFUTED" or not bool(pre_state["ended_by_finish"]) or bool(pre_state.get("pullback_gate_triggered"))) else 0.0
-    f_unknown_code = 1.0 if (ver_state == "UNKNOWN" and not is_bm) else 0.0
+    f_unknown_code = 1.0 if ((ver_state == "UNKNOWN" and not is_bm) or ident_risk) else 0.0
     f_unknown_bm = 1.0 if (ver_state == "UNKNOWN" and is_bm) else 0.0
     f_exhaust = 1.0 if (turns_ratio >= 0.96 and sk_cnt == 0) else max(0.0, (turns_ratio - 0.85) / 0.15) * (0.25 if sk_cnt >= 1 else 1.0)
     f_grounded = (
         1.0
         if (
-            ver_state == "VERIFIED"
-            or (ver_state == "SUPPORTED_IN_PARTIAL_SCOPE" and (sk_cnt >= 1 or ng_cnt >= 1) and turns_ratio < 0.96)
+            not ident_risk
+            and (
+                ver_state == "VERIFIED"
+                or (ver_state == "SUPPORTED_IN_PARTIAL_SCOPE" and (sk_cnt >= 1 or ng_cnt >= 1) and turns_ratio < 0.96)
+            )
         )
         else 0.0
     )
@@ -193,11 +227,16 @@ def build_container_pre_action_state(
     max_t = max(1, int(primary_summary.get("max_turns") or 28))
     used_t = int(primary_summary.get("turns_used") or 0)
     sk_cnt = int(primary_summary.get("skill_activation_count") or 0)
-    ng_cnt = int(primary_summary.get("nogood_count") or len(primary_summary.get("nogoods_recorded") or []))
+    ng_recs = list(primary_summary.get("nogoods_recorded") or [])
+    ng_cnt = int(primary_summary.get("nogood_count") or len(ng_recs))
     staged_cnt = len(primary_summary.get("staged_wormhole_modules") or [])
     chk_ok = bool((contract_check or {}).get("accepted", True))
     if benchmark != "BioMysteryBench-Preview" and not primary_summary.get("final_candidate_sha256") and contract_check is None:
         chk_ok = False
+
+    pub_m = public_metrics or {}
+    has_ident_warn = bool(pub_m.get("identifiability_warning"))
+    has_target_ng = _has_unresolved_target_identifiability_nogood(ng_recs)
 
     v_state, v_reasons = classify_public_container_verification_state(
         benchmark=benchmark,
@@ -207,6 +246,7 @@ def build_container_pre_action_state(
         skill_activation_count=sk_cnt,
         nogood_count=ng_cnt,
         submitted_final_answer=primary_summary.get("submitted_final_answer"),
+        nogoods_recorded=ng_recs,
     )
     return {
         "task_id": task_id,
@@ -220,6 +260,8 @@ def build_container_pre_action_state(
         "staged_module_count": staged_cnt,
         "skill_activation_count": sk_cnt,
         "nogood_count": ng_cnt,
+        "identifiability_warning": has_ident_warn,
+        "unresolved_target_identifiability_nogood": has_target_ng,
         "contract_accepted": chk_ok,
         "public_verification_state": v_state,
         "public_verification_reasons": v_reasons,
@@ -284,6 +326,10 @@ def finalize_container_decision_record(
     """Upgrade a pre-execution `PROPOSED_PRE_EXECUTION` decision dict with post-execution measured receipts."""
     rec_d = dict(decision_out.get("decision_record") or {})
     if rec_d:
+        act_nm = str(decision_out.get("selected_action") or rec_d.get("selected_action"))
+        rec_d["selected_action"] = act_nm
+        if act_nm not in (rec_d.get("available_actions") or []):
+            rec_d["available_actions"] = [*(rec_d.get("available_actions") or []), act_nm]
         rec_d["execution_status"] = "EXECUTED_OK" if executed_ok else "EXECUTION_ERROR"
         rec_d["actual_cost"] = round(float(actual_cost), 5)
         rec_d["total_search_cost_spent"] = round(float(actual_cost), 5)
@@ -291,7 +337,7 @@ def finalize_container_decision_record(
         rec_d["total_completion_tokens"] = int(completion_tokens)
         rec_d["attempt_cost_events"] = [
             {
-                "action": str(decision_out.get("selected_action")),
+                "action": act_nm,
                 "cost_spent": round(float(actual_cost), 5),
                 "prompt_tokens": int(prompt_tokens),
                 "completion_tokens": int(completion_tokens),
@@ -306,11 +352,12 @@ def finalize_container_decision_record(
 
 @dataclass
 class M8OfflineContainerPlanner:
-    """Calibrated M8.2 Variational Planner: NIG posterior primary failure risk x Beta realized recovery - cost."""
+    """Calibrated M8.4 Variational Planner: Two-Sided Realized Synthesis Utility (Rescue Gain minus Synthesis Damage minus Cost)."""
 
     nig_fit: dict[str, Any]
     posterior_recovery_rate: float = 0.35
-    cost_lambda: float = 0.08
+    posterior_damage_rate: float = 0.05
+    cost_lambda: float = 0.02
     epistemic_ucb_beta: float = 0.35
     decision_threshold: float = 0.0
     training_suite_ids: list[str] = field(default_factory=list)
@@ -323,18 +370,29 @@ class M8OfflineContainerPlanner:
         records: list[dict[str, Any]],
         *,
         suite_ids: list[str],
-        cost_lambda: float = 0.08,
+        cost_lambda: float = 0.02,
         epistemic_ucb_beta: float = 0.35,
     ) -> M8OfflineContainerPlanner:
         X_rows = [build_pre_action_feature_vector(r["pre_action_state"]) for r in records]
-        # 1. Fit scale-covariant NIG posterior on primary Antithesis failure indicator `1 - antithesis_1x_pass`
-        #    (which is strictly causal wrt primary `pre_action_state`!)
-        y_primary_fail = np.array(
-            [1.0 - float(r["outcomes"]["antithesis_1x_pass"]) for r in records],
+        # 1. Fit scale-covariant NIG posterior on two-sided realized synthesis risk/harm target:
+        #    `+1` when primary failed, `-0.5` when synthesis damaged a contract-accepted passing primary, and `0` otherwise!
+        y_two_sided = np.array(
+            [
+                (
+                    1.0
+                    if not bool(r["outcomes"]["antithesis_1x_pass"])
+                    else (
+                        -0.5
+                        if (bool(r["pre_action_state"].get("contract_accepted", True)) and not bool(r["outcomes"]["m8_twobranch_pass"]))
+                        else 0.0
+                    )
+                )
+                for r in records
+            ],
             dtype=float,
         )
         # 2. Estimate realized conditional 2-branch recovery rate `P(m8_twobranch_pass | primary_fail)` via Beta(2, 2)
-        #    (strictly realized synthesis outcome, NEVER `oracle_either_pass`!)
+        #    AND conditional collateral synthesis-damage rate `P(not m8_twobranch_pass | contract_accepted & primary_pass)` via Beta(0.5, 11.5)!
         n_fail = sum(1 for r in records if not bool(r["outcomes"]["antithesis_1x_pass"]))
         n_recovered = sum(
             1
@@ -343,12 +401,26 @@ class M8OfflineContainerPlanner:
         )
         post_rec_rate = float((2.0 + n_recovered) / (4.0 + n_fail))
 
+        n_pass_acc = sum(
+            1
+            for r in records
+            if bool(r["pre_action_state"].get("contract_accepted", True)) and bool(r["outcomes"]["antithesis_1x_pass"])
+        )
+        n_damaged = sum(
+            1
+            for r in records
+            if bool(r["pre_action_state"].get("contract_accepted", True))
+            and bool(r["outcomes"]["antithesis_1x_pass"])
+            and (not bool(r["outcomes"]["m8_twobranch_pass"]))
+        )
+        post_dmg_rate = float((0.5 + n_damaged) / (12.0 + n_pass_acc))
+
         Phi = np.vstack(X_rows)
         # Structural prior mean on `[intercept, refuted, unknown_code, unknown_bm, exhaust, grounded]`
         prior_mu = np.array([0.15, 0.55, 0.55, 0.10, 0.45, -0.15], dtype=float)
         nig = fit_scale_covariant_nig_linear_model(
             Phi,
-            y_primary_fail,
+            y_two_sided,
             prior_mean=prior_mu,
             prior_shrinkage=2.0,
             alpha_0=3.0,
@@ -357,6 +429,7 @@ class M8OfflineContainerPlanner:
         return cls(
             nig_fit=nig,
             posterior_recovery_rate=post_rec_rate,
+            posterior_damage_rate=post_dmg_rate,
             cost_lambda=float(cost_lambda),
             epistemic_ucb_beta=float(epistemic_ucb_beta),
             decision_threshold=0.0,
@@ -371,21 +444,16 @@ class M8OfflineContainerPlanner:
         step_index: int = 1,
         record_to_ledger: bool = True,
     ) -> dict[str, Any]:
-        """Compute NIG-Beta expected net utility `p_rec * (mu_fail + beta * epistemic_std) - cost_lambda`.
-
-        Hard overrides fire ONLY on:
-          - Safety failure (`not ended_by_finish`, `pullback_gate_triggered`, or `REFUTED`) -> `SpawnDialecticalChallenger`
-          - Quantitative domain verification (`VERIFIED` before hard turn ceiling) -> `CommitPrimary1x`
-        ALL `SUPPORTED_IN_PARTIAL_SCOPE` and `UNKNOWN` states are governed strictly by `net_variational_utility > decision_threshold`!
-        """
+        """Compute two-sided NIG-Beta expected net utility `p_rec * ucb_fail - (1 - lcb_fail) * p_damage - cost_lambda`."""
         x_vec = build_pre_action_feature_vector(pre_state)[None, :]
         pred = predict_nig_student_t_log_score(self.nig_fit, x_vec, np.zeros(1))
-        mu_fail = float(np.clip(pred["predictions"][0], 0.0, 1.0))
-        # Use epistemic parameter uncertainty (`epistemic_std`), NOT noise-inflated `predictive_std`!
+        raw_mu = float(np.clip(pred["predictions"][0], -1.0, 1.0))
+        mu_fail = float(np.clip(raw_mu, 0.0, 1.0))
         epistemic_std = float(pred["epistemic_std"][0])
-        ucb_fail_risk = min(1.0, mu_fail + self.epistemic_ucb_beta * epistemic_std)
+        ucb_fail_risk = float(np.clip(raw_mu + self.epistemic_ucb_beta * epistemic_std, -1.0, 1.0))
         expected_gain = self.posterior_recovery_rate * ucb_fail_risk
-        net_variational_utility = expected_gain - self.cost_lambda
+        expected_collateral_damage = (1.0 - mu_fail) * self.posterior_damage_rate
+        net_variational_utility = expected_gain - expected_collateral_damage - self.cost_lambda
 
         triggers: list[str] = []
         hard_safety_spawn = False
@@ -453,6 +521,7 @@ class M8OfflineContainerPlanner:
             "triggers": triggers,
             "posterior_mean_fail_risk": round(mu_fail, 5),
             "posterior_mean_gain": round(expected_gain, 5),
+            "expected_collateral_damage": round(expected_collateral_damage, 5),
             "epistemic_std_gain": round(epistemic_std, 5),
             "net_variational_utility": round(net_variational_utility, 5),
             "public_verification_state": pre_state["public_verification_state"],
@@ -466,9 +535,10 @@ class M8OfflineContainerPlanner:
             if k != "residuals"
         }
         return {
-            "schema": "hegel_m8_calibrated_container_planner_v2",
+            "schema": "hegel_m8_calibrated_container_planner_v3",
             "feature_names": ["intercept", *CONTAINER_STATE_FEATURE_NAMES],
             "posterior_recovery_rate": self.posterior_recovery_rate,
+            "posterior_damage_rate": self.posterior_damage_rate,
             "cost_lambda": self.cost_lambda,
             "epistemic_ucb_beta": self.epistemic_ucb_beta,
             "decision_threshold": self.decision_threshold,
@@ -485,6 +555,7 @@ class M8OfflineContainerPlanner:
         return cls(
             nig_fit=nig_raw,
             posterior_recovery_rate=float(data.get("posterior_recovery_rate", 0.35)),
+            posterior_damage_rate=float(data.get("posterior_damage_rate", 0.04)),
             cost_lambda=float(data["cost_lambda"]),
             epistemic_ucb_beta=float(data["epistemic_ucb_beta"]),
             decision_threshold=float(data["decision_threshold"]),

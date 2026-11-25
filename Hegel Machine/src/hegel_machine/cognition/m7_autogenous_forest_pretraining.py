@@ -358,10 +358,27 @@ def _extract_code_ast_operator_profile(python_code: str) -> dict[str, Any]:
         "exp": "exp_log_kernel", "expm1": "exp_log_kernel", "log": "exp_log_kernel", "log1p": "exp_log_kernel", "hypot": "metric_norm", "norm": "metric_norm",
     }
 
+    func_ast_dumps: list[str] = []
     for fn in [n for n in tree.body if isinstance(n, ast.FunctionDef)]:
         if fn.name.startswith("_"):
             continue
         func_count += 1
+        fn_clean = deepcopy(fn)
+        fn_clean.decorator_list = [
+            d for d in fn_clean.decorator_list
+            if not (
+                (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "track_wormhole_skill")
+                or (isinstance(d, ast.Name) and d.id == "track_wormhole_skill")
+            )
+        ]
+        if (
+            fn_clean.body
+            and isinstance(fn_clean.body[0], ast.Expr)
+            and isinstance(fn_clean.body[0].value, ast.Constant)
+            and isinstance(fn_clean.body[0].value.value, str)
+        ):
+            fn_clean.body = fn_clean.body[1:] or [ast.Pass()]
+        func_ast_dumps.append(ast.dump(fn_clean, annotate_fields=True, include_attributes=False))
         for sub in ast.walk(fn):
             if isinstance(sub, ast.BinOp):
                 bin_ops += 1
@@ -388,6 +405,7 @@ def _extract_code_ast_operator_profile(python_code: str) -> dict[str, Any]:
         "sci_calls": sorted(set(sci_calls)),
         "bin_ops_bucket": min(bin_ops // 3, 12),
         "has_loops": loops_or_comps > 0,
+        "canonical_fn_asts": func_ast_dumps,
     }
     ast_sha12 = hashlib.sha256(json.dumps(canon_struct, sort_keys=True).encode("utf-8")).hexdigest()[:12] if has_real_computation else ""
     return {
@@ -621,6 +639,7 @@ def discover_cross_tree_operator_wormholes(
                         "verification_tier": verification_tier,
                         "subtree_id": sub_id,
                         "origin_node_ids": [nid_a, nid_b],
+                        "source_code_ast_digests": {nid_a: ea["code_ast_digest"], nid_b: eb["code_ast_digest"]},
                     },
                     hop_error_budget=0.08 if mech_verified else 0.18,
                     permission_tier="local_solver_guidance" if mech_verified else "bounded_trial",
@@ -842,6 +861,37 @@ def validate_and_decorate_autogenous_python_code(
     const_lines: list[str] = []
     fn_nodes: list[ast.FunctionDef] = []
 
+    _DISALLOWED_IO_CALL_ATTRS = {
+        "savetxt", "save", "savez", "savez_compressed", "tofile", "memmap",
+        "loadtxt", "genfromtxt", "fromfile", "load", "dump", "system", "popen",
+    }
+    for sub_n in ast.walk(tree):
+        if isinstance(sub_n, ast.Call):
+            c_attr = sub_n.func.attr if isinstance(sub_n.func, ast.Attribute) else (sub_n.func.id if isinstance(sub_n.func, ast.Name) else "")
+            if c_attr in _DISALLOWED_IO_CALL_ATTRS:
+                return False, f"disallowed_io_call:{c_attr}", [], ""
+
+    def _is_pure_top_const(expr_node: ast.AST) -> bool:
+        if isinstance(expr_node, ast.Constant):
+            return True
+        if isinstance(expr_node, ast.UnaryOp) and isinstance(expr_node.operand, ast.Constant):
+            return True
+        if isinstance(expr_node, (ast.Tuple, ast.List, ast.Set)):
+            return all(_is_pure_top_const(e) for e in expr_node.elts)
+        if isinstance(expr_node, ast.Dict):
+            return all((k is not None and _is_pure_top_const(k) and _is_pure_top_const(v)) for k, v in zip(expr_node.keys, expr_node.values))
+        if (
+            isinstance(expr_node, ast.Call)
+            and isinstance(expr_node.func, ast.Attribute)
+            and isinstance(expr_node.func.value, ast.Name)
+            and expr_node.func.value.id in {"np", "numpy"}
+            and expr_node.func.attr in {"array", "asarray"}
+            and len(expr_node.args) >= 1
+            and not expr_node.keywords
+        ):
+            return all(_is_pure_top_const(a) for a in expr_node.args)
+        return False
+
     for stmt in tree.body:
         if isinstance(stmt, ast.Import):
             for alias in stmt.names:
@@ -862,7 +912,7 @@ def validate_and_decorate_autogenous_python_code(
             import_lines.append(ast.unparse(stmt))
         elif isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
             c_id = stmt.targets[0].id
-            if not _check_pure_lexical_scope(stmt.value, allowed_mod_env):
+            if not (_is_pure_top_const(stmt.value) and _check_pure_lexical_scope(stmt.value, allowed_mod_env)):
                 return False, f"impure_module_constant:{c_id}", [], ""
             allowed_mod_env.add(c_id)
             const_lines.append(ast.unparse(stmt))
@@ -1573,10 +1623,16 @@ def load_autogenous_forest_bundle(
                         needs_rediscovery = True
                         break
             for wh in forest.horizontal_wormhole_edges.values():
+                rmap_wh = wh.get("role_and_observation_map") or {}
+                wh_digs = rmap_wh.get("source_code_ast_digests") or {}
+                for d_nid, d_sha in (wh_digs.items() if isinstance(wh_digs, dict) else []):
+                    if live_node_digests.get(str(d_nid)) != d_sha:
+                        needs_rediscovery = True
+                        break
                 endpoint_ids = [
                     wh.get("source_node_id"),
                     wh.get("target_node_id"),
-                    *((wh.get("role_and_observation_map") or {}).get("origin_node_ids") or []),
+                    *(rmap_wh.get("origin_node_ids") or []),
                 ]
                 for ep_nid in endpoint_ids:
                     if ep_nid and str(ep_nid) in archive and str(ep_nid) not in live_node_digests:

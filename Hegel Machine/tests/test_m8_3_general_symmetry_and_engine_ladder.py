@@ -50,7 +50,7 @@ def fit_prony_and_predict_stress(experiment: dict) -> dict:
     assert p_bad_08["public_output_contract_ok"] is True  # Passes unperturbed public fit!
     assert p_bad_08["id_renaming_invariant_ok"] is False  # Caught by affine thermal-drift gauge probe!
 
-    # Verify upgraded horizon-truncation + equilibrium-shift probe catches the live M8.3 `ho08` `G_inf <-> slow mode` collinearity!
+    # Verify upgraded horizon-truncation check emits soft `identifiability_warning` (`SUPPORTED_IN_PARTIAL_SCOPE`, NOT false `REFUTED`!)
     archived_ho08_fp = (
         REPO_ROOT
         / "docs/evidence/m8_3_live_engine_symmetry_repair_slice_20261125"
@@ -62,7 +62,17 @@ def fit_prony_and_predict_stress(experiment: dict) -> dict:
             candidate_py_code=archived_ho08_fp.read_text(encoding="utf-8"),
         )
         assert p_arch_08["public_output_contract_ok"] is True
-        assert p_arch_08["id_renaming_invariant_ok"] is False
+        assert p_arch_08["id_renaming_invariant_ok"] is True
+        assert p_arch_08["identifiability_warning"] is True
+        st_arch, _ = classify_public_container_verification_state(
+            benchmark="Hegel-OOD-Holdout-12",
+            ended_by_finish=True,
+            contract_accepted=True,
+            public_metrics=p_arch_08,
+            skill_activation_count=0,
+            nogood_count=1,
+        )
+        assert st_arch == "SUPPORTED_IN_PARTIAL_SCOPE"
     st_bad, _ = classify_public_container_verification_state(
         benchmark="Hegel-OOD-Holdout-12",
         ended_by_finish=True,
@@ -225,7 +235,8 @@ def test_m8_3_three_tier_escalation_ladder_in_main_engine(tmp_path: Path) -> Non
     assert ep_sum["postlock_branch_outcomes"]["thesis_spawned"] is False
     # Raw pre-repair Antithesis graded honestly (`False`), while repaired episode passed (`True`)!
     assert ep_sum["postlock_branch_outcomes"]["antithesis_wormhole_strict_pass"] is False
-    assert ep_sum["declared_budget_multiplier"] == "selective_1p1x_local_container_repair"
+    assert ep_sum["declared_budget_multiplier"] == "nominal_1.35u_primary_plus_local_repair"
+    assert ep_sum["episode_nominal_units_total"] == 1.35
     assert ep_sum["turns_used"] == 7  # 6 primary turns + 1 local repair turn (saved full 24-turn Thesis branch!)
     assert ep_sum["prompt_tokens"] == 810  # 500 primary + 310 local repair
     assert ckpt_fp.is_file()
