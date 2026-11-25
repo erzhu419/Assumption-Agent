@@ -994,11 +994,37 @@ def verify_autogenous_module_in_clean_container(
     synthetic_unit_test_code: str,
     public_fn_names: list[str],
     timeout_sec: int = 35,
+    require_all_public_fns_called: bool = False,
 ) -> dict[str, Any]:
-    """Mount `packaged_module_code` inside `sandbox_cid:/tmp/hegel_wormhole_skills/` and execute `synthetic_unit_test_code` under `python3 -I`."""
+    """Mount `packaged_module_code` inside `sandbox_cid:/tmp/hegel_wormhole_skills/` and execute `synthetic_unit_test_code` under `python3 -I`.
+
+    `M88-TEST-ALIAS` & `M88-FULL-EXPORT-EXEC`:
+    - Registers `sys.modules[mod_stem] = _wh_mod` so `from <mod_stem> import ...`, `from hegel_wormhole_skills.<mod_stem> import ...`,
+      and direct calls all resolve to the EXACT SAME module singleton & `@track_wormhole_skill` telemetry decorator!
+    - Parses `synthetic_unit_test_code` AST to verify substantive assertions (`assert` / `assert_allclose` / `assert_array_*`) exist.
+    - When `require_all_public_fns_called=True`, requires EVERY exported symbol in `public_fn_names` to record >= 1 completed telemetry call!
+    """
     for bad_io in ("/app", "/data", "/workspace", "/tests", "/pretrain_task"):
         if bad_io in synthetic_unit_test_code:
             return {"passed": False, "error": f"unit_test_references_forbidden_path:{bad_io}"}
+
+    try:
+        ut_ast = ast.parse(synthetic_unit_test_code)
+    except SyntaxError as exc:
+        return {"passed": False, "error": f"unit_test_syntax_error:{exc}"}
+    has_substantive_assertion = any(
+        isinstance(n, ast.Assert)
+        or (
+            isinstance(n, ast.Call)
+            and (
+                (isinstance(n.func, ast.Name) and n.func.id.startswith("assert_"))
+                or (isinstance(n.func, ast.Attribute) and n.func.attr.startswith("assert_"))
+            )
+        )
+        for n in ast.walk(ut_ast)
+    )
+    if not has_substantive_assertion:
+        return {"passed": False, "error": "unit_test_lacks_substantive_assertions"}
 
     with tempfile.TemporaryDirectory(prefix="hegel_m7_ut_") as td:
         td_p = Path(td)
@@ -1011,6 +1037,8 @@ def verify_autogenous_module_in_clean_container(
         runner_src = (
             "import sys\n"
             "sys.path.insert(0, '/tmp')\n"
+            f"import hegel_wormhole_skills.{mod_stem} as _hegel_wh_mod\n"
+            f"sys.modules[{mod_stem!r}] = _hegel_wh_mod\n"
             f"from hegel_wormhole_skills.{mod_stem} import {imp_list}\n\n"
             + synthetic_unit_test_code
             + "\nprint('AUTOGENOUS_SELF_TEST_OK')\n"
@@ -1027,23 +1055,42 @@ def verify_autogenous_module_in_clean_container(
 
     ex = m6f.exec_container_bash(
         sandbox_cid,
-        "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 HEGEL_SKILL_ACTIVATION_LOG=/tmp/.hegel_ut_act.jsonl python3 -I /tmp/run_ut.py",
+        "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 HEGEL_SKILL_CALLER_ROLE=compiler_self_test HEGEL_SKILL_ACTIVATION_LOG=/tmp/.hegel_ut_act.jsonl python3 -I /tmp/run_ut.py",
         timeout_sec=timeout_sec,
     )
     act_chk = m6f.exec_container_bash(sandbox_cid, "cat /tmp/.hegel_ut_act.jsonl 2>/dev/null || true", timeout_sec=10)
     m6f.exec_container_bash(sandbox_cid, "rm -rf /tmp/hegel_wormhole_skills /tmp/run_ut.py /tmp/.hegel_ut_act.jsonl", timeout_sec=10)
 
+    called_fn_counts: dict[str, int] = {}
+    for ln_act in (act_chk.get("stdout") or "").splitlines():
+        s_act = ln_act.strip()
+        if not s_act:
+            continue
+        try:
+            ev_act = json.loads(s_act)
+        except json.JSONDecodeError:
+            continue
+        if ev_act.get("status", "completed") == "completed" and ev_act.get("function"):
+            fn_k = str(ev_act["function"])
+            called_fn_counts[fn_k] = called_fn_counts.get(fn_k, 0) + int(ev_act.get("call_count", 1))
+
+    uncalled_public_fns = [fn for fn in public_fn_names if called_fn_counts.get(fn, 0) <= 0]
+    telemetry_ok = len(called_fn_counts) > 0 and (not require_all_public_fns_called or len(uncalled_public_fns) == 0)
+
     passed = (
         int(ex.get("exit_code", 1)) == 0
         and "AUTOGENOUS_SELF_TEST_OK" in str(ex.get("stdout") or "")
-        and len((act_chk.get("stdout") or "").strip()) > 0
+        and telemetry_ok
     )
     return {
         "passed": passed,
         "exit_code": ex.get("exit_code"),
-        "stdout": str(ex.get("stdout") or "")[-1200:],
-        "stderr": str(ex.get("stderr") or "")[-1200:],
-        "telemetry_verified": len((act_chk.get("stdout") or "").strip()) > 0,
+        "stdout": str(ex.get("stdout") or "")[-2400:],
+        "stderr": str(ex.get("stderr") or "")[-2400:],
+        "telemetry_verified": telemetry_ok,
+        "called_function_counts": called_fn_counts,
+        "uncalled_public_functions": uncalled_public_fns,
+        "has_substantive_assertion": has_substantive_assertion,
     }
 
 
@@ -1694,6 +1741,7 @@ def consolidate_wave1_via_aufhebung_compiler(
     run_id: str,
     reasoning_effort: str = "medium",
     allow_horizontal_wormholes: bool = True,
+    enable_l1_primitive_pass: bool = False,
 ) -> dict[str, Any]:
     """Blind Online Wave-1 -> Wave-2 Dialectical Consolidation (`Audit Fix A01` Preserved!):
     Inspects ONLY public completion signals (`ended_by_finish == True` & non-empty producer code, ZERO private
@@ -1733,6 +1781,20 @@ def consolidate_wave1_via_aufhebung_compiler(
 
             py_sources: dict[str, str] = {}
             resolved_source_kind = "none"
+
+            def _bundle_matches_expected_sha(cand_files: dict[str, str], exp_sha: str) -> bool:
+                """`M88-WAVE1-MULTIFILE-DIGEST`: Require non-empty `exp_sha` and verify BOTH single-file and multi-file candidate digests!"""
+                if not exp_sha or not cand_files:
+                    return False
+                if len(cand_files) == 1:
+                    only_txt = next(iter(cand_files.values()))
+                    if hashlib.sha256(only_txt.encode("utf-8")).hexdigest() == exp_sha:
+                        return True
+                h_bundle = hashlib.sha256()
+                for fn_k in sorted(cand_files.keys()):
+                    h_bundle.update(fn_k.encode("utf-8") + b"\0" + cand_files[fn_k].encode("utf-8") + b"\0")
+                return h_bundle.hexdigest() == exp_sha
+
             if rep_verified:
                 repaired_snap_dirs: list[Path] = []
                 if rep_sum.get("repaired_snapshot_dir"):
@@ -1748,10 +1810,8 @@ def consolidate_wave1_via_aufhebung_compiler(
                     cand_map = {k: v for k, v in cand_map.items() if v.strip()}
                     if not cand_map:
                         continue
-                    if expected_rep_sha and len(cand_map) == 1:
-                        only_txt = next(iter(cand_map.values()))
-                        if hashlib.sha256(only_txt.encode("utf-8")).hexdigest() != expected_rep_sha:
-                            continue
+                    if not _bundle_matches_expected_sha(cand_map, expected_rep_sha):
+                        continue
                     py_sources = cand_map
                     resolved_source_kind = "repaired_active_snapshot"
                     break
@@ -1764,7 +1824,7 @@ def consolidate_wave1_via_aufhebung_compiler(
                             for p in sorted(sub_dir.glob("*.py"))
                         }
                         cand_sub = {k: v for k, v in cand_sub.items() if v.strip()}
-                        if len(cand_sub) == 1 and hashlib.sha256(next(iter(cand_sub.values())).encode("utf-8")).hexdigest() == expected_rep_sha:
+                        if _bundle_matches_expected_sha(cand_sub, expected_rep_sha):
                             py_sources = cand_sub
                             resolved_source_kind = "repaired_hash_verified_submitted_snapshot"
                 if not py_sources:
@@ -1845,12 +1905,25 @@ def consolidate_wave1_via_aufhebung_compiler(
     finally:
         m6f.stop_container_safely(sandbox_cid)
 
+    l1_wave1_pass: dict[str, Any] | None = None
+    if enable_l1_primitive_pass and any(e.get("compiled_ok") for e in events):
+        l1_wave1_pass = sublate_autogenous_forest_into_compositional_primitives(
+            forest=forest,
+            archive=archive,
+            codex_client=client,
+            run_id=f"{run_id}__wave1_l1_pass",
+            require_pretraining_only=False,
+            allow_horizontal_wormholes=allow_horizontal_wormholes,
+            skip_already_compiled_sources=True,
+        )
+
     return {
         "blind_public_consolidation_only": True,
         "consolidated_event_count": sum(1 for e in events if e.get("compiled_ok")),
         "total_forest_nodes_after_wave1": len(forest.nodes),
         "total_horizontal_wormholes_after_wave1": len(forest.horizontal_wormhole_edges),
         "events": events,
+        "l1_primitive_pass": l1_wave1_pass,
     }
 
 
@@ -1860,6 +1933,7 @@ COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA: dict[str, Any] = {
     "required": [
         "primitive_module_stem",
         "exported_api_signatures",
+        "mathematical_preconditions",
         "compositional_rationale",
         "canonical_python_code",
         "synthetic_unit_test_code",
@@ -1874,6 +1948,14 @@ COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA: dict[str, Any] = {
             "items": {"type": "string"},
             "description": "Exact Python call signatures with type hints for the 2-3 exported schema-free numerical primitives.",
         },
+        "mathematical_preconditions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Explicit mathematical validity preconditions (e.g., positive weights/scales, SPD/PSD operator or minorant "
+                "requirements, rank/identifiability conditions, finite real/complex dtype bounds) enforced or assumed by the primitives."
+            ),
+        },
         "compositional_rationale": {
             "type": "string",
             "description": "Concise explanation of how monolithic episode-specific assumptions were factored out into general array-level primitives.",
@@ -1883,7 +1965,7 @@ COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA: dict[str, Any] = {
             "description": (
                 "Pure `math`, `numpy`, `scipy` Python module (`ZERO sklearn`, `ZERO file I/O`, `ZERO task dict keys`, "
                 "`ZERO fixed column-count checks`) implementing 2-3 compact (15-45 lines each), documented, schema-free "
-                "numerical primitives over standard NumPy arrays."
+                "numerical primitives over standard NumPy arrays with explicit cheap entry guards on invalid preconditions."
             ),
         },
         "synthetic_unit_test_code": {
@@ -1897,25 +1979,112 @@ COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA: dict[str, Any] = {
 }
 
 
+_DEFAULT_V3_L1_MATHEMATICAL_PRECONDITIONS: dict[str, list[str]] = {
+    "autogenous_prim_conservative_spd_solve": [
+        "cell_coeff > 0 and spacing > 0 everywhere on finite grid (guarantees symmetric positive-semidefinite/SPD flux operator).",
+        "operator must be square symmetric positive-definite (or consistent on orthogonal complement) for conjugate-gradient convergence.",
+    ],
+    "autogenous_prim_ridge_profiled_matching": [
+        "design (n, p) and values (n,) or (n, q) share leading axis n; ridge >= 0 finite scalar or (p,) vector.",
+        "whitener (r, p) must match the SVD Gram whitener of the same weighted design matrix; candidate_energy >= 0.",
+    ],
+    "autogenous_prim_robust_affine_projection": [
+        "scale > 0 finite scalar or broadcastable array; loss in {'huber', 'cauchy'}.",
+        "weights >= 0 when provided; sensitivity must have nonzero weighted norm above gain_floor for identifiable slope.",
+    ],
+    "autogenous_prim_box_ridge_bounds": [
+        "box >= 0, activation_cost >= 0, ridge >= 0; design (n, p) and target (n,) finite.",
+        "diagonal (if supplied) MUST be a valid PSD diagonal minorant satisfying (X.T @ X + ridge * I) - diag(diagonal) >= 0 (prefer gram_diagonal_minorant(design)).",
+    ],
+}
+
+
+def enrich_and_harden_l1_primitive_contracts(archive: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """`M88-PRIMITIVE-CONTRACTS`: Ensure every existing `L1` module in `archive` carries explicit non-empty
+    `mathematical_preconditions` (`scope_preconditions`) AND enforce PSD-minorant entry validation on `box_ridge_cube_lower_bound`!
+    """
+    updated_modules: list[str] = []
+    minorant_hardened_nodes: list[str] = []
+    for nid, rec in iter_live_archive_nodes(archive):
+        for mod in rec.get("autogenous_wormhole_modules") or []:
+            fname = str(mod.get("filename") or "")
+            stem = Path(fname).stem
+            if not (fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive"):
+                continue
+            default_pre = _DEFAULT_V3_L1_MATHEMATICAL_PRECONDITIONS.get(
+                stem,
+                ["Inputs must be finite NumPy arrays matching documented axis dimensions and positive regularization/scale parameters."],
+            )
+            cur_pre = list(mod.get("mathematical_preconditions") or mod.get("scope_preconditions") or [])
+            if not cur_pre:
+                mod["scope_preconditions"] = list(default_pre)
+                mod["mathematical_preconditions"] = list(default_pre)
+                if stem not in updated_modules:
+                    updated_modules.append(stem)
+            else:
+                mod["mathematical_preconditions"] = cur_pre
+                mod["scope_preconditions"] = cur_pre
+
+            # Harden `box_ridge_cube_lower_bound` against invalid non-minorant `diagonal` (`M8.7 Audit §6` counterexample: X=[[1]], diagonal=[2])
+            py_code = str(mod.get("python_code") or "")
+            if stem == "autogenous_prim_box_ridge_bounds" and "psd_minorant_guard_m88" not in py_code and "def box_ridge_cube_lower_bound" in py_code:
+                guard_snippet = (
+                    "    # psd_minorant_guard_m88: reject invalid `diagonal` that violates `X.T @ X + ridge * I - diag(d) >= 0`\n"
+                    "    if diagonal is not None:\n"
+                    "        _X_chk = np.asarray(design, dtype=float)\n"
+                    "        _d_chk = np.asarray(diagonal, dtype=float).ravel()\n"
+                    "        if _X_chk.ndim == 2 and _d_chk.size == _X_chk.shape[1] and _X_chk.shape[1] <= 512:\n"
+                    "            _G_chk = (_X_chk.T @ _X_chk) + float(ridge) * np.eye(_X_chk.shape[1]) - np.diag(_d_chk)\n"
+                    "            _min_eig = float(np.linalg.eigvalsh(0.5 * (_G_chk + _G_chk.T))[0]) if _X_chk.shape[1] > 0 else 0.0\n"
+                    "            if _min_eig < -1e-7 * max(1.0, float(np.max(np.abs(_d_chk))) if _d_chk.size else 1.0):\n"
+                    "                raise ValueError('diagonal must be a valid PSD minorant of design.T @ design + ridge * I')\n"
+                )
+                lines = py_code.splitlines()
+                out_lines: list[str] = []
+                inserted = False
+                in_target = False
+                for i_ln, ln in enumerate(lines):
+                    out_lines.append(ln)
+                    if ln.startswith("def box_ridge_cube_lower_bound"):
+                        in_target = True
+                    elif in_target and not inserted and ln.strip().endswith('"""') and i_ln > 0:
+                        out_lines.extend(guard_snippet.rstrip("\n").splitlines())
+                        inserted = True
+                        in_target = False
+                if inserted:
+                    new_py = "\n".join(out_lines) + "\n"
+                    compile(new_py, "<hardened_box_ridge>", "exec")
+                    mod["python_code"] = new_py
+                    mod["compiled_code_sha256"] = hashlib.sha256(new_py.encode("utf-8")).hexdigest()
+                    minorant_hardened_nodes.append(nid)
+    return {
+        "preconditions_populated_modules": updated_modules,
+        "minorant_hardened_nodes": minorant_hardened_nodes,
+    }
+
+
 def sublate_autogenous_forest_into_compositional_primitives(
     *,
     forest: PhilosophicalForest,
     archive: dict[str, dict[str, Any]],
     codex_client: Any,
-    run_id: str = "m8_7_compositional_primitives",
+    run_id: str = "m8_8_compositional_primitives",
     require_pretraining_only: bool = True,
     allow_horizontal_wormholes: bool = True,
+    skip_already_compiled_sources: bool = True,
+    max_workers: int = 8,
 ) -> dict[str, Any]:
-    """`M8.7` Two-Tier Compositional Primitive Sublation (`pt01..pt06 -> L1_compositional_primitive`):
+    """`M8.7` + `M8.8` Parallel, Replay-Auditable Two-Tier Compositional Primitive Sublation (`L2 -> L1_compositional_primitive`):
 
-    Refactors coarse episode-level `L2` autogenous Python solvers in `archive` into compact, schema-free `L1`
-    pure `numpy`/`scipy` numerical primitives (`autogenous_prim_*.py`), unit-tested inside air-gapped
-    `hegel_clean_scipy_sandbox:v1` (`network_mode='none'`).
-
-    Strict Zero-Leakage Guarantee:
-    When `require_pretraining_only=True`, mechanically rejects any forest archive containing non-`autogenous_only`
-    nodes or any `ho*` / `tb__*` benchmark episode provenance (`0` Holdout-12 or Frontier-20 exposure!).
+    Upgrades in `M8.8`:
+    - Preserves already-qualified `L1` modules by recomputed `source_candidate_sha256` (`skip_already_compiled_sources=True`) so incremental runs never re-bill or overwrite verified assets.
+    - Runs pending `L2` sources in PARALLEL (`ThreadPoolExecutor(max_workers=...)`) with dedicated air-gapped containers per worker.
+    - Archives FULL payload for EVERY attempt (passed AND failed: parsed JSON, candidate code + SHA, synthetic test + SHA, AST gate, full stdout/stderr, called functions, tokens).
+    - Enforces `require_all_public_fns_called=True` + non-empty `mathematical_preconditions` + honest `source_qualification_status`.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading as _th
+
     if require_pretraining_only:
         for nid, rec in iter_live_archive_nodes(archive):
             if rec.get("layer_role") == "coarse":
@@ -1928,85 +2097,132 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     prov_tags.append(str(m_item["provenance_episode_id"]))
             for tag in prov_tags:
                 low_t = tag.lower()
-                if low_t.startswith(("ho", "tb__", "wave1_", "m8_5_repair_")) or "holdout" in low_t:
+                if low_t.startswith(("ho", "tb__", "wave1_", "m8_5_repair_", "uf")) or "holdout" in low_t:
                     raise ValueError(
                         f"Benchmark/Holdout provenance `{tag}` on node `{nid}` forbidden when `require_pretraining_only=True`!"
                     )
 
-    # Collect unique coarse `L2` autogenous modules across live `mid`/`fine` nodes
+    enrich_receipt = enrich_and_harden_l1_primitive_contracts(archive)
+    qual_status = (
+        "pretraining_only_l1_primitive_sublation"
+        if require_pretraining_only
+        else "online_or_mixed_l1_primitive_sublation"
+    )
+
+    # Collect unique coarse `L2` autogenous modules + check existing verified `L1` modules by recomputed source SHA-256
     source_mods_by_fname: dict[str, dict[str, Any]] = {}
     node_ids_by_fname: dict[str, list[str]] = {}
+    existing_l1_by_src_sha: dict[str, dict[str, Any]] = {}
+    used_prim_stems: set[str] = set()
+
     for nid, rec in iter_live_archive_nodes(archive):
         if rec.get("layer_role") not in {"mid", "fine"}:
             continue
         for mod in rec.get("autogenous_wormhole_modules") or []:
             fname = str(mod.get("filename") or "")
-            if not fname or fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive":
+            if not fname:
+                continue
+            if fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive":
+                used_prim_stems.add(Path(fname).stem)
+                if mod.get("unit_test_verified") and mod.get("source_candidate_sha256"):
+                    existing_l1_by_src_sha[str(mod["source_candidate_sha256"])] = deepcopy(mod)
                 continue
             node_ids_by_fname.setdefault(fname, []).append(nid)
             if fname not in source_mods_by_fname:
+                recomputed_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+                declared_sha = str(mod.get("compiled_code_sha256") or "")
                 source_mods_by_fname[fname] = {
                     "mod": deepcopy(mod),
+                    "recomputed_source_sha256": recomputed_sha,
+                    "declared_source_sha256": declared_sha,
                     "representative_node_id": nid,
                     "methodology_principle": str(rec.get("methodology_principle") or ""),
                     "consolidated_nogoods": list(rec.get("wave1_consolidated_nogoods") or []),
                 }
 
     if not source_mods_by_fname:
-        return {"compiled_primitive_count": 0, "events": [], "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}}
+        return {
+            "compiled_primitive_count": 0,
+            "retained_existing_count": 0,
+            "events": [],
+            "contract_enrichment": enrich_receipt,
+            "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
+        }
 
-    ensure_clean_scipy_sandbox_image()
-    sandbox_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")
+    events_by_fname: dict[str, dict[str, Any]] = {}
+    pending_items: list[tuple[str, dict[str, Any]]] = []
+    retained_count = 0
+
+    for src_fname, bundle_item in sorted(source_mods_by_fname.items()):
+        recomp_sha = bundle_item["recomputed_source_sha256"]
+        decl_sha = bundle_item["declared_source_sha256"]
+        existing_match = existing_l1_by_src_sha.get(recomp_sha) or (existing_l1_by_src_sha.get(decl_sha) if decl_sha else None)
+        if skip_already_compiled_sources and existing_match is not None:
+            retained_count += 1
+            events_by_fname[src_fname] = {
+                "source_l2_module": src_fname,
+                "source_provenance_episode_id": str(bundle_item["mod"].get("provenance_episode_id") or ""),
+                "representative_node_id": bundle_item["representative_node_id"],
+                "recomputed_source_sha256": recomp_sha,
+                "status": "retained_existing_verified_l1",
+                "compiled_ok": True,
+                "primitive_filename": existing_match["filename"],
+                "exported_functions": existing_match.get("function_names", []),
+                "exported_apis": existing_match.get("exported_apis", ""),
+                "mathematical_preconditions": existing_match.get("mathematical_preconditions") or existing_match.get("scope_preconditions", []),
+                "compiled_code_sha256": existing_match.get("compiled_code_sha256"),
+                "synthetic_unit_test_sha256": existing_match.get("synthetic_unit_test_sha256"),
+                "attempts": [],
+                "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
+            }
+        else:
+            pending_items.append((src_fname, bundle_item))
+
     sys_prompt = (
-        "You are the `Hegel-M8.7` Compositional Numerical Primitive Compiler (`DreamCoder` / `Stitch` `L1` Abstraction Pass).\n"
+        "You are the `Hegel-M8.8` Compositional Numerical Primitive Compiler (`L1` Mathematical Operator Pass).\n"
         "You are given ONE autogenously discovered scientific Python module (`L2` episode operator) plus its empirical falsification "
-        "lessons (`nogoods`). Downstream out-of-distribution scientific problems share the underlying mathematical mechanisms "
-        "(nuisance subspace/surface projection on control subsets, Huber/Cauchy IRLS with optional linear equality / zero-sum gauge "
-        "constraints, Golub-Pereyra variable projection separating linear amplitudes/drifts from nonlinear kernels, SPD/ridge dual "
-        "bounds, leave-one-group-out jackknife stability), NOT the episode's monolithic observable layout!\n\n"
-        "YOUR REFACTORING MISSION:\n"
-        "1. Distill 2 to 3 compact (15-45 lines each), general-purpose, SCHEMA-FREE `L1` numerical primitive functions in `canonical_python_code`:\n"
-        "   - Use ONLY `math`, `numpy`, and `scipy` (`ZERO sklearn`, `ZERO open/Path/load`, `ZERO task-specific dict keys`).\n"
-        "   - NEVER hardcode fixed column counts (`len(cols) == 5`), fixed sensor counts, or binary-classification-only wrappers!\n"
-        "   - Operate directly on clean `np.ndarray` / boolean mask / float arguments with sensible keyword defaults (e.g., "
-        "`project_nuisance_subspace(values, nuisance_basis, *, fit_mask=None, weights=None, ridge=1e-6) -> tuple[np.ndarray, np.ndarray]`, "
-        "`fit_control_polynomial_field(coords, values, control_mask, *, degree=2, ridge=1e-3, huber_delta=1.35) -> tuple[np.ndarray, np.ndarray]`, "
-        "`solve_irls_linear_constrained(design, rhs, *, equality_matrix=None, equality_rhs=None, loss='huber', scale=None, ridge=1e-6, max_iter=25) -> tuple[np.ndarray, np.ndarray]`, "
-        "`varpro_linear_projection(basis_matrix, target, *, nuisance_basis=None, ridge=1e-6, nonneg_mask=None) -> dict[str, np.ndarray | float]`).\n"
-        "   - Start EVERY exported function with a crisp 1-sentence docstring stating exact input shapes and return value!\n"
-        "2. Write `synthetic_unit_test_code` (`def run_self_test(): ...; run_self_test()`) exercising EVERY exported primitive across "
-        "at least 2 distinct shapes/dimensions and asserting mathematical accuracy & finite outputs."
+        "lessons (`nogoods`). Refactor its reusable inner numerical mechanisms into 2 to 3 compact (15-45 lines each), general-purpose, "
+        "array-level `L1` functions in `canonical_python_code`:\n"
+        "1. Use ONLY `math`, `numpy`, and `scipy` (`ZERO sklearn`, `ZERO file I/O`, `ZERO task-specific dict keys`, `ZERO fixed column counts`).\n"
+        "2. State explicit `mathematical_preconditions` (positive scales/weights, SPD/PSD minorant requirements, rank/identifiability conditions) "
+        "AND raise `ValueError` on invalid shapes, non-positive scales, or violated cheap preconditions!\n"
+        "3. Start EVERY exported function with a crisp 1-sentence docstring stating exact input shapes, preconditions, and return value.\n"
+        "4. Write `synthetic_unit_test_code` (`def run_self_test(): ...; run_self_test()`) calling EVERY exported primitive directly "
+        "(they are pre-imported in scope, or `from hegel_wormhole_skills.<primitive_module_stem> import ...`) across >= 2 distinct shapes "
+        "and asserting exact reference solutions via `np.testing.assert_allclose`!"
     )
 
-    events: list[dict[str, Any]] = []
-    tok_totals = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
-    compiled_count = 0
-    used_prim_stems: set[str] = set()
+    stem_lock = _th.Lock()
+    compiled_results_by_fname: dict[str, dict[str, Any] | None] = {}
 
-    try:
-        for src_fname, bundle_item in sorted(source_mods_by_fname.items()):
-            orig_mod = bundle_item["mod"]
-            rep_nid = bundle_item["representative_node_id"]
-            orig_stem = Path(src_fname).stem
-            short_tail = re.sub(r"^autogenous_", "", orig_stem)[:34]
-            conv: list[dict[str, Any]] = [
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "source_l2_module_filename": src_fname,
-                            "source_methodology_principle": bundle_item["methodology_principle"],
-                            "source_consolidated_nogoods": bundle_item["consolidated_nogoods"],
-                            "source_l2_python_code": str(orig_mod.get("python_code") or "")[:16000],
-                        },
-                        ensure_ascii=False,
-                    ),
-                }
-            ]
-            mod_tok = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
-            last_err = "not_run"
-            compiled_entry: dict[str, Any] | None = None
+    def _compile_one_source(src_fname: str, bundle_item: dict[str, Any]) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
+        orig_mod = bundle_item["mod"]
+        recomp_sha = bundle_item["recomputed_source_sha256"]
+        rep_nid = bundle_item["representative_node_id"]
+        orig_stem = Path(src_fname).stem
+        short_tail = re.sub(r"^autogenous_", "", orig_stem)[:34]
+        conv: list[dict[str, Any]] = [
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "source_l2_module_filename": src_fname,
+                        "source_methodology_principle": bundle_item["methodology_principle"],
+                        "source_consolidated_nogoods": bundle_item["consolidated_nogoods"],
+                        "source_l2_python_code": str(orig_mod.get("python_code") or "")[:16000],
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        ]
+        mod_tok = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
+        last_err = "not_run"
+        compiled_entry: dict[str, Any] | None = None
+        attempt_records: list[dict[str, Any]] = []
 
+        ensure_clean_scipy_sandbox_image()
+        worker_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="1024m", cpus="2", network_mode="none")
+        try:
             for attempt_i in (1, 2):
                 llm_res = codex_client.call_structured(
                     system_prompt=sys_prompt,
@@ -2014,31 +2230,66 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     output_schema=COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA,
                     stage_subdir=f"{run_id}__{short_tail}_t{attempt_i}",
                 )
-                for tk_k, src_k in (("prompt", "prompt_tokens"), ("cached", "cached_tokens"), ("completion", "completion_tokens"), ("wall_ms", "wall_ms")):
-                    val_t = float(llm_res.get(src_k, 0) or 0)
-                    mod_tok[tk_k] += int(val_t) if tk_k != "wall_ms" else val_t
-                    tok_totals[tk_k] += int(val_t) if tk_k != "wall_ms" else val_t
+                att_tok = {
+                    "prompt": int(llm_res.get("prompt_tokens", 0) or 0),
+                    "cached": int(llm_res.get("cached_tokens", 0) or 0),
+                    "completion": int(llm_res.get("completion_tokens", 0) or 0),
+                    "wall_ms": float(llm_res.get("wall_ms", 0.0) or 0.0),
+                }
+                for tk_k in ("prompt", "cached", "completion", "wall_ms"):
+                    mod_tok[tk_k] += att_tok[tk_k]
 
                 if not llm_res.get("ok") or not isinstance(llm_res.get("parsed"), dict):
                     last_err = f"llm_error:{llm_res.get('error')}"
+                    attempt_records.append(
+                        {
+                            "attempt_index": attempt_i,
+                            "llm_ok": False,
+                            "error": last_err,
+                            "llm_tokens": att_tok,
+                        }
+                    )
                     break
 
                 parsed = llm_res["parsed"]
                 raw_p_stem = re.sub(r"[^a-z0-9_]+", "_", str(parsed["primitive_module_stem"]).strip().lower()).strip("_")
                 if not raw_p_stem.startswith("autogenous_prim_"):
                     raw_p_stem = "autogenous_prim_" + re.sub(r"^(autogenous_prim_|autogenous_)", "", raw_p_stem)
-                prim_stem = raw_p_stem[:56]
-                if prim_stem in used_prim_stems:
-                    prim_stem = f"{prim_stem[:40]}_{short_tail[:15]}".rstrip("_")
+                with stem_lock:
+                    prim_stem = raw_p_stem[:56]
+                    if prim_stem in used_prim_stems:
+                        prim_stem = f"{prim_stem[:40]}_{short_tail[:15]}".rstrip("_")
 
-                # Mechanically forbid `sklearn` inside `L1` primitives so they mount cleanly in every physics/bio/math container!
+                raw_cand_py = str(parsed["canonical_python_code"])
+                ut_src = str(parsed["synthetic_unit_test_code"])
+                raw_cand_sha = hashlib.sha256(raw_cand_py.encode("utf-8")).hexdigest()
+                ut_sha = hashlib.sha256(ut_src.encode("utf-8")).hexdigest()
+                math_pre = [str(x).strip() for x in (parsed.get("mathematical_preconditions") or []) if str(x).strip()]
+                if not math_pre:
+                    math_pre = ["Inputs must be finite NumPy arrays matching documented shapes and positive regularization/scale parameters."]
+
                 ok_ast, reason_ast, pub_fns, packaged_code = validate_and_decorate_autogenous_python_code(
-                    str(parsed["canonical_python_code"]),
+                    raw_cand_py,
                     prim_stem,
                     extra_forbidden_tokens=("sklearn",),
                 )
                 if not ok_ast:
                     last_err = f"static_purity_gate_failed:{reason_ast}"
+                    attempt_records.append(
+                        {
+                            "attempt_index": attempt_i,
+                            "llm_ok": True,
+                            "proposed_stem": prim_stem,
+                            "ast_gate_ok": False,
+                            "ast_gate_reason": reason_ast,
+                            "candidate_python_code": raw_cand_py,
+                            "candidate_code_sha256": raw_cand_sha,
+                            "synthetic_unit_test_code": ut_src,
+                            "synthetic_unit_test_sha256": ut_sha,
+                            "mathematical_preconditions": math_pre,
+                            "llm_tokens": att_tok,
+                        }
+                    )
                     conv.append({"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)})
                     conv.append(
                         {
@@ -2057,28 +2308,45 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     )
                     continue
 
-                ut_src = str(parsed["synthetic_unit_test_code"])
                 ut_res = verify_autogenous_module_in_clean_container(
-                    sandbox_cid=sandbox_cid,
+                    sandbox_cid=worker_cid,
                     mod_stem=prim_stem,
                     packaged_module_code=packaged_code,
                     synthetic_unit_test_code=ut_src,
                     public_fn_names=pub_fns,
+                    require_all_public_fns_called=True,
+                )
+                code_sha = hashlib.sha256(packaged_code.encode("utf-8")).hexdigest()
+                attempt_records.append(
+                    {
+                        "attempt_index": attempt_i,
+                        "llm_ok": True,
+                        "proposed_stem": prim_stem,
+                        "ast_gate_ok": True,
+                        "ast_gate_reason": "ok",
+                        "exported_functions": pub_fns,
+                        "candidate_python_code": raw_cand_py,
+                        "packaged_python_code": packaged_code,
+                        "compiled_code_sha256": code_sha,
+                        "synthetic_unit_test_code": ut_src,
+                        "synthetic_unit_test_sha256": ut_sha,
+                        "mathematical_preconditions": math_pre,
+                        "unit_test_receipt": ut_res,
+                        "llm_tokens": att_tok,
+                    }
                 )
                 if ut_res.get("passed") and ut_res.get("telemetry_verified"):
-                    code_sha = hashlib.sha256(packaged_code.encode("utf-8")).hexdigest()
-                    ut_sha = hashlib.sha256(ut_src.encode("utf-8")).hexdigest()
-                    src_l2_sha = str(orig_mod.get("compiled_code_sha256") or "") or hashlib.sha256(
-                        str(orig_mod.get("python_code") or "").encode("utf-8")
-                    ).hexdigest()
+                    with stem_lock:
+                        used_prim_stems.add(prim_stem)
                     compiled_entry = {
                         "filename": f"{prim_stem}.py",
                         "granularity_tier": "L1_compositional_primitive",
-                        "origin": "m8_7_compositional_primitive_aufhebung_verified",
+                        "origin": "m8_8_compositional_primitive_aufhebung_verified",
                         "unit_test_verified": True,
-                        "source_qualification_status": "pretraining_only_l1_primitive_sublation",
+                        "source_qualification_status": qual_status,
                         "source_l2_module_filename": src_fname,
-                        "source_candidate_sha256": src_l2_sha,
+                        "source_candidate_sha256": recomp_sha,
+                        "declared_source_l2_sha256": bundle_item["declared_source_sha256"],
                         "function_names": pub_fns,
                         "exported_apis": "; ".join(parsed.get("exported_api_signatures") or pub_fns),
                         "compositional_rationale": str(parsed.get("compositional_rationale") or "").strip(),
@@ -2087,12 +2355,16 @@ def sublate_autogenous_forest_into_compositional_primitives(
                         "synthetic_unit_test_code": ut_src,
                         "synthetic_unit_test_sha256": ut_sha,
                         "unit_test_receipt": ut_res,
-                        "scope_preconditions": [],
+                        "scope_preconditions": math_pre,
+                        "mathematical_preconditions": math_pre,
                         "provenance_episode_id": str(orig_mod.get("provenance_episode_id") or f"pt_l1_{short_tail}"),
                     }
                     break
 
-                last_err = f"unit_test_failed(rc={ut_res.get('exit_code')}):{str(ut_res.get('stderr') or '')[-450:]}"
+                last_err = (
+                    f"unit_test_failed(rc={ut_res.get('exit_code')},uncalled={ut_res.get('uncalled_public_functions')}):"
+                    f"{str(ut_res.get('stderr') or ut_res.get('error') or '')[-600:]}"
+                )
                 conv.append({"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)})
                 conv.append(
                     {
@@ -2100,65 +2372,105 @@ def sublate_autogenous_forest_into_compositional_primitives(
                         "content": json.dumps(
                             {
                                 "unit_test_failure": ut_res,
-                                "fix_instruction": "Fix `canonical_python_code` or `synthetic_unit_test_code` so `python3 -I` passes cleanly and calls every exported primitive.",
+                                "fix_instruction": (
+                                    "Fix the mathematical bug in `canonical_python_code` or any setup bug in `synthetic_unit_test_code` "
+                                    "(NEVER weaken tolerances to hide a wrong formula!) so `python3 -I` passes cleanly and invokes EVERY exported primitive."
+                                ),
                             },
                             ensure_ascii=False,
                         ),
                     }
                 )
+        finally:
+            m6f.stop_container_safely(worker_cid)
 
-            if compiled_entry is not None:
-                used_prim_stems.add(Path(str(compiled_entry["filename"])).stem)
-                compiled_count += 1
-                attached_nodes: list[str] = []
-                for target_nid in node_ids_by_fname[src_fname]:
-                    mods_list = archive[target_nid].setdefault("autogenous_wormhole_modules", [])
-                    mods_list = [m for m in mods_list if m.get("filename") != compiled_entry["filename"]]
-                    # Prepend `L1_compositional_primitive` ahead of `L2` pipeline modules!
-                    archive[target_nid]["autogenous_wormhole_modules"] = [deepcopy(compiled_entry), *mods_list]
-                    attached_nodes.append(target_nid)
-                events.append(
-                    {
-                        "source_l2_module": src_fname,
-                        "representative_node_id": rep_nid,
-                        "compiled_ok": True,
-                        "primitive_filename": compiled_entry["filename"],
-                        "exported_functions": compiled_entry["function_names"],
-                        "exported_apis": compiled_entry["exported_apis"],
-                        "compiled_code_sha256": compiled_entry["compiled_code_sha256"],
-                        "synthetic_unit_test_sha256": compiled_entry["synthetic_unit_test_sha256"],
-                        "attached_to_nodes": attached_nodes,
-                        "llm_tokens": mod_tok,
-                    }
-                )
-            else:
-                events.append(
-                    {
-                        "source_l2_module": src_fname,
-                        "representative_node_id": rep_nid,
-                        "compiled_ok": False,
-                        "error": last_err,
-                        "llm_tokens": mod_tok,
-                    }
-                )
-    finally:
-        m6f.stop_container_safely(sandbox_cid)
+        ev_out: dict[str, Any] = {
+            "source_l2_module": src_fname,
+            "source_provenance_episode_id": str(orig_mod.get("provenance_episode_id") or ""),
+            "representative_node_id": rep_nid,
+            "recomputed_source_sha256": recomp_sha,
+            "status": ("compiled_new_verified_l1" if compiled_entry is not None else "rejected_failed_verification"),
+            "compiled_ok": compiled_entry is not None,
+            "attempts": attempt_records,
+            "llm_tokens": mod_tok,
+        }
+        if compiled_entry is not None:
+            ev_out.update(
+                {
+                    "primitive_filename": compiled_entry["filename"],
+                    "exported_functions": compiled_entry["function_names"],
+                    "exported_apis": compiled_entry["exported_apis"],
+                    "mathematical_preconditions": compiled_entry["mathematical_preconditions"],
+                    "compiled_code_sha256": compiled_entry["compiled_code_sha256"],
+                    "synthetic_unit_test_sha256": compiled_entry["synthetic_unit_test_sha256"],
+                }
+            )
+        else:
+            ev_out["error"] = last_err
+        return src_fname, compiled_entry, ev_out
 
+    if pending_items:
+        eff_workers = max(1, min(int(max_workers), len(pending_items)))
+        if eff_workers == 1:
+            for s_fn, b_it in pending_items:
+                _, c_ent, ev_d = _compile_one_source(s_fn, b_it)
+                compiled_results_by_fname[s_fn] = c_ent
+                events_by_fname[s_fn] = ev_d
+        else:
+            with ThreadPoolExecutor(max_workers=eff_workers) as pool:
+                futs = {pool.submit(_compile_one_source, s_fn, b_it): s_fn for s_fn, b_it in pending_items}
+                for fut in as_completed(futs):
+                    s_fn_done, c_ent, ev_d = fut.result()
+                    compiled_results_by_fname[s_fn_done] = c_ent
+                    events_by_fname[s_fn_done] = ev_d
+
+    newly_compiled_count = 0
+    tok_totals = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
+    ordered_events: list[dict[str, Any]] = []
+
+    for src_fname in sorted(source_mods_by_fname.keys()):
+        ev_d = events_by_fname[src_fname]
+        for tk_k in ("prompt", "cached", "completion", "wall_ms"):
+            tok_totals[tk_k] += ev_d["llm_tokens"][tk_k]
+        c_ent = compiled_results_by_fname.get(src_fname)
+        if c_ent is not None:
+            newly_compiled_count += 1
+            attached_nodes: list[str] = []
+            for target_nid in node_ids_by_fname[src_fname]:
+                mods_list = archive[target_nid].setdefault("autogenous_wormhole_modules", [])
+                mods_list = [m for m in mods_list if m.get("filename") != c_ent["filename"]]
+                archive[target_nid]["autogenous_wormhole_modules"] = [deepcopy(c_ent), *mods_list]
+                attached_nodes.append(target_nid)
+            ev_d["attached_to_nodes"] = attached_nodes
+        ordered_events.append(ev_d)
+
+    total_qualified_l1 = retained_count + newly_compiled_count
     wh_summary = (
         discover_cross_tree_operator_wormholes(forest, archive)
-        if allow_horizontal_wormholes and compiled_count > 0
+        if allow_horizontal_wormholes and newly_compiled_count > 0
         else {"skipped": True}
     )
-    archive.setdefault("__autogenous_blank_seed__", {})["m8_7_compositional_primitives"] = {
-        "compiled_primitive_count": compiled_count,
+    archive.setdefault("__autogenous_blank_seed__", {})["m8_8_compositional_primitives"] = {
+        "total_qualified_l1_count": total_qualified_l1,
+        "retained_existing_l1_count": retained_count,
+        "newly_compiled_l1_count": newly_compiled_count,
         "require_pretraining_only": require_pretraining_only,
-        "events": events,
+        "source_qualification_status": qual_status,
+        "contract_enrichment": enrich_receipt,
+        "events": [
+            {k: v for k, v in ev.items() if k != "attempts"}
+            for ev in ordered_events
+        ],
     }
     return {
-        "compiled_primitive_count": compiled_count,
+        "compiled_primitive_count": total_qualified_l1,
+        "retained_existing_count": retained_count,
+        "newly_compiled_count": newly_compiled_count,
         "total_source_l2_modules": len(source_mods_by_fname),
         "require_pretraining_only": require_pretraining_only,
-        "events": events,
+        "source_qualification_status": qual_status,
+        "contract_enrichment": enrich_receipt,
+        "events": ordered_events,
         "anti_unification_summary": wh_summary,
         "llm_tokens": tok_totals,
     }
@@ -3280,6 +3592,7 @@ def run_blank_seed_forest_pretraining(
     max_turns_per_task: int = 16,
     reasoning_effort: str = "medium",
     selected_task_ids: list[str] | None = None,
+    enable_l1_primitive_pass: bool = False,
 ) -> dict[str, Any]:
     """Execute complete Blank-Seed Offline Forest Pretraining from `K0 = 4` methodological axioms (`0` human skills)
     and export the frozen, SHA-256-verified `pretrained_autogenous_forest_bundle.json`!
@@ -3331,6 +3644,24 @@ def run_blank_seed_forest_pretraining(
             meta_dag=meta_dag,
             out_path=out_dir / "checkpoint_forest_bundle.json",
             extra_metadata={"completed_episodes": len(episode_summaries)},
+        )
+
+    l1_pass_summary: dict[str, Any] | None = None
+    if enable_l1_primitive_pass:
+        l1_cli = m6f.FrontierCodexClient(
+            codex_info=codex_info,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=240,
+        )
+        l1_pass_summary = sublate_autogenous_forest_into_compositional_primitives(
+            forest=forest,
+            archive=archive,
+            codex_client=l1_cli,
+            run_id=f"{out_dir.name}__l1_pass",
+            require_pretraining_only=True,
+            allow_horizontal_wormholes=True,
+            skip_already_compiled_sources=True,
         )
 
     bundle_path = out_dir / "pretrained_autogenous_forest_bundle.json"

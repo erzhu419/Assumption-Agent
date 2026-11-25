@@ -79,6 +79,17 @@ def test_m8_7_sklearn_rejection_container_verified_l1_primitive_and_m86_static_p
     """Verify `L1` primitive `sklearn` rejection, container unit-test verification, L1-first staging, and M8.6 clean-room packaging."""
     forest, archive, _ = m7a.build_blank_axiomatic_philosophical_forest()
     # Seed a single synthetic `pt` L2 node (simulating `pt03` with `sklearn` in the coarse L2 module)
+    l2_demo_code = (
+        '"""Demo L2 coarse module."""\n'
+        "from __future__ import annotations\n"
+        "import numpy as np\n"
+        "from . import track_wormhole_skill\n\n"
+        '@track_wormhole_skill("autogenous_coarse_panel_demo")\n'
+        "def coarse_panel_fn(X: np.ndarray, groups: np.ndarray) -> np.ndarray:\n"
+        "    return np.asarray(X, float) - np.mean(X, axis=0, keepdims=True)\n"
+    )
+    import hashlib as _hl
+    l2_true_sha = _hl.sha256(l2_demo_code.encode("utf-8")).hexdigest()
     l2_comp = {
         "compiled_ok": True,
         "compilation_mode": "llm_aufhebung_container_verified",
@@ -87,16 +98,8 @@ def test_m8_7_sklearn_rejection_container_verified_l1_primitive_and_m86_static_p
         "filename": "autogenous_coarse_panel_demo.py",
         "function_names": ["coarse_panel_fn"],
         "exported_apis": "coarse_panel_fn(X, groups)",
-        "packaged_python_code": (
-            '"""Demo L2 coarse module."""\n'
-            "from __future__ import annotations\n"
-            "import numpy as np\n"
-            "from . import track_wormhole_skill\n\n"
-            '@track_wormhole_skill("autogenous_coarse_panel_demo")\n'
-            "def coarse_panel_fn(X: np.ndarray, groups: np.ndarray) -> np.ndarray:\n"
-            "    return np.asarray(X, float) - np.mean(X, axis=0, keepdims=True)\n"
-        ),
-        "compiled_code_sha256": "a" * 64,
+        "packaged_python_code": l2_demo_code,
+        "compiled_code_sha256": l2_true_sha,
         "source_candidate_sha256": "b" * 64,
         "synthetic_unit_test_code": "assert True\n",
         "synthetic_unit_test_sha256": "c" * 64,
@@ -202,7 +205,7 @@ def test_m8_7_sklearn_rejection_container_verified_l1_primitive_and_m86_static_p
     mods_after = archive[target_nid]["autogenous_wormhole_modules"]
     assert mods_after[0]["granularity_tier"] == "L1_compositional_primitive"
     assert mods_after[0]["filename"] == "autogenous_prim_nuisance_projection.py"
-    assert mods_after[0]["source_candidate_sha256"] == "a" * 64
+    assert mods_after[0]["source_candidate_sha256"] == l2_true_sha
     assert "def run_self_test" in mods_after[0]["synthetic_unit_test_code"]
 
     # Verify `collect_recalled_executable_wormhole_sources` stages `L1` FIRST and extracts `api_quick_reference`

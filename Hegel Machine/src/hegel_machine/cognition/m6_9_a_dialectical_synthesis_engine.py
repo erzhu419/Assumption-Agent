@@ -39,7 +39,10 @@ from . import m6_frontier_real_benchmarks as m6f
 from .hipporag_wormhole_index import HippoRAGWormholeIndex
 from .m5_live_gpt_and_provenance import DecisionProvenanceLedger, verify_decision_provenance_chain
 from .m6_4_executable_wormhole_library import (
+    auto_package_wormhole_imports_in_container,
+    collect_recalled_executable_wormhole_sources,
     find_uninlined_wormhole_imports_in_container,
+    inspect_final_deliverable_skill_retention,
     stage_recalled_executable_wormholes_in_container,
     sum_skill_activation_calls,
 )
@@ -950,7 +953,7 @@ def should_spawn_dialectical_second_branch(
     pub = public_metrics or {}
     if not bool(chk.get("accepted", True)):
         triggers.append("failed_public_artifact_contract")
-    if task.benchmark == "Hegel-OOD-Holdout-12":
+    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4"}:
         max_t = int(primary_summary.get("max_turns") or 28)
         used_t = int(primary_summary.get("turns_used") or 0)
         if used_t >= max(1, max_t - 3):
@@ -1125,6 +1128,7 @@ def reconcile_thesis_and_antithesis_publicly(
     stage_subdir: str,
     forest_archive: dict[str, dict[str, Any]] | None = None,
     use_m8_minimax_variational_tiebreak: bool = False,
+    allow_l1_primitives: bool = True,
 ) -> dict[str, Any]:
     """Blind Public Synthesis (`Zero` `/tests`, `Zero` `answer_rubric`, `Zero` verifier access, A/B label-blinded!)."""
     is_bm = task.benchmark == "BioMysteryBench-Preview"
@@ -1337,9 +1341,24 @@ def reconcile_thesis_and_antithesis_publicly(
             is_auto_blank = bool(forest_archive and forest_archive.get("__autogenous_blank_seed__")) or (
                 bool(recalled_stub) and all(bool(n.get("autogenous_only")) for n in recalled_stub)
             )
+            sub_mods_map: dict[str, str] = {}
+            if recalled_stub:
+                sub_mods_map, _ = collect_recalled_executable_wormhole_sources(
+                    recalled_stub,
+                    include_foundational_skills=(not is_auto_blank),
+                    allow_l1_primitives=allow_l1_primitives,
+                    full_forest_archive=(forest_archive if is_auto_blank else None),
+                    task_query_text=(task.instruction_text if is_auto_blank else ""),
+                )
+            staged_sub_by_stem = {Path(fn).stem: src for fn, src in sub_mods_map.items()}
             staged_sub_skills = (
                 stage_recalled_executable_wormholes_in_container(
-                    synth_cid, recalled_stub, include_foundational_skills=(not is_auto_blank)
+                    synth_cid,
+                    recalled_stub,
+                    include_foundational_skills=(not is_auto_blank),
+                    allow_l1_primitives=allow_l1_primitives,
+                    full_forest_archive=(forest_archive if is_auto_blank else None),
+                    task_query_text=(task.instruction_text if is_auto_blank else ""),
                 )
                 if recalled_stub
                 else []
@@ -1373,11 +1392,12 @@ def reconcile_thesis_and_antithesis_publicly(
                 "Both `candidate_a` (`/tmp/dialectic/candidate_a`) and `candidate_b` (`/tmp/dialectic/candidate_b`) left an objective gap "
                 "on the public container benchmark (`public_benchmark_unresolved_gap`).\n"
                 "In Turn 1, inspect `candidate_a`, `candidate_b`, and any relevant `/tmp/hegel_wormhole_skills` operators (`PYTHONPATH=/tmp`), "
-                "synthesize a unified, SELF-CONTAINED deliverable directly into `declared_artifacts` (inlining any pure NumPy/SciPy/sklearn "
-                "wormhole functions via `inspect.getsource` — NEVER leave `hegel_wormhole_skills` or `/tmp` imports in target files!), "
-                "and verify clean-process execution (`python3 -I`)."
+                "synthesize a unified deliverable directly into `declared_artifacts` (you may `from hegel_wormhole_skills.<mod> import <fn>` — "
+                "our host AST packager automatically bundles self-contained transitive closures before clean-room verification!), "
+                "and verify execution (`python3 -I`)."
             )
             sub_rat = ""
+            sub_pkg_receipts: list[dict[str, Any]] = []
             for sub_idx in range(1, 3):
                 llm_sub = client.call_structured(
                     system_prompt=sub_sys,
@@ -1395,6 +1415,10 @@ def reconcile_thesis_and_antithesis_publicly(
                 sub_rat = str(p_sub.get("rationale") or "")
                 cmd_sub = str(p_sub.get("bash_command") or "")
                 ex_sub = m6f.exec_container_bash(synth_cid, f"export PYTHONPATH=/tmp:${{PYTHONPATH:-}}\n{cmd_sub}", timeout_sec=120)
+                if staged_sub_by_stem:
+                    pkg_sub = auto_package_wormhole_imports_in_container(synth_cid, task.declared_artifacts, staged_sub_by_stem)
+                    if pkg_sub.get("attempted"):
+                        sub_pkg_receipts.append({"sub_turn": sub_idx, **pkg_sub})
                 unin = find_uninlined_wormhole_imports_in_container(synth_cid, task.declared_artifacts)
                 if ex_sub.get("exit_code") == 0 and not unin:
                     break
@@ -1408,7 +1432,7 @@ def reconcile_thesis_and_antithesis_publicly(
                                 "uninlined_wormhole_imports": unin,
                                 "stdout_tail": str(ex_sub.get("stdout") or "")[-2500:],
                                 "stderr_tail": str(ex_sub.get("stderr") or "")[-1200:],
-                                "repair_instruction": "Fix any syntax/runtime error and inline ALL `hegel_wormhole_skills` code so `declared_artifacts` runs cleanly under `python3 -I`.",
+                                "repair_instruction": "Fix any syntax/runtime/unsupported-import error so `declared_artifacts` passes static packaging and runs cleanly under `python3 -I`.",
                             },
                             ensure_ascii=False,
                         ),
@@ -1423,6 +1447,7 @@ def reconcile_thesis_and_antithesis_publicly(
                 else {"accepted": False, "reasons": unin_final or ["empty_digest"]}
             )
             if chk_sub.get("accepted"):
+                # Note: `_run_public_container_candidate_benchmark` executes AFTER `rm -rf /tmp/hegel_wormhole_skills` on the packaged `sha_sub`!
                 pub_sub = _run_public_container_candidate_benchmark(synth_cid)
                 dom_ok, dom_reason = _synthesized_strictly_dominates_branches(pub_sub, pub_t, pub_a)
                 if dom_ok:
@@ -1432,6 +1457,7 @@ def reconcile_thesis_and_antithesis_publicly(
                         "selection_mechanism": f"public_code_sublation({dom_reason})",
                         "rationale": sub_rat,
                         "synthesized_candidate_sha256": sha_sub,
+                        "skill_packaging_receipts": sub_pkg_receipts,
                         "thesis_public_contract": chk_t,
                         "antithesis_public_contract": chk_a,
                         "synthesized_public_contract": chk_sub,
@@ -1657,6 +1683,10 @@ def grade_archived_branch_post_lock(
         from .m7_holdout_ood_blind_benchmark import run_holdout_private_verifier_by_id
 
         return run_holdout_private_verifier_by_id(task.task_id, branch_tar)
+    if task.benchmark == "Hegel-Unseen-PostFreeze-4":
+        from .m8_8_unseen_postfreeze_benchmark import run_unseen_postfreeze_private_verifier_by_id
+
+        return run_unseen_postfreeze_private_verifier_by_id(task.task_id, branch_tar)
 
     cid: str | None = None
     try:
@@ -1685,7 +1715,7 @@ def grade_archived_branch_post_lock(
 
 
 def _init_holdout_public_env_if_needed(cid: str, task: m6f.FrontierBenchmarkTask) -> None:
-    if task.benchmark == "Hegel-OOD-Holdout-12" and task.holdout_public_setup_py:
+    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4"} and task.holdout_public_setup_py:
         subprocess.run(["docker", "exec", cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
         with tempfile.TemporaryDirectory(prefix="hegel_ho_syn_") as td_h:
             setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -1714,6 +1744,7 @@ def run_m6_9_a_two_branch_episode(
     m8_mechanism_graph: Any | None = None,
     m8_graph_checkpoint_path: Path | None = None,
     episode_nominal_budget: float = 2.5,
+    allow_l1_primitives: bool = True,
 ) -> dict[str, Any]:
     """Execute one `Hegel_M6_9_A_TwoBranch_LiveGPT` (or budgeted M8.4 3-tier `1.00u -> 1.35u Repair -> 2.00u/2.35u Challenger`) episode."""
     ep_t0 = monotonic()
@@ -1761,6 +1792,7 @@ def run_m6_9_a_two_branch_episode(
             reasoning_effort=reasoning_effort,
             export_artifacts_tar_path=(None if is_bm else antithesis_tar),
             defer_official_verifier=True,
+            allow_l1_primitives=allow_l1_primitives,
         )
 
     selective_decision: dict[str, Any] | None = None
@@ -1909,6 +1941,18 @@ def run_m6_9_a_two_branch_episode(
                                         reasoning_effort=reasoning_effort,
                                         timeout_seconds=210,
                                     )
+                                    # `M88-REPAIR-SYNTH-PKG`: build deterministic skill source map from `forest_archive` + recalled notes so
+                                    # `execute_in_container_local_repair` automatically bundles `hegel_wormhole_skills` closures before probing!
+                                    repair_skill_sources: dict[str, str] = {}
+                                    for _rnid, _rrec in (forest_archive or {}).items():
+                                        if str(_rnid).startswith("__") or not isinstance(_rrec, dict):
+                                            continue
+                                        for _rmod in (_rrec.get("autogenous_wormhole_modules") or []) + (_rrec.get("wave1_executable_modules") or []):
+                                            _rfname = str(_rmod.get("filename") or "")
+                                            if (not allow_l1_primitives) and (_rfname.startswith("autogenous_prim_") or _rmod.get("granularity_tier") == "L1_compositional_primitive"):
+                                                continue
+                                            if _rfname and _rmod.get("python_code"):
+                                                repair_skill_sources.setdefault(Path(_rfname).stem, str(_rmod["python_code"]))
                                     local_repair_summary = execute_in_container_local_repair(
                                         probe_cid=probe_cid,
                                         task=task,
@@ -1919,6 +1963,7 @@ def run_m6_9_a_two_branch_episode(
                                         step_index=step_idx_r,
                                         stage_subdir=f"{run_id}__{model}__M8LocalRepair__{task.task_id}".replace(":", "_"),
                                         defer_guard_commit=True,
+                                        staged_skill_sources_by_stem=repair_skill_sources,
                                     )
                                     if local_repair_summary.get("repaired_verified"):
                                         repaired_tar = antithesis_dir / "repaired_declared_artifacts.tar"
@@ -2343,6 +2388,7 @@ def run_m6_9_a_two_branch_episode(
                 stage_subdir=stage_sub,
                 forest_archive=forest_archive,
                 use_m8_minimax_variational_tiebreak=use_m8_planner,
+                allow_l1_primitives=allow_l1_primitives,
             )
         s_tok = synth_res["llm_tokens"]
         last_p = ledger.record_decision(
@@ -2419,6 +2465,12 @@ def run_m6_9_a_two_branch_episode(
             from .m7_holdout_ood_blind_benchmark import run_holdout_private_verifier_for_container
 
             verifier_report = run_holdout_private_verifier_for_container(task.task_id, synth_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-Unseen-PostFreeze-4":
+            assert synth_cid is not None
+            from .m8_8_unseen_postfreeze_benchmark import run_unseen_postfreeze_private_verifier_for_container
+
+            verifier_report = run_unseen_postfreeze_private_verifier_for_container(task.task_id, synth_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             assert synth_cid is not None
@@ -2576,7 +2628,42 @@ def run_m6_9_a_two_branch_episode(
         "skill_activation_count": skill_call_total,
         "skill_activations": list(anti_sum.get("skill_activations", []))[:50],
         "skill_packaging_events": list(anti_sum.get("skill_packaging_events", [])),
-        "skill_adoption_funnel": anti_sum.get("skill_adoption_funnel"),
+        "skill_adoption_funnel": (
+            (lambda _base_f: (
+                {
+                    **dict(_base_f or {}),
+                    "selected_branch": synth_res["selected_branch"],
+                    "final_selected_candidate_sha256": synth_res.get("synthesized_candidate_sha256"),
+                    **(
+                        (lambda _ret: {
+                            "final_selected_artifact_retention": _ret,
+                            "static_packaged_deliverable_count": len(_ret["final_retained_modules"]),
+                            "static_packaged_l1_primitive_count": len(_ret["final_retained_l1_modules"]),
+                            "any_skill_executed_or_packaged": bool(
+                                int((_base_f or {}).get("dynamic_skill_activation_count", 0)) > 0
+                                or len(_ret["final_retained_modules"]) > 0
+                            ),
+                        })(
+                            __import__(
+                                "hegel_machine.cognition.m6_4_executable_wormhole_library",
+                                fromlist=["inspect_final_deliverable_skill_retention"],
+                            ).inspect_final_deliverable_skill_retention(
+                                episode_out_dir / "04_submitted_artifacts_snapshot",
+                                {
+                                    Path(str(_m["filename"])).stem: str(_m["python_code"])
+                                    for _k, _v in (forest_archive or {}).items()
+                                    if not str(_k).startswith("__") and isinstance(_v, dict)
+                                    for _m in (_v.get("autogenous_wormhole_modules") or []) + (_v.get("wave1_executable_modules") or [])
+                                    if _m.get("filename") and _m.get("python_code")
+                                },
+                            )
+                        )
+                        if not is_bm
+                        else {}
+                    ),
+                }
+            ))(anti_sum.get("skill_adoption_funnel"))
+        ),
         "saved_artifact_snapshots": saved_snapshots,
         "submitted_final_answer": submitted_final_ans,
         "decision_count": tots["decision_count"],

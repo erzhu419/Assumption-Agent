@@ -1259,6 +1259,7 @@ def execute_in_container_local_repair(
         "reason": ("ok" if repaired_ok else (probe_exc_reason or "public_probe_rejected")),
         "raw_candidate_sha256": orig_sha,
         "repaired_candidate_sha256": rep_sha,
+        "skill_packaging_receipt": packaging_receipt,
         "repaired_python_code": repaired_code if repaired_ok else None,
         "attempted_repaired_python_code": repaired_code,
         "probe_after": probe_after,
@@ -1281,6 +1282,7 @@ def choose_and_execute_container_mechanism_action(
     codex_client: Any | None,
     budget_remaining: float = 1.0,
     step_index: int = 1,
+    staged_skill_sources_by_stem: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Standalone pre-payment budgeted container planner (`CommitPrimary1x` / `LocalContainerRepair` / `SpawnDialecticalChallenger`)."""
     t0 = monotonic()
@@ -1395,6 +1397,7 @@ def choose_and_execute_container_mechanism_action(
             graph=graph,
             step_index=step_index,
             stage_subdir=f"m8_local_container_repair_{step_index:02d}",
+            staged_skill_sources_by_stem=staged_skill_sources_by_stem,
         )
         tok = rep_out["llm_tokens"]
         repaired_ok = bool(rep_out.get("repaired_verified"))

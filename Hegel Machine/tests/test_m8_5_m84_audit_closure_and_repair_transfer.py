@@ -484,7 +484,15 @@ def test_m8_5_boundary_sentinel_stderr_ho12_codon_ho05_binary_ast_and_compiler_c
             wave1_antithesis_episodes=[
                 (
                     mock_w1_task,
-                    {"ended_by_finish": True, "local_container_repair_summary": {"repaired_verified": True}},
+                    {
+                        "ended_by_finish": True,
+                        "local_container_repair_summary": {
+                            "repaired_verified": True,
+                            "repaired_candidate_sha256": hashlib.sha256(
+                                (ep_dir / "04a_repaired_antithesis_snapshot/solver.py").read_bytes()
+                            ).hexdigest(),
+                        },
+                    },
                     ep_dir,
                 )
             ],

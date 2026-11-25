@@ -1921,9 +1921,33 @@ class M8VariationalPlanner:
                 wormhole_linked_ids.add(str(o_nid))
 
         # Phase A (Zero-Fit Descriptor Screening & Alignment Ranking): enumerate role-mapped candidates WITHOUT calling `fit_and_score_task_model`!
+        # `M88-CACHE-VIEW` Fix: bind train/val data view digest + incumbent structure digest + mechanism scope guard into negative cache keys!
+        _view_hasher = hashlib.sha256()
+        for _vk, _vv in sorted(ds_tr.get("x", {}).items()):
+            _view_hasher.update(f"tr:{_vk}:".encode("utf-8") + np.round(np.asarray(_vv, dtype=float).ravel(), 7).tobytes())
+        _view_hasher.update(b"tr_y:" + np.round(np.asarray(ds_tr["y"], dtype=float).ravel(), 7).tobytes())
+        for _vk, _vv in sorted(ds_va.get("x", {}).items()):
+            _view_hasher.update(f"va:{_vk}:".encode("utf-8") + np.round(np.asarray(_vv, dtype=float).ravel(), 7).tobytes())
+        _view_hasher.update(b"va_y:" + np.round(np.asarray(ds_va["y"], dtype=float).ravel(), 7).tobytes())
+        view_sha10 = _view_hasher.hexdigest()[:10]
+        inc_sig = hashlib.sha256(
+            json.dumps(
+                {
+                    "features": list(incumbent.feature_names),
+                    "lifts": list(incumbent.interaction_lift_ids),
+                    "mem": incumbent.temporal_memory_id,
+                    "role_maps": incumbent.lift_role_maps,
+                },
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()[:10]
+
         staged_specs: list[tuple[float, str, dict[str, Any]]] = []
         for mid, mech in sorted(self.graph.mechanisms.items()):
-            neg_scope_key = f"{task_id}@v{mech.version}:n{n_tr_rows}"
+            scope_sig6 = hashlib.sha256(
+                json.dumps({"sg": mech.scope_guard, "sb": mech.support_bounds}, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:6]
+            neg_scope_key = f"{task_id}@v{mech.version}:n{n_tr_rows}:vw={view_sha10}:inc={inc_sig}:sc={scope_sig6}"
             if mech.epistemic_status != "SUPPORTED_IN_SCOPE" or neg_scope_key in mech.inapplicable_task_ids:
                 continue
 
