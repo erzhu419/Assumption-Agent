@@ -1,0 +1,118 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs02_rotated_tensor_robin_darcy_4d3a4af860b6",
+    "source_hash": "4d3a4af860b6bf8ee653d53de303106a727e4292a1074d76c9ca7311f08e9f3f",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs02__rotated_tensor_robin_darcy_inversion",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/tensor_gate_audit.py",
+        "archived_relpath": "producers/tmp__tensor_gate_audit.py",
+        "bytes": 3195,
+        "sha256": "f1ce014ae8aec2f3ad664c636d8964364e716fe77c83ac465b42848912cfa971"
+      },
+      {
+        "container_path": "/tmp/tensor_public_validation.py",
+        "archived_relpath": "producers/tmp__tensor_public_validation.py",
+        "bytes": 2266,
+        "sha256": "063e0b9feeae47593652f4c87e027885cc16ac6901df650b44bbf341298e8ca9"
+      },
+      {
+        "container_path": "/tmp/tensor_stress_diagnosis.py",
+        "archived_relpath": "producers/tmp__tensor_stress_diagnosis.py",
+        "bytes": 2686,
+        "sha256": "1854451564524ab60bddb64d36c4821da377345a7a10e929b39fc07d78b0a305"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_tensor_cases.pkl','rb') as f:\n    data=pickle.load(f)\ndef inspect(x, level=0):\n    if isinstance(x, dict):\n        for k,v in x.items():\n            print('  '*level+str(k)+':',end=' ')\n            inspect(v,level+1)\n    elif isinstance(x,(list,tuple)) and any(isinstance(v,(dict,tuple)) for v in x):\n        print(type(x).__name__,len(x))\n        for v in x: inspect(v,level+1)\n    else:\n        a=np.asarray(x)\n        if not a.ndim: print(repr(x))\n        elif a.dtype.kind in 'iuf' and a.size: print(a.shape,",
+      "cat > /holdout_task/tensor_darcy_robin.py <<'PY'\n\"\"\"Cell-centered tensor–Robin Darcy source inversion.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _operator(problem):\n    \"\"\"Return the integrated finite-volume matrix and ambient RHS.\"\"\"\n    xx = np.asarray(problem['k_xx'], dtype=float)\n    xy = np.asarray(problem['k_xy'], dtype=float)\n    yy = np.asarray(problem['k_yy'], dtype=float)\n    nx, ny = xx.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    ids = np.arange(nx * ny).reshape(nx, ny)\n    area = hx * hy\n    gamma = probl",
+      "sed -i '/^import numpy as np$/a from scipy.optimize import linprog\\nfrom scipy.sparse import csr_matrix, eye, hstack, vstack' /holdout_task/tensor_darcy_robin.py\ncat >> /holdout_task/tensor_darcy_robin.py <<'PY'\n\n\ndef _robust_sources(response, observed, alpha):\n    \"\"\"Locate the inlier residual band, then fit ridge on source weights only.\"\"\"\n    n, m = response.shape\n    center = response.mean(axis=0)\n    scale = np.linalg.norm(response - center, axis=0)\n    scale[scale == 0] = 1\n    design = np.column_stack(((response - center) / scale, np.ones(n)))\n    origin = np.median(observed)\n    y = ob",
+      "cat > /tmp/tensor_stress_diagnosis.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _responses, _robust_sources\n\nwith open('/holdout_task/public_tensor_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)['cases']\n\nfor case_id, case in enumerate(cases):\n    p, g = case['problem'], case['gt']\n    ij = p['sensor_ij']\n    Z = _responses(p)\n    X = Z[tuple(ij.T)][:, 1:]\n    n, m = X.shape\n    a = p['tikhonov_alpha']\n    w0, o0 = g['source_weights'], g['sensor_offset']\n    mu = X @ w0 + o0\n    D = np.column_stack((X, np.ones(n)))",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/tensor_darcy_robin.py')\ns = p.read_text().replace('from scipy.optimize import linprog\\nfrom scipy.sparse import csr_matrix, eye, hstack, vstack\\n', '')\nstart = s.index('def _robust_sources(')\nend = s.index('def infer_tensor_darcy_sources(', start)\ns = s[:start] + '''def _robust_sources(response, observed, alpha):\n    \"\"\"Find a consensus of clean sensors and refit with source-only ridge.\"\"\"\n    n, m = response.shape\n    center = response.mean(axis=0)\n    scale = np.linalg.norm(response - center, axis=0)\n    scale[scale == 0] = 1\n",
+      "cat > /tmp/tensor_gate_audit.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import infer_tensor_darcy_sources, _operator\n\n\ndef face_balance(p, u):\n    xx, xy, yy = (p[k] for k in ('k_xx', 'k_xy', 'k_yy'))\n    nx, ny = u.shape\n    hx, hy = p['Lx']/nx, p['Ly']/ny\n    gamma, ambient = p['gamma_robin'], p['u_ambient']\n    out = hx*hy*p['sigma']*u\n    for i in range(nx):\n        for j in range(ny):\n            if i+1 < nx:\n                lo, hi = max(j-1, 0), min(j+1, ny-1)\n                flux = (hy/hx)*2/(1/xx[i,j]+1/xx[i+1,j])*(",
+      "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _responses, _robust_sources\n\nwith open('/holdout_task/public_tensor_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)['cases']\nrng = np.random.default_rng(9029)\nfor case_id, case in enumerate(cases):\n    p, g = case['problem'], case['gt']\n    ij = p['sensor_ij']\n    z = _responses(p)[tuple(ij.T)]\n    X, y = z[:, 1:], p['y_obs'] - z[:, 0]\n    clean = abs(p['y_obs'] - g['u_true'][tuple(ij.T)] - g['sensor_offset']) < .1\n    m = X.sh"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tensor_gate_audit.py",
+      "primary_producer_container_path": "/tmp/tensor_gate_audit.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_robust_assimilation"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tensor_darcy_robin.py",
+        "filename": "tensor_darcy_robin.py",
+        "bytes": 5213,
+        "sha256": "ccaf0bac56b9cec1ef83bc883f3701cabdb1051bd5ca244a07fcfa6a817fa1fe",
+        "content_addressed_ref": "content_addressed_blobs/ccaf0bac56b9cec1ef83bc883f3701cabdb1051bd5ca244a07fcfa6a817fa1fe.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tensor_darcy_robin.py"
+    ],
+    "exported_pure_functions": [
+      "face_balance",
+      "errors"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4d3a4af860b6bf8ee653d53de303106a727e4292a1074d76c9ca7311f08e9f3f",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _responses, _robust_sources\n\nwith open('/holdout_task/public_tensor_cases.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4d3a4af860b6bf8ee653d53de303106a727e4292a1074d76c9ca7311f08e9f3f",
+        "expected_candidate_sha256": "4d3a4af860b6bf8ee653d53de303106a727e4292a1074d76c9ca7311f08e9f3f",
+        "computed_candidate_sha256": "4d3a4af860b6bf8ee653d53de303106a727e4292a1074d76c9ca7311f08e9f3f",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tensor_darcy_robin.py",
+            "bytes": 5213
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_4d3a4af8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "face_balance",
+        "code": "def face_balance(p, u):\n    (xx, xy, yy) = (p[k] for k in ('k_xx', 'k_xy', 'k_yy'))\n    (nx, ny) = u.shape\n    (hx, hy) = (p['Lx'] / nx, p['Ly'] / ny)\n    (gamma, ambient) = (p['gamma_robin'], p['u_ambient'])\n    out = hx * hy * p['sigma'] * u\n    for i in range(nx):\n        for j in range(ny):\n            if i + 1 < nx:\n                (lo, hi) = (max(j - 1, 0), min(j + 1, ny - 1))\n                flux = hy / hx * 2 / (1 / xx[i, j] + 1 / xx[i + 1, j]) * (u[i, j] - u[i + 1, j])\n                flux -= (xy[i, j] + xy[i + 1, j]) / 8 * (u[i, hi] - u[i, lo] + u[i + 1, hi] - u[i + 1, lo])\n                out[i, j] += flux\n                out[i + 1, j] -= flux\n            if j + 1 < ny:\n                (lo, hi) = (max(i - 1, 0), min(i + 1, nx - 1))\n                flux = hx / hy * 2 / (1 / yy[i, j] + 1 / yy[i, j + 1]) * (u[i, j] - u[i, j + 1])\n                flux -= (xy[i, j] + xy[i, j + 1]) / 8 * (u[hi, j] - u[lo, j] + u[hi, j + 1] - u[lo, j + 1])\n                out[i, j] += flux\n                out[i, j + 1] -= flux\n            out[i, j] += ((int(i == 0) + int(i == nx - 1)) * hy / (1 / gamma + hx / (2 * xx[i, j])) + (int(j == 0) + int(j == ny - 1)) * hx / (1 / gamma + hy / (2 * yy[i, j]))) * (u[i, j] - ambient)\n    return out"
+      },
+      {
+        "name": "errors",
+        "code": "def errors(w, offset, z, g):\n    field = z[..., 0] + z[..., 1:] @ w\n    return (np.linalg.norm(w - g['source_weights']) / np.linalg.norm(g['source_weights']), abs(offset - g['sensor_offset']), np.max(np.abs(field - g['u_true'])))"
+      }
+    ]
+  }
+}

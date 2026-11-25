@@ -1,0 +1,202 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs04_missing_panel_multicenter_8606298523b2",
+    "source_hash": "8606298523b20e789e6006e0725396b181cfb55247630023dc49e5ff325e2cd1",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs04__missing_panel_multicenter_stratum_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/assay_center_calibration.py",
+        "archived_relpath": "producers/tmp__assay_center_calibration.py",
+        "bytes": 2981,
+        "sha256": "948fdf2913721b6a6bcbd221a1308e35565bca340e2897f2d6d2a097f1206308"
+      },
+      {
+        "container_path": "/tmp/assay_dev.py",
+        "archived_relpath": "producers/tmp__assay_dev.py",
+        "bytes": 2908,
+        "sha256": "79b56ff78df7e4d11908277c85c50693f9e52cf7c7d6ac06ec330e40c91e0bfe"
+      },
+      {
+        "container_path": "/tmp/assay_gate_audit.py",
+        "archived_relpath": "producers/tmp__assay_gate_audit.py",
+        "bytes": 2820,
+        "sha256": "e6411fc1b5d7984765acf7bf1fc2c52364922f98e294b97906b9a8bd968496ce"
+      },
+      {
+        "container_path": "/tmp/assay_missing_risk.py",
+        "archived_relpath": "producers/tmp__assay_missing_risk.py",
+        "bytes": 3151,
+        "sha256": "6365ec58f7a20c231c576dff5cc5373f81982df0bfb869f21b2b3177483f200c"
+      },
+      {
+        "container_path": "/tmp/assay_panel_challenge.py",
+        "archived_relpath": "producers/tmp__assay_panel_challenge.py",
+        "bytes": 3526,
+        "sha256": "31e25465d1d261406351cc42694ec1f4617e3dd28252717e736898ab89994ff9"
+      },
+      {
+        "container_path": "/tmp/assay_singleton_audit.py",
+        "archived_relpath": "producers/tmp__assay_singleton_audit.py",
+        "bytes": 2622,
+        "sha256": "02664fd85b7e347f00939f74856727e1b819ff6ea83a0e6ebb327758cc73e772"
+      },
+      {
+        "container_path": "/tmp/assay_stress.py",
+        "archived_relpath": "producers/tmp__assay_stress.py",
+        "bytes": 3786,
+        "sha256": "8654fff5883f18330d893b94d9a7e5239e69c5e4f468e051338354516dee6cc4"
+      },
+      {
+        "container_path": "/tmp/assay_stress_helpers.py",
+        "archived_relpath": "producers/tmp__assay_stress_helpers.py",
+        "bytes": 3486,
+        "sha256": "ce78358bf3afc783b8c184b330729a6ff4cf1ff732d23747ead0a7b5649e0b5c"
+      },
+      {
+        "container_path": "/tmp/assay_structure.py",
+        "archived_relpath": "producers/tmp__assay_structure.py",
+        "bytes": 2054,
+        "sha256": "2748e432810d4ec3a990980a0ccbf6f69cd4192c54077a4eca8a5497e4b62eb9"
+      },
+      {
+        "container_path": "/tmp/assay_validate.py",
+        "archived_relpath": "producers/tmp__assay_validate.py",
+        "bytes": 2043,
+        "sha256": "317db18e93214ab714c58371c3f1c899ec59e1229d9c22adc76727010bab016d"
+      },
+      {
+        "container_path": "/tmp/assay_verify_artifact.py",
+        "archived_relpath": "producers/tmp__assay_verify_artifact.py",
+        "bytes": 2537,
+        "sha256": "10d8912822e3162116ed62d362ea3971d0be937cff646ab9bb8967c3ee17a370"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && python3 - <<'PY'\nimport pickle\nfrom collections import Counter\nimport numpy as np\nwith open('public_multicenter_assay.pkl','rb') as f:\n    x=pickle.load(f)\ndef describe(obj, prefix='', depth=0):\n    if isinstance(obj, dict):\n        print(prefix, 'keys:', list(obj))\n        for k,v in obj.items():\n            describe(v, prefix+'/'+str(k), depth+1)\n        if {'X','center_id'} <= obj.keys():\n            a=np.asarray(obj['X']); c=np.asarray(obj['center_id']); y=obj.get('y'); s=obj.get('stratum')\n            for g in np.unique(c):\n                m=c==g; z=a[m]; prin",
+      "cat > /tmp/assay_dev.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.special import logit, expit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\nnp.set_printoptions(precision=3,suppress=True)\ncohorts=pickle.load(open('/holdout_task/public_multicenter_assay.pkl','rb'))['cohorts']\ndef moments(r,c):\n    with np.errstate(invalid='ignore',divide='ignore'):\n        x=r['X'][r['center_id']==c]; n=np.isfinite(x).sum(0); m=np.nanmean(x,axis=0); sd=np.nanstd(x,axis=0,ddof=1)\n    return n,m,sd\ndef align(r,p,a):\n    x=p['X']; out=np.zer",
+      "cat > /tmp/assay_validate.py <<'PY'\nimport warnings\nwarnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice')\nfrom assay_dev import *\nfrom scipy.special import expit\nfrom scipy.optimize import minimize\nfrom sklearn.metrics import balanced_accuracy_score, log_loss\n\ndef fit(z,s,c,y,C,center_sd):\n    u,gi=np.unique(c,return_inverse=True)\n    X=np.column_stack((np.ones(len(y)),z,s[:,None]==[1,2],np.eye(len(u))[gi]))\n    lam=np.r_[0,np.repeat(1/C,z.shape[1]+2),np.repeat(1/center_sd**2,len(u))]\n    def fg(b):\n        eta=X@b\n        return np.sum(np.logaddexp(0,eta)-y*eta)+.5*np",
+      "cat > /tmp/assay_structure.py <<'PY'\nimport warnings\nwarnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice')\nfrom assay_dev import *\nfrom scipy.optimize import minimize\nfrom sklearn.metrics import balanced_accuracy_score\n\n# Compare low-variance priors, without using query outcomes to fit or select.\ndef fit(z,s,y,l2,shared,trend):\n    X=np.column_stack((np.ones(len(y)),z,s==1,s==2))\n    P=np.diag(np.r_[0.,np.full(z.shape[1],l2),.25,.25]); v=np.r_[np.zeros(1+z.shape[1]),2.,-1.]; P+=trend*np.outer(v,v)\n    def solve(P):\n        def fg(b):\n            eta=X@b; pb=P@b\n       ",
+      "cat > /holdout_task/multicenter_calibration.py <<'PY'\n\"\"\"Reference-panel alignment and stratum-aware multicenter assay calibration.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\ndef _shrink(values, variance):\n    \"\"\"Pool compatible estimates while retaining between-biomarker variation.\"\"\"\n    anchor = np.median(values)\n    if values.size == 1:\n        return values.copy(), anchor\n    # A small prior variance prevents noisy estimates of heterogeneity from\n    # forcing identical transforms even when only a few columns are available.\n    noise = np.",
+      "cat > /tmp/assay_stress.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom scipy.optimize import minimize\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\nspec=importlib.util.spec_from_file_location('assay','/holdout_task/multicenter_calibration.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n\ndef predictors(d):\n    r,t,q=[d[k] for k in ('reference_controls','train','query')]; y=t['y']; c=t['center_id']; u=np.unique(c)\n    panel,pool=m._reference_transforms(r); z=m._align(t,panel,pool); zq=m._align(q,panel,pool)\n",
+      "cat > /tmp/assay_center_calibration.py <<'PY'\nfrom assay_stress import m, simulate\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\n\n# Compare out-of-center transfer without using query labels in any fit.\ndef predict(d):\n    r,t,q=(d[k] for k in ('reference_controls','train','query'))\n    panels,pool=m._reference_transforms(r)\n    z,zq=m._align(t,panels,pool),m._align(q,panels,pool)\n    y=t['y']; c=t['center_id']; u=np.unique(c)\n    A=m._design(z,t['stratum']); Aq=m._design(zq,q['str",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_calibration.py')\ns = p.read_text()\na = s.index('    # Remove residual training-center offsets')\nb = s.index('\\n\\ndef calibrate_multicenter_assay', a)\ns = s[:a] + '''    # Center effects are nuisance terms: estimate their dispersion from the\n    # training data, but never add them to risk predictions for new centers.\n    n_centers = effects.shape[1]\n    k = base.shape[1]\n    penalty = np.r_[0., np.full(z.shape[1], 3.), .25, .25,\n                    np.full(n_centers, .25)]\n\n    def objective(b):\n        eta = design @",
+      "cat > /tmp/assay_panel_challenge.py <<'PY'\nimport sys\nsys.path.insert(0, '/tmp')\nimport pickle\nimport numpy as np\nfrom scipy.special import digamma, polygamma\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\nfrom assay_stress_helpers import simulate, m\n\nbaseline = m._reference_transforms\n\ndef estimate(values, variance, huber):\n    w = 1 / variance\n    anchor = np.average(values, weights=w)\n    # Estimate excess dispersion relative to the known sampling variances.\n    q = np.dot(w, (values - anchor)**2)\n    df = len(w) - 1\n    denom = w.sum() - np.dot(w,w) / w.sum()\n    between = max",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_calibration.py')\ns = p.read_text().replace('from scipy.special import expit', 'from scipy.special import digamma, expit, polygamma')\na = s.index('    \"\"\"Pool compatible estimates')\nb = s.index('\\n\\ndef _reference_transforms', a)\ns = s[:a] + '''    \"\"\"Estimate a common panel anchor and shrink noisy column deviations.\"\"\"\n    if values.size == 1:\n        return values.copy(), values[0]\n    precision = 1. / variance\n    fixed_anchor = np.average(values, weights=precision)\n    dispersion = precision @ (values - fix",
+      "cat > /tmp/assay_gate_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import balanced_accuracy_score, brier_score_loss, roc_auc_score, recall_score\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef metrics(y, p):\n    pred = p >= .5\n    recall = recall_score(y, pred, labels=[0, 1], average=None, zero_division=0)\n    return np.r_[roc_auc_score(y, p), brier_score_loss(y, p), balan",
+      "cat > /tmp/assay_singleton_audit.py <<'PY'\nimport sys\nsys.path.insert(0, '/tmp')\nimport pickle\nimport numpy as np\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\nfrom assay_stress_helpers import m, simulate\n\nbase = m._reference_transforms\n\ndef singleton_update(ref):\n    panels, pooled = base(ref)\n    x, groups = np.asarray(ref['X']), np.asarray(ref['center_id'])\n    for c, (location, scale) in panels.items():\n        panel = x[groups == c]\n        columns = [v[np.isfinite(v)] for v in panel.T]\n        good = [v for v in columns if len(v) >= 2 and v.std(ddof=1) > 0]\n        if len(g",
+      "cat > /tmp/assay_missing_risk.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\nfrom numpy.polynomial.hermite import hermgauss\nfrom sklearn.metrics import roc_auc_score, brier_score_loss, balanced_accuracy_score\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nnodes, weights = hermgauss(20)\nnodes *= np.sqrt(2.)\nweights /= np.sqrt(np.pi)\n\ndef marginal(eta, missing, beta):\n    sd = np.sqrt(missin"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__assay_stress.py",
+      "primary_producer_container_path": "/tmp/assay_stress.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_calibration.py",
+        "filename": "multicenter_calibration.py",
+        "bytes": 5557,
+        "sha256": "30633a07d0c03c7bf56339d57a485885787c0a80b45693bf1cbd6cb0a3653516",
+        "content_addressed_ref": "content_addressed_blobs/30633a07d0c03c7bf56339d57a485885787c0a80b45693bf1cbd6cb0a3653516.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "moments",
+      "align",
+      "design",
+      "metrics",
+      "score",
+      "estimate",
+      "scores",
+      "simulate"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8606298523b20e789e6006e0725396b181cfb55247630023dc49e5ff325e2cd1",
+      "verified_post_package": true,
+      "verified_turn": 15,
+      "verification_command": "cat > /tmp/assay_missing_risk.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\nfrom numpy.polynomial.hermite import hermgauss\nfrom sklearn.metrics import ro",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8606298523b20e789e6006e0725396b181cfb55247630023dc49e5ff325e2cd1",
+        "expected_candidate_sha256": "8606298523b20e789e6006e0725396b181cfb55247630023dc49e5ff325e2cd1",
+        "computed_candidate_sha256": "8606298523b20e789e6006e0725396b181cfb55247630023dc49e5ff325e2cd1",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_calibration.py",
+            "bytes": 5557
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_86062985"
+    }
+  },
+  "structure": {
+    "full_producer_count": 11,
+    "reusable_ast_function_closures": [
+      {
+        "name": "moments",
+        "code": "def moments(r, c):\n    with np.errstate(invalid='ignore', divide='ignore'):\n        x = r['X'][r['center_id'] == c]\n        n = np.isfinite(x).sum(0)\n        m = np.nanmean(x, axis=0)\n        sd = np.nanstd(x, axis=0, ddof=1)\n    return (n, m, sd)"
+      },
+      {
+        "name": "align",
+        "code": "def align(r, p, a):\n    x = p['X']\n    out = np.zeros_like(x)\n    for c in np.unique(p['center_id']):\n        (n, m, s) = moments(r, c)\n        good = (n >= 2) & (s > 0)\n        mm = np.median(m[good])\n        ss = np.median(s[good])\n        w = np.where(good, a, 0)\n        m = mm + w * (np.where(good, m, mm) - mm)\n        s = ss + w * (np.where(good, s, ss) - ss)\n        ix = p['center_id'] == c\n        out[ix] = np.nan_to_num((x[ix] - m) / s)\n    return out"
+      },
+      {
+        "name": "design",
+        "code": "def design(z, s, c=None, centers=None):\n    st = np.asarray(s)[:, None] == [1, 2]\n    parts = [z, st.astype(float)]\n    if c is not None:\n        parts.append(5 * ((np.asarray(c)[:, None] == centers) - 1 / len(centers)))\n    return np.column_stack(parts)"
+      },
+      {
+        "name": "metrics",
+        "code": "def metrics(y, p):\n    from sklearn.metrics import balanced_accuracy_score\n    from sklearn.metrics import brier_score_loss\n    from sklearn.metrics import recall_score\n    from sklearn.metrics import roc_auc_score\n    pred = p >= 0.5\n    recall = recall_score(y, pred, labels=[0, 1], average=None, zero_division=0)\n    return np.r_[roc_auc_score(y, p), brier_score_loss(y, p), balanced_accuracy_score(y, pred), recall]"
+      },
+      {
+        "name": "score",
+        "code": "def score(y, p):\n    from sklearn.metrics import balanced_accuracy_score\n    from sklearn.metrics import brier_score_loss\n    from sklearn.metrics import roc_auc_score\n    return np.array([roc_auc_score(y, p), brier_score_loss(y, p), balanced_accuracy_score(y, p >= 0.5)])"
+      },
+      {
+        "name": "estimate",
+        "code": "def estimate(values, variance, huber):\n    w = 1 / variance\n    anchor = np.average(values, weights=w)\n    q = np.dot(w, (values - anchor) ** 2)\n    df = len(w) - 1\n    denom = w.sum() - np.dot(w, w) / w.sum()\n    between = max(0.25 * len(w) / w.sum(), (q - df) / denom if df else 0.0)\n    w = 1 / (variance + between)\n    anchor = np.average(values, weights=w)\n    if huber:\n        for _ in range(4):\n            u = np.abs(values - anchor) / np.sqrt(variance + between)\n            anchor = np.average(values, weights=w / np.maximum(1.0, u / 1.5))\n    return (anchor + between / (between + variance) * (values - anchor), anchor)"
+      },
+      {
+        "name": "scores",
+        "code": "def scores(c, z, p, g):\n    from sklearn.metrics import brier_score_loss\n    from sklearn.metrics import roc_auc_score\n    return [[np.abs(z[c == j] - g['Z_query'][c == j]).mean(), roc_auc_score(g['y_query'][c == j], p[c == j]), brier_score_loss(g['y_query'][c == j], p[c == j])] for j in np.unique(c)]"
+      },
+      {
+        "name": "simulate",
+        "code": "def simulate(seed, heter, confound):\n    from scipy.special import expit\n    rng = np.random.default_rng(seed)\n    D = 8\n    shift = np.array([3.5, 3.5, -3.5, -3.5, -2.7, 2.8])[:, None] + rng.normal(0, heter, (6, D))\n    scale = np.array([1.3, 0.9, 1.1, 1.05, 1.45, 0.75])[:, None] * np.exp(rng.normal(0, heter / 2, (6, D)))\n\n    def raw(z, c, miss):\n        a = shift[c] + scale[c] * z\n        a[rng.random(a.shape) < miss] = np.nan\n        return a\n    rc = np.repeat(np.arange(6), [80, 75, 75, 75, 24, 18])\n    rx = raw(rng.normal(size=(rc.size, D)), rc, 0.15)\n    ix = np.flatnonzero(rc == 4)\n    rx[ix[1:], 0] = np.nan\n    rx[ix, 1] = 7.0\n    ix = np.flatnonzero(rc == 5)\n    rx[ix, 5] = np.nan\n    rx[ix[1:], 7] = np.nan\n    beta = rng.normal(size=D)\n    beta *= 3.3 / np.linalg.norm(beta)\n\n    def patient(c, n, train):\n        c = np.repeat(c, n)\n        s = rng.choice(3, c.size, p=[0.6, 0.25, 0.15])\n        z = rng.normal(size=(c.size, D))\n        base = z @ beta + np.array([-0.65, 0.55, 1.4])[s]\n        if train:\n            base += np.array([1, 1, -1, -1, 0, 0])[c] * confound\n        p = expit(base)\n        y = rng.binomial(1, p)\n        return ({'center_id': c, 'X': raw(z, c, 0.045), 'stratum': s}, z, y, p)\n    (t, zt, yt, pt) = patient(np.arange(4), 100, True)\n    t['y'] = yt\n    (q, z, y, p) = patient(np.arange(4, 6), 180, False)\n    return ({'reference_controls': {'X': rx, 'center_id': rc}, 'train': t, 'query': q}, {'Z_query': z, 'y_query': y, 'prob_query': p})"
+      }
+    ]
+  }
+}

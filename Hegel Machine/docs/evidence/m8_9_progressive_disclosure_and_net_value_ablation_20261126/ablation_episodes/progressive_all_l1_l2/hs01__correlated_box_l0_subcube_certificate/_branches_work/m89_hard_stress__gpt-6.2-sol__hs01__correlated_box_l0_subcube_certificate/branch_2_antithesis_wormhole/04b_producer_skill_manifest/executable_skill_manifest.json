@@ -1,0 +1,127 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs01_correlated_box_l0_cert_08364682e138",
+    "source_hash": "08364682e138e6327f050b853bd8ca0cd1b8d07432e80a34d7537310312ae734",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs01__correlated_box_l0_subcube_certificate",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_box_l0_gate.py",
+        "archived_relpath": "producers/tmp__audit_box_l0_gate.py",
+        "bytes": 2757,
+        "sha256": "5d0b91ae924573529ea8ab6954ca575d6d79cefdd5695692e20bf17043a50120"
+      },
+      {
+        "container_path": "/tmp/audit_public_box_pressure.py",
+        "archived_relpath": "producers/tmp__audit_public_box_pressure.py",
+        "bytes": 2218,
+        "sha256": "7a8dd2c0e604eaa5d89e1fc814c78c8d4f06347d6f9879fe578fdc698b3f51d3"
+      },
+      {
+        "container_path": "/tmp/stress_box_l0.py",
+        "archived_relpath": "producers/tmp__stress_box_l0.py",
+        "bytes": 3392,
+        "sha256": "2da859b1203ef8d9bf84cd027b1567d9d0337c17efd9f1370d977302c165af2d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_box_l0_cases.pkl','rb') as f: data=pickle.load(f)\ndef show(obj, label='public'):\n if isinstance(obj, dict) and 'X' in obj:\n  x=np.asarray(obj['X']); y=np.asarray(obj['y']); s=np.linalg.svd(x,compute_uv=False)\n  print(label, x.shape, 'singular range', (s.min(),s.max()), 'y norm',np.linalg.norm(y), 'parameters',{k:v for k,v in obj.items() if np.isscalar(v)})\n elif isinstance(obj, dict):\n  for k,v in obj.items(): show(v,str(k))\n elif isinstance(obj,(list,tuple)):\n  for i,v in enumerate(obj): s",
+      "cd /holdout_task && python3 - <<'PY'\nimport importlib.util, pathlib\nname = 'hegel_wormhole_skills.autogenous_sparse_ridge_certification'\np = pathlib.Path(importlib.util.find_spec(name).origin)\nprint(p)\nprint(p.read_text())\nPY",
+      "cat > /holdout_task/certified_box_l0.py <<'PY'\n\"\"\"Box-constrained sparse ridge with a disjunctive dual certificate.\"\"\"\nfrom itertools import combinations\n\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\n\ndef solve_certified_box_l0(problem: dict) -> dict:\n    \"\"\"Minimize the thresholded L0 objective and certify the entire cube.\"\"\"\n    X = np.asarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    ridge = float(problem['ridge'])\n    penalty = float(problem['l0_penalty'])\n    box = float(problem['box'])\n    tol = float(problem['gap_tol'])\n    n, p = X.shape\n",
+      "cat > /tmp/stress_box_l0.py <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nspec = importlib.util.spec_from_file_location('certified_box_l0', '/holdout_task/certified_box_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef objective(d, w):\n    r = d['X'] @ w - d['y']\n    return .5*(r @ r + d['ridge']*(w @ w)) + d['l0_penalty']*np.count_nonzero(abs(w)>1e-10)\n\ndef reference(d):\n    X, y = d['X'], d['y']\n    p = X.shape[1]\n    A = np.vstack((X, np.sqrt(d['ridge'])*np.eye(p)))\n    b ",
+      "cat > /tmp/audit_box_l0_gate.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('box_l0', '/holdout_task/certified_box_l0.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\ncases = pickle.load(open('/holdout_task/public_box_l0_cases.pkl', 'rb'))['cases']\n\ndef verify(name, d):\n    start = time.perf_counter()\n    r = m.solve_certified_box_l0(d)\n    elapsed = time.perf_counter() - start\n    w = np.asarray(r['weights'])\n    e = d['X'] @ w - d['y']\n    obj = .5*(e @ e + d['ridge']*(w @ w)) + d['l0_penalt",
+      "cat > /tmp/audit_public_box_pressure.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nspec = importlib.util.spec_from_file_location('box_l0', '/holdout_task/certified_box_l0.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_box_l0_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)['cases']\n\ndef run(name, case):\n    start = time.perf_counter()\n    out = m.solve_certified_box_l0(case)\n    elapsed = time.perf_counter() - start\n    w = np.asarray(out['weights'])\n    X, y, M = "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_box_l0.py",
+      "primary_producer_container_path": "/tmp/stress_box_l0.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_box_l0.py",
+        "filename": "certified_box_l0.py",
+        "bytes": 6862,
+        "sha256": "b0c38f8e47ff8b270bb7815e7325e6e7efc1997b110b04d70849926310e568ca",
+        "content_addressed_ref": "content_addressed_blobs/b0c38f8e47ff8b270bb7815e7325e6e7efc1997b110b04d70849926310e568ca.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_box_l0.py"
+    ],
+    "exported_pure_functions": [
+      "same_opt",
+      "objective",
+      "reference",
+      "prob"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "08364682e138e6327f050b853bd8ca0cd1b8d07432e80a34d7537310312ae734",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat > /tmp/audit_public_box_pressure.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nspec = importlib.util.spec_from_file_location('box_l0', '/holdout_task/certified_box_l0",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "08364682e138e6327f050b853bd8ca0cd1b8d07432e80a34d7537310312ae734",
+        "expected_candidate_sha256": "08364682e138e6327f050b853bd8ca0cd1b8d07432e80a34d7537310312ae734",
+        "computed_candidate_sha256": "08364682e138e6327f050b853bd8ca0cd1b8d07432e80a34d7537310312ae734",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/certified_box_l0.py",
+            "bytes": 6862
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_08364682"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "same_opt",
+        "code": "def same_opt(name, first, second):\n    assert max(first[1], second[1]) <= min(first[0], second[0]) + 1e-10, (name, first, second)"
+      },
+      {
+        "name": "objective",
+        "code": "def objective(d, w):\n    r = d['X'] @ w - d['y']\n    return 0.5 * (r @ r + d['ridge'] * (w @ w)) + d['l0_penalty'] * np.count_nonzero(abs(w) > 1e-10)"
+      },
+      {
+        "name": "reference",
+        "code": "def reference(d):\n    import itertools\n    from scipy.optimize import lsq_linear\n    (X, y) = (d['X'], d['y'])\n    p = X.shape[1]\n    A = np.vstack((X, np.sqrt(d['ridge']) * np.eye(p)))\n    b = np.r_[y, np.zeros(p)]\n    opt = np.inf\n    for mask in itertools.product((False, True), repeat=p):\n        lim = np.where(mask, d['box'], min(d['box'], 1e-10))\n        w = lsq_linear(A, b, bounds=(-lim, lim), method='bvls', tol=1e-14).x\n        r = A @ w - b\n        opt = min(opt, 0.5 * (r @ r) + d['l0_penalty'] * sum(mask))\n    return opt"
+      },
+      {
+        "name": "prob",
+        "code": "def prob(X, y, ridge, penalty, box):\n    return dict(X=X, y=y, ridge=ridge, l0_penalty=penalty, box=box, gap_tol=1e-06, max_leaves=1)"
+      }
+    ]
+  }
+}

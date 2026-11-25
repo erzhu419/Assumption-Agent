@@ -1,0 +1,66 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs03_hereditary_memory_deconv_9ad029a37ded",
+    "source_hash": "9ad029a37ded52a09bc49bfad591cca22ff0734f5c80b2122f67048f11d1dcc9",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "hs03__irregular_dt_hereditary_memory_deconvolution",
+    "wormhole_family": "fam_temporal_memory_and_stage_deconfounding"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nwith open('public_hereditary_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\ndef describe(x, depth=0):\n    if isinstance(x, dict):\n        return {k: describe(v,depth+1) for k,v in x.items()}\n    if isinstance(x, (list,tuple)):\n        if x and isinstance(x[0],dict):\n            return [describe(v,depth+1) for v in x[:3]]\n        return x if len(x)<5 else (type(x).__name__,len(x))\n    if isinstance(x,np.ndarray):\n        return (x.shape,str(x.dtype))\n    return x\nprint('numpy/scipy', np.__version__, ",
+      "cd /holdout_task && command -v python3 && python3 - <<'PY'\nimport pickle, importlib.util\nimport numpy as np\nprint('numpy', np.__version__, 'scipy available', importlib.util.find_spec('scipy') is not None)\nwith open('public_hereditary_cases.pkl','rb') as f: data=pickle.load(f)\ndef describe(o):\n    if isinstance(o,dict): return {k:describe(v) for k,v in o.items()}\n    if isinstance(o,(list,tuple)): return [describe(v) for v in o[:5]]\n    if isinstance(o,np.ndarray): return (o.shape,str(o.dtype))\n    return o\nprint(describe(data))\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nwith open('public_hereditary_cases.pkl','rb') as f: cases=pickle.load(f)['cases']\nfor case in cases:\n p=case['problem']; r=p['calibration_run']; t=r['timestamps']; u=r['driver_u']; y=r['y_obs']; tau=np.asarray(p['taus']); pt=r['past_timestamps']; pu=r['past_driver_history']; m=np.full(2,pu[0]); out=[]\n for dt,v in zip(np.diff(pt),pu[1:]):\n  m += -np.expm1(-dt/tau)*(v-m)\n for dt,v in zip(np.diff(t,prepend=pt[-1]),u):\n  m += -np.expm1(-dt/tau)*(v-m); out.append(m.copy())\n X=np.column_stack((u",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nwith open('public_hereditary_cases.pkl','rb') as f: cases=pickle.load(f)['cases']\ndef mad(r): return 1.4826*np.median(np.abs(r-np.median(r)))\nfor c in cases:\n p=c['problem']; run=p['calibration_run']; t=run['timestamps']; pt=run['past_timestamps']; pu=run['past_driver_history']; u=run['driver_u']; y=run['y_obs']; tau=np.array(p['taus']); m=np.full(2,pu[0]); mem=[]\n for dt,v in zip(np.diff(pt),pu[1:]): m += -np.expm1(-dt/tau)*(v-m)\n for dt,v in zip(np.diff(t,prepend=pt[-1]),u):\n  m += -np.ex",
+      "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom hereditary_deconv import deconvolve_hereditary_driver, _invert\n\n# Assemble an independent dense forward model from direct ZOH replay.\ndef reference(run, taus, moduli, u):\n    past_t, past_u = run['past_timestamps'], run['past_driver_history']\n    t = run['timestamps']\n    m = np.repeat(past_u[0], 2).astype(float)\n    for dt, v in zip(np.diff(past_t), past_u[1:]):\n        a = np.exp(-dt / taus)\n        m = a*m + (1-a)*v\n    y = []\n    for dt, v, tk in zip(np.diff(np.r_[pas"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/hereditary_deconv.py",
+        "filename": "hereditary_deconv.py",
+        "bytes": 4135,
+        "sha256": "6415243aab1331caa5520018f52f120ea3ac4606006485909506922c96f3f322",
+        "content_addressed_ref": "content_addressed_blobs/6415243aab1331caa5520018f52f120ea3ac4606006485909506922c96f3f322.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/hereditary_deconv.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_temporal_memory_and_stage_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "9ad029a37ded52a09bc49bfad591cca22ff0734f5c80b2122f67048f11d1dcc9",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom hereditary_deconv import deconvolve_hereditary_driver, _invert\n\n# Assemble an independent dense forward model from d",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

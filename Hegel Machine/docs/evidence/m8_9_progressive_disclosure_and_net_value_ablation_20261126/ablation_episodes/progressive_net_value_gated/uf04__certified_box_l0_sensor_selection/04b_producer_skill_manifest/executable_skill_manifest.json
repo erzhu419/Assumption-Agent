@@ -1,0 +1,174 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_certified_box_l0_selection_2e772b3008a6",
+    "source_hash": "2e772b3008a6d6ff5e5c4213d6af0856e09414d7ce0c1f035f206667271d574f",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf04__certified_box_l0_sensor_selection",
+    "wormhole_family": "fam_unseen_certified_box_l0"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/cardinality_insert.py",
+        "archived_relpath": "producers/tmp__cardinality_insert.py",
+        "bytes": 4863,
+        "sha256": "716eacbfc16ebd37cf5395ab16e8a7394ba9876b986f44ffc05f4dec27cf3aa1"
+      },
+      {
+        "container_path": "/tmp/l0_block_audit.py",
+        "archived_relpath": "producers/tmp__l0_block_audit.py",
+        "bytes": 2182,
+        "sha256": "bf34722d3b0235417aead32aec8bdb6f2e079d3a21ebef7b29d5054333c2f075"
+      },
+      {
+        "container_path": "/tmp/l0_diagonal.py",
+        "archived_relpath": "producers/tmp__l0_diagonal.py",
+        "bytes": 9132,
+        "sha256": "3c3bd45c78c04673693711bdfcb8544f10d564b91f8475e3880b0ab08ee52af5"
+      },
+      {
+        "container_path": "/tmp/l0_gate_audit.py",
+        "archived_relpath": "producers/tmp__l0_gate_audit.py",
+        "bytes": 2175,
+        "sha256": "ea865a3f55846310d8f0be8d026cbb2261da08e98fdd72e9a6732e49e4be3dbc"
+      },
+      {
+        "container_path": "/tmp/l0_rank1.py",
+        "archived_relpath": "producers/tmp__l0_rank1.py",
+        "bytes": 932,
+        "sha256": "e2dd506a4ff310c5998ff4fa1588e819adbc31c90153f02ca79637b9ffe7722b"
+      },
+      {
+        "container_path": "/tmp/l0_stress.py",
+        "archived_relpath": "producers/tmp__l0_stress.py",
+        "bytes": 1800,
+        "sha256": "88eadf9a32d2eb31fa7ea6d493ab0c349b73188800fb3128f01aaf7325ef25ba"
+      },
+      {
+        "container_path": "/tmp/l0_v04.py",
+        "archived_relpath": "producers/tmp__l0_v04.py",
+        "bytes": 20255,
+        "sha256": "474950176c02a7c573e87d81f5db91dcfe5bebdcf5f09c97c4e74097e8d8d123"
+      },
+      {
+        "container_path": "/tmp/l0_v05.py",
+        "archived_relpath": "producers/tmp__l0_v05.py",
+        "bytes": 25329,
+        "sha256": "b8425813744d2657be9a7e3e248793d2d815d16e8f60828ca752f57638778688"
+      },
+      {
+        "container_path": "/tmp/l0_verify_extra.py",
+        "archived_relpath": "producers/tmp__l0_verify_extra.py",
+        "bytes": 2267,
+        "sha256": "50420ab68e6c912d085421140dac7bdf7a758712dd77c401fdb7f16f04e3078b"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\np='/holdout_task/public_box_l0_instances.pkl'\na=pickle.load(open(p,'rb'))\ndef show(x,level=0):\n if isinstance(x,dict):\n  print(' '*level,'keys:',list(x));\n  for k,v in x.items():\n   print(' '*level,k, end=': ');show(v,level+2)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x))\n  for v in x:show(v,level+2)\n elif isinstance(x,np.ndarray):\n  print(x.shape,x.dtype,'min,max', (float(x.min()),float(x.max())) if x.size else None)\n else: print(repr(x))\nshow(a)\nPY\npython3 -m hegel_wormhole_skills --describe autogenous_prim",
+      "cat > /holdout_task/certified_l0_solver.py <<'PY'\n\"\"\"Best-bound search for thresholded, boxed sparse ridge regression.\"\"\"\nimport heapq\nimport numpy as np\nfrom scipy.linalg import eigvalsh\nfrom scipy.optimize import minimize\n\n_TOL = 1e-9\n_GAP = 1e-5\n_LIMIT = 600\n\n\nclass _Search:\n    def __init__(self, instance):\n        self.X = np.asarray(instance['X'], dtype=float)\n        self.y = np.asarray(instance['y'], dtype=float)\n        self.ridge = float(instance['ridge'])\n        self.m = float(instance['box'])\n        self.lam = float(instance['l0_penalty'])\n        self.t = min(_TOL, self.m)\n     ",
+      "python3 - <<'PY'\np='/holdout_task/certified_l0_solver.py'\ns=open(p).read().replace('from scipy.optimize import minimize\\n','')\ns=s.replace('        self.c = self.X.T @ self.y','        self.abs_gram = np.abs(self.X).T @ np.abs(self.X) + self.ridge*np.eye(self.p)\\n        self.c = self.X.T @ self.y')\na=s.index('        # Either Gershgorin'); b=s.index('\\n    def _accept', a)\ns=s[:a]+'''        # Spectral and row-sum estimates propose curvature; the Cholesky\n        # reconstruction and a rounding margin certify it independently.\n        g = np.maximum(0., 1. - off.sum(axis=1))\n        e = max(0",
+      "cp /holdout_task/certified_l0_solver.py /tmp/l0_diagonal.py\ncat >> /holdout_task/certified_l0_solver.py <<'PY'\n\n\ndef _correlation_groups(search):\n    X = search.X\n    nrm = np.linalg.norm(X, axis=0)\n    nrm[nrm == 0] = 1.\n    Z = X / nrm\n    C = np.abs(Z.T @ Z)\n    groups = [[j] for j in range(search.p)]\n    while True:\n        value, pair = .88, None\n        for i, a in enumerate(groups):\n            for j in range(i):\n                b = groups[j]\n                if len(a)+len(b) <= 4:\n                    v = C[np.ix_(a,b)].min()\n                    if v > value:\n                        valu",
+      "cat > /tmp/l0_verify_extra.py <<'PY'\nimport importlib.util,itertools,time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\np='/holdout_task/certified_l0_solver.py'\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ndef check(label,X,y,ridge,box,l0,ref=None):\n    t=time.monotonic(); r=m.solve_certified_box_l0(dict(X=X,y=y,ridge=ridge,box=box,l0_penalty=l0)); w=np.array(r['weights']); v=X@w-y; obj=.5*(v@v+ridge*(w@w))+l0*sum(abs(w)>1e-9); lb=r['certified_lower_bound'];gap=obj-lb\n    assert np.max(abs(w),initial=0)<=box and r",
+      "python3 - <<'PY'\np='/holdout_task/certified_l0_solver.py'\ns=open(p).read()\ni=s.index('\\ndef solve_certified_box_l0(')\ns=s[:i]+'''\ndef _exchangeable_root(s):\n    \"\"\"Certify a fully exchangeable design, including sign flips, at the root.\"\"\"\n    x = s.X[:, 0]\n    same = np.all(s.X == x[:, None], axis=0)\n    flipped = np.all(s.X == -x[:, None], axis=0)\n    if not np.all(same | flipped):\n        return None\n    signs = np.where(same, 1., -1.)\n    h = float(x @ x)\n    c = float(x @ s.y)\n    a = abs(c)\n    lower = np.inf\n    # At fixed cardinality, permutation symmetry and convexity allow all\n    # c",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/certified_l0_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nrng = np.random.default_rng(81)\nx = rng.normal(size=24)\nx /= np.linalg.norm(x)\nsigns = np.where(np.arange(15) % 2, -1., 1.)\nnoise = rng.normal(size=(24, 15)) / np.sqrt(24)\nfor eps in (0., 0.001, 0.02):\n    X = (x[:, None] + eps*noise)*signs\n    y = 3.1*x\n    r = m.solve_certified_box_l0(dict(X=X, y=y, ridge=.015, box=.6, l0_penalty=.15))\n    w = np.",
+      "cp /holdout_task/certified_l0_solver.py /tmp/l0_v04.py\ncat > /tmp/cardinality_insert.py <<'PY'\n\nclass _CardinalitySearch:\n    \"\"\"Branch on total cardinality, then on indicators within that cardinality.\"\"\"\n    def __init__(self, search):\n        self.s = search\n\n    def oracle(self, dual, k, state):\n        s = self.s\n        # An on indicator pays the charge across the whole box. Including the\n        # inactive interval in that box does not change the global minimum.\n        a = s.X.T @ dual\n        x0 = -np.clip(a/s.ridge, -s.t, s.t)\n        x1 = -np.clip(a/s.ridge, -s.m, s.m)\n        q0 = x",
+      "set -euo pipefail\nexport OPENBLAS_NUM_THREADS=1\nfor suite in /tmp/l0_stress.py /tmp/l0_verify_extra.py /tmp/l0_rank1.py; do\n  python3 -I \"$suite\" > \"${suite%.py}.final.log\"\ndone\npython3 -I - <<'PY'\nimport pathlib,re\nfrom collections import defaultdict\nstats=defaultdict(list)\nfor name in ('l0_stress','l0_verify_extra','l0_rank1'):\n    for line in pathlib.Path('/tmp',name+'.final.log').read_text().splitlines():\n        assert 'FAIL' not in line,line\n        if name=='l0_stress':\n            label,nodes,gap,*_=line.split()\n        elif name=='l0_verify_extra':\n            label,nodes,gap=re.match",
+      "cat > /tmp/l0_gate_audit.py <<'PY'\nimport importlib.util,pickle,itertools\nimport numpy as np\nfrom scipy.optimize import lsq_linear\nroot='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',root+'certified_l0_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n\ndef solve(label,a,ref=None):\n    r=m.solve_certified_box_l0(a); X=np.asarray(a['X']); w=np.asarray(r['weights']); e=X@w-a['y']\n    j=.5*(e@e+a['ridge']*(w@w))+a['l0_penalty']*np.count_nonzero(abs(w)>1e-9)\n    lb=r['certified_lower_bound']; gap=j-lb\n    assert set(r)=={'weights','objective','c",
+      "cat > /tmp/l0_block_audit.py <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\n\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root+'certified_l0_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef block_opt(X, y, ridge, box, penalty):\n    p = X.shape[1]\n    A = np.vstack((X, np.sqrt(ridge)*np.eye(p)))\n    b = np.r_[y, np.zeros(p)]\n    best = np.inf\n    for bits in itertools.product((False, True), repeat=p):\n        radii = np.where(bits, box, 1e-9)\n        D =",
+      "set -e\ncp /holdout_task/certified_l0_solver.py /tmp/l0_v05.py\npython3 - <<'PY'\np='/holdout_task/certified_l0_solver.py'\ns=open(p).read().replace('        self.nodes = 0\\n','        self.nodes = 0\\n        self.gap = _GAP\\n',1)\na=s.index('    def solve(self):'); b=s.index('    def result(',a)\ns=s[:a]+s[a:b].replace('_GAP','self.gap')+s[b:]\na=s.index('        ids = np.flatnonzero(~off)')\ns=s[:a]+'''        if not np.any(free):\n            from scipy.optimize import lsq_linear\n            radius = np.where(on, self.m, self.t)\n            A = np.vstack((self.X, np.sqrt(self.ridge)*np.eye(self.p)))"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__l0_v05.py",
+      "primary_producer_container_path": "/tmp/l0_v05.py",
+      "selected_channels": [
+        "fam_unseen_certified_box_l0"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_l0_solver.py",
+        "filename": "certified_l0_solver.py",
+        "bytes": 27640,
+        "sha256": "38f88a4978eca84604bce1e3079fff46f0a682022255272042d0df213dbf1e01",
+        "content_addressed_ref": "content_addressed_blobs/38f88a4978eca84604bce1e3079fff46f0a682022255272042d0df213dbf1e01.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_l0_solver.py"
+    ],
+    "exported_pure_functions": [
+      "block_opt",
+      "reference",
+      "case",
+      "_correlation_groups",
+      "_exchangeable_root"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_certified_box_l0",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2e772b3008a6d6ff5e5c4213d6af0856e09414d7ce0c1f035f206667271d574f",
+      "verified_post_package": true,
+      "verified_turn": 14,
+      "verification_command": "set -e\ncp /holdout_task/certified_l0_solver.py /tmp/l0_v05.py\npython3 - <<'PY'\np='/holdout_task/certified_l0_solver.py'\ns=open(p).read().replace('        self.nodes = 0\\n','        self.nodes = 0\\n        self.gap = _GAP\\n',1)\na=s.index('  ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2e772b3008a6d6ff5e5c4213d6af0856e09414d7ce0c1f035f206667271d574f",
+        "expected_candidate_sha256": "2e772b3008a6d6ff5e5c4213d6af0856e09414d7ce0c1f035f206667271d574f",
+        "computed_candidate_sha256": "2e772b3008a6d6ff5e5c4213d6af0856e09414d7ce0c1f035f206667271d574f",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/certified_l0_solver.py",
+            "bytes": 27640
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v06_2e772b30"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "block_opt",
+        "code": "def block_opt(X, y, ridge, box, penalty):\n    import itertools\n    from scipy.optimize import lsq_linear\n    p = X.shape[1]\n    A = np.vstack((X, np.sqrt(ridge) * np.eye(p)))\n    b = np.r_[y, np.zeros(p)]\n    best = np.inf\n    for bits in itertools.product((False, True), repeat=p):\n        radii = np.where(bits, box, 1e-09)\n        D = A * radii\n        fit = lsq_linear(D, b, bounds=(-1.0, 1.0), method='bvls', tol=1e-14)\n        e = D @ fit.x - b\n        best = min(best, 0.5 * (e @ e) + penalty * sum(bits))\n    return best"
+      },
+      {
+        "name": "reference",
+        "code": "def reference(a):\n    import itertools\n    from scipy.optimize import lsq_linear\n    X = a['X']\n    p = X.shape[1]\n    A = np.vstack((X, np.sqrt(a['ridge']) * np.eye(p)))\n    b = np.r_[a['y'], np.zeros(p)]\n    best = np.inf\n    for mask in itertools.product((0, 1), repeat=p):\n        radius = np.where(mask, a['box'], 1e-09)\n        D = A * radius\n        fit = lsq_linear(D, b, bounds=(-1, 1), method='bvls', tol=1e-14)\n        e = D @ fit.x - b\n        best = min(best, 0.5 * (e @ e) + a['l0_penalty'] * sum(mask))\n    return best"
+      },
+      {
+        "name": "case",
+        "code": "def case(X, y, ridge=0.35, box=1.5, l0_penalty=0.85):\n    return dict(X=X, y=y, ridge=ridge, box=box, l0_penalty=l0_penalty)"
+      },
+      {
+        "name": "_correlation_groups",
+        "code": "def _correlation_groups(search):\n    X = search.X\n    nrm = np.linalg.norm(X, axis=0)\n    nrm[nrm == 0] = 1.0\n    Z = X / nrm\n    C = np.abs(Z.T @ Z)\n    groups = [[j] for j in range(search.p)]\n    while True:\n        (value, pair) = (0.88, None)\n        for (i, a) in enumerate(groups):\n            for j in range(i):\n                b = groups[j]\n                if len(a) + len(b) <= 4:\n                    v = C[np.ix_(a, b)].min()\n                    if v > value:\n                        (value, pair) = (v, (i, j))\n        if pair is None:\n            return [np.asarray(g) for g in groups]\n        (i, j) = pair\n        groups[j] += groups.pop(i)"
+      },
+      {
+        "name": "_exchangeable_root",
+        "code": "def _exchangeable_root(s):\n    \"\"\"Certify a fully exchangeable design, including sign flips, at the root.\"\"\"\n    x = s.X[:, 0]\n    same = np.all(s.X == x[:, None], axis=0)\n    flipped = np.all(s.X == -x[:, None], axis=0)\n    if not np.all(same | flipped):\n        return None\n    signs = np.where(same, 1.0, -1.0)\n    h = float(x @ x)\n    c = float(x @ s.y)\n    a = abs(c)\n    lower = np.inf\n    for k in range(s.p + 1):\n        q = s.p - k\n        if a <= (s.ridge + s.p * h) * s.t:\n            v = u = a / (s.ridge + s.p * h)\n        else:\n            v = s.t\n            u = min(s.m, max(0.0, (a - h * q * v) / (s.ridge + h * k)))\n        w = np.copysign(np.r_[np.full(k, u), np.full(q, v)], c)\n        radius = np.r_[np.full(k, s.m), np.full(q, s.t)]\n        candidate = signs * w\n        s._accept(candidate)\n        r = s.X @ candidate - s.y\n        grad = signs * (s.X.T @ r) + s.ridge * w\n        f = 0.5 * (r @ r + s.ridge * (w @ w)) + s.lam * k\n        lb = f - (np.abs(grad) @ radius + grad @ w) - s.err\n        lower = min(lower, lb)\n    s.nodes = 1\n    return s.result(max(0.0, lower))"
+      }
+    ]
+  }
+}

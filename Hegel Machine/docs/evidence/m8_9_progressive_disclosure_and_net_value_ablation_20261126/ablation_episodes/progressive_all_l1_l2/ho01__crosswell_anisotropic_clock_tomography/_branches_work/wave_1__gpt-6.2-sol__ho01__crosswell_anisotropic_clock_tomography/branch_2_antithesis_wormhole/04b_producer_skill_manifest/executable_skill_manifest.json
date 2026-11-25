@@ -1,0 +1,117 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_1fcebc931e61",
+    "source_hash": "1fcebc931e61d7029970bb231d3c9529909d09f4d160927146493959f8f06b23",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_tomo.py",
+        "archived_relpath": "producers/tmp__audit_tomo.py",
+        "bytes": 2642,
+        "sha256": "084ae268538ecdd2e917acfb57f03a1323b3c847abc1c26c6e1cdca527bf7314"
+      },
+      {
+        "container_path": "/tmp/probe_tomo.py",
+        "archived_relpath": "producers/tmp__probe_tomo.py",
+        "bytes": 941,
+        "sha256": "878329f4db4fef142ef3d14806c4158678118400b505988aa76471d2373e8c34"
+      },
+      {
+        "container_path": "/tmp/stress_tomo.py",
+        "archived_relpath": "producers/tmp__stress_tomo.py",
+        "bytes": 3638,
+        "sha256": "77339f2999f5301fc08334324efbc32e4d84cc94d59f7ec913d3dea782e1e963"
+      },
+      {
+        "container_path": "/tmp/tomo_clock_free.py",
+        "archived_relpath": "producers/tmp__tomo_clock_free.py",
+        "bytes": 1628,
+        "sha256": "b585ae9652eec339ecb287b1256a2a819844adae536d03af0bd1175cd6b34ffc"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('/holdout_task/public_surveys.pkl','rb') as f: d=pickle.load(f)\nprint('numpy/scipy',np.__version__,scipy.__version__)\ndef inspect(v,depth=0):\n if depth>4: return\n if isinstance(v,dict):\n  for k,x in v.items():\n   print('  '*depth,k,end=': '); inspect(x,depth+1)\n elif isinstance(v,(list,tuple)) and v and isinstance(v[0],dict):\n  print(type(v).__name__,len(v)); [inspect(x,depth+1) for x in v[:4]]\n else:\n  a=np.asarray(v)\n  print(type(v).__name__,a.shape,a.dtype, a.ravel()[:10], ('range',float(np.min(a)),float(np.max(",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Straight-ray inversion for one Gaussian plume and receiver clock offsets.\"\"\"\nimport numpy as np\nfrom scipy.linalg import helmert\nfrom scipy.optimize import least_squares\nfrom scipy.special import ndtr\n\n\nclass _RayModel:\n    def __init__(self, survey):\n        self.w, self.h = float(survey['W_m']), float(survey['H_m'])\n        self.r = float(survey.get('R_plume_m', 5.5))\n        zs = np.asarray(survey['z_src_m'], dtype=float)\n        zr = np.asarray(survey['z_rcv_m'], dtype=float)\n        self.ns, self.nr = len(zs), len(zr)\n        self.zs = np",
+      "cat > /tmp/stress_tomo.py <<'PY'\nimport pickle, sys, time\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.integrate import quad\nsys.path.insert(0, '/holdout_task')\nfrom tomography_solver import invert_plume_and_clocks\n\nrng = np.random.default_rng(501)\n\ndef check(s, xy, clocks):\n    start = time.perf_counter()\n    out = invert_plume_and_clocks(s)\n    dt = time.perf_counter() - start\n    assert set(out) == {'plume_xz_m', 'rcv_clock_bias_s'}\n    assert isinstance(out['plume_xz_m'], list) and len(out['plume_xz_m']) == 2\n    assert isinstance(out['rcv_clock_bias_s'], list) and len(out['rcv_c",
+      "cat > /tmp/audit_tomo.py <<'PY'\nimport pickle\nimport sys\nimport time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tomography_solver import _RayModel, invert_plume_and_clocks\n\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    entries = pickle.load(f)\nfor num, entry in enumerate(entries, 1):\n    s, gt = entry['survey'], entry['gt']\n    a = _RayModel(s)\n    start = time.perf_counter()\n    out = invert_plume_and_clocks(s)\n    elapsed = time.perf_counter() - start\n    c = np.asarray(out['rcv_clock_bias_s'])\n    loc = np.linalg.norm(np.asarray(out['plume_xz_m']) - gt['plum",
+      "cat > /tmp/tomo_clock_free.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tomography_solver import _RayModel\n\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    entries = pickle.load(f)\nfor n, entry in enumerate(entries, 1):\n    s = entry['survey']\n    full = _RayModel(s)\n    cols = [0, *range(2, full.design.shape[1])]\n    residual = np.empty((2, full.ns - 1, full.nr))\n    for i in range(full.ns - 1):\n        rows = np.ones(full.ns, dtype=bool)\n        rows[i:i+2] = False\n        train = dict(s, z_src_m=s['z_src_m'][rows], T_obs_s=s['T"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_tomo.py",
+      "primary_producer_container_path": "/tmp/stress_tomo.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 4519,
+        "sha256": "ab70bbb809ef23e5294180c8bc7b1769ab03170bc6964775005766aede99d340",
+        "content_addressed_ref": "content_addressed_blobs/ab70bbb809ef23e5294180c8bc7b1769ab03170bc6964775005766aede99d340.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": [
+      "report"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "1fcebc931e61d7029970bb231d3c9529909d09f4d160927146493959f8f06b23",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cat > /tmp/tomo_clock_free.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tomography_solver import _RayModel\n\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    entries = pickle.loa",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1fcebc931e61d7029970bb231d3c9529909d09f4d160927146493959f8f06b23",
+        "expected_candidate_sha256": "1fcebc931e61d7029970bb231d3c9529909d09f4d160927146493959f8f06b23",
+        "computed_candidate_sha256": "1fcebc931e61d7029970bb231d3c9529909d09f4d160927146493959f8f06b23",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tomography_solver.py",
+            "bytes": 4519
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1fcebc93"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "report",
+        "code": "def report(label, scores):\n    a = np.asarray(scores)\n    print(label, 'n', len(a), 'max [m,s,runtime s]', a.max(axis=0), 'failures [location,clock,runtime]', (a > [1.8, 0.00025, 15]).sum(axis=0), flush=True)"
+      }
+    ]
+  }
+}

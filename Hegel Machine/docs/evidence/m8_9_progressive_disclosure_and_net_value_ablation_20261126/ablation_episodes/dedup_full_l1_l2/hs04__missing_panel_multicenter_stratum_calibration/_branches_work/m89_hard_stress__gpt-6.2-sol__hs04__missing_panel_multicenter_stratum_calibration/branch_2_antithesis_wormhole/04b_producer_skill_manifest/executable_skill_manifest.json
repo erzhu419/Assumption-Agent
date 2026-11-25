@@ -1,0 +1,205 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs04_missing_panel_multicenter_f9b65a6fd896",
+    "source_hash": "f9b65a6fd896b76570dea7d60b14aec5eea2de508f1976060a1a2caf1bf3cba8",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs04__missing_panel_multicenter_stratum_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/assay_calibration_probe.py",
+        "archived_relpath": "producers/tmp__assay_calibration_probe.py",
+        "bytes": 1498,
+        "sha256": "9eb6619707502d7b13d15783295f299038b9463f9b6199f0f2d2edfff94772ab"
+      },
+      {
+        "container_path": "/tmp/assay_gate_audit.py",
+        "archived_relpath": "producers/tmp__assay_gate_audit.py",
+        "bytes": 2893,
+        "sha256": "e8cc9f04534483d1325d2b7aa386b5afefa5f0eaea11ca621c59a628ff8a9336"
+      },
+      {
+        "container_path": "/tmp/assay_logit_cv.py",
+        "archived_relpath": "producers/tmp__assay_logit_cv.py",
+        "bytes": 2816,
+        "sha256": "8a19342edfbdb30e231a35708661992c1d87f2ae98cf51db4ff9f7896f65a111"
+      },
+      {
+        "container_path": "/tmp/assay_marker_audit.py",
+        "archived_relpath": "producers/tmp__assay_marker_audit.py",
+        "bytes": 2741,
+        "sha256": "f6c0526314f5ea988210979af0ebcd619f26d714a944dfb8eef1a95db2cf54bf"
+      },
+      {
+        "container_path": "/tmp/assay_missing_probe.py",
+        "archived_relpath": "producers/tmp__assay_missing_probe.py",
+        "bytes": 2402,
+        "sha256": "10bed81c7e23cf8f18a0e1b9cea71353350b9159fb6db3086073546c70dce7a4"
+      },
+      {
+        "container_path": "/tmp/assay_pool_compare.py",
+        "archived_relpath": "producers/tmp__assay_pool_compare.py",
+        "bytes": 1359,
+        "sha256": "2f8ecba6fd20ba6aba56b42c5c6d02c4e9b550d64e3f60dbc5e713b5e442ad72"
+      },
+      {
+        "container_path": "/tmp/assay_probe.py",
+        "archived_relpath": "producers/tmp__assay_probe.py",
+        "bytes": 3139,
+        "sha256": "88fe19afae202b9f1be0ad0c0e40e051b849ac1d262a89c7bc21f43a1809f6e5"
+      },
+      {
+        "container_path": "/tmp/assay_singleton_compare.py",
+        "archived_relpath": "producers/tmp__assay_singleton_compare.py",
+        "bytes": 1009,
+        "sha256": "4a72134e668ac09bbb87a1a1e0d931fdf632bbd041c6237b8d7a0c9f5a1d78fb"
+      },
+      {
+        "container_path": "/tmp/assay_sparse_aux.py",
+        "archived_relpath": "producers/tmp__assay_sparse_aux.py",
+        "bytes": 2317,
+        "sha256": "1e80290cc6a65fcdb6f1628022823a65b2b3d02941553bc60eb503189d63c53b"
+      },
+      {
+        "container_path": "/tmp/assay_sparse_pooling.py",
+        "archived_relpath": "producers/tmp__assay_sparse_pooling.py",
+        "bytes": 1353,
+        "sha256": "655f5c8622a714c97c84a3b4fd22b95d4c61073bbd8868117d19385e2ac8d844"
+      },
+      {
+        "container_path": "/tmp/assay_stress.py",
+        "archived_relpath": "producers/tmp__assay_stress.py",
+        "bytes": 3883,
+        "sha256": "5ab78d278dae4a729e8616fabb9057915366c0aebfa8eaf9af733e55dfdfd4f0"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport pickle, numpy as np\np='/holdout_task/public_multicenter_assay.pkl'\nwith open(p,'rb') as f: d=pickle.load(f)\ndef show(x, depth=0):\n    if isinstance(x,dict):\n        for k,v in x.items():\n            print('  '*depth,k,end=': ')\n            if isinstance(v,(dict,list,tuple)): print(); show(v,depth+1)\n            else: show(v,depth+1)\n    elif isinstance(x,(list,tuple)):\n        print('  '*depth,type(x).__name__,len(x))\n        for v in x[:3]: show(v,depth+1)\n    elif isinstance(x,np.ndarray):\n        print(x.shape,x.dtype, ('nonfinite='+str(np.count_nonzero(~np.isfinite(",
+      "python3 - <<'PY'\nimport pickle\nimport numpy as np\nnp.set_printoptions(precision=2, suppress=True, linewidth=120)\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as f:\n    cohorts=pickle.load(f)['cohorts']\nfor i, entry in enumerate(cohorts):\n    d,g=entry['dataset'],entry['gt']\n    r,t,q=(d[k] for k in ('reference_controls','train','query'))\n    print('\\nCOHORT',i,'beta',g['beta'])\n    for c in np.unique(r['center_id']):\n        x=r['X'][r['center_id']==c]; n=np.isfinite(x).sum(0)\n        loc=np.array([np.nanmean(v) if k else np.nan for v,k in zip(x.T,n)])\n        scl=np.array([np.",
+      "cat > /tmp/assay_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score\n\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as f:\n    cohorts = pickle.load(f)['cohorts']\n\ndef moments(r):\n    def single(x):\n        n = np.isfinite(x).sum(0)\n        mu = np.divide(np.nansum(x,0), n, out=np.zeros(x.shape[1]), where=n>0)\n        v = np.divide(np.nansum((x-mu)**2,0), n-1, out=np.zeros(x.shape[1]), where=n>1)\n        return n, mu, v\n    return {c:single(r['X'][r['center_i",
+      "cat > /tmp/assay_calibration_probe.py <<'PY'\nfrom assay_probe import *\nfrom scipy.special import logit\n\nfor i,e in enumerate(cohorts):\n    d,g=e['dataset'],e['gt']; t,q=d['train'],d['query']; r=moments(d['reference_controls']); y=g['y_query']\n    x,z=align(t,r,100.),align(q,r,100.)\n    p,b=fit(x,t,z,q,.5)\n    raw,_=fit(np.nan_to_num(t['X']),t,np.nan_to_num(q['X']),q,3.)\n    print('cohort',i,'pooled query Brier oracle/raw/aligned',np.round([np.mean((v-y)**2) for v in (g['prob_query'],raw,p)],4),'center oracle/raw/aligned',*[np.round(score(q,y,v),4).tolist() for v in (g['prob_query'],raw,p)])\n  ",
+      "cat > /tmp/assay_missing_probe.py <<'PY'\nfrom assay_probe import *\nfrom scipy.optimize import minimize\nfrom numpy.polynomial.hermite import hermgauss\nfrom scipy.special import expit\n\nnodes, weights = hermgauss(12)\nnodes, weights = nodes * np.sqrt(2), weights / np.sqrt(np.pi)\n\ndef design(z, a, levels, mode):\n    miss = ~np.isfinite(a['X'])\n    z = z.copy()\n    if mode:\n        for c in np.unique(a['center_id']):\n            rows = a['center_id'] == c\n            obs = ~miss[rows]\n            counts = obs.sum(axis=0)\n            center_mean = (z[rows].sum(axis=0) / np.maximum(counts, 1)).mean()\n",
+      "cat > /holdout_task/multicenter_calibration.py <<'PY'\n\"\"\"Reference-control alignment and stratum-aware multicenter assay prediction.\"\"\"\n\nimport numpy as np\nfrom scipy.special import digamma, polygamma\nfrom sklearn.linear_model import LogisticRegression\n\n\ndef _excess_dispersion(estimates, noise):\n    \"\"\"Separate between-biomarker dispersion from control sampling noise.\"\"\"\n    precision = 1.0 / noise\n    total = precision.sum()\n    mean = np.dot(precision, estimates) / total\n    q = np.dot(precision, (estimates - mean) ** 2)\n    dof = len(estimates) - 1\n    information = max(0.0, total - np.dot(",
+      "cat > /tmp/assay_stress.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nassay = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(assay)\n\ndef score(q, y, z, o):\n    x, p, w = (o[k] for k in ('aligned_query_features', 'query_probabilities', 'feature_weights'))\n    assert x.shape == z.shape and p.shape == y.shape and w.shape == (z.shape[1],)\n    assert np.isfinite(x).all() and np.isfinite(w).all(",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy,pickle,numpy as np\nfrom scipy.special import expit,logit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score\nm=runpy.run_path('/holdout_task/multicenter_calibration.py'); f=m['calibrate_multicenter_assay']\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as r: cohorts=pickle.load(r)['cohorts']\nfor i,e in enumerate(cohorts):\n d,g=e['dataset'],e['gt']; t,q=d['train'],d['query']; a,b=m['_reference_affines'](d['reference_controls']); x=m['_align'](t,a,b); z=m['_align'](q,a,b); out=f(d); y=",
+      "cat > /tmp/assay_logit_cv.py <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score\n\nmod = runpy.run_path('/holdout_task/multicenter_calibration.py')\nwith open('/holdout_task/public_multicenter_assay.pkl', 'rb') as f:\n    cohorts = pickle.load(f)['cohorts']\n\nbase = (.25, 3., 0., False)\nfamilies = {\n    'baseline': [base],\n    'ridge_and_strata': [(C, s, 0., False) for C in (.12, .25, .7, 2.) for s in (1., 3., 10.)],\n    'center_intercepts': [(C, 3., a, False) for C in (.12, .25, .7, 2.) for a in (1., 3., 10.)",
+      "cat > /tmp/assay_pool_compare.py <<'PY'\nimport contextlib, io, runpy\nimport numpy as np\n\ndef alternative(original, mix):\n    def shrink(estimates, noise):\n        fits = original(estimates, noise)\n        adjusted = []\n        for x, v, fit in zip(estimates, noise, fits):\n            if len(x) < 2:\n                adjusted.append(fit)\n                continue\n            center = np.median(x)\n            residual = x - center\n            # Recover the local shrinkage fractions from the existing fit.\n            fraction = np.divide(fit-center, residual, out=np.zeros_like(x), where=residual!=0)",
+      "cat > /tmp/assay_sparse_aux.py <<'PY'\nimport numpy as np\n\n\ndef with_auxiliary(assay, mode):\n    original = assay.calibrate_multicenter_assay\n    base_affines = assay._reference_affines\n    def calibrate(dataset):\n        ref = dataset['reference_controls']\n        affines, pooled = base_affines(ref)\n        for part in (dataset['train'], dataset['query']):\n            for c in np.unique(part['center_id']):\n                if c not in affines:\n                    continue\n                r = ref['X'][ref['center_id'] == c]\n                counts = np.isfinite(r).sum(0)\n                supported",
+      "cat > /tmp/assay_singleton_compare.py <<'PY'\nfrom pathlib import Path\n\nartifact = Path('/holdout_task/multicenter_calibration.py').read_text()\nstress_path = '/tmp/assay_stress.py'\nstress = Path(stress_path).read_text()\nload = 'spec.loader.exec_module(assay)'\nanchor = '            fitted_loc[i, m] = fitted\\n'\nassert artifact.count(anchor) == 1 and stress.count(load) == 1\nfor pseudo_count in (0, 6, 16):\n    candidate = artifact\n    if pseudo_count:\n        candidate = candidate.replace(anchor, anchor + f'''            # A single control gives weak location evidence, but no spread estimate.\n     ",
+      "cat > /tmp/assay_sparse_pooling.py <<'PY'\nfrom pathlib import Path\nimport numpy as np\n\nartifact = Path('/holdout_task/multicenter_calibration.py').read_text()\nstress_path = '/tmp/assay_stress.py'\nstress = Path(stress_path).read_text()\nload = 'spec.loader.exec_module(assay)'\nassert artifact.count('spread = max(shared, local)') == 1 and artifact.count('center = np.median(x)') == 1\nfor name, spread, center in (\n    ('baseline', 'max(shared, local)', 'np.median(x)'),\n    ('shared', 'shared', 'np.median(x)'),\n    ('tempered', 'shared + 0.25 * max(0.0, local - shared)', 'np.median(x)'),\n    ('temper",
+      "cat > /tmp/assay_gate_audit.py <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import balanced_accuracy_score, roc_auc_score\n\nm = runpy.run_path('/holdout_task/multicenter_calibration.py')\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as f:\n    cohorts = pickle.load(f)['cohorts']\n\ndef sub(d,k):\n    return {a:b[k] for a,b in d.items()}\n\ndef fit(x,t,z,q,kind):\n    levels=np.unique(t['stratum'])\n    a=np.c_[x,3.*(t['stratum'][:,None]==levels)]\n",
+      "cat > /tmp/assay_marker_audit.py <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.special import digamma, polygamma\nfrom sklearn.metrics import roc_auc_score\n\nm = runpy.run_path('/holdout_task/multicenter_calibration.py')\nwith open('/holdout_task/public_multicenter_assay.pkl', 'rb') as f:\n    cohorts = pickle.load(f)['cohorts']\n\nfor i, entry in enumerate(cohorts):\n    d, gt = entry['dataset'], entry['gt']\n    ref, q = d['reference_controls'], d['query']\n    centers = np.unique(ref['center_id'])\n    moments = np.empty((2, len(centers), ref['X'].shape[1]))\n    noise = np.empty_like(mome",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/assay_marker_audit.py')\ns=p.read_text()\na=s.index('        mu = np.nanmean')\nb=s.index('    for name, estimate',a)\ns=s[:a]+'''        valid = [(j, v[np.isfinite(v)]) for j,v in enumerate(rows.T)]\n        stats = [(j, v.mean(), v.std(ddof=1)) for j,v in valid if len(v)>=2 and np.ptp(v)>0]\n        moments[:, k] = np.nan\n        noise[:, k] = np.inf\n        if not stats:\n            continue\n        j, mu, sd = map(np.asarray, zip(*stats))\n        df = n[j] - 1\n        typical = np.median(sd)\n        moments[:, k, j] = np.vstack([mu / typical"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__assay_stress.py",
+      "primary_producer_container_path": "/tmp/assay_stress.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_calibration.py",
+        "filename": "multicenter_calibration.py",
+        "bytes": 5124,
+        "sha256": "4c710b13ed7dfe1cea67b70232ef0d04744d1acb30d9d667262f65b0aaff10c3",
+        "content_addressed_ref": "content_addressed_blobs/4c710b13ed7dfe1cea67b70232ef0d04744d1acb30d9d667262f65b0aaff10c3.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "take",
+      "score",
+      "loco",
+      "design",
+      "alternative",
+      "moments",
+      "align"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f9b65a6fd896b76570dea7d60b14aec5eea2de508f1976060a1a2caf1bf3cba8",
+      "verified_post_package": true,
+      "verified_turn": 16,
+      "verification_command": "cat > /tmp/assay_marker_audit.py <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.special import digamma, polygamma\nfrom sklearn.metrics import roc_auc_score\n\nm = runpy.run_path('/holdout_task/multicenter_calibration.py')\nwith open",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f9b65a6fd896b76570dea7d60b14aec5eea2de508f1976060a1a2caf1bf3cba8",
+        "expected_candidate_sha256": "f9b65a6fd896b76570dea7d60b14aec5eea2de508f1976060a1a2caf1bf3cba8",
+        "computed_candidate_sha256": "f9b65a6fd896b76570dea7d60b14aec5eea2de508f1976060a1a2caf1bf3cba8",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_calibration.py",
+            "bytes": 5124
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_f9b65a6f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 11,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(x, t, z, q, kind):\n    from sklearn.linear_model import LogisticRegression\n    from scipy.special import expit\n    from scipy.optimize import minimize\n    levels = np.unique(t['stratum'])\n    a = np.c_[x, 3.0 * (t['stratum'][:, None] == levels)]\n    b = np.c_[z, 3.0 * (q['stratum'][:, None] == levels)]\n    (g, idx) = np.unique(t['center_id'], return_inverse=True)\n    y = t['y']\n    if kind == 'quadratic':\n        (j, k) = np.triu_indices(x.shape[1])\n        a = np.c_[a, 0.2 * x[:, j] * x[:, k]]\n        b = np.c_[b, 0.2 * z[:, j] * z[:, k]]\n    if kind == 'center_cell':\n        cell = 2 * idx + y\n        counts = np.bincount(cell)\n        w = len(y) / (np.count_nonzero(counts) * counts[cell])\n        nuisance = 6.0 * ((idx[:, None] == np.arange(len(g))) - 1.0 / len(g))\n        model = LogisticRegression(C=0.25, max_iter=500, tol=1e-08).fit(np.c_[a, nuisance], y, sample_weight=w)\n        slope = model.coef_[0, :x.shape[1]]\n        d = np.c_[np.ones(len(x)), a[:, x.shape[1]:]]\n        score = x @ slope\n\n        def loss(h):\n            eta = score + d @ h\n            return (np.sum(np.logaddexp(0.0, eta) - y * eta) + 2 * np.dot(h[1:], h[1:]), d.T @ (expit(eta) - y) + np.r_[0.0, 4 * h[1:]])\n        h = minimize(loss, np.zeros(d.shape[1]), jac=True, method='BFGS').x\n        return expit(z @ slope + np.c_[np.ones(len(z)), b[:, z.shape[1]:]] @ h)\n    model = LogisticRegression(C=0.25, max_iter=500, tol=1e-08).fit(a, y)\n    return model.predict_proba(b)[:, 1]"
+      },
+      {
+        "name": "take",
+        "code": "def take(data, m):\n    return {k: v[m] for (k, v) in data.items()}"
+      },
+      {
+        "name": "score",
+        "code": "def score(y, p):\n    from sklearn.metrics import roc_auc_score\n    return np.array([roc_auc_score(y, p), np.mean((y - p) ** 2)])"
+      },
+      {
+        "name": "loco",
+        "code": "def loco(x, data, cfg):\n    results = []\n    for c in np.unique(data['center_id']):\n        v = data['center_id'] == c\n        results.append(score(data['y'][v], fit(x[~v], take(data, ~v), x[v], take(data, v), cfg)))\n    return np.array(results)"
+      },
+      {
+        "name": "design",
+        "code": "def design(z, a, levels, mode):\n    miss = ~np.isfinite(a['X'])\n    z = z.copy()\n    if mode:\n        for c in np.unique(a['center_id']):\n            rows = a['center_id'] == c\n            obs = ~miss[rows]\n            counts = obs.sum(axis=0)\n            center_mean = (z[rows].sum(axis=0) / np.maximum(counts, 1)).mean()\n            means = (z[rows].sum(axis=0) + 24 * center_mean) / (counts + 24)\n            z[rows] += miss[rows] * means\n    return (np.column_stack([z, np.ones(len(z)), 3.0 * (a['stratum'][:, None] == levels)]), miss.astype(float))"
+      },
+      {
+        "name": "alternative",
+        "code": "def alternative(original, mix):\n\n    def shrink(estimates, noise):\n        fits = original(estimates, noise)\n        adjusted = []\n        for (x, v, fit) in zip(estimates, noise, fits):\n            if len(x) < 2:\n                adjusted.append(fit)\n                continue\n            center = np.median(x)\n            residual = x - center\n            fraction = np.divide(fit - center, residual, out=np.zeros_like(x), where=residual != 0)\n            med_spread = np.median((fraction * v / np.maximum(1 - fraction, 1e-15))[residual != 0]) if (residual != 0).any() else 0.0\n            weights = 1 / (v + med_spread)\n            shift = mix * (np.average(x, weights=weights) - center)\n            adjusted.append(fit + shift * v / (v + med_spread))\n        return adjusted\n    return shrink"
+      },
+      {
+        "name": "moments",
+        "code": "def moments(r):\n\n    def single(x):\n        n = np.isfinite(x).sum(0)\n        mu = np.divide(np.nansum(x, 0), n, out=np.zeros(x.shape[1]), where=n > 0)\n        v = np.divide(np.nansum((x - mu) ** 2, 0), n - 1, out=np.zeros(x.shape[1]), where=n > 1)\n        return (n, mu, v)\n    return {c: single(r['X'][r['center_id'] == c]) for c in np.unique(r['center_id'])}"
+      },
+      {
+        "name": "align",
+        "code": "def align(a, stats, mass):\n    x = np.array(a['X'], float, copy=True)\n    for c in np.unique(a['center_id']):\n        (n, mu, v) = stats[c]\n        ok = (n >= 2) & (v > 0)\n        center = np.median(mu[ok])\n        var = np.median(v[ok])\n        w = np.divide(n - 1, n - 1 + mass, out=np.zeros_like(mu), where=ok)\n        m = center + w * (mu - center)\n        s = np.sqrt(var + w * (v - var))\n        rows = a['center_id'] == c\n        x[rows] = (x[rows] - m) / s\n    return np.where(np.isfinite(x), x, 0.0)"
+      }
+    ]
+  }
+}

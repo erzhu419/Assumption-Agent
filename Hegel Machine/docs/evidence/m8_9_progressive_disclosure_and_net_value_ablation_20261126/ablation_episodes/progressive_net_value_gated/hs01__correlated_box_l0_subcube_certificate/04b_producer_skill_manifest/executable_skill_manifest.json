@@ -1,0 +1,125 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs01_correlated_box_l0_cert_58973b34b0c3",
+    "source_hash": "58973b34b0c3e6cc4c4ac47364ec647411da79c674467649bd0f14a232bd714b",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs01__correlated_box_l0_subcube_certificate",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/certified_box_l0_v02.py",
+        "archived_relpath": "producers/tmp__certified_box_l0_v02.py",
+        "bytes": 5774,
+        "sha256": "e6f50861300b43c248ca41c93678c39739ba706d289cce3f1475450faa5b597f"
+      },
+      {
+        "container_path": "/tmp/certified_box_l0_v03.py",
+        "archived_relpath": "producers/tmp__certified_box_l0_v03.py",
+        "bytes": 6301,
+        "sha256": "22ff30a4f0ba5c985eb147d579d29fb46790b1f40556c16a7ce45a9b1286e546"
+      },
+      {
+        "container_path": "/tmp/verify_box_l0.py",
+        "archived_relpath": "producers/tmp__verify_box_l0.py",
+        "bytes": 3305,
+        "sha256": "595b631149899b81599166d510052e4bad06b21ea0a18821777fa40402388084"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np,scipy\nv=pickle.load(open('public_box_l0_cases.pkl','rb'));print(type(v),scipy.__version__)\nif isinstance(v,dict): print(list(v)); v=v.items()\nelse: v=enumerate(v)\nfor k,d in v:\n print(k,type(d),list(d) if isinstance(d,dict) else '')\n if isinstance(d,dict):\n  for a,b in d.items():\n   if isinstance(b,dict): print(a,list(b)); d=b; break\n  print({a: (b.shape, float(np.max(np.abs(b)))) if isinstance(b,np.ndarray) else b for a,b in d.items() if not isinstance(b,dict)})\n  if 'X' in d:\n   X=np.asarray(d['X'",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\ncases=pickle.load(open('public_box_l0_cases.pkl','rb'))['cases']\nfor i,c in enumerate(cases):\n print('case',i, list(c))\n for k,v in c.items():\n  if isinstance(v,dict): print(k,list(v))\n d=c if 'X' in c else next(v for v in c.values() if isinstance(v,dict) and 'X' in v)\n X=np.asarray(d['X']); y=np.asarray(d['y']);print('shape',X.shape,'target norm',np.linalg.norm(y),'Gram eigenvalues',np.linalg.eigvalsh(X.T@X)); print({k:v for k,v in d.items() if k not in ('X','y')})\nPY\nsed -n '1,270p' /tmp/hegel_wormhole_skil",
+      "cat > /holdout_task/certified_box_l0.py <<'PY'\n\"\"\"Global boxed L0 regression using a disjunctive root certificate.\"\"\"\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\n\ndef solve_certified_box_l0(problem: dict) -> dict:\n    X = np.asarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    ridge = float(problem['ridge'])\n    penalty = float(problem['l0_penalty'])\n    box = float(problem['box'])\n    tol = float(problem['gap_tol'])\n    n, p = X.shape\n    small = min(1e-10, box)\n    H = X.T @ X + ridge * np.eye(p)\n    c = X.T @ y\n    yy = 0.5 * (y @ y)\n    # Cover",
+      "cat > /tmp/verify_box_l0.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\npath = '/holdout_task/certified_box_l0.py'\nspec = importlib.util.spec_from_file_location('certified_box_l0', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef check(name, d, ref=None):\n    t = time.perf_counter()\n    result = mod.solve_certified_box_l0(d)\n    elapsed = time.perf_counter() - t\n    X, y = d['X'], d['y']\n    w = np.asarray(result['weights'])\n    r = X @ w - y\n    objective = .5 * (r @ r + d['ridge'] * (w @ w",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/certified_box_l0.py')\ns = p.read_text()\nold = \"                    v[a] = lsq_linear(design, target, bounds=(-box, box),\\n                                      method='bvls', tol=1e-13).x\"\nnew = \"                    fit = lsq_linear(design, target, bounds=(-box, box),\\n                                     method='bvls', tol=1e-13)\\n                    v[a] = np.clip(fit.x, -box, box)\"\nassert s.count(old) == 1\np.write_text(s.replace(old, new))\nPY\npython3 -I /tmp/verify_box_l0.py",
+      "cp /holdout_task/certified_box_l0.py /tmp/certified_box_l0_v02.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/certified_box_l0.py')\ns = p.read_text()\nold = '        return fixed + np.linalg.solve(system, rhs[..., None])[..., 0]'\nnew = '''        # Small positive-definite systems: batch the triangular substitutions\n        # across supports rather than dispatching a general solve per support.\n        try:\n            L = np.linalg.cholesky(system)\n        except np.linalg.LinAlgError:\n            return fixed + np.linalg.solve(system, rhs[..., None])[..., 0]\n        v = rh",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\ns=importlib.util.spec_from_file_location('solver','/holdout_task/certified_box_l0.py')\nm=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nfor i,d in enumerate(pickle.load(open('public_box_l0_cases.pkl','rb'))['cases']):\n X=d['X']; norms=np.linalg.norm(X,axis=0); A=X/norms; C=A.T@A\n j,k=np.unravel_index(np.argmax(np.abs(np.triu(C,1))),C.shape)\n print(f'public-{i}: strongest pair ({j},{k}), corr={C[j,k]:.6g}, normalized signed-difference norm={np.linalg.norm(A[:,j]-np.sign(C[j,k])*A[:,k]):.6",
+      "cp /holdout_task/certified_box_l0.py /tmp/certified_box_l0_v03.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/certified_box_l0.py')\ns = p.read_text()\na = s.index('    # Cover floating-point errors')\nb = s.index('    bits =', a)\ns = s[:a] + '''    u = np.finfo(float).eps\n    abs_X = np.abs(X)\n    abs_y = np.abs(y)\n    # Conservative dot-product and summation allowance for the dual witness.\n    roundoff = 8 * (n + p + 8) * u\n''' + s[b:]\na = s.index('        g = gradient(w)\\n        smooth', s.index('    def evaluate'))\nb = s.index('\\n    # A support charges', a)\ns = s[:a] +",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/certified_box_l0.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('/holdout_task/public_box_l0_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)['cases']\n\nfor i, d in enumerate(cases):\n    X, y = d['X'], d['y']\n    n, p = X.shape\n    ridge, penalty, box, tol = (d[k] for k in ('ridge', 'l0_penalty', 'box', 'gap_to"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__certified_box_l0_v03.py",
+      "primary_producer_container_path": "/tmp/certified_box_l0_v03.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_box_l0.py",
+        "filename": "certified_box_l0.py",
+        "bytes": 6551,
+        "sha256": "3ad794e2bf1608d928c4d9a535d5aaf4ccc9af9934cc06c0cb486bbbbe503c3d",
+        "content_addressed_ref": "content_addressed_blobs/3ad794e2bf1608d928c4d9a535d5aaf4ccc9af9934cc06c0cb486bbbbe503c3d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_box_l0.py"
+    ],
+    "exported_pure_functions": [
+      "solve_certified_box_l0",
+      "data",
+      "corr"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "58973b34b0c3e6cc4c4ac47364ec647411da79c674467649bd0f14a232bd714b",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "58973b34b0c3e6cc4c4ac47364ec647411da79c674467649bd0f14a232bd714b",
+        "expected_candidate_sha256": "58973b34b0c3e6cc4c4ac47364ec647411da79c674467649bd0f14a232bd714b",
+        "computed_candidate_sha256": "58973b34b0c3e6cc4c4ac47364ec647411da79c674467649bd0f14a232bd714b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/certified_box_l0.py",
+            "bytes": 6551
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_58973b34"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "solve_certified_box_l0",
+        "code": "def solve_certified_box_l0(problem: dict) -> dict:\n    from scipy.optimize import lsq_linear\n    X = np.asarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    ridge = float(problem['ridge'])\n    penalty = float(problem['l0_penalty'])\n    box = float(problem['box'])\n    tol = float(problem['gap_tol'])\n    (n, p) = X.shape\n    small = min(1e-10, box)\n    H = X.T @ X + ridge * np.eye(p)\n    c = X.T @ y\n    yy = 0.5 * (y @ y)\n    u = np.finfo(float).eps\n    xa = np.sum(np.abs(X), axis=1)\n    scale = 0.5 * np.sum((np.abs(y) + 5 * box * xa) ** 2) + 20 * ridge * p * box ** 2 + p * penalty\n    guard = (8 * n + 32 * p + 64) * u * scale\n    bits = 1 << np.arange(p)\n    eye = np.eye(p)\n    shift = 64 * u * max(1.0, np.max(H, initial=0.0))\n    best = np.zeros(p)\n    upper = float(yy)\n    lower = np.full(1 << p, -np.inf)\n    pending = []\n    rowdot = lambda a, b: np.einsum('ij,ij->i', a, b)\n\n    def gradient(w):\n        return np.einsum('ij,kj->ik', w, H) - c\n\n    def solve_face(free, fixed):\n        system = H * (free[:, :, None] & free[:, None, :])\n        system += np.where(free, shift, 1.0)[:, :, None] * eye\n        rhs = -gradient(fixed) * free\n        return fixed + np.linalg.solve(system, rhs[..., None])[..., 0]\n\n    def evaluate(ids, radius, charge, w, candidate=True):\n        nonlocal upper, best\n        g = gradient(w)\n        smooth = yy + 0.5 * rowdot(w, g - c)\n        lb = smooth + charge - rowdot(w, g) - rowdot(radius, np.abs(g)) - guard\n        lower[ids] = np.maximum(lower[ids], lb)\n        if candidate:\n            values = smooth + penalty * np.count_nonzero(np.abs(w) > 1e-10, axis=1)\n            j = int(np.argmin(values))\n            if values[j] < upper + guard:\n                v = w[j]\n                r = X @ v - y\n                value = float(0.5 * (r @ r + ridge * (v @ v)) + penalty * np.count_nonzero(np.abs(v) > 1e-10))\n                if value < upper:\n                    (upper, best) = (value, v.copy())\n        return g\n    batch = 512\n    if p:\n        for start in range(0, 1 << p, batch):\n            ids = np.arange(start, min(start + batch, 1 << p))\n            active = ids[:, None] & bits != 0\n            radius = np.where(active, box, small)\n            charge = penalty * active.sum(axis=1)\n            center = solve_face(active, np.zeros_like(radius))\n            evaluate(ids, radius, charge, np.clip(center, -4 * box, 4 * box), False)\n            w = np.clip(center, -radius, radius)\n            w = np.where(active, w, -small * np.sign(gradient(w)))\n            evaluate(ids, radius, charge, w)\n            if np.any(lower[ids] < upper - tol):\n                pending.append((ids, active, radius, charge, w))\n    else:\n        lower[0] = yy - guard\n    for (ids, active, radius, charge, w) in pending:\n        for _ in range(8):\n            keep = lower[ids] < upper - tol\n            if not np.any(keep):\n                break\n            (ids, active, radius, charge, w) = (a[keep] for a in (ids, active, radius, charge, w))\n            g = gradient(w)\n            pinned = (w <= -box) & (g >= 0) | (w >= box) & (g <= 0)\n            free = active & ~pinned\n            fixed = np.where(free, 0.0, np.where(active, w, -small * np.sign(g)))\n            w = np.clip(solve_face(free, fixed), -radius, radius)\n            evaluate(ids, radius, charge, w)\n        for j in np.flatnonzero(lower[ids] < upper - tol):\n            if lower[ids[j]] >= upper - tol:\n                continue\n            a = active[j]\n            v = w[j].copy()\n            if np.any(a):\n                design = X[:, a]\n                if ridge:\n                    design = np.vstack((design, np.sqrt(ridge) * np.eye(a.sum())))\n                for _ in range(3):\n                    target = y - X[:, ~a] @ v[~a]\n                    if ridge:\n                        target = np.r_[target, np.zeros(a.sum())]\n                    fit = lsq_linear(design, target, bounds=(-box, box), method='bvls', tol=1e-13)\n                    v[a] = np.clip(fit.x, -box, box)\n                    v[~a] = -small * np.sign(gradient(v[None])[0, ~a])\n                    evaluate(ids[j:j + 1], radius[j:j + 1], charge[j:j + 1], v[None])\n                    if lower[ids[j]] >= upper - tol:\n                        break\n    bound = min(upper, float(np.min(lower)))\n    if not 0 <= upper - bound <= tol:\n        raise ArithmeticError(f'Unable to close certificate gap: {upper - bound:g}')\n    return {'weights': best, 'objective': upper, 'certified_lower_bound': bound, 'certificate_leaves': [{'fixed_zero': [], 'fixed_nonzero': [], 'leaf_lower_bound': bound}]}"
+      },
+      {
+        "name": "data",
+        "code": "def data(X, y, ridge, lam, M):\n    return dict(X=X, y=y, ridge=ridge, l0_penalty=lam, box=M, gap_tol=1e-06, max_leaves=512)"
+      },
+      {
+        "name": "corr",
+        "code": "def corr(seed, p, n, decoy):\n    rng = np.random.default_rng(seed)\n    X = rng.normal(size=(n, p)) + 1.5 * rng.normal(size=(n, 1))\n    if decoy:\n        X[:, -3:] = X[:, :3] + decoy * rng.normal(size=(n, 3))\n    y = X @ rng.uniform(-1.4, 1.4, p) + 0.1 * rng.normal(size=n)\n    return (X, y)"
+      }
+    ]
+  }
+}

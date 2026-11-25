@@ -1,0 +1,64 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs03_hereditary_memory_deconv_7e28f4770d56",
+    "source_hash": "7e28f4770d565a18d88e7224ed83548273247eaeea6c585b28397b13e8836870",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "hs03__irregular_dt_hereditary_memory_deconvolution",
+    "wormhole_family": "fam_temporal_memory_and_stage_deconfounding"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python - <<'PY'\nimport pickle, numpy as np\np=pickle.load(open('/holdout_task/public_hereditary_cases.pkl','rb'))\ndef describe(x,n=0):\n if n>4:return\n pre='  '*n\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(pre,k,end=': ')\n   if isinstance(v,(dict,list,tuple)) and (len(v)>4 or isinstance(v,dict) or not all(np.isscalar(t) for t in v)):\n    print(type(v).__name__,len(v));describe(v,n+1)\n   elif isinstance(v,np.ndarray): print(v.shape,v.dtype, v.flat[:3])\n   else: print(repr(v)[:100])\n elif isinstance(x,(list,tuple)):\n  for v in x[:2]: describe(v,n+1)\n else: print",
+      "python3 - <<'PY'\nimport pickle, numpy as np\np=pickle.load(open('/holdout_task/public_hereditary_cases.pkl','rb'))\ndef describe(x,n=0):\n if n>4:return\n pre='  '*n\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(pre,k,end=': ')\n   if isinstance(v,dict) or isinstance(v,(list,tuple)) and any(not np.isscalar(t) for t in v):\n    print(type(v).__name__,len(v));describe(v,n+1)\n   elif isinstance(v,np.ndarray): print(v.shape,v.dtype,v.flat[:3])\n   else: print(repr(v)[:100])\n elif isinstance(x,(list,tuple)):\n  for v in x: describe(v,n+1)\n else: print(pre,repr(x)[:100])\nprint(type(p),len(p));des",
+      "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom hereditary_deconv import deconvolve_hereditary_driver\n\n# Independent forward simulation and dense augmented least-squares reference.\ndef forward(run, taus, e, u):\n    last = run['past_timestamps'][0]\n    state = np.full(2, run['past_driver_history'][0], dtype=float)\n    for t, h in zip(run['past_timestamps'][1:], run['past_driver_history'][1:]):\n        decay = np.exp(-(t-last)/taus)\n        state = decay*state + (1-decay)*h\n        last = t\n    y = []\n    for t, value in"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/hereditary_deconv.py",
+        "filename": "hereditary_deconv.py",
+        "bytes": 4188,
+        "sha256": "56b0833eabec387a6a85fa45443e9d6268d546f2b6e6a8b9510b7289acdc66d6",
+        "content_addressed_ref": "content_addressed_blobs/56b0833eabec387a6a85fa45443e9d6268d546f2b6e6a8b9510b7289acdc66d6.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/hereditary_deconv.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_temporal_memory_and_stage_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7e28f4770d565a18d88e7224ed83548273247eaeea6c585b28397b13e8836870",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom hereditary_deconv import deconvolve_hereditary_driver\n\n# Independent forward simulation and dense augmented least-sq",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

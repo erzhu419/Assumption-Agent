@@ -1,0 +1,91 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs01_correlated_box_l0_cert_7c0936505be9",
+    "source_hash": "7c0936505be9c229df4ad5d5b23379c105ff13aaeca6c432c4e7d088426fd105",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "hs01__correlated_box_l0_subcube_certificate",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/box_diagnostic.py",
+        "archived_relpath": "producers/tmp__box_diagnostic.py",
+        "bytes": 8003,
+        "sha256": "c57ea24ba934a60ed75794a8fc8746850fb8c736c52e15b592e5231bf7a8c8e5"
+      },
+      {
+        "container_path": "/tmp/verify_box_l0.py",
+        "archived_relpath": "producers/tmp__verify_box_l0.py",
+        "bytes": 2794,
+        "sha256": "05331fef94f18861c82a378458eb821b58191582d08fde4020fca9126b07278e"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && OPENBLAS_NUM_THREADS=1 python - <<'PY'\nimport pickle,numpy as np, scipy\nx=pickle.load(open('public_box_l0_cases.pkl','rb'))\nprint(type(x),len(x),scipy.__version__)\nif isinstance(x,dict): print(x.keys()); cases=x.values()\nelse: cases=x\nfor c in cases:\n print(type(c));\n if isinstance(c,dict):\n  print({k:(v.shape if hasattr(v,'shape') else v if not isinstance(v,(dict,list)) else type(v)) for k,v in c.items()})\n else: print(str(c)[:200])\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np,scipy\nx=pickle.load(open('public_box_l0_cases.pkl','rb'))\nprint(type(x),len(x),scipy.__version__)\nfor c in (x.values() if isinstance(x,dict) else x):\n print({k:(v.shape if hasattr(v,'shape') else v if not isinstance(v,(dict,list)) else type(v)) for k,v in c.items()} if isinstance(c,dict) else str(c)[:200])\nPY",
+      "cd /holdout_task && ls -la && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nobj=pickle.load(open('public_box_l0_cases.pkl','rb'))\nprint('keys',list(obj))\nfor group in obj.values():\n for c in group:\n  X=np.asarray(c['X']); y=np.asarray(c['y']); print({k:v for k,v in c.items() if k not in ('X','y')}); print('shape',X.shape,'ynorm',np.linalg.norm(y),'singular values',np.linalg.svd(X,compute_uv=False))\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np, itertools, time\nfrom scipy.optimize import lsq_linear\nfor c in pickle.load(open('public_box_l0_cases.pkl','rb'))['cases']:\n X,y=c['X'],c['y']; n,p=X.shape; l0=c['l0_penalty']; M=c['box']; G=X.T@X+c['ridge']*np.eye(p); h=X.T@y; yy=.5*(y@y); best=yy; bad=[]; good=[]; t=time.monotonic()\n for k in range(1,p+1):\n  ids=np.array(list(itertools.combinations(range(p),k))); v=np.linalg.solve(G[ids[:,:,None],ids[:,None,:]],h[ids][...,None])[...,0]; vals=yy-.5*np.sum(v*h[ids],axis=1)+k*l0; ok=np.max(abs(v),axis=1)<=M\n ",
+      "cat > /holdout_task/certified_box_l0.py <<'PY'\n\"\"\"Small-dimensional box-constrained L0 regression with dual subcube bounds.\"\"\"\n\nfrom itertools import combinations\nfrom math import comb\n\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\n\n_NONZERO = 1e-10\n\n\ndef solve_certified_box_l0(problem: dict) -> dict:\n    \"\"\"Enumerate binary supports, bound them by box-QP duality, then group them.\n\n    A support pays for its selected coordinates even if a box-QP minimizer\n    sets some of them to zero. For the numerical L0 convention, unselected\n    coordinates may lie in the tiny zero-count box. R",
+      "cat > /tmp/verify_box_l0.py <<'PY'\nimport sys, pickle, time\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nfrom itertools import combinations\nfrom scipy.optimize import lsq_linear\nfrom certified_box_l0 import solve_certified_box_l0\n\n\ndef verify(c, name):\n    X,y = c['X'],c['y']; p=X.shape[1]; M,pen,reg=(c[k] for k in ('box','l0_penalty','ridge'))\n    t=time.perf_counter(); out=solve_certified_box_l0(c); dt=time.perf_counter()-t\n    w=np.array(out['weights']); obj=lambda w: .5*np.linalg.norm(X @ w-y)**2+.5*reg*(w@w)+pen*np.count_nonzero(abs(w)>1e-10)\n    assert w.shape==(p,) and max(abs",
+      "cp /holdout_task/certified_box_l0.py /tmp/box_diagnostic.py; sed -i \"/raise RuntimeError/i\\        ids = np.argsort(lower)[:8]; print('DIAGNOSTIC', objective, bound, ids, lower[ids], 'incumbent', np.sum(bits[active]))\" /tmp/box_diagnostic.py; sed -i \"/raise RuntimeError/d\" /tmp/box_diagnostic.py; sed -i '/if objective - bound > tol:/a\\        pass' /tmp/box_diagnostic.py; OPENBLAS_NUM_THREADS=1 PYTHONPATH=/tmp python3 - <<'PY'\nfrom box_diagnostic import solve_certified_box_l0\nimport numpy as np\nrng=np.random.default_rng(19)\nfor i,(p,noise,ridge,box,pen,cap) in enumerate([(15,0.,0.,.4,.16,512),",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np\nfrom scipy.optimize import lsq_linear\nrng=np.random.default_rng(19)\nfor p,noise in [(15,0.),(15,.002),(16,.02),(14,.001)]:\n X=rng.normal(size=(38,4))@rng.normal(size=(4,p))+noise*rng.normal(size=(38,p)); y=X@rng.uniform(-1,1,p)*.6+rng.normal(size=38)*.05\nfor mask in [941,1400,12070,3944,3712]:\n j=(mask & (1<<np.arange(p)))!=0; rads=np.where(j,1.3,1e-10)\n for method in ['full','restricted']:\n  if method=='full': f=lsq_linear(X,y,bounds=(-rads,rads),method='bvls',tol=1e-13); w=f.x\n  else: f=lsq_linear(X[:,j],y,bounds=(-1.3,1.3),method='b",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/certified_box_l0.py')\ns=p.read_text()\na='''            radii = np.where(mask & bits, box, small_box)\n            fit = lsq_linear(A, b, bounds=(-radii, radii), method='bvls', tol=1e-13)\n            w = np.clip(fit.x, -radii, radii)[None, :]\n            update(w)\n            lower[mask] = max(lower[mask], dual(w, radii[None, :], counts[mask])[0])'''\nb='''            selected = (mask & bits) != 0\n            radii = np.where(selected, box, small_box)\n            # Fit only the selected columns. The tiny inactive box is still\n       "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__box_diagnostic.py",
+      "primary_producer_container_path": "/tmp/box_diagnostic.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_box_l0.py",
+        "filename": "certified_box_l0.py",
+        "bytes": 8276,
+        "sha256": "cd1bf2f4609b625301f13886823f523a06289f204baac7d909060a55c0f6723a",
+        "content_addressed_ref": "content_addressed_blobs/cd1bf2f4609b625301f13886823f523a06289f204baac7d909060a55c0f6723a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_box_l0.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7c0936505be9c229df4ad5d5b23379c105ff13aaeca6c432c4e7d088426fd105",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/certified_box_l0.py')\ns=p.read_text()\na='''            radii = np.where(mask & bits, box, small_box)\n            fit = lsq_linear(A, b, bounds=(-radii, radii), method='bvls', t",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

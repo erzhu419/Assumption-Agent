@@ -1,0 +1,127 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs02_rotated_tensor_robin_darcy_60618da636b3",
+    "source_hash": "60618da636b39c23edf8b9e171938333583f377800e9fc997542728ff5bfc025",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs02__rotated_tensor_robin_darcy_inversion",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/tensor_v01.py",
+        "archived_relpath": "producers/tmp__tensor_v01.py",
+        "bytes": 4310,
+        "sha256": "f70559145593125e9522c8c03d54e88fc39123434360353e7f4ee2aa48fe4858"
+      },
+      {
+        "container_path": "/tmp/verify_tensor.py",
+        "archived_relpath": "producers/tmp__verify_tensor.py",
+        "bytes": 4733,
+        "sha256": "f6e888e88661f9e28e3172a041104da2be7d6f0def84ef3113934de9580c3a24"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_tensor_cases.pkl','rb') as f:\n    data=pickle.load(f)\ndef describe(x, depth=0):\n    if isinstance(x, dict):\n        for k,v in x.items():\n            print(' '*depth, k, end=': ')\n            if isinstance(v,(dict,list,tuple)):\n                print(); describe(v, depth+2)\n            elif isinstance(v,np.ndarray):\n                print(v.shape,v.dtype, 'min/max', (v.min(),v.max()) if v.size else None)\n            else: print(repr(v)[:200])\n    elif isinstance(x,(tuple,list)):\n        print(' '*depth,type(x).__na",
+      "cat > /holdout_task/tensor_darcy_robin.py <<'PY'\n\"\"\"Finite-volume tensor Darcy source inversion with robust sensor fitting.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _assemble(problem):\n    \"\"\"Return the integrated cell operator and ambient boundary load.\"\"\"\n    kxx = np.asarray(problem['k_xx'], dtype=float)\n    kyy = np.asarray(problem['k_yy'], dtype=float)\n    kxy = np.asarray(problem['k_xy'], dtype=float)\n    nx, ny = kxx.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    ids = np.arange(nx * ny).reshape(nx, ny)\n    rows",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _assemble, _responses, _fit_sources, infer_tensor_darcy_sources\nwith open('/holdout_task/public_tensor_cases.pkl','rb') as f: cases=pickle.load(f)['cases']\n\ndef balance(p, u):\n    xx, xy, yy = (p[k] for k in ('k_xx','k_xy','k_yy'))\n    nx, ny = u.shape\n    hx, hy = p['Lx']/nx, p['Ly']/ny\n    g, amb = p['gamma_robin'], p['u_ambient']\n    out = hx*hy*p['sigma']*u\n    def v(i,j): return u[min(max(i,0),nx-1),min(max(j,0),ny-1)]\n    for i in range(nx):\n",
+      "cp /holdout_task/tensor_darcy_robin.py /tmp/tensor_v01.py\nsed -i 's/<= 5 \\* scale/<= 8 * scale/' /holdout_task/tensor_darcy_robin.py\ncat > /tmp/verify_tensor.py <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _assemble, _responses, _fit_sources, infer_tensor_darcy_sources\nwith open('/holdout_task/public_tensor_cases.pkl','rb') as f:\n    cases=pickle.load(f)['cases']\n\ndef balance(p,u):\n    xx,xy,yy=(p[k] for k in ('k_xx','k_xy','k_yy'))\n    nx,ny=u.shape; hx,hy=p['Lx']/nx,p['Ly']/ny\n    g,amb=p['gamma_robin'],p['u_ambient']\n    out",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/tensor_darcy_robin.py')\ns = p.read_text()\nold = '''    coef[-1] = np.median(target)\n    floor = 1e-12 * max(1., np.max(np.abs(target)))\n'''\nnew = '''    coef[-1] = np.median(target)\n    if p < n <= 3 * p:\n        # With few redundant rows, a single high-leverage spike can pull\n        # the initial fit far enough to hide itself from residual weights.\n        # Compare leave-one-out starts on the full set by median residual.\n        best = np.median(np.abs(target - design @ coef))\n        keep = np.ones(n, dtype=bool)\n        for",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _responses, _fit_sources, infer_tensor_darcy_sources\nwith open('/holdout_task/public_tensor_cases.pkl','rb') as f:\n    cases = pickle.load(f)['cases']\n\nfor k, case in enumerate(cases):\n    p, gt = case['problem'], case['gt']\n    i, j = p['sensor_ij'].T\n    response = _responses(p)\n    design = np.c_[response[i,j,1:], np.ones(len(i))]\n    target = p['y_obs'] - response[i,j,0]\n    w, offset, field = gt['source_weights'], gt['sensor_offset'], gt",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _responses, _fit_sources\nwith open('/holdout_task/public_tensor_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)['cases']\nfailures = []\nfor k, case in enumerate(cases):\n    p, gt = case['problem'], case['gt']\n    i, j = p['sensor_ij'].T\n    response = _responses(p)[i, j]\n    clean = np.abs(p['y_obs'] - gt['u_true'][i, j] - gt['sensor_offset']) < .1\n    sensors = response[clean]\n    measured = p['y_obs'][clean] - sensors[:, 0]\n    d = np.c_[sensor"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tensor_v01.py",
+      "primary_producer_container_path": "/tmp/tensor_v01.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_robust_assimilation"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tensor_darcy_robin.py",
+        "filename": "tensor_darcy_robin.py",
+        "bytes": 5044,
+        "sha256": "c2b9d838278a639b76cc827ba949bca62bcaadf5b2e545ac55a880bd81695d1c",
+        "content_addressed_ref": "content_addressed_blobs/c2b9d838278a639b76cc827ba949bca62bcaadf5b2e545ac55a880bd81695d1c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tensor_darcy_robin.py"
+    ],
+    "exported_pure_functions": [
+      "_assemble",
+      "_responses",
+      "_fit_sources",
+      "infer_tensor_darcy_sources",
+      "balance"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "60618da636b39c23edf8b9e171938333583f377800e9fc997542728ff5bfc025",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom tensor_darcy_robin import _responses, _fit_sources\nwith open('/holdout_task/public_tensor_cases.pkl', 'rb') as f:\n    ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "60618da636b39c23edf8b9e171938333583f377800e9fc997542728ff5bfc025",
+        "expected_candidate_sha256": "60618da636b39c23edf8b9e171938333583f377800e9fc997542728ff5bfc025",
+        "computed_candidate_sha256": "60618da636b39c23edf8b9e171938333583f377800e9fc997542728ff5bfc025",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tensor_darcy_robin.py",
+            "bytes": 5044
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_60618da6"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_assemble",
+        "code": "def _assemble(problem):\n    \"\"\"Return the integrated cell operator and ambient boundary load.\"\"\"\n    from scipy.sparse import coo_matrix\n    kxx = np.asarray(problem['k_xx'], dtype=float)\n    kyy = np.asarray(problem['k_yy'], dtype=float)\n    kxy = np.asarray(problem['k_xy'], dtype=float)\n    (nx, ny) = kxx.shape\n    (hx, hy) = (problem['Lx'] / nx, problem['Ly'] / ny)\n    ids = np.arange(nx * ny).reshape(nx, ny)\n    (rows, cols, vals) = ([], [], [])\n\n    def add(row, col, val):\n        rows.append(row.ravel())\n        cols.append(col.ravel())\n        vals.append(val.ravel())\n\n    def face(left, right, conductance, cross, up0, down0, up1, down1):\n        for (col, coefficient) in ((left, conductance), (right, -conductance), (up0, -cross), (down0, cross), (up1, -cross), (down1, cross)):\n            add(left, col, coefficient)\n            add(right, col, -coefficient)\n    yp = np.minimum(np.arange(ny) + 1, ny - 1)\n    ym = np.maximum(np.arange(ny) - 1, 0)\n    xp = np.minimum(np.arange(nx) + 1, nx - 1)\n    xm = np.maximum(np.arange(nx) - 1, 0)\n    face(ids[:-1], ids[1:], 2 * hy / hx * kxx[:-1] * kxx[1:] / (kxx[:-1] + kxx[1:]), (kxy[:-1] + kxy[1:]) / 8, ids[:-1, yp], ids[:-1, ym], ids[1:, yp], ids[1:, ym])\n    face(ids[:, :-1], ids[:, 1:], 2 * hx / hy * kyy[:, :-1] * kyy[:, 1:] / (kyy[:, :-1] + kyy[:, 1:]), (kxy[:, :-1] + kxy[:, 1:]) / 8, ids[xp, :-1], ids[xm, :-1], ids[xp, 1:], ids[xm, 1:])\n    gamma = problem['gamma_robin']\n    wall = np.zeros_like(kxx)\n    for i in (0, -1):\n        wall[i] += hy * gamma * kxx[i] / (0.5 * hx * gamma + kxx[i])\n    for j in (0, -1):\n        wall[:, j] += hx * gamma * kyy[:, j] / (0.5 * hy * gamma + kyy[:, j])\n    area = hx * hy\n    add(ids, ids, wall + area * np.asarray(problem['sigma']))\n    operator = coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(ids.size, ids.size)).tocsc()\n    return (operator, (wall * problem['u_ambient']).ravel(), area)"
+      },
+      {
+        "name": "_responses",
+        "code": "def _responses(problem):\n    from scipy.sparse.linalg import splu\n    (operator, ambient, area) = _assemble(problem)\n    basis = np.asarray(problem['basis'], dtype=float)\n    (m, nx, ny) = basis.shape\n    rhs = np.column_stack((ambient, area * basis.reshape(m, nx * ny).T))\n    return splu(operator).solve(rhs).reshape(nx, ny, m + 1)"
+      },
+      {
+        "name": "_fit_sources",
+        "code": "def _fit_sources(design, target, alpha):\n    \"\"\"Robustly screen sensor spikes, then fit the retained observations.\"\"\"\n    (n, p) = design.shape\n    ridge = np.sqrt(alpha) * np.eye(p)[:-1]\n    zeros = np.zeros(p - 1)\n\n    def fit(weight):\n        root = np.sqrt(weight)\n        return np.linalg.lstsq(np.vstack((root[:, None] * design, ridge)), np.r_[root * target, zeros], rcond=None)[0]\n    coef = np.zeros(p)\n    coef[-1] = np.median(target)\n    floor = 1e-12 * max(1.0, np.max(np.abs(target)))\n    for _ in range(40):\n        residual = target - design @ coef\n        scale = max(floor, 1.4826 * np.median(np.abs(residual - np.median(residual))))\n        update = fit(1 / (1 + (residual / (2.5 * scale)) ** 2))\n        if np.linalg.norm(update - coef) <= 1e-09 * (1 + np.linalg.norm(coef)):\n            coef = update\n            break\n        coef = update\n    residual = target - design @ coef\n    median = np.median(residual)\n    scale = max(floor, 1.4826 * np.median(np.abs(residual - median)))\n    keep = np.abs(residual - median) <= 5 * scale\n    return fit(keep) if np.count_nonzero(keep) >= p else coef"
+      },
+      {
+        "name": "infer_tensor_darcy_sources",
+        "code": "def infer_tensor_darcy_sources(problem: dict) -> dict:\n    \"\"\"Recover source amplitudes, a common sensor offset, and the pressure grid.\"\"\"\n    response = _responses(problem)\n    (i, j) = np.asarray(problem['sensor_ij']).T\n    sensors = response[i, j]\n    design = np.column_stack((sensors[:, 1:], np.ones(len(sensors))))\n    target = np.asarray(problem['y_obs'], dtype=float) - sensors[:, 0]\n    coef = _fit_sources(design, target, float(problem['tikhonov_alpha']))\n    return {'source_weights': coef[:-1], 'sensor_offset': float(coef[-1]), 'predicted_field': response[..., 0] + response[..., 1:] @ coef[:-1]}"
+      },
+      {
+        "name": "balance",
+        "code": "def balance(p, u):\n    (xx, xy, yy) = (p[k] for k in ('k_xx', 'k_xy', 'k_yy'))\n    (nx, ny) = u.shape\n    (hx, hy) = (p['Lx'] / nx, p['Ly'] / ny)\n    (g, amb) = (p['gamma_robin'], p['u_ambient'])\n    out = hx * hy * p['sigma'] * u\n\n    def v(i, j):\n        return u[min(max(i, 0), nx - 1), min(max(j, 0), ny - 1)]\n    for i in range(nx):\n        for j in range(ny):\n            for d in (-1, 1):\n                k = i + d\n                if 0 <= k < nx:\n                    out[i, j] += hy / hx * 2 / (1 / xx[i, j] + 1 / xx[k, j]) * (u[i, j] - u[k, j]) - d * (xy[i, j] + xy[k, j]) / 8 * (v(i, j + 1) - v(i, j - 1) + v(k, j + 1) - v(k, j - 1))\n                else:\n                    out[i, j] += hy / (1 / g + hx / (2 * xx[i, j])) * (u[i, j] - amb)\n                k = j + d\n                if 0 <= k < ny:\n                    out[i, j] += hx / hy * 2 / (1 / yy[i, j] + 1 / yy[i, k]) * (u[i, j] - u[i, k]) - d * (xy[i, j] + xy[i, k]) / 8 * (v(i + 1, j) - v(i - 1, j) + v(i + 1, k) - v(i - 1, k))\n                else:\n                    out[i, j] += hx / (1 / g + hy / (2 * yy[i, j])) * (u[i, j] - amb)\n    return out"
+      }
+    ]
+  }
+}

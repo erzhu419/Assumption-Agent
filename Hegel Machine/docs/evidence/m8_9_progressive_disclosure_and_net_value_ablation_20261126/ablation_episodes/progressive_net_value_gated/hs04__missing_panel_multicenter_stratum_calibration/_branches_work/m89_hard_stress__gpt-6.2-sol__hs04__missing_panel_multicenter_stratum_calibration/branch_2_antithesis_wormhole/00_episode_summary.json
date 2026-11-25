@@ -1,0 +1,283 @@
+{
+  "task_id": "hs04__missing_panel_multicenter_stratum_calibration",
+  "short_name": "hs04_missing_panel_multicenter",
+  "benchmark": "Hegel-M89-HardStress-4",
+  "wave": "m89_hard_stress",
+  "scientific_domain": "Biostatistics, Missing Reference Control Alignment & Simpson-Confounded Calibration",
+  "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "progressive",
+  "staging_policy": "net_value_gated",
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 14,
+  "max_turns": 28,
+  "final_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+  "validated_incumbent_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "4112fc25cb7929f6e8641bed8b5df602dcc8060002e818add62dd7d98c5881bc",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cat > /tmp/assay_transfer_stress.py <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\n\nspec = impo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4112fc25cb7929f6e8641bed8b5df602dcc8060002e818add62dd7d98c5881bc",
+        "expected_candidate_sha256": "4112fc25cb7929f6e8641bed8b5df602dcc8060002e818add62dd7d98c5881bc",
+        "computed_candidate_sha256": "4112fc25cb7929f6e8641bed8b5df602dcc8060002e818add62dd7d98c5881bc",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_calibration.py",
+            "bytes": 4234
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4112fc25"
+    },
+    {
+      "candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "cat > /tmp/assay_panel_mask_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nassay = importlib.util.module_from_spec(s",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+        "expected_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+        "computed_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_calibration.py",
+            "bytes": 4317
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_680ca47e"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t04",
+      "turn_idx": 4,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "measurement confounding",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "A logistic model fitted on raw biomarker coordinates transfers across centers as well as a reference-aligned model with the same feature basis.",
+      "empirical_witness": "In public cohort 1, pooled AUROC/Brier improved from 0.711/0.239 to 0.860/0.150 after alignment, with AUROC improving in both query centers.",
+      "causal_blanket_diagnosis": "Raw biomarkers mix site-specific measurement distortions with patient signal; controls isolate the measurement component without centering away patient biology.",
+      "sublated_pivot": "Use separate biomarker transforms shrunk toward a center anchor, retain clinical stratum, and estimate training-center intercepts without exporting them to query centers.",
+      "pending_resolution_proposed_at_turn": 8,
+      "resolved_at_turn": 8,
+      "resolved_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+      "resolution_witness_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_calibration.py')\ns = p.read_text()\ns = s.replace('    model = LogisticRegression(C=1.0, max_iter=1000)\\n    model.fit(np.c"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 7,
+      "verified_turn": 8,
+      "resolved_nogood_ids": [
+        "ng_t04"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_calibration.py')\ns = p.read_text()\ns = s.replace('    model = LogisticRegression(C=1.0, max_iter=1000)\\n    model.fit(np.c"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_prim_box_ridge_bounds",
+      "granularity_tier": "L1_compositional_primitive",
+      "compiled_code_sha256_8": "18dcec21",
+      "index_cards": [
+        "autogenous_prim_box_ridge_bounds@18dcec21 | row_incidence_blocks(design: np.ndarray) -> tuple[list[tuple[np.ndarray, np.ndarray]], np.ndarray] | Return (blocks, uncovered_rows) for design (n, p), with each block a pair of 1 | REQ: G-diag(d)>=0 PSD minorant (NO ridge in minorant); box>=0, l0>=0; finite arrays | --describe autogenous_prim_box_ridge_bounds.row_incidence_blocks",
+        "autogenous_prim_box_ridge_bounds@18dcec21 | gram_diagonal_minorant(design: np.ndarray) -> np.ndarray | Return a nonnegative vector d (p,) for design X (n, p) such that X | REQ: G-diag(d)>=0 PSD minorant (NO ridge in minorant); box>=0, l0>=0; finite arrays | --describe autogenous_prim_box_ridge_bounds.gram_diagonal_minorant",
+        "autogenous_prim_box_ridge_bounds@18dcec21 | box_ridge_cube_lower_bound(design: np.ndarray, target: np.ndarray, center: np.ndarray, box: float, activation_cost: float, *, ridge: float=0.0, fixed_zero: np.ndarray | None=None, fixed_active: np.ndarray | None=None, diagonal: np.ndarray | None=None) -> float | Return a scalar box-ridge lower bound for design (n, p), target (n,), and cent | REQ: G-diag(d)>=0 PSD minorant (NO ridge in minorant); box>=0, l0>=0; finite arrays | --describe autogenous_prim_box_ridge_bounds.box_ridge_cube_lower_bound"
+      ],
+      "expected_net_value": 1.608
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_prim_reference_panel_balancing",
+      "granularity_tier": "L1_compositional_primitive",
+      "compiled_code_sha256_8": "a0bd4b96",
+      "index_cards": [
+        "autogenous_prim_reference_panel_balancing@a0bd4b96 | align_reference_panel(values: np.ndarray, controls: np.ndarray, groups: np.ndarray) -> np.ndarray | Return aligned real values (n, p) using real controls (n, q) and finite real g | REQ: discrete groups/strata (n,); >=1 control col with >=2 finite obs & spread>0 per group | --describe autogenous_prim_reference_panel_balancing.align_reference_panel",
+        "autogenous_prim_reference_panel_balancing@a0bd4b96 | balanced_cell_weights(groups: np.ndarray, strata: np.ndarray) -> np.ndarray | Return positive mean-one weights (n,) from nonempty finite real vectors groups | REQ: discrete groups/strata (n,); >=1 control col with >=2 finite obs & spread>0 per group | --describe autogenous_prim_reference_panel_balancing.balanced_cell_weights",
+        "autogenous_prim_reference_panel_balancing@a0bd4b96 | weighted_column_fill(values: np.ndarray, weights: np.ndarray) -> np.ndarray | Return finite-entry weighted means (p,) for a nonempty real matrix values (n,  | REQ: discrete groups/strata (n,); >=1 control col with >=2 finite obs & spread>0 per group | --describe autogenous_prim_reference_panel_balancing.weighted_column_fill"
+      ],
+      "expected_net_value": 1.34
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_prim_robust_affine_projection",
+      "granularity_tier": "L1_compositional_primitive",
+      "compiled_code_sha256_8": "abc35d3d",
+      "index_cards": [
+        "autogenous_prim_robust_affine_projection@abc35d3d | propagate_linear_basis(transition: np.ndarray, initial: np.ndarray, increments: np.ndarray) -> np.ndarray | Return a trajectory of shape (steps+1, n, k) from transition (n, n), initial ( | REQ: initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0 | --describe autogenous_prim_robust_affine_projection.propagate_linear_basis",
+        "autogenous_prim_robust_affine_projection@abc35d3d | profile_weighted_affine(predictor: np.ndarray, sensitivity: np.ndarray, target: np.ndarray, *, weights: np.ndarray | None=None, gain_floor: float=0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | For predictor, target and optional weights (n, m) and predictor sensitivity (n | REQ: initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0 | --describe autogenous_prim_robust_affine_projection.profile_weighted_affine",
+        "autogenous_prim_robust_affine_projection@abc35d3d | robust_residual_weights(residual: np.ndarray, scale: float | np.ndarray, *, loss: str='cauchy') -> np.ndarray | For residuals of shape S and a positive scalar or scale array broadcastable to | REQ: initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0 | --describe autogenous_prim_robust_affine_projection.robust_residual_weights"
+      ],
+      "expected_net_value": 0.798
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_control_panel_deconfounding",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "aa502f6d",
+      "index_cards": [
+        "autogenous_control_panel_deconfounding@aa502f6d | align_control_panel(X: np.ndarray, centers: np.ndarray, signal_columns: tuple[int, ...], control_columns: tuple[int, ...] | None=None) -> np.ndarray | Return signal values in control-referenced coordinates, in input row order | REQ: {'field': 'observations_per_contributing_control', 'op': '>=', 'value': 2}; {'field': 'u | --describe autogenous_control_panel_deconfounding.align_control_panel",
+        "autogenous_control_panel_deconfounding@aa502f6d | fit_predict_neutral(X_train: np.ndarray, y_train: np.ndarray, center_train: np.ndarray, X_test: np.ndarray, center_test: np.ndarray, signal_columns: tuple[int, int, int, int, int], control_columns: tuple[int, ...] | None=None, *, C: float=3.0) -> np.ndarray | Fit equal-prior logistic probabilities for a prespecified signal basis | REQ: {'field': 'observations_per_contributing_control', 'op': '>=', 'value': 2}; {'field': 'u | --describe autogenous_control_panel_deconfounding.fit_predict_neutral"
+      ]
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_dispersive_wave_tomography",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "fbf620db",
+      "index_cards": [
+        "autogenous_dispersive_wave_tomography@fbf620db | localize_pitch_catch(sensor_xy: np.ndarray, pairs: np.ndarray, waveforms: np.ndarray, plate_dims: np.ndarray, sample_rate_hz: float, carrier_hz: float, *, thickness: float | None=None, reference_sensor_xy: np.ndarray | None=None, reference_pairs: np.ndarray | None=None, reference_waveforms: np.ndarray | None=None, reference_plate_dims: np.ndarray | None=None, reference_thickness: float | None=None, grid_step: float=0.009) -> tuple[tuple[float, float], dict] | Locate one localized flaw in a rectangular plate; return (xy, diagnostics) | REQ: {'field': 'samples_per_carrier_period', 'op': '>', 'value': 2}; {'field': 'unique_unorde | --describe autogenous_dispersive_wave_tomography.localize_pitch_catch"
+      ]
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_robust_network_assimilation",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "2262dea7",
+      "index_cards": [
+        "autogenous_robust_network_assimilation@2262dea7 | assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int=5, valve_levels: tuple[float, float]=(0.35, 1.0), gain_floor: float=0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | Infer constant transmission and forecast a forward-Euler network | REQ: {'field': 'dt', 'op': '>', 'value': 0}; {'field': 'observation_sample_count', 'op': '>=' | --describe autogenous_robust_network_assimilation.assimilate_diffusive_network"
+      ]
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "770f6644",
+      "index_cards": [
+        "autogenous_sparse_ridge_certification@770f6644 | solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float=1e-06, *, max_leaves: int=90) -> dict | Certify boxed sparse ridge regression with at most 16 real predictors | REQ: {'field': 'n_samples', 'op': '>=', 'value': 1}; {'field': 'n_features', 'op': '<=', 'val | --describe autogenous_sparse_ridge_certification.solve_and_certify_l0"
+      ]
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_hs04_missing_panel_multicenter_680ca47ee7af",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 9,
+    "exported_pure_functions": [
+      "fit",
+      "metrics",
+      "predict",
+      "aligned",
+      "score",
+      "pred",
+      "scores"
+    ],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "progressive",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 7,
+    "staged_l1_primitive_count": 3,
+    "describe_skill_inspection_count": 0,
+    "describe_skill_queries": [],
+    "inspected_in_bash": false,
+    "inspected_source_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "calibrate_multicenter_assay"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "multicenter_calibration.py",
+          "final_file_sha256": "5d4f4a1bc2ca7f2ddbcf6eececbff853fccbc74e32f84200040e8050e7febe52",
+          "public_entrypoints": [
+            "calibrate_multicenter_assay"
+          ],
+          "effective_entrypoints": [
+            "calibrate_multicenter_assay"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "multicenter_calibration.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 35,
+  "prompt_tokens": 476209,
+  "cached_tokens": 88448,
+  "completion_tokens": 16250,
+  "total_tokens": 492459,
+  "effective_billed_tokens": 426123,
+  "wall_ms": 478923.26,
+  "provenance_verified": true,
+  "terminal_record_sha256": "1ffb53c7c8bd107e0f6a146bef71dca4cd7dd3bf85ac1bceb651e80cfeaf177a"
+}

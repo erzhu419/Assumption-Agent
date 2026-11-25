@@ -1,0 +1,131 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_4084e339825c",
+    "source_hash": "4084e339825c63e5935ddff61162df5d90242c555397a9cc5216c56aa45ac995",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/ic50_plate_probe.py",
+        "archived_relpath": "producers/tmp__ic50_plate_probe.py",
+        "bytes": 3436,
+        "sha256": "62b0e773610151ff02c7c2001b3352b568d2d73044431b118cf1d30e1f4b5436"
+      },
+      {
+        "container_path": "/tmp/ic50_probe.py",
+        "archived_relpath": "producers/tmp__ic50_probe.py",
+        "bytes": 4021,
+        "sha256": "26c129b8c512e3a4558fd0be8919bd5c9e81db028b0b31b21fb263b75eee87ad"
+      },
+      {
+        "container_path": "/tmp/ic50_replicate_audit.py",
+        "archived_relpath": "producers/tmp__ic50_replicate_audit.py",
+        "bytes": 1757,
+        "sha256": "cc11167789404a0bd9682816747db6f48402d6279389274f7865839ffa7af460"
+      },
+      {
+        "container_path": "/tmp/ic50_spatial_audit.py",
+        "archived_relpath": "producers/tmp__ic50_spatial_audit.py",
+        "bytes": 3058,
+        "sha256": "065d7c1ee27243c9ddf85c9503e5009c3ca56b954ce60c70c87f61dc89db4c92"
+      },
+      {
+        "container_path": "/tmp/ic50_stress.py",
+        "archived_relpath": "producers/tmp__ic50_stress.py",
+        "bytes": 1875,
+        "sha256": "27404b08efc0533b83ce9965066a538cc705772aeb9db02d3ad1648ae3b82aea"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && python3 - <<'PY'\nimport pickle\nfrom collections import Counter\nimport numpy as np\nimport scipy\nwith open('public_screen.pkl','rb') as f: data=pickle.load(f)\ndef describe(x, depth=0):\n print('  '*depth, type(x).__name__, getattr(x,'shape',''), f'len={len(x)}' if hasattr(x,'__len__') else repr(x)[:200]);\n if depth>=4: return\n if isinstance(x,dict):\n  for k,v in list(x.items())[:20]:\n   print('  '*depth,str(k)); describe(v,depth+1)\n elif isinstance(x,(list,tuple)) and len(x): describe(x[0],depth+1)\n elif isinstance(x,np.ndarray) and x.size: print('  '*depth,x.dtype,re",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nfrom collections import Counter, defaultdict\nwith open('public_screen.pkl','rb') as f: plates=pickle.load(f)['plates']\nfor p in plates:\n w=p['wells']; print(p['plate_id'],len(w),w[:3]);\n for k in w[0]:\n  c=Counter(str(a[k]) for a in w); print(k,len(c),c.most_common(15) if len(c)<35 else list(c)[:4])\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_screen.pkl','rb') as f: plates=pickle.load(f)['plates']\nfor p in plates:\n    w=p['wells']; b=np.median([a['fluorescence'] for a in w if a['well_type']=='POS_KILL']); print(p['plate_id'], 'background', round(b,1), 'kill MAD', round(np.median([abs(a['fluorescence']-b) for a in w if a['well_type']=='POS_KILL']),1)); print('DMSO (row, col, signal minus background):', [(a['row'],a['col'],round(a['fluorescence']-b)) for a in w if a['well_type']=='DMSO'])\nw=plates[0]['wells']; print('Compound layout (ID, dose, rep",
+      "cat > /tmp/ic50_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\nLN10 = np.log(10.)\n\ndef fit(plates, mode='exp', loss='cauchy'):\n    keys=sorted({w['compound_id'] for p in plates for w in p['wells'] if w['well_type']=='COMPOUND'})\n    lookup={k:i for i,k in enumerate(keys)}\n    n=len(plates); m=len(keys)\n    a=np.array([(j,w['row'],w['col'],w['fluorescence'],lookup[w['compound_id']] if w['well_type']=='COMPOUND' else (-1 if w['well_type']=='DMSO' else -2),w['log10_conc_uM'] if w['well_type']=='COMPOUND' else 0.) for j,p ",
+      "python3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/ic50_probe.py').read_text().split(\"if __name__=='__main__':\")[0]\ns=s.replace(\"    start=np.r_\", \"    if mode=='expplate': sp=np.tile(sp,(n,1)).ravel()\\n    start=np.r_\")\ns=s.replace(\"amp,tau,bx,bz=s[:4]; power\", \"amp,tau,bx,bz=(s.reshape(n,4)[p].T if mode=='expplate' else s[:4]); power\")\ns=s.replace(\"        j[:,p0:]=(g*v)[:,None]*db\", \"        if mode=='expplate':\\n            j[idx[:,None],p0+4*p[:,None]+np.arange(4)]=(g*v)[:,None]*db\\n        else: j[:,p0:]=(g*v)[:,None]*db\")\ns=s.replace(\"    if mode=='exppow': lo[-1]\", \"    if mode=='e",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\npath = '/holdout_task/assay_ic50.py'\nspec = importlib.util.spec_from_file_location('assay_ic50', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nestimate = module.estimate_compound_hill_parameters\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    data = pickle.load(f)\nplates = data['plates']\nkeys = sorted(data['gt'])\nfields = ('log10_ic50_uM', 'hill_slope')\nlimits = np.array([0.09, 0.18])\n\ndef predict(plates):\n    result = e",
+      "cat > /tmp/ic50_spatial_audit.py <<'PY'\nimport pickle\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    data = pickle.load(f)\nplates, gt = data['plates'], data['gt']\nkeys = sorted(gt)\nfields = ('log10_ic50_uM', 'hill_slope')\ntruth = np.array([[gt[k][f] for f in fields] for k in keys])\nsource = Path('/holdout_task/assay_ic50.py').read_text()\nrational = source.replace('np.exp(-edge / decay)', '1 / (1 + (edge / decay)**2)').replace('amplitude * attenuation * edge / decay**2', '2 * amplitude * attenuat",
+      "cat > /tmp/ic50_replicate_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom collections import defaultdict\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nassay = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(assay)\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    data = pickle.load(f)\nkeys = sorted(data['gt'])\nfields = ('log10_ic50_uM', 'hill_slope')\ntruth = np.array([[data['gt'][k][f] for f in fields] for k in keys])\nlimits = np.array([0.09, 0.18])\n\ndef position(w):\n    r, c = w['row'], w['col']"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__ic50_probe.py",
+      "primary_producer_container_path": "/tmp/ic50_probe.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 4352,
+        "sha256": "121858dbaec4ce54d8351c46a6c21a77cdb6089c595af059757442a03dd5c1c4",
+        "content_addressed_ref": "content_addressed_blobs/121858dbaec4ce54d8351c46a6c21a77cdb6089c595af059757442a03dd5c1c4.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "position",
+      "depth"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4084e339825c63e5935ddff61162df5d90242c555397a9cc5216c56aa45ac995",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/ic50_replicate_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom collections import defaultdict\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nassay = importl",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4084e339825c63e5935ddff61162df5d90242c555397a9cc5216c56aa45ac995",
+        "expected_candidate_sha256": "4084e339825c63e5935ddff61162df5d90242c555397a9cc5216c56aa45ac995",
+        "computed_candidate_sha256": "4084e339825c63e5935ddff61162df5d90242c555397a9cc5216c56aa45ac995",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 4352
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4084e339"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "position",
+        "code": "def position(w):\n    (r, c) = (w['row'], w['col'])\n    return (min(r, 15 - r, c, 23 - c), r, c)"
+      },
+      {
+        "name": "depth",
+        "code": "def depth(w):\n    (r, c) = (w['row'], w['col'])\n    return min(r, 15 - r, c, 23 - c)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs04_missing_panel_multicenter_680ca47ee7af",
+    "source_hash": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs04__missing_panel_multicenter_stratum_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/assay_calibration_cv.py",
+        "archived_relpath": "producers/tmp__assay_calibration_cv.py",
+        "bytes": 2366,
+        "sha256": "c62d05c1e6adaef607b908ce722eaf60921b631d09d5ed2cf914f54ee826f208"
+      },
+      {
+        "container_path": "/tmp/assay_gate_audit.py",
+        "archived_relpath": "producers/tmp__assay_gate_audit.py",
+        "bytes": 2922,
+        "sha256": "e71a35d24e1031e2eb67cf908ff7772903535d0fffc0d74d8f80b795d57fd8e3"
+      },
+      {
+        "container_path": "/tmp/assay_nuisance_cv.py",
+        "archived_relpath": "producers/tmp__assay_nuisance_cv.py",
+        "bytes": 2356,
+        "sha256": "adca38766bf8beaaf6d64d2b2ba39660c5c1b0ba72e67609f1878dea86804d47"
+      },
+      {
+        "container_path": "/tmp/assay_nuisance_stress.py",
+        "archived_relpath": "producers/tmp__assay_nuisance_stress.py",
+        "bytes": 3280,
+        "sha256": "239a1558c86e3f5ee6a0dfb938b9068ee2418d0eadcddfbea9cf0df3dc5eee04"
+      },
+      {
+        "container_path": "/tmp/assay_panel_mask_audit.py",
+        "archived_relpath": "producers/tmp__assay_panel_mask_audit.py",
+        "bytes": 2338,
+        "sha256": "5c46561898beef64a0520063b2f5bca4c844cc6fb269047d9f2558447f119e4f"
+      },
+      {
+        "container_path": "/tmp/assay_screen.py",
+        "archived_relpath": "producers/tmp__assay_screen.py",
+        "bytes": 2876,
+        "sha256": "1fad4247f60203342a21f257479dd3153e7b5f53618ef39d7782909c7938c663"
+      },
+      {
+        "container_path": "/tmp/assay_stratum_cv.py",
+        "archived_relpath": "producers/tmp__assay_stratum_cv.py",
+        "bytes": 3063,
+        "sha256": "f085e5bd96ba6b71005e69d602834b86d304660d597fb6ee44d7023f8d63a725"
+      },
+      {
+        "container_path": "/tmp/assay_transfer_stress.py",
+        "archived_relpath": "producers/tmp__assay_transfer_stress.py",
+        "bytes": 3277,
+        "sha256": "6ee93b8b1d21b274abd9d2f8f14836f78323d9bab7e805c50e7205184177f108"
+      },
+      {
+        "container_path": "/tmp/assay_verify.py",
+        "archived_relpath": "producers/tmp__assay_verify.py",
+        "bytes": 2205,
+        "sha256": "a3f3df8de7a3e01b21fb71af2adf54aa324af75be16a3455eb546459033c9d72"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nfrom collections import Counter\nwith open('public_multicenter_assay.pkl','rb') as f: data=pickle.load(f)\ndef inspect(x,path='',depth=0):\n if isinstance(x,dict):\n  print(path, 'keys:',list(x)[:30]);\n  for k,v in x.items(): inspect(v, f'{path}/{k}',depth+1)\n elif isinstance(x,(list,tuple)) and depth<3:\n  print(path,type(x).__name__,len(x));\n  for i,v in enumerate(x[:5]): inspect(v,f'{path}/{i}',depth+1)\n elif isinstance(x,np.ndarray):\n  print(path,x.shape,x.dtype, 'nonfinite='+str((~np.isfinite(x)).sum()) if np.issubdtype(x.dtype,np",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.special import logit\nnp.set_printoptions(precision=2,suppress=True,linewidth=150)\nfor k,co in enumerate(pickle.load(open('public_multicenter_assay.pkl','rb'))['cohorts']):\n d=co['dataset']; g=co['gt']; r,t,q=[d[s] for s in ('reference_controls','train','query')]; print('\\ncohort',k,'beta',g['beta'])\n for c in np.unique(r['center_id']):\n  x=r['X'][r['center_id']==c]; n=np.isfinite(x).sum(0); print(c,'n',n,'mean',np.nanmean(x,axis=0),'sd',np.nanstd(x,axis=0,ddof=1))\n  m=t['center_id']==c\n  if m.any(): print(' train cells (",
+      "cat > /tmp/assay_screen.py <<'PY'\nimport pickle\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\n\ncohorts = pickle.load(open('/holdout_task/public_multicenter_assay.pkl','rb'))['cohorts']\n\ndef aligned(part, ref, shrink, robust=False):\n    out = np.zeros_like(part['X'], dtype=float)\n    for c in np.unique(part['center_id']):\n        block = ref['X'][ref['center_id']==c]\n        mu, sig, n = [], [], []\n        for v in block.T:\n            v = v[np.isfinite(v)]\n            n.append(len(v))\n            m = np.median",
+      "cat > /holdout_task/multicenter_calibration.py <<'PY'\n\"\"\"Reference-panel alignment and stratum-adjusted assay probabilities.\"\"\"\n\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\n\n\ndef _panel_statistics(block):\n    \"\"\"Estimate per-biomarker location and log scale from finite controls.\"\"\"\n    n = np.zeros(block.shape[1], dtype=int)\n    loc = np.zeros(block.shape[1])\n    log_scale = np.zeros(block.shape[1])\n    usable = np.zeros(block.shape[1], dtype=bool)\n    for j, col in enumerate(block.T):\n        col = col[np.isfinite(col)]\n        n[j] = col.size\n        if col.size >=",
+      "cat > /tmp/assay_calibration_cv.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score, brier_score_loss, log_loss\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as handle:\n    cohorts = pickle.load(handle)['cohorts']\n\ndef fit(x, y, s, c, z, v, C, center_scale):\n    strata = np.unique(s)\n    ct = (c[:,None] == n",
+      "cat > /tmp/assay_transfer_stress.py <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score, brier_score_loss\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nsettings = [(1., 1.), (.3, 0.), (.3, .25), (.3, .5), (.3, 1.)]\n\nfor center_bias, biomarker_spread in [(0., .03), (1.8, .03), (0., .25), (1.8, .25)]:\n    results = {key: [] for key in settings}\n    oracle",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/assay_transfer_stress.py')\ns=p.read_text().replace('settings = [(1., 1.), (.3, 0.), (.3, .25), (.3, .5), (.3, 1.)]', 'settings = [(1.,1.), (.3,1.), (.3,3.), (.3,8.), (1.,3.), (1.,8.)]')\ns=s.replace('seed + 14000','seed + 25000')\nPath('/tmp/assay_nuisance_stress.py').write_text(s)\np=Path('/tmp/assay_calibration_cv.py')\ns=p.read_text().replace('settings = [(C, a) for C in (0.1, 0.3, 1.0, 3.0) for a in (0.0, 0.25, 1.0)]','settings = [(1.,1.), (.3,1.), (.3,3.), (.3,8.), (1.,3.), (1.,8.)]')\nPath('/tmp/assay_nuisance_cv.py').write_text(s)\nPY\nOPE",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_calibration.py')\ns = p.read_text()\ns = s.replace('    model = LogisticRegression(C=1.0, max_iter=1000)\\n    model.fit(np.column_stack((xt, st, ct)), train[\\'y\\'])', '    # Penalize nuisance intercepts less than transferable biomarker effects.\\n    model = LogisticRegression(C=0.3, max_iter=1000)\\n    model.fit(np.column_stack((xt, st, 3.0 * ct)), train[\\'y\\'])')\np.write_text(s)\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/assay_verify.py",
+      "cat > /tmp/assay_gate_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.special import expit, logit\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import balanced_accuracy_score, brier_score_loss, log_loss, recall_score, roc_auc_score\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as f:\n    cohorts = pickle.load(f)['cohorts']\n\ndef metrics(y,p):\n    if np.un",
+      "cat > /tmp/assay_stratum_cv.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import brier_score_loss, roc_auc_score, log_loss\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_multicenter_assay.pkl','rb') as f:\n    cohorts = pickle.load(f)['cohorts']\n\n# The full indicator basis remains present. The optional contrast only changes\n# the ridge penalty on an ordered t",
+      "cat > /tmp/assay_panel_mask_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nassay = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(assay)\nwith open('/holdout_task/public_multicenter_assay.pkl', 'rb') as handle:\n    cohorts = pickle.load(handle)['cohorts']\n\n# Can other centers predict a repeatable biomarker-specific departure from\n# the local panel anchor when that biomarker has no usable local controls?\nfor k, cohort in enumerate(cohorts):\n    d = cohort['da"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__assay_nuisance_stress.py",
+      "primary_producer_container_path": "/tmp/assay_nuisance_stress.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_calibration.py",
+        "filename": "multicenter_calibration.py",
+        "bytes": 4317,
+        "sha256": "5d4f4a1bc2ca7f2ddbcf6eececbff853fccbc74e32f84200040e8050e7febe52",
+        "content_addressed_ref": "content_addressed_blobs/5d4f4a1bc2ca7f2ddbcf6eececbff853fccbc74e32f84200040e8050e7febe52.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "metrics",
+      "predict",
+      "aligned",
+      "score",
+      "pred",
+      "scores"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "cat > /tmp/assay_panel_mask_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay', '/holdout_task/multicenter_calibration.py')\nassay = importlib.util.module_from_spec(s",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+        "expected_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+        "computed_candidate_sha256": "680ca47ee7af9f07be83dc45a4790fd348104e5c18b8261532b56fa626a78671",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_calibration.py",
+            "bytes": 4317
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_680ca47e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(x, y, s, c, z, v, C, center_scale):\n    from sklearn.linear_model import LogisticRegression\n    strata = np.unique(s)\n    ct = (c[:, None] == np.unique(c)).astype(float)\n    ct -= ct.mean(0)\n    train = np.column_stack((x, s[:, None] == strata, center_scale * ct))\n    test = np.column_stack((z, v[:, None] == strata, np.zeros((len(z), ct.shape[1]))))\n    model = LogisticRegression(C=C, max_iter=1000).fit(train, y)\n    return model.predict_proba(test)[:, 1]"
+      },
+      {
+        "name": "metrics",
+        "code": "def metrics(y, p):\n    from sklearn.metrics import balanced_accuracy_score\n    from sklearn.metrics import brier_score_loss\n    from sklearn.metrics import recall_score\n    from sklearn.metrics import roc_auc_score\n    if np.unique(y).size < 2:\n        return None\n    return tuple(np.round([roc_auc_score(y, p), brier_score_loss(y, p), balanced_accuracy_score(y, p >= 0.5), *recall_score(y, p >= 0.5, average=None, labels=[0, 1], zero_division=0)], 3))"
+      },
+      {
+        "name": "predict",
+        "code": "def predict(x, s, c, y, tr, te, mode):\n    from sklearn.linear_model import LogisticRegression\n    st = s[:, None] == np.unique(s[tr])\n    if mode == 'raw':\n        fit = np.c_[x[tr], st[tr]]\n        test = np.c_[x[te], st[te]]\n    else:\n        ct = (c[tr, None] == np.unique(c[tr])).astype(float)\n        ct -= ct.mean(0)\n        fit = np.c_[x[tr], st[tr], 3 * ct]\n        test = np.c_[x[te], st[te], np.zeros((te.sum(), ct.shape[1]))]\n        if mode != 'linear':\n            (i, j) = np.triu_indices(x.shape[1])\n            products = x[:, i] * x[:, j]\n            products -= products[tr].mean(0)\n            products /= np.maximum(products[tr].std(0), 1e-06)\n            fit = np.c_[fit, mode * products[tr]]\n            test = np.c_[test, mode * products[te]]\n    return LogisticRegression(C=0.3, max_iter=1000).fit(fit, y[tr]).predict_proba(test)[:, 1]"
+      },
+      {
+        "name": "aligned",
+        "code": "def aligned(part, ref, shrink, robust=False):\n    out = np.zeros_like(part['X'], dtype=float)\n    for c in np.unique(part['center_id']):\n        block = ref['X'][ref['center_id'] == c]\n        (mu, sig, n) = ([], [], [])\n        for v in block.T:\n            v = v[np.isfinite(v)]\n            n.append(len(v))\n            m = np.median(v) if robust and len(v) else np.mean(v) if len(v) else 0\n            sd = 1.4826 * np.median(abs(v - m)) if robust and len(v) > 1 else np.std(v, ddof=1) if len(v) > 1 else 0\n            mu.append(m)\n            sig.append(sd)\n        (mu, sig, n) = map(np.asarray, (mu, sig, n))\n        ok = (n >= 2) & (sig > 0)\n        (m0, s0) = (np.median(mu[ok]), np.median(sig[ok]))\n        w = np.where(ok, n / (n + shrink), 0)\n        group = part['center_id'] == c\n        out[group] = (part['X'][group] - (w * mu + (1 - w) * m0)) / (w * sig + (1 - w) * s0)\n    return np.nan_to_num(out)"
+      },
+      {
+        "name": "score",
+        "code": "def score(y, p, c):\n    from sklearn.metrics import brier_score_loss\n    from sklearn.metrics import roc_auc_score\n    return np.array([(roc_auc_score(y[c == i], p[c == i]), brier_score_loss(y[c == i], p[c == i])) for i in np.unique(c)])"
+      },
+      {
+        "name": "pred",
+        "code": "def pred(xt, t, xq, q, cscale, C):\n    from sklearn.linear_model import LogisticRegression\n    st = np.eye(3)[t['stratum']]\n    sq = np.eye(3)[q['stratum']]\n    centers = np.unique(t['center_id'])\n    ct = (t['center_id'][:, None] == centers).astype(float)\n    design = np.c_[xt, st, cscale * (ct - ct.mean(0))]\n    model = LogisticRegression(C=C, max_iter=1000).fit(design, t['y'])\n    return (model.predict_proba(np.c_[xq, sq, np.zeros((len(xq), len(centers)))])[:, 1], model.coef_[0, :8])"
+      },
+      {
+        "name": "scores",
+        "code": "def scores(y, p):\n    from sklearn.metrics import brier_score_loss\n    from sklearn.metrics import log_loss\n    from sklearn.metrics import roc_auc_score\n    return (roc_auc_score(y, p), brier_score_loss(y, p), log_loss(y, p, labels=[0, 1]))"
+      }
+    ]
+  }
+}

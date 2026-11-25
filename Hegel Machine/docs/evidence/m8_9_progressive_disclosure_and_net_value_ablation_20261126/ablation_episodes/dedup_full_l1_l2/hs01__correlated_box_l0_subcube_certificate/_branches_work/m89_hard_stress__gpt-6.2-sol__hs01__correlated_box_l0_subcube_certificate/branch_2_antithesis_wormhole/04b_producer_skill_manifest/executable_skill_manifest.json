@@ -1,0 +1,107 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs01_correlated_box_l0_cert_a681264159eb",
+    "source_hash": "a681264159eb0b34c2d263a196c1f919910b2ca851c7fd9037b40fb18422da04",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs01__correlated_box_l0_subcube_certificate",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_box_l0.py",
+        "archived_relpath": "producers/tmp__audit_box_l0.py",
+        "bytes": 3594,
+        "sha256": "d3ae61f4bc7ac5cb53c7e3ad5b5ceb43fe583372ca3f2fe1c6d6760e91f12aaa"
+      },
+      {
+        "container_path": "/tmp/check_box_l0.py",
+        "archived_relpath": "producers/tmp__check_box_l0.py",
+        "bytes": 3553,
+        "sha256": "9c05e9b01bc8dd21f9bd3267baea5a8606053e04df10753717ede698d176d0cd"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nwith open('/holdout_task/public_box_l0_cases.pkl', 'rb') as f:\n    data = pickle.load(f)\nprint('numpy', np.__version__, 'scipy', scipy.__version__)\ndef describe(o, depth=0):\n    if isinstance(o, dict):\n        print('  '*depth, 'keys:', list(o))\n        if 'X' in o and 'y' in o:\n            X, y = np.asarray(o['X']), np.asarray(o['y'])\n            print('  '*depth, 'shape:', X.shape, 'rank:', np.linalg.matrix_rank(X), 'y norm:', np.linalg.norm(y))\n            print('  '*depth, 'parameters:', {k:v for k,v in o",
+      "cat > /holdout_task/certified_box_l0.py <<'PY'\n\"\"\"Global box-constrained sparse regression with a disjunctive dual bound.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\n\ndef solve_certified_box_l0(problem: dict) -> dict:\n    \"\"\"Return a feasible incumbent and an exhaustive, single-subcube certificate.\"\"\"\n    X = np.ascontiguousarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    ridge = float(problem['ridge'])\n    penalty = float(problem['l0_penalty'])\n    box = float(problem['box'])\n    tol = float(problem['gap_tol'])\n    n, p = X.shape\n    cutoff ",
+      "cat > /tmp/check_box_l0.py <<'PY'\nimport importlib.util\nimport pickle\nfrom time import perf_counter\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/certified_box_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef verify(name, c, expected=None):\n    t = perf_counter()\n    out = mod.solve_certified_box_l0(c)\n    dt = perf_counter()-t\n    X, y = c['X'], c['y']\n    w = np.asarray(out['weights'])\n    assert w.shape == (X.shape[1],) and np.all(np.abs(w) <= c['box'])\n    r = X @ w-y\n    j = 0.5*(r@r + c['ridge']*(w@w)) + c[",
+      "printf 'BLAS environment: '; env | grep -E 'OPENBLAS|OMP_NUM_THREADS|MKL_NUM_THREADS' || true\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I -m cProfile -o /tmp/box_l0.prof /tmp/check_box_l0.py\npython3 - <<'PY'\nimport pstats\npstats.Stats('/tmp/box_l0.prof').strip_dirs().sort_stats('cumulative').print_stats(23)\nPY",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/certified_box_l0.py')\ns = p.read_text()\nold = '    if work.size:\\n        A = np.vstack'\nassert s.count(old) == 1\ns = s.replace(old, '''    # Accelerated projected gradient supplies better dual centers in batches.\n    # It need not converge: only the recomputed dual bound can discard a mask.\n    if work.size >= 64:\n        work = work[np.argsort(lower[work])]\n        abs_gram = np.abs(gram)\n        for start in range(0, work.size, batch):\n            ids = work[start:start + batch]\n            ids = ids[lower[ids] < upper",
+      "set -e\ncat > /tmp/audit_box_l0.py <<'PY'\nimport importlib.util\nimport pickle\nfrom time import perf_counter\n\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/certified_box_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\n\ndef audit(name, problem, reference=None):\n    X, y = problem['X'], problem['y']\n    M, r, cost = (problem[k] for k in ('box', 'ridge', 'l0_penalty'))\n    t = perf_counter()\n    out = mod.solve_certified_box_l0(problem)\n    elapsed = perf_counter() - t\n    w = np.asa",
+      "python3 -I - <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/certified_box_l0.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('/holdout_task/public_box_l0_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)['cases']\ncutoff = 1e-10\n\nfor i, case in enumerate(cases):\n    X = case['X']\n    scaled = X / np.linalg.norm(X, axis=0)\n    corr = np.abs(scaled.T @ scaled)\n    np.fill_diagonal(corr, -np.inf)\n    anchor = np.unravel_index(corr.argmax(), corr.sha"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_box_l0.py",
+      "primary_producer_container_path": "/tmp/audit_box_l0.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_box_l0.py",
+        "filename": "certified_box_l0.py",
+        "bytes": 7428,
+        "sha256": "7822e1f6498b63b00451a409556e258ae21454e3dd3b1c89ceaa407454291ab0",
+        "content_addressed_ref": "content_addressed_blobs/7822e1f6498b63b00451a409556e258ae21454e3dd3b1c89ceaa407454291ab0.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_box_l0.py"
+    ],
+    "exported_pure_functions": [
+      "public_incumbent"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a681264159eb0b34c2d263a196c1f919910b2ca851c7fd9037b40fb18422da04",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "python3 -I - <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/certified_box_l0.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.lo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a681264159eb0b34c2d263a196c1f919910b2ca851c7fd9037b40fb18422da04",
+        "expected_candidate_sha256": "a681264159eb0b34c2d263a196c1f919910b2ca851c7fd9037b40fb18422da04",
+        "computed_candidate_sha256": "a681264159eb0b34c2d263a196c1f919910b2ca851c7fd9037b40fb18422da04",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/certified_box_l0.py",
+            "bytes": 7428
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a6812641"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "public_incumbent",
+        "code": "def public_incumbent(problem):\n    from scipy.optimize import lsq_linear\n    (X, y) = (problem['X'], problem['y'])\n    p = X.shape[1]\n    (r, M, cost) = (problem[k] for k in ('ridge', 'box', 'l0_penalty'))\n    A = np.vstack((X, np.sqrt(r) * np.eye(p)))\n    b = np.r_[y, np.zeros(p)]\n    best = 0.5 * (y @ y)\n    bits = 1 << np.arange(p)\n    for k in range(1, 1 << p):\n        active = k & bits != 0\n        if active.sum() * cost >= best:\n            continue\n        As = A[:, active]\n        v = lsq_linear(As, b, bounds=(-M, M), method='bvls', tol=1e-13).x\n        residual = As @ v - b\n        best = min(best, 0.5 * (residual @ residual) + cost * np.count_nonzero(abs(v) > 1e-10))\n    return best"
+      }
+    ]
+  }
+}

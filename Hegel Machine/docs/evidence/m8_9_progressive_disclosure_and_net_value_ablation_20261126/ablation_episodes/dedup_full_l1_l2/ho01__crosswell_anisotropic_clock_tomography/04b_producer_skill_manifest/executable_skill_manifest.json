@@ -1,0 +1,160 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_df4d88132b26",
+    "source_hash": "df4d88132b26d9144a9b5385ee621c14156bb1b88a01fbf01b05f5068718595e",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_tomo_angles.py",
+        "archived_relpath": "producers/tmp__audit_tomo_angles.py",
+        "bytes": 2183,
+        "sha256": "3c11f0055facab51aafb080d80eaa6cbc83d5d091752d75d0e9f774040e82886"
+      },
+      {
+        "container_path": "/tmp/audit_tomo_folds.py",
+        "archived_relpath": "producers/tmp__audit_tomo_folds.py",
+        "bytes": 2674,
+        "sha256": "bd0b90953b396879caa98537ea3d8051dc0f810969d20330d16c42bf95ae0fdd"
+      },
+      {
+        "container_path": "/tmp/check_tomo_measured_snr.py",
+        "archived_relpath": "producers/tmp__check_tomo_measured_snr.py",
+        "bytes": 1968,
+        "sha256": "e4ec0cbb2fc291f8b7297d96290cb599ce5389c57064144fb72b9aed3998c6c5"
+      },
+      {
+        "container_path": "/tmp/check_tomo_public.py",
+        "archived_relpath": "producers/tmp__check_tomo_public.py",
+        "bytes": 1182,
+        "sha256": "521ea35ea5935d7169244c63233fa6f89c527852dbb3bebb0d7d3ec228ef751e"
+      },
+      {
+        "container_path": "/tmp/check_tomo_stress.py",
+        "archived_relpath": "producers/tmp__check_tomo_stress.py",
+        "bytes": 2373,
+        "sha256": "32af640d37fc9b7930bed06dd0ffd47ab67ab6d345e320e176e79316223fe47c"
+      },
+      {
+        "container_path": "/tmp/check_tomo_weak_diagnose.py",
+        "archived_relpath": "producers/tmp__check_tomo_weak_diagnose.py",
+        "bytes": 2038,
+        "sha256": "cfd54edc9053c4ee39fdee4c7e97839e7bedb13719df96d24d5e62071fa4f65a"
+      },
+      {
+        "container_path": "/tmp/tomo_diagnose.py",
+        "archived_relpath": "producers/tmp__tomo_diagnose.py",
+        "bytes": 1839,
+        "sha256": "a12ede4b06f71739dd8e0c055e2a80f05b6c7f2018d59d3cea5da6b128482c5e"
+      },
+      {
+        "container_path": "/tmp/tomo_weak_diagnose.py",
+        "archived_relpath": "producers/tmp__tomo_weak_diagnose.py",
+        "bytes": 5316,
+        "sha256": "6183afb5cdb72fcd0d921ccbf30161a6537aff869dafbe56c7e3cf245e39849e"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_surveys.pkl', 'rb') as f:\n    data = pickle.load(f)\ndef show(x, name='data', depth=0):\n    if isinstance(x, dict):\n        print(name, 'keys:', list(x)[:20])\n        if depth < 4:\n            for k, v in list(x.items())[:8]:\n                show(v, str(k), depth + 1)\n    elif isinstance(x, (list, tuple)):\n        print(name, type(x).__name__, len(x))\n        if len(x) and depth < 4:\n            if np.isscalar(x[0]): print(' ', x[:8])\n            else:\n                for i, v in enumerate(x[:5]): show(v, f'",
+      "cat > /tmp/tomo_diagnose.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.special import erf\nfrom scipy.optimize import least_squares\n\ndef ray_integral(width, source, receiver, x, z, radius):\n    dz = receiver - source\n    length = np.hypot(width, dz)\n    ux, uz = width / length, dz / length\n    parallel = ux * x + uz * (z - source)\n    normal = -uz * x + ux * (z - source)\n    rr = np.sqrt(2) * radius\n    return np.sqrt(np.pi / 2) * radius * np.exp(-0.5 * (normal / radius)**2) * (erf((length - parallel) / rr) + erf(parallel / rr))\n\nif __name__ == '__main__':\n    with open('/holdout_task/p",
+      "sed -i 's/jac=lambda b: a,/jac=lambda b: a.copy(),/' /tmp/tomo_diagnose.py && python3 -I /tmp/tomo_diagnose.py",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Straight-ray inversion of cross-well picks for a Gaussian plume and receiver clocks.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import helmert, qr\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\n\n\ndef _clock_box(clock):\n    \"\"\"Project millisecond biases onto the zero-sum box.\"\"\"\n    if np.max(np.abs(clock)) <= 4.0:\n        return clock - clock.mean()\n    lo, hi = clock.min() - 4.0, clock.max() + 4.0\n    for _ in range(48):\n        mid = (lo + hi) / 2\n        if np.clip(clock - mid, -4.0, 4.0).sum() > 0:\n            lo = mi",
+      "cat > /tmp/check_tomo_stress.py <<'PY'\nimport runpy\nimport numpy as np\nfrom numpy.polynomial.legendre import leggauss\n\nbase = runpy.run_path('/tmp/check_tomo_public.py', run_name='stress')\ncheck, data = base['check'], base['data']\nfor k, row in enumerate(data):\n    s, gt = row['survey'], row['gt']\n    errors = []\n    for j in range(len(s['z_rcv_m'])):\n        keep = np.arange(len(s['z_rcv_m'])) != j\n        times = s['T_obs_s'][:, keep]\n        clock = gt['rcv_clock_bias_s'][keep]\n        reduced = dict(s, z_rcv_m=s['z_rcv_m'][keep], T_obs_s=times-clock.mean())\n        errors.append(check(redu",
+      "python3 - <<'PY'\nfrom pathlib import Path\ns = Path('/holdout_task/tomography_solver.py').read_text()\ns = s.replace('def invert_plume_and_clocks(survey: dict) -> dict:', 'def invert_plume_and_clocks(survey: dict, truth=None) -> dict:')\ns = s.replace(\"    return {'plume_xz_m':\", \"\"\"    if truth is not None:\n        local = v.copy()\n        seeded = fit(np.r_[v[:-2], truth], mask, 'linear', 1.0)\n        e = residual(v)\n        sigma = np.sqrt(np.sum(e[mask]**2) / (mask.sum() - len(v)))\n        jac = jacobian(v)[mask]\n        sd = sigma * np.sqrt(np.diag(np.linalg.pinv(jac.T @ jac)))[-2:]\n        ",
+      "python3 - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/check_tomo_stress.py').read_text()\ns = s[:s.index('base = ')] + '''import contextlib, io\nwith contextlib.redirect_stdout(io.StringIO()):\n    base = runpy.run_path('/tmp/check_tomo_public.py', run_name='stress')\ncheck = base['check']\n\n''' + s[s.index('nodes, weights'):]\ns = s.replace('range(40)', 'range(60, 120)').replace('[(12, 11), (15, 16), (19, 21)]', '[(15, 16), (17, 14), (19, 21)]').replace('[.000035, .00007, .00012]', '[.000055, .00007, .00010]').replace('rng.normal(0, .00007', 'rng.normal(0, .000035').replace('synthetic 40-case ma",
+      "cat > /tmp/audit_tomo_folds.py <<'PY'\nfrom pathlib import Path\nimport pickle\nimport numpy as np\nfrom scipy.special import erf\n\npath = Path('/holdout_task/tomography_solver.py')\nsource = path.read_text()\n# Expose the fitted physical coefficients only in these in-memory audit copies.\nneedle = \"    return {'plume_xz_m':\"\nassert source.count(needle) == 1\n\ndef load_variant(kind):\n    text = source\n    if kind == 'no_clocks':\n        text = text.replace('clocks[j]))', 'clocks[j, :0]))')\n        text = text.replace('clocks @ v[2:p]', 'np.zeros(len(rcv))')\n    elif kind == 'extra_harmonic':\n        te",
+      "cat > /tmp/audit_tomo_angles.py <<'PY'\nimport contextlib\nimport io\nimport runpy\nimport numpy as np\nfrom scipy.special import erf\n\nwith contextlib.redirect_stdout(io.StringIO()):\n    audit = runpy.run_path('/tmp/audit_tomo_folds.py')\ninvert = audit['load_variant']('exact')\nfor k, row in enumerate(audit['data']):\n    s, gt = row['survey'], row['gt']\n    w, h, r = s['W_m'], s['H_m'], s['R_plume_m']\n    zs = s['z_src_m'][:, None]\n    dz = s['z_rcv_m'][None, :] - zs\n    length = np.hypot(w, dz)\n    y = 1000 * s['T_obs_s']\n    folds = np.array_split(np.argsort(np.abs(dz).ravel(), kind='stable'), 5)\n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tomo_weak_diagnose.py",
+      "primary_producer_container_path": "/tmp/tomo_weak_diagnose.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 4437,
+        "sha256": "d4ae9b15904c325271677d5529c4005e37c330d67682ac43c4fe6a692ecb2042",
+        "content_addressed_ref": "content_addressed_blobs/d4ae9b15904c325271677d5529c4005e37c330d67682ac43c4fe6a692ecb2042.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": [
+      "ray_integral",
+      "_clock_box",
+      "invert_plume_and_clocks",
+      "check"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "df4d88132b26d9144a9b5385ee621c14156bb1b88a01fbf01b05f5068718595e",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cat > /tmp/audit_tomo_folds.py <<'PY'\nfrom pathlib import Path\nimport pickle\nimport numpy as np\nfrom scipy.special import erf\n\npath = Path('/holdout_task/tomography_solver.py')\nsource = path.read_text()\n# Expose the fitted physical coeffici",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "df4d88132b26d9144a9b5385ee621c14156bb1b88a01fbf01b05f5068718595e",
+        "expected_candidate_sha256": "df4d88132b26d9144a9b5385ee621c14156bb1b88a01fbf01b05f5068718595e",
+        "computed_candidate_sha256": "df4d88132b26d9144a9b5385ee621c14156bb1b88a01fbf01b05f5068718595e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tomography_solver.py",
+            "bytes": 4437
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_df4d8813"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": [
+      {
+        "name": "ray_integral",
+        "code": "def ray_integral(width, source, receiver, x, z, radius):\n    from scipy.special import erf\n    dz = receiver - source\n    length = np.hypot(width, dz)\n    (ux, uz) = (width / length, dz / length)\n    parallel = ux * x + uz * (z - source)\n    normal = -uz * x + ux * (z - source)\n    rr = np.sqrt(2) * radius\n    return np.sqrt(np.pi / 2) * radius * np.exp(-0.5 * (normal / radius) ** 2) * (erf((length - parallel) / rr) + erf(parallel / rr))"
+      },
+      {
+        "name": "_clock_box",
+        "code": "def _clock_box(clock):\n    \"\"\"Project millisecond biases onto the zero-sum box.\"\"\"\n    if np.max(np.abs(clock)) <= 4.0:\n        return clock - clock.mean()\n    (lo, hi) = (clock.min() - 4.0, clock.max() + 4.0)\n    for _ in range(48):\n        mid = (lo + hi) / 2\n        if np.clip(clock - mid, -4.0, 4.0).sum() > 0:\n            lo = mid\n        else:\n            hi = mid\n    return np.clip(clock - (lo + hi) / 2, -4.0, 4.0)"
+      },
+      {
+        "name": "invert_plume_and_clocks",
+        "code": "def invert_plume_and_clocks(survey: dict, truth=None) -> dict:\n    from scipy.special import erf\n    from scipy.linalg import helmert\n    from scipy.optimize import least_squares\n    from scipy.linalg import qr\n    (w, h) = (float(survey['W_m']), float(survey['H_m']))\n    radius = float(survey.get('R_plume_m', 5.5))\n    src = np.asarray(survey['z_src_m'], dtype=float)\n    rcv = np.asarray(survey['z_rcv_m'], dtype=float)\n    times = np.asarray(survey['T_obs_s'], dtype=float)\n    (i, j) = np.nonzero(np.isfinite(times))\n    zs = src[i]\n    dz = rcv[j] - zs\n    length = np.hypot(w, dz)\n    (ux, uz) = (w / length, dz / length)\n    y = 1000 * times[i, j]\n    clocks = helmert(len(rcv), full=False).T\n    design = np.column_stack((length, -dz * dz / length, clocks[j]))\n    p = design.shape[1]\n    rr = np.sqrt(2.0) * radius\n    cap = np.sqrt(np.pi / 2.0) * radius\n\n    def plume(x, z, deriv=False):\n        along = ux * x + uz * (z - zs)\n        cross = -uz * x + ux * (z - zs)\n        (a, b) = (along / rr, (length - along) / rr)\n        env = np.exp(-0.5 * (cross / radius) ** 2)\n        ray = cap * env * (erf(a) + erf(b))\n        if not deriv:\n            return ray\n        dp = env * (np.exp(-a * a) - np.exp(-b * b))\n        dn = -cross * ray / (radius * radius)\n        return (ray, dp * ux - dn * uz, dp * uz + dn * ux)\n    background = least_squares(lambda c: design @ c - y, np.linalg.lstsq(design, y, rcond=None)[0], jac=lambda c: design.copy(), loss='soft_l1', f_scale=0.45).x\n    keep0 = np.abs(y - design @ background) < 2.7\n    if keep0.sum() <= p + 3:\n        keep0 = np.ones(len(y), dtype=bool)\n    (q, _) = qr(design[keep0], mode='economic')\n    target = y[keep0] - q @ (q.T @ y[keep0])\n    step = radius / 2\n    (xx, zz) = np.meshgrid(np.linspace(0, w, max(2, int(np.ceil(w / step)) + 1)), np.linspace(0, h, max(2, int(np.ceil(h / step)) + 1)))\n    xy = np.column_stack((xx.ravel(), zz.ravel()))\n    projected = plume(xy[:, :1], xy[:, 1:])[:, keep0]\n    projected -= projected @ q @ q.T\n    energy = np.einsum('ij,ij->i', projected, projected)\n    cov = np.maximum(projected @ target, 0.0)\n    score = cov * cov / np.maximum(energy, 1e-20)\n    lower = np.r_[np.full(p, -np.inf), 0.0, 0.0, 0.0]\n    upper = np.r_[np.full(p, np.inf), np.inf, w, h]\n\n    def residual(v):\n        (c, amp, x, z) = (v[:p], *v[p:])\n        return design @ c + amp * plume(x, z) - y\n\n    def jacobian(v):\n        (amp, x, z) = v[p:]\n        (ray, dx, dzp) = plume(x, z, True)\n        return np.column_stack((design, ray, amp * dx, amp * dzp))\n\n    def fit(v, mask, loss, scale):\n        return least_squares(lambda c: residual(c)[mask], v, jac=lambda c: jacobian(c)[mask], bounds=(lower, upper), x_scale='jac', loss=loss, f_scale=scale, max_nfev=100)\n    starts = []\n    best = None\n    all_picks = np.ones(len(y), dtype=bool)\n    for k in np.argsort(score)[::-1]:\n        (x, z) = xy[k]\n        if any((np.hypot(x - a, z - b) < radius for (a, b) in starts)):\n            continue\n        starts.append((x, z))\n        amp = max(cov[k] / max(energy[k], 1e-20), 0.005)\n        c = np.linalg.lstsq(design[keep0], (y - amp * plume(x, z))[keep0], rcond=None)[0]\n        result = fit(np.r_[c, amp, x, z], all_picks, 'cauchy', 0.25)\n        if best is None or result.cost < best.cost:\n            best = result\n        if len(starts) == 4:\n            break\n    v = best.x\n    mask = np.abs(residual(v)) < 2.5\n    if mask.sum() > p + 3:\n        v = fit(v, mask, 'linear', 1.0).x\n    if truth is not None:\n        local = v.copy()\n        seeded = fit(np.r_[v[:-2], truth], mask, 'linear', 1.0)\n        e = residual(v)\n        sigma = np.sqrt(np.sum(e[mask] ** 2) / (mask.sum() - len(v)))\n        jac = jacobian(v)[mask]\n        sd = sigma * np.sqrt(np.diag(np.linalg.pinv(jac.T @ jac)))[-2:]\n        if np.linalg.norm(v[-2:] - truth) > 1.6:\n            near = e.copy()\n            near[~mask] -= np.sign(e[~mask]) * np.median(np.abs(e[~mask]))\n            jj = jacobian(v)\n            corrected = v - np.linalg.lstsq(jj, near, rcond=None)[0]\n            print('weak slice: truth, fit, truth-seeded, linear SD (m), fitted amplitude, corrected, costs:', np.round(truth, 3), np.round(local[-2:], 3), np.round(seeded.x[-2:], 3), np.round(sd, 3), round(v[-3], 4), np.round(corrected[-2:], 3), np.round([0.5 * np.sum(e[mask] ** 2), seeded.cost], 5), flush=True)\n    return {'plume_xz_m': v[-2:].tolist(), 'rcv_clock_bias_s': (_clock_box(clocks @ v[2:p]) / 1000).tolist()}"
+      },
+      {
+        "name": "check",
+        "code": "def check(s, gt):\n    got = invert_plume_and_clocks(s, gt['plume_xz_m'])\n    return (np.linalg.norm(np.asarray(got['plume_xz_m']) - gt['plume_xz_m']), 1000 * np.sqrt(np.mean((np.array(got['rcv_clock_bias_s']) - gt['rcv_clock_bias_s']) ** 2)), 0.0)"
+      }
+    ]
+  }
+}

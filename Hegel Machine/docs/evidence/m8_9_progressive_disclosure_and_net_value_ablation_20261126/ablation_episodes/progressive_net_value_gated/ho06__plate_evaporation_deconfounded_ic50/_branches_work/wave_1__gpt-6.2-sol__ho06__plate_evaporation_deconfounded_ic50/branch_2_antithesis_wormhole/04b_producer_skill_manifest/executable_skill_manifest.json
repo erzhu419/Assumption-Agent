@@ -1,0 +1,134 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_2bb50e734734",
+    "source_hash": "2bb50e734734dfce53ccc6070eefea8e91a946dae8d8e1c79e3f10abff6a8d59",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/assay_probe.py",
+        "archived_relpath": "producers/tmp__assay_probe.py",
+        "bytes": 2739,
+        "sha256": "c7d16a901a5cc786a740cfa6bf3ca6125c8d91427d452691d2fab4af121a7b28"
+      },
+      {
+        "container_path": "/tmp/audit_assay.py",
+        "archived_relpath": "producers/tmp__audit_assay.py",
+        "bytes": 2960,
+        "sha256": "9d5e25362855b8348874e2afe7076ed79636b5a6f8d5de4c76f47669e5974c91"
+      },
+      {
+        "container_path": "/tmp/audit_assay_pairs.py",
+        "archived_relpath": "producers/tmp__audit_assay_pairs.py",
+        "bytes": 2057,
+        "sha256": "76cc45e2db44e6ffedaf6e2ba08c322bfb2d5b57bc3ca9d2a447197847462c7c"
+      },
+      {
+        "container_path": "/tmp/verify_assay.py",
+        "archived_relpath": "producers/tmp__verify_assay.py",
+        "bytes": 1188,
+        "sha256": "0df861e10702d25762d60039948f740240483a8dbb2f8e3333474497bd7e2c2c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nfrom collections import Counter\nwith open('public_screen.pkl','rb') as f:\n    x=pickle.load(f)\ndef brief(v, depth=0):\n    pad='  '*depth\n    if isinstance(v,dict):\n        print(pad,'dict',len(v),list(v)[:20]);\n        if depth<3:\n            for k,y in list(v.items())[:12]:\n                print(pad,repr(k)); brief(y,depth+1)\n    elif isinstance(v,(list,tuple)):\n        print(pad,type(v).__name__,len(v));\n        if depth<4 and v: brief(v[0],depth+1)\n    elif hasattr(v,'shape'):\n        print(pad,type(v),v.shape,getattr(v,'dtype',None),getatt",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nfrom collections import Counter, defaultdict\nimport numpy as np\nwith open('public_screen.pkl','rb') as f:\n    plates=pickle.load(f)['plates']\nfor p in plates:\n    groups=defaultdict(list)\n    for w in p['wells']: groups[w['well_type']].append(w)\n    print(p['plate_id'], len(p['wells']), 'unique wells',len({(w['row'],w['col']) for w in p['wells']}))\n    for k,ws in groups.items():\n        r,c,y=([w[s] for w in ws] for s in ('row','col','fluorescence'))\n        print(k,len(ws), 'r/c', (min(r),max(r)),(min(c),max(c)), 'y quantiles',np.round(np.qu",
+      "cat > /tmp/assay_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\nwith open('/holdout_task/public_screen.pkl','rb') as f:\n    data=pickle.load(f)\nplates=data['plates']\n\ndef geom(ws):\n    r=np.array([w['row'] for w in ws]); c=np.array([w['col'] for w in ws]);\n    return np.array([r,15-r,c,23-c]).T\n\ndef design(d,t,kind):\n    r=d[:,0]/7.5-1; c=d[:,2]/11.5-1\n    e=np.exp(-d/t)\n    nearest=np.max(e,axis=1)\n    s=e.sum(axis=1)\n    cols=[np.ones(len(d)),r,c]\n    if kind=='constant': return np.ones((len(d),1))\n    if kind=='near",
+      "cat > /holdout_task/assay_ic50.py <<'PY'\n\"\"\"Control-calibrated Hill fits for a 16 by 24 viability assay.\"\"\"\nfrom collections import defaultdict\n\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom scipy.special import expit\n\n\ndef _positions(wells):\n    row = np.array([w['row'] for w in wells], dtype=float)\n    col = np.array([w['col'] for w in wells], dtype=float)\n    edge = np.minimum(np.minimum(row, 15 - row), np.minimum(col, 23 - col))\n    return np.column_stack((np.ones_like(row), row / 7.5 - 1, col / 11.5 - 1, edge))\n\n\ndef _basis(pos, decay):\n    x = pos.copy",
+      "cat > /tmp/audit_assay.py <<'PY'\nfrom collections import defaultdict\nfrom copy import deepcopy\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom verify_assay import data, module, score\n\nplates = data['plates']\ncontrols = []\nfor p in plates:\n    dm = [w for w in p['wells'] if w['well_type'] == 'DMSO']\n    kill = np.array([w['fluorescence'] for w in p['wells'] if w['well_type'] == 'POS_KILL'])\n    bg = np.median(kill)\n    y = np.array([w['fluorescence'] for w in dm]) - bg\n    xy = [(w['row'], w['col']) for w in dm]\n    controls.append((np.asarray(xy), module._posi",
+      "set -e\nsed -i 's/e\\*p\\[:, 1:3\\]/e[:, None]*p[:, 1:3]/' /tmp/audit_assay.py\nOPENBLAS_NUM_THREADS=1 python3 -I -c 'import sys; sys.path.insert(0, \"/tmp\"); import audit_assay'",
+      "cat > /tmp/audit_assay_pairs.py <<'PY'\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom verify_assay import data, module\n\ncontrols, samples = [], []\nfor plate in data['plates']:\n    groups = defaultdict(list)\n    for w in plate['wells']:\n        groups[w['well_type']].append(w)\n    kills = np.array([w['fluorescence'] for w in groups['POS_KILL']])\n    bg = np.median(kills)\n    dm = groups['DMSO']\n    y = np.array([w['fluorescence'] for w in dm]) - bg\n    scale = np.median(y)\n    noise = max(.005, 1.4826 * np.median(abs(kills-bg))/scale)\n    "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_assay.py",
+      "primary_producer_container_path": "/tmp/audit_assay.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 3778,
+        "sha256": "6e76ea39466843c126d1d6f97e6cd2c6a6f81097fa4f6a7bf4f3248ba0a107f4",
+        "content_addressed_ref": "content_addressed_blobs/6e76ea39466843c126d1d6f97e6cd2c6a6f81097fa4f6a7bf4f3248ba0a107f4.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "geom",
+      "design",
+      "reg",
+      "basis"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2bb50e734734dfce53ccc6070eefea8e91a946dae8d8e1c79e3f10abff6a8d59",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cat > /tmp/audit_assay_pairs.py <<'PY'\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom verify_assay import data, module\n\ncontrols, samples = [], []\nfor plate in data['plates']:\n    grou",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2bb50e734734dfce53ccc6070eefea8e91a946dae8d8e1c79e3f10abff6a8d59",
+        "expected_candidate_sha256": "2bb50e734734dfce53ccc6070eefea8e91a946dae8d8e1c79e3f10abff6a8d59",
+        "computed_candidate_sha256": "2bb50e734734dfce53ccc6070eefea8e91a946dae8d8e1c79e3f10abff6a8d59",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 3778
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_2bb50e73"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "geom",
+        "code": "def geom(ws):\n    r = np.array([w['row'] for w in ws])\n    c = np.array([w['col'] for w in ws])\n    return np.array([r, 15 - r, c, 23 - c]).T"
+      },
+      {
+        "name": "design",
+        "code": "def design(d, t, kind):\n    r = d[:, 0] / 7.5 - 1\n    c = d[:, 2] / 11.5 - 1\n    e = np.exp(-d / t)\n    nearest = np.max(e, axis=1)\n    s = e.sum(axis=1)\n    cols = [np.ones(len(d)), r, c]\n    if kind == 'constant':\n        return np.ones((len(d), 1))\n    if kind == 'nearest':\n        cols += [nearest]\n    if kind == 'sum':\n        cols += [s]\n    if kind == 'union':\n        cols += [s, (e[:, 0] + e[:, 1]) * (e[:, 2] + e[:, 3])]\n    if kind == 'axes':\n        cols += [e[:, 0] + e[:, 1], e[:, 2] + e[:, 3]]\n    if kind == 'mixed':\n        cols += [nearest, s - nearest]\n    return np.column_stack(cols)"
+      },
+      {
+        "name": "reg",
+        "code": "def reg(X, y):\n    from scipy.optimize import least_squares\n    a = np.linalg.lstsq(X, y, rcond=None)[0]\n    return least_squares(lambda k: X @ k - y, a, loss='soft_l1', f_scale=0.018).x"
+      },
+      {
+        "name": "basis",
+        "code": "def basis(p, scale, form):\n    if form == 'constant':\n        return p[:, :1]\n    d = p[:, 3] / scale\n    e = 1 / (1 + d * d) if form == 'rational' else np.exp(-d)\n    x = np.column_stack((p[:, :3], e))\n    return np.column_stack((x, e[:, None] * p[:, 1:3])) if form == 'interaction' else x"
+      }
+    ]
+  }
+}

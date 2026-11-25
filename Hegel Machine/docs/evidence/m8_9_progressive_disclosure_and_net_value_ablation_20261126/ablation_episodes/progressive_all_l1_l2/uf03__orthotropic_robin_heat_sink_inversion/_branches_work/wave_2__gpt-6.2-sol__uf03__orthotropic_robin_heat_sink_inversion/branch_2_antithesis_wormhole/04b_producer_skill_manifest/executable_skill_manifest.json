@@ -1,0 +1,125 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_robin_heat_sink_pde_inversion_e4545f30e32f",
+    "source_hash": "e4545f30e32fb698fc00dadbb369e3362a22095626893f006e4f1639c58b1079",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "uf03__orthotropic_robin_heat_sink_inversion",
+    "wormhole_family": "fam_unseen_elliptic_robin_inversion"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_stuck_leverage.py",
+        "archived_relpath": "producers/tmp__audit_stuck_leverage.py",
+        "bytes": 1684,
+        "sha256": "3824342dafd629c6f35ad67fe7e4e5745cfce1e9a1e8a6af7f326e63ba4bff77"
+      },
+      {
+        "container_path": "/tmp/audit_thermal.py",
+        "archived_relpath": "producers/tmp__audit_thermal.py",
+        "bytes": 2364,
+        "sha256": "add3b15b9c439831855e367a90366bbfdd5f0445793164d4b65f61b02428e9a6"
+      },
+      {
+        "container_path": "/tmp/diagnose_thermal.py",
+        "archived_relpath": "producers/tmp__diagnose_thermal.py",
+        "bytes": 2180,
+        "sha256": "deea980718a10afc9032025f4a810a8d3260523e6a817615cabbd98e9b389c23"
+      },
+      {
+        "container_path": "/tmp/stress_thermal.py",
+        "archived_relpath": "producers/tmp__stress_thermal.py",
+        "bytes": 3038,
+        "sha256": "9cc2051641fc3abdefa483f0822d0f684137071d24ae06e98b65efdcf31bebf3"
+      },
+      {
+        "container_path": "/tmp/verify_thermal.py",
+        "archived_relpath": "producers/tmp__verify_thermal.py",
+        "bytes": 905,
+        "sha256": "a3e05c0922ba8d92f7548adbe5f118b3d7608e8a7d3796a7cf5e383f0f1e048b"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle, numpy as np\nwith open('public_thermal_cases.pkl','rb') as f: data=pickle.load(f)\ndef describe(a,depth=0):\n p='  '*depth\n if isinstance(a,dict):\n  for k,v in a.items():\n   print(p+str(k)+':'); describe(v,depth+1)\n elif isinstance(a,(list,tuple)) and depth<3:\n  print(p+f'{type(a).__name__} length={len(a)}')\n  for v in a[:8]: describe(v,depth+1)\n elif isinstance(a,np.ndarray):\n  print(p+f'{a.shape} {a.dtype}, range=({a.min()},{a.max()}), first={a.ravel()[:5]}')\n else: print(p+repr(a)[:250])\ndescribe(data)\nPY",
+      "cat > /holdout_task/thermal_sink_solver.py <<'PY'\n\"\"\"Conservative finite-volume source inversion from point temperatures.\"\"\"\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.optimize import least_squares\nfrom scipy.sparse.linalg import splu\n\n\ndef _sensor_green(k, gamma, sensor):\n    n = k.shape[0]\n    ids = np.arange(n*n).reshape(n, n)\n    u = np.r_[ids[:-1, :].ravel(), ids[:, :-1].ravel()]\n    v = np.r_[ids[1:, :].ravel(), ids[:, 1:].ravel()]\n    a, b = k.ravel()[u], k.ravel()[v]\n    w = 2*a*b/(a+b)\n    edge = np.zeros_like(k)\n    edge[[0, -1], :] += gamma/n\n    edge[:, [0, -1]] += gamm",
+      "cat > /tmp/stress_thermal.py <<'PY'\nexec(open('/tmp/verify_thermal.py').read().split('for i,c in enumerate(cases):')[0])\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\ndef forward(k, gamma, sigma, xy, amp):\n    n = len(k)\n    h = 1/n\n    a = lil_matrix((n*n,n*n))\n    for i,j in np.ndindex(k.shape):\n        p = i*n+j\n        for u,v in [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]:\n            if 0 <= u < n and 0 <= v < n:\n                w = 2/(1/k[i,j]+1/k[u,v])\n                a[p,u*n+v] = -w\n                a[p,p] += w\n            else:\n                a[p,p] += gamma*h\n  ",
+      "cat > /tmp/diagnose_thermal.py <<'PY'\nexec(open('/tmp/stress_thermal.py').read().split('for c in cases:')[0])\nfrom scipy.optimize import least_squares\nseed=25\nrng=np.random.default_rng(seed)\nn=22; gamma=5; sigma=.125; xy=[.96,.48]\nx,y=(np.indices((n,n))+.5)/n\nk=np.exp(.65*np.sin(6*x+2*y)+.6*np.cos(3*x-8*y)); k=np.where(x>.52,3*k,k)\namp=18*rng.uniform(.8,1.5)*(.085/sigma)**2; offset=rng.uniform(-.08,.08)\nq,temp=forward(k,gamma,sigma,xy,amp)\nm=40; sensor=np.column_stack(np.unravel_index(rng.choice(n*n,m,replace=False),(n,n)))\nclean=temp[tuple(sensor.T)]+offset; obs=clean+rng.normal(0,.0006,m)\nba",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/thermal_sink_solver.py')\ns = p.read_text()\nold = \"    p = fit(best, loss='cauchy', f_scale=scale, gtol=1e-11)\\n    return\"\nnew = \"\"\"    p = fit(best, loss='cauchy', f_scale=scale, gtol=1e-11)\n    # Refit the clean readings without shrinking ordinary noise along weakly\n    # identified directions, such as amplitude versus distance to an edge.\n    r = evaluate(p)\n    deviation = np.abs(r - np.median(r))\n    cutoff = max(5 * 1.4826 * np.median(deviation), scale)\n    ids = np.flatnonzero(deviation <= cutoff)\n    if keep <= ids.size ",
+      "cat > /tmp/audit_thermal.py <<'PY'\nexec(open('/tmp/stress_thermal.py').read().split('for c in cases:')[0])\nworst = np.zeros(4)\nfor i, c in enumerate(cases):\n    m, gt = c['measurement'], c['gt']\n    assert set(m) == {'N', 'kappa', 'gamma_robin', 'sigma_m', 'sensor_ij', 'T_obs'}\n    k, ij, obs = m['kappa'], m['sensor_ij'], m['T_obs']\n    xy, amp = np.array(gt['source_xy']), gt['amplitude']\n    q, temp = forward(k, m['gamma_robin'], m['sigma_m'], xy, amp)\n    green = s._sensor_green(k, m['gamma_robin'], ij)\n    pred = green @ q.ravel()\n    np.testing.assert_allclose(pred, temp[tuple(ij.T)], atol",
+      "cat > /tmp/audit_stuck_leverage.py <<'PY'\nexec(open('/tmp/stress_thermal.py').read().split('for c in cases:')[0])\nworst = np.zeros(4)\nfor i, c in enumerate(cases):\n    m, gt = c['measurement'], c['gt']\n    ij, obs = m['sensor_ij'], m['T_obs']\n    sigma = m['sigma_m']\n    q, temp = forward(m['kappa'], m['gamma_robin'], sigma, gt['source_xy'], gt['amplitude'])\n    exact = temp[tuple(ij.T)] + gt['junction_offset']\n    r = obs - exact\n    dev = np.abs(r - np.median(r))\n    good = np.flatnonzero(dev <= 5 * 1.4826 * np.median(dev))\n    bad = np.setdiff1d(np.arange(obs.size), good)\n    green = s._sen"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_thermal.py",
+      "primary_producer_container_path": "/tmp/stress_thermal.py",
+      "selected_channels": [
+        "fam_unseen_elliptic_robin_inversion"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/thermal_sink_solver.py",
+        "filename": "thermal_sink_solver.py",
+        "bytes": 5368,
+        "sha256": "da9b1cbcee9356ea42cd0cfdbe6e18e15499624e4dac3a5917a0619e6c3ec574",
+        "content_addressed_ref": "content_addressed_blobs/da9b1cbcee9356ea42cd0cfdbe6e18e15499624e4dac3a5917a0619e6c3ec574.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/thermal_sink_solver.py"
+    ],
+    "exported_pure_functions": [
+      "forward"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_unseen_elliptic_robin_inversion",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e4545f30e32fb698fc00dadbb369e3362a22095626893f006e4f1639c58b1079",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/thermal_sink_solver.py')\ns = p.read_text()\nold = \"    p = fit(best, loss='cauchy', f_scale=scale, gtol=1e-11)\\n    return\"\nnew = \"\"\"    p = fit(best, loss='cauchy', f_scale=s",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e4545f30e32fb698fc00dadbb369e3362a22095626893f006e4f1639c58b1079",
+        "expected_candidate_sha256": "e4545f30e32fb698fc00dadbb369e3362a22095626893f006e4f1639c58b1079",
+        "computed_candidate_sha256": "e4545f30e32fb698fc00dadbb369e3362a22095626893f006e4f1639c58b1079",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/thermal_sink_solver.py",
+            "bytes": 5368
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_e4545f30"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "forward",
+        "code": "def forward(k, gamma, sigma, xy, amp):\n    from scipy.sparse import lil_matrix\n    from scipy.sparse.linalg import spsolve\n    n = len(k)\n    h = 1 / n\n    a = lil_matrix((n * n, n * n))\n    for (i, j) in np.ndindex(k.shape):\n        p = i * n + j\n        for (u, v) in [(i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)]:\n            if 0 <= u < n and 0 <= v < n:\n                w = 2 / (1 / k[i, j] + 1 / k[u, v])\n                a[p, u * n + v] = -w\n                a[p, p] += w\n            else:\n                a[p, p] += gamma * h\n    (x, y) = (np.indices(k.shape) + 0.5) * h\n    q = amp * np.exp(-((x - xy[0]) ** 2 + (y - xy[1]) ** 2) / (2 * sigma ** 2))\n    temp = spsolve(a.tocsr(), q.ravel() * h * h).reshape(k.shape)\n    np.testing.assert_allclose(gamma * h * (temp[0].sum() + temp[-1].sum() + temp[:, 0].sum() + temp[:, -1].sum()), q.sum() * h * h, rtol=1e-10)\n    return (q, temp)"
+      }
+    ]
+  }
+}

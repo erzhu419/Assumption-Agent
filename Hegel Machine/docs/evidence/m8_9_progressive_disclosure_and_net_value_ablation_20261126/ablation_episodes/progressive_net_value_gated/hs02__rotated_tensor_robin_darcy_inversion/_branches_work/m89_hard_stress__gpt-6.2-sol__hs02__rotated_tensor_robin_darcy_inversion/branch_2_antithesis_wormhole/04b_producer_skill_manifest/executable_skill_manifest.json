@@ -1,0 +1,151 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs02_rotated_tensor_robin_darcy_1c7f0f15fc8c",
+    "source_hash": "1c7f0f15fc8c63fac49de9d851f2baa051d06c2fb473bd9f46c26eae2e364b57",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs02__rotated_tensor_robin_darcy_inversion",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_darcy_margin.py",
+        "archived_relpath": "producers/tmp__audit_darcy_margin.py",
+        "bytes": 2810,
+        "sha256": "808b8572757484b78f9c7d3516ddd78dc02e70b2fcce7e8c12cd8c69d2e93c61"
+      },
+      {
+        "container_path": "/tmp/audit_tensor_public.py",
+        "archived_relpath": "producers/tmp__audit_tensor_public.py",
+        "bytes": 3322,
+        "sha256": "11ee5b4d1d0cfd6d2a2c4a6cb8a4ed0fdde2d21b34f32380b4fc9e7cacd05302"
+      },
+      {
+        "container_path": "/tmp/check_tensor_darcy.py",
+        "archived_relpath": "producers/tmp__check_tensor_darcy.py",
+        "bytes": 4252,
+        "sha256": "4c86a9b8cc3321069390e65b591fccf5cc68bbed31c759ed0a737af9e84393e1"
+      },
+      {
+        "container_path": "/tmp/check_tensor_darcy_gap.py",
+        "archived_relpath": "producers/tmp__check_tensor_darcy_gap.py",
+        "bytes": 4241,
+        "sha256": "2deb82d88328d5105a5da1841df723e63865f9fd62a5cb48336e701ffdf5d47a"
+      },
+      {
+        "container_path": "/tmp/diagnose_tensor_fit.py",
+        "archived_relpath": "producers/tmp__diagnose_tensor_fit.py",
+        "bytes": 1933,
+        "sha256": "a1acf40d92aa406d98ee7d2466c4a9e923ca1a3601af24b3d2ac06ed184d4c42"
+      },
+      {
+        "container_path": "/tmp/tensor_darcy_gap.py",
+        "archived_relpath": "producers/tmp__tensor_darcy_gap.py",
+        "bytes": 4787,
+        "sha256": "86e38566bb96473c911761720201971013e182b2ba9b6f0257d54bc139be5191"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_tensor_cases.pkl','rb') as f:\n    data = pickle.load(f)\ndef describe(x, label='root', depth=0):\n    pad = '  '*depth\n    if isinstance(x, dict):\n        print(pad, label, 'dict', list(x))\n        if depth < 4:\n            for k,v in list(x.items())[:20]: describe(v, str(k), depth+1)\n    elif isinstance(x,(list,tuple)):\n        print(pad,label,type(x).__name__,len(x))\n        if depth < 3:\n            for i,v in enumerate(x[:8]): describe(v,str(i),depth+1)\n    elif isinstance(x,np.ndarray):\n        print(pad",
+      "cat > /holdout_task/tensor_darcy_robin.py <<'PY'\n\"\"\"Cell-centered tensor Darcy forward model and robust source inversion.\"\"\"\n\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\n\ndef _assemble(problem):\n    \"\"\"Return the integrated cell balance matrix and ambient load.\"\"\"\n    kxx, kxy, kyy, sigma = (np.asarray(problem[key], dtype=float)\n                            for key in ('k_xx', 'k_xy', 'k_yy', 'sigma'))\n    nx, ny = kxx.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    n = nx * ny\n    cells = np.arange(n).reshape(nx, ny)\n\n    def differences(lo, ",
+      "cat > /tmp/check_tensor_darcy.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('tensor_darcy_robin', '/holdout_task/tensor_darcy_robin.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_tensor_cases.pkl', 'rb') as stream:\n    cases = pickle.load(stream)['cases']\nrng = np.random.default_rng(445)\n\ndef errors(p, weights, offset, field):\n    result = mod.infer_tensor_darcy_sources(p)\n    assert set(result) == {'source_weights', 'sensor_offset', 'predicted_field'}\n    assert res",
+      "cat > /tmp/diagnose_tensor_fit.py <<'PY'\nimport numpy as np\nfrom collections import defaultdict\n\npath = '/tmp/check_tensor_darcy.py'\ntext = open(path).read()\nmarker = 'worst_balance = 0.'\nhead, tail = text.split(marker, 1)\nexec(head)\noriginal_errors = errors\ncomparisons = defaultdict(list)\n\ndef errors(p, weights, offset, field):\n    baseline = original_errors(p, weights, offset, field)\n    ij = tuple(p['sensor_ij'].T)\n    y = p['y_obs']\n    true_residual = y - field[ij] - offset\n    clean = abs(true_residual) < .75\n    b = mod.infer_tensor_darcy_sources(p)\n    detected = abs(y - b['predicted_f",
+      "python3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/holdout_task/tensor_darcy_robin.py').read_text()\nneedle = '        center = np.median(residual)\\n        scale = max(1.4826 * np.median(np.abs(residual - center)), 1e-12)\\n'\nassert src.count(needle) == 1\nsrc = src.replace(needle, needle + '''        # With a clear gap, use the full quadratic information in the inliers.\n        magnitude = np.abs(residual - center)\n        ordered = np.sort(magnitude)\n        first = max(design.shape[1] + 1, (3 * len(target) + 3) // 4)\n        for split in range(first, len(target)):\n            if ordered[s",
+      "cat > /tmp/audit_tensor_public.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('tensor_darcy_robin', '/holdout_task/tensor_darcy_robin.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_tensor_cases.pkl', 'rb') as stream:\n    cases = pickle.load(stream)['cases']\n\nfor index, case in enumerate(cases):\n    p, g = case['problem'], case['gt']\n    ij = p['sensor_ij']\n    shape = p['k_xx'].shape\n    flat = np.ravel_multi_index(ij.T, shape)\n    response = mod._forward(p)\n    resul",
+      "cat > /tmp/audit_darcy_margin.py <<'PY'\nfrom pathlib import Path\nimport numpy as np\n\n# Reuse the independent flux balance and isolated import from the first stress test.\nexec(Path('/tmp/check_tensor_darcy.py').read_text().split('worst_balance = 0.', 1)[0])\nbase = cases[0]['problem']\nfor number, case in enumerate(cases):\n    p, g = case['problem'], case['gt']\n    ij = p['sensor_ij']\n    clean = abs(p['y_obs'] - g['u_true'][tuple(ij.T)] - g['sensor_offset']) < .75\n    flat = np.ravel_multi_index(ij.T, g['u_true'].shape)\n    a = mod._forward(p)[flat, 1:]\n    centered = a[clean] - a[clean].mean(ax"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tensor_darcy_gap.py",
+      "primary_producer_container_path": "/tmp/tensor_darcy_gap.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_robust_assimilation"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tensor_darcy_robin.py",
+        "filename": "tensor_darcy_robin.py",
+        "bytes": 4339,
+        "sha256": "02ef2f59fa4a4fa61c9337fb04dba6773553b8bd820412a6c5e2021e7136c07a",
+        "content_addressed_ref": "content_addressed_blobs/02ef2f59fa4a4fa61c9337fb04dba6773553b8bd820412a6c5e2021e7136c07a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tensor_darcy_robin.py"
+    ],
+    "exported_pure_functions": [
+      "direct_balance",
+      "_assemble",
+      "_forward",
+      "_robust_fit",
+      "infer_tensor_darcy_sources"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "1c7f0f15fc8c63fac49de9d851f2baa051d06c2fb473bd9f46c26eae2e364b57",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cat > /tmp/audit_tensor_public.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('tensor_darcy_robin', '/holdout_task/tensor_darcy_robin.py')\nmod = importlib.util.module_from_spe",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1c7f0f15fc8c63fac49de9d851f2baa051d06c2fb473bd9f46c26eae2e364b57",
+        "expected_candidate_sha256": "1c7f0f15fc8c63fac49de9d851f2baa051d06c2fb473bd9f46c26eae2e364b57",
+        "computed_candidate_sha256": "1c7f0f15fc8c63fac49de9d851f2baa051d06c2fb473bd9f46c26eae2e364b57",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tensor_darcy_robin.py",
+            "bytes": 4339
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1c7f0f15"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "direct_balance",
+        "code": "def direct_balance(p, u):\n    (kxx, kxy, kyy, sigma) = [p[k] for k in ('k_xx', 'k_xy', 'k_yy', 'sigma')]\n    (nx, ny) = u.shape\n    (hx, hy) = (p['Lx'] / nx, p['Ly'] / ny)\n    (gamma, ambient) = (p['gamma_robin'], p['u_ambient'])\n    w = np.pad(u, 1, mode='edge')\n    cx = w[2:, 1:-1] - w[:-2, 1:-1]\n    cy = w[1:-1, 2:] - w[1:-1, :-2]\n    out = hx * hy * sigma * u\n    fx = hy / hx * (2 * kxx[:-1] * kxx[1:] / (kxx[:-1] + kxx[1:])) * (u[:-1] - u[1:]) - (kxy[:-1] + kxy[1:]) * (cy[:-1] + cy[1:]) / 8\n    fy = hx / hy * (2 * kyy[:, :-1] * kyy[:, 1:] / (kyy[:, :-1] + kyy[:, 1:])) * (u[:, :-1] - u[:, 1:]) - (kxy[:, :-1] + kxy[:, 1:]) * (cx[:, :-1] + cx[:, 1:]) / 8\n    out[:-1] += fx\n    out[1:] -= fx\n    out[:, :-1] += fy\n    out[:, 1:] -= fy\n    for i in (0, -1):\n        out[i] += hy * gamma * kxx[i] / (kxx[i] + gamma * hx / 2) * (u[i] - ambient)\n    for j in (0, -1):\n        out[:, j] += hx * gamma * kyy[:, j] / (kyy[:, j] + gamma * hy / 2) * (u[:, j] - ambient)\n    return out"
+      },
+      {
+        "name": "_assemble",
+        "code": "def _assemble(problem):\n    \"\"\"Return the integrated cell balance matrix and ambient load.\"\"\"\n    from scipy import sparse\n    (kxx, kxy, kyy, sigma) = (np.asarray(problem[key], dtype=float) for key in ('k_xx', 'k_xy', 'k_yy', 'sigma'))\n    (nx, ny) = kxx.shape\n    (hx, hy) = (problem['Lx'] / nx, problem['Ly'] / ny)\n    n = nx * ny\n    cells = np.arange(n).reshape(nx, ny)\n\n    def differences(lo, hi):\n        (lo, hi) = (lo.ravel(), hi.ravel())\n        face = np.arange(lo.size)\n        return sparse.csr_matrix((np.tile([1.0, -1.0], (lo.size, 1)).ravel(), (np.repeat(face, 2), np.column_stack((lo, hi)).ravel())), shape=(lo.size, n))\n    (ix, iy) = (np.arange(nx), np.arange(ny))\n    gx = differences(cells[np.maximum(ix - 1, 0), :], cells[np.minimum(ix + 1, nx - 1), :])\n    gy = differences(cells[:, np.maximum(iy - 1, 0)], cells[:, np.minimum(iy + 1, ny - 1)])\n    (xlo, xhi) = (cells[:-1, :], cells[1:, :])\n    (ylo, yhi) = (cells[:, :-1], cells[:, 1:])\n    (dx, dy) = (differences(xlo, xhi), differences(ylo, yhi))\n    (kx0, kx1) = (kxx[:-1, :], kxx[1:, :])\n    (ky0, ky1) = (kyy[:, :-1], kyy[:, 1:])\n    normal_x = hy / hx * (2 * kx0 * kx1 / (kx0 + kx1))\n    normal_y = hx / hy * (2 * ky0 * ky1 / (ky0 + ky1))\n    cross_x = (kxy[:-1, :] + kxy[1:, :]) / 8\n    cross_y = (kxy[:, :-1] + kxy[:, 1:]) / 8\n    fx = dx.multiply(normal_x.reshape(-1, 1)) + (gy[xlo.ravel()] + gy[xhi.ravel()]).multiply(cross_x.reshape(-1, 1))\n    fy = dy.multiply(normal_y.reshape(-1, 1)) + (gx[ylo.ravel()] + gx[yhi.ravel()]).multiply(cross_y.reshape(-1, 1))\n    gamma = problem['gamma_robin']\n    robin = np.zeros_like(kxx)\n    for i in (0, -1):\n        robin[i, :] += hy * gamma * kxx[i, :] / (gamma * hx / 2 + kxx[i, :])\n    for j in (0, -1):\n        robin[:, j] += hx * gamma * kyy[:, j] / (gamma * hy / 2 + kyy[:, j])\n    area = hx * hy\n    matrix = dx.T @ fx + dy.T @ fy + sparse.diags((robin + area * sigma).ravel())\n    return (matrix.tocsc(), (robin * problem['u_ambient']).ravel(), area)"
+      },
+      {
+        "name": "_forward",
+        "code": "def _forward(problem):\n    from scipy.sparse.linalg import splu\n    (matrix, ambient, area) = _assemble(problem)\n    basis = np.asarray(problem['basis'], dtype=float)\n    loads = np.column_stack((ambient, area * basis.reshape(len(basis), matrix.shape[0]).T))\n    return splu(matrix).solve(loads)"
+      },
+      {
+        "name": "_robust_fit",
+        "code": "def _robust_fit(design, target, alpha):\n    \"\"\"Estimate sources and a free intercept, rejecting gross sensor spikes.\"\"\"\n    penalty = np.diag(np.r_[np.full(design.shape[1] - 1, np.sqrt(alpha)), 0.0])\n\n    def fit(weights):\n        root = np.sqrt(weights)\n        return np.linalg.lstsq(np.vstack((root[:, None] * design, penalty)), np.r_[root * target, np.zeros(len(penalty))], rcond=None)[0]\n    centered = target - np.median(target)\n    scale = max(1.4826 * np.median(np.abs(centered)), 1e-12)\n    weights = 1 / (1 + (centered / (4 * scale)) ** 2)\n    for _ in range(20):\n        coef = fit(weights)\n        residual = target - design @ coef\n        center = np.median(residual)\n        scale = max(1.4826 * np.median(np.abs(residual - center)), 1e-12)\n        magnitude = np.abs(residual - center)\n        ordered = np.sort(magnitude)\n        first = max(design.shape[1] + 1, (3 * len(target) + 3) // 4)\n        for split in range(first, len(target)):\n            if ordered[split] > max(0.1, 12 * ordered[split - 1], 12 * scale):\n                clean = magnitude <= ordered[split - 1]\n                return fit(clean)\n        updated = 1 / (1 + ((residual - center) / (5 * scale)) ** 4)\n        if np.max(np.abs(updated - weights)) < 1e-06:\n            break\n        weights = updated\n    return fit(updated)"
+      },
+      {
+        "name": "infer_tensor_darcy_sources",
+        "code": "def infer_tensor_darcy_sources(problem: dict) -> dict:\n    \"\"\"Infer source weights, a common sensor offset, and the pressure field.\"\"\"\n    shape = np.shape(problem['k_xx'])\n    responses = _forward(problem)\n    sensors = np.ravel_multi_index(np.asarray(problem['sensor_ij']).T, shape)\n    observed = responses[sensors]\n    design = np.column_stack((observed[:, 1:], np.ones(len(sensors))))\n    target = np.asarray(problem['y_obs'], dtype=float) - observed[:, 0]\n    coef = _robust_fit(design, target, problem['tikhonov_alpha'])\n    field = responses[:, 0] + responses[:, 1:] @ coef[:-1]\n    return {'source_weights': coef[:-1], 'sensor_offset': float(coef[-1]), 'predicted_field': field.reshape(shape)}"
+      }
+    ]
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs01_correlated_box_l0_cert_c77c34de8f7f",
+    "source_hash": "c77c34de8f7f00bdf8f939da369ce214232b4afcb7961401efb0550de2dbf1b9",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "hs01__correlated_box_l0_subcube_certificate",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/box_l0_baseline.py",
+        "archived_relpath": "producers/tmp__box_l0_baseline.py",
+        "bytes": 5432,
+        "sha256": "1f0ce94ff6261498bbb00c4da590cdc4a7fea63252841598b94aaf5c9a4f375b"
+      },
+      {
+        "container_path": "/tmp/test_box_screen.py",
+        "archived_relpath": "producers/tmp__test_box_screen.py",
+        "bytes": 1374,
+        "sha256": "668eadf33339399ab976e0465d346a68fab1dd64f444c21e83359278ace30fc9"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task /pretrain_task; python - <<'PY'\nimport pickle,numpy as np,scipy\np=pickle.load(open('/holdout_task/public_box_l0_cases.pkl','rb')); print(type(p),scipy.__version__)\nitems=p.items() if isinstance(p,dict) else enumerate(p)\nfor k,v in items:\n print(k,type(v));\n if isinstance(v,dict):\n  print({a:(b.shape if hasattr(b,'shape') else b if np.isscalar(b) else type(b)) for a,b in v.items()})\n  if 'X' in v: print('Gram spectrum',np.linalg.eigvalsh(v['X'].T@v['X']))\nPY",
+      "command -v python3; ls -la /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np,scipy\np=pickle.load(open('/holdout_task/public_box_l0_cases.pkl','rb')); print(type(p),scipy.__version__)\nfor k,v in (p.items() if isinstance(p,dict) else enumerate(p)):\n print(k,type(v))\n if isinstance(v,dict):\n  print({a:(b.shape if hasattr(b,'shape') else b if np.isscalar(b) else type(b)) for a,b in v.items()})\n  if 'X' in v: print('Gram spectrum',np.linalg.eigvalsh(v['X'].T@v['X']))\nPY",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfor i,v in enumerate(pickle.load(open('/holdout_task/public_box_l0_cases.pkl','rb'))['cases']):\n print(i,{a:(b.shape if hasattr(b,'shape') else b if np.isscalar(b) else type(b)) for a,b in v.items()})\n if 'X' in v:\n  print(np.linalg.eigvalsh(v['X'].T@v['X']))\n  print('linear',v['X'].T@v['y'])\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np,time,itertools\nfrom scipy.optimize import lsq_linear\nprint('NumPy',np.__version__)\nfor d in pickle.load(open('public_box_l0_cases.pkl','rb'))['cases']:\n X,y,lam,r,M=[d[k] for k in ('X','y','l0_penalty','ridge','box')]; p=X.shape[1]; G=X.T@X+r*np.eye(p); c=X.T@y; c0=y@y/2; t=time.perf_counter(); best=c0; stats=[]\n for k in range(1,p+1):\n  I=np.array(list(itertools.combinations(range(p),k))); w=np.linalg.solve(G[I[:,:,None],I[:,None,:]],c[I][...,None])[...,0]; lb=c0+lam*k-.5*np.einsum('ij,ij->i',w,c[I]); boxok=",
+      "cat > /holdout_task/certified_box_l0.py <<'PY'\n\"\"\"Box-constrained L0 optimization with a support-enumeration certificate.\"\"\"\n\nfrom itertools import combinations\n\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\n\n_THRESHOLD = 1e-10\n\n\ndef solve_certified_box_l0(problem: dict) -> dict:\n    \"\"\"Return a feasible incumbent and an exhaustive, single-subcube certificate.\n\n    For each support mask we bound the associated box QP by weak duality.\n    The minimum of those bounds certifies the root cube; the leaf limit\n    constrains the reported partition, not the number of QPs considered.\n    \"",
+      "cd /holdout_task && python3 - <<'PY'\nfrom itertools import combinations\nfrom time import perf_counter\nimport numpy as np\nfrom scipy.optimize import lsq_linear\nfrom certified_box_l0 import solve_certified_box_l0\nrng=np.random.default_rng(94)\nfor p,ridge,M in [(7,0.,.24),(8,.07,.75),(8,0.,.3),(14,0.,.18),(15,.025,.25),(15,0.,.35),(16,.04,.5)]:\n n=34; latent=rng.normal(size=(n,4)); X=latent@rng.normal(size=(4,p))+.16*rng.normal(size=(n,p)); X[:,1]=X[:,0]; X[:,3]=-2*X[:,2]; y=X[:,::2]@rng.normal(size=(p+1)//2)+rng.normal(size=n)*.18; L=.18\n d=dict(X=X,y=y,ridge=ridge,l0_penalty=L,box=M,gap_tol=1e-",
+      "cd /holdout_task && sed -i '/        seeds = np.zeros((1 << p, p))/d; /            if p:/{N;/                seeds\\[ids\\] = w/d;P;D;}' certified_box_l0.py && python3 -B - <<'PY'\nimport pickle\nimport numpy as np\nfrom certified_box_l0 import solve_certified_box_l0\nfor case in pickle.load(open('public_box_l0_cases.pkl','rb'))['cases']:\n r=solve_certified_box_l0(case); assert 0<=r['objective']-r['certified_lower_bound']<=case['gap_tol']\n# Analytic optima on either side of the coefficient-counting threshold.\nfor box,penalty,expected in [(0.7e-10,1.,0.5*(1-0.7)**2),(2e-10,1.,0.),(2e-10,0.01,0.01)]:\n",
+      "cd /holdout_task && cp certified_box_l0.py /tmp/box_l0_baseline.py && python3 - <<'PY'\nfrom pathlib import Path\nf = Path('certified_box_l0.py')\ns = f.read_text()\ns = s.replace('        a = np.einsum(\\'bp,np->bn\\', w, X) - y\\n        g =', '        return dual_at(np.einsum(\\'bp,np->bn\\', w, X) - y, widths, cost)\\n\\n    def dual_at(a, widths, cost):\\n        g =')\ns = s.replace('        aa = 0.5 * np.einsum(\\'bn,bn->b\\', a, a)', '        aa = 0.5 * np.einsum(\\'bn,bn->b\\', a, a)')\ns = s.replace('        dual -= eps * (8 * max(n, p) + 32) * mag\\n        primal = (aa + 0.5 * ridge * np.einsum(\\'bp,"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__box_l0_baseline.py",
+      "primary_producer_container_path": "/tmp/box_l0_baseline.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/certified_box_l0.py",
+        "filename": "certified_box_l0.py",
+        "bytes": 6592,
+        "sha256": "72a2b1c19016ba622e82b7adffa20fb867241785c3efe3a471683ad6061b9e33",
+        "content_addressed_ref": "content_addressed_blobs/72a2b1c19016ba622e82b7adffa20fb867241785c3efe3a471683ad6061b9e33.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/certified_box_l0.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c77c34de8f7f00bdf8f939da369ce214232b4afcb7961401efb0550de2dbf1b9",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cd /holdout_task && cp certified_box_l0.py /tmp/box_l0_baseline.py && python3 - <<'PY'\nfrom pathlib import Path\nf = Path('certified_box_l0.py')\ns = f.read_text()\ns = s.replace('        a = np.einsum(\\'bp,np->bn\\', w, X) - y\\n        g =', '",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

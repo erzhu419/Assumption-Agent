@@ -1,0 +1,98 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_855e6436f06c",
+    "source_hash": "855e6436f06cb752b7f1abdc62ecf6ea15afb3cc0b1c9a702413e24f31d0e2f4",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_tomography.py",
+        "archived_relpath": "producers/tmp__audit_tomography.py",
+        "bytes": 2814,
+        "sha256": "f8cd25325d44b05e38e2315e312ce8e8c59b2fff9b25090ff34bd6cda55151d7"
+      },
+      {
+        "container_path": "/tmp/validate_tomography.py",
+        "archived_relpath": "producers/tmp__validate_tomography.py",
+        "bytes": 3950,
+        "sha256": "2a3c3e3e723c1ca04d508da5c28a112ad7371643cc42edec6ffeb7f33b25c9ef"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_surveys.pkl','rb') as f: data=pickle.load(f)\ndef inspect(x, depth=0):\n    p='  '*depth\n    if isinstance(x,dict):\n        for k,v in x.items():\n            print(p+str(k)); inspect(v,depth+1)\n    elif isinstance(x,(tuple,list)) and len(x) and isinstance(x[0],(tuple,list,dict)):\n        print(p+str(type(x)),len(x))\n        for v in x: inspect(v, depth+1)\n    elif isinstance(x,(tuple,list,np.ndarray)):\n        a=np.asarray(x);print(p+str(a.shape),a.dtype,repr(a.ravel()[:12]))\n        if a.size and a.dtype.k",
+      "cd /holdout_task && cat > tomography_solver.py <<'PY'\n\"\"\"Robust straight-ray inversion for a Gaussian slowness plume.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\n\n\ndef invert_plume_and_clocks(survey: dict) -> dict:\n    \"\"\"Estimate the plume center and zero-sum receiver clocks from pick times.\"\"\"\n    width, height = float(survey['W_m']), float(survey['H_m'])\n    radius = float(survey.get('R_plume_m', 5.5))\n    source = np.asarray(survey['z_src_m'], dtype=float)\n    receiver = np.asarray(survey['z_rcv_m'], dtype=float)\n    times = np.asarray(surve",
+      "cat > /tmp/validate_tomography.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom numpy.polynomial.legendre import leggauss\nfrom scipy.optimize import least_squares\nfrom pathlib import Path\n\npath = Path('/holdout_task/tomography_solver.py')\nspec = importlib.util.spec_from_file_location('tomography_solver', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nrows = pickle.loads(path.with_name('public_surveys.pkl').read_bytes())\nq, w = leggauss(64)\nu, w = (q + 1) / 2, w / 2\n\ndef terms(s, center):\n    z0 = np.asarray(s['z_src_m'])[:, None]",
+      "cat > /tmp/audit_tomography.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom numpy.polynomial.legendre import leggauss\n\npath = '/holdout_task/tomography_solver.py'\nspec = importlib.util.spec_from_file_location('tomography_solver', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nq, w = leggauss(48)\nu, w = (q + 1)/2, w/2\nwith open('/holdout_task/public_surveys.pkl','rb') as f:\n    rows = pickle.load(f)\nworst = np.zeros(3)\nfor k, row in enumerate(rows):\n    s, truth = row['survey'], row['gt']\n",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom numpy.polynomial.legendre import leggauss\n\nspec = importlib.util.spec_from_file_location('tomography_solver', '/holdout_task/tomography_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nq, w = leggauss(48)\nu, w = (q + 1) / 2, w / 2\nwith open('public_surveys.pkl', 'rb') as f:\n    rows = pickle.load(f)\nworst = np.zeros(4)\nfor k, row in enumerate(rows):\n    s, truth = row['survey'], row['gt']\n    W, y = s["
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__validate_tomography.py",
+      "primary_producer_container_path": "/tmp/validate_tomography.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 5006,
+        "sha256": "32d646a05827d37bf0623fb8b5530fce3242c75a9ca868e19c321c68b1b537fd",
+        "content_addressed_ref": "content_addressed_blobs/32d646a05827d37bf0623fb8b5530fce3242c75a9ca868e19c321c68b1b537fd.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "855e6436f06cb752b7f1abdc62ecf6ea15afb3cc0b1c9a702413e24f31d0e2f4",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom numpy.polynomial.legendre import leggauss\n\nspec = importlib.util.spec_from_file_locatio",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "855e6436f06cb752b7f1abdc62ecf6ea15afb3cc0b1c9a702413e24f31d0e2f4",
+        "expected_candidate_sha256": "855e6436f06cb752b7f1abdc62ecf6ea15afb3cc0b1c9a702413e24f31d0e2f4",
+        "computed_candidate_sha256": "855e6436f06cb752b7f1abdc62ecf6ea15afb3cc0b1c9a702413e24f31d0e2f4",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tomography_solver.py",
+            "bytes": 5006
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_855e6436"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

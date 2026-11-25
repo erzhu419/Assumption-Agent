@@ -1,0 +1,77 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hs03_hereditary_memory_deconv_a9bcf455c242",
+    "source_hash": "a9bcf455c242032c12da2be057f23f14a1054f918f88444cce7089d0e7aebbba",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hs03__irregular_dt_hereditary_memory_deconvolution",
+    "wormhole_family": "fam_temporal_memory_and_stage_deconfounding"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_hereditary_cases.pkl','rb') as f:\n    obj=pickle.load(f)\ndef describe(x, depth=0):\n    if isinstance(x,dict):\n        print('  '*depth, 'keys:', list(x))\n        for k,v in x.items():\n            print('  '*(depth+1), k, end=': ')\n            describe(v,depth+1)\n    elif isinstance(x,(list,tuple)) and len(x) and isinstance(x[0],(dict,list,tuple)):\n        print(type(x).__name__,len(x))\n        for item in x:\n            describe(item,depth+1)\n    elif hasattr(x,'shape') or isinstance(x,(list,tuple)):\n      ",
+      "cat > /holdout_task/hereditary_deconv.py <<'PY'\n\"\"\"Calibrate a two-mode Prony material, then invert its blind response.\"\"\"\n\nimport numpy as np\n\n\ndef _window(run, taus):\n    t = np.asarray(run['timestamps'], dtype=float)\n    past = np.asarray(run['past_driver_history'], dtype=float)\n    tp = np.asarray(run['past_timestamps'], dtype=float)\n    m = np.full(2, past[0], dtype=float)\n    for dt, u in zip(np.diff(tp), past[1:]):\n        m += -np.expm1(-dt / taus) * (u - m)\n    dt = np.diff(t, prepend=tp[-1])\n    z = -dt[:, None] / taus\n    return t - t[0], dt, np.exp(z), -np.expm1(z), m\n\n\ndef _memory",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.optimize import least_squares\npath='/holdout_task/'\nsolve=runpy.run_path(path+'hereditary_deconv.py')['deconvolve_hereditary_driver']\ncases=pickle.load(open(path+'public_hereditary_cases.pkl','rb'))['cases']\n\ndef forward(run, taus, E, u):\n    times=np.r_[run['past_timestamps'],run['timestamps']]\n    values=np.r_[run['past_driver_history'],u]\n    start=len(run['past_timestamps'])\n    state=np.repeat(values[0], 2)\n    result=[]\n    for k in range(1,len(times)):\n        decay=np.exp(-(times[k]-times[k-1]",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\np='/holdout_task/'\nmod=runpy.run_path(p+'hereditary_deconv.py')\nsolve=mod['deconvolve_hereditary_driver']\nworst=np.zeros(6)\nfor j, case in enumerate(pickle.load(open(p+'public_hereditary_cases.pkl','rb'))['cases']):\n    problem, gt=case['problem'],case['gt']\n    taus=np.asarray(problem['taus']); cal=problem['calibration_run']; blind=problem['blind_run']\n    t, _, a, b, m=mod['_window'](cal,taus)\n    u=np.asarray(cal['driver_u']); y=np.asarray(cal['y_obs']); n=len(y)\n    def design(m):\n        return np.column_st",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, pickle, runpy\nimport numpy as np\nmod = runpy.run_path('hereditary_deconv.py')\nsolve = mod['deconvolve_hereditary_driver']\nworst = np.zeros(5)\nfor j, case in enumerate(pickle.load(open('public_hereditary_cases.pkl','rb'))['cases']):\n    p = case['problem']; gt = np.asarray(case['gt']['moduli'])\n    taus = np.asarray(p['taus']); cal = p['calibration_run']\n    t, dt, a, b, m = mod['_window'](cal, taus)\n    u = np.asarray(cal['driver_u']); y = np.asarray(cal['y_obs'])\n    def design(a,b):\n        return np.column_stack((u,"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/hereditary_deconv.py",
+        "filename": "hereditary_deconv.py",
+        "bytes": 4215,
+        "sha256": "a25fbc60e3568ed05f1f4fed8547a665d800ea8a4f3559d2c6848946e13ad9c1",
+        "content_addressed_ref": "content_addressed_blobs/a25fbc60e3568ed05f1f4fed8547a665d800ea8a4f3559d2c6848946e13ad9c1.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/hereditary_deconv.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_temporal_memory_and_stage_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a9bcf455c242032c12da2be057f23f14a1054f918f88444cce7089d0e7aebbba",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, pickle, runpy\nimport numpy as np\nmod = runpy.run_path('hereditary_deconv.py')\nsolve = mod['deconvolve_hereditary_driver']\nworst = np.zeros(5)\nfor j, case in enumera",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a9bcf455c242032c12da2be057f23f14a1054f918f88444cce7089d0e7aebbba",
+        "expected_candidate_sha256": "a9bcf455c242032c12da2be057f23f14a1054f918f88444cce7089d0e7aebbba",
+        "computed_candidate_sha256": "a9bcf455c242032c12da2be057f23f14a1054f918f88444cce7089d0e7aebbba",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/hereditary_deconv.py",
+            "bytes": 4215
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_a9bcf455"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}
