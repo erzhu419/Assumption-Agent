@@ -1337,6 +1337,7 @@ def consolidate_autogenous_episode_into_forest(
     ut_verified = bool(ut_rec.get("passed")) and str(ut_rec.get("mode") or "") != "static_compile_only_unverified"
     mod_entry = {
         "filename": compilation["filename"],
+        "granularity_tier": str(compilation.get("granularity_tier") or "L2_domain_operator"),
         "origin": compilation["compilation_mode"],
         "unit_test_verified": ut_verified,
         "source_qualification_status": str(compilation.get("source_qualification_status") or "public_episode"),
@@ -1850,6 +1851,316 @@ def consolidate_wave1_via_aufhebung_compiler(
         "total_forest_nodes_after_wave1": len(forest.nodes),
         "total_horizontal_wormholes_after_wave1": len(forest.horizontal_wormhole_edges),
         "events": events,
+    }
+
+
+COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "primitive_module_stem",
+        "exported_api_signatures",
+        "compositional_rationale",
+        "canonical_python_code",
+        "synthetic_unit_test_code",
+    ],
+    "properties": {
+        "primitive_module_stem": {
+            "type": "string",
+            "description": "Domain-general snake_case module name starting with `autogenous_prim_` (e.g., `autogenous_prim_nuisance_subspace_projection`).",
+        },
+        "exported_api_signatures": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Exact Python call signatures with type hints for the 2-3 exported schema-free numerical primitives.",
+        },
+        "compositional_rationale": {
+            "type": "string",
+            "description": "Concise explanation of how monolithic episode-specific assumptions were factored out into general array-level primitives.",
+        },
+        "canonical_python_code": {
+            "type": "string",
+            "description": (
+                "Pure `math`, `numpy`, `scipy` Python module (`ZERO sklearn`, `ZERO file I/O`, `ZERO task dict keys`, "
+                "`ZERO fixed column-count checks`) implementing 2-3 compact (15-45 lines each), documented, schema-free "
+                "numerical primitives over standard NumPy arrays."
+            ),
+        },
+        "synthetic_unit_test_code": {
+            "type": "string",
+            "description": (
+                "Standalone Python self-test (`def run_self_test(): ...; run_self_test()`) calling ALL exported primitives "
+                "on synthetic NumPy arrays across multiple dimensions/shapes and asserting numerical accuracy & finiteness."
+            ),
+        },
+    },
+}
+
+
+def sublate_autogenous_forest_into_compositional_primitives(
+    *,
+    forest: PhilosophicalForest,
+    archive: dict[str, dict[str, Any]],
+    codex_client: Any,
+    run_id: str = "m8_7_compositional_primitives",
+    require_pretraining_only: bool = True,
+    allow_horizontal_wormholes: bool = True,
+) -> dict[str, Any]:
+    """`M8.7` Two-Tier Compositional Primitive Sublation (`pt01..pt06 -> L1_compositional_primitive`):
+
+    Refactors coarse episode-level `L2` autogenous Python solvers in `archive` into compact, schema-free `L1`
+    pure `numpy`/`scipy` numerical primitives (`autogenous_prim_*.py`), unit-tested inside air-gapped
+    `hegel_clean_scipy_sandbox:v1` (`network_mode='none'`).
+
+    Strict Zero-Leakage Guarantee:
+    When `require_pretraining_only=True`, mechanically rejects any forest archive containing non-`autogenous_only`
+    nodes or any `ho*` / `tb__*` benchmark episode provenance (`0` Holdout-12 or Frontier-20 exposure!).
+    """
+    if require_pretraining_only:
+        for nid, rec in iter_live_archive_nodes(archive):
+            if rec.get("layer_role") == "coarse":
+                continue
+            if not bool(rec.get("autogenous_only")):
+                raise ValueError(f"Node `{nid}` violates `autogenous_only=True` pretraining purity!")
+            prov_tags = [str(x) for x in (rec.get("supported_by") or [])]
+            for m_item in rec.get("autogenous_wormhole_modules") or []:
+                if m_item.get("provenance_episode_id"):
+                    prov_tags.append(str(m_item["provenance_episode_id"]))
+            for tag in prov_tags:
+                low_t = tag.lower()
+                if low_t.startswith(("ho", "tb__", "wave1_", "m8_5_repair_")) or "holdout" in low_t:
+                    raise ValueError(
+                        f"Benchmark/Holdout provenance `{tag}` on node `{nid}` forbidden when `require_pretraining_only=True`!"
+                    )
+
+    # Collect unique coarse `L2` autogenous modules across live `mid`/`fine` nodes
+    source_mods_by_fname: dict[str, dict[str, Any]] = {}
+    node_ids_by_fname: dict[str, list[str]] = {}
+    for nid, rec in iter_live_archive_nodes(archive):
+        if rec.get("layer_role") not in {"mid", "fine"}:
+            continue
+        for mod in rec.get("autogenous_wormhole_modules") or []:
+            fname = str(mod.get("filename") or "")
+            if not fname or fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive":
+                continue
+            node_ids_by_fname.setdefault(fname, []).append(nid)
+            if fname not in source_mods_by_fname:
+                source_mods_by_fname[fname] = {
+                    "mod": deepcopy(mod),
+                    "representative_node_id": nid,
+                    "methodology_principle": str(rec.get("methodology_principle") or ""),
+                    "consolidated_nogoods": list(rec.get("wave1_consolidated_nogoods") or []),
+                }
+
+    if not source_mods_by_fname:
+        return {"compiled_primitive_count": 0, "events": [], "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}}
+
+    ensure_clean_scipy_sandbox_image()
+    sandbox_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")
+    sys_prompt = (
+        "You are the `Hegel-M8.7` Compositional Numerical Primitive Compiler (`DreamCoder` / `Stitch` `L1` Abstraction Pass).\n"
+        "You are given ONE autogenously discovered scientific Python module (`L2` episode operator) plus its empirical falsification "
+        "lessons (`nogoods`). Downstream out-of-distribution scientific problems share the underlying mathematical mechanisms "
+        "(nuisance subspace/surface projection on control subsets, Huber/Cauchy IRLS with optional linear equality / zero-sum gauge "
+        "constraints, Golub-Pereyra variable projection separating linear amplitudes/drifts from nonlinear kernels, SPD/ridge dual "
+        "bounds, leave-one-group-out jackknife stability), NOT the episode's monolithic observable layout!\n\n"
+        "YOUR REFACTORING MISSION:\n"
+        "1. Distill 2 to 3 compact (15-45 lines each), general-purpose, SCHEMA-FREE `L1` numerical primitive functions in `canonical_python_code`:\n"
+        "   - Use ONLY `math`, `numpy`, and `scipy` (`ZERO sklearn`, `ZERO open/Path/load`, `ZERO task-specific dict keys`).\n"
+        "   - NEVER hardcode fixed column counts (`len(cols) == 5`), fixed sensor counts, or binary-classification-only wrappers!\n"
+        "   - Operate directly on clean `np.ndarray` / boolean mask / float arguments with sensible keyword defaults (e.g., "
+        "`project_nuisance_subspace(values, nuisance_basis, *, fit_mask=None, weights=None, ridge=1e-6) -> tuple[np.ndarray, np.ndarray]`, "
+        "`fit_control_polynomial_field(coords, values, control_mask, *, degree=2, ridge=1e-3, huber_delta=1.35) -> tuple[np.ndarray, np.ndarray]`, "
+        "`solve_irls_linear_constrained(design, rhs, *, equality_matrix=None, equality_rhs=None, loss='huber', scale=None, ridge=1e-6, max_iter=25) -> tuple[np.ndarray, np.ndarray]`, "
+        "`varpro_linear_projection(basis_matrix, target, *, nuisance_basis=None, ridge=1e-6, nonneg_mask=None) -> dict[str, np.ndarray | float]`).\n"
+        "   - Start EVERY exported function with a crisp 1-sentence docstring stating exact input shapes and return value!\n"
+        "2. Write `synthetic_unit_test_code` (`def run_self_test(): ...; run_self_test()`) exercising EVERY exported primitive across "
+        "at least 2 distinct shapes/dimensions and asserting mathematical accuracy & finite outputs."
+    )
+
+    events: list[dict[str, Any]] = []
+    tok_totals = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
+    compiled_count = 0
+    used_prim_stems: set[str] = set()
+
+    try:
+        for src_fname, bundle_item in sorted(source_mods_by_fname.items()):
+            orig_mod = bundle_item["mod"]
+            rep_nid = bundle_item["representative_node_id"]
+            orig_stem = Path(src_fname).stem
+            short_tail = re.sub(r"^autogenous_", "", orig_stem)[:34]
+            conv: list[dict[str, Any]] = [
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "source_l2_module_filename": src_fname,
+                            "source_methodology_principle": bundle_item["methodology_principle"],
+                            "source_consolidated_nogoods": bundle_item["consolidated_nogoods"],
+                            "source_l2_python_code": str(orig_mod.get("python_code") or "")[:16000],
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
+            mod_tok = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
+            last_err = "not_run"
+            compiled_entry: dict[str, Any] | None = None
+
+            for attempt_i in (1, 2):
+                llm_res = codex_client.call_structured(
+                    system_prompt=sys_prompt,
+                    conversation_turns=conv,
+                    output_schema=COMPOSITIONAL_PRIMITIVE_COMPILER_SCHEMA,
+                    stage_subdir=f"{run_id}__{short_tail}_t{attempt_i}",
+                )
+                for tk_k, src_k in (("prompt", "prompt_tokens"), ("cached", "cached_tokens"), ("completion", "completion_tokens"), ("wall_ms", "wall_ms")):
+                    val_t = float(llm_res.get(src_k, 0) or 0)
+                    mod_tok[tk_k] += int(val_t) if tk_k != "wall_ms" else val_t
+                    tok_totals[tk_k] += int(val_t) if tk_k != "wall_ms" else val_t
+
+                if not llm_res.get("ok") or not isinstance(llm_res.get("parsed"), dict):
+                    last_err = f"llm_error:{llm_res.get('error')}"
+                    break
+
+                parsed = llm_res["parsed"]
+                raw_p_stem = re.sub(r"[^a-z0-9_]+", "_", str(parsed["primitive_module_stem"]).strip().lower()).strip("_")
+                if not raw_p_stem.startswith("autogenous_prim_"):
+                    raw_p_stem = "autogenous_prim_" + re.sub(r"^(autogenous_prim_|autogenous_)", "", raw_p_stem)
+                prim_stem = raw_p_stem[:56]
+                if prim_stem in used_prim_stems:
+                    prim_stem = f"{prim_stem[:40]}_{short_tail[:15]}".rstrip("_")
+
+                # Mechanically forbid `sklearn` inside `L1` primitives so they mount cleanly in every physics/bio/math container!
+                ok_ast, reason_ast, pub_fns, packaged_code = validate_and_decorate_autogenous_python_code(
+                    str(parsed["canonical_python_code"]),
+                    prim_stem,
+                    extra_forbidden_tokens=("sklearn",),
+                )
+                if not ok_ast:
+                    last_err = f"static_purity_gate_failed:{reason_ast}"
+                    conv.append({"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)})
+                    conv.append(
+                        {
+                            "role": "user",
+                            "content": json.dumps(
+                                {
+                                    "compiler_gate_error": last_err,
+                                    "fix_instruction": (
+                                        "Use ONLY pure `math`, `numpy`, and `scipy` (NO `sklearn`, NO file I/O, NO decorators, "
+                                        "NO unbound module globals)."
+                                    ),
+                                },
+                                ensure_ascii=False,
+                            ),
+                        }
+                    )
+                    continue
+
+                ut_src = str(parsed["synthetic_unit_test_code"])
+                ut_res = verify_autogenous_module_in_clean_container(
+                    sandbox_cid=sandbox_cid,
+                    mod_stem=prim_stem,
+                    packaged_module_code=packaged_code,
+                    synthetic_unit_test_code=ut_src,
+                    public_fn_names=pub_fns,
+                )
+                if ut_res.get("passed") and ut_res.get("telemetry_verified"):
+                    code_sha = hashlib.sha256(packaged_code.encode("utf-8")).hexdigest()
+                    ut_sha = hashlib.sha256(ut_src.encode("utf-8")).hexdigest()
+                    src_l2_sha = str(orig_mod.get("compiled_code_sha256") or "") or hashlib.sha256(
+                        str(orig_mod.get("python_code") or "").encode("utf-8")
+                    ).hexdigest()
+                    compiled_entry = {
+                        "filename": f"{prim_stem}.py",
+                        "granularity_tier": "L1_compositional_primitive",
+                        "origin": "m8_7_compositional_primitive_aufhebung_verified",
+                        "unit_test_verified": True,
+                        "source_qualification_status": "pretraining_only_l1_primitive_sublation",
+                        "source_l2_module_filename": src_fname,
+                        "source_candidate_sha256": src_l2_sha,
+                        "function_names": pub_fns,
+                        "exported_apis": "; ".join(parsed.get("exported_api_signatures") or pub_fns),
+                        "compositional_rationale": str(parsed.get("compositional_rationale") or "").strip(),
+                        "python_code": packaged_code,
+                        "compiled_code_sha256": code_sha,
+                        "synthetic_unit_test_code": ut_src,
+                        "synthetic_unit_test_sha256": ut_sha,
+                        "unit_test_receipt": ut_res,
+                        "scope_preconditions": [],
+                        "provenance_episode_id": str(orig_mod.get("provenance_episode_id") or f"pt_l1_{short_tail}"),
+                    }
+                    break
+
+                last_err = f"unit_test_failed(rc={ut_res.get('exit_code')}):{str(ut_res.get('stderr') or '')[-450:]}"
+                conv.append({"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)})
+                conv.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "unit_test_failure": ut_res,
+                                "fix_instruction": "Fix `canonical_python_code` or `synthetic_unit_test_code` so `python3 -I` passes cleanly and calls every exported primitive.",
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
+
+            if compiled_entry is not None:
+                used_prim_stems.add(Path(str(compiled_entry["filename"])).stem)
+                compiled_count += 1
+                attached_nodes: list[str] = []
+                for target_nid in node_ids_by_fname[src_fname]:
+                    mods_list = archive[target_nid].setdefault("autogenous_wormhole_modules", [])
+                    mods_list = [m for m in mods_list if m.get("filename") != compiled_entry["filename"]]
+                    # Prepend `L1_compositional_primitive` ahead of `L2` pipeline modules!
+                    archive[target_nid]["autogenous_wormhole_modules"] = [deepcopy(compiled_entry), *mods_list]
+                    attached_nodes.append(target_nid)
+                events.append(
+                    {
+                        "source_l2_module": src_fname,
+                        "representative_node_id": rep_nid,
+                        "compiled_ok": True,
+                        "primitive_filename": compiled_entry["filename"],
+                        "exported_functions": compiled_entry["function_names"],
+                        "exported_apis": compiled_entry["exported_apis"],
+                        "compiled_code_sha256": compiled_entry["compiled_code_sha256"],
+                        "synthetic_unit_test_sha256": compiled_entry["synthetic_unit_test_sha256"],
+                        "attached_to_nodes": attached_nodes,
+                        "llm_tokens": mod_tok,
+                    }
+                )
+            else:
+                events.append(
+                    {
+                        "source_l2_module": src_fname,
+                        "representative_node_id": rep_nid,
+                        "compiled_ok": False,
+                        "error": last_err,
+                        "llm_tokens": mod_tok,
+                    }
+                )
+    finally:
+        m6f.stop_container_safely(sandbox_cid)
+
+    wh_summary = (
+        discover_cross_tree_operator_wormholes(forest, archive)
+        if allow_horizontal_wormholes and compiled_count > 0
+        else {"skipped": True}
+    )
+    archive.setdefault("__autogenous_blank_seed__", {})["m8_7_compositional_primitives"] = {
+        "compiled_primitive_count": compiled_count,
+        "require_pretraining_only": require_pretraining_only,
+        "events": events,
+    }
+    return {
+        "compiled_primitive_count": compiled_count,
+        "total_source_l2_modules": len(source_mods_by_fname),
+        "require_pretraining_only": require_pretraining_only,
+        "events": events,
+        "anti_unification_summary": wh_summary,
+        "llm_tokens": tok_totals,
     }
 
 

@@ -1603,13 +1603,31 @@ NODE_TO_EXECUTABLE_WORMHOLE_MODULE: dict[str, tuple[str, str, str]] = {
 }
 
 
+def extract_skill_api_quick_reference(python_code: str) -> list[dict[str, str]]:
+    """AST-extract exact public function signatures & 1-sentence doc summaries so agents see contracts without `sed` guesswork (`M8.7`)."""
+    try:
+        tree = ast.parse(python_code)
+    except SyntaxError:
+        return []
+    refs: list[dict[str, str]] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
+            continue
+        ret_ann = f" -> {ast.unparse(node.returns)}" if node.returns is not None else ""
+        sig_str = f"{node.name}({ast.unparse(node.args)}){ret_ann}"
+        doc = (ast.get_docstring(node) or "").strip()
+        first_para = " ".join(ln.strip() for ln in doc.split("\n\n")[0].splitlines() if ln.strip())[:240]
+        refs.append({"function": node.name, "signature": sig_str, "doc_summary": first_para})
+    return refs
+
+
 def collect_recalled_executable_wormhole_sources(
     recalled_notes: list[dict[str, Any]],
     *,
     extra_modules: list[tuple[str, str, str, str]] | None = None,
     include_foundational_skills: bool = True,
 ) -> tuple[dict[str, str], list[dict[str, Any]]]:
-    """Collect `{filename: python_code}` and `manifest_entries` for recalled wormhole modules without touching Docker."""
+    """Collect `{filename: python_code}` and `manifest_entries` for recalled wormhole modules without touching Docker (`M8.7` L1-first)."""
     is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
     allow_foundational = bool(include_foundational_skills) and (not is_autogenous_blank)
 
@@ -1625,7 +1643,9 @@ def collect_recalled_executable_wormhole_sources(
                         "module_import": f"hegel_wormhole_skills.{Path(fname).stem}",
                         "source_forest_node": "m5_multiscale_and_branch_reconciliation",
                         "origin": origin_tag,
+                        "granularity_tier": "foundational_operator",
                         "exported_apis": api_sig,
+                        "api_quick_reference": extract_skill_api_quick_reference(code_str),
                     }
                 )
 
@@ -1640,36 +1660,62 @@ def collect_recalled_executable_wormhole_sources(
                         "module_import": f"hegel_wormhole_skills.{Path(fname).stem}",
                         "source_forest_node": nid,
                         "origin": "foundational_wormhole_operator",
+                        "granularity_tier": "foundational_operator",
                         "exported_apis": api_sig,
+                        "api_quick_reference": extract_skill_api_quick_reference(code_str),
                     }
                 )
-        for auto_mod in note.get("autogenous_wormhole_modules", []):
-            af_name = str(auto_mod["filename"])
-            if af_name not in modules_to_write:
-                modules_to_write[af_name] = str(auto_mod["python_code"])
-                manifest_entries.append(
-                    {
-                        "module_import": f"hegel_wormhole_skills.{Path(af_name).stem}",
-                        "source_forest_node": nid,
-                        "origin": auto_mod.get("origin", "autogenous_aufhebung_compiled"),
-                        "unit_test_verified": bool(auto_mod.get("unit_test_verified", auto_mod.get("origin") == "llm_aufhebung_container_verified")),
-                        "source_qualification_status": str(auto_mod.get("source_qualification_status", "public_episode")),
-                        "exported_apis": auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", [])),
-                        "scope_preconditions": auto_mod.get("scope_preconditions", []),
-                        "counter_regime_guards": note.get("counter_regime_guards", []),
-                        "provenance_episode_id": auto_mod.get("provenance_episode_id", ""),
-                    }
+
+    # Pass 1 (`M8.7`): Stage `L1_compositional_primitive` (`autogenous_prim_*`) modules across ALL recalled notes FIRST!
+    # Pass 2: Stage `L2_domain_operator` (`autogenous_*`) modules!
+    for tier_pass in ("L1", "L2"):
+        for note in recalled_notes:
+            nid = str(note.get("node_id") or "")
+            for auto_mod in note.get("autogenous_wormhole_modules", []):
+                af_name = str(auto_mod["filename"])
+                g_tier = str(
+                    auto_mod.get("granularity_tier")
+                    or ("L1_compositional_primitive" if af_name.startswith("autogenous_prim_") else "L2_domain_operator")
                 )
+                is_l1 = g_tier == "L1_compositional_primitive" or af_name.startswith("autogenous_prim_")
+                if (tier_pass == "L1" and not is_l1) or (tier_pass == "L2" and is_l1):
+                    continue
+                if af_name not in modules_to_write:
+                    py_src = str(auto_mod["python_code"])
+                    modules_to_write[af_name] = py_src
+                    manifest_entries.append(
+                        {
+                            "module_import": f"hegel_wormhole_skills.{Path(af_name).stem}",
+                            "source_forest_node": nid,
+                            "granularity_tier": g_tier,
+                            "origin": auto_mod.get("origin", "autogenous_aufhebung_compiled"),
+                            "unit_test_verified": bool(
+                                auto_mod.get("unit_test_verified", auto_mod.get("origin") == "llm_aufhebung_container_verified")
+                            ),
+                            "source_qualification_status": str(auto_mod.get("source_qualification_status", "public_episode")),
+                            "exported_apis": auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", [])),
+                            "api_quick_reference": extract_skill_api_quick_reference(py_src),
+                            "scope_preconditions": auto_mod.get("scope_preconditions", []),
+                            "counter_regime_guards": note.get("counter_regime_guards", []),
+                            "provenance_episode_id": auto_mod.get("provenance_episode_id", ""),
+                        }
+                    )
+
+    for note in recalled_notes:
+        nid = str(note.get("node_id") or "")
         for sub_mod in note.get("wave1_executable_modules", []):
             sf_name = str(sub_mod["filename"])
             if sf_name not in modules_to_write:
-                modules_to_write[sf_name] = str(sub_mod["python_code"])
+                py_sub = str(sub_mod["python_code"])
+                modules_to_write[sf_name] = py_sub
                 manifest_entries.append(
                     {
                         "module_import": f"hegel_wormhole_skills.{Path(sf_name).stem}",
                         "source_forest_node": nid,
+                        "granularity_tier": "wave1_sublated_helper",
                         "origin": sub_mod.get("origin", "wave1_ast_sublated"),
                         "exported_apis": sub_mod.get("exported_apis") or ", ".join(sub_mod.get("function_names", [])),
+                        "api_quick_reference": extract_skill_api_quick_reference(py_sub),
                     }
                 )
     return modules_to_write, manifest_entries

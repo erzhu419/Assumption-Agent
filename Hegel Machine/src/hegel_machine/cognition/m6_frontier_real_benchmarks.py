@@ -2107,9 +2107,9 @@ def _build_system_and_initial_brief(
         )
         if staged_wormhole_manifest and is_autogenous_blank:
             exec_skill_rules = (
-                "5. AUTOGENOUSLY GROWN & WAVE-1 SUBLATED WORMHOLE LIBRARY (`/tmp/hegel_wormhole_skills` — `PYTHONPATH=/tmp` PRE-CONFIGURED):\n"
-                "   - Autogenously discovered, unit-tested Python scientific operators bound to your recalled `PhilosophicalForest` nodes are mounted at `/tmp/hegel_wormhole_skills` (listed in `mounted_executable_wormhole_skills`, zero hand-authored prior templates).\n"
-                "   - ACTIVELY inspect their docstrings & source (`python3 -c \"import inspect; from hegel_wormhole_skills.<mod> import <fn>; print(inspect.getsource(<fn>))\"`), check their `scope_preconditions`, and benchmark them (or hybrids combining their sublated nuisance-projection / regularization / dispersion / cross-slice logic with your problem-specific physics) head-to-head against your baseline across ALL regime corners!\n"
+                "5. AUTOGENOUSLY GROWN TWO-TIER (`L1` PRIMITIVE + `L2` OPERATOR) WORMHOLE LIBRARY (`/tmp/hegel_wormhole_skills` — `PYTHONPATH=/tmp` PRE-CONFIGURED):\n"
+                "   - Autogenously discovered, unit-tested Python scientific modules bound to your recalled `PhilosophicalForest` nodes are mounted at `/tmp/hegel_wormhole_skills` (`mounted_executable_wormhole_skills` includes `api_quick_reference` with exact NumPy array signatures & 1-sentence contracts; zero hand-authored prior templates).\n"
+                "   - Schema-free `L1_compositional_primitive` modules (`autogenous_prim_*`, pure `numpy`/`scipy`) expose general mathematical building blocks (control-subset nuisance surface/subspace projection, Huber/Cauchy IRLS with optional linear equality/zero-sum gauge constraints, variable-projection linear/nonlinear separation, LOPO/LOGO stability). Whenever a mounted `L1` primitive matches an inner subproblem in your `/tmp` diagnostic scripts OR your declared target `.py` solver, import and call it directly (`from hegel_wormhole_skills.<mod> import <fn>`) and benchmark it against your problem-specific physics across all regime corners!\n"
                 + pkg_rule_line
             )
         elif staged_wormhole_manifest:
@@ -2812,7 +2812,9 @@ def run_frontier_episode(
                     for n_rec in recalled_notes:
                         if "autogenous_wormhole_modules" in n_rec:
                             n_rec["autogenous_wormhole_modules"] = [
-                                m for m in n_rec["autogenous_wormhole_modules"] if "sklearn" not in str(m.get("python_code", ""))
+                                m
+                                for m in n_rec["autogenous_wormhole_modules"]
+                                if not re.search(r"^\s*(?:import|from)\s+sklearn\b", str(m.get("python_code", "")), flags=re.MULTILINE)
                             ]
             last_parent = ledger.record_decision(
                 decision_type="D1_WORMHOLE_FOREST_RETRIEVAL",
@@ -3802,13 +3804,33 @@ def run_frontier_episode(
             "skill_adoption_funnel": {
                 "recalled_node_count": len(recalled_notes),
                 "staged_module_count": len(staged_wormhole_manifest),
+                "staged_l1_primitive_count": sum(
+                    1 for m in staged_wormhole_manifest if m.get("granularity_tier") == "L1_compositional_primitive"
+                ),
                 "inspected_in_bash": any(
                     "hegel_wormhole_skills" in str(t.get("bash_command") or "")
                     for t in turn_logs
                 ),
                 "dynamic_skill_activation_count": skill_call_total,
+                "dynamic_l1_primitive_activation_count": sum(
+                    int(r.get("call_count", 1))
+                    for r in skill_activations
+                    if r.get("status", "completed") == "completed"
+                    and r.get("caller_role", "agent") != "smoke_test"
+                    and str(r.get("module") or "").startswith("autogenous_prim_")
+                ),
                 "static_packaged_deliverable_count": sum(len(ev.get("packaged_files", [])) for ev in skill_packaging_events if ev.get("ok")),
+                "static_packaged_l1_primitive_count": sum(
+                    1
+                    for ev in skill_packaging_events
+                    if ev.get("ok")
+                    for pf in ev.get("packaged_files", [])
+                    if any(str(pm).startswith("autogenous_prim_") for pm in pf.get("packaged_modules", []))
+                ),
                 "static_packaging_attempt_count": len(skill_packaging_events),
+                "any_skill_executed_or_packaged": bool(
+                    skill_call_total > 0 or any(ev.get("ok") and ev.get("packaged_files") for ev in skill_packaging_events)
+                ),
             },
             "saved_artifact_snapshots": saved_snapshots,
             "submitted_final_answer": submitted_final_answer if is_bm else None,
