@@ -1,0 +1,186 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_prony_viscoelastic_memory_a6b94d946577",
+    "source_hash": "a6b94d946577269bec991d8aa3370e606b563e6747c5eeb59b13e2919eba981d",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho08__prony_viscoelastic_memory_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/prony_bias.py",
+        "archived_relpath": "producers/tmp__prony_bias.py",
+        "bytes": 1964,
+        "sha256": "b3106a4071b89327dcfa5de2b85223e2299a0580418b53268c8cdb92b5e5227f"
+      },
+      {
+        "container_path": "/tmp/prony_bounds_probe.py",
+        "archived_relpath": "producers/tmp__prony_bounds_probe.py",
+        "bytes": 1047,
+        "sha256": "990747daccbea96410e8fdc636162bd2562e27b87747d3c12d8def3bbe6b3985"
+      },
+      {
+        "container_path": "/tmp/prony_compare_folds.py",
+        "archived_relpath": "producers/tmp__prony_compare_folds.py",
+        "bytes": 2595,
+        "sha256": "acb4d123017841b466d873a02e390c66d05f3be21d21da8eb9eac571b3c22dbc"
+      },
+      {
+        "container_path": "/tmp/prony_extrapolation.py",
+        "archived_relpath": "producers/tmp__prony_extrapolation.py",
+        "bytes": 3235,
+        "sha256": "d0a3f41d6f2da565f0a580cda957e559336db35b94239763bbb31859765893bb"
+      },
+      {
+        "container_path": "/tmp/prony_gap.py",
+        "archived_relpath": "producers/tmp__prony_gap.py",
+        "bytes": 1272,
+        "sha256": "615d4a555ae8a0c311d28a5e975081dc816458585d1c8fc0e752082c91dfaa65"
+      },
+      {
+        "container_path": "/tmp/prony_probe.py",
+        "archived_relpath": "producers/tmp__prony_probe.py",
+        "bytes": 2528,
+        "sha256": "652fb58a0d83bbf460612cd6fb8f247e77f591be076b24dbeb0eb9b22749d82c"
+      },
+      {
+        "container_path": "/tmp/prony_sensitivity.py",
+        "archived_relpath": "producers/tmp__prony_sensitivity.py",
+        "bytes": 2481,
+        "sha256": "8ae08a41c571f59eb9c871600ceb6d74e8727eb01ee7ed2577f21ec1f00cc43d"
+      },
+      {
+        "container_path": "/tmp/prony_spacing.py",
+        "archived_relpath": "producers/tmp__prony_spacing.py",
+        "bytes": 1869,
+        "sha256": "7ed193880d3cd2da1ff6250a1da91b06169874c85f85890dab19e81b5e5a75cb"
+      },
+      {
+        "container_path": "/tmp/prony_spikes.py",
+        "archived_relpath": "producers/tmp__prony_spikes.py",
+        "bytes": 1824,
+        "sha256": "d541542dd1cef2ace2017bcb0b9fbe239c91a13c97c8caba0daeeb044196286f"
+      },
+      {
+        "container_path": "/tmp/prony_validate.py",
+        "archived_relpath": "producers/tmp__prony_validate.py",
+        "bytes": 2742,
+        "sha256": "3132522cc95d6082f7782028a7f904e7a2d6ef3916044576bcbcd4a9d6616ef4"
+      },
+      {
+        "container_path": "/tmp/prony_joint/prony_rheology.py",
+        "archived_relpath": "producers/tmp__prony_joint__prony_rheology.py",
+        "bytes": 7384,
+        "sha256": "327a27ac84b185d97cfcf74d69dc524875859b5614f347b485d387d3588a0cbe"
+      },
+      {
+        "container_path": "/tmp/prony_trial/prony_rheology.py",
+        "archived_relpath": "producers/tmp__prony_trial__prony_rheology.py",
+        "bytes": 7214,
+        "sha256": "52a08279f3051e84e6db06015c6f41782495282fe5561f55616da5853eb89f5f"
+      },
+      {
+        "container_path": "/tmp/prony_profile/prony_rheology.py",
+        "archived_relpath": "producers/tmp__prony_profile__prony_rheology.py",
+        "bytes": 9268,
+        "sha256": "99d709446a67722dae64575a398df352cd130ad090bb539c6b7c4578b841960d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; ls -1 /tmp/hegel_wormhole_skills 2>/dev/null; python - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'))\ndef show(o,level=0):\n if isinstance(o,dict):\n  for k,v in o.items():\n   print(' '*level,k,end=': ');show(v,level+2)\n elif isinstance(o,(tuple,list)) and o and isinstance(o[0],dict):\n  print(type(o).__name__,len(o));show(o[0],level+2)\n else:\n  a=np.asarray(o); print(type(o).__name__,a.shape,a.dtype,end=' ')\n  if a.ndim and a.dtype.kind in 'iuf' and a.size: print('range',np.min(a),np.max(a),'first',a.ravel()[:5],'last',a.ravel",
+      "set -e\ncommand -v python3\npython3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb'))\nprint('numpy/scipy',np.__version__,scipy.__version__)\ndef show(x,depth=0):\n    if isinstance(x,dict):\n        for k,v in x.items():\n            print(' '*depth+str(k)+':',end=' ')\n            if isinstance(v,dict): print()\n            show(v,depth+2)\n    elif isinstance(x,(list,tuple)) and len(x) and isinstance(x[0],dict):\n        print(type(x).__name__,len(x)); show(x[0],depth+2)\n    else:\n        a=np.asarray(x)\n        print(a.shape,a.dtype,e",
+      "cat > /tmp/prony_probe.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import nnls\nfrom scipy.signal import lfilter\nimport pickle\n\ndef basis(t,e,tau,kind):\n    t,e=np.asarray(t),np.asarray(e)\n    dt, de=np.diff(t),np.diff(e)\n    z=dt[:,None]/tau\n    q=np.exp(-z)\n    if kind=='ramp': u=de[:,None]*(-np.expm1(-z)/z)\n    elif kind=='right': u=np.broadcast_to(de[:,None],z.shape)\n    elif kind=='left': u=de[:,None]*q\n    elif kind=='mid': u=de[:,None]*np.exp(-z/2)\n    elif kind=='trap':\n        v=np.gradient(e,t)\n        u=dt[:,None]*(q*v[:-1,None]+v[1:,None])/2\n    elif kind=='gradient':\n        v",
+      "cat > /tmp/prony_sensitivity.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import nnls, least_squares\nfrom prony_probe import basis\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); x=p['experiment']; t=x['train_t']; e=x['train_strain']; y=x['train_stress_raw']; d=np.column_stack((np.ones_like(t),t/30-.5)); tt=x['test_t']; et=x['test_strain']; gt=p['gt_test_stress']; grid=np.geomspace(.02,20,100); a=basis(t,e,grid,'ramp'); at=basis(tt,et,grid,'ramp'); N=np.linalg.norm(gt)\n\ndef report(label,cc,bb,taus,train,test):\n r=y-train; s=1.4826*np.median(abs(r-np.median(r))); print",
+      "cat > /tmp/prony_spacing.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom prony_probe import basis,solve\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); x=p['experiment']; t=x['train_t']; e=x['train_strain']; y=x['train_stress_raw']; d=np.column_stack((np.ones_like(t),t/t[-1]-.5)); tt=x['test_t']; et=x['test_strain']; gt=p['gt_test_stress']; grid=np.geomspace(.02,20,100); a=basis(t,e,grid,'ramp')\n\ndef fit(mask,kind,lam=0):\n    c,b,r,s=solve(a[mask],d[mask],y[mask]); r=y-a@c-d@b; good=mask&(abs(r)<6*s)\n    logtau=np.log([.18,1.4,8]); v0=np.",
+      "cat > /tmp/prony_bias.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom prony_probe import basis,solve\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); x=p['experiment']; t=x['train_t']; e=x['train_strain']; y=x['train_stress_raw']; tt=x['test_t']; et=x['test_strain']; d=np.column_stack((np.ones_like(t),(t-t.mean())/np.ptp(t))); grid=np.geomspace(.02,20,100); a=basis(t,e,grid,'ramp'); clean=p['gt_test_stress']\nc,b,r,s=solve(a,d,y); good=abs(r-np.median(r))<6*s\nlo=np.r_[np.zeros(4),[-np.inf]*2,[np.log(.02)]*3]; hi=np.r_[[np.inf]*6,[np.log(20)]*3]\nv0",
+      "cat > /tmp/prony_extrapolation.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom prony_probe import basis, solve\n\np = pickle.load(open('/holdout_task/public_rheology.pkl', 'rb'))\nx = p['experiment']\nt, e, y = (x[k] for k in ('train_t', 'train_strain', 'train_stress_raw'))\ntt, et = (x[k] for k in ('test_t', 'test_strain'))\nd = np.column_stack((np.ones(t.size), (t-t.mean())/np.ptp(t)))\ngrid = np.geomspace(.02, 20, 80)\na = basis(t, e, grid, 'ramp')\nlo = np.r_[np.zeros(4), [-np.inf]*2, [np.log(.02)]*3]\nhi = np.r_[[np.inf]*6, [np.log(20)]*3]\n\ndef stress(v, T=t",
+      "cat > /tmp/prony_spikes.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom prony_probe import basis,solve\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); x=p['experiment']; t=x['train_t']; e=x['train_strain']; y=x['train_stress_raw']; tt=x['test_t']; et=x['test_strain']; z=p['gt_test_stress']; d=np.column_stack((np.ones_like(t),(t-t.mean())/np.ptp(t))); A=basis(t,e,np.geomspace(.02,20,80),'ramp')\nlo=np.r_[np.zeros(4),[-np.inf]*2,[np.log(.02)]*3]; hi=np.r_[[np.inf]*6,[np.log(20)]*3]\ndef fit(exclude,action,penalty):\n c,b,_,s=solve(A[~exclude],d[~excl",
+      "set -e\ncat > /holdout_task/prony_rheology.py <<'PY'\n\"\"\"Identify a nonnegative Prony spectrum from a strain-controlled experiment.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares, nnls\nfrom scipy.signal import lfilter\n\n\ndef _history(t, strain):\n    return np.diff(t), np.diff(strain), strain\n\n\ndef _basis(history, tau):\n    dt, de, strain = history\n    a = np.empty((len(strain), len(tau) + 1))\n    a[:, 0] = strain\n    a[0, 1:] = 0.\n    if not len(dt) or not len(tau):\n        return a\n    # Exact convolution for a linear strain ramp between observations.\n    if np.max(abs(dt - dt[0",
+      "cat > /tmp/prony_validate.py <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom prony_rheology import fit_prony_and_predict_stress, _basis, _history, _spectrum\n\np = pickle.load(open('/holdout_task/public_rheology.pkl', 'rb'))\nx = p['experiment']\nt, e, tt = (x[k] for k in ('train_t', 'train_strain', 'test_t'))\n\ndef reference(t, e, G, tau, amp):\n    # Independent direct integration over completed linear segments.\n    result = G * e.copy()\n    rate = np.diff(e) / np.diff(t)\n    age = t[1:, None] - t[None, 1:]\n    valid = age >= 0\n    for T, A in zip(tau, amp):\n        local = rate * T * (-n",
+      "cat > /tmp/prony_gap.py <<'PY'\nimport numpy as np\nfrom prony_rheology import _spectrum, _basis, _history\nfrom pathlib import Path\n# Reuse the independent reference and test protocols, not the validation loop.\nexec(Path('/tmp/prony_validate.py').read_text().split('for i, (G,tau,amp) in enumerate(regimes):')[0])\nfor i, (G, tau, amp) in enumerate(regimes[1:], 1):\n    T = tj if i%2 else t\n    clean = reference(T, e, G, tau, amp)\n    z = reference(te, et, G, tau, amp)\n    step = np.zeros(te.size, bool)\n    for u in (8,16): step |= (te >= u) & (te < u+.35)\n    for seed in (0,1,2,3):\n        r = np.r",
+      "set -e\nmkdir -p /tmp/prony_trial\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/prony_rheology.py').read_text()\np=p.replace('def _spectrum(t, e, y, penalty=.5):','def _spectrum(t, e, y, penalty=.5):\\n    import os\\n    order_cost = float(os.environ.get(\"PRONY_ORDER_COST\", \"4\"))\\n    soft_order = int(os.environ.get(\"PRONY_SOFT_ORDER\", \"0\"))\\n    gate = int(os.environ.get(\"PRONY_GATE\", \"1\"))')\np=p.replace('    # Compare model orders', '    models = [best]\\n\\n    # Compare model orders')\np=p.replace('        for start in', '        best_m = None\\n        for start in')\np=p.replac",
+      "set -e\nmkdir -p /tmp/prony_joint\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/prony_trial/prony_rheology.py').read_text()\np=p.replace('    target = y\\n', '    target = y\\n    regressor = None\\n')\np=p.replace('            target[candidate] -= np.sign(residual[candidate]) * magnitude\\n', '            target[candidate] -= np.sign(residual[candidate]) * magnitude\\n            regressor = np.where(candidate, np.sign(residual), 0.)\\n')\np=p.replace('    q, _ = np.linalg.qr(drift[good], mode=\\'reduced\\')', '    if regressor is not None:\\n        drift = np.column_stack((drift, regressor))\\n ",
+      "set -e\nmkdir -p /tmp/prony_profile\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/prony_joint/prony_rheology.py').read_text()\na=p.index('    fitted = [refit(model) for model in models]')\nb=p.index('\\n\\ndef fit_prony',a)\np=p[:a]+'''    def profile(model):\n        coef, tau = refit(model)\n        m = len(tau)\n        # If the first memory is only resolved over a few samples, integrate\n        # plausible fast times instead of extrapolating a likelihood maximizer.\n        order = np.argsort(tau)\n        tau, coef = tau[order], np.r_[coef[0], coef[1:][order]]\n        cutoff = 3. * np.media",
+      "set -e\ncat > /tmp/prony_compare_folds.py <<'PY'\nimport importlib.util\nimport os\nfrom pathlib import Path\nimport pickle\nimport numpy as np\n\np = pickle.load(open('/holdout_task/public_rheology.pkl', 'rb'))\nx = p['experiment']\nt,e,y,tt,et = (x[k] for k in ('train_t','train_strain','train_stress_raw','test_t','test_strain'))\nblocks = ((0,2),(2,6),(6,12),(12,18),(18,24),(24,31))\n\ndef load(path, name):\n    text = Path(path).read_text().replace('penalty=.5):', 'penalty=.5, observed=None):', 1)\n    text = text.replace('    c, residual, scale = _pilot(a, drift, y)', '''    if observed is None:\n        ",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/prony_joint/prony_rheology.py').read_text()\na = src.index('    import os\\n', src.index('def _spectrum'))\nb = src.index('    elapsed =', a)\nsrc = src[:a] + src[b:]\nsrc = src.replace('m * order_cost', '4. * m')\nsrc = src.replace('penalty if not gate or (m and np.max(np.exp(logtau)) <= duration * .4) else 0.', 'penalty if m and np.max(np.exp(logtau)) <= .4 * duration else 0.')\nsrc = src.replace('    if not soft_order:\\n        return refit(best)\\n', '    # Average competitive spectra instead of discarding a weakly excited mode\\n   "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__prony_profile__prony_rheology.py",
+      "primary_producer_container_path": "/tmp/prony_profile/prony_rheology.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/prony_rheology.py",
+        "filename": "prony_rheology.py",
+        "bytes": 7135,
+        "sha256": "ae3c668b2b92193ace46101af3a2ee8d399bc4c4c6e736ed251a2ec039446ec7",
+        "content_addressed_ref": "content_addressed_blobs/ae3c668b2b92193ace46101af3a2ee8d399bc4c4c6e736ed251a2ec039446ec7.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/prony_rheology.py"
+    ],
+    "exported_pure_functions": [
+      "basis",
+      "solve"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a6b94d946577269bec991d8aa3370e606b563e6747c5eeb59b13e2919eba981d",
+      "verified_turn": 16,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/prony_joint/prony_rheology.py').read_text()\na = src.index('    import os\\n', src.index('def _spectrum'))\nb = src.index('    elapsed =', a)\nsrc = src[:a] + src[b:]\nsrc = src.r",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a6b94d946577269bec991d8aa3370e606b563e6747c5eeb59b13e2919eba981d",
+        "expected_candidate_sha256": "a6b94d946577269bec991d8aa3370e606b563e6747c5eeb59b13e2919eba981d",
+        "computed_candidate_sha256": "a6b94d946577269bec991d8aa3370e606b563e6747c5eeb59b13e2919eba981d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/prony_rheology.py",
+            "bytes": 7135
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a6b94d94"
+    }
+  },
+  "structure": {
+    "full_producer_count": 13,
+    "reusable_ast_function_closures": [
+      {
+        "name": "basis",
+        "code": "def basis(t, e, tau, kind):\n    from scipy.signal import lfilter\n    (t, e) = (np.asarray(t), np.asarray(e))\n    (dt, de) = (np.diff(t), np.diff(e))\n    z = dt[:, None] / tau\n    q = np.exp(-z)\n    if kind == 'ramp':\n        u = de[:, None] * (-np.expm1(-z) / z)\n    elif kind == 'right':\n        u = np.broadcast_to(de[:, None], z.shape)\n    elif kind == 'left':\n        u = de[:, None] * q\n    elif kind == 'mid':\n        u = de[:, None] * np.exp(-z / 2)\n    elif kind == 'trap':\n        v = np.gradient(e, t)\n        u = dt[:, None] * (q * v[:-1, None] + v[1:, None]) / 2\n    elif kind == 'gradient':\n        v = np.gradient(e, t)\n        u = dt[:, None] * v[1:, None] * np.ones(len(tau))\n    h = np.zeros((len(t), len(tau)))\n    if np.allclose(dt, dt[0], rtol=1e-11, atol=0):\n        for j in range(len(tau)):\n            h[1:, j] = lfilter([1.0], [1.0, -q[0, j]], u[:, j])\n    else:\n        for j in range(1, len(t)):\n            h[j] = q[j - 1] * h[j - 1] + u[j - 1]\n    return np.column_stack((e, h))"
+      },
+      {
+        "name": "solve",
+        "code": "def solve(a, d, y):\n    from scipy.optimize import nnls\n    w = np.ones(len(y))\n    for i in range(30):\n        aw = a * w[:, None]\n        dw = d * w[:, None]\n        yw = y * w\n        (q, _) = np.linalg.qr(dw, mode='reduced')\n        yp = yw - q @ (q.T @ yw)\n        ap = aw - q @ (q.T @ aw)\n        c = nnls(ap, yp, maxiter=3000)[0]\n        b = np.linalg.lstsq(dw, yw - aw @ c, rcond=None)[0]\n        r = y - a @ c - d @ b\n        s = max(1e-10, 1.4826 * np.median(abs(r - np.median(r))))\n        wn = (1 + (r / (3 * s)) ** 2) ** (-0.5)\n        if np.max(abs(wn - w)) < 1e-05:\n            break\n        w = wn\n    return (c, b, r, s)"
+      }
+    ]
+  }
+}

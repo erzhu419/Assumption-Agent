@@ -1,0 +1,192 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_crosswell_anisotropic_tomography_95ce9c6d2b76",
+    "source_hash": "95ce9c6d2b76b38b85a7c764f42e018abf9ef6f3f81c88e70bb2507bf4ed692b",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho01__crosswell_anisotropic_clock_tomography",
+    "wormhole_family": "fam_guided_wave_shm_localization"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/tomo_corner_diagnosis.py",
+        "archived_relpath": "producers/tmp__tomo_corner_diagnosis.py",
+        "bytes": 3306,
+        "sha256": "8cf519ae12db1b3b6907db5e73c2531ffb7f46c4d12efaa73b5f8f6a26e462dd"
+      },
+      {
+        "container_path": "/tmp/tomo_public_check.py",
+        "archived_relpath": "producers/tmp__tomo_public_check.py",
+        "bytes": 2847,
+        "sha256": "6a8e3096432152451411775044a18f5e655f57dbceeca33dac4b1a89a658bc84"
+      },
+      {
+        "container_path": "/tmp/tomo_stress.py",
+        "archived_relpath": "producers/tmp__tomo_stress.py",
+        "bytes": 2009,
+        "sha256": "9227b9fca9944e86be32f70650133c33602ea1849708a22b8fd1a6e26b2a1133"
+      },
+      {
+        "container_path": "/tmp/tomo_stress_new.py",
+        "archived_relpath": "producers/tmp__tomo_stress_new.py",
+        "bytes": 2044,
+        "sha256": "4ccd29eed49f272d448aad11c8c836ee7e6d780b195782069f1e5532f5128db8"
+      },
+      {
+        "container_path": "/tmp/tomo_stress_shifted.py",
+        "archived_relpath": "producers/tmp__tomo_stress_shifted.py",
+        "bytes": 2039,
+        "sha256": "e72f033eafcb395fc0af8a7142c9e4cbd6758a7925b9ea0aae5d6f68ac185bfa"
+      },
+      {
+        "container_path": "/tmp/tomo_weighted/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_weighted__tomography_solver.py",
+        "bytes": 11312,
+        "sha256": "6ee319f3a70ab33d572a1b3c7cfce0e6fa53bde4b104b19782390634cd33aa4d"
+      },
+      {
+        "container_path": "/tmp/tomo_coherent/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_coherent__tomography_solver.py",
+        "bytes": 8783,
+        "sha256": "4b3ea0f7661b33a5fa0ac433a530bf1c25821ece16e89d33d312b093234de109"
+      },
+      {
+        "container_path": "/tmp/tomo_marginal/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_marginal__tomography_solver.py",
+        "bytes": 10190,
+        "sha256": "44e84852e2a7b564038a74372a9b16cdd33c492aa19f3c33c82fda8fa959aad2"
+      },
+      {
+        "container_path": "/tmp/tomo_clock_test/joint_box.py",
+        "archived_relpath": "producers/tmp__tomo_clock_test__joint_box.py",
+        "bytes": 9230,
+        "sha256": "73809dd31940770f377fa529e4d4147a8e1617a49a13b2090ec930448aa03358"
+      },
+      {
+        "container_path": "/tmp/tomo_blend/blend.py",
+        "archived_relpath": "producers/tmp__tomo_blend__blend.py",
+        "bytes": 11047,
+        "sha256": "66a893d5ec552ac0aacc0ab0696422699bc51e4c9edb4dee94b4f7ddef945de9"
+      },
+      {
+        "container_path": "/tmp/tomo_prior_check/prior_35.py",
+        "archived_relpath": "producers/tmp__tomo_prior_check__prior_35.py",
+        "bytes": 8087,
+        "sha256": "a5decc25dab558937b2ccbdbf246be73b74631e1d44ae5f47ad5e9f120dafcf8"
+      },
+      {
+        "container_path": "/tmp/tomo_prior_check/prior_45.py",
+        "archived_relpath": "producers/tmp__tomo_prior_check__prior_45.py",
+        "bytes": 8087,
+        "sha256": "8af1941e93e3978da8ff29d39512464dd0936ce736e2965bb009bfa3b19f137b"
+      },
+      {
+        "container_path": "/tmp/tomo_repair/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_repair__tomography_solver.py",
+        "bytes": 8260,
+        "sha256": "a424c337363a5674c969d56d1895423adfdba8adf9c1f5601e4f872ca5a9748f"
+      },
+      {
+        "container_path": "/tmp/tomo_prior/tomography_solver.py",
+        "archived_relpath": "producers/tmp__tomo_prior__tomography_solver.py",
+        "bytes": 8086,
+        "sha256": "342d1fc3ca5f63460fe01b1e7514d0d7ca26ec04c212a2817356cf5a58e4edc7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "command -v python3; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_surveys.pkl', 'rb') as f:\n    data = pickle.load(f)\ndef show(o, key='root'):\n    if isinstance(o, dict):\n        print(key, 'dict', list(o))\n        for k, v in o.items(): show(v, f'{key}.{k}')\n    elif isinstance(o, (list,tuple)) and any(isinstance(x,dict) for x in o):\n        print(key, type(o).__name__, len(o))\n        for i, v in enumerate(o): show(v, f'{key}[{i}]')\n    else:\n        a=np.asarray(o)\n        if a.size and a.dtype.kind in 'fiub':\n            print(key,a.shape,a.dtype,'range',np.na",
+      "cat > /holdout_task/tomography_solver.py <<'PY'\n\"\"\"Robust straight-ray inversion for a circular slowness anomaly.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import helmert\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\n\nfrom hegel_wormhole_skills.autogenous_prim_ridge_profiled_matching import (\n    fit_ridge_nuisance,\n    profile_candidate_amplitudes,\n)\n\n\ndef _integral(x, z, radius, zs, ex, ez, length, jac=False):\n    \"\"\"Integrate the unit-peak Gaussian along each finite ray segment.\"\"\"\n    dz = z - zs\n    u = x * ex + dz * ez\n    d = dz * ex - x * ez\n    root2r = np.sqrt",
+      "cat > /tmp/tomo_public_check.py <<'PY'\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom numpy.polynomial.legendre import leggauss\nfrom tomography_solver import invert_plume_and_clocks\n\n\ndef ray_terms(s, center):\n    # Independent Gauss-Legendre quadrature, not the solver's analytic kernel.\n    zs = np.asarray(s['z_src_m'])[:, None]\n    dz = np.asarray(s['z_rcv_m'])[None, :] - zs\n    w = s['W_m']\n    length = np.hypot(w, dz)\n    nodes, weights = leggauss(32)\n    frac = (nodes + 1) / 2\n    d2 = (w * frac - center[0])**2 + (zs[..., None] + dz[..., None] *",
+      "cat > /tmp/tomo_stress.py <<'PY'\nimport time\nimport numpy as np\nfrom tomo_public_check import ray_terms, public_cases\nfrom tomography_solver import invert_plume_and_clocks\n\nbase = public_cases()[0]['survey']\ncenters = [(1,38),(39,41),(17,5),(24,75),(2,7),(38,73),(20,40),(11,57),(31,26)]\nmetrics = []\nfor k, xy in enumerate(centers):\n    group = []\n    for seed in range(6):\n        rng = np.random.default_rng(716+seed+20*k)\n        s = dict(base)\n        if seed >= 3:\n            s['z_src_m'] = np.asarray(base['z_src_m']) + rng.uniform(-1.2,1.2,15)\n            s['z_rcv_m'] = np.asarray(base['z_r",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/tomo_stress.py').read_text()\np = p.replace('import time', '''import time\nimport tomography_solver as solver\noriginal_fit = solver.least_squares\n\ndef trace_fit(fun, x0, *args, **kwargs):\n    fit = original_fit(fun, x0, *args, **kwargs)\n    r = fun(fit.x)\n    mode = kwargs.get('loss', 'inlier')\n    print(mode, 'start', np.round(x0[:3], 4), 'end', np.round(fit.x[:5], 4),\n          'cost', round(fit.cost, 5), 'n', len(r), 'skips', np.sum(abs(r) > 3),\n          'evaluations', fit.nfev, flush=True)\n    if mode == 'cauchy':\n        init = np.r_",
+      "mkdir -p /tmp/tomo_repair\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/tomography_solver.py').read_text()\nstart = p.index('    # Refit on the ordinary picks')\nend = p.index('    bias = gauge @ p[5:]', start)\np = p[:start] + '''    # Estimate the cycle integer against the robust fit before the inlier refit.\n    # Reuse repaired picks only when the shift leaves an ordinary-sized residual.\n    p = best.x\n    for _ in range(3):\n        r = fun(p)\n        scale = 1.4826 * np.median(np.abs(r - np.median(r)))\n        cutoff = np.clip(5.5 * scale, 0.40, 2.5)\n        shift = 6. * n",
+      "set -e\nmkdir -p /tmp/tomo_repair\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/holdout_task/tomography_solver.py').read_text()\nstart = src.index('    p = best.x')\nend = src.index('    bias = gauge @ p[5:]', start)\npatch = '''    p = best.x\n    r = fun(p)\n    skipped = np.abs(r) > 3.\n    shift = np.where(skipped, 6. * np.sign(r), 0.)\n    ordinary = ~skipped\n    scale = max(1.4826 * np.median(np.abs(r[ordinary] - np.median(r[ordinary]))), 0.01)\n    # Test whether repaired picks are on the same noise scale as ordinary picks.\n    # Public skips often have appreciable extra timing error af",
+      "set -e\nmkdir -p /tmp/tomo_prior\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/holdout_task/tomography_solver.py').read_text()\nstart = src.index('    p = best.x')\nend = src.index('    bias = gauge @ p[5:]', start)\npatch = '''    p = best.x\n    for _ in range(3):\n        r = fun(p)\n        scale = 1.4826 * np.median(np.abs(r - np.median(r)))\n        keep = np.abs(r) < np.clip(5.5 * scale, 0.40, 2.5)\n        # A weak constraint on fractional plume strength matters only when\n        # the ray data poorly separate plume amplitude from position.\n        factor = full_gaussian / width\n      ",
+      "set -e\nmkdir -p /tmp/tomo_marginal\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/tomo_prior/tomography_solver.py').read_text().replace('from scipy.special import erf', 'from scipy.special import erf, log_ndtr')\npos = src.index('    bias = gauge @ p[5:]')\ninsert = '''    # When ray coverage makes the local position uncertain, integrate the\n    # likelihood over the physical domain rather than returning its peak.\n    j = jac(p)[keep]\n    sigma = max(0.005, np.linalg.norm(fun(p)[keep]) / np.sqrt(max(1, keep.sum() - len(p))))\n    cov = np.linalg.pinv(j.T @ j, rcond=1e-12)\n    if sigma",
+      "set -e\nmkdir -p /tmp/tomo_prior_check\nOPENBLAS_NUM_THREADS=1 PYTHONPATH=/holdout_task:/tmp python3 - <<'PY'\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom tomo_public_check import public_cases, ray_terms\nfor i,d in enumerate(public_cases()):\n    s,g=d['survey'],d['gt']\n    a=ray_terms(s,g['plume_xz_m'])\n    y=np.asarray(s['T_obs_s'])*1000-np.asarray(g['rcv_clock_bias_s'])*1000\n    r=least_squares(lambda q:(y-a@q).ravel(),[.4,-.05,.07],loss='cauchy',f_scale=.15).fun\n    print('signed public skips',i,np.round(np.sort(r[np.abs(r)>3]),3))\nprior=Path('/tmp",
+      "set -e\nmkdir -p /tmp/tomo_coherent\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/tomo_prior_check/prior_45.py').read_text()\na=s.index('    p = best.x')\nb=s.index('    bias = gauge @ p[5:]',a)\ns=s[:a]+'''    p = best.x\n    r = fun(p)\n    ordinary = np.abs(r) < 3.\n    signs = np.where(ordinary, 0., np.sign(r))\n    r0 = r[ordinary]\n    scale = max(0.01, 1.4826 * np.median(np.abs(r0 - np.median(r0))))\n    mag = np.abs(r[~ordinary])\n    # Reuse skipped picks only when their magnitudes support a shared shift.\n    coherent = len(mag) >= 4 and np.sqrt(np.mean((mag - np.median(mag))**2)) < max",
+      "set -e\nmkdir -p /tmp/tomo_clock_test\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/tomo_coherent/tomography_solver.py').read_text()\na=s.index('        pnew = least_squares')\nb=s.index('        change =',a)\npatch='''        # Apply the clock bounds during the physical fit, not just to its output.\n        def clock_terms(q):\n            c = gauge @ q[5:5 + gauge.shape[1]]\n            return c - np.clip(c, -4., 4.)\n\n        def fit_residual(q):\n            return np.r_[residual(q)[keep], prior @ q, 100. * clock_terms(q)]\n\n        def fit_jacobian(q):\n            block = np.zeros((len(rcv",
+      "set -e\nmkdir -p /tmp/tomo_blend\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/tomo_coherent/tomography_solver.py').read_text().replace('from scipy.special import erf','from scipy.special import erf, log_ndtr')\nm=Path('/tmp/tomo_marginal/tomography_solver.py').read_text()\na=m.index('    # When ray coverage'); b=m.index('    bias = gauge',a)\nq=m[a:b].replace('j = jac(p)[keep]','j = derivative(p)[keep]').replace('np.linalg.norm(fun(p)[keep])','np.linalg.norm(residual(p)[keep])').replace('a_clean = design[keep]','a_clean = (np.column_stack((design, -signs)) if coherent else design)[keep]'",
+      "set -e\nmkdir -p /tmp/tomo_weighted\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/tomo_blend/blend.py').read_text().replace('BLEND = 0.5','BLEND = 1.0')\ns=s.replace('coherent = len(mag) >= 4 and np.sqrt(np.mean((mag - np.median(mag))**2)) < max(3 * scale, 0.09)', '''coherent = len(mag) >= 4 and 4.5 < np.median(mag) < 7.5\n    weight = np.ones(len(y))\n    if coherent:\n        skip_scale = np.sqrt(np.mean((mag - np.median(mag))**2))\n        weight[~ordinary] = min(1., max(1.6 * scale, 0.055) / max(skip_scale, 0.01))''')\ns=s.replace('np.r_[residual(q)[keep], prior @ q]','np.r_[(residual(q)",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/tomo_blend/blend.py').read_text()\nassert 'BLEND = 0.5' in p and p.count('+= BLEND *') == 2\np = p.replace('BLEND = 0.5\\n\\n\\n','').replace('p[:2] += BLEND * (mass @ coords - p[:2])','p[:2] = mass @ coords').replace('p[3:] += BLEND * (bv @ mass - p[3:])','p[3:] = bv @ mass')\nPath('/holdout_task/tomography_solver.py').write_text(p)\nPY\np=/holdout_task/tomography_solver.py; h=$(sha256sum \"$p\" | cut -c1-8); mkdir -p /tmp/.hegel_candidate_archive; cp \"$p\" /tmp/.hegel_candidate_archive/v02_$h; sha256sum \"$p\"\ncd /holdout_task\nPYTHONPATH=/ho",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 env -u PYTHONPATH python3 - <<'PY'\nimport contextlib, io, pickle, runpy, sys, time\nfrom pathlib import Path\nimport numpy as np\nimport tomography_solver as solver\nassert Path(solver.__file__).resolve() == Path('/holdout_task/tomography_solver.py')\nassert not any(n.startswith('hegel_wormhole_skills') for n in sys.modules), 'The installed solver still imports the mounted skill'\nwith open('public_surveys.pkl', 'rb') as f:\n    for i, d in enumerate(pickle.load(f)):\n        start = time.perf_counter()\n        out = solver.invert_plume_and_clocks(d['surv"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tomo_weighted__tomography_solver.py",
+      "primary_producer_container_path": "/tmp/tomo_weighted/tomography_solver.py",
+      "selected_channels": [
+        "fam_guided_wave_shm_localization"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/tomography_solver.py",
+        "filename": "tomography_solver.py",
+        "bytes": 10995,
+        "sha256": "766bb0e8aa1e1b16da3d6ec2278e4c21c2c78eb58d9d9aaa9900b55ba5190b07",
+        "content_addressed_ref": "content_addressed_blobs/766bb0e8aa1e1b16da3d6ec2278e4c21c2c78eb58d9d9aaa9900b55ba5190b07.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/tomography_solver.py"
+    ],
+    "exported_pure_functions": [
+      "ray_terms",
+      "_integral"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_guided_wave_shm_localization",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "95ce9c6d2b76b38b85a7c764f42e018abf9ef6f3f81c88e70bb2507bf4ed692b",
+      "verified_turn": 17,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 env -u PYTHONPATH python3 - <<'PY'\nimport contextlib, io, pickle, runpy, sys, time\nfrom pathlib import Path\nimport numpy as np\nimport tomography_solver as solver\nassert Path(solver.__file__).re",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "95ce9c6d2b76b38b85a7c764f42e018abf9ef6f3f81c88e70bb2507bf4ed692b",
+        "expected_candidate_sha256": "95ce9c6d2b76b38b85a7c764f42e018abf9ef6f3f81c88e70bb2507bf4ed692b",
+        "computed_candidate_sha256": "95ce9c6d2b76b38b85a7c764f42e018abf9ef6f3f81c88e70bb2507bf4ed692b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/tomography_solver.py",
+            "bytes": 10995
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_95ce9c6d"
+    }
+  },
+  "structure": {
+    "full_producer_count": 14,
+    "reusable_ast_function_closures": [
+      {
+        "name": "ray_terms",
+        "code": "def ray_terms(s, center):\n    from numpy.polynomial.legendre import leggauss\n    zs = np.asarray(s['z_src_m'])[:, None]\n    dz = np.asarray(s['z_rcv_m'])[None, :] - zs\n    w = s['W_m']\n    length = np.hypot(w, dz)\n    (nodes, weights) = leggauss(32)\n    frac = (nodes + 1) / 2\n    d2 = (w * frac - center[0]) ** 2 + (zs[..., None] + dz[..., None] * frac - center[1]) ** 2\n    g = length * (np.exp(-0.5 * d2 / s['R_plume_m'] ** 2) @ (weights / 2))\n    return np.stack((length, length * (dz / length) ** 2, g), axis=-1)"
+      },
+      {
+        "name": "_integral",
+        "code": "def _integral(x, z, radius, zs, ex, ez, length, jac=False):\n    \"\"\"Integrate the unit-peak Gaussian along each finite ray segment.\"\"\"\n    from scipy.special import erf\n    dz = z - zs\n    u = x * ex + dz * ez\n    d = dz * ex - x * ez\n    root2r = np.sqrt(2) * radius\n    transverse = np.exp(-0.5 * (d / radius) ** 2)\n    g = transverse * (radius * np.sqrt(np.pi / 2)) * (erf((length - u) / root2r) + erf(u / root2r))\n    if not jac:\n        return g\n    gu = transverse * (np.exp(-0.5 * (u / radius) ** 2) - np.exp(-0.5 * ((length - u) / radius) ** 2))\n    gd = -d * g / radius ** 2\n    return (g, ex * gu - ez * gd, ez * gu + ex * gd)"
+      }
+    ]
+  }
+}

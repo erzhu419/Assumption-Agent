@@ -1,0 +1,137 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_daa4022a0a96",
+    "source_hash": "daa4022a0a96546445c3572051bf1c04b6fb2ab4fd9de1fa06f7356175aa11cd",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_assay.py",
+        "archived_relpath": "producers/tmp__audit_assay.py",
+        "bytes": 3526,
+        "sha256": "a94dc1c3b4d960b826fd59ecfb44db59c8240daf430071582a8dc69a65042df1"
+      },
+      {
+        "container_path": "/tmp/calibrate.py",
+        "archived_relpath": "producers/tmp__calibrate.py",
+        "bytes": 1924,
+        "sha256": "7f33da7aceddf49f6c112e7df0a3e7720c59193b8febdd6f7a02fe4850d39e56"
+      },
+      {
+        "container_path": "/tmp/screen_models.py",
+        "archived_relpath": "producers/tmp__screen_models.py",
+        "bytes": 2935,
+        "sha256": "fef9be30dfd97331ca4052ca62006bbc0f51a4899afc32a8b413c9a4e8ed31f5"
+      },
+      {
+        "container_path": "/tmp/stress_assay.py",
+        "archived_relpath": "producers/tmp__stress_assay.py",
+        "bytes": 2871,
+        "sha256": "857464d5c0a7b3b8cd14529b6a92be3f96cda5e60cb772d7db2ec60071676872"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "python - <<'PY'\nimport pickle, collections\np = pickle.load(open('/holdout_task/public_screen.pkl', 'rb'))\ndef view(x, depth=0):\n    print('  '*depth, type(x).__name__, getattr(x,'shape',None), len(x) if hasattr(x,'__len__') else '', end=' ')\n    if depth >= 4:\n        print(repr(x)[:350]); return\n    if isinstance(x, dict):\n        print(list(x)[:35])\n        for k,v in list(x.items())[:8]:\n            print('  '*(depth+1), k); view(v,depth+1)\n    elif isinstance(x,(list,tuple)):\n        print();\n        if x: view(x[0],depth+1)\n    else: print(repr(x)[:450])\nview(p)\nPY\nls -1 /tmp/hegel_wormho",
+      "set -e\ncommand -v python3\npython3 - <<'PY'\nimport pickle\np=pickle.load(open('/holdout_task/public_screen.pkl','rb'))\ndef show(x,d=0):\n    print(' '*d,type(x).__name__,getattr(x,'shape',''),len(x) if hasattr(x,'__len__') else '',repr(x)[:180] if d>=4 or not isinstance(x,(dict,list,tuple)) else '')\n    if d>=4:return\n    if isinstance(x,dict):\n        print(' '*d,list(x)[:20]);\n        for k,v in list(x.items())[:8]:\n            print(' '*d,k);show(v,d+1)\n    elif isinstance(x,(list,tuple)) and x:show(x[0],d+1)\nshow(p)\nimport numpy, scipy\nprint(numpy.__version__,scipy.__version__)\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, collections, numpy as np\np=pickle.load(open('public_screen.pkl','rb'))\nfor plate in p['plates']:\n w=plate['wells']; groups=collections.defaultdict(list)\n for a in w: groups[a['well_type']].append(a)\n print(plate['plate_id'],len(w),len({(a['row'],a['col']) for a in w}))\n for k,g in groups.items():\n  r,c,y=np.array([(a['row'],a['col'],a['fluorescence']) for a in g]).T; d=np.minimum.reduce([r,15-r,c,23-c]); print(k,len(g),'quantiles',np.round(np.quantile(y,[0,.1,.5,.9,1]),1),'depths',dict(sorted(collections.Counter(d.astype(int)).items())))\n  if",
+      "cat > /tmp/screen_models.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\nfrom hegel_wormhole_skills.autogenous_prim_robust_affine_projection import robust_residual_weights\nfrom hegel_wormhole_skills.autogenous_prim_ridge_profiled_matching import fit_ridge_nuisance\n\n\ndef design(r,c,kind,tau):\n    x=(r-7.5)/7.5; z=(c-11.5)/11.5\n    dr=np.minimum(r,15-r); dc=np.minimum(c,23-c)\n    a,b=np.exp(-dr/tau),np.exp(-dc/tau)\n    cols=[np.ones_like(x),x,z]\n    if kind=='min': cols += [np.maximum(a,b)]\n    if kind=='sum': cols += [a+b]\n    ",
+      "cat > /tmp/calibrate.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom screen_models import arrays, design, fit\n\n\ndef controls(data):\n    out = []\n    for r,c,k,y,_,_ in data:\n        bg = np.median(y[k=='POS_KILL'])\n        ix = k=='DMSO'\n        amp = np.median(y[ix])-bg\n        out.append((r[ix],c[ix],(y[ix]-bg)/amp))\n    return out\n\n\ndef profile(block, tau, kind='min'):\n    r,c,y = block\n    a = design(r,c,kind,tau)\n    beta = fit(a,y)\n    err = y-a@beta\n    return np.log1p((err/0.025)**2).sum(), beta\n\n\ndef width(blocks, kind='min'):\n    ans = minimize_scalar(lam",
+      "set -e\ncat > /holdout_task/assay_ic50.py <<'PY'\n\"\"\"Control-calibrated Hill fits for a 384-well viability screen.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom scipy.special import expit\n\nfrom hegel_wormhole_skills.autogenous_prim_ridge_profiled_matching import fit_ridge_nuisance\nfrom hegel_wormhole_skills.autogenous_prim_robust_affine_projection import robust_residual_weights\n\n\n_LOG10 = np.log(10.0)\n_CONTROL_SCALE = 0.025\n\n\ndef _geometry(wells):\n    row = np.array([well['row'] for well in wells], dtype=float)\n    col = np.array([well['col'] for well in w",
+      "cat > /tmp/stress_assay.py <<'PY'\nimport copy\nimport pickle\nimport sys\nimport numpy as np\nfrom scipy.special import expit\nsys.path.insert(0, '/holdout_task')\nfrom assay_ic50 import estimate_compound_hill_parameters as estimate\n\npublic = pickle.load(open('/holdout_task/public_screen.pkl', 'rb'))\nkeys = ('log10_ic50_uM', 'hill_slope')\n\ndef synthesize(seed, widths, layout, control_outliers, geometry):\n    rng = np.random.default_rng(seed)\n    plates = copy.deepcopy(public['plates'])\n    truth = {c: (v[keys[0]] + rng.uniform(-.18,.18), v[keys[1]] * rng.uniform(.85,1.15)) for c, v in public['gt'].i",
+      "set -e\ncmp /holdout_task/assay_ic50.py /tmp/.hegel_candidate_archive/v01_daa4022a\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport math\nimport pickle\nimport sys\n\nsys.path.insert(0, '/tmp')  # Mounted primitives are bundled by the grading packager.\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    screen = pickle.load(f)\nlimits = {'log10_ic50_uM': 0.09, 'hill_slope': 0.18}\nplates, tr",
+      "set -e\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport math\nimport pickle\nimport sys\n\nsys.path.insert(0, '/tmp')\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_screen.pkl', 'rb') as source:\n    screen = pickle.load(source)\nlimits = {'log10_ic50_uM': 0.09, 'hill_slope': 0.18}\nplates, truth = screen['plates'], screen['gt']\nworst = dict.fromkeys(limits, 0.0)\nfor subset in [plates] + [plates[:i] + plates[i+1:] ",
+      "cat > /tmp/audit_assay.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom scipy.special import expit\nfrom screen_models import arrays, fit\n\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    p = pickle.load(f)\ndata = arrays(p['plates'])\ncontrols = [(r[k=='DMSO'], c[k=='DMSO'], y[k=='DMSO']-np.median(y[k=='POS_KILL'])) for r,c,k,y,_,_ in data]\ncoords = sorted(set((int(r),int(c)) for rr,cc,_ in controls for r,c in zip(rr,cc)))\n\ndef depth(r,c):\n    return np.minimum.reduce([r,15-r,c,23-c])\n\ndef design(r,c,w,mode):\n    x,z = (r-7.5)/7.5,(c-11.5)/11",
+      "cd /tmp && PYTHONPATH=/tmp OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom screen_models import arrays, design, fit\nfrom calibrate import controls, width\nfrom scipy.optimize import minimize_scalar\n\nwith open('/holdout_task/public_screen.pkl', 'rb') as f:\n    p = pickle.load(f)\ndata = arrays(p['plates'])\nblocks = controls(data)\n\ndef rational(r, c, w):\n    A = design(r, c, 'min', w)\n    d = np.minimum.reduce([r, 15-r, c, 23-c])\n    A[:, -1] = 1 / (1 + (d/w)**2)\n    return A\n\ndef objective(log_w):\n    score = 0.\n    for r,c,y in blocks"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_assay.py",
+      "primary_producer_container_path": "/tmp/audit_assay.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 6406,
+        "sha256": "64fc4cafb8c1ab733dd080df63073d7a6f351e39dc84941c087e018827c6c592",
+        "content_addressed_ref": "content_addressed_blobs/64fc4cafb8c1ab733dd080df63073d7a6f351e39dc84941c087e018827c6c592.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": [
+      "depth",
+      "design",
+      "controls",
+      "arrays"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "daa4022a0a96546445c3572051bf1c04b6fb2ab4fd9de1fa06f7356175aa11cd",
+      "verified_turn": 9,
+      "verification_command": "set -e\ncd /tmp\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport math\nimport pickle\nimport sys\n\nsys.path.insert(0, '/tmp')\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nm",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "daa4022a0a96546445c3572051bf1c04b6fb2ab4fd9de1fa06f7356175aa11cd",
+        "expected_candidate_sha256": "daa4022a0a96546445c3572051bf1c04b6fb2ab4fd9de1fa06f7356175aa11cd",
+        "computed_candidate_sha256": "daa4022a0a96546445c3572051bf1c04b6fb2ab4fd9de1fa06f7356175aa11cd",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 6406
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_daa4022a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "depth",
+        "code": "def depth(r, c):\n    return np.minimum.reduce([r, 15 - r, c, 23 - c])"
+      },
+      {
+        "name": "design",
+        "code": "def design(r, c, w, mode):\n    (x, z) = ((r - 7.5) / 7.5, (c - 11.5) / 11.5)\n    d = depth(r, c)\n    g = 1 / (1 + (d / w) ** 2) if mode == 'rational' else np.exp(-d / w)\n    cols = [np.ones_like(x), x, z, g]\n    if mode == 'cross':\n        cols += [x * g, z * g]\n    return np.column_stack(cols)"
+      },
+      {
+        "name": "controls",
+        "code": "def controls(data):\n    out = []\n    for (r, c, k, y, _, _) in data:\n        bg = np.median(y[k == 'POS_KILL'])\n        ix = k == 'DMSO'\n        amp = np.median(y[ix]) - bg\n        out.append((r[ix], c[ix], (y[ix] - bg) / amp))\n    return out"
+      },
+      {
+        "name": "arrays",
+        "code": "def arrays(plates):\n    return [(np.array([a['row'] for a in t['wells']]), np.array([a['col'] for a in t['wells']]), np.array([a['well_type'] for a in t['wells']]), np.array([a['fluorescence'] for a in t['wells']]), np.array([a['compound_id'] for a in t['wells']], dtype=object), np.array([a['log10_conc_uM'] for a in t['wells']], dtype=float)) for t in plates]"
+      }
+    ]
+  }
+}
