@@ -1,0 +1,77 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_multicopy_plasmid_cohort_4c793d20c0f0",
+    "source_hash": "4c793d20c0f05f3fbd1dda1bd9e33f29a95c7761d650ece42d7f84742bc5c5c9",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho12__multicopy_plasmid_cohort_consensus",
+    "wormhole_family": "fam_biomystery_genomic_homology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && find public_cohort -maxdepth 1 -type f -printf '%f %s bytes\\n' | sort -V && python3 - <<'PY'\nimport json\nfrom pathlib import Path\np = Path('public_cohort')\ndef shape(x):\n    if isinstance(x, dict): return {k: shape(v) for k, v in x.items()}\n    if isinstance(x, list): return {'count': len(x), 'first': shape(x[0]) if x else None}\n    if isinstance(x, str): return f'string[{len(x)}]'\n    return type(x).__name__\nfor f in [p/'reference_panel.json', *sorted(p.glob('isolate_*.json'))[:3]]:\n    print(f.name, json.dumps(shape(json.loads(f.read_text()))))\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport json\nfrom collections import Counter\nfrom pathlib import Path\nfiles = sorted(Path('public_cohort').glob('isolate_*.json'))\nshapes = Counter()\nfamilies = Counter()\nfor path in files:\n    contigs = json.loads(path.read_text())['contigs']\n    shapes[tuple(sorted((c['circular'], c['family_tag']) for c in contigs if not c['circular']))] += 1\n    families.update({c['family_tag'] for c in contigs if c['circular'] and len(c['sequence']) >= 2400})\nprint('isolate count:', len(files))\nprint('noncircular contig signatures:', shapes)\nprint('length-qualified circu",
+      "cd /holdout_task && python3 - <<'PY'\nfrom collections import Counter, defaultdict\nfrom pathlib import Path\nfrom statistics import median\nimport json\n\ncohort = Path('public_cohort')\nqualified = defaultdict(list)\nexcluded_copy = defaultdict(list)\nfor path in sorted(cohort.glob('isolate_*.json')):\n    record = json.loads(path.read_text())\n    chr_depth = median(c['mean_depth'] for c in record['contigs'] if not c['circular'])\n    seen = Counter()\n    for c in record['contigs']:\n        if not c['circular'] or len(c['sequence']) < 2400:\n            continue\n        family = c['family_tag']\n        ",
+      "set -eu\ncd /holdout_task\ncat > plasmid_audit.py <<'PY'\n\"\"\"Audit circular plasmid family prevalence and depth-normalized copy number.\"\"\"\n\nimport json\nfrom collections import defaultdict\nfrom pathlib import Path\nfrom statistics import median\n\n\ndef audit_outbreak_cohort(cohort_dir: str) -> dict:\n    paths = sorted(Path(cohort_dir).glob('isolate_*.json'))\n    if not paths:\n        raise ValueError('No isolate bundles found')\n\n    cohort_copies = defaultdict(list)\n    for path in paths:\n        contigs = json.loads(path.read_text(encoding='utf-8'))['contigs']\n        chromosome_depth = median(c['me",
+      "cd /holdout_task && python3 -B - <<'PY'\nimport json\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nfrom plasmid_audit import audit_outbreak_cohort\n\nsource = Path('/holdout_task/public_cohort')\nwith TemporaryDirectory() as tmp:\n    subset = Path(tmp)\n    for path in sorted(source.glob('isolate_*.json'))[2:]:\n        (subset / path.name).symlink_to(path)\n    result = audit_outbreak_cohort(str(subset))\n    assert result['shared_plasmid_family_tag'] == 'IncX4_CTX_PLASMID', result\n    assert 3.2 <= result['median_plasmid_copy_number'] <= 7.5, result\n    print('Public cohort withou",
+      "set -eu\ncd /holdout_task\npython3 -IB - <<'PY'\nimport importlib.util\nimport json\nimport math\nfrom pathlib import Path\nfrom statistics import median\nfrom tempfile import TemporaryDirectory\n\nroot = Path('/holdout_task')\nsource = root / 'public_cohort'\nspec = importlib.util.spec_from_file_location('plasmid_audit', root / 'plasmid_audit.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\naudit = module.audit_outbreak_cohort\nfamily = 'IncX4_CTX_PLASMID'\npaths = sorted(source.glob('isolate_*.json'))\nexpected_copies = {}\nfor path in paths:\n    contigs = json.loads(path."
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/plasmid_audit.py",
+        "filename": "plasmid_audit.py",
+        "bytes": 1432,
+        "sha256": "19716db90d0e90fde25268c2ec5a20f1eb0609f8d4303f3ef182539c02a1a245",
+        "content_addressed_ref": "content_addressed_blobs/19716db90d0e90fde25268c2ec5a20f1eb0609f8d4303f3ef182539c02a1a245.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/plasmid_audit.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_genomic_homology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4c793d20c0f05f3fbd1dda1bd9e33f29a95c7761d650ece42d7f84742bc5c5c9",
+      "verified_turn": 7,
+      "verification_command": "set -eu\ncd /holdout_task\npython3 -IB - <<'PY'\nimport importlib.util\nimport json\nimport math\nfrom pathlib import Path\nfrom statistics import median\nfrom tempfile import TemporaryDirectory\n\nroot = Path('/holdout_task')\nsource = root / 'public",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4c793d20c0f05f3fbd1dda1bd9e33f29a95c7761d650ece42d7f84742bc5c5c9",
+        "expected_candidate_sha256": "4c793d20c0f05f3fbd1dda1bd9e33f29a95c7761d650ece42d7f84742bc5c5c9",
+        "computed_candidate_sha256": "4c793d20c0f05f3fbd1dda1bd9e33f29a95c7761d650ece42d7f84742bc5c5c9",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/plasmid_audit.py",
+            "bytes": 1432
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4c793d20"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

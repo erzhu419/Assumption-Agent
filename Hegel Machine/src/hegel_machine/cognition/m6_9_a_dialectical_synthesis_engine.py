@@ -1710,8 +1710,11 @@ def run_m6_9_a_two_branch_episode(
     reasoning_effort: str = "medium",
     selective_second_branch: bool = False,
     m8_container_planner: Any | None = None,
+    enable_m8_local_repair: bool = False,
+    m8_mechanism_graph: Any | None = None,
+    m8_graph_checkpoint_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Execute one `Hegel_M6_9_A_TwoBranch_LiveGPT` (or `selective_second_branch=True` `~1.3x` selective) episode."""
+    """Execute one `Hegel_M6_9_A_TwoBranch_LiveGPT` (or `selective_second_branch` / M8.3 3-tier `1x -> 1.1x Repair -> 2x`) episode."""
     ep_t0 = monotonic()
     is_bm = task.benchmark == "BioMysteryBench-Preview"
     is_ho = task.benchmark == "Hegel-OOD-Holdout-12"
@@ -1760,9 +1763,12 @@ def run_m6_9_a_two_branch_episode(
         )
 
     selective_decision: dict[str, Any] | None = None
+    local_repair_summary: dict[str, Any] | None = None
+    raw_pre_repair_tar: Path | None = None
     thesis_sum: dict[str, Any] | None = None
     use_m8_planner = m8_container_planner is not None
-    if selective_second_branch or use_m8_planner:
+    use_m8_repair = bool(enable_m8_local_repair or m8_mechanism_graph is not None)
+    if selective_second_branch or use_m8_planner or use_m8_repair:
         anti_sum = _exec_antithesis()
         chk_sel: dict[str, Any] = {"accepted": True}
         pub_sel: dict[str, Any] = {}
@@ -1775,13 +1781,82 @@ def run_m6_9_a_two_branch_episode(
                     cpus=str(task.agent_cpus),
                 )
                 _init_holdout_public_env_if_needed(probe_cid, task)
+                imp_init_sha = str(anti_sum.get("final_candidate_sha256") or "")
                 if antithesis_tar.is_file():
-                    m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                    imp_init = m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                    imp_init_sha = str(imp_init.get("candidate_sha256") or imp_init_sha)
                 chk_sel = verify_candidate_artifact_contract_in_container(
-                    probe_cid, task.declared_artifacts, str(anti_sum.get("final_candidate_sha256") or "")
+                    probe_cid, task.declared_artifacts, imp_init_sha
                 )
                 if chk_sel.get("accepted"):
                     pub_sel = _run_public_container_candidate_benchmark(probe_cid)
+                    if use_m8_planner or use_m8_repair:
+                        from .m8_container_mechanism_adapter import (
+                            execute_in_container_local_repair,
+                            probe_general_public_container_invariants_in_container,
+                        )
+
+                        sym_probe = probe_general_public_container_invariants_in_container(probe_cid, task)
+                        if sym_probe.get("probe_applicable"):
+                            pub_sel["public_output_contract_ok"] = sym_probe.get("public_output_contract_ok")
+                            pub_sel["id_renaming_invariant_ok"] = sym_probe.get("id_renaming_invariant_ok")
+                            pub_sel["symmetry_probe_family"] = sym_probe.get("symmetry_probe_family")
+                            pub_sel["missing_or_null_keys"] = sym_probe.get("missing_or_null_keys")
+                            pub_sel["renaming_discrepancies"] = sym_probe.get("renaming_discrepancies")
+                            pub_sel["public_consistency_metrics"] = sym_probe.get("public_consistency_metrics")
+
+                        # Tier 1 (`0.35x` `LocalContainerRepair`) BEFORE spawning a `2.0x` `Thesis` challenger!
+                        needs_local_repair = bool(
+                            use_m8_repair
+                            and sym_probe.get("probe_applicable")
+                            and (
+                                sym_probe.get("public_output_contract_ok") is False
+                                or sym_probe.get("id_renaming_invariant_ok") is False
+                            )
+                        )
+                        if needs_local_repair:
+                            repair_client = m6f.FrontierCodexClient(
+                                codex_info=codex_info,
+                                model=model,
+                                reasoning_effort=reasoning_effort,
+                                timeout_seconds=210,
+                            )
+                            local_repair_summary = execute_in_container_local_repair(
+                                probe_cid=probe_cid,
+                                task=task,
+                                public_probe_before=sym_probe,
+                                codex_client=repair_client,
+                                graph=m8_mechanism_graph,
+                                checkpoint_path=m8_graph_checkpoint_path,
+                                step_index=(len(m8_mechanism_graph.decision_ledger) + 1 if m8_mechanism_graph is not None else 1),
+                                stage_subdir=f"{run_id}__{model}__M8LocalRepair__{task.task_id}".replace(":", "_"),
+                            )
+                            if local_repair_summary.get("repaired_verified"):
+                                raw_pre_repair_tar = antithesis_dir / "raw_pre_repair_declared_artifacts.tar"
+                                if antithesis_tar.is_file():
+                                    shutil.copy2(antithesis_tar, raw_pre_repair_tar)
+                                m6f.export_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                                imp_rep = m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                                rep_sha = str(imp_rep.get("candidate_sha256") or "")
+                                chk_after = verify_candidate_artifact_contract_in_container(
+                                    probe_cid, task.declared_artifacts, rep_sha
+                                )
+                                if chk_after.get("accepted"):
+                                    chk_sel = chk_after
+                                    anti_sum["pre_repair_candidate_sha256"] = anti_sum.get("final_candidate_sha256")
+                                    anti_sum["final_candidate_sha256"] = rep_sha
+                                    post_p = local_repair_summary["probe_after"]
+                                    pub_sel["public_output_contract_ok"] = post_p.get("public_output_contract_ok")
+                                    pub_sel["id_renaming_invariant_ok"] = post_p.get("id_renaming_invariant_ok")
+                                    pub_sel["missing_or_null_keys"] = post_p.get("missing_or_null_keys")
+                                    pub_sel["renaming_discrepancies"] = post_p.get("renaming_discrepancies")
+                                else:
+                                    # Roll back if contract guard rejects repaired module
+                                    local_repair_summary["repaired_verified"] = False
+                                    if raw_pre_repair_tar.is_file():
+                                        shutil.copy2(raw_pre_repair_tar, antithesis_tar)
+                                        raw_pre_repair_tar.unlink(missing_ok=True)
+                                    raw_pre_repair_tar = None
             finally:
                 m6f.stop_container_safely(probe_cid)
         if use_m8_planner:
@@ -1796,23 +1871,32 @@ def run_m6_9_a_two_branch_episode(
                 public_metrics=pub_sel,
             )
             selective_decision = m8_container_planner.decide_second_branch(pre_st, record_to_ledger=False)
+            if local_repair_summary and local_repair_summary.get("repaired_verified") and not selective_decision.get("spawn_second_branch"):
+                selective_decision["selected_action"] = "LocalContainerRepair"
+                selective_decision["decision_driver"] = "m8_3_tier1_local_container_repair_verified"
         else:
             selective_decision = should_spawn_dialectical_second_branch(
                 task=task, primary_summary=anti_sum, contract_check=chk_sel, public_metrics=pub_sel
             )
         selective_decision["primary_public_metrics"] = {k: v for k, v in pub_sel.items() if v is not None}
+        if local_repair_summary is not None:
+            selective_decision["local_container_repair"] = {
+                k: v for k, v in local_repair_summary.items() if k != "repaired_python_code"
+            }
         if selective_decision.get("spawn_second_branch"):
             thesis_sum = _exec_thesis()
         if use_m8_planner:
             from .m8_offline_container_planner import finalize_container_decision_record
 
-            extra_p = int((thesis_sum or {}).get("prompt_tokens") or 0)
-            extra_c = int((thesis_sum or {}).get("completion_tokens") or 0)
-            extra_w = float((thesis_sum or {}).get("wall_ms") or 0.0)
+            rep_tok = (local_repair_summary or {}).get("llm_tokens") or {}
+            extra_p = int((thesis_sum or {}).get("prompt_tokens") or 0) + int(rep_tok.get("prompt") or 0)
+            extra_c = int((thesis_sum or {}).get("completion_tokens") or 0) + int(rep_tok.get("completion") or 0)
+            extra_w = float((thesis_sum or {}).get("wall_ms") or 0.0) + float((local_repair_summary or {}).get("wall_ms") or 0.0)
+            rep_cost = 0.35 if (local_repair_summary and local_repair_summary.get("attempted")) else 0.0
             finalize_container_decision_record(
                 selective_decision,
                 executed_ok=bool(thesis_sum is None or thesis_sum.get("ended_by_finish")),
-                actual_cost=(2.0 if thesis_sum is not None else 1.0),
+                actual_cost=(2.0 + rep_cost if thesis_sum is not None else (1.0 + rep_cost)),
                 prompt_tokens=int(anti_sum.get("prompt_tokens") or 0) + extra_p,
                 completion_tokens=int(anti_sum.get("completion_tokens") or 0) + extra_c,
                 wall_ms=float(anti_sum.get("wall_ms") or 0.0) + extra_w,
@@ -1886,6 +1970,36 @@ def run_m6_9_a_two_branch_episode(
         completion_tokens_delta=int(anti_sum["completion_tokens"]),
         wall_ms_delta=float(anti_sum["wall_ms"]),
     )
+    if local_repair_summary and local_repair_summary.get("attempted"):
+        lr_tok = local_repair_summary.get("llm_tokens") or {}
+        last_p = ledger.record_decision(
+            decision_type="D2B_M8_LOCAL_CONTAINER_REPAIR",
+            parent_decision_id=last_p,
+            evidence_inputs={
+                "recalled_guard_ids": local_repair_summary.get("recalled_guard_ids", []),
+                "pre_repair_sha256": anti_sum.get("pre_repair_candidate_sha256") or anti_sum.get("final_candidate_sha256"),
+            },
+            candidates_evaluated=[
+                {
+                    "repaired_verified": bool(local_repair_summary.get("repaired_verified")),
+                    "persisted_guard_id": local_repair_summary.get("persisted_guard_id"),
+                }
+            ],
+            chosen_option={
+                "repaired_verified": bool(local_repair_summary.get("repaired_verified")),
+                "persisted_guard_id": local_repair_summary.get("persisted_guard_id"),
+                "post_repair_sha256": anti_sum.get("final_candidate_sha256"),
+            },
+            rejection_reasons=({} if local_repair_summary.get("repaired_verified") else {"local_repair": str(local_repair_summary.get("reason") or "public_probe_rejected")}),
+            rationale_summary=(
+                f"M8.3 1-turn `LocalContainerRepair` (`verified={bool(local_repair_summary.get('repaired_verified'))}`, "
+                f"`guard={local_repair_summary.get('persisted_guard_id')}`)."
+            ),
+            prompt_tokens_delta=int(lr_tok.get("prompt") or 0),
+            cached_tokens_delta=int(lr_tok.get("cached") or 0),
+            completion_tokens_delta=int(lr_tok.get("completion") or 0),
+            wall_ms_delta=float(local_repair_summary.get("wall_ms") or 0.0),
+        )
 
     synth_client = m6f.FrontierCodexClient(
         codex_info=codex_info,
@@ -1907,10 +2021,19 @@ def run_m6_9_a_two_branch_episode(
         if thesis_sum is None:
             if (not is_bm) and synth_cid is not None and antithesis_tar.is_file():
                 m6f.import_declared_artifacts_tar(synth_cid, task.declared_artifacts, antithesis_tar)
+            rep_accepted = bool(local_repair_summary and local_repair_summary.get("repaired_verified"))
             synth_res = {
-                "selected_branch": "antithesis",
-                "selection_mechanism": "selective_router_confident_single_branch",
-                "rationale": "Primary Antithesis branch cleared all public contract & benchmark checks; second branch skipped (`1.0x` compute).",
+                "selected_branch": "antithesis_local_repaired" if rep_accepted else "antithesis",
+                "selection_mechanism": (
+                    "m8_local_container_repair_single_branch"
+                    if rep_accepted
+                    else "selective_router_confident_single_branch"
+                ),
+                "rationale": (
+                    f"M8.3 `LocalContainerRepair` fixed public symmetry/contract defect (`guard={local_repair_summary.get('persisted_guard_id')}`); skipped second branch (`1.1x` compute)."
+                    if rep_accepted and local_repair_summary
+                    else "Primary Antithesis branch cleared all public contract & symmetry checks; second branch skipped (`1.0x` compute)."
+                ),
                 "synthesized_candidate_sha256": anti_sum.get("final_candidate_sha256"),
                 "synthesized_final_answer": anti_sum.get("submitted_final_answer"),
                 "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
@@ -1992,8 +2115,9 @@ def run_m6_9_a_two_branch_episode(
             )
 
         # 4. Official Air-Gapped Verification of the LOCKED Synthesized Deliverable!
-        tot_turns = int(anti_sum["turns_used"]) + (int(thesis_sum["turns_used"]) if thesis_sum else 0)
-        tot_max_turns = max_turns_per_branch * (2 if thesis_sum else 1)
+        local_repair_turns = 1 if (local_repair_summary and local_repair_summary.get("attempted")) else 0
+        tot_turns = int(anti_sum["turns_used"]) + local_repair_turns + (int(thesis_sum["turns_used"]) if thesis_sum else 0)
+        tot_max_turns = max_turns_per_branch * (2 if thesis_sum else 1) + local_repair_turns
         any_finished = bool(anti_sum["ended_by_finish"] or (thesis_sum and thesis_sum["ended_by_finish"]))
         submitted_final_ans = str(synth_res.get("synthesized_final_answer") or "") if is_bm else None
         if is_bm:
@@ -2036,15 +2160,21 @@ def run_m6_9_a_two_branch_episode(
     finally:
         m6f.stop_container_safely(synth_cid)
 
-    # 5. Post-Lock Independent Branch Grading (for `Bare_Run2_1x`, `Oracle_BestOf2_Bare_2x`, `Antithesis_1x`, and `Selection Regret`!)
+    # 5. Post-Lock Independent Branch Grading (grading raw `pre_repair_tar` when `LocalContainerRepair` modified `antithesis_tar`!)
+    raw_anti_ver: dict[str, Any] | None = None
+    if raw_pre_repair_tar is not None and raw_pre_repair_tar.is_file():
+        raw_anti_ver = grade_archived_branch_post_lock(
+            task=task, branch_summary=anti_sum, branch_tar=raw_pre_repair_tar, codex_info=codex_info
+        )
+        raw_pre_repair_tar.unlink(missing_ok=True)
     if thesis_sum is None:
-        anti_ver = verifier_report
+        anti_ver = raw_anti_ver if raw_anti_ver is not None else verifier_report
         thesis_ver: dict[str, Any] | None = None
     else:
         thesis_ver = grade_archived_branch_post_lock(
             task=task, branch_summary=thesis_sum, branch_tar=thesis_tar, codex_info=codex_info
         )
-        anti_ver = grade_archived_branch_post_lock(
+        anti_ver = raw_anti_ver if raw_anti_ver is not None else grade_archived_branch_post_lock(
             task=task, branch_summary=anti_sum, branch_tar=antithesis_tar, codex_info=codex_info
         )
         (thesis_dir / "03_postlock_branch_verifier_report.json").write_text(
@@ -2075,12 +2205,25 @@ def run_m6_9_a_two_branch_episode(
         "auth_mode": str(codex_info["auth_mode"]),
         "arm": ("Hegel_M6_9_2_Selective_LiveGPT" if selective_second_branch else "Hegel_M6_9_A_TwoBranch_LiveGPT"),
         "declared_budget_multiplier": (
-            ("selective_2x_spawned_synthesis" if thesis_sum else "selective_1x_single_branch")
-            if (selective_second_branch or use_m8_planner)
+            (
+                "selective_2x_spawned_synthesis"
+                if thesis_sum
+                else (
+                    "selective_1p1x_local_container_repair"
+                    if (local_repair_summary and local_repair_summary.get("repaired_verified"))
+                    else "selective_1x_single_branch"
+                )
+            )
+            if (selective_second_branch or use_m8_planner or use_m8_repair)
             else "2x_56_turns_plus_synthesis"
         ),
-        "selective_second_branch": bool(selective_second_branch or use_m8_planner),
+        "selective_second_branch": bool(selective_second_branch or use_m8_planner or use_m8_repair),
         "selective_router_decision": selective_decision,
+        "local_container_repair_summary": (
+            {k: v for k, v in local_repair_summary.items() if k != "repaired_python_code"}
+            if local_repair_summary is not None
+            else None
+        ),
         "strict_pass": strict_pass,
         "reward": reward_val,
         "failure_taxonomy": failure_tax,

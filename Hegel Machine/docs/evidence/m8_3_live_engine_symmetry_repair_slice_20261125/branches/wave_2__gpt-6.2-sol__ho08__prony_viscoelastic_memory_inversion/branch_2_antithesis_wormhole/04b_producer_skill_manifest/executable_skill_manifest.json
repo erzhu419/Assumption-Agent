@@ -1,0 +1,182 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_prony_viscoelastic_memory_69d6cc420153",
+    "source_hash": "69d6cc42015339b61b2da6c28082f5fda7f6bfccb07e6e3ab477c79bada43f54",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho08__prony_viscoelastic_memory_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/prony_benchmark.py",
+        "archived_relpath": "producers/tmp__prony_benchmark.py",
+        "bytes": 4592,
+        "sha256": "2c448f74faf22519c074398b5b073e893b1f2eab2074839528ab2567ad3a470c"
+      },
+      {
+        "container_path": "/tmp/prony_compare_averaging.py",
+        "archived_relpath": "producers/tmp__prony_compare_averaging.py",
+        "bytes": 3070,
+        "sha256": "ed574a15e6684cdd4b1e247971da232b171ddd30bb444859efccc38372b2909d"
+      },
+      {
+        "container_path": "/tmp/prony_full_pipeline_audit.py",
+        "archived_relpath": "producers/tmp__prony_full_pipeline_audit.py",
+        "bytes": 2785,
+        "sha256": "6cd597160590a7bf69df532c9400f92cabe63e5fda8698f3294402f3b09710a0"
+      },
+      {
+        "container_path": "/tmp/prony_probe.py",
+        "archived_relpath": "producers/tmp__prony_probe.py",
+        "bytes": 2493,
+        "sha256": "cec690fbc6af578e80fba440d740e2a4605285696c8d4858450fa0ac84aedc5a"
+      },
+      {
+        "container_path": "/tmp/prony_prune_probe.py",
+        "archived_relpath": "producers/tmp__prony_prune_probe.py",
+        "bytes": 2720,
+        "sha256": "1123f6f8148c21c1dc719357ada60642d78ac5d9510665d83de220701616c9e0"
+      },
+      {
+        "container_path": "/tmp/prony_prune_run.py",
+        "archived_relpath": "producers/tmp__prony_prune_run.py",
+        "bytes": 2795,
+        "sha256": "26529423610b57c27c32ce0ed10d7716a2478e2d5e42772bf5a80d743837ec5a"
+      },
+      {
+        "container_path": "/tmp/prony_real_audit.py",
+        "archived_relpath": "producers/tmp__prony_real_audit.py",
+        "bytes": 1498,
+        "sha256": "f0256b8c4fe64f392f1ff8f50e5136e722a0340290cf1907d0cb71e662703b5c"
+      },
+      {
+        "container_path": "/tmp/prony_refine_probe.py",
+        "archived_relpath": "producers/tmp__prony_refine_probe.py",
+        "bytes": 3078,
+        "sha256": "5a014842112f512a8083aadda04b0d632d8fb8d8df081bbe624641854592ba67"
+      },
+      {
+        "container_path": "/tmp/prony_structure.py",
+        "archived_relpath": "producers/tmp__prony_structure.py",
+        "bytes": 2798,
+        "sha256": "eb8dc721526fb3bbc9c3dade09cdfebf17324ecd83914f5f3b904252c593284e"
+      },
+      {
+        "container_path": "/tmp/prony_verify_exact.py",
+        "archived_relpath": "producers/tmp__prony_verify_exact.py",
+        "bytes": 2559,
+        "sha256": "7bcaccd551c362cb8645f97388cf199c5b9911e37141d7d1ea429726fd471f30"
+      },
+      {
+        "container_path": "/tmp/prony_verify_families.py",
+        "archived_relpath": "producers/tmp__prony_verify_families.py",
+        "bytes": 5082,
+        "sha256": "1b3649308a1f38ae4a815912025fcff545f467815476360b0ab546384ea98af8"
+      },
+      {
+        "container_path": "/tmp/prony_verify_v02.py",
+        "archived_relpath": "producers/tmp__prony_verify_v02.py",
+        "bytes": 5083,
+        "sha256": "c464cebda10997fc73cb1a89714487891a06c52becb3b253229d8ebedcd4f41d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; ls -la /tmp/hegel_wormhole_skills; python3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('/holdout_task/public_rheology.pkl','rb') as f: d=pickle.load(f)\ndef show(x,depth=0):\n p='  '*depth\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(p,repr(k)); show(v,depth+1)\n elif isinstance(x,np.ndarray):\n  print(p,x.shape,x.dtype,'head',x.ravel()[:5],'tail',x.ravel()[-5:]);\n  if x.size and np.issubdtype(x.dtype,np.number): print(p,'range',np.nanmin(x),np.nanmax(x))\n elif isinstance(x,(list,tuple)) and depth < 4:\n  print(p,type(x).__name__,len(x));\n  for v in x[:4]:",
+      "sed -n '1,108p' /tmp/hegel_wormhole_skills/autogenous_creep_corrected_retraction_calibration.py; cat >/tmp/prony_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import nnls\nfrom scipy.signal import lfilter\nfrom scipy.linalg import qr\n\ndef memory(t,e,tau,mode='linear'):\n    dt=np.diff(t); z=dt[:,None]/tau; decay=np.exp(-z); fac={'linear':lambda:-np.expm1(-z)/z,'right':lambda:np.ones_like(z),'left':lambda:decay,'mid':lambda:np.exp(-z/2),'trap':lambda:(1+decay)/2}[mode]()\n    drive=np.diff(e)[:,None]*fac\n    if np.allclose(dt,dt[0],rtol=1e-11,atol=0):\n        return np.vstack",
+      "cat >/tmp/prony_refine_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import qr\nfrom scipy.optimize import least_squares, nnls\nfrom prony_probe import memory\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\nt,x,y,tt,xx=[e[k] for k in ('train_t','train_strain','train_stress_raw','test_t','test_strain')]; yt=p['gt_test_stress']; D=np.column_stack((np.ones(len(t)),t/t[-1])); tau=np.geomspace(.02,20,100)\nA=np.column_stack((x,memory(t,x,tau))); At=np.column_stack((xx,memory(tt,xx,tau)))\ndef solve(A,w):\n    Aw=A*w[:,None]; Dw=D*w[:,None]; yw=y*w\n  ",
+      "cat >/tmp/prony_structure.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares, nnls\nfrom scipy.linalg import qr\nfrom prony_probe import memory, fit\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']; t,x,y,tt,xx=[e[k] for k in ('train_t','train_strain','train_stress_raw','test_t','test_strain')]; truth=p['gt_test_stress']; D=np.c_[np.ones(len(t)),t/t[-1]]; taus=np.geomspace(.02,20,90)\ndef design(t,x,ts): return np.c_[x,memory(t,x,ts)]\nA=design(t,x,taus)\nc,b,r,s=fit(A,D,y,True)\nkeep=np.abs(r-np.median(r))<7*s\nix=np.flatnonzero(c[1:]>",
+      "cat >/tmp/prony_benchmark.py <<'PY'\nimport numpy as np\nimport pickle\nfrom scipy.linalg import qr\nfrom scipy.optimize import nnls, least_squares\nfrom prony_probe import memory\n\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\nt,x,y,tt,xx=[e[k] for k in ('train_t','train_strain','train_stress_raw','test_t','test_strain')]\ngrid=np.geomspace(.02,20,96)\n\ndef design(t,x,ts): return np.c_[x,memory(t,x,ts)]\ndef problem(t,x,y):\n    D=np.c_[np.ones(len(t)),(t-t.mean())/np.ptp(t)]; A=design(t,x,grid)\n    def solve(A,D,y,w=None):\n        if w is not None: A=A*w[:,None]; D=D",
+      "set -e\ncat > /holdout_task/prony_rheology.py <<'PY'\n\"\"\"Recover a passive Prony model and forecast stress without load-cell drift.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import qr\nfrom scipy.optimize import least_squares, nnls\nfrom scipy.signal import lfilter\n\n\n_TAU_MIN, _TAU_MAX = 0.02, 20.0\n\n\ndef _design(t, strain, tau):\n    \"\"\"Integrate the exponential memory exactly for piecewise-linear strain.\"\"\"\n    A = np.zeros((len(t), len(tau) + 1))\n    A[:, 0] = strain\n    dt = np.diff(t)\n    if not dt.size or not len(tau):\n        return A\n    de = np.diff(strain)\n    if np.allclose(dt, dt[0], rtol",
+      "set -e\npython3 - <<'PY'\np='/tmp/prony_benchmark.py'\ns=open(p).read(); s=s.replace('from prony_probe import memory','from prony_probe import memory\\nimport sys\\nsys.path.insert(0, \"/holdout_task\")\\nfrom prony_rheology import fit_prony_and_predict_stress'); s=s.replace('    fit,z0=problem(t,x,y)\\n    fits=', '''    result=fit_prony_and_predict_stress(dict(train_t=t,train_strain=x,train_stress_raw=y,test_t=tt,test_strain=xx))\n    pred=result['test_stress']; delta=pred-true\n    quartiles=np.array_split(np.arange(len(tt)),4)\n    return 0,{'candidate':[abs(result['G_inf']/g-1), np.linalg.norm(delta)",
+      "set -e\ncat >/tmp/prony_prune_probe.py <<'PY'\nimport sys\nfrom itertools import combinations\nimport numpy as np\nfrom scipy.linalg import qr\nfrom scipy.optimize import least_squares\nsys.path.insert(0, '/holdout_task')\nimport prony_rheology as base\n\n\ndef fits(t, strain, y):\n    drift = np.column_stack((np.ones(len(t)), (t-t.mean())/np.ptp(t)))\n    grid = np.geomspace(0.02, 20., 96)\n    A = base._design(t, strain, grid)\n    keep, s = base._robust_screen(A, drift, y)\n    Q = qr(drift[keep], mode='economic')[0]\n    obs = base._project(Q, y[keep])\n    B = base._project(Q, A[keep])\n    g = base._positi",
+      "set -e\ncat >/tmp/prony_compare_averaging.py <<'PY'\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport prony_rheology as base\nfrom prony_prune_probe import fits\nfrom prony_benchmark import p,t,x,y,tt,xx,design\n\ndef compare(t,x,y,tt,xx,truth,g):\n    options,profile=fits(t,x,y)\n    fit=base.fit_prony_and_predict_stress(dict(train_t=t, train_strain=x, train_stress_raw=y, test_t=tt, test_strain=xx))\n    prior=np.r_[fit['G_inf'],fit['test_stress']]\n    tau,c=options[1.]\n    reduced=np.r_[c[0],base._design(tt,xx,tau)@c]\n    gap=profile[1][1] if len(profile)>1 else np.inf\n    val",
+      "set -e\npython3 - <<'PY'\np='/holdout_task/prony_rheology.py'\ns=open(p).read()\na=s.index('    # Smooth log-time gaps')\nb=s.index('\\n\\ndef fit_prony_and_predict_stress',a)\ns=s[:a]+'''    def smooth_spacing(z, c, cost):\n        # Regularize log-time gaps only within the residual noise budget.\n        if len(z) >= 3:\n            for strength in (18, 10, 6, 3):\n                zz, cc, err = refine(z, strength)\n                if err <= cost + len(z) - 2:\n                    return zz, cc\n        return z, c\n\n    full = smooth_spacing(z, c, cost)\n    # If a smaller spectrum fits almost equally well, ",
+      "set -e\ncat >/tmp/prony_verify_exact.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom prony_rheology import fit_prony_and_predict_stress\n\n# Independent direct interval integration, with no recursive state update.\ndef reference(t, x, tau, c):\n    u = t[:, None] - t[None, 1:]\n    age = np.maximum(u, 0)\n    dt = np.diff(t)\n    delta = np.diff(x)\n    out = c[0] * x.copy()\n    for q, a in zip(tau, c[1:]):\n        interval = -np.expm1(-dt/q) * (q/dt) * delta\n        out += a * ((np.exp(-age/q) * (u >= 0)) @ interval)\n    return out\n\nwith open('/holdout_ta",
+      "cat >/tmp/prony_real_audit.py <<'PY'\nimport sys,pickle\nimport numpy as np\nfrom scipy.linalg import qr\nsys.path.insert(0,'/holdout_task')\nimport prony_rheology as m\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']\nt,x,y=(e[k] for k in ('train_t','train_strain','train_stress_raw'))\nD=np.c_[np.ones(len(t)),(t-t.mean())/np.ptp(t)]\ntau=np.geomspace(.02,20,96); A=m._design(t,x,tau)\nz,c=m._fit(t,x,y); B=m._design(t,x,z)\nkeep,s=m._robust_screen(A,D,y)\nr=y-B@c; b=np.linalg.lstsq(D[keep],r[keep],rcond=None)[0]; r-=D@b\nprint('time/strain every 2s', list(zip(t[::40],x[::40]",
+      "set -e\ncat >/tmp/prony_full_pipeline_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nfrom unittest.mock import patch\n\nimport numpy as np\n\npath = Path('/holdout_task/prony_rheology.py')\nspec = importlib.util.spec_from_file_location('prony_rheology', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n# Ablate spacing regularization without changing screening, mode selection or integration.\nunregularized = {'__name__': 'unregularized'}\nsource = path.read_text()\nassert source.count('for strength in (18, 10, 6, 3):') == 1\nexec(compile(source.repl"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__prony_verify_v02.py",
+      "primary_producer_container_path": "/tmp/prony_verify_v02.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/prony_rheology.py",
+        "filename": "prony_rheology.py",
+        "bytes": 5248,
+        "sha256": "bf70278c15ec3e7aebfdcdcaefa53eedc4e39312e0e79a132029361d969bfdfc",
+        "content_addressed_ref": "content_addressed_blobs/bf70278c15ec3e7aebfdcdcaefa53eedc4e39312e0e79a132029361d969bfdfc.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/prony_rheology.py"
+    ],
+    "exported_pure_functions": [
+      "memory",
+      "fit",
+      "design"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "69d6cc42015339b61b2da6c28082f5fda7f6bfccb07e6e3ab477c79bada43f54",
+      "verified_turn": 15,
+      "verification_command": "set -e\ncat >/tmp/prony_full_pipeline_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nfrom unittest.mock import patch\n\nimport numpy as np\n\npath = Path('/holdout_task/prony_rheology.py')\nspec = importlib.util.spec",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "69d6cc42015339b61b2da6c28082f5fda7f6bfccb07e6e3ab477c79bada43f54",
+        "expected_candidate_sha256": "69d6cc42015339b61b2da6c28082f5fda7f6bfccb07e6e3ab477c79bada43f54",
+        "computed_candidate_sha256": "69d6cc42015339b61b2da6c28082f5fda7f6bfccb07e6e3ab477c79bada43f54",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/prony_rheology.py",
+            "bytes": 5248
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_69d6cc42"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": [
+      {
+        "name": "memory",
+        "code": "def memory(t, e, tau, mode='linear'):\n    from scipy.signal import lfilter\n    dt = np.diff(t)\n    z = dt[:, None] / tau\n    decay = np.exp(-z)\n    fac = {'linear': lambda : -np.expm1(-z) / z, 'right': lambda : np.ones_like(z), 'left': lambda : decay, 'mid': lambda : np.exp(-z / 2), 'trap': lambda : (1 + decay) / 2}[mode]()\n    drive = np.diff(e)[:, None] * fac\n    if np.allclose(dt, dt[0], rtol=1e-11, atol=0):\n        return np.vstack((np.zeros(len(tau)), np.column_stack([lfilter([1], [1, -a], u) for (a, u) in zip(decay[0], drive.T)])))\n    out = np.zeros((len(t), len(tau)))\n    for i in range(len(dt)):\n        out[i + 1] = decay[i] * out[i] + drive[i]\n    return out"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(A, D, y, robust=True):\n    from scipy.optimize import nnls\n    from scipy.linalg import qr\n    w = np.ones(len(y))\n    for it in range(20 if robust else 1):\n        Aw = A * w[:, None]\n        Dw = D * w[:, None]\n        yw = y * w\n        Q = qr(Dw, mode='economic')[0]\n        Ap = Aw - Q @ (Q.T @ Aw)\n        yp = yw - Q @ (Q.T @ yw)\n        s = np.linalg.norm(Ap, axis=0)\n        c = nnls(Ap / s, yp, maxiter=5000)[0] / s\n        b = np.linalg.lstsq(Dw, (y - A @ c) * w, rcond=None)[0]\n        r = y - A @ c - D @ b\n        mad = 1.4826 * np.median(np.abs(r - np.median(r)))\n        w = 1 / np.hypot(1, r / max(mad * 2.4, 1e-10))\n    return (c, b, r, mad)"
+      },
+      {
+        "name": "design",
+        "code": "def design(t, x, ts):\n    return np.c_[x, memory(t, x, ts)]"
+      }
+    ]
+  }
+}

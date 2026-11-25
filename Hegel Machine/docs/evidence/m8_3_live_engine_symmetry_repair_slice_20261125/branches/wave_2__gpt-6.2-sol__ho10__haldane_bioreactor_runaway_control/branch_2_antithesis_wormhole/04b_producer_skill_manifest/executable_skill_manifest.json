@@ -1,0 +1,92 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_4ef989b24df7",
+    "source_hash": "4ef989b24df7da178b314adbf3913e95489b5d5fb3c1ed57e55779cc261bb24e",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho10__haldane_bioreactor_runaway_control",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/stress_bio.py",
+        "archived_relpath": "producers/tmp__stress_bio.py",
+        "bytes": 823,
+        "sha256": "bb2783c9df5d67408933ea42ba6d0f7dd201567909517848db5e7bf5a13f2643"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat > bioreactor_ctrl.py <<'PY'\n\"\"\"Delay-aware feedback for the supplied fed-batch simulator.\"\"\"\n\nfrom math import exp\n\n\ndef compute_control_step(obs: dict, state_memory: dict) -> tuple[dict, dict]:\n    dt = obs['dt_h']\n    v = obs['V_L']\n    x = obs['X_meas_g_L']\n    s = obs['S_meas_g_L']\n    temp = obs['T_meas_C']\n    pending = state_memory.get('feed', 0.2)\n    next_v = v + dt * pending\n\n    # Predict substrate when the new command first takes effect.\n    mu = 0.42 * exp(0.065 * (temp - 30.0)) * s / (0.8 + s + s*s/15.0)\n    uptake = 2.0 * mu * x\n    next_s = s + dt * (pen",
+      "cd /holdout_task && sha256sum bioreactor_ctrl.py && PYTHONPATH=/tmp python3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration import calibrate_retraction\nprint(inspect.getdoc(calibrate_retraction))\nprint('\\n'.join(inspect.getsource(calibrate_retraction).splitlines()[:22]))\nPY\ncd /holdout_task && env -u PYTHONPATH python3 - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom random import Random\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nbounds = ((0.357, 0.483), (0",
+      "set -eu\ncd /holdout_task\nsed -n '1,160p' plant_sim.py\nenv -u PYTHONPATH python3 -B - <<'PY'\nfrom itertools import product\nfrom math import sqrt\nfrom plant_sim import run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\n# The previous temperature maximum occurred at the slow-growth corner.\n# Sweep through growth rates at fixed maximum tested pulse and fouling:\n# changing growth can move the biomass buildup into or out of the pulse.\nrows = []\nfor mu0, ki, ks, seed in product((0.357, 0.378, 0.399, 0.420, 0.441, 0.462, 0.483), (12., 18.), (0.8, 0.9), (17, 451)):\n    peak_s = sqrt(ks *",
+      "set -eu\ncd /holdout_task\nenv -u PYTHONPATH python3 -B - <<'PY'\nfrom itertools import product\nfrom pathlib import Path\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\nsource = Path('bioreactor_ctrl.py').read_text()\nanchor = \"        heat += 2.0\"\nassert source.count(anchor) == 1\n\ndef controller(pulse_allowance):\n    if pulse_allowance == 2.0:\n        return compute_control_step\n    namespace = {}\n    exec(compile(source.replace(anchor, f'        heat += {pulse_allowance!r}'), '<pulse allowance experiment>', 'exec'), namespace)\n    return",
+      "set -eu\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('bioreactor_ctrl.py')\ns = p.read_text()\nanchor = '        heat += 2.0'\nassert s.count(anchor) == 1\np.write_text(s.replace(anchor, '        # Reserve cooling for the scheduled heat-disturbance window.\\n        heat += 6.0'))\nPY\nmkdir -p /tmp/.hegel_candidate_archive\nsha=$(sha256sum bioreactor_ctrl.py | cut -c1-8)\ncp bioreactor_ctrl.py \"/tmp/.hegel_candidate_archive/v02_$sha\"\nenv -u PYTHONPATH python3 -B - <<'PY'\nfrom itertools import product\nfrom math import isfinite\nfrom random import Random\nfrom plant_sim import NOMIN",
+      "set -eu\ncd /holdout_task\nenv -u PYTHONPATH python3 -B - <<'PY'\nfrom inspect import getsource\nfrom math import sqrt\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\n# Capture the simulator's own substep states; leave its update equations unchanged.\nsource = getsource(run_closed_loop)\nanchor = '            max_T = max(max_T, T); max_V = max(max_V, V)'\nassert source.count(anchor) == 1\ntrace = []\nns = dict(run_closed_loop.__globals__, trace=trace)\nexec(compile(source.replace(anchor, anchor + '\\n            trace.append((t, X, S, V, T, F, uc"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_bio.py",
+      "primary_producer_container_path": "/tmp/stress_bio.py",
+      "selected_channels": [
+        "fam_robust_control_and_safety"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/bioreactor_ctrl.py",
+        "filename": "bioreactor_ctrl.py",
+        "bytes": 1226,
+        "sha256": "5a92c2d70d836fe17a5e23999f94f4360cdeb37dbd6af96d48e797c3f49ac946",
+        "content_addressed_ref": "content_addressed_blobs/5a92c2d70d836fe17a5e23999f94f4360cdeb37dbd6af96d48e797c3f49ac946.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/bioreactor_ctrl.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4ef989b24df7da178b314adbf3913e95489b5d5fb3c1ed57e55779cc261bb24e",
+      "verified_turn": 10,
+      "verification_command": "set -eu\ncd /holdout_task\nenv -u PYTHONPATH python3 -B - <<'PY'\nfrom inspect import getsource\nfrom math import sqrt\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\nfrom bioreactor_ctrl import compute_control_step\n\n# Capture the simu",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4ef989b24df7da178b314adbf3913e95489b5d5fb3c1ed57e55779cc261bb24e",
+        "expected_candidate_sha256": "4ef989b24df7da178b314adbf3913e95489b5d5fb3c1ed57e55779cc261bb24e",
+        "computed_candidate_sha256": "4ef989b24df7da178b314adbf3913e95489b5d5fb3c1ed57e55779cc261bb24e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/bioreactor_ctrl.py",
+            "bytes": 1226
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_4ef989b2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}
