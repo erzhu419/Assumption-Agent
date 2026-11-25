@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_multicopy_plasmid_cohort_e735eea3c24b",
+    "source_hash": "e735eea3c24b87dd2f228a8c69d562ab13874db0b18182685fc2d6bb9126b5f6",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "ho12__multicopy_plasmid_cohort_consensus",
+    "wormhole_family": "fam_biomystery_genomic_homology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && find public_cohort -maxdepth 1 -type f -printf '%f %s bytes\\n' | sort && python - <<'PY'\nimport json\nfrom pathlib import Path\nfor name in ('reference_panel.json','isolate_01.json','isolate_03.json'):\n p=Path('public_cohort')/name\n if not p.exists(): continue\n d=json.loads(p.read_text()); print(name)\n for k,v in d.items():\n  if isinstance(v,list): print(k,len(v),list(v[0]) if v and isinstance(v[0],dict) else [type(x).__name__ for x in v[:2]])\n  elif isinstance(v,dict): print(k,list(v))\n  else: print(k,type(v).__name__,repr(v)[:140] if not isinstance(v,str) or len(v",
+      "cd /holdout_task && python3 - <<'PY'\nimport json\nfrom pathlib import Path\nfor name in ('reference_panel.json','isolate_01.json','isolate_03.json','isolate_09.json'):\n d=json.loads((Path('public_cohort')/name).read_text()); print(name)\n for k,v in d.items():\n  if isinstance(v,list):\n   print(k,len(v));\n   for row in v[:8]:\n    print({a:(f'<str length={len(b)}>' if isinstance(b,str) and len(b)>45 else b) for a,b in row.items()} if isinstance(row,dict) else type(row).__name__)\n  elif isinstance(v,dict): print(k,list(v))\n  else: print(k,type(v).__name__,(f'length={len(v)}' if isinstance(v,str) and",
+      "cd /holdout_task && python3 - <<'PY'\nimport json\nfrom pathlib import Path\nfrom statistics import median\np = Path('public_cohort')\nref = json.loads((p/'reference_panel.json').read_text())['reference_wildtype_cds'].upper()\nrc = str.maketrans('ACGT', 'TGCA')\nprint('Reference codons:',len(ref)//3)\nfor f in sorted(p.glob('isolate_*.json')):\n    contigs = json.loads(f.read_text())['contigs']\n    baseline = median(x['mean_depth'] for x in contigs if x['family_tag'].startswith('CHR_SEG_'))\n    print(f.stem, 'baseline', baseline)\n    for c in contigs:\n        if not c['circular']:\n            continue\n",
+      "cd /holdout_task && cat > plasmid_audit.py <<'PY'\n\"\"\"Audit existing circular plasmid contigs for cohort and coding consensus.\"\"\"\n\nimport json\nfrom collections import defaultdict\nfrom itertools import product\nfrom pathlib import Path\nfrom statistics import median\n\n\n# Standard genetic code, in T/C/A/G order at each codon position.\n_CODE = dict(zip(map(''.join, product('TCAG', repeat=3)),\n                 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRR'\n                 'IIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG'))\n_COMPLEMENT = str.maketrans('ACGT', 'TGCA')\n_CORE = 36\n_HALF = _CORE // 2\n\n\ndef _variant_cores(sequence, ",
+      "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport json\nfrom math import isclose\nfrom pathlib import Path\nfrom statistics import median\nfrom plasmid_audit import audit_outbreak_cohort\n\ncohort = Path('public_cohort')\nfamily = 'IncX4_CTX_PLASMID'\nreference = json.loads((cohort / 'reference_panel.json').read_text())['reference_wildtype_cds']\ncomplement = str.maketrans('ACGT', 'TGCA')\nwild = reference[18:21]\nassert wild in {'TCT', 'TCC', 'TCA', 'TCG', 'AGT', 'AGC'}\nratios = []\nbundles = sorted(cohort.glob('isolate_*.json'))\nfor path in bundles:\n    contigs = json.loads(path.read"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/plasmid_audit.py",
+        "filename": "plasmid_audit.py",
+        "bytes": 4558,
+        "sha256": "cf72e7889d6a27103137088d3cac4c54291804d5848145698029ec52e831fd82",
+        "content_addressed_ref": "content_addressed_blobs/cf72e7889d6a27103137088d3cac4c54291804d5848145698029ec52e831fd82.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/plasmid_audit.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_genomic_homology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e735eea3c24b87dd2f228a8c69d562ab13874db0b18182685fc2d6bb9126b5f6",
+      "verified_turn": 5,
+      "verification_command": "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport json\nfrom math import isclose\nfrom pathlib import Path\nfrom statistics import median\nfrom plasmid_audit import audit_outbreak_cohort\n\ncohort = Path('public_cohort')\nfamil",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

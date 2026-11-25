@@ -1,0 +1,101 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_plate_evaporation_ic50_assay_96cf08a2a194",
+    "source_hash": "96cf08a2a1947d1ba361a65f4a951386a342cc2ddad603f1b352a94240419b8c",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho06__plate_evaporation_deconfounded_ic50",
+    "wormhole_family": "fam_biomystery_structural_and_regulatory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/assay_joint.py",
+        "archived_relpath": "producers/tmp__assay_joint.py",
+        "bytes": 3825,
+        "sha256": "70f481a9b5ae5c77c5ea4f9d2d1f0f43df9b6af907cabb70fe816608e98fa217"
+      },
+      {
+        "container_path": "/tmp/assay_stress.py",
+        "archived_relpath": "producers/tmp__assay_stress.py",
+        "bytes": 2358,
+        "sha256": "a9a28a3b611a2e75007b42da7161711ab6c11adc8a9efe39d40f75efa48d20aa"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python - <<'PY'\nimport pickle\np=pickle.load(open('public_screen.pkl','rb'))\ndef show(x, d=0):\n print(' '*d, type(x).__name__,getattr(x,'shape',''), repr(x)[:220] if not isinstance(x,(dict,list,tuple)) else len(x))\n if d>=4:return\n if isinstance(x,dict):\n  for k,v in list(x.items())[:16]:\n   print(' '*d,repr(k));show(v,d+1)\n elif isinstance(x,(list,tuple)) and x:show(x[0],d+1)\nshow(p)\nPY\nls /tmp/hegel_wormhole_skills; sed -n '1,125p' /tmp/hegel_wormhole_skills/autogenous_control_panel_deconfounding.py",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\np = pickle.load(open('public_screen.pkl', 'rb'))\ndef show(x, depth=0):\n    pad = '  '*depth\n    if isinstance(x, dict):\n        print(pad, 'dict', len(x), 'keys:', list(x)[:16])\n        if depth < 5:\n            for k,v in list(x.items())[:12]:\n                print(pad, repr(k)); show(v, depth+1)\n    elif isinstance(x, (list, tuple)):\n        print(pad, type(x).__name__, len(x))\n        if depth < 5:\n            for v in x[:min(2,len(x))]: show(v, depth+1)\n    elif isinstance(x, np.ndarray):\n        print(p",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nfrom collections import Counter\nimport numpy as np\np=pickle.load(open('public_screen.pkl','rb'))\nfor plate in p['plates']:\n    w=plate['wells']; print(plate['plate_id'], Counter(q['well_type'] for q in w))\n    for t in ('POS_KILL','DMSO'):\n        a=np.array([(q['row'],q['col'],q['fluorescence']) for q in w if q['well_type']==t]); print(t,'quantiles',np.round(np.quantile(a[:,2],[0,.05,.25,.5,.75,.95,1]),1));\n        if plate is p['plates'][0]:\n            for r in sorted(set(a[:,0])):\n                z=a[a[:,0]==r]; print(int(r),[(int(c),round",
+      "cat > /holdout_task/assay_ic50.py <<'PY'\n\"\"\"Estimate Hill curves after control-based spatial calibration of each plate.\"\"\"\n\nfrom collections import defaultdict\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\n\n\ndef _surface(row, col, decay):\n    distance = np.minimum.reduce((row, 15 - row, col, 23 - col))\n    return np.column_stack((np.ones_like(row), np.exp(-distance / decay),\n                            (row - 7.5) / 7.5, (col - 11.5) / 11.5))\n\n\ndef _calibrate(row, col, signal, kill, dmso):\n    background = np.median(signal[kill])\n    control = sig",
+      "cat > /tmp/assay_stress.py <<'PY'\nimport copy\nimport pickle\nimport sys\n\nimport numpy as np\nfrom scipy.special import expit\n\nsys.path.insert(0, '/holdout_task')\nimport assay_ic50 as assay\n\nwith open('/holdout_task/public_screen.pkl', 'rb') as stream:\n    public = pickle.load(stream)\nKEYS = ('log10_ic50_uM', 'hill_slope')\nLIMITS = np.array([0.09, 0.18])\n\n\ndef synthetic(shape, seed):\n    rng = np.random.default_rng(seed)\n    plates = copy.deepcopy(public['plates'])\n    truth = {c: dict(zip(KEYS, (v[KEYS[0]] + rng.uniform(-0.19, 0.19),\n                                rng.uniform(0.7, 1.65)))) for ",
+      "cat > /tmp/assay_joint.py <<'PY'\n\"\"\"Experimental joint fit of plate gains and compound Hill curves.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\nimport assay_ic50 as baseline\n\n\ndef joint(plates):\n    seed = baseline.estimate_compound_hill_parameters(plates)\n    ids = list(seed)\n    lookup = {name: i for i, name in enumerate(ids)}\n    nplate = len(plates)\n    offset = 5*nplate\n    npar = offset + 3 + 2*len(ids)\n    data, init = [], []\n    for plate in plates:\n        wells = plate['wells']\n        r, c, signal = np.asarray([(w['row'], w['col'], ",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\npath = Path('assay_ic50.py')\nbase = path.read_text()\nbase = base.replace('return background, gain', 'return background, gain, fit.x')\nbase = base.replace('def estimate_compound_hill_parameters(plates: list[dict]) -> dict[str, dict[str, float]]:', 'def _initial_curves(plates, calibrations):')\nbase = base.replace('for plate in plates:', 'for plate, (background, gain, _) in zip(plates, calibrations):')\nbase = base.replace(\"        row, col, signal = np.array([(w['row'], w['col'], w['fluorescence'])\\n                                ",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport pickle\nfrom collections import defaultdict\nfrom pathlib import Path\nimport numpy as np\n\npath = Path('/holdout_task/assay_ic50.py')\nspec = importlib.util.spec_from_file_location('assay_ic50', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nwith open('/holdout_task/public_screen.pkl', 'rb') as stream:\n    public = pickle.load(stream)\ntruth = public['gt']\nkeys = ('log10_ic50_uM', 'hill_slope')\nlimits = np.array([.09, .18])\n\ndef distance(w):\n    r, c = w['row'], w['",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nassay = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(assay)\nwith open('/holdout_task/public_screen.pkl', 'rb') as stream:\n    screen = pickle.load(stream)\nplates, truth = screen['plates'], screen['gt']\nkeys = ('log10_ic50_uM', 'hill_slope')\nlimits = np.array([.09, .18])\n\ndef errors(data):\n    out = assay.estimate_compound_hill_parameters(data)\n    assert set(out) =="
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__assay_joint.py",
+      "primary_producer_container_path": "/tmp/assay_joint.py",
+      "selected_channels": [
+        "fam_biomystery_structural_and_regulatory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/assay_ic50.py",
+        "filename": "assay_ic50.py",
+        "bytes": 6584,
+        "sha256": "84fc4a166d60b87c27d7d25baf329ac95dd9051b764ae850c30847115df736ae",
+        "content_addressed_ref": "content_addressed_blobs/84fc4a166d60b87c27d7d25baf329ac95dd9051b764ae850c30847115df736ae.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/assay_ic50.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_biomystery_structural_and_regulatory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "96cf08a2a1947d1ba361a65f4a951386a342cc2ddad603f1b352a94240419b8c",
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -IB - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('assay_ic50', '/holdout_task/assay_ic50.py')\nassay = importlib.util.mo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "96cf08a2a1947d1ba361a65f4a951386a342cc2ddad603f1b352a94240419b8c",
+        "expected_candidate_sha256": "96cf08a2a1947d1ba361a65f4a951386a342cc2ddad603f1b352a94240419b8c",
+        "computed_candidate_sha256": "96cf08a2a1947d1ba361a65f4a951386a342cc2ddad603f1b352a94240419b8c",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/assay_ic50.py",
+            "bytes": 6584
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_96cf08a2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

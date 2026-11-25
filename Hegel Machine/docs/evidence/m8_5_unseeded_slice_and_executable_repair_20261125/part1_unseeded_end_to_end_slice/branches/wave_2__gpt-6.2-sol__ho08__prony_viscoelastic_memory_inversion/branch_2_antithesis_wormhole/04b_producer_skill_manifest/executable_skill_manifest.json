@@ -1,0 +1,209 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_prony_viscoelastic_memory_6e8cad86a3f5",
+    "source_hash": "6e8cad86a3f579ac1887d485712372a3e97d9ff443f3c1abdc2a22a5ac185ceb",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho08__prony_viscoelastic_memory_inversion",
+    "wormhole_family": "fam_symbolic_and_operator_dynamics"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/prony_api_check.py",
+        "archived_relpath": "producers/tmp__prony_api_check.py",
+        "bytes": 1837,
+        "sha256": "2ff5e4c353326cbc3b7053a28caa7089276cf992c9a74e4ecf2e08412a19c15c"
+      },
+      {
+        "container_path": "/tmp/prony_bias.py",
+        "archived_relpath": "producers/tmp__prony_bias.py",
+        "bytes": 3163,
+        "sha256": "df7c856e372a968f72b9186ad6ab6f7a0511df2665acc23e8b2be0b897982e66"
+      },
+      {
+        "container_path": "/tmp/prony_coherence.py",
+        "archived_relpath": "producers/tmp__prony_coherence.py",
+        "bytes": 3009,
+        "sha256": "579be1d9bac2a8babf841cceb31f0087c2a602ed0b1b3d7b707caac3138e7577"
+      },
+      {
+        "container_path": "/tmp/prony_conventions.py",
+        "archived_relpath": "producers/tmp__prony_conventions.py",
+        "bytes": 2368,
+        "sha256": "f0698e8d039d2f14ac269cc6161b33ded0be33821d03ee9ef9e2a097a52cd7be"
+      },
+      {
+        "container_path": "/tmp/prony_ensemble.py",
+        "archived_relpath": "producers/tmp__prony_ensemble.py",
+        "bytes": 7496,
+        "sha256": "a4f69c82bbe5ab9de213556c319127bd6daafb50a59f61de47c64cff7869b409"
+      },
+      {
+        "container_path": "/tmp/prony_ensemble_check.py",
+        "archived_relpath": "producers/tmp__prony_ensemble_check.py",
+        "bytes": 2471,
+        "sha256": "ca5f66dc43ab2ac7ed99fe16c079d0fbcd78b8b9f2074719c0d296ce8bb41bd0"
+      },
+      {
+        "container_path": "/tmp/prony_probe.py",
+        "archived_relpath": "producers/tmp__prony_probe.py",
+        "bytes": 2509,
+        "sha256": "0a7d8b7b60931201da7e51a6b5fa23d7af297a4981d275f727d440f1e8da0783"
+      },
+      {
+        "container_path": "/tmp/prony_profile.py",
+        "archived_relpath": "producers/tmp__prony_profile.py",
+        "bytes": 2404,
+        "sha256": "0fa7984b80355c832cef2d85f81cd18f7ad49e226f21d55231d6bb82002cae39"
+      },
+      {
+        "container_path": "/tmp/prony_regularize.py",
+        "archived_relpath": "producers/tmp__prony_regularize.py",
+        "bytes": 4051,
+        "sha256": "bd06cd175ee8433a0cf60a316759684ae9a236b8525ce2c08fdecf31f3818cb9"
+      },
+      {
+        "container_path": "/tmp/prony_sparse.py",
+        "archived_relpath": "producers/tmp__prony_sparse.py",
+        "bytes": 2577,
+        "sha256": "96e6624f1942692e54fce9b962f338d96916f947e0670b03fe41e827dde045c4"
+      },
+      {
+        "container_path": "/tmp/prony_stresscheck.py",
+        "archived_relpath": "producers/tmp__prony_stresscheck.py",
+        "bytes": 2651,
+        "sha256": "c813bf159c91ea529ed574965b6ff3d3663078dc7fed5472bdff0f8bb756012f"
+      },
+      {
+        "container_path": "/tmp/prony_vector.py",
+        "archived_relpath": "producers/tmp__prony_vector.py",
+        "bytes": 7235,
+        "sha256": "a035782b18afd9004ec397690cf5b9e82be871988c2757b7a5c3a16629d1b770"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; ls -lah /tmp/hegel_wormhole_skills; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_rheology.pkl','rb') as f: x=pickle.load(f)\ndef show(x, path, depth=0):\n if isinstance(x,dict) and depth<4:\n  print(path,'keys',list(x));\n  for k,v in x.items(): show(v,f'{path}.{k}',depth+1)\n elif isinstance(x,(list,tuple)) and depth<3:\n  print(path,type(x).__name__,len(x));\n  for i,v in enumerate(x[:3]):show(v,f'{path}[{i}]',depth+1)\n elif isinstance(x,np.ndarray):\n  print(path,x.shape,x.dtype,'range', (x.min(),x.max()) if x.size else None,'head',x.ravel()[:6])",
+      "cat > /tmp/prony_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import nnls\nfrom scipy.signal import lfilter\n\n\ndef memory(t, strain, tau):\n    dt = np.diff(t)\n    de = np.diff(strain)\n    x = dt[:, None] / tau\n    drive = -np.expm1(-x) / x * de[:, None]\n    q = np.zeros((len(t), len(tau)))\n    if np.allclose(dt, dt[0], rtol=1e-10, atol=0):\n        for j, a in enumerate(np.exp(-dt[0] / tau)):\n            q[1:, j] = lfilter([1.], [1., -a], drive[:, j])\n    else:\n        decay = np.exp(-x)\n        for i in range(len(dt)):\n            q[i+1] = decay[i] * q[i] + drive[i]\n    r",
+      "cat >/tmp/prony_conventions.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.signal import lfilter\nfrom scipy.optimize import nnls,least_squares\nfrom prony_probe import solve\n\ndef build(t,e,tau,kind):\n    dt=np.diff(t)[:,None]; dx=np.diff(e)[:,None]; x=dt/tau\n    if kind=='euler':\n        a=1-x; c=1\n    elif kind=='backward_euler':\n        a=1/(1+x); c=a\n    else:\n        a=np.exp(-x)\n        c={'linear':lambda:-np.expm1(-x)/x,'right':lambda:1,'left':lambda:a,'mid':lambda:np.exp(-x/2),'trapezoid':lambda:(1+a)/2}[kind]()\n    q=np.zeros((len(t),len(tau))); f=c*dx*np.ones_like(a)\n    if np.allclose",
+      "cat >/tmp/prony_sparse.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom prony_probe import memory, solve\n\np=pickle.load(open('/holdout_task/public_rheology.pkl','rb')); e=p['experiment']; t=e['train_t']; eps=e['train_strain']; y=e['train_stress_raw']; te=e['test_t']; et=e['test_strain']; yt=p['gt_test_stress']; G=p['gt_G_inf']\nD=np.c_[np.ones_like(t),(t-t.mean())/np.ptp(t)]; grid=np.geomspace(.02,20,61); A=memory(t,eps,grid)\n\ndef sparse(keep,m,seed=0,starts=9):\n    visible=keep.copy(); g,b,s,r=solve(A[keep],D[keep],y[keep],'clip'); keep[visible] = abs(r)",
+      "cat > /tmp/prony_bias.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.signal import lfilter\nimport prony_sparse as s\n\ndef problem(t,eps,keep):\n    dt=np.diff(t); dx=np.diff(eps); uniform=np.allclose(dt,dt[0],rtol=1e-10,atol=0); ds=dt[0] if uniform else dt\n    D=np.c_[np.ones(len(t)),(t-t.mean())/np.ptp(t)][keep]; Q=np.linalg.qr(D)[0]\n    def proj(a): return a-Q@(Q.T@a)\n    def columns(logs, derivative=False):\n        K=np.empty((len(t),1+len(logs))); K[:,0]=eps\n        H=np.zeros((len(t),len(logs))) if derivative else None\n        for j,log in enumerate(logs):\n",
+      "cat > /tmp/prony_profile.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nimport prony_sparse as s\nfrom prony_bias import local, problem\n\n\ndef profile(t, eps, y, keep, v, rms, ngrid=31):\n    m=(len(v)-1)//2\n    proj,cols=problem(t,eps,keep); z=proj(y[keep]); lo,hi=np.log([.02,20.]); nxt=np.delete(v,m-1)\n    lb=np.r_[[lo]*(m-1),[0.]*(m+1)]; ub=np.r_[[hi]*(m-1),[np.inf]*(m+1)]\n    # Concentrate integration near the fitted time while covering the full admissible slow tail.\n    zz=np.unique(np.r_[np.linspace(max(lo, v[m-2]),hi,ngrid),v[m-1]])\n    rows=[]\n    for k in zz:\n     ",
+      "sed -i 's/H\\[:,\\s*:m-1\\]\\*w\\[m:\\]/H[:,:m-1]*w[m:-1]/' /tmp/prony_profile.py\nOPENBLAS_NUM_THREADS=1 python3 /tmp/prony_profile.py",
+      "cat > /holdout_task/prony_rheology.py <<'PY'\n\"\"\"Positive Prony inversion with affine load-cell drift and sparse spikes.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares, nnls\nfrom scipy.signal import lfilter\n\n\n_LOG_BOUNDS = np.log([0.02, 20.0])\n\n\nclass _History:\n    def __init__(self, time, strain):\n        self.strain = np.asarray(strain, dtype=float)\n        dt = np.diff(time)\n        self.increment = np.diff(self.strain)\n        self.uniform = dt.size > 0 and np.allclose(dt, dt[0], rtol=1e-10, atol=0)\n        self.dt = dt[0] if self.uniform else dt[:, None]\n\n    def columns(s",
+      "cat > /tmp/prony_stresscheck.py <<'PY'\nimport sys, time\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nimport prony_rheology as model\n\n# Direct interval integral, independent of the production state recurrence.\ndef clean(t, x, tau, g):\n    dt = np.diff(t)\n    delta = np.diff(x)\n    tau = np.asarray(tau)\n    end_state = (delta / dt)[:, None] * tau * -np.expm1(-dt[:, None] / tau)\n    y = g[0]*x.copy()\n    for i in range(1, len(t)):\n        y[i] += np.sum((np.exp(-(t[i]-t[1:i+1, None])/tau)*end_state[:i]) @ g[1:])\n    return y\n\ndef strain(t):\n    return .05*np.minimum(t/2, 1) + np.where(t",
+      "cp /holdout_task/prony_rheology.py /tmp/prony_vector.py\npython3 - <<'PY'\np='/tmp/prony_vector.py'\ns=open(p).read().replace('        self.dt = dt[0] if self.uniform else dt[:, None]', '        self.dt = dt[0] if self.uniform else dt[:, None]\\n        self.elapsed = np.asarray(time) - time[0]')\na=s.index('            for i, d in enumerate(self.increment):'); b=s.index('        return np.column_stack',a)\ns=s[:a]+'''            # Restart the integrating factor in short blocks to keep its range bounded.\n            inv_tau = np.exp(-log_times)\n            forcing = drive * self.increment[:, None]\n ",
+      "set -e\nf=/holdout_task/prony_rheology.py\ncp /tmp/prony_vector.py \"$f\"\nh=$(sha256sum \"$f\" | cut -c1-8); mkdir -p /tmp/.hegel_candidate_archive/v02_$h; cp \"$f\" /tmp/.hegel_candidate_archive/v02_$h/\ncat > /tmp/prony_regularize.py <<'PY'\nimport pickle, sys\nsys.path.insert(0,'/holdout_task')\nimport numpy as np\nfrom scipy.optimize import least_squares\nimport prony_rheology as mod\nfrom prony_stresscheck import strain, probe, clean\n\n# Regularize poorly constrained relative spectral geometry, not the modulus or absolute time.\ndef refit(hist, t, y, keep, v0, strength, shape):\n    m=(len(v0)-1)//2\n    if",
+      "cp /holdout_task/prony_rheology.py /tmp/prony_ensemble.py\npython3 - <<'PY'\np='/tmp/prony_ensemble.py'\ns=open(p).read().replace('    for m in range(5):','    candidates = []\\n    for m in range(5):').replace('            continue\\n        def residual','            candidates.append((best_score, modulus, None))\\n            continue\\n        mode_score = np.inf\\n        def residual').replace('            if score < best_score:', '            if score < mode_score:\\n                mode_score, mode_v, mode_fit = score, fit.x, fit\\n            if score < best_score:').replace('    return best, b",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/prony_ensemble.py').read_text()\ns=s.replace('    best_score = np.inf\\n','').replace('            best_score = len(z)', '            score = len(z)').replace('            best, best_fit = modulus, None\\n            candidates.append((best_score, modulus, None))','            candidates.append((score, modulus, None))').replace('            if score < best_score:\\n                best_score, best, best_fit = score, fit.x, fit\\n','')\na=s.index('    v, result, columns = _spectrum')\ns=s[:a]+'''    candidates, columns = _spectrum(train, gr",
+      "cat > /tmp/prony_coherence.py <<'PY'\nimport pickle, sys\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nfrom scipy.optimize import least_squares\nimport prony_rheology as m\nfrom prony_stresscheck import clean, strain, probe\n\n\ndef compare(e, truth, G):\n    t,x,y,u,z = [e[k] for k in ('train_t','train_strain','train_stress_raw','test_t','test_strain')]\n    tr,te = m._History(t,x),m._History(u,z)\n    D = np.c_[np.ones(len(t)),(t-t.mean())/np.ptp(t)]\n    grid = np.linspace(*m._LOG_BOUNDS,61); A = tr.columns(grid)[0]\n    keep,g = m._screen(A,D,y); rows,cols = m._spectrum(tr,grid,A,D,y,keep,g)",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/prony_rheology.py')\ns = p.read_text()\na = s.index('\\ndef fit_prony_and_predict_stress(')\ns = s[:a] + '''\ndef _refit_at_equilibrium(v, modulus, columns, target):\n    \"\"\"Refit the transient spectrum without changing its equilibrium limit.\"\"\"\n    m = (len(v) - 1) // 2\n    lo, hi = _LOG_BOUNDS\n\n    def residual(w):\n        a, _ = columns(w[:m])\n        return a[:, 0] * modulus + a[:, 1:] @ w[m:] - target\n\n    def jacobian(w):\n        a, d = columns(w[:m], True)\n        return np.column_stack((d * w[m:], a[:, 1:]))\n\n    opt = "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__prony_ensemble.py",
+      "primary_producer_container_path": "/tmp/prony_ensemble.py",
+      "selected_channels": [
+        "fam_symbolic_and_operator_dynamics"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/prony_rheology.py",
+        "filename": "prony_rheology.py",
+        "bytes": 8670,
+        "sha256": "4dda5bc75d7e313e830c26bd6f26af1d5f237550c2d98eb07408cc9b60fde129",
+        "content_addressed_ref": "content_addressed_blobs/4dda5bc75d7e313e830c26bd6f26af1d5f237550c2d98eb07408cc9b60fde129.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/prony_rheology.py"
+    ],
+    "exported_pure_functions": [
+      "problem",
+      "local",
+      "build",
+      "_project",
+      "_positive_fit",
+      "_screen",
+      "solve",
+      "profile"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_symbolic_and_operator_dynamics",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6e8cad86a3f579ac1887d485712372a3e97d9ff443f3c1abdc2a22a5ac185ceb",
+      "verified_turn": 15,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/prony_rheology.py')\ns = p.read_text()\na = s.index('\\ndef fit_prony_and_predict_stress(')\ns = s[:a] + '''\ndef _refit_at_equilibrium(v, modulus, columns, target):\n    \"\"",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6e8cad86a3f579ac1887d485712372a3e97d9ff443f3c1abdc2a22a5ac185ceb",
+        "expected_candidate_sha256": "6e8cad86a3f579ac1887d485712372a3e97d9ff443f3c1abdc2a22a5ac185ceb",
+        "computed_candidate_sha256": "6e8cad86a3f579ac1887d485712372a3e97d9ff443f3c1abdc2a22a5ac185ceb",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/prony_rheology.py",
+            "bytes": 8670
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_6e8cad86"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": [
+      {
+        "name": "problem",
+        "code": "def problem(t, eps, keep):\n    from scipy.signal import lfilter\n    dt = np.diff(t)\n    dx = np.diff(eps)\n    uniform = np.allclose(dt, dt[0], rtol=1e-10, atol=0)\n    ds = dt[0] if uniform else dt\n    D = np.c_[np.ones(len(t)), (t - t.mean()) / np.ptp(t)][keep]\n    Q = np.linalg.qr(D)[0]\n\n    def proj(a):\n        return a - Q @ (Q.T @ a)\n\n    def columns(logs, derivative=False):\n        K = np.empty((len(t), 1 + len(logs)))\n        K[:, 0] = eps\n        H = np.zeros((len(t), len(logs))) if derivative else None\n        for (j, log) in enumerate(logs):\n            x = ds * np.exp(-log)\n            a = np.exp(-x)\n            c = -np.expm1(-x) / x\n            q = K[:, j + 1]\n            q[0] = 0.0\n            if uniform:\n                q[1:] = lfilter([c], [1.0, -a], dx)\n                if derivative:\n                    H[1:, j] = lfilter([1.0], [1.0, -a], x * a * q[:-1] + (c - a) * dx)\n            else:\n                for i in range(len(dx)):\n                    q[i + 1] = a[i] * q[i] + c[i] * dx[i]\n                    if derivative:\n                        H[i + 1, j] = a[i] * (H[i, j] + x[i] * q[i]) + (c[i] - a[i]) * dx[i]\n        return (proj(K[keep]), proj(H[keep]) if derivative else None)\n    return (proj, columns)"
+      },
+      {
+        "name": "local",
+        "code": "def local(t, eps, y, keep, v0):\n    from scipy.optimize import least_squares\n    m = (len(v0) - 1) // 2\n    (proj, columns) = problem(t, eps, keep)\n    z = proj(y[keep])\n    lo = np.r_[[np.log(0.02)] * m, [0.0] * (m + 1)]\n    hi = np.r_[[np.log(20.0)] * m, [np.inf] * (m + 1)]\n\n    def f(v):\n        return columns(v[:m])[0] @ v[m:] - z\n\n    def jac(v):\n        (A, H) = columns(v[:m], True)\n        return np.c_[H * v[m + 1:], A]\n    v0 = np.maximum(lo + 1e-09, np.minimum(hi - 1e-09, v0))\n    res = least_squares(f, v0, jac=jac, bounds=(lo, hi), x_scale='jac', max_nfev=160, ftol=1e-10)\n    v = res.x\n    J = res.jac\n    P = np.linalg.pinv(J, rcond=1e-09)\n    C = P @ P.T * (2 * res.cost / max(1, len(z) - len(v) - 2))\n    (A, H) = columns(v[:m], True)\n    h = 0.0001\n    H2 = (columns(v[:m] + h, True)[1] - columns(v[:m] - h, True)[1]) / (2 * h)\n    trace = H2 @ (v[m + 1:] * np.diag(C)[:m]) + 2 * H @ C[np.arange(m), m + 1 + np.arange(m)]\n    corrected = v + 0.5 * (P @ trace)\n    err = np.sqrt(C[m, m])\n    return (v, corrected, err, res.cost)"
+      },
+      {
+        "name": "build",
+        "code": "def build(t, e, tau, kind):\n    from scipy.signal import lfilter\n    dt = np.diff(t)[:, None]\n    dx = np.diff(e)[:, None]\n    x = dt / tau\n    if kind == 'euler':\n        a = 1 - x\n        c = 1\n    elif kind == 'backward_euler':\n        a = 1 / (1 + x)\n        c = a\n    else:\n        a = np.exp(-x)\n        c = {'linear': lambda : -np.expm1(-x) / x, 'right': lambda : 1, 'left': lambda : a, 'mid': lambda : np.exp(-x / 2), 'trapezoid': lambda : (1 + a) / 2}[kind]()\n    q = np.zeros((len(t), len(tau)))\n    f = c * dx * np.ones_like(a)\n    if np.allclose(dt, dt[0], atol=0, rtol=1e-10):\n        for (k, v) in enumerate(a[0]):\n            q[1:, k] = lfilter([1.0], [1.0, -v], f[:, k])\n    else:\n        for k in range(len(dt)):\n            q[k + 1] = a[k] * q[k] + f[k]\n    return np.column_stack((e, q))"
+      },
+      {
+        "name": "_project",
+        "code": "def _project(q, x):\n    return x - q @ (q.T @ x)"
+      },
+      {
+        "name": "_positive_fit",
+        "code": "def _positive_fit(a, y):\n    from scipy.optimize import nnls\n    scale = np.linalg.norm(a, axis=0)\n    scale[scale == 0.0] = 1.0\n    return nnls(a / scale, y, maxiter=20 * a.shape[1], atol=1e-10)[0] / scale"
+      },
+      {
+        "name": "_screen",
+        "code": "def _screen(a, drift, y):\n    \"\"\"Fit the affine nuisance independently of positivity and screen spikes.\"\"\"\n    keep = np.ones(len(y), dtype=bool)\n    for _ in range(18):\n        (q, r) = np.linalg.qr(drift[keep], mode='reduced')\n        g = _positive_fit(_project(q, a[keep]), _project(q, y[keep]))\n        b = np.linalg.solve(r, q.T @ (y[keep] - a[keep] @ g))\n        resid = y - a @ g - drift @ b\n        median = np.median(resid)\n        noise = max(1.4826 * np.median(np.abs(resid - median)), 1e-12)\n        new_keep = np.abs(resid - median) < 4.0 * noise\n        if np.array_equal(new_keep, keep):\n            break\n        keep = new_keep\n    return (keep, g)"
+      },
+      {
+        "name": "solve",
+        "code": "def solve(A, D, y, mode='cauchy'):\n    from scipy.optimize import nnls\n    w = np.ones(len(y))\n    for it in range(1 if mode == 'ols' else 18):\n        (Q, R) = np.linalg.qr(D * w[:, None], mode='reduced')\n        (X, z) = (A * w[:, None], y * w)\n        (U, v) = (Q.T @ X, Q.T @ z)\n        (X, z) = (X - Q @ U, z - Q @ v)\n        norm = np.linalg.norm(X, axis=0)\n        norm[norm == 0] = 1\n        g = nnls(X / norm, z, maxiter=20 * A.shape[1], atol=1e-10)[0] / norm\n        b = np.linalg.solve(R, v - U @ g)\n        r = y - A @ g - D @ b\n        s = max(1e-12, 1.4826 * np.median(np.abs(r - np.median(r))))\n        if mode == 'cauchy':\n            w = 1 / np.hypot(1, r / s)\n        else:\n            w = (np.abs(r) < 4 * s).astype(float)\n    return (g, b, s, r)"
+      },
+      {
+        "name": "profile",
+        "code": "def profile(t, eps, y, keep, v, rms, ngrid=31):\n    from scipy.optimize import least_squares\n    m = (len(v) - 1) // 2\n    (proj, cols) = problem(t, eps, keep)\n    z = proj(y[keep])\n    (lo, hi) = np.log([0.02, 20.0])\n    nxt = np.delete(v, m - 1)\n    lb = np.r_[[lo] * (m - 1), [0.0] * (m + 1)]\n    ub = np.r_[[hi] * (m - 1), [np.inf] * (m + 1)]\n    zz = np.unique(np.r_[np.linspace(max(lo, v[m - 2]), hi, ngrid), v[m - 1]])\n    rows = []\n    for k in zz:\n\n        def fun(w):\n            (X, _) = cols(np.r_[w[:m - 1], k])\n            return X @ w[m - 1:] - z\n\n        def jac(w):\n            (X, H) = cols(np.r_[w[:m - 1], k], True)\n            return np.c_[H[:, :m - 1] * w[m:-1], X]\n        up = ub.copy()\n        up[:m - 1] = k\n        w = np.minimum(up - 1e-09, np.maximum(lb + 1e-09, nxt))\n        f = least_squares(fun, w, jac=jac, bounds=(lb, up), max_nfev=40, x_scale='jac', ftol=1e-08)\n        sv = np.linalg.svd(f.jac, compute_uv=False)\n        vol = -np.log(np.maximum(sv, sv[0] * 1e-06)).sum()\n        rows.append([f.cost, f.x[m - 1], vol])\n    r = np.array(rows)\n    dx = np.r_[np.diff(zz), 0] + np.r_[0, np.diff(zz)]\n    base = -(r[:, 0] - r[:, 0].min()) / rms ** 2 + np.log(dx)\n\n    def average(logw):\n        w = np.exp(logw - logw.max())\n        return w @ r[:, 1] / w.sum()\n    return [average(base + a * r[:, 2] + b * zz) for (a, b) in [(0, 0), (1, 0), (0, -1), (1, -1), (0, 1)]]"
+      }
+    ]
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_haldane_bioreactor_safety_control_37498b912c05",
+    "source_hash": "37498b912c054a7dbb1f0a314c25827487dceba9669f2fe63dbdb8ab08f26e17",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "ho10__haldane_bioreactor_runaway_control",
+    "wormhole_family": "fam_robust_control_and_safety"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && sed -n '1,75p' /tmp/hegel_wormhole_skills/autogenous_creep_corrected_retraction_calibration.py && cat > bioreactor_ctrl.py <<'PY'\n\"\"\"Substrate and temperature feedback for the supplied fed-batch model.\"\"\"\n\nfrom math import exp\n\n\ndef compute_control_step(obs: dict, state_memory: dict) -> tuple[dict, dict]:\n    dt = obs['dt_h']\n    volume = obs['V_L']\n    biomass = obs['X_meas_g_L']\n    substrate = obs['S_meas_g_L']\n    temperature = obs['T_meas_C']\n\n    # The previous command is still applied over the upcoming interval.\n    pending_feed = state_memory.get('pending_feed', 0.2",
+      "cd /holdout_task && env -u PYTHONPATH python3 -I -B - <<'PY'\nimport itertools\nimport math\nimport sys\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path.cwd()))\nfrom bioreactor_ctrl import compute_control_step\nfrom plant_sim import NOMINAL_SCENARIOS, run_closed_loop\n\ndef checked_step(obs, memory):\n    command, updated = compute_control_step(obs, memory)\n    assert isinstance(updated, dict)\n    assert set(command) == {'feed_rate_L_per_h', 'coolant_flow_frac'}\n    for key, bound in [('feed_rate_L_per_h', 2.5), ('coolant_flow_frac', 1.0)]:\n        value = command[key]\n        assert type(value)",
+      "cd /holdout_task && python3 -I -B - <<'PY'\nfrom pathlib import Path\nfrom hashlib import sha256\n\npath = Path('bioreactor_ctrl.py')\nraw = path.read_bytes()\nverified = '797a80b18b13fa84e16cc317d507b723554edccb6ef8e7698411fe44b9095ff4'\nhost = '37498b912c054a7dbb1f0a314c25827487dceba9669f2fe63dbdb8ab08f26e17'\narchive = Path('/tmp/.hegel_candidate_archive')\nprint('target', sha256(raw).hexdigest())\nlf = raw.replace(b'\\r\\n', b'\\n')\nfor name, candidate in [('LF', lf), ('CRLF', lf.replace(b'\\n', b'\\r\\n'))]:\n    print(name, sha256(candidate).hexdigest(), 'matches host:', sha256(candidate).hexdigest() == ",
+      "cd /holdout_task && sed -n '1,110p' plant_sim.py && env -u PYTHONPATH python3 -I -B - <<'PY'\nimport sys\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path.cwd()))\nimport numpy as np\nfrom bioreactor_ctrl import compute_control_step\nfrom plant_sim import run_closed_loop\n\n# Interior points can align peak heat generation with the disturbance even\n# when parameter corners do not. Stratify each axis independently.\nrng = np.random.default_rng(20261125)\nbounds = {'mu0': (0.357, 0.483), 'Ks': (0.8, 0.9), 'Ki': (12.0, 18.0), 'ua_scale': (0.75, 1.0), 'heat_pulse': (0.0, 2.2)}\nn = 128\nsamples = {key: l"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/bioreactor_ctrl.py",
+        "filename": "bioreactor_ctrl.py",
+        "bytes": 1435,
+        "sha256": "797a80b18b13fa84e16cc317d507b723554edccb6ef8e7698411fe44b9095ff4",
+        "content_addressed_ref": "content_addressed_blobs/797a80b18b13fa84e16cc317d507b723554edccb6ef8e7698411fe44b9095ff4.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/bioreactor_ctrl.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_robust_control_and_safety",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "37498b912c054a7dbb1f0a314c25827487dceba9669f2fe63dbdb8ab08f26e17",
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && sed -n '1,110p' plant_sim.py && env -u PYTHONPATH python3 -I -B - <<'PY'\nimport sys\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path.cwd()))\nimport numpy as np\nfrom bioreactor_ctrl import compute_control_step\nfrom p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "37498b912c054a7dbb1f0a314c25827487dceba9669f2fe63dbdb8ab08f26e17",
+        "expected_candidate_sha256": "37498b912c054a7dbb1f0a314c25827487dceba9669f2fe63dbdb8ab08f26e17",
+        "computed_candidate_sha256": "37498b912c054a7dbb1f0a314c25827487dceba9669f2fe63dbdb8ab08f26e17",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/bioreactor_ctrl.py",
+            "bytes": 1435
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_37498b91"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}
