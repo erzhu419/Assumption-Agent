@@ -40,6 +40,7 @@ from hegel_machine.cognition.hipporag_wormhole_index import HippoRAGWormholeInde
 from hegel_machine.cognition.m6_9_a_dialectical_synthesis_engine import run_m6_9_a_two_branch_episode
 from hegel_machine.cognition.m7_autogenous_forest_pretraining import load_autogenous_forest_bundle
 from hegel_machine.cognition.m7_holdout_ood_blind_benchmark import holdout_tasks_as_frontier_waves
+from hegel_machine.cognition.m8_container_mechanism_adapter import merge_worker_graph_into_shared
 from hegel_machine.cognition.m8_offline_container_planner import (
     M8OfflineContainerPlanner,
     load_historical_suite_episode_records,
@@ -164,9 +165,7 @@ def main() -> None:
             m8_mechanism_graph=worker_graph,
         )
         with graph_lock:
-            for mid, mech in worker_graph.mechanisms.items():
-                if mid not in shared_graph.mechanisms:
-                    shared_graph.register_mechanism(mech, tree_id="tree_container_invariance")
+            merge_worker_graph_into_shared(shared_graph, worker_graph)
         s["m8_planner_sha256"] = planner_sha
         (ep_dir / "00_episode_summary.json").write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         sel = s.get("selective_router_decision") or {}

@@ -1080,6 +1080,20 @@ def lift_python_scientific_expressions_to_programs(
             if fn_name == "square" and len(node.args) == 1:
                 ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program("mul", children=(ch, ch)) if ch is not None else None
+            if fn_name == "power" and len(node.args) == 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, (int, float)):
+                base_ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                if base_ch is None:
+                    return None
+                exp_v = float(node.args[1].value)
+                if exp_v == 2.0:
+                    return Program("mul", children=(base_ch, base_ch))
+                if exp_v == 3.0:
+                    return Program("mul", children=(Program("mul", children=(base_ch, base_ch)), base_ch))
+                if exp_v == 0.5:
+                    return Program("sqrt", children=(base_ch,))
+                if exp_v == -1.0:
+                    return Program("div", children=(Program("const", value=1.0), base_ch))
+                return None
             if fn_name == "log1p" and len(node.args) == 1:
                 ch = _lift_expr(node.args[0], env, depth + 1, shadowed_bare, valid_mod_aliases, module_fn_progs)
                 return Program("log", children=(Program("add", children=(Program("const", value=1.0), ch)),)) if ch is not None else None
@@ -1234,6 +1248,26 @@ def lift_python_scientific_expressions_to_programs(
                             )
                         }
 
+                        _PURE_UNARY = {
+                            "sin": math.sin, "cos": math.cos, "tan": math.tan, "tanh": math.tanh,
+                            "exp": math.exp, "expm1": math.expm1, "log": math.log, "log1p": math.log1p,
+                            "sqrt": math.sqrt, "abs": abs, "fabs": math.fabs, "square": lambda z: z * z,
+                            "asarray": float, "array": float, "float": float, "real": float, "ravel": float,
+                        }
+                        _PURE_BINARY = {
+                            "maximum": max, "minimum": min, "max": max, "min": min,
+                            "hypot": math.hypot, "atan2": math.atan2,
+                            "add": lambda a, b: a + b, "subtract": lambda a, b: a - b,
+                            "multiply": lambda a, b: a * b, "divide": lambda a, b: a / b,
+                            "true_divide": lambda a, b: a / b, "power": lambda a, b: float(a ** b),
+                        }
+                        imported_bare_names: set[str] = set()
+                        for m_s in tree.body:
+                            if isinstance(m_s, ast.ImportFrom) and m_s.module in {"math", "numpy"} and (m_s.level or 0) == 0:
+                                for al in m_s.names:
+                                    if (not al.asname or al.asname == al.name) and al.name not in module_shadowed:
+                                        imported_bare_names.add(al.name)
+
                         def _eval_pure_ast_expr(node: ast.AST, loc_env: dict[str, float], depth: int = 0) -> float:
                             if depth > 24:
                                 raise ValueError("max_ast_eval_depth")
@@ -1242,8 +1276,13 @@ def lift_python_scientific_expressions_to_programs(
                             if isinstance(node, ast.Name):
                                 if node.id in loc_env:
                                     return float(loc_env[node.id])
+                                if node.id not in module_shadowed:
+                                    if node.id == "pi":
+                                        return math.pi
+                                    if node.id == "e":
+                                        return math.e
                                 raise ValueError(f"unknown_name:{node.id}")
-                            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in valid_mod_aliases:
+                            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in valid_mod_aliases and node.value.id not in loc_env:
                                 if node.attr == "pi":
                                     return math.pi
                                 if node.attr == "e":
@@ -1290,6 +1329,8 @@ def lift_python_scientific_expressions_to_programs(
                                 c_args = [_eval_pure_ast_expr(a, loc_env, depth + 1) for a in node.args]
                                 if isinstance(node.func, ast.Name):
                                     fn_id = node.func.id
+                                    if fn_id in loc_env:
+                                        raise ValueError("shadowed_local_callable")
                                     if fn_id == "abs" and len(c_args) == 1:
                                         return abs(c_args[0])
                                     if fn_id == "min" and len(c_args) >= 2:
@@ -1298,25 +1339,21 @@ def lift_python_scientific_expressions_to_programs(
                                         return max(c_args)
                                     if fn_id == "float" and len(c_args) == 1:
                                         return float(c_args[0])
+                                    if fn_id in imported_bare_names or fn_id not in module_shadowed:
+                                        if fn_id in _PURE_UNARY and len(c_args) == 1:
+                                            return float(_PURE_UNARY[fn_id](c_args[0]))
+                                        if fn_id in _PURE_BINARY and len(c_args) == 2:
+                                            return float(_PURE_BINARY[fn_id](c_args[0], c_args[1]))
+                                        if fn_id == "clip" and len(c_args) == 3:
+                                            return min(max(c_args[0], c_args[1]), c_args[2])
                                     if fn_id in fn_defs_by_name and fn_id != stmt.name:
                                         return _eval_pure_ast_fn(fn_defs_by_name[fn_id], c_args, depth + 1)
-                                elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id in valid_mod_aliases:
+                                elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id in valid_mod_aliases and node.func.value.id not in loc_env:
                                     anm = node.func.attr
-                                    _PURE_UNARY = {
-                                        "sin": math.sin, "cos": math.cos, "tan": math.tan, "tanh": math.tanh,
-                                        "exp": math.exp, "expm1": math.expm1, "log": math.log, "log1p": math.log1p,
-                                        "sqrt": math.sqrt, "abs": abs, "fabs": math.fabs, "square": lambda z: z * z,
-                                    }
                                     if anm in _PURE_UNARY and len(c_args) == 1:
                                         return float(_PURE_UNARY[anm](c_args[0]))
-                                    if anm == "maximum" and len(c_args) == 2:
-                                        return max(c_args[0], c_args[1])
-                                    if anm == "minimum" and len(c_args) == 2:
-                                        return min(c_args[0], c_args[1])
-                                    if anm == "hypot" and len(c_args) == 2:
-                                        return math.hypot(c_args[0], c_args[1])
-                                    if anm == "atan2" and len(c_args) == 2:
-                                        return math.atan2(c_args[0], c_args[1])
+                                    if anm in _PURE_BINARY and len(c_args) == 2:
+                                        return float(_PURE_BINARY[anm](c_args[0], c_args[1]))
                                     if anm == "clip" and len(c_args) == 3:
                                         return min(max(c_args[0], c_args[1]), c_args[2])
                             raise ValueError("unsupported_ast_call_or_node")

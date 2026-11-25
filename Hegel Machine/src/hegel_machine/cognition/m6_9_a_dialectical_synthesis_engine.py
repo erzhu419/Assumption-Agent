@@ -1770,7 +1770,7 @@ def run_m6_9_a_two_branch_episode(
     raw_antithesis_sha256: str = ""
     active_antithesis_sha256: str = ""
     thesis_sum: dict[str, Any] | None = None
-    use_m8_planner = m8_container_planner is not None
+    use_m8_planner = m8_container_planner is not None and hasattr(m8_container_planner, "decide_second_branch")
     use_m8_repair = bool(enable_m8_local_repair or m8_mechanism_graph is not None)
     rem_nominal_budget = max(0.0, float(episode_nominal_budget) - 1.0)
     nominal_units_spent = 1.0
@@ -1825,7 +1825,7 @@ def run_m6_9_a_two_branch_episode(
                             ):
                                 pub_sel[pk] = sym_probe.get(pk)
 
-                        # Tier 1 (`0.35u` `LocalContainerRepair`) with pre-execution budget reservation & dedicated `repair_decision_record`!
+                        # Tier 1 (`0.35u` `LocalContainerRepair`) with pre-execution budget reservation & exception-safe outer acceptance!
                         probe_failed = bool(
                             sym_probe.get("probe_applicable")
                             and (
@@ -1835,6 +1835,7 @@ def run_m6_9_a_two_branch_episode(
                         )
                         if use_m8_repair and probe_failed:
                             step_idx_r = (len(m8_mechanism_graph.decision_ledger) + 1 if m8_mechanism_graph is not None else 1)
+                            repair_dec_id = f"m8_rep_dec_{step_idx_r:03d}_{task.task_id}"
                             repair_pre_state = {
                                 "task_id": task.task_id,
                                 "raw_candidate_sha256": raw_antithesis_sha256,
@@ -1847,7 +1848,7 @@ def run_m6_9_a_two_branch_episode(
                             }
                             if rem_nominal_budget + 1e-9 < NOMINAL_LOCAL_REPAIR_COST:
                                 r_dec = ResearchDecisionRecord(
-                                    decision_id=f"m8_rep_dec_{step_idx_r:03d}_{task.task_id}",
+                                    decision_id=repair_dec_id,
                                     step_index=step_idx_r,
                                     task_id=task.task_id,
                                     pre_action_state=repair_pre_state,
@@ -1872,128 +1873,214 @@ def run_m6_9_a_two_branch_episode(
                                     m8_mechanism_graph.decision_ledger.append(r_dec)
                                     m8_mechanism_graph.sync_authoritative_state_to_forest()
                             else:
-                                # Reserve `0.35u` BEFORE calling paid repair model, and snapshot raw primary artifact!
+                                # Reserve `0.35u` BEFORE calling paid repair model, and wrap the entire outer repair + acceptance
+                                # transaction in `try/except/finally` (`M8.5` Fix `E01`: zero lost LLM tokens or broken episodes on transport errors)!
                                 rem_nominal_budget -= NOMINAL_LOCAL_REPAIR_COST
                                 nominal_units_spent = round(nominal_units_spent + NOMINAL_LOCAL_REPAIR_COST, 5)
-                                m6f.save_submitted_artifacts_snapshot(
-                                    probe_cid,
-                                    task.declared_artifacts,
-                                    episode_out_dir / "04a_raw_antithesis_snapshot",
-                                )
-                                repair_client = m6f.FrontierCodexClient(
-                                    codex_info=codex_info,
-                                    model=model,
-                                    reasoning_effort=reasoning_effort,
-                                    timeout_seconds=210,
-                                )
-                                local_repair_summary = execute_in_container_local_repair(
-                                    probe_cid=probe_cid,
-                                    task=task,
-                                    public_probe_before=sym_probe,
-                                    codex_client=repair_client,
-                                    graph=m8_mechanism_graph,
-                                    checkpoint_path=None,
-                                    step_index=step_idx_r,
-                                    stage_subdir=f"{run_id}__{model}__M8LocalRepair__{task.task_id}".replace(":", "_"),
-                                    defer_guard_commit=True,
-                                )
-                                if local_repair_summary.get("repaired_verified"):
-                                    raw_pre_repair_tar = antithesis_dir / "raw_pre_repair_declared_artifacts.tar"
-                                    if antithesis_tar.is_file():
-                                        shutil.copy2(antithesis_tar, raw_pre_repair_tar)
-                                    repaired_tar = antithesis_dir / "repaired_declared_artifacts.tar"
-                                    m6f.export_declared_artifacts_tar(probe_cid, task.declared_artifacts, repaired_tar)
-                                    imp_rep = m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, repaired_tar)
-                                    rep_sha = str(imp_rep.get("candidate_sha256") or "")
-                                    chk_after = verify_candidate_artifact_contract_in_container(
-                                        probe_cid, task.declared_artifacts, rep_sha
-                                    )
-                                    if chk_after.get("accepted"):
-                                        shutil.copy2(repaired_tar, antithesis_tar)
-                                        repaired_tar.unlink(missing_ok=True)
-                                        chk_sel = chk_after
-                                        active_antithesis_sha256 = rep_sha
+                                orig_tar_bytes = antithesis_tar.read_bytes() if antithesis_tar.is_file() else None
+                                local_repair_summary = {
+                                    "attempted": True,
+                                    "repaired_verified": False,
+                                    "reason": "uninitialized_repair_transaction",
+                                    "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
+                                    "wall_ms": 0.0,
+                                }
+                                outer_tx_exc_msg: str | None = None
+                                try:
+                                    try:
                                         m6f.save_submitted_artifacts_snapshot(
                                             probe_cid,
                                             task.declared_artifacts,
-                                            episode_out_dir / "04a_repaired_antithesis_snapshot",
+                                            episode_out_dir / "04a_raw_antithesis_snapshot",
                                         )
-                                        # Publish `SUPPORTED_IN_SCOPE` guard ONLY AFTER secondary artifact contract check passes!
-                                        committed_gid = commit_verified_container_guard(
-                                            m8_mechanism_graph,
-                                            local_repair_summary.get("pending_guard"),
-                                            checkpoint_path=m8_graph_checkpoint_path,
+                                    except Exception:
+                                        pass
+                                    repair_client = m6f.FrontierCodexClient(
+                                        codex_info=codex_info,
+                                        model=model,
+                                        reasoning_effort=reasoning_effort,
+                                        timeout_seconds=210,
+                                    )
+                                    local_repair_summary = execute_in_container_local_repair(
+                                        probe_cid=probe_cid,
+                                        task=task,
+                                        public_probe_before=sym_probe,
+                                        codex_client=repair_client,
+                                        graph=m8_mechanism_graph,
+                                        checkpoint_path=None,
+                                        step_index=step_idx_r,
+                                        stage_subdir=f"{run_id}__{model}__M8LocalRepair__{task.task_id}".replace(":", "_"),
+                                        defer_guard_commit=True,
+                                    )
+                                    if local_repair_summary.get("repaired_verified"):
+                                        repaired_tar = antithesis_dir / "repaired_declared_artifacts.tar"
+                                        try:
+                                            raw_pre_repair_tar = antithesis_dir / "raw_pre_repair_declared_artifacts.tar"
+                                            if orig_tar_bytes is not None:
+                                                raw_pre_repair_tar.parent.mkdir(parents=True, exist_ok=True)
+                                                raw_pre_repair_tar.write_bytes(orig_tar_bytes)
+                                            m6f.export_declared_artifacts_tar(probe_cid, task.declared_artifacts, repaired_tar)
+                                            imp_rep = m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, repaired_tar)
+                                            rep_sha = str(imp_rep.get("candidate_sha256") or local_repair_summary.get("repaired_candidate_sha256") or "")
+                                            chk_after = verify_candidate_artifact_contract_in_container(
+                                                probe_cid, task.declared_artifacts, rep_sha
+                                            )
+                                            if chk_after.get("accepted"):
+                                                antithesis_tar.parent.mkdir(parents=True, exist_ok=True)
+                                                shutil.copy2(repaired_tar, antithesis_tar)
+                                                repaired_tar.unlink(missing_ok=True)
+                                                chk_sel = chk_after
+                                                active_antithesis_sha256 = rep_sha
+                                                rep_snap_dir = episode_out_dir / "04a_repaired_antithesis_snapshot"
+                                                m6f.save_submitted_artifacts_snapshot(
+                                                    probe_cid,
+                                                    task.declared_artifacts,
+                                                    rep_snap_dir,
+                                                )
+                                                if antithesis_dir != episode_out_dir:
+                                                    try:
+                                                        m6f.save_submitted_artifacts_snapshot(
+                                                            probe_cid,
+                                                            task.declared_artifacts,
+                                                            antithesis_dir / "04a_repaired_antithesis_snapshot",
+                                                        )
+                                                    except Exception:
+                                                        pass
+                                                local_repair_summary["repaired_snapshot_dir"] = str(rep_snap_dir)
+                                                # Publish `SUPPORTED_IN_SCOPE` guard ONLY AFTER secondary artifact contract & snapshot succeed!
+                                                committed_gid = commit_verified_container_guard(
+                                                    m8_mechanism_graph,
+                                                    local_repair_summary.get("pending_guard"),
+                                                    checkpoint_path=m8_graph_checkpoint_path,
+                                                )
+                                                local_repair_summary["persisted_guard_id"] = committed_gid
+                                                post_p = local_repair_summary.get("probe_after") or {}
+                                                for pk in (
+                                                    "public_output_contract_ok",
+                                                    "public_calibration_ok",
+                                                    "id_renaming_invariant_ok",
+                                                    "identifiability_warning",
+                                                    "identifiability_metrics",
+                                                    "missing_or_null_keys",
+                                                    "renaming_discrepancies",
+                                                    "public_consistency_metrics",
+                                                ):
+                                                    if pk in post_p:
+                                                        pub_sel[pk] = post_p.get(pk)
+                                            else:
+                                                repaired_tar.unlink(missing_ok=True)
+                                                local_repair_summary["repaired_verified"] = False
+                                                local_repair_summary["persisted_guard_id"] = None
+                                                local_repair_summary["reason"] = f"secondary_artifact_contract_rejected:{chk_after.get('reasons')}"
+                                                if orig_tar_bytes is not None:
+                                                    antithesis_tar.write_bytes(orig_tar_bytes)
+                                                    try:
+                                                        m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                                                    except Exception:
+                                                        pass
+                                                if raw_pre_repair_tar is not None:
+                                                    raw_pre_repair_tar.unlink(missing_ok=True)
+                                                raw_pre_repair_tar = None
+                                                active_antithesis_sha256 = raw_antithesis_sha256
+                                        except Exception as accept_exc:
+                                            repaired_tar.unlink(missing_ok=True)
+                                            outer_tx_exc_msg = f"outer_acceptance_exception:{type(accept_exc).__name__}:{accept_exc}"
+                                            local_repair_summary["repaired_verified"] = False
+                                            local_repair_summary["persisted_guard_id"] = None
+                                            local_repair_summary["outer_acceptance_exception"] = outer_tx_exc_msg
+                                            local_repair_summary["reason"] = outer_tx_exc_msg
+                                            if orig_tar_bytes is not None:
+                                                try:
+                                                    antithesis_tar.write_bytes(orig_tar_bytes)
+                                                    m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
+                                                except Exception:
+                                                    pass
+                                            if raw_pre_repair_tar is not None:
+                                                raw_pre_repair_tar.unlink(missing_ok=True)
+                                            raw_pre_repair_tar = None
+                                            active_antithesis_sha256 = raw_antithesis_sha256
+                                except Exception as repair_outer_exc:
+                                    outer_tx_exc_msg = f"outer_repair_exception:{type(repair_outer_exc).__name__}:{repair_outer_exc}"
+                                    local_repair_summary["repaired_verified"] = False
+                                    local_repair_summary["persisted_guard_id"] = None
+                                    local_repair_summary["outer_acceptance_exception"] = outer_tx_exc_msg
+                                    local_repair_summary["reason"] = outer_tx_exc_msg
+                                    if orig_tar_bytes is not None:
+                                        try:
+                                            antithesis_tar.write_bytes(orig_tar_bytes)
+                                        except Exception:
+                                            pass
+                                    if raw_pre_repair_tar is not None:
+                                        raw_pre_repair_tar.unlink(missing_ok=True)
+                                    raw_pre_repair_tar = None
+                                    active_antithesis_sha256 = raw_antithesis_sha256
+                                finally:
+                                    if not local_repair_summary.get("repaired_verified") and local_repair_summary.get("attempted_repaired_python_code"):
+                                        try:
+                                            episode_out_dir.mkdir(parents=True, exist_ok=True)
+                                            (episode_out_dir / "04a_failed_repair_attempt.py").write_text(
+                                                str(local_repair_summary["attempted_repaired_python_code"]),
+                                                encoding="utf-8",
+                                            )
+                                        except Exception:
+                                            pass
+
+                                    lr_tok_r = local_repair_summary.get("llm_tokens") or {}
+                                    rep_ok_final = bool(local_repair_summary.get("repaired_verified"))
+                                    exec_status_r = (
+                                        "EXECUTED_OK"
+                                        if rep_ok_final
+                                        else ("OUTER_ACCEPTANCE_ROLLED_BACK" if outer_tx_exc_msg else "PROBE_OR_CONTRACT_REJECTED")
+                                    )
+                                    r_dec = ResearchDecisionRecord(
+                                        decision_id=repair_dec_id,
+                                        step_index=step_idx_r,
+                                        task_id=task.task_id,
+                                        pre_action_state=repair_pre_state,
+                                        available_actions=["SkipLocalRepair", "LocalContainerRepair"],
+                                        selected_action="LocalContainerRepair",
+                                        selected_candidate_id=str(local_repair_summary.get("persisted_guard_id") or active_antithesis_sha256[:16] or "repair_attempt"),
+                                        execution_status=exec_status_r,
+                                        actual_cost=NOMINAL_LOCAL_REPAIR_COST,
+                                        estimated_selected_cost=NOMINAL_LOCAL_REPAIR_COST,
+                                        total_search_cost_spent=NOMINAL_LOCAL_REPAIR_COST,
+                                        total_prompt_tokens=int(lr_tok_r.get("prompt") or 0),
+                                        total_completion_tokens=int(lr_tok_r.get("completion") or 0),
+                                        attempt_cost_events=[
+                                            {
+                                                "action": "LocalContainerRepair",
+                                                "cost_spent": NOMINAL_LOCAL_REPAIR_COST,
+                                                "prompt_tokens": int(lr_tok_r.get("prompt") or 0),
+                                                "completion_tokens": int(lr_tok_r.get("completion") or 0),
+                                                "wall_ms": round(float(local_repair_summary.get("wall_ms") or 0.0), 2),
+                                                "status": "OK" if rep_ok_final else ("OUTER_TRANSPORT_ROLLED_BACK" if outer_tx_exc_msg else "REJECTED_OR_ERROR"),
+                                                "note": str(local_repair_summary.get("reason") or ""),
+                                            }
+                                        ],
+                                        public_val_log_predictive_delta=0.0,
+                                        collateral_min_delta=0.0,
+                                        rationale=(
+                                            f"Tier-1 `LocalContainerRepair` (`verified={rep_ok_final}`, `status={exec_status_r}`, "
+                                            f"`reason={local_repair_summary.get('reason')}`; binary public acceptance recorded separately from log-predictive nats)."
+                                        ),
+                                    )
+                                    repair_decision_record = r_dec.to_dict()
+                                    if m8_mechanism_graph is not None:
+                                        m8_mechanism_graph.decision_ledger.append(r_dec)
+                                        m8_mechanism_graph.action_return_history.setdefault("LocalContainerRepair", []).append(
+                                            {
+                                                "event_id": r_dec.decision_id,
+                                                "task_id": str(task.task_id),
+                                                "step_index": int(step_idx_r),
+                                                "metric_kind": "observed_public_repair_acceptance",
+                                                "observed_public_acceptance": 1.0 if rep_ok_final else 0.0,
+                                                "gain_nats": 0.0,
+                                                "cost_spent": NOMINAL_LOCAL_REPAIR_COST,
+                                            }
                                         )
-                                        local_repair_summary["persisted_guard_id"] = committed_gid
-                                        post_p = local_repair_summary["probe_after"]
-                                        for pk in (
-                                            "public_output_contract_ok",
-                                            "public_calibration_ok",
-                                            "id_renaming_invariant_ok",
-                                            "identifiability_warning",
-                                            "identifiability_metrics",
-                                            "missing_or_null_keys",
-                                            "renaming_discrepancies",
-                                            "public_consistency_metrics",
-                                        ):
-                                            pub_sel[pk] = post_p.get(pk)
-                                    else:
-                                        repaired_tar.unlink(missing_ok=True)
-                                        local_repair_summary["repaired_verified"] = False
-                                        local_repair_summary["persisted_guard_id"] = None
-                                        local_repair_summary["reason"] = f"secondary_artifact_contract_rejected:{chk_after.get('reasons')}"
-                                        if raw_pre_repair_tar.is_file():
-                                            shutil.copy2(raw_pre_repair_tar, antithesis_tar)
-                                            m6f.import_declared_artifacts_tar(probe_cid, task.declared_artifacts, antithesis_tar)
-                                            raw_pre_repair_tar.unlink(missing_ok=True)
-                                        raw_pre_repair_tar = None
-
-                                if not local_repair_summary.get("repaired_verified") and local_repair_summary.get("attempted_repaired_python_code"):
-                                    (episode_out_dir / "04a_failed_repair_attempt.py").write_text(
-                                        str(local_repair_summary["attempted_repaired_python_code"]),
-                                        encoding="utf-8",
-                                    )
-
-                                lr_tok_r = local_repair_summary.get("llm_tokens") or {}
-                                rep_ok_final = bool(local_repair_summary.get("repaired_verified"))
-                                r_dec = ResearchDecisionRecord(
-                                    decision_id=f"m8_rep_dec_{step_idx_r:03d}_{task.task_id}",
-                                    step_index=step_idx_r,
-                                    task_id=task.task_id,
-                                    pre_action_state=repair_pre_state,
-                                    available_actions=["SkipLocalRepair", "LocalContainerRepair"],
-                                    selected_action="LocalContainerRepair",
-                                    selected_candidate_id=str(local_repair_summary.get("persisted_guard_id") or active_antithesis_sha256[:16] or "repair_attempt"),
-                                    execution_status="EXECUTED_OK" if rep_ok_final else "PROBE_OR_CONTRACT_REJECTED",
-                                    actual_cost=NOMINAL_LOCAL_REPAIR_COST,
-                                    estimated_selected_cost=NOMINAL_LOCAL_REPAIR_COST,
-                                    total_search_cost_spent=NOMINAL_LOCAL_REPAIR_COST,
-                                    total_prompt_tokens=int(lr_tok_r.get("prompt") or 0),
-                                    total_completion_tokens=int(lr_tok_r.get("completion") or 0),
-                                    attempt_cost_events=[
-                                        {
-                                            "action": "LocalContainerRepair",
-                                            "cost_spent": NOMINAL_LOCAL_REPAIR_COST,
-                                            "prompt_tokens": int(lr_tok_r.get("prompt") or 0),
-                                            "completion_tokens": int(lr_tok_r.get("completion") or 0),
-                                            "wall_ms": round(float(local_repair_summary.get("wall_ms") or 0.0), 2),
-                                            "status": "OK" if rep_ok_final else "REJECTED_OR_ERROR",
-                                            "note": str(local_repair_summary.get("reason") or ""),
-                                        }
-                                    ],
-                                    public_val_log_predictive_delta=1.0 if rep_ok_final else 0.0,
-                                    collateral_min_delta=0.0,
-                                    rationale=f"Tier-1 `LocalContainerRepair` (`verified={rep_ok_final}`, `reason={local_repair_summary.get('reason')}`).",
-                                )
-                                repair_decision_record = r_dec.to_dict()
-                                if m8_mechanism_graph is not None:
-                                    m8_mechanism_graph.decision_ledger.append(r_dec)
-                                    m8_mechanism_graph.action_return_history.setdefault("LocalContainerRepair", []).append(
-                                        {"gain_nats": 1.0 if rep_ok_final else 0.0, "cost_spent": NOMINAL_LOCAL_REPAIR_COST}
-                                    )
-                                    m8_mechanism_graph.sync_authoritative_state_to_forest()
-                                    if m8_graph_checkpoint_path is not None:
-                                        m8_mechanism_graph.save_checkpoint(m8_graph_checkpoint_path)
+                                        m8_mechanism_graph.sync_authoritative_state_to_forest()
+                                        if m8_graph_checkpoint_path is not None:
+                                            m8_mechanism_graph.save_checkpoint(m8_graph_checkpoint_path)
             finally:
                 m6f.stop_container_safely(probe_cid)
         if use_m8_planner:
@@ -2056,8 +2143,18 @@ def run_m6_9_a_two_branch_episode(
             if m8_mechanism_graph is not None and isinstance(selective_decision.get("decision_record"), dict):
                 b_rec = ResearchDecisionRecord.from_dict(selective_decision["decision_record"])
                 m8_mechanism_graph.decision_ledger.append(b_rec)
+                pred_net_u = float(selective_decision.get("net_variational_utility") or 0.0)
                 m8_mechanism_graph.action_return_history.setdefault(b_rec.selected_action, []).append(
-                    {"gain_nats": float(selective_decision.get("net_variational_utility") or 0.0), "cost_spent": br_cost}
+                    {
+                        "event_id": b_rec.decision_id,
+                        "task_id": str(task.task_id),
+                        "step_index": int(b_rec.step_index),
+                        "metric_kind": "predicted_net_accuracy_utility",
+                        "predicted_net_utility": pred_net_u,
+                        "challenger_executed": bool(thesis_sum is not None),
+                        "gain_nats": 0.0,
+                        "cost_spent": br_cost,
+                    }
                 )
                 m8_mechanism_graph.sync_authoritative_state_to_forest()
                 if m8_graph_checkpoint_path is not None:

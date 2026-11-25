@@ -359,45 +359,59 @@ def _extract_code_ast_operator_profile(python_code: str) -> dict[str, Any]:
     }
 
     func_ast_dumps: list[str] = []
-    for fn in [n for n in tree.body if isinstance(n, ast.FunctionDef)]:
-        if fn.name.startswith("_"):
-            continue
-        func_count += 1
-        fn_clean = deepcopy(fn)
-        fn_clean.decorator_list = [
-            d for d in fn_clean.decorator_list
-            if not (
-                (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "track_wormhole_skill")
-                or (isinstance(d, ast.Name) and d.id == "track_wormhole_skill")
-            )
-        ]
-        if (
-            fn_clean.body
-            and isinstance(fn_clean.body[0], ast.Expr)
-            and isinstance(fn_clean.body[0].value, ast.Constant)
-            and isinstance(fn_clean.body[0].value.value, str)
-        ):
-            fn_clean.body = fn_clean.body[1:] or [ast.Pass()]
-        func_ast_dumps.append(ast.dump(fn_clean, annotate_fields=True, include_attributes=False))
-        for sub in ast.walk(fn):
-            if isinstance(sub, ast.BinOp):
-                bin_ops += 1
-            elif isinstance(sub, (ast.For, ast.While, ast.ListComp, ast.GeneratorExp, ast.DictComp)):
-                loops_or_comps += 1
-            elif isinstance(sub, ast.Call):
-                cname = sub.func.id if isinstance(sub.func, ast.Name) else (sub.func.attr if isinstance(sub.func, ast.Attribute) else "")
-                if cname and not cname.startswith("_"):
-                    sci_calls.append(cname)
-                    if cname in _FAM_MAP:
-                        op_families.add(_FAM_MAP[cname])
-            elif isinstance(sub, ast.Return) and sub.value is not None:
-                # Check whether return value is a literal numeric/None constant or unary -constant!
-                rv = sub.value
-                is_const = isinstance(rv, ast.Constant) or (
-                    isinstance(rv, ast.UnaryOp) and isinstance(rv.operand, ast.Constant)
+    helper_ast_dumps: list[str] = []
+    module_env_ast_dumps: list[str] = []
+
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.Assign, ast.AnnAssign)):
+            module_env_ast_dumps.append(ast.dump(stmt, annotate_fields=True, include_attributes=False))
+        elif isinstance(stmt, ast.Import):
+            module_env_ast_dumps.append(ast.dump(stmt, annotate_fields=True, include_attributes=False))
+        elif isinstance(stmt, ast.ImportFrom):
+            if any(al.name == "track_wormhole_skill" for al in stmt.names):
+                continue
+            module_env_ast_dumps.append(ast.dump(stmt, annotate_fields=True, include_attributes=False))
+        elif isinstance(stmt, ast.FunctionDef):
+            fn_clean = deepcopy(stmt)
+            fn_clean.decorator_list = [
+                d for d in fn_clean.decorator_list
+                if not (
+                    (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "track_wormhole_skill")
+                    or (isinstance(d, ast.Name) and d.id == "track_wormhole_skill")
                 )
-                if not is_const:
-                    non_trivial_returns += 1
+            ]
+            if (
+                fn_clean.body
+                and isinstance(fn_clean.body[0], ast.Expr)
+                and isinstance(fn_clean.body[0].value, ast.Constant)
+                and isinstance(fn_clean.body[0].value.value, str)
+            ):
+                fn_clean.body = fn_clean.body[1:] or [ast.Pass()]
+            dumped_fn = ast.dump(fn_clean, annotate_fields=True, include_attributes=False)
+            if stmt.name.startswith("_"):
+                helper_ast_dumps.append(dumped_fn)
+            else:
+                func_count += 1
+                func_ast_dumps.append(dumped_fn)
+            for sub in ast.walk(stmt):
+                if isinstance(sub, ast.BinOp):
+                    bin_ops += 1
+                elif isinstance(sub, (ast.For, ast.While, ast.ListComp, ast.GeneratorExp, ast.DictComp)):
+                    loops_or_comps += 1
+                elif isinstance(sub, ast.Call):
+                    cname = sub.func.id if isinstance(sub.func, ast.Name) else (sub.func.attr if isinstance(sub.func, ast.Attribute) else "")
+                    if cname and not cname.startswith("_"):
+                        sci_calls.append(cname)
+                        if cname in _FAM_MAP:
+                            op_families.add(_FAM_MAP[cname])
+                elif not stmt.name.startswith("_") and isinstance(sub, ast.Return) and sub.value is not None:
+                    # Check whether return value is a literal numeric/None constant or unary -constant!
+                    rv = sub.value
+                    is_const = isinstance(rv, ast.Constant) or (
+                        isinstance(rv, ast.UnaryOp) and isinstance(rv.operand, ast.Constant)
+                    )
+                    if not is_const:
+                        non_trivial_returns += 1
 
     has_real_computation = bool(func_count > 0 and non_trivial_returns > 0 and (bin_ops >= 2 or len(sci_calls) >= 2))
     canon_struct = {
@@ -406,6 +420,8 @@ def _extract_code_ast_operator_profile(python_code: str) -> dict[str, Any]:
         "bin_ops_bucket": min(bin_ops // 3, 12),
         "has_loops": loops_or_comps > 0,
         "canonical_fn_asts": func_ast_dumps,
+        "helper_fn_asts": helper_ast_dumps,
+        "module_env_asts": module_env_ast_dumps,
     }
     ast_sha12 = hashlib.sha256(json.dumps(canon_struct, sort_keys=True).encode("utf-8")).hexdigest()[:12] if has_real_computation else ""
     return {
@@ -1680,21 +1696,46 @@ def consolidate_wave1_via_aufhebung_compiler(
         for task, anti_sum, anti_dir in wave1_antithesis_episodes:
             if task.benchmark == "BioMysteryBench-Preview":
                 continue
+            if not bool(anti_sum.get("ended_by_finish", True)):
+                events.append({"task_id": task.task_id, "status": "skipped_incomplete_episode"})
+                continue
+            sel_ver = str((anti_sum.get("selective_router_decision") or {}).get("public_verification_state") or "")
+            if sel_ver == "REFUTED":
+                events.append({"task_id": task.task_id, "status": "skipped_public_refuted_candidate"})
+                continue
+
+            # Resolve active accepted deliverable (`M8.5` Fix `M01`: prefer `04a_repaired_antithesis_snapshot` when `repaired_verified=True`
+            # so broken pre-repair `04_submitted_artifacts_snapshot` in `branch_2_antithesis_wormhole` is NEVER compiled as verified!)
+            rep_sum = anti_sum.get("local_container_repair_summary") or (anti_sum.get("selective_router_decision") or {}).get("local_container_repair") or {}
+            rep_verified = bool(rep_sum.get("repaired_verified"))
+            candidate_snap_dirs: list[Path] = []
+            if rep_verified:
+                if rep_sum.get("repaired_snapshot_dir"):
+                    candidate_snap_dirs.append(Path(str(rep_sum["repaired_snapshot_dir"])))
+                candidate_snap_dirs.append(anti_dir / "04a_repaired_antithesis_snapshot")
+            candidate_snap_dirs.append(anti_dir / "04_submitted_artifacts_snapshot")
 
             py_sources: dict[str, str] = {}
-            snap_dir = anti_dir / "04_submitted_artifacts_snapshot"
+            resolved_source_kind = "none"
+            for sdir in candidate_snap_dirs:
+                if sdir.is_dir():
+                    for p in sorted(sdir.glob("*.py")):
+                        txt = p.read_text(encoding="utf-8", errors="ignore")
+                        if txt.strip():
+                            py_sources[p.name] = txt
+                    if py_sources:
+                        resolved_source_kind = "repaired_active_snapshot" if "04a_repaired" in sdir.name else "submitted_snapshot"
+                        break
+
             prod_dir = anti_dir / "04b_producer_skill_manifest" / "producers"
-            if snap_dir.is_dir():
-                for p in sorted(snap_dir.glob("*.py")):
-                    txt = p.read_text(encoding="utf-8", errors="ignore")
-                    if txt.strip():
-                        py_sources[p.name] = txt
             if not py_sources and prod_dir.is_dir():
                 for p in sorted(prod_dir.glob("*.py"))[:3]:
                     if ".hegel" not in p.name and "wormhole" not in p.name:
                         txt = p.read_text(encoding="utf-8", errors="ignore")
                         if txt.strip():
                             py_sources[p.name] = txt
+                if py_sources:
+                    resolved_source_kind = "producer_manifest"
             if not py_sources:
                 events.append({"task_id": task.task_id, "status": "skipped_no_python_deliverable"})
                 continue
@@ -1719,7 +1760,9 @@ def consolidate_wave1_via_aufhebung_compiler(
                 module_prefix="wave1_aufhebung",
             )
             comp["source_qualification_status"] = (
-                "completed_public_episode" if bool(anti_sum.get("ended_by_finish")) else "incomplete_exploratory_episode"
+                "repaired_public_verified_episode"
+                if rep_verified
+                else ("completed_public_episode" if bool(anti_sum.get("ended_by_finish")) else "incomplete_exploratory_episode")
             )
             cons = consolidate_autogenous_episode_into_forest(
                 forest=forest,
@@ -1732,6 +1775,7 @@ def consolidate_wave1_via_aufhebung_compiler(
                 {
                     "task_id": task.task_id,
                     "short_name": task.short_name,
+                    "resolved_source_kind": resolved_source_kind,
                     "compilation_mode": comp.get("compilation_mode"),
                     "compiled_ok": comp.get("compiled_ok"),
                     "module_filename": comp.get("filename"),

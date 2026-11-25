@@ -33,6 +33,7 @@ import secrets
 import subprocess
 import tempfile
 from time import monotonic
+from types import SimpleNamespace
 from typing import Any
 
 from . import m6_frontier_real_benchmarks as m6f
@@ -68,16 +69,17 @@ M8_CONTAINER_LOCAL_REPAIR_SCHEMA: dict[str, Any] = {
 # Self-contained supervisor script executing ONLY against public workspace files in `/holdout_task`
 # while isolating untrusted candidate module imports/calls inside a separate `python3 -I` child RPC worker!
 _GENERAL_PUBLIC_INVARIANCE_PROBE_PY = r'''
-import copy, glob, json, math, os, pickle, re, shutil, subprocess, sys
+import copy, glob, json, math, os, pickle, re, shutil, subprocess, sys, tempfile
 import numpy as np
 
 TASK_DIR = "/holdout_task"
-sys.path.insert(0, TASK_DIR)
-SENTINEL = os.environ.get("HEGEL_PUB_PROBE_SENTINEL", "")
+if TASK_DIR not in sys.path:
+    sys.path.append(TASK_DIR)
+SENTINEL = os.environ.pop("HEGEL_PUB_PROBE_SENTINEL", "")
 
 out = {
     "probe_applicable": False,
-    "probe_protocol_version": "m8_4_isolated_rpc_v1",
+    "probe_protocol_version": "m8_5_isolated_rpc_v2",
     "symmetry_probe_family": None,
     "public_output_contract_ok": None,
     "public_calibration_ok": None,
@@ -124,7 +126,7 @@ def _start_candidate_worker(mod_name):
         "rpc_fd = os.dup(1)\n"
         "os.dup2(2, 1)\n"
         "sys.stdout = sys.stderr\n"
-        f"sys.path.insert(0, {TASK_DIR!r})\n"
+        f"if {TASK_DIR!r} not in sys.path: sys.path.append({TASK_DIR!r})\n"
         + _CODEC_SRC +
         f"\nmod = importlib.import_module({mod_name!r})\n"
         "for raw_ln in sys.stdin:\n"
@@ -140,10 +142,13 @@ def _start_candidate_worker(mod_name):
         "    os.write(rpc_fd, (json.dumps(resp, allow_nan=False) + '\\n').encode('utf-8'))\n"
         "os.close(rpc_fd)\n"
     )
+    err_fp = tempfile.TemporaryFile(mode="w+b")
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("HEGEL_")}
     proc = subprocess.Popen(
         [sys.executable, "-I", "-c", worker_src],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err_fp, env=clean_env, text=True, bufsize=1,
     )
+    proc._hegel_err_fp = err_fp
     seq = {"i": 0}
     def _call(fn_name, *args, **kwargs):
         seq["i"] += 1
@@ -152,7 +157,14 @@ def _start_candidate_worker(mod_name):
         proc.stdin.flush()
         ln = proc.stdout.readline()
         if not ln:
-            err_tail = proc.stderr.read()[-400:] if proc.stderr else ""
+            err_tail = ""
+            try:
+                err_fp.flush()
+                sz = err_fp.tell()
+                err_fp.seek(max(0, sz - 400))
+                err_tail = err_fp.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
             raise RuntimeError(f"candidate_worker_eof:{err_tail}")
         resp = json.loads(ln)
         if resp.get("id") != rid or not resp.get("ok"):
@@ -167,6 +179,12 @@ def _stop_worker(proc):
         proc.wait(timeout=3)
     except Exception:
         proc.kill()
+    try:
+        efp = getattr(proc, "_hegel_err_fp", None)
+        if efp is not None:
+            efp.close()
+    except Exception:
+        pass
 
 def _is_finite_scalar(v):
     try:
@@ -186,6 +204,18 @@ def _is_finite_array(x, expected_shape=None):
     if expected_shape is not None and arr.shape != tuple(expected_shape):
         return False
     return True
+
+def _is_binary_matrix(x, expected_shape):
+    try:
+        raw = np.asarray(x)
+        if raw.dtype == object:
+            return False
+        af = np.asarray(raw, dtype=float)
+    except Exception:
+        return False
+    if af.shape != tuple(expected_shape) or not bool(np.all(np.isfinite(af))):
+        return False
+    return bool(np.all((af == 0.0) | (af == 1.0)))
 
 # 1. `ho12` Cohort Consensus: Cohort prevalence + depth witness + WT codon witness + negative & positive tag renaming!
 if os.path.isdir("/holdout_task/public_cohort") and os.path.isfile("/holdout_task/plasmid_audit.py"):
@@ -209,16 +239,42 @@ if os.path.isdir("/holdout_task/public_cohort") and os.path.isfile("/holdout_tas
         isos = sorted(glob.glob(os.path.join(pub_dir, "isolate_*.json")))
         tag_iso_counts = {}
         tag_cns = {}
+        tag_seqs = {}
+        _RC_TRANS = str.maketrans("ACGTacgt", "TGCAtgca")
+        def _revcomp(s):
+            return s.translate(_RC_TRANS)[::-1]
+        def _find_aligned_plasmid_cds(plasmid_seq, wt_seq):
+            L = len(wt_seq)
+            if L < 48 or len(plasmid_seq) < L:
+                return None
+            anchors = [(0, wt_seq[:24]), (24, wt_seq[24:48]), (L - 24, wt_seq[-24:]), (L - 48, wt_seq[-48:-24])]
+            for strand_seq in (plasmid_seq + plasmid_seq[:L], _revcomp(plasmid_seq) + _revcomp(plasmid_seq)[:L]):
+                tried = set()
+                for off_a, seed_a in anchors:
+                    idx = strand_seq.find(seed_a)
+                    while idx != -1:
+                        st = idx - off_a
+                        if 0 <= st <= len(strand_seq) - L and st not in tried:
+                            tried.add(st)
+                            cand_cds = strand_seq[st : st + L]
+                            diffs_nt = sum(1 for a, b in zip(cand_cds, wt_seq) if a != b)
+                            if diffs_nt <= 9:
+                                return cand_cds
+                        idx = strand_seq.find(seed_a, idx + 1)
+            return None
+
         for ifp in isos:
             b_iso = json.load(open(ifp, "r", encoding="utf-8"))
             chr_ds = [float(c["mean_depth"]) for c in b_iso.get("contigs", []) if not bool(c.get("circular", False))]
             med_chr = float(np.median(chr_ds)) if chr_ds else 1.0
             seen_t = set()
             for c in b_iso.get("contigs", []):
-                if bool(c.get("circular", False)) and len(str(c.get("sequence") or "")) >= 2400:
+                c_seq = str(c.get("sequence") or "").upper()
+                if bool(c.get("circular", False)) and len(c_seq) >= 2400:
                     ft = str(c.get("family_tag") or "")
                     seen_t.add(ft)
                     tag_cns.setdefault(ft, []).append(float(c["mean_depth"]) / max(med_chr, 1e-9))
+                    tag_seqs.setdefault(ft, []).append(c_seq)
             for ft in seen_t:
                 tag_iso_counts[ft] = tag_iso_counts.get(ft, 0) + 1
 
@@ -249,16 +305,35 @@ if os.path.isdir("/holdout_task/public_cohort") and os.path.isfile("/holdout_tas
             else:
                 s_clean = sub0.strip()
                 wt_aa, pos_1, mut_aa = s_clean[0], int(s_clean[1:-1]), s_clean[-1]
-                n_cod = len(wt_cds) // 3
+                wt_up = wt_cds.upper()
+                n_cod = len(wt_up) // 3
                 if not (1 <= pos_1 <= n_cod) or wt_aa == mut_aa:
                     miss.append("substitution_position_or_synonymous_invalid")
                 else:
-                    ref_cod = wt_cds[3 * (pos_1 - 1) : 3 * pos_1]
+                    ref_cod = wt_up[3 * (pos_1 - 1) : 3 * pos_1]
                     if _CODON.get(ref_cod) != wt_aa:
                         miss.append(f"substitution_wt_mismatch({wt_aa}!=ref_{_CODON.get(ref_cod)})")
+                    elif isinstance(ft0, str) and ft0 in tag_seqs:
+                        seq_list = tag_seqs[ft0]
+                        mut_matches = 0
+                        aligned_cnt = 0
+                        for p_seq in seq_list:
+                            al_cds = _find_aligned_plasmid_cds(p_seq, wt_up)
+                            if al_cds is not None:
+                                aligned_cnt += 1
+                                pl_cod = al_cds[3 * (pos_1 - 1) : 3 * pos_1]
+                                if _CODON.get(pl_cod) == mut_aa:
+                                    mut_matches += 1
+                        if aligned_cnt == 0 or mut_matches < max(1, int(math.ceil(0.80 * aligned_cnt))):
+                            miss.append(f"substitution_mut_not_supported_by_plasmid_sequence({s_clean}:matches={mut_matches}/{aligned_cnt})")
         out["missing_or_null_keys"] = miss
         out["public_output_contract_ok"] = (len(miss) == 0)
         out["public_calibration_ok"] = (len(miss) == 0)
+        out["public_consistency_metrics"]["target_coverage"] = {
+            "shared_plasmid_family_tag": "verified_cohort_prevalence_and_equivariance",
+            "median_plasmid_copy_number": "verified_cohort_depth_ratio",
+            "amino_acid_substitution": "verified_wildtype_and_plasmid_cds_codon",
+        }
         if isinstance(r0, dict) and all(_is_finite_scalar(v) if isinstance(v, (int, float)) else True for v in r0.values()):
             out["public_consistency_metrics"]["public_output_preview"] = {
                 k: (float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v))
@@ -554,31 +629,31 @@ elif os.path.isfile("/holdout_task/public_graph.npz") and os.path.isfile("/holdo
         miss = []
         if not (isinstance(r0, dict) and "adjacency" in r0 and "sparse_precision" in r0):
             miss.append("missing_adjacency_or_sparse_precision")
+        elif not (_is_binary_matrix(r0["adjacency"], (p, p)) and _is_finite_array(r0["sparse_precision"], (p, p))):
+            miss.append("invalid_shape_nonbinary_adjacency_or_non_finite_precision")
         else:
-            adj0 = np.asarray(r0["adjacency"], bool); S0 = np.asarray(r0["sparse_precision"], float)
-            if adj0.shape != (p, p) or not _is_finite_array(S0, (p, p)):
-                miss.append("invalid_shape_or_non_finite_precision")
-            else:
-                iu = np.triu_indices(p, 1)
-                tp = int(np.sum(adj0[iu] & gt_adj[iu])); fp = int(np.sum(adj0[iu] & ~gt_adj[iu])); fn = int(np.sum(~adj0[iu] & gt_adj[iu]))
-                f1 = (2.0 * tp) / max(2 * tp + fp + fn, 1)
-                min_eig = float(np.linalg.eigvalsh(0.5 * (S0 + S0.T))[0])
-                supp_ok = bool(np.any(adj0) and float(np.min(np.abs(S0[adj0]))) > 1e-5)
-                out["public_consistency_metrics"] = {"pub_edge_f1": round(f1, 4), "min_eig": round(min_eig, 6)}
-                if (
-                    np.any(np.diag(adj0))
-                    or not np.array_equal(adj0, adj0.T)
-                    or not np.allclose(S0, S0.T, atol=1e-3)
-                    or not (min_eig > 1e-6 and f1 >= 0.86 and supp_ok)
-                ):
-                    miss.append(f"invalid_spd_or_low_pub_f1(f1={f1:.4f},eig={min_eig:.5f})")
+            adj0 = np.asarray(r0["adjacency"], float).astype(bool)
+            S0 = np.asarray(r0["sparse_precision"], float)
+            iu = np.triu_indices(p, 1)
+            tp = int(np.sum(adj0[iu] & gt_adj[iu])); fp = int(np.sum(adj0[iu] & ~gt_adj[iu])); fn = int(np.sum(~adj0[iu] & gt_adj[iu]))
+            f1 = (2.0 * tp) / max(2 * tp + fp + fn, 1)
+            min_eig = float(np.linalg.eigvalsh(0.5 * (S0 + S0.T))[0])
+            supp_ok = bool(np.any(adj0) and float(np.min(np.abs(S0[adj0]))) > 1e-5)
+            out["public_consistency_metrics"] = {"pub_edge_f1": round(f1, 4), "min_eig": round(min_eig, 6)}
+            if (
+                np.any(np.diag(adj0))
+                or not np.array_equal(adj0, adj0.T)
+                or not np.allclose(S0, S0.T, atol=1e-3)
+                or not (min_eig > 1e-6 and f1 >= 0.86 and supp_ok)
+            ):
+                miss.append(f"invalid_spd_or_low_pub_f1(f1={f1:.4f},eig={min_eig:.5f})")
         out["missing_or_null_keys"] = miss
         out["public_output_contract_ok"] = (len(miss) == 0)
         out["public_calibration_ok"] = (len(miss) == 0)
 
         diffs = []
-        if isinstance(r0, dict) and "adjacency" in r0 and "sparse_precision" in r0 and _is_finite_array(r0["sparse_precision"], (p, p)):
-            adj0 = np.asarray(r0["adjacency"], bool); S0 = np.asarray(r0["sparse_precision"], float)
+        if isinstance(r0, dict) and "adjacency" in r0 and "sparse_precision" in r0 and _is_binary_matrix(r0["adjacency"], (p, p)) and _is_finite_array(r0["sparse_precision"], (p, p)):
+            adj0 = np.asarray(r0["adjacency"], float).astype(bool); S0 = np.asarray(r0["sparse_precision"], float)
             # Two fixed NON-CYCLIC general permutations (breaks 24-cycle ring automorphisms completely!)
             rng_g = np.random.default_rng(8505)
             perm_a = rng_g.permutation(p)
@@ -587,9 +662,9 @@ elif os.path.isfile("/holdout_task/public_graph.npz") and os.path.isfile("/holdo
                 perm_b = rng_g.permutation(p)
             for p_idx, perm in enumerate((perm_a, perm_b)):
                 r1 = call_fn("recover_sparse_precision_support", X[:, perm].copy())
-                if not (isinstance(r1, dict) and "adjacency" in r1 and _is_finite_array(r1.get("sparse_precision"), (p, p))):
+                if not (isinstance(r1, dict) and "adjacency" in r1 and _is_binary_matrix(r1.get("adjacency"), (p, p)) and _is_finite_array(r1.get("sparse_precision"), (p, p))):
                     diffs.append(f"perm_{p_idx}_invalid_or_non_finite"); break
-                adj1 = np.asarray(r1["adjacency"], bool)
+                adj1 = np.asarray(r1["adjacency"], float).astype(bool)
                 S1 = np.asarray(r1["sparse_precision"], float)
                 adj0_perm = adj0[np.ix_(perm, perm)]
                 S0_perm = S0[np.ix_(perm, perm)]
@@ -816,17 +891,130 @@ def merge_worker_graph_into_shared(
             seen_dec_ids.add(rec.decision_id)
             merged_decisions += 1
 
+    merged_returns = 0
     for act_k, rows in worker_graph.action_return_history.items():
         cur_rows = shared_graph.action_return_history.setdefault(act_k, [])
-        seen_r = {json.dumps(r, sort_keys=True) for r in cur_rows}
+        seen_event_ids = {str(r["event_id"]) for r in cur_rows if isinstance(r, dict) and r.get("event_id")}
+        seen_legacy = {json.dumps(r, sort_keys=True) for r in cur_rows if isinstance(r, dict) and not r.get("event_id")}
         for r in rows:
-            rk = json.dumps(r, sort_keys=True)
-            if rk not in seen_r:
-                cur_rows.append(deepcopy(r))
-                seen_r.add(rk)
+            ev_id = str(r.get("event_id") or "") if isinstance(r, dict) else ""
+            if ev_id:
+                if ev_id not in seen_event_ids:
+                    cur_rows.append(deepcopy(r))
+                    seen_event_ids.add(ev_id)
+                    merged_returns += 1
+            else:
+                rk = json.dumps(r, sort_keys=True)
+                if rk not in seen_legacy:
+                    cur_rows.append(deepcopy(r))
+                    seen_legacy.add(rk)
+                    merged_returns += 1
 
     shared_graph.sync_authoritative_state_to_forest()
-    return {"merged_mechanisms": merged_mechs, "merged_decisions": merged_decisions}
+    return {"merged_mechanisms": merged_mechs, "merged_decisions": merged_decisions, "merged_return_events": merged_returns}
+
+
+def compile_verified_repair_to_executable_skill(
+    *,
+    task: Any,
+    repair_summary: dict[str, Any],
+    forest: Any,
+    archive: dict[str, dict[str, Any]],
+    codex_client: Any,
+    run_id: str = "m8_5_repair_compile",
+    graph: PersistentMechanismGraph | None = None,
+    allow_horizontal_wormholes: bool = True,
+) -> dict[str, Any]:
+    """Compile a public-probe & contract-verified `LocalContainerRepair` into a unit-tested `@track_wormhole_skill` Python module (`M8.5`).
+
+    Strictly rejects unverified/syntax-only fallbacks (`unit_test_receipt['passed'] == True` inside `hegel_clean_scipy_sandbox:v1` required!)
+    before consolidating into `PhilosophicalForest` + `archive` so downstream tasks execute real Python functions rather than prompt hints.
+    """
+    from . import m7_autogenous_forest_pretraining as m7a
+
+    if not bool(repair_summary.get("repaired_verified")):
+        return {"compiled_and_consolidated": False, "reason": "repair_not_verified"}
+    rep_code = str(repair_summary.get("repaired_python_code") or "").strip()
+    if not rep_code:
+        return {"compiled_and_consolidated": False, "reason": "missing_repaired_python_code"}
+
+    ensure_clean_scipy_sandbox_image()
+    sandbox_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")
+    try:
+        sig_task = (
+            task
+            if hasattr(task, "benchmark")
+            else SimpleNamespace(benchmark="Hegel-OOD-Holdout-12", instruction_text=str(task.instruction_text))
+        )
+        pub_sigs = m6f.extract_public_task_signatures(sig_task)
+        root_nid = m7a._select_axiomatic_root_for_signatures(archive, pub_sigs)
+        parent_summary = {
+            "node_id": root_nid,
+            "principle": archive[root_nid].get("methodology_principle", ""),
+        }
+        art_name = Path(str(task.declared_artifacts[0])).name if getattr(task, "declared_artifacts", None) else "repaired_module.py"
+        repair_nogoods = [
+            {
+                "nogood_rung": "RUNG_2_INVARIANCE_REPAIR",
+                "assumption_refuted": str(repair_summary.get("defect_diagnosis") or "Naive primary solver violated public invariance or contract."),
+                "empirical_witness": json.dumps(repair_summary.get("probe_after", {}).get("public_consistency_metrics", {}), sort_keys=True)[:240],
+                "sublated_pivot": str(repair_summary.get("invariance_principle") or "Enforce symmetry/gauge invariance and finite output completeness."),
+            }
+        ]
+        short_slug = str(getattr(task, "short_name", None) or getattr(task, "task_id", "repair_task")).split("__")[-1]
+        comp = m7a.compile_episode_dialectical_sublation(
+            episode_id=f"m8_5_repair_{short_slug}",
+            source_slug=f"repair_{short_slug}",
+            public_task_brief=str(task.instruction_text),
+            inferred_signatures=pub_sigs,
+            raw_python_sources={art_name: rep_code},
+            nogoods_recorded=repair_nogoods,
+            parent_node_summary=parent_summary,
+            client=codex_client,
+            sandbox_cid=sandbox_cid,
+            stage_subdir=f"{run_id}__exec_repair__{short_slug}".replace(":", "_"),
+            module_prefix="autogenous_repair",
+        )
+        ut_passed = bool((comp.get("unit_test_receipt") or {}).get("passed")) and str((comp.get("unit_test_receipt") or {}).get("mode") or "") != "static_compile_only_unverified"
+        if not (comp.get("compiled_ok") and ut_passed):
+            return {
+                "compiled_and_consolidated": False,
+                "reason": "unit_test_verification_required_failed",
+                "compilation": comp,
+            }
+        comp["routed_signatures"] = sorted(
+            set(comp.get("routed_signatures") or [])
+            | {s for s in pub_sigs if s in m7a.ALL_PUBLIC_ROUTING_SIGNATURES}
+        ) or ["sig:robust_physical_calibration_and_safety_margins"]
+        comp["source_qualification_status"] = "verified_container_repair_operator"
+        cons = m7a.consolidate_autogenous_episode_into_forest(
+            forest=forest,
+            archive=archive,
+            compilation=comp,
+            nogoods_recorded=repair_nogoods,
+            allow_horizontal_wormholes=allow_horizontal_wormholes,
+        )
+        gid = str(repair_summary.get("persisted_guard_id") or "")
+        if graph is not None and gid and gid in graph.mechanisms:
+            g_mech = graph.mechanisms[gid]
+            g_mech.provenance_note = (
+                f"{g_mech.provenance_note} | [EXECUTABLE_SKILL node={cons.get('target_node_id')} "
+                f"module={comp.get('filename')} funcs={comp.get('function_names')} sha256={str(comp.get('compiled_code_sha256'))[:16]}]"
+            )
+            graph.sync_authoritative_state_to_forest()
+        return {
+            "compiled_and_consolidated": bool(cons.get("consolidated")),
+            "target_node_id": cons.get("target_node_id"),
+            "module_filename": comp.get("filename"),
+            "exported_functions": comp.get("function_names", []),
+            "compiled_code_sha256": comp.get("compiled_code_sha256"),
+            "unit_test_receipt": comp.get("unit_test_receipt"),
+            "routed_signatures": comp.get("routed_signatures", []),
+            "consolidation": cons,
+            "llm_tokens": comp.get("llm_tokens", {}),
+        }
+    finally:
+        m6f.stop_container_safely(sandbox_cid)
 
 
 def execute_in_container_local_repair(
@@ -1073,7 +1261,17 @@ def choose_and_execute_container_mechanism_action(
                 rationale="Primary candidate satisfied public output contract, calibration/witnesses, and symmetry probe.",
             )
             graph.decision_ledger.append(rec)
-            graph.action_return_history.setdefault("CommitPrimary1x", []).append({"gain_nats": 0.0, "cost_spent": 0.0})
+            graph.action_return_history.setdefault("CommitPrimary1x", []).append(
+                {
+                    "event_id": rec.decision_id,
+                    "task_id": str(task.task_id),
+                    "step_index": int(step_index),
+                    "metric_kind": "observed_public_envelope_pass",
+                    "observed_public_acceptance": 1.0,
+                    "gain_nats": 0.0,
+                    "cost_spent": 0.0,
+                }
+            )
             graph.sync_authoritative_state_to_forest()
             return {
                 "selected_action": "CommitPrimary1x",
@@ -1165,7 +1363,7 @@ def choose_and_execute_container_mechanism_action(
             total_prompt_tokens=int(tok["prompt"]),
             total_completion_tokens=int(tok["completion"]),
             attempt_cost_events=attempt_events,
-            public_val_log_predictive_delta=1.0 if repaired_ok else 0.0,
+            public_val_log_predictive_delta=0.0,
             collateral_min_delta=0.0,
             rationale=(
                 f"Executed 1-turn `LocalContainerRepair` (`repaired_ok={repaired_ok}`, "
@@ -1174,7 +1372,15 @@ def choose_and_execute_container_mechanism_action(
         )
         graph.decision_ledger.append(rec_done)
         graph.action_return_history.setdefault("LocalContainerRepair", []).append(
-            {"gain_nats": 1.0 if repaired_ok else 0.0, "cost_spent": NOMINAL_LOCAL_REPAIR_COST}
+            {
+                "event_id": rec_done.decision_id,
+                "task_id": str(task.task_id),
+                "step_index": int(step_index),
+                "metric_kind": "observed_public_repair_acceptance",
+                "observed_public_acceptance": 1.0 if repaired_ok else 0.0,
+                "gain_nats": 0.0,
+                "cost_spent": NOMINAL_LOCAL_REPAIR_COST,
+            }
         )
         graph.sync_authoritative_state_to_forest()
         return {

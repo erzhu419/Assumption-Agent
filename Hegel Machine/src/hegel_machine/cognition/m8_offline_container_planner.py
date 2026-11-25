@@ -48,16 +48,77 @@ CONTAINER_STATE_FEATURE_NAMES: tuple[str, ...] = (
 
 
 def _has_unresolved_target_identifiability_nogood(nogoods: list[dict[str, Any]] | None) -> bool:
-    """Detect active RUNG_3 physical/identifiability nogoods warning that a target parameter remains under-identified."""
+    """Detect active RUNG_3 target-parameter identifiability nogoods via structured fields OR semantic concept groups (`R02`)."""
+    _IDENT_CLAIM_CONCEPTS = (
+        "identifi",
+        "unique",
+        "uniquely",
+        "ambigu",
+        "degenera",
+        "ill-conditioned",
+        "ill-posed",
+        "underdetermined",
+        "indistinguish",
+        "distinguish",
+        "separab",
+    )
+    _TRADE_OFF_WITNESS_CONCEPTS = (
+        "trades off",
+        "trade-off",
+        "tradeoff",
+        "collinear",
+        "unidentifiable",
+        "shifts the fitted",
+        "different equilibrium",
+        "different parameter",
+        "different moduli",
+        "different modulus",
+        "nearly equal",
+        "similar residual",
+        "equal residual",
+        "same residual",
+        "cannot separate",
+        "does not distinguish",
+        "not uniquely",
+    )
+    _TARGET_QUANTITY_CONCEPTS = (
+        "modulus",
+        "moduli",
+        "g_inf",
+        "equilibrium",
+        "parameter",
+        "rate",
+        "constant",
+        "tau",
+        "ic50",
+        "precision",
+        "relaxation",
+        "amplitude",
+        "coefficient",
+        "target",
+    )
     for ng in nogoods or []:
         if not isinstance(ng, dict):
             continue
+        if (
+            ng.get("resolved") is True
+            or bool(ng.get("superseded_by"))
+            or str(ng.get("status") or "").upper() in {"RESOLVED", "SUPERSEDED", "CLOSED"}
+        ):
+            continue
+        risk_kind = str(ng.get("risk_kind") or ng.get("nogood_kind") or "").strip().lower()
+        if risk_kind in {"target_identifiability", "parameter_non_identifiability", "underdetermined_target"}:
+            return True
         rung = str(ng.get("nogood_rung") or "")
+        if not rung.startswith("RUNG_3"):
+            continue
         refuted = str(ng.get("assumption_refuted") or "").lower()
         witness = " ".join(str(ng.get(k) or "") for k in ("empirical_witness", "causal_blanket_diagnosis")).lower()
-        if rung.startswith("RUNG_3") and (
-            ("identified" in refuted or "identifiable" in refuted)
-            and any(kw in witness for kw in ("trades off", "collinear", "unidentifiable", "shifts the fitted"))
+        combined = f"{refuted} {witness}"
+        if (
+            any(c in combined for c in _IDENT_CLAIM_CONCEPTS)
+            and any(w in combined for w in _TRADE_OFF_WITNESS_CONCEPTS)
+            and any(t in combined for t in _TARGET_QUANTITY_CONCEPTS)
         ):
             return True
     return False
@@ -352,9 +413,19 @@ def finalize_container_decision_record(
 
 @dataclass
 class M8OfflineContainerPlanner:
-    """Calibrated M8.4 Variational Planner: Two-Sided Realized Synthesis Utility (Rescue Gain minus Synthesis Damage minus Cost)."""
+    """Calibrated M8.5 Variational Planner: Exact Total-Probability Risk & Collateral Decomposition (`R01` Fix).
+
+    Separates:
+      1. `fail_nig_fit`: pure NIG posterior on primary failure indicator `y_fail = 1 - primary_pass` -> `P(primary_fail | x)`,
+      2. `damage_nig_fit`: pure NIG posterior on conditional collateral harm `y_dmg = 1 - synth_pass` given contract-accepted `primary_pass` -> `P(damage | pass, x)`,
+      3. `posterior_recovery_rate`: Beta(2, 2) conditional recovery rate `P(synth_pass | primary_fail)`,
+    and evaluates exact expected net accuracy utility WITHOUT double-counting collateral synthesis harm:
+      `U(x) = ucb_fail(x) * p_rec_given_fail - (1 - mu_fail(x)) * mu_damage_given_pass(x) - cost_lambda`.
+    """
 
     nig_fit: dict[str, Any]
+    fail_nig_fit: dict[str, Any] | None = None
+    damage_nig_fit: dict[str, Any] | None = None
     posterior_recovery_rate: float = 0.35
     posterior_damage_rate: float = 0.05
     cost_lambda: float = 0.02
@@ -374,25 +445,21 @@ class M8OfflineContainerPlanner:
         epistemic_ucb_beta: float = 0.35,
     ) -> M8OfflineContainerPlanner:
         X_rows = [build_pre_action_feature_vector(r["pre_action_state"]) for r in records]
-        # 1. Fit scale-covariant NIG posterior on two-sided realized synthesis risk/harm target:
-        #    `+1` when primary failed, `-0.5` when synthesis damaged a contract-accepted passing primary, and `0` otherwise!
-        y_two_sided = np.array(
-            [
-                (
-                    1.0
-                    if not bool(r["outcomes"]["antithesis_1x_pass"])
-                    else (
-                        -0.5
-                        if (bool(r["pre_action_state"].get("contract_accepted", True)) and not bool(r["outcomes"]["m8_twobranch_pass"]))
-                        else 0.0
-                    )
-                )
-                for r in records
-            ],
-            dtype=float,
+        Phi = np.vstack(X_rows)
+
+        # 1. Pure primary failure target `y_fail in {0, 1}` (NEVER mixed with collateral synthesis damage!)
+        y_fail = np.array([0.0 if bool(r["outcomes"]["antithesis_1x_pass"]) else 1.0 for r in records], dtype=float)
+        prior_fail_mu = np.array([0.15, 0.55, 0.55, 0.10, 0.45, -0.15], dtype=float)
+        fail_nig = fit_scale_covariant_nig_linear_model(
+            Phi,
+            y_fail,
+            prior_mean=prior_fail_mu,
+            prior_shrinkage=2.0,
+            alpha_0=3.0,
+            beta_0=0.25,
         )
-        # 2. Estimate realized conditional 2-branch recovery rate `P(m8_twobranch_pass | primary_fail)` via Beta(2, 2)
-        #    AND conditional collateral synthesis-damage rate `P(not m8_twobranch_pass | contract_accepted & primary_pass)` via Beta(0.5, 11.5)!
+
+        # 2. Conditional 2-branch recovery rate `P(m8_twobranch_pass | primary_fail)` via Beta(2, 2)
         n_fail = sum(1 for r in records if not bool(r["outcomes"]["antithesis_1x_pass"]))
         n_recovered = sum(
             1
@@ -401,6 +468,7 @@ class M8OfflineContainerPlanner:
         )
         post_rec_rate = float((2.0 + n_recovered) / (4.0 + n_fail))
 
+        # 3. Pure conditional collateral damage rate `P(not m8_twobranch_pass | contract_accepted & primary_pass)` via Beta(0.5, 11.5)
         n_pass_acc = sum(
             1
             for r in records
@@ -414,20 +482,24 @@ class M8OfflineContainerPlanner:
             and (not bool(r["outcomes"]["m8_twobranch_pass"]))
         )
         post_dmg_rate = float((0.5 + n_damaged) / (12.0 + n_pass_acc))
+        dmg_intercept_vec = np.array([post_dmg_rate, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=float)
+        damage_nig = {
+            "posterior_mean": dmg_intercept_vec,
+            "posterior_precision": (12.0 + n_pass_acc) * np.eye(len(dmg_intercept_vec)),
+            "prior_precision": 12.0 * np.eye(len(dmg_intercept_vec)),
+            "alpha_n": 0.5 + n_damaged,
+            "beta_n": 11.5 + max(0, n_pass_acc - n_damaged),
+            "log_marginal_likelihood": 0.0,
+        }
 
-        Phi = np.vstack(X_rows)
-        # Structural prior mean on `[intercept, refuted, unknown_code, unknown_bm, exhaust, grounded]`
-        prior_mu = np.array([0.15, 0.55, 0.55, 0.10, 0.45, -0.15], dtype=float)
-        nig = fit_scale_covariant_nig_linear_model(
-            Phi,
-            y_two_sided,
-            prior_mean=prior_mu,
-            prior_shrinkage=2.0,
-            alpha_0=3.0,
-            beta_0=0.25,
-        )
+        # Derived 6D linear net-effect summary (`p_rec * mu_fail_coef - p_dmg_intercept`) for diagnostics & schema inspection
+        net_summary_nig = deepcopy(fail_nig)
+        net_summary_nig["posterior_mean"] = post_rec_rate * np.asarray(fail_nig["posterior_mean"], dtype=float) - dmg_intercept_vec
+
         return cls(
-            nig_fit=nig,
+            nig_fit=net_summary_nig,
+            fail_nig_fit=fail_nig,
+            damage_nig_fit=damage_nig,
             posterior_recovery_rate=post_rec_rate,
             posterior_damage_rate=post_dmg_rate,
             cost_lambda=float(cost_lambda),
@@ -444,15 +516,17 @@ class M8OfflineContainerPlanner:
         step_index: int = 1,
         record_to_ledger: bool = True,
     ) -> dict[str, Any]:
-        """Compute two-sided NIG-Beta expected net utility `p_rec * ucb_fail - (1 - lcb_fail) * p_damage - cost_lambda`."""
+        """Compute exact decomposed expected net accuracy utility `ucb_fail * p_rec - (1 - mu_fail) * p_dmg - cost_lambda` (`R01`)."""
         x_vec = build_pre_action_feature_vector(pre_state)[None, :]
-        pred = predict_nig_student_t_log_score(self.nig_fit, x_vec, np.zeros(1))
-        raw_mu = float(np.clip(pred["predictions"][0], -1.0, 1.0))
-        mu_fail = float(np.clip(raw_mu, 0.0, 1.0))
-        epistemic_std = float(pred["epistemic_std"][0])
-        ucb_fail_risk = float(np.clip(raw_mu + self.epistemic_ucb_beta * epistemic_std, -1.0, 1.0))
+        eff_fail_nig = self.fail_nig_fit if self.fail_nig_fit is not None else self.nig_fit
+        pred_fail = predict_nig_student_t_log_score(eff_fail_nig, x_vec, np.zeros(1))
+        mu_fail = float(np.clip(pred_fail["predictions"][0], 0.0, 1.0))
+        epistemic_std = float(pred_fail["epistemic_std"][0])
+        ucb_fail_risk = float(np.clip(mu_fail + self.epistemic_ucb_beta * epistemic_std, 0.0, 1.0))
+        mu_damage_cond = float(np.clip(self.posterior_damage_rate, 0.0, 1.0))
+
         expected_gain = self.posterior_recovery_rate * ucb_fail_risk
-        expected_collateral_damage = (1.0 - mu_fail) * self.posterior_damage_rate
+        expected_collateral_damage = (1.0 - mu_fail) * mu_damage_cond
         net_variational_utility = expected_gain - expected_collateral_damage - self.cost_lambda
 
         triggers: list[str] = []
@@ -482,7 +556,7 @@ class M8OfflineContainerPlanner:
             triggers = []
             decision_driver = "hard_domain_verified_commit"
         else:
-            # Learned NIG posterior governs all `SUPPORTED_IN_PARTIAL_SCOPE` and `UNKNOWN` episodes!
+            # Learned decomposed NIG posterior governs all `SUPPORTED_IN_PARTIAL_SCOPE` and `UNKNOWN` episodes!
             spawn = bool(net_variational_utility > self.decision_threshold)
             decision_driver = "learned_nig_posterior_utility"
             if spawn:
@@ -506,8 +580,9 @@ class M8OfflineContainerPlanner:
             public_val_log_predictive_delta=round(net_variational_utility, 6),
             collateral_min_delta=0.0,
             rationale=(
-                f"M8.2 NIG Router (`driver={decision_driver}`, `state={pre_state['public_verification_state']}`, "
-                f"`mu_fail={mu_fail:.4f}`, `epi_std={epistemic_std:.4f}`, `U={net_variational_utility:.4f}`) -> `{selected_action}`."
+                f"M8.5 Decomposed NIG Router (`driver={decision_driver}`, `state={pre_state['public_verification_state']}`, "
+                f"`p_fail={mu_fail:.4f}`, `p_dmg_cond={mu_damage_cond:.4f}`, `epi_std={epistemic_std:.4f}`, "
+                f"`U_net_acc={net_variational_utility:.4f}`) -> `{selected_action}`."
             ),
         )
         rec.validate_prefix_clean()
@@ -520,22 +595,39 @@ class M8OfflineContainerPlanner:
             "decision_driver": decision_driver,
             "triggers": triggers,
             "posterior_mean_fail_risk": round(mu_fail, 5),
+            "posterior_conditional_damage_risk": round(mu_damage_cond, 5),
             "posterior_mean_gain": round(expected_gain, 5),
             "expected_collateral_damage": round(expected_collateral_damage, 5),
             "epistemic_std_gain": round(epistemic_std, 5),
             "net_variational_utility": round(net_variational_utility, 5),
+            "utility_unit": "expected_net_accuracy_gain_minus_cost_lambda",
             "public_verification_state": pre_state["public_verification_state"],
             "decision_record": rec.to_dict(),
         }
 
-    def to_json_dict(self) -> dict[str, Any]:
-        nig_ser = {
+    @staticmethod
+    def _ser_nig(d: dict[str, Any] | None) -> dict[str, Any] | None:
+        if d is None:
+            return None
+        return {
             k: (v.tolist() if isinstance(v, np.ndarray) else v)
-            for k, v in self.nig_fit.items()
+            for k, v in d.items()
             if k != "residuals"
         }
+
+    @staticmethod
+    def _deser_nig(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(raw, dict):
+            return None
+        out = dict(raw)
+        for arr_k in ("posterior_mean", "posterior_precision", "prior_precision"):
+            if arr_k in out:
+                out[arr_k] = np.asarray(out[arr_k], dtype=float)
+        return out
+
+    def to_json_dict(self) -> dict[str, Any]:
         return {
-            "schema": "hegel_m8_calibrated_container_planner_v3",
+            "schema": "hegel_m8_calibrated_container_planner_v4",
             "feature_names": ["intercept", *CONTAINER_STATE_FEATURE_NAMES],
             "posterior_recovery_rate": self.posterior_recovery_rate,
             "posterior_damage_rate": self.posterior_damage_rate,
@@ -544,16 +636,19 @@ class M8OfflineContainerPlanner:
             "decision_threshold": self.decision_threshold,
             "training_suite_ids": self.training_suite_ids,
             "training_episode_count": self.training_episode_count,
-            "nig_fit": nig_ser,
+            "nig_fit": self._ser_nig(self.nig_fit),
+            "fail_nig_fit": self._ser_nig(self.fail_nig_fit),
+            "damage_nig_fit": self._ser_nig(self.damage_nig_fit),
         }
 
     @classmethod
     def from_json_dict(cls, data: dict[str, Any]) -> M8OfflineContainerPlanner:
-        nig_raw = dict(data["nig_fit"])
-        for arr_k in ("posterior_mean", "posterior_precision", "prior_precision"):
-            nig_raw[arr_k] = np.asarray(nig_raw[arr_k], dtype=float)
+        nig_raw = cls._deser_nig(data["nig_fit"])
+        assert nig_raw is not None
         return cls(
             nig_fit=nig_raw,
+            fail_nig_fit=cls._deser_nig(data.get("fail_nig_fit")),
+            damage_nig_fit=cls._deser_nig(data.get("damage_nig_fit")),
             posterior_recovery_rate=float(data.get("posterior_recovery_rate", 0.35)),
             posterior_damage_rate=float(data.get("posterior_damage_rate", 0.04)),
             cost_lambda=float(data["cost_lambda"]),
