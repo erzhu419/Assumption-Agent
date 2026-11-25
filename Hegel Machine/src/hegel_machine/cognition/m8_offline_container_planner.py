@@ -38,6 +38,8 @@ from .m8_persistent_variational_planner import (
     predict_nig_student_t_log_score,
 )
 
+ROUTER_FEATURE_SCHEMA_VERSION = "m8_9_prefix_clean_v2"
+
 CONTAINER_STATE_FEATURE_NAMES: tuple[str, ...] = (
     "unfinished_or_refuted",
     "epistemic_unknown_unprobed",
@@ -259,14 +261,20 @@ def build_pre_action_feature_vector(pre_state: dict[str, Any]) -> np.ndarray:
     f_refuted = 1.0 if (ver_state == "REFUTED" or not bool(pre_state["ended_by_finish"]) or bool(pre_state.get("pullback_gate_triggered"))) else 0.0
     f_unknown_code = 1.0 if ((ver_state == "UNKNOWN" and not is_bm) or ident_risk) else 0.0
     f_unknown_bm = 1.0 if (ver_state == "UNKNOWN" and is_bm) else 0.0
-    f_exhaust = 1.0 if (turns_ratio >= 0.96 and sk_cnt == 0) else max(0.0, (turns_ratio - 0.85) / 0.15) * (0.25 if sk_cnt >= 1 else 1.0)
+    f_exhaust = max(0.0, (turns_ratio - 0.85) / 0.15) * (0.25 if sk_cnt >= 1 else 1.0)
     f_grounded = (
         1.0
         if (
             not ident_risk
+            and bool(pre_state.get("ended_by_finish"))
+            and not bool(pre_state.get("pullback_gate_triggered"))
             and (
                 ver_state == "VERIFIED"
-                or (ver_state == "SUPPORTED_IN_PARTIAL_SCOPE" and (sk_cnt >= 1 or ng_cnt >= 1) and turns_ratio < 0.96)
+                or (
+                    ver_state == "SUPPORTED_IN_PARTIAL_SCOPE"
+                    and turns_ratio < 0.96
+                    and (sk_cnt >= 1 or ng_cnt >= 1 or bool(pre_state.get("contract_accepted")))
+                )
             )
         )
         else 0.0
@@ -642,6 +650,7 @@ class M8OfflineContainerPlanner:
     def to_json_dict(self) -> dict[str, Any]:
         return {
             "schema": "hegel_m8_calibrated_container_planner_v4",
+            "feature_schema_version": ROUTER_FEATURE_SCHEMA_VERSION,
             "feature_names": ["intercept", *CONTAINER_STATE_FEATURE_NAMES],
             "posterior_recovery_rate": self.posterior_recovery_rate,
             "posterior_damage_rate": self.posterior_damage_rate,

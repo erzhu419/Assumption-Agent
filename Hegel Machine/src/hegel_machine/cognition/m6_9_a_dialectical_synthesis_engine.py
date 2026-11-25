@@ -953,7 +953,7 @@ def should_spawn_dialectical_second_branch(
     pub = public_metrics or {}
     if not bool(chk.get("accepted", True)):
         triggers.append("failed_public_artifact_contract")
-    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4"}:
+    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4"}:
         max_t = int(primary_summary.get("max_turns") or 28)
         used_t = int(primary_summary.get("turns_used") or 0)
         if used_t >= max(1, max_t - 3):
@@ -1129,6 +1129,8 @@ def reconcile_thesis_and_antithesis_publicly(
     forest_archive: dict[str, dict[str, Any]] | None = None,
     use_m8_minimax_variational_tiebreak: bool = False,
     allow_l1_primitives: bool = True,
+    disclosure_mode: str = "dedup_full",
+    staging_policy: str = "all_compatible",
 ) -> dict[str, Any]:
     """Blind Public Synthesis (`Zero` `/tests`, `Zero` `answer_rubric`, `Zero` verifier access, A/B label-blinded!)."""
     is_bm = task.benchmark == "BioMysteryBench-Preview"
@@ -1349,6 +1351,8 @@ def reconcile_thesis_and_antithesis_publicly(
                     allow_l1_primitives=allow_l1_primitives,
                     full_forest_archive=(forest_archive if is_auto_blank else None),
                     task_query_text=(task.instruction_text if is_auto_blank else ""),
+                    disclosure_mode=disclosure_mode,
+                    staging_policy=staging_policy,
                 )
             staged_sub_by_stem = {Path(fn).stem: src for fn, src in sub_mods_map.items()}
             staged_sub_skills = (
@@ -1359,6 +1363,8 @@ def reconcile_thesis_and_antithesis_publicly(
                     allow_l1_primitives=allow_l1_primitives,
                     full_forest_archive=(forest_archive if is_auto_blank else None),
                     task_query_text=(task.instruction_text if is_auto_blank else ""),
+                    disclosure_mode=disclosure_mode,
+                    staging_policy=staging_policy,
                 )
                 if recalled_stub
                 else []
@@ -1687,6 +1693,10 @@ def grade_archived_branch_post_lock(
         from .m8_8_unseen_postfreeze_benchmark import run_unseen_postfreeze_private_verifier_by_id
 
         return run_unseen_postfreeze_private_verifier_by_id(task.task_id, branch_tar)
+    if task.benchmark == "Hegel-M89-HardStress-4":
+        from .m8_9_hard_stress_benchmark import run_hard_stress_private_verifier_by_id
+
+        return run_hard_stress_private_verifier_by_id(task.task_id, branch_tar)
 
     cid: str | None = None
     try:
@@ -1715,7 +1725,7 @@ def grade_archived_branch_post_lock(
 
 
 def _init_holdout_public_env_if_needed(cid: str, task: m6f.FrontierBenchmarkTask) -> None:
-    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4"} and task.holdout_public_setup_py:
+    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4"} and task.holdout_public_setup_py:
         subprocess.run(["docker", "exec", cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
         with tempfile.TemporaryDirectory(prefix="hegel_ho_syn_") as td_h:
             setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -1745,6 +1755,8 @@ def run_m6_9_a_two_branch_episode(
     m8_graph_checkpoint_path: Path | None = None,
     episode_nominal_budget: float = 2.5,
     allow_l1_primitives: bool = True,
+    disclosure_mode: str = "dedup_full",
+    staging_policy: str = "all_compatible",
 ) -> dict[str, Any]:
     """Execute one `Hegel_M6_9_A_TwoBranch_LiveGPT` (or budgeted M8.4 3-tier `1.00u -> 1.35u Repair -> 2.00u/2.35u Challenger`) episode."""
     ep_t0 = monotonic()
@@ -1793,6 +1805,8 @@ def run_m6_9_a_two_branch_episode(
             export_artifacts_tar_path=(None if is_bm else antithesis_tar),
             defer_official_verifier=True,
             allow_l1_primitives=allow_l1_primitives,
+            disclosure_mode=disclosure_mode,
+            staging_policy=staging_policy,
         )
 
     selective_decision: dict[str, Any] | None = None
@@ -2389,6 +2403,8 @@ def run_m6_9_a_two_branch_episode(
                 forest_archive=forest_archive,
                 use_m8_minimax_variational_tiebreak=use_m8_planner,
                 allow_l1_primitives=allow_l1_primitives,
+                disclosure_mode=disclosure_mode,
+                staging_policy=staging_policy,
             )
         s_tok = synth_res["llm_tokens"]
         last_p = ledger.record_decision(
@@ -2471,6 +2487,12 @@ def run_m6_9_a_two_branch_episode(
             from .m8_8_unseen_postfreeze_benchmark import run_unseen_postfreeze_private_verifier_for_container
 
             verifier_report = run_unseen_postfreeze_private_verifier_for_container(task.task_id, synth_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M89-HardStress-4":
+            assert synth_cid is not None
+            from .m8_9_hard_stress_benchmark import run_hard_stress_private_verifier_for_container
+
+            verifier_report = run_hard_stress_private_verifier_for_container(task.task_id, synth_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             assert synth_cid is not None
@@ -2656,6 +2678,7 @@ def run_m6_9_a_two_branch_episode(
                                     for _m in (_v.get("autogenous_wormhole_modules") or []) + (_v.get("wave1_executable_modules") or [])
                                     if _m.get("filename") and _m.get("python_code")
                                 },
+                                declared_entrypoints=m6f._extract_declared_python_entrypoints(task.instruction_text),
                             )
                         )
                         if not is_bm

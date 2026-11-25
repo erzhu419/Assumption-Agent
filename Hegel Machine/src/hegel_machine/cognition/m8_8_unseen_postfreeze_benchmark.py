@@ -98,14 +98,21 @@ def make_ert(seed, xa, za, c0, c1, amp):
     return {"L_m": L, "D_m": D, "a0_m": a0, "z_tx_m": z_tx, "z_rx_m": z_rx, "V_obs": V}, np.array([xa, za]), rx_off
 
 pos_errs, rx_errs = [], []
+all_valid = True
 for sd, xa, za, c0, c1, amp in ((901, 14.5, 54.0, 1.95, -0.42, 6.8), (902, 27.0, 24.5, 1.65, 0.31, 7.6), (903, 19.5, 39.0, 2.25, -0.18, 6.1)):
     sv, gt_xz, gt_rx = make_ert(sd, xa, za, c0, c1, amp)
     out = ert_solver.invert_ert_anomaly(sv)
-    pos_errs.append(float(np.linalg.norm(np.asarray(out["anomaly_xz_m"], float) - gt_xz)))
-    rx_hat = np.asarray(out["rx_contact_offset_v"], float); rx_hat = rx_hat - np.mean(rx_hat)
+    if not isinstance(out, dict) or "anomaly_xz_m" not in out or "rx_contact_offset_v" not in out:
+        all_valid = False; break
+    xz_arr = np.asarray(out["anomaly_xz_m"], dtype=float)
+    rx_raw = np.asarray(out["rx_contact_offset_v"], dtype=float)
+    if xz_arr.shape != (2,) or rx_raw.shape != gt_rx.shape or not (np.all(np.isfinite(xz_arr)) and np.all(np.isfinite(rx_raw))):
+        all_valid = False; break
+    pos_errs.append(float(np.linalg.norm(xz_arr - gt_xz)))
+    rx_hat = rx_raw - np.mean(rx_raw)
     rx_errs.append(float(np.sqrt(np.mean((rx_hat - gt_rx) ** 2))))
-passed = bool(max(pos_errs) <= 2.0 and max(rx_errs) <= 0.0012)
-print(json.dumps({"strict_pass": passed, "max_pos_err_m": round(max(pos_errs), 4), "max_rx_rmse_v": round(max(rx_errs), 6)}))
+passed = bool(all_valid and len(pos_errs) == 3 and max(pos_errs) <= 2.0 and max(rx_errs) <= 0.0012)
+print(json.dumps({"strict_pass": passed, "max_pos_err_m": (round(max(pos_errs), 4) if pos_errs and all_valid else None), "max_rx_rmse_v": (round(max(rx_errs), 6) if rx_errs and all_valid else None)}, allow_nan=False))
 ''',
         ),
         HoldoutOODTask(
@@ -219,13 +226,25 @@ gt_priv = {
     "ENZ_104": {"V_max": 2.05, "K_m": 0.35, "K_i": 11.0},
 }
 rel_errs = []
+all_valid = True
 for sd in (911, 912):
     est = enzyme_plate_solver.estimate_variant_haldane_parameters(sim_batches(sd, gt_priv))
+    if not isinstance(est, dict) or set(est.keys()) != set(gt_priv.keys()):
+        all_valid = False; break
     for vid, g in gt_priv.items():
+        if not isinstance(est[vid], dict):
+            all_valid = False; break
         for k in ("V_max", "K_m", "K_i"):
-            rel_errs.append(abs(float(est[vid][k]) - g[k]) / g[k])
-mx = max(rel_errs)
-print(json.dumps({"strict_pass": bool(mx <= 0.12), "max_rel_param_err": round(mx, 5)}))
+            v_hat = est[vid].get(k)
+            if isinstance(v_hat, bool) or not isinstance(v_hat, (int, float, np.floating, np.integer)) or not np.isfinite(float(v_hat)):
+                all_valid = False; break
+            rel_errs.append(abs(float(v_hat) - g[k]) / g[k])
+        if not all_valid:
+            break
+    if not all_valid:
+        break
+mx = max(rel_errs) if (all_valid and len(rel_errs) == 2 * len(gt_priv) * 3) else None
+print(json.dumps({"strict_pass": bool(mx is not None and mx <= 0.12), "max_rel_param_err": (round(mx, 5) if mx is not None else None)}, allow_nan=False))
 ''',
         ),
         HoldoutOODTask(
@@ -340,13 +359,28 @@ def make_case(seed, xs, ys, amp, j_off):
     return {"N": N, "kappa": kappa, "gamma_robin": gamma, "sigma_m": sigma, "sensor_ij": s_ij, "T_obs": T_obs}
 
 xy_e, amp_e, off_e = [], [], []
+all_valid = True
 for sd, xs, ys, amp, j_off in ((921, 0.27, 0.71, 21.0, -0.041), (922, 0.73, 0.38, 16.5, 0.052), (923, 0.46, 0.48, 26.0, -0.019)):
     out = thermal_sink_solver.localize_thermal_source(make_case(sd, xs, ys, amp, j_off))
-    xy_e.append(float(np.linalg.norm(np.asarray(out["source_xy"], float) - np.array([xs, ys]))))
-    amp_e.append(abs(float(out["amplitude"]) - amp) / amp)
-    off_e.append(abs(float(out["junction_offset"]) - j_off))
-passed = bool(max(xy_e) <= 0.035 and max(amp_e) <= 0.08 and max(off_e) <= 0.008)
-print(json.dumps({"strict_pass": passed, "max_xy_err": round(max(xy_e), 5), "max_amp_rel_err": round(max(amp_e), 5), "max_offset_err": round(max(off_e), 5)}))
+    if not isinstance(out, dict) or not all(k in out for k in ("source_xy", "amplitude", "junction_offset")):
+        all_valid = False; break
+    xy_arr = np.asarray(out["source_xy"], dtype=float)
+    amp_raw, off_raw = out["amplitude"], out["junction_offset"]
+    if (
+        xy_arr.shape != (2,)
+        or not np.all(np.isfinite(xy_arr))
+        or isinstance(amp_raw, bool)
+        or isinstance(off_raw, bool)
+        or not isinstance(amp_raw, (int, float, np.floating, np.integer))
+        or not isinstance(off_raw, (int, float, np.floating, np.integer))
+        or not (np.isfinite(float(amp_raw)) and np.isfinite(float(off_raw)))
+    ):
+        all_valid = False; break
+    xy_e.append(float(np.linalg.norm(xy_arr - np.array([xs, ys]))))
+    amp_e.append(abs(float(amp_raw) - amp) / amp)
+    off_e.append(abs(float(off_raw) - j_off))
+passed = bool(all_valid and len(xy_e) == 3 and max(xy_e) <= 0.035 and max(amp_e) <= 0.08 and max(off_e) <= 0.008)
+print(json.dumps({"strict_pass": passed, "max_xy_err": (round(max(xy_e), 5) if all_valid and xy_e else None), "max_amp_rel_err": (round(max(amp_e), 5) if all_valid and amp_e else None), "max_offset_err": (round(max(off_e), 5) if all_valid and off_e else None)}, allow_nan=False))
 ''',
         ),
         HoldoutOODTask(
@@ -419,23 +453,51 @@ def make_inst(seed, n=46, p=14):
 all_ok = True
 max_gap = 0.0
 max_nodes = 0
+checked_count = 0
 for sd in (931, 932, 933):
     inst = make_inst(sd)
     X, y, ridge, box, lam0 = inst["X"], inst["y"], inst["ridge"], inst["box"], inst["l0_penalty"]
     j_star = exact_brute_opt(X, y, ridge, box, lam0)
     out = certified_l0_solver.solve_certified_box_l0(inst)
-    w = np.asarray(out["weights"], dtype=float)
-    lb = float(out["certified_lower_bound"])
-    nodes = int(out.get("nodes_explored", 0))
-    if w.shape != (X.shape[1],) or np.max(np.abs(w)) > box + 1e-7 or nodes <= 0 or nodes > 600:
-        all_ok = False
+    if not isinstance(out, dict) or not all(k in out for k in ("weights", "objective", "certified_lower_bound", "nodes_explored")):
+        all_ok = False; break
+    w_raw, obj_raw, lb_raw, nodes_raw = out["weights"], out["objective"], out["certified_lower_bound"], out["nodes_explored"]
+    if (
+        isinstance(obj_raw, bool)
+        or isinstance(lb_raw, bool)
+        or isinstance(nodes_raw, bool)
+        or not isinstance(obj_raw, (int, float, np.floating, np.integer))
+        or not isinstance(lb_raw, (int, float, np.floating, np.integer))
+        or not isinstance(nodes_raw, (int, np.integer))
+    ):
+        all_ok = False; break
+    try:
+        w_list = list(w_raw)
+    except TypeError:
+        all_ok = False; break
+    if any(isinstance(el, bool) or not isinstance(el, (int, float, np.floating, np.integer)) for el in w_list):
+        all_ok = False; break
+    w = np.asarray(w_list, dtype=float)
+    obj_rep = float(obj_raw)
+    lb = float(lb_raw)
+    nodes = int(nodes_raw)
+    if w.shape != (X.shape[1],) or not np.all(np.isfinite(w)) or not np.isfinite(obj_rep) or not np.isfinite(lb):
+        all_ok = False; break
+    if np.max(np.abs(w)) > box + 1e-7 or nodes <= 0 or nodes > 600:
+        all_ok = False; break
     j_w = 0.5 * float(np.sum((X @ w - y) ** 2) + ridge * np.sum(w ** 2)) + lam0 * int(np.sum(np.abs(w) > 1e-9))
     gap = j_w - lb
+    if not (np.isfinite(j_w) and np.isfinite(gap)):
+        all_ok = False; break
+    # Match exact task specification (`gap <= 1e-5`, consistent `objective == J(w)`, and valid lower bound `lb <= J_opt`)!
+    if abs(obj_rep - j_w) > 1e-6 or lb > j_star + 1e-5 or j_w > j_star + 1e-5 or gap < -1e-5 or gap > 1e-5:
+        all_ok = False; break
     max_gap = max(max_gap, abs(gap), abs(j_w - j_star))
     max_nodes = max(max_nodes, nodes)
-    if lb > j_star + 1e-5 or j_w > j_star + 1e-4 or gap < -1e-5 or gap > 1e-4:
-        all_ok = False
-print(json.dumps({"strict_pass": bool(all_ok), "max_gap": round(max_gap, 7), "max_nodes_explored": max_nodes}))
+    checked_count += 1
+if checked_count != 3:
+    all_ok = False
+print(json.dumps({"strict_pass": bool(all_ok), "max_gap": (round(max_gap, 7) if all_ok else None), "max_nodes_explored": (max_nodes if all_ok else None)}, allow_nan=False))
 ''',
         ),
     ]

@@ -37,29 +37,109 @@ import tempfile
 from typing import Any
 
 
-SKILL_INIT_PY = '''"""Hegel M6.8-B' Executable Wormhole Micro-Library with Post-Execution Status & Kernel-Write Skill∞ Telemetry."""
+SKILL_MAIN_PY = '''"""Read-only CLI entry (`python3 -m hegel_wormhole_skills --list | --describe <mod_or_fn>`) without importing skill code."""
+import argparse
+from . import describe_skill
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--list", action="store_true", help="List compact index cards for all mounted wormhole skills")
+    ap.add_argument("--describe", type=str, default="", help="Describe full contract for `<module>` or `<module>.<fn>`")
+    args = ap.parse_args()
+    if args.list and not args.describe:
+        print(describe_skill("", detail_level="index"))
+    else:
+        print(describe_skill(args.describe, detail_level="full"))
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+SKILL_INIT_PY = '''"""Hegel M6.8-B' / M8.9 Executable Wormhole Micro-Library with Pure-JSON `describe_skill` & Skill∞ Telemetry."""
 import atexit
 from functools import wraps
 import json
 import os
+from pathlib import Path
 import time
 
 ACTIVATION_LOG_PATH = os.environ.get("HEGEL_SKILL_ACTIVATION_LOG", "/tmp/.hegel_skill_activations.jsonl")
+INSPECTION_LOG_PATH = os.environ.get("HEGEL_SKILL_INSPECTION_LOG", "/tmp/.hegel_skill_inspections.jsonl")
+CONTRACTS_CATALOG_PATH = str(Path(__file__).resolve().parent / "_skill_contracts.json")
 _DIRECT_WRITE_CAP = 256
 _BATCH_FLUSH_EVERY = 32
 _SEEN_COMPLETED: dict[tuple[str, str], int] = {}
 _BUFFERED_EXTRA: dict[tuple[str, str], dict[str, float | int]] = {}
 
 
-def _append_jsonl_kernel(line_str: str) -> None:
+def _append_jsonl_path(path_str: str, line_str: str) -> None:
     try:
-        fd = os.open(ACTIVATION_LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        fd = os.open(path_str, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
         try:
             os.write(fd, (line_str + "\\n").encode("utf-8"))
         finally:
             os.close(fd)
     except OSError:
         pass
+
+
+def _append_jsonl_kernel(line_str: str) -> None:
+    _append_jsonl_path(ACTIVATION_LOG_PATH, line_str)
+
+
+def describe_skill(target: str = "", detail_level: str = "full") -> str:
+    """Pure-data contract reader (`0` arbitrary module import/execution!). Reads frozen `_skill_contracts.json`."""
+    caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
+    _append_jsonl_path(
+        INSPECTION_LOG_PATH,
+        json.dumps(
+            {
+                "ts": round(time.time(), 3),
+                "event": "skill_contract_requested",
+                "target": str(target or "*"),
+                "detail_level": str(detail_level),
+                "caller_role": caller_role,
+            }
+        ),
+    )
+    if not os.path.isfile(CONTRACTS_CATALOG_PATH):
+        return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
+    with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
+        catalog = json.load(fh)
+    q = str(target or "").strip()
+    if q.startswith("hegel_wormhole_skills."):
+        q = q[len("hegel_wormhole_skills.") :]
+    matches = []
+    for entry in catalog.get("skills", []):
+        m_stem = entry.get("module_stem", "")
+        if not q or q == m_stem:
+            matches.append(entry)
+        elif "." in q and q.split(".", 1)[0] == m_stem:
+            fn_q = q.split(".", 1)[1]
+            sub_fns = [f for f in entry.get("functions", []) if f.get("function") == fn_q]
+            if sub_fns:
+                matches.append({**entry, "functions": sub_fns})
+        else:
+            sub_fns = [f for f in entry.get("functions", []) if f.get("function") == q]
+            if sub_fns:
+                matches.append({**entry, "functions": sub_fns})
+    _append_jsonl_path(
+        INSPECTION_LOG_PATH,
+        json.dumps(
+            {
+                "ts": round(time.time(), 3),
+                "event": "skill_contract_delivered",
+                "target": str(target or "*"),
+                "matched_module_count": len(matches),
+                "matched_modules": [m.get("module_stem") for m in matches],
+                "caller_role": caller_role,
+            }
+        ),
+    )
+    if detail_level == "index":
+        return "\\n".join(c for m in matches for c in m.get("index_cards", []))
+    return json.dumps({"ok": len(matches) > 0, "target": q or "*", "matches": matches}, indent=2, ensure_ascii=False)
 
 
 def _flush_buffered_skill_activations() -> None:
@@ -1609,12 +1689,14 @@ def extract_skill_api_quick_reference(
     *,
     mathematical_preconditions: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """AST-extract exact public function signatures, 1-sentence contracts, and mathematical preconditions (`M8.7` + `M8.8`)."""
+    """AST-extract exact public function signatures and 1-sentence contracts (`M8.9` Lossless Deduplication:
+    module-level `mathematical_preconditions` are stored ONCE per module, NEVER duplicated across every function!).
+    """
+    _ = mathematical_preconditions
     try:
         tree = ast.parse(python_code)
     except SyntaxError:
         return []
-    preconds = [str(p) if not isinstance(p, dict) else json.dumps(p, ensure_ascii=False) for p in (mathematical_preconditions or [])]
     refs: list[dict[str, Any]] = []
     for node in tree.body:
         if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
@@ -1623,44 +1705,232 @@ def extract_skill_api_quick_reference(
         sig_str = f"{node.name}({ast.unparse(node.args)}){ret_ann}"
         doc = (ast.get_docstring(node) or "").strip()
         first_para = " ".join(ln.strip() for ln in doc.split("\n\n")[0].splitlines() if ln.strip())[:280]
-        entry: dict[str, Any] = {"function": node.name, "signature": sig_str, "doc_summary": first_para}
-        if preconds:
-            entry["mathematical_preconditions"] = preconds
-        refs.append(entry)
+        refs.append({"function": node.name, "signature": sig_str, "doc_summary": first_para})
     return refs
 
 
-def _score_l1_primitive_capability_match(mod_entry: dict[str, Any], parent_nid: str, recalled_nids: set[str], query_text: str) -> float:
-    """Score an `L1` primitive module's mathematical capability match against `query_text` + recalled tree context (`M88-PRIMITIVE-RETRIEVAL`)."""
-    score = 2.0 if parent_nid in recalled_nids else 0.0
-    if not query_text.strip():
-        return score
-    q_toks = {
-        tok
-        for tok in re.findall(r"[a-zA-Z0-9_]{3,}", query_text.lower())
-        if tok not in {"the", "and", "for", "with", "from", "into", "that", "this", "float", "dict", "list", "return", "write"}
+def _summarize_critical_veto_flags(module_stem: str, preconditions: list[Any]) -> str:
+    """Distill critical non-negotiable applicability & mathematical veto flags into a `< 110`-char banner (`M8.9A` §7.1)."""
+    known_flags = {
+        "autogenous_prim_box_ridge_bounds": "G-diag(d)>=0 PSD minorant (NO ridge in minorant); box>=0, l0>=0; finite arrays",
+        "autogenous_prim_conservative_spd_solve": "grid op assumes isotropic scalar coeff>0 + zero Dirichlet ghosts; CG/AMG need square SPD",
+        "autogenous_prim_ridge_profiled_matching": "ridge>=0; whitener must match SVD Gram of same weighted design",
+        "autogenous_prim_robust_affine_projection": "initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0",
+        "autogenous_prim_reference_panel_balancing": "discrete groups/strata (n,); >=1 control col with >=2 finite obs & spread>0 per group",
+        "autogenous_prim_robust_trend_decomposition": "1D strictly increasing t>=0 (n>=4), full-rank design, scale>0, >=3 pts/side for step",
     }
-    blob = " ".join(
+    if module_stem in known_flags:
+        return known_flags[module_stem]
+    joined = "; ".join(str(p).strip() for p in preconditions if str(p).strip())
+    return (joined[:110] + "...") if len(joined) > 113 else (joined or "finite numeric NumPy arrays matching signature")
+
+
+def build_module_index_cards(module_stem: str, code_sha256: str, api_refs: list[dict[str, Any]], preconditions: list[Any]) -> list[str]:
+    sha8 = (code_sha256 or "00000000")[:8]
+    veto_banner = _summarize_critical_veto_flags(module_stem, preconditions)[:88]
+    cards: list[str] = []
+    for ref in api_refs:
+        fn_nm = ref["function"]
+        sig = ref["signature"]
+        role = str(ref.get("doc_summary") or "").split(".")[0][:78]
+        cards.append(
+            f"{module_stem}@{sha8} | {sig} | {role} | REQ: {veto_banner} | --describe {module_stem}.{fn_nm}"
+        )
+    return cards
+
+
+def _score_l1_primitive_capability_match(
+    mod_entry: dict[str, Any],
+    parent_nid: str,
+    recalled_nids: set[str],
+    query_text: str,
+) -> float:
+    """Deterministic capability-keyword & signature match score for `L1` compositional primitives (`M8.8` + `M8.9`)."""
+    fname = str(mod_entry.get("filename") or "")
+    stem = Path(fname).stem
+    q_low = (query_text or "").lower()
+    q_toks = set(re.findall(r"[a-zA-Z0-9_]{2,}", q_low))
+    score = 0.6 if (parent_nid and parent_nid in recalled_nids) else 0.0
+    if not q_toks:
+        return round(score, 4)
+
+    stem_keywords: dict[str, set[str]] = {
+        "autogenous_prim_box_ridge_bounds": {
+            "box", "l0", "l0_penalty", "ridge", "minorant", "certified_lower_bound",
+            "lower_bound", "branch", "bound", "subcube", "cube", "cardinality", "sparse", "gram",
+        },
+        "autogenous_prim_conservative_spd_solve": {
+            "spd", "cg", "conjugate", "preconditioner", "galerkin", "amg", "poisson",
+            "elliptic", "diffusion", "flux", "harmonic", "conductivity", "kappa", "pde",
+        },
+        "autogenous_prim_ridge_profiled_matching": {
+            "profiled", "whitener", "gram", "matching", "cosine", "tomography", "plume",
+            "source", "kernel", "nuisance", "projection", "candidate", "ridge",
+        },
+        "autogenous_prim_robust_affine_projection": {
+            "affine", "cauchy", "huber", "irls", "robust", "outliers", "outlier",
+            "propagate", "transition", "trajectory", "sensitivity", "gain", "offset",
+        },
+        "autogenous_prim_reference_panel_balancing": {
+            "reference", "panel", "control", "controls", "group", "groups", "stratum",
+            "strata", "center", "centers", "site", "sites", "plate", "plates", "cohort", "balanced", "weights",
+        },
+        "autogenous_prim_robust_trend_decomposition": {
+            "trend", "relaxation", "creep", "step", "breakpoint", "unloading",
+            "hereditary", "memory", "tau", "exponential", "drift", "cauchy",
+        },
+    }
+    kw_hits = q_toks & stem_keywords.get(stem, set())
+    score += 1.25 * len(kw_hits)
+
+    meta_blob = " ".join(
         [
-            str(mod_entry.get("filename") or ""),
+            stem.replace("autogenous_prim_", ""),
             str(mod_entry.get("exported_apis") or ""),
-            str(mod_entry.get("compositional_rationale") or ""),
-            " ".join(str(x) for x in (mod_entry.get("mathematical_preconditions") or mod_entry.get("scope_preconditions") or [])),
-            " ".join(r.get("doc_summary", "") for r in extract_skill_api_quick_reference(str(mod_entry.get("python_code") or ""))),
+            " ".join(str(x) for x in (mod_entry.get("function_names") or [])),
+            " ".join(str(x) for x in (mod_entry.get("mathematical_preconditions") or [])),
         ]
     ).lower()
-    m_toks = set(re.findall(r"[a-zA-Z0-9_]{3,}", blob))
-    overlap = len(q_toks & m_toks)
-    # Capability-family synonyms bridging domain vocabulary to mathematical operators
-    cap_bonuses = (
-        ({"drift", "bias", "clock", "gain", "background", "evaporation", "nuisance", "control", "batch", "plate", "offset", "illumination"}, {"nuisance", "ridge", "affine", "reference", "control"}),
-        ({"outlier", "skip", "cycle", "spike", "faulty", "robust", "corrupted", "gross"}, {"robust", "huber", "cauchy", "weights", "irls"}),
-        ({"plume", "source", "sink", "anomaly", "tomography", "kernel", "ray", "dipole"}, {"profile", "candidate", "amplitudes", "whitener", "ridge"}),
-        ({"pde", "flux", "diffusion", "elliptic", "poisson", "darcy", "conductivity", "grid", "robin"}, {"conservative", "grid", "galerkin", "cg", "spd"}),
-        ({"certificate", "bound", "branch", "mip", "cardinality", "l0", "sparse", "facility", "box"}, {"bound", "minorant", "cube", "incidence", "box"}),
+    meta_toks = set(re.findall(r"[a-zA-Z0-9_]{3,}", meta_blob)) - {
+        "float", "int", "ndarray", "numpy", "dict", "list", "tuple", "none", "true", "false", "array", "shape",
+    }
+    score += 0.25 * min(len(q_toks & meta_toks), 10)
+    return round(score, 4)
+
+
+def build_compact_skill_index_cards_from_sources(
+    staged_sources_by_stem: dict[str, str],
+    *,
+    query_text: str = "",
+    max_cards: int = 8,
+) -> list[str]:
+    """Build top-matching compact 1-line index cards for single-turn `LocalContainerRepair` (`M8.9` `D5`)."""
+    scored: list[tuple[float, str]] = []
+    for stem, src in sorted(staged_sources_by_stem.items()):
+        fake_mod = {"filename": f"{stem}.py", "python_code": src}
+        sc = _score_l1_primitive_capability_match(fake_mod, "", set(), query_text) + (1.0 if stem.startswith("autogenous_prim_") else 0.0)
+        sha = hashlib.sha256(src.encode("utf-8")).hexdigest()
+        refs = extract_skill_api_quick_reference(src)
+        for card in build_module_index_cards(stem, sha, refs, []):
+            scored.append((sc, card))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [c for _, c in scored[:max_cards]]
+
+
+def evaluate_l1_skill_staging_net_value(
+    mod_entry: dict[str, Any],
+    parent_nid: str,
+    recalled_nids: set[str],
+    query_text: str,
+) -> dict[str, Any]:
+    """`M8.9B` Transparent Qualification + Interface/Boundary Compatibility + Expected-Net-Value Gate
+    (replaces crude LOC cutoffs!).
+    """
+    fname = str(mod_entry.get("filename") or "")
+    stem = Path(fname).stem
+    py_src = str(mod_entry.get("python_code") or "")
+    actual_sha = hashlib.sha256(py_src.encode("utf-8")).hexdigest()
+    decl_sha = str(mod_entry.get("compiled_code_sha256") or actual_sha)
+    ut_rec = mod_entry.get("unit_test_receipt")
+    ut_sha_ok = (
+        isinstance(ut_rec, dict)
+        and bool(ut_rec.get("passed", True))
+        and str(ut_rec.get("verified_code_sha256") or decl_sha) == actual_sha
+    ) or (ut_rec is None and bool(mod_entry.get("unit_test_verified", True)) and decl_sha == actual_sha)
+    qualified = bool(mod_entry.get("unit_test_verified", True)) and (decl_sha == actual_sha) and ut_sha_ok
+
+    q_low = query_text.lower()
+    q_toks = set(re.findall(r"[a-zA-Z0-9_]{2,}", q_low))
+    cap_score = _score_l1_primitive_capability_match(mod_entry, parent_nid, recalled_nids, query_text)
+
+    vetoes: list[str] = []
+    partial_subroutine_note: str | None = None
+    reimpl_saved = 1.0
+    adapt_cost = 0.65
+    context_cost = 0.35
+
+    if stem == "autogenous_prim_conservative_spd_solve":
+        reimpl_saved = 2.1
+        has_grid_pde = bool(q_toks & {"pde", "diffusion", "flux", "darcy", "poisson", "elliptic", "thermal", "conductivity", "kappa"})
+        has_robin_or_tensor = bool(q_toks & {"robin", "gamma_robin", "tensor", "k_xy", "anisotropic"})
+        if not has_grid_pde:
+            vetoes.append("no_elliptic_grid_or_spd_pde_subproblem_in_task")
+            reimpl_saved = 0.0
+        elif has_robin_or_tensor:
+            # Exact `uf03` / `hs02` partial-structure distinction (`M8.9 Plan §4.2`):
+            # `conservative_grid_operator` assumes scalar zero-ghost Dirichlet, whereas `galerkin_preconditioner` +
+            # `solve_residual_checked_cg` remain valid ONLY if matrix size warrants iterative AMG over direct sparse LU!
+            partial_subroutine_note = "grid_assembly_boundary_mismatch(zero_ghost_scalar_vs_robin_or_tensor); only_cg_amg_applicable_on_large_spd"
+            if not bool(q_toks & {"3d", "multigrid", "iterative", "10000", "matrix_free"}):
+                vetoes.append("direct_sparse_lu_cheaper_than_adapting_zero_ghost_amg_on_small_2d_robin_or_tensor_grid")
+                adapt_cost += 1.8
+    elif stem == "autogenous_prim_box_ridge_bounds":
+        reimpl_saved = 2.4
+        if not bool(q_toks & {"l0", "l0_penalty", "box", "certified_lower_bound", "branch", "facility", "cardinality", "sparse"}):
+            vetoes.append("no_box_or_cardinality_certified_bound_subproblem")
+            reimpl_saved = 0.0
+        elif bool(q_toks & {"facility", "capacitated", "integer", "binary"}) and not bool(q_toks & {"ridge", "least", "sensor", "regression", "x"}):
+            vetoes.append("linear_mip_facility_demand_mismatch_vs_quadratic_design_gram_bound")
+            adapt_cost += 2.0
+    elif stem == "autogenous_prim_reference_panel_balancing":
+        reimpl_saved = 1.7
+        if not bool(q_toks & {"group", "groups", "stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "control", "controls", "reference"}):
+            vetoes.append("no_grouped_control_panel_or_stratum_balancing_structure")
+            reimpl_saved = 0.0
+        elif bool(q_toks & {"quadratic", "2d", "row", "col", "spatial"}) and not bool(q_toks & {"center", "centers", "site", "sites", "stratum", "strata", "missing", "nan"}):
+            vetoes.append("spatial_2d_polynomial_plate_gain_mismatch_vs_scalar_group_median_alignment")
+            adapt_cost += 1.3
+    elif stem == "autogenous_prim_robust_trend_decomposition":
+        reimpl_saved = 1.6
+        if not bool(q_toks & {"relaxation", "creep", "step", "breakpoint", "unloading", "hereditary", "memory", "drift", "outlier", "spikes", "cauchy"}):
+            vetoes.append("no_robust_linear_or_relaxation_step_subproblem")
+            reimpl_saved = 0.0
+        elif not bool(q_toks & {"time", "timestamps", "relaxation", "creep", "step", "memory", "tau"}):
+            # Only `cauchy_linear_fit` applies on static spatial problems — modest reimplementation savings
+            reimpl_saved = 0.85
+    elif stem == "autogenous_prim_ridge_profiled_matching":
+        reimpl_saved = 1.45
+        if not bool(q_toks & {"tomography", "plume", "anomaly", "source", "kernel", "candidate", "grid", "nuisance", "offset", "ridge"}):
+            vetoes.append("no_nuisance_projected_kernel_matching_subproblem")
+            reimpl_saved = 0.0
+    elif stem == "autogenous_prim_robust_affine_projection":
+        reimpl_saved = 1.55
+        if not bool(q_toks & {"affine", "gain", "offset", "robust", "cauchy", "huber", "outliers", "outlier", "transition", "propagate", "trajectory", "memory"}):
+            vetoes.append("no_affine_nuisance_or_linear_state_propagation_subproblem")
+            reimpl_saved = 0.0
+
+    expected_net_value = round((reimpl_saved + 0.08 * min(cap_score, 8.0)) - context_cost - adapt_cost, 4) if qualified else -9.99
+    status = (
+        "REJECTED_UNQUALIFIED"
+        if not qualified
+        else ("QUALIFIED_RECOMMENDED" if (not vetoes and expected_net_value > 0.0) else "QUALIFIED_LOW_OR_NEGATIVE_NET_VALUE")
     )
-    fam_bonus = sum(1.5 for q_set, m_set in cap_bonuses if (q_toks & q_set) and (m_toks & m_set))
-    return round(score + 0.25 * overlap + fam_bonus, 4)
+    return {
+        "module_filename": fname,
+        "module_stem": stem,
+        "compiled_code_sha256": actual_sha,
+        "qualified": qualified,
+        "applicability_status": status,
+        "capability_score": cap_score,
+        "expected_reimplementation_saved": round(reimpl_saved, 4),
+        "discovery_and_context_cost": round(context_cost, 4),
+        "adaptation_and_mismatch_cost": round(adapt_cost, 4),
+        "expected_net_value": expected_net_value,
+        "veto_reasons": vetoes,
+        "partial_subroutine_note": partial_subroutine_note,
+        "recommend_turn1_staging": bool(qualified and (not vetoes) and expected_net_value > 0.0),
+    }
+
+
+def _build_skills_contracts_catalog_json(all_catalog_entries: list[dict[str, Any]]) -> str:
+    return json.dumps(
+        {
+            "schema": "hegel_m8_9_skill_contracts_catalog_v1",
+            "skills": all_catalog_entries,
+        },
+        indent=2,
+        ensure_ascii=False,
+    ) + "\n"
 
 
 def collect_recalled_executable_wormhole_sources(
@@ -1673,37 +1943,109 @@ def collect_recalled_executable_wormhole_sources(
     task_query_text: str = "",
     max_l1_modules: int = 4,
     allow_sklearn: bool = True,
+    disclosure_mode: str = "dedup_full",
+    staging_policy: str = "all_compatible",
     return_diagnostics: bool = False,
 ) -> Any:
-    """Collect `{filename: python_code}` and `manifest_entries` (`M8.7` L1-first + `M8.8` capability-indexed L1 pool & `allow_l1_primitives` switch)."""
+    """Collect `{filename: python_code}` and `manifest_entries` (`M8.9A` `dedup_full` vs `progressive` disclosure +
+    `M8.9B` `all_compatible` vs `net_value_gated` staging policy, with lossless precondition deduplication!).
+    """
+    assert disclosure_mode in {"dedup_full", "progressive"}, f"Invalid disclosure_mode={disclosure_mode}"
+    assert staging_policy in {"all_compatible", "net_value_gated"}, f"Invalid staging_policy={staging_policy}"
     is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
     allow_foundational = bool(include_foundational_skills) and (not is_autogenous_blank)
 
     modules_to_write: dict[str, str] = {}
     manifest_entries: list[dict[str, Any]] = []
+    catalog_entries_by_stem: dict[str, dict[str, Any]] = {}
     selection_diagnostics: dict[str, Any] = {
         "allow_l1_primitives": bool(allow_l1_primitives),
+        "disclosure_mode": disclosure_mode,
+        "staging_policy": staging_policy,
         "max_l1_modules": int(max_l1_modules),
         "selected_l1_modules": [],
         "excluded_l1_candidates": [],
+        "net_value_evaluations": [],
     }
 
     def _has_sklearn_import(code_s: str) -> bool:
         return bool(re.search(r"^\s*(?:import|from)\s+sklearn\b", code_s, flags=re.MULTILINE))
 
+    def _register_manifest_and_catalog(
+        *,
+        fname: str,
+        code_str: str,
+        src_nid: str,
+        granularity_tier: str,
+        origin_tag: str,
+        exported_apis: str,
+        preconditions: list[Any],
+        unit_test_verified: bool = True,
+        qualification_status: str = "qualified",
+        counter_regime_guards: list[Any] | None = None,
+        provenance_episode_id: str = "",
+        stage_in_turn1_manifest: bool = True,
+        net_value_eval: dict[str, Any] | None = None,
+    ) -> None:
+        stem = Path(fname).stem
+        c_sha = hashlib.sha256(code_str.encode("utf-8")).hexdigest()
+        refs = extract_skill_api_quick_reference(code_str)
+        cards = build_module_index_cards(stem, c_sha, refs, preconditions)
+        modules_to_write.setdefault(fname, code_str)
+        catalog_entries_by_stem.setdefault(
+            stem,
+            {
+                "module_stem": stem,
+                "module_import": f"hegel_wormhole_skills.{stem}",
+                "granularity_tier": granularity_tier,
+                "compiled_code_sha256": c_sha,
+                "qualification_status": qualification_status,
+                "unit_test_verified": unit_test_verified,
+                "mathematical_preconditions": list(preconditions),
+                "counter_regime_guards": list(counter_regime_guards or []),
+                "functions": refs,
+                "index_cards": cards,
+            },
+        )
+        if not stage_in_turn1_manifest:
+            return
+        if disclosure_mode == "progressive":
+            entry: dict[str, Any] = {
+                "module_import": f"hegel_wormhole_skills.{stem}",
+                "granularity_tier": granularity_tier,
+                "compiled_code_sha256_8": c_sha[:8],
+                "index_cards": cards,
+            }
+            if net_value_eval is not None:
+                entry["expected_net_value"] = net_value_eval["expected_net_value"]
+        else:
+            entry = {
+                "module_import": f"hegel_wormhole_skills.{stem}",
+                "source_forest_node": src_nid,
+                "granularity_tier": granularity_tier,
+                "origin": origin_tag,
+                "unit_test_verified": unit_test_verified,
+                "source_qualification_status": qualification_status,
+                "compiled_code_sha256": c_sha,
+                "exported_apis": exported_apis,
+                "api_quick_reference": refs,
+                "mathematical_preconditions": list(preconditions),
+                "counter_regime_guards": list(counter_regime_guards or []),
+                "provenance_episode_id": provenance_episode_id,
+            }
+        manifest_entries.append(entry)
+
     if allow_foundational:
         for fname, code_str, origin_tag, api_sig in (extra_modules or []):
             if fname not in modules_to_write:
-                modules_to_write[fname] = code_str
-                manifest_entries.append(
-                    {
-                        "module_import": f"hegel_wormhole_skills.{Path(fname).stem}",
-                        "source_forest_node": "m5_multiscale_and_branch_reconciliation",
-                        "origin": origin_tag,
-                        "granularity_tier": "foundational_operator",
-                        "exported_apis": api_sig,
-                        "api_quick_reference": extract_skill_api_quick_reference(code_str),
-                    }
+                _register_manifest_and_catalog(
+                    fname=fname,
+                    code_str=code_str,
+                    src_nid="m5_multiscale_and_branch_reconciliation",
+                    granularity_tier="foundational_operator",
+                    origin_tag=origin_tag,
+                    exported_apis=api_sig,
+                    preconditions=[],
                 )
 
     for note in recalled_notes:
@@ -1711,19 +2053,17 @@ def collect_recalled_executable_wormhole_sources(
         if allow_foundational and nid in NODE_TO_EXECUTABLE_WORMHOLE_MODULE:
             fname, code_str, api_sig = NODE_TO_EXECUTABLE_WORMHOLE_MODULE[nid]
             if fname not in modules_to_write:
-                modules_to_write[fname] = code_str
-                manifest_entries.append(
-                    {
-                        "module_import": f"hegel_wormhole_skills.{Path(fname).stem}",
-                        "source_forest_node": nid,
-                        "origin": "foundational_wormhole_operator",
-                        "granularity_tier": "foundational_operator",
-                        "exported_apis": api_sig,
-                        "api_quick_reference": extract_skill_api_quick_reference(code_str),
-                    }
+                _register_manifest_and_catalog(
+                    fname=fname,
+                    code_str=code_str,
+                    src_nid=nid,
+                    granularity_tier="foundational_operator",
+                    origin_tag="foundational_wormhole_operator",
+                    exported_apis=api_sig,
+                    preconditions=[],
                 )
 
-    # Pass 1 (`M8.8` Capability-Indexed `L1` Candidate Pool BEFORE Parent-Node Truncation):
+    # Pass 1 (`M8.8` + `M8.9` Capability & Net-Value Indexed `L1` Candidate Pool):
     recalled_nid_set = {str(n.get("node_id") or "") for n in recalled_notes}
     l1_pool_notes: list[dict[str, Any]] = list(recalled_notes)
     if full_forest_archive:
@@ -1734,7 +2074,7 @@ def collect_recalled_executable_wormhole_sources(
             l1_pool_notes.append(arch_rec)
             seen_pool_nids.add(str(arch_nid))
 
-    l1_candidates_by_fname: dict[str, tuple[float, str, dict[str, Any], dict[str, Any]]] = {}
+    l1_candidates_by_fname: dict[str, tuple[float, str, dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
     for p_note in l1_pool_notes:
         p_nid = str(p_note.get("node_id") or "")
         for auto_mod in p_note.get("autogenous_wormhole_modules", []):
@@ -1746,23 +2086,61 @@ def collect_recalled_executable_wormhole_sources(
             is_l1 = g_tier == "L1_compositional_primitive" or af_name.startswith("autogenous_prim_")
             if not is_l1:
                 continue
-            sc = _score_l1_primitive_capability_match(auto_mod, p_nid, recalled_nid_set, task_query_text)
+            nv_eval = evaluate_l1_skill_staging_net_value(auto_mod, p_nid, recalled_nid_set, task_query_text)
+            sc = float(nv_eval["capability_score"])
+            sort_key = float(nv_eval["expected_net_value"]) if staging_policy == "net_value_gated" else sc
             prev_c = l1_candidates_by_fname.get(af_name)
-            if prev_c is None or sc > prev_c[0]:
-                l1_candidates_by_fname[af_name] = (sc, p_nid, p_note, auto_mod)
+            if prev_c is None or sort_key > prev_c[0]:
+                l1_candidates_by_fname[af_name] = (sort_key, p_nid, p_note, auto_mod, nv_eval)
 
     ranked_l1 = sorted(l1_candidates_by_fname.items(), key=lambda kv: (-kv[1][0], kv[0]))
     staged_l1_count = 0
-    for af_name, (sc, src_nid, src_note, auto_mod) in ranked_l1:
+    for af_name, (sort_val, src_nid, src_note, auto_mod, nv_eval) in ranked_l1:
+        selection_diagnostics["net_value_evaluations"].append(nv_eval)
         py_src = str(auto_mod["python_code"])
+        sc = float(nv_eval["capability_score"])
+        math_pre = list(auto_mod.get("mathematical_preconditions") or auto_mod.get("scope_preconditions") or [])
         if not allow_l1_primitives:
             selection_diagnostics["excluded_l1_candidates"].append(
                 {"filename": af_name, "source_node": src_nid, "score": sc, "reason": "l1_disabled_by_arm"}
             )
             continue
+        if not nv_eval["qualified"]:
+            selection_diagnostics["excluded_l1_candidates"].append(
+                {"filename": af_name, "source_node": src_nid, "score": sc, "reason": "unqualified_or_stale_code_sha"}
+            )
+            continue
         if (not allow_sklearn) and _has_sklearn_import(py_src):
             selection_diagnostics["excluded_l1_candidates"].append(
                 {"filename": af_name, "source_node": src_nid, "score": sc, "reason": "sklearn_filtered"}
+            )
+            continue
+        if staging_policy == "net_value_gated" and not nv_eval["recommend_turn1_staging"]:
+            # Keep qualified primitive on disk + in `_skill_contracts.json` for `--list`/`--describe`, but omit from Turn-1 staged manifest!
+            _register_manifest_and_catalog(
+                fname=af_name,
+                code_str=py_src,
+                src_nid=src_nid,
+                granularity_tier="L1_compositional_primitive",
+                origin_tag=str(auto_mod.get("origin", "m8_7_compositional_primitive_aufhebung_verified")),
+                exported_apis=str(auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", []))),
+                preconditions=math_pre,
+                unit_test_verified=True,
+                qualification_status=str(auto_mod.get("source_qualification_status", "pretraining_only_l1_primitive_sublation")),
+                counter_regime_guards=src_note.get("counter_regime_guards", []),
+                provenance_episode_id=str(auto_mod.get("provenance_episode_id", "")),
+                stage_in_turn1_manifest=False,
+                net_value_eval=nv_eval,
+            )
+            selection_diagnostics["excluded_l1_candidates"].append(
+                {
+                    "filename": af_name,
+                    "source_node": src_nid,
+                    "score": sc,
+                    "expected_net_value": nv_eval["expected_net_value"],
+                    "veto_reasons": nv_eval["veto_reasons"],
+                    "reason": "net_value_gate_filtered_kept_in_on_demand_catalog",
+                }
             )
             continue
         if (src_nid not in recalled_nid_set) and sc <= 0.0:
@@ -1775,29 +2153,31 @@ def collect_recalled_executable_wormhole_sources(
                 {"filename": af_name, "source_node": src_nid, "score": sc, "reason": f"context_budget_cap({max_l1_modules})"}
             )
             continue
-        if af_name not in modules_to_write:
-            modules_to_write[af_name] = py_src
+        if Path(af_name).stem not in {m["module_import"].split(".")[-1] for m in manifest_entries}:
             staged_l1_count += 1
-            math_pre = list(auto_mod.get("mathematical_preconditions") or auto_mod.get("scope_preconditions") or [])
             selection_diagnostics["selected_l1_modules"].append(
-                {"filename": af_name, "source_node": src_nid, "score": sc, "via_capability_expansion": (src_nid not in recalled_nid_set)}
-            )
-            manifest_entries.append(
                 {
-                    "module_import": f"hegel_wormhole_skills.{Path(af_name).stem}",
-                    "source_forest_node": src_nid,
-                    "granularity_tier": "L1_compositional_primitive",
-                    "origin": auto_mod.get("origin", "m8_7_compositional_primitive_aufhebung_verified"),
-                    "unit_test_verified": bool(auto_mod.get("unit_test_verified", True)),
-                    "source_qualification_status": str(auto_mod.get("source_qualification_status", "pretraining_only_l1_primitive_sublation")),
-                    "compiled_code_sha256": str(auto_mod.get("compiled_code_sha256") or hashlib.sha256(py_src.encode("utf-8")).hexdigest()),
-                    "exported_apis": auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", [])),
-                    "api_quick_reference": extract_skill_api_quick_reference(py_src, mathematical_preconditions=math_pre),
-                    "scope_preconditions": math_pre,
-                    "mathematical_preconditions": math_pre,
-                    "counter_regime_guards": src_note.get("counter_regime_guards", []),
-                    "provenance_episode_id": auto_mod.get("provenance_episode_id", ""),
+                    "filename": af_name,
+                    "source_node": src_nid,
+                    "score": sc,
+                    "expected_net_value": nv_eval["expected_net_value"],
+                    "via_capability_expansion": (src_nid not in recalled_nid_set),
                 }
+            )
+            _register_manifest_and_catalog(
+                fname=af_name,
+                code_str=py_src,
+                src_nid=src_nid,
+                granularity_tier="L1_compositional_primitive",
+                origin_tag=str(auto_mod.get("origin", "m8_7_compositional_primitive_aufhebung_verified")),
+                exported_apis=str(auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", []))),
+                preconditions=math_pre,
+                unit_test_verified=True,
+                qualification_status=str(auto_mod.get("source_qualification_status", "pretraining_only_l1_primitive_sublation")),
+                counter_regime_guards=src_note.get("counter_regime_guards", []),
+                provenance_episode_id=str(auto_mod.get("provenance_episode_id", "")),
+                stage_in_turn1_manifest=True,
+                net_value_eval=nv_eval,
             )
 
     # Pass 2: Stage `L2_domain_operator` (`autogenous_*`) modules bound to `recalled_notes`!
@@ -1816,25 +2196,22 @@ def collect_recalled_executable_wormhole_sources(
             if (not allow_sklearn) and _has_sklearn_import(py_src):
                 continue
             if af_name not in modules_to_write:
-                modules_to_write[af_name] = py_src
-                l2_pre = list(auto_mod.get("scope_preconditions") or [])
-                manifest_entries.append(
-                    {
-                        "module_import": f"hegel_wormhole_skills.{Path(af_name).stem}",
-                        "source_forest_node": nid,
-                        "granularity_tier": g_tier,
-                        "origin": auto_mod.get("origin", "autogenous_aufhebung_compiled"),
-                        "unit_test_verified": bool(
-                            auto_mod.get("unit_test_verified", auto_mod.get("origin") == "llm_aufhebung_container_verified")
-                        ),
-                        "source_qualification_status": str(auto_mod.get("source_qualification_status", "public_episode")),
-                        "compiled_code_sha256": str(auto_mod.get("compiled_code_sha256") or hashlib.sha256(py_src.encode("utf-8")).hexdigest()),
-                        "exported_apis": auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", [])),
-                        "api_quick_reference": extract_skill_api_quick_reference(py_src, mathematical_preconditions=l2_pre),
-                        "scope_preconditions": l2_pre,
-                        "counter_regime_guards": note.get("counter_regime_guards", []),
-                        "provenance_episode_id": auto_mod.get("provenance_episode_id", ""),
-                    }
+                l2_pre = list(auto_mod.get("mathematical_preconditions") or auto_mod.get("scope_preconditions") or [])
+                _register_manifest_and_catalog(
+                    fname=af_name,
+                    code_str=py_src,
+                    src_nid=nid,
+                    granularity_tier=g_tier,
+                    origin_tag=str(auto_mod.get("origin", "autogenous_aufhebung_compiled")),
+                    exported_apis=str(auto_mod.get("exported_apis") or ", ".join(auto_mod.get("function_names", []))),
+                    preconditions=l2_pre,
+                    unit_test_verified=bool(
+                        auto_mod.get("unit_test_verified", auto_mod.get("origin") == "llm_aufhebung_container_verified")
+                    ),
+                    qualification_status=str(auto_mod.get("source_qualification_status", "public_episode")),
+                    counter_regime_guards=note.get("counter_regime_guards", []),
+                    provenance_episode_id=str(auto_mod.get("provenance_episode_id", "")),
+                    stage_in_turn1_manifest=True,
                 )
 
     for note in recalled_notes:
@@ -1845,17 +2222,20 @@ def collect_recalled_executable_wormhole_sources(
                 py_sub = str(sub_mod["python_code"])
                 if (not allow_sklearn) and _has_sklearn_import(py_sub):
                     continue
-                modules_to_write[sf_name] = py_sub
-                manifest_entries.append(
-                    {
-                        "module_import": f"hegel_wormhole_skills.{Path(sf_name).stem}",
-                        "source_forest_node": nid,
-                        "granularity_tier": "wave1_sublated_helper",
-                        "origin": sub_mod.get("origin", "wave1_ast_sublated"),
-                        "exported_apis": sub_mod.get("exported_apis") or ", ".join(sub_mod.get("function_names", [])),
-                        "api_quick_reference": extract_skill_api_quick_reference(py_sub),
-                    }
+                _register_manifest_and_catalog(
+                    fname=sf_name,
+                    code_str=py_sub,
+                    src_nid=nid,
+                    granularity_tier="wave1_sublated_helper",
+                    origin_tag=str(sub_mod.get("origin", "wave1_ast_sublated")),
+                    exported_apis=str(sub_mod.get("exported_apis") or ", ".join(sub_mod.get("function_names", []))),
+                    preconditions=[],
+                    stage_in_turn1_manifest=True,
                 )
+
+    selection_diagnostics["contracts_catalog_json"] = _build_skills_contracts_catalog_json(
+        [catalog_entries_by_stem[k] for k in sorted(catalog_entries_by_stem.keys())]
+    )
     if return_diagnostics:
         return modules_to_write, manifest_entries, selection_diagnostics
     return modules_to_write, manifest_entries
@@ -1872,9 +2252,11 @@ def stage_recalled_executable_wormholes_in_container(
     task_query_text: str = "",
     max_l1_modules: int = 4,
     allow_sklearn: bool = True,
+    disclosure_mode: str = "dedup_full",
+    staging_policy: str = "all_compatible",
 ) -> list[dict[str, Any]]:
-    """Mount ONLY the executable Python modules bound to recalled `PhilosophicalForest` nodes into `/tmp/hegel_wormhole_skills/`."""
-    modules_to_write, manifest_entries = collect_recalled_executable_wormhole_sources(
+    """Mount recalled Python modules + read-only `_skill_contracts.json` + `__main__.py` into `/tmp/hegel_wormhole_skills/`."""
+    modules_to_write, manifest_entries, sel_diag = collect_recalled_executable_wormhole_sources(
         recalled_notes,
         extra_modules=extra_modules,
         include_foundational_skills=include_foundational_skills,
@@ -1883,6 +2265,9 @@ def stage_recalled_executable_wormholes_in_container(
         task_query_text=task_query_text,
         max_l1_modules=max_l1_modules,
         allow_sklearn=allow_sklearn,
+        disclosure_mode=disclosure_mode,
+        staging_policy=staging_policy,
+        return_diagnostics=True,
     )
     if not modules_to_write:
         return []
@@ -1891,11 +2276,18 @@ def stage_recalled_executable_wormholes_in_container(
         pkg_dir = Path(tmp_s) / "hegel_wormhole_skills"
         pkg_dir.mkdir(parents=True, exist_ok=True)
         (pkg_dir / "__init__.py").write_text(SKILL_INIT_PY, encoding="utf-8")
+        (pkg_dir / "__main__.py").write_text(SKILL_MAIN_PY, encoding="utf-8")
+        (pkg_dir / "_skill_contracts.json").write_text(sel_diag["contracts_catalog_json"], encoding="utf-8")
         for fname, src in modules_to_write.items():
             (pkg_dir / fname).write_text(src, encoding="utf-8")
 
         subprocess.run(
-            ["docker", "exec", agent_cid, "rm", "-rf", "/tmp/hegel_wormhole_skills", "/tmp/.hegel_skill_activations.jsonl"],
+            [
+                "docker", "exec", agent_cid, "rm", "-rf",
+                "/tmp/hegel_wormhole_skills",
+                "/tmp/.hegel_skill_activations.jsonl",
+                "/tmp/.hegel_skill_inspections.jsonl",
+            ],
             capture_output=True, timeout=15,
         )
         subprocess.run(
@@ -1907,6 +2299,24 @@ def stage_recalled_executable_wormholes_in_container(
             capture_output=True, timeout=15,
         )
     return manifest_entries
+
+
+def harvest_container_skill_inspections(agent_cid: str) -> list[dict[str, Any]]:
+    """Read `/tmp/.hegel_skill_inspections.jsonl` recorded by `describe_skill` (`--list` / `--describe`) inside `<agent_cid>`."""
+    proc = subprocess.run(
+        ["docker", "exec", agent_cid, "bash", "-lc", "cat /tmp/.hegel_skill_inspections.jsonl 2>/dev/null || true"],
+        capture_output=True, text=True, timeout=15,
+    )
+    events: list[dict[str, Any]] = []
+    for ln in proc.stdout.splitlines():
+        s = ln.strip()
+        if not s:
+            continue
+        try:
+            events.append(json.loads(s))
+        except json.JSONDecodeError:
+            continue
+    return events
 
 
 def harvest_container_skill_activations(agent_cid: str) -> list[dict[str, Any]]:
@@ -2402,8 +2812,10 @@ def package_self_contained_wormhole_dependencies(
         packaged_symbols[m_stem] = exp_syms
         included_definitions[m_stem] = inc_defs
 
-    # 1b. `M88-PKG-ATTR`: Fail closed on dynamic `getattr(m, ...)` or unexported/private `m._helper` access on whole-module aliases!
+    # 1b. `M88-PKG-ATTR` + `M89-IMMUTABLE-MOD`: Fail closed on dynamic `getattr`/`setattr`, attribute `Store`/`Del`/`AugAssign`
+    # (`m.K = 5`), bare module-object value escape (`foo(m)`), or unexported/private `m._helper` access!
     if whole_mod_alias_to_stem or bare_dotted_mods:
+        safe_attr_value_ids: set[int] = set()
         for _anode in ast.walk(cand_tree):
             if isinstance(_anode, ast.Call) and isinstance(_anode.func, ast.Name) and _anode.func.id in {"getattr", "setattr", "delattr", "vars"} and _anode.args:
                 _t0 = _anode.args[0]
@@ -2416,6 +2828,13 @@ def package_self_contained_wormhole_dependencies(
                     }
             if isinstance(_anode, ast.Attribute) and isinstance(_anode.value, ast.Name) and _anode.value.id in whole_mod_alias_to_stem:
                 _m_st = whole_mod_alias_to_stem[_anode.value.id]
+                if not isinstance(_anode.ctx, ast.Load):
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": f"skill_module_attribute_mutation_unsupported:{_m_st}.{_anode.attr}",
+                        "packaged_python_code": candidate_py,
+                    }
                 if _anode.attr not in set(packaged_symbols.get(_m_st, ())):
                     return {
                         "had_skill_imports": True,
@@ -2423,6 +2842,7 @@ def package_self_contained_wormhole_dependencies(
                         "error": f"unexported_or_private_module_attribute_unsupported:{_m_st}.{_anode.attr}",
                         "packaged_python_code": candidate_py,
                     }
+                safe_attr_value_ids.add(id(_anode.value))
             if (
                 isinstance(_anode, ast.Attribute)
                 and isinstance(_anode.value, ast.Attribute)
@@ -2431,6 +2851,13 @@ def package_self_contained_wormhole_dependencies(
                 and _anode.value.attr in bare_dotted_mods
             ):
                 _m_st2 = _anode.value.attr
+                if not isinstance(_anode.ctx, ast.Load):
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": f"skill_module_attribute_mutation_unsupported:{_m_st2}.{_anode.attr}",
+                        "packaged_python_code": candidate_py,
+                    }
                 if _anode.attr not in set(packaged_symbols.get(_m_st2, ())):
                     return {
                         "had_skill_imports": True,
@@ -2438,6 +2865,19 @@ def package_self_contained_wormhole_dependencies(
                         "error": f"unexported_or_private_module_attribute_unsupported:{_m_st2}.{_anode.attr}",
                         "packaged_python_code": candidate_py,
                     }
+        for _nnode in ast.walk(cand_tree):
+            if (
+                isinstance(_nnode, ast.Name)
+                and isinstance(_nnode.ctx, ast.Load)
+                and _nnode.id in whole_mod_alias_to_stem
+                and id(_nnode) not in safe_attr_value_ids
+            ):
+                return {
+                    "had_skill_imports": True,
+                    "ok": False,
+                    "error": f"bare_skill_module_object_escape_unsupported:{_nnode.id}",
+                    "packaged_python_code": candidate_py,
+                }
 
     # 2. Rewrite candidate imports & bare `hegel_wormhole_skills.<mod_stem>` attribute chains
     class _SkillImportRewriter(ast.NodeTransformer):
@@ -2619,11 +3059,20 @@ def scan_wormhole_imports_in_container(agent_cid: str, declared_artifacts: tuple
             "hits": [],
             "error": f"scanner_nonzero_exit(rc={proc.returncode}):{(proc.stderr or proc.stdout or '')[-240:].strip()}",
         }
+    raw_out = (proc.stdout or "").strip()
+    if not raw_out:
+        return {"scan_ok": False, "hits": [], "error": "scanner_empty_stdout"}
     try:
-        parsed_hits = list(json.loads(proc.stdout.strip() or "[]"))
+        parsed_raw = json.loads(raw_out)
     except json.JSONDecodeError as exc:
-        return {"scan_ok": False, "hits": [], "error": f"scanner_invalid_json:{exc}:{(proc.stdout or '')[:160]}"}
-    return {"scan_ok": True, "hits": parsed_hits, "error": ""}
+        return {"scan_ok": False, "hits": [], "error": f"scanner_invalid_json:{exc}:{raw_out[:160]}"}
+    if not isinstance(parsed_raw, list) or not all(isinstance(x, str) for x in parsed_raw):
+        return {
+            "scan_ok": False,
+            "hits": [],
+            "error": f"scanner_invalid_payload_type:{type(parsed_raw).__name__}:{raw_out[:160]}",
+        }
+    return {"scan_ok": True, "hits": list(parsed_raw), "error": ""}
 
 
 def find_uninlined_wormhole_imports_in_container(agent_cid: str, declared_artifacts: tuple[str, ...]) -> list[str]:
@@ -2639,12 +3088,14 @@ def auto_package_wormhole_imports_in_container(
     declared_artifacts: tuple[str, ...],
     staged_modules_by_stem: dict[str, str],
 ) -> dict[str, Any]:
-    """Atomically bundle `hegel_wormhole_skills` transitive closures into `.py` declared artifacts inside `<agent_cid>` (`M8.6` + `M8.8` All-or-Nothing).
+    """Atomically bundle `hegel_wormhole_skills` transitive closures into `.py` declared artifacts inside `<agent_cid>` (`M8.9` `D1` Verified Rollback).
 
-    `M88-PKG-TXN` & `M88-SCAN-FAILCLOSED`:
+    `M89-PKG-TXN-VERIFIED` & `M89-SCAN-FAILCLOSED`:
     - Fails closed (`attempted=True, ok=False, scan_ok=False`) if `scan_wormhole_imports_in_container` fails.
     - Reads & transforms ALL candidate `.py` files in memory BEFORE writing ANY file back to `<agent_cid>`.
-    - If any file fails static packaging, ZERO container files are modified! If any `docker cp` write fails, all prior writes are rolled back!
+    - Tracks every target path *before* `docker cp` begins, catches ALL write exceptions (`TimeoutExpired`, `OSError`, nonzero rc),
+      restores every touched/attempted path (including a partially written current file), and re-reads + SHA-256-verifies
+      each restored container file before reporting `rolled_back=True, rollback_verified=True`!
     """
     scan_res = scan_wormhole_imports_in_container(agent_cid, declared_artifacts)
     if not scan_res["scan_ok"]:
@@ -2652,6 +3103,8 @@ def auto_package_wormhole_imports_in_container(
             "attempted": True,
             "ok": False,
             "scan_ok": False,
+            "rolled_back": False,
+            "rollback_verified": False,
             "packaged_files": [],
             "errors": [scan_res["error"]],
         }
@@ -2661,39 +3114,60 @@ def auto_package_wormhole_imports_in_container(
             "attempted": True,
             "ok": False,
             "scan_ok": True,
+            "rolled_back": True,
+            "rollback_verified": True,
             "packaged_files": [],
             "errors": [f"non_python_skill_reference_unsupported:{p}" for p in non_py_hits],
         }
     hits = [p for p in scan_res["hits"] if p.endswith(".py")]
     if not hits:
-        return {"attempted": False, "ok": True, "scan_ok": True, "packaged_files": [], "errors": []}
+        return {
+            "attempted": False,
+            "ok": True,
+            "scan_ok": True,
+            "rolled_back": False,
+            "rollback_verified": True,
+            "packaged_files": [],
+            "errors": [],
+        }
     if not staged_modules_by_stem:
         return {
             "attempted": True,
             "ok": False,
             "scan_ok": True,
+            "rolled_back": True,
+            "rollback_verified": True,
             "packaged_files": [],
             "errors": ["no_staged_modules_available_for_packaging"],
         }
 
-    staged_transforms: list[tuple[str, str, dict[str, Any]]] = []
+    staged_transforms: list[tuple[str, bytes, dict[str, Any]]] = []
     errors: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="hegel_m88_autopkg_") as td:
+    with tempfile.TemporaryDirectory(prefix="hegel_m89_autopkg_") as td:
         td_p = Path(td)
         # Phase 1: Read & transform ALL target files in memory FIRST (`0` container mutations on any failure!)
         for idx, container_fp in enumerate(hits):
             local_in = td_p / f"in_{idx}.py"
-            cp_in = subprocess.run(["docker", "cp", f"{agent_cid}:{container_fp}", str(local_in)], capture_output=True, timeout=20)
+            try:
+                cp_in = subprocess.run(["docker", "cp", f"{agent_cid}:{container_fp}", str(local_in)], capture_output=True, timeout=20)
+            except Exception as exc:
+                errors.append(f"docker_cp_read_exception:{container_fp}:{type(exc).__name__}:{exc}")
+                break
             if cp_in.returncode != 0 or not local_in.is_file():
                 errors.append(f"docker_cp_read_failed:{container_fp}")
                 break
-            raw_src = local_in.read_text(encoding="utf-8", errors="ignore")
+            raw_bytes = local_in.read_bytes()
+            try:
+                raw_src = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                errors.append(f"utf8_decode_failed:{container_fp}:{exc}")
+                break
             pkg_res = package_self_contained_wormhole_dependencies(raw_src, staged_modules_by_stem)
             if not pkg_res.get("ok"):
                 errors.append(f"{container_fp}:{pkg_res.get('error')}")
                 break
             if pkg_res.get("had_skill_imports"):
-                staged_transforms.append((container_fp, raw_src, pkg_res))
+                staged_transforms.append((container_fp, raw_bytes, pkg_res))
 
         if errors:
             return {
@@ -2701,36 +3175,94 @@ def auto_package_wormhole_imports_in_container(
                 "ok": False,
                 "scan_ok": True,
                 "rolled_back": True,
+                "rollback_verified": True,
                 "packaged_files": [],
                 "errors": errors,
             }
         if not staged_transforms:
-            return {"attempted": False, "ok": True, "scan_ok": True, "packaged_files": [], "errors": []}
+            return {
+                "attempted": False,
+                "ok": True,
+                "scan_ok": True,
+                "rolled_back": False,
+                "rollback_verified": True,
+                "packaged_files": [],
+                "errors": [],
+            }
 
-        # Phase 2: Commit staged files with full rollback if any `docker cp` write fails!
-        written_fps: list[tuple[str, str]] = []
+        # Phase 2: Commit staged files; track `potentially_touched` BEFORE `docker cp` and verify byte-exact rollback on ANY failure!
+        potentially_touched: list[tuple[str, bytes, str]] = []
         packaged_files: list[dict[str, Any]] = []
-        for idx, (container_fp, orig_raw_src, pkg_res) in enumerate(staged_transforms):
+
+        def _rollback_and_verify() -> tuple[bool, list[str]]:
+            rb_errs: list[str] = []
+            all_restored = True
+            for rb_i, (rb_fp, rb_bytes, rb_sha) in enumerate(potentially_touched):
+                rb_local = td_p / f"rb_{rb_i}.py"
+                rb_local.write_bytes(rb_bytes)
+                try:
+                    cp_rb = subprocess.run(["docker", "cp", str(rb_local), f"{agent_cid}:{rb_fp}"], capture_output=True, timeout=20)
+                except Exception as rb_exc:
+                    all_restored = False
+                    rb_errs.append(f"rollback_cp_exception:{rb_fp}:{type(rb_exc).__name__}:{rb_exc}")
+                    continue
+                if cp_rb.returncode != 0:
+                    all_restored = False
+                    rb_errs.append(f"rollback_cp_failed:{rb_fp}:rc={cp_rb.returncode}")
+                    continue
+                ver_local = td_p / f"ver_rb_{rb_i}.py"
+                try:
+                    cp_ver = subprocess.run(["docker", "cp", f"{agent_cid}:{rb_fp}", str(ver_local)], capture_output=True, timeout=20)
+                except Exception as ver_exc:
+                    all_restored = False
+                    rb_errs.append(f"rollback_verify_exception:{rb_fp}:{type(ver_exc).__name__}:{ver_exc}")
+                    continue
+                if cp_ver.returncode != 0 or not ver_local.is_file():
+                    all_restored = False
+                    rb_errs.append(f"rollback_verify_read_failed:{rb_fp}")
+                    continue
+                actual_rb_sha = hashlib.sha256(ver_local.read_bytes()).hexdigest()
+                if actual_rb_sha != rb_sha:
+                    all_restored = False
+                    rb_errs.append(f"rollback_sha_mismatch:{rb_fp}:{actual_rb_sha[:12]}!={rb_sha[:12]}")
+            return all_restored, rb_errs
+
+        for idx, (container_fp, orig_raw_bytes, pkg_res) in enumerate(staged_transforms):
             local_out = td_p / f"out_{idx}.py"
             local_out.write_text(str(pkg_res["packaged_python_code"]), encoding="utf-8")
-            cp_out = subprocess.run(["docker", "cp", str(local_out), f"{agent_cid}:{container_fp}"], capture_output=True, timeout=20)
-            if cp_out.returncode != 0:
-                errors.append(f"docker_cp_write_failed:{container_fp}")
-                # Roll back every already-written file to `orig_raw_src`!
-                for rb_i, (rb_fp, rb_src) in enumerate(written_fps):
-                    rb_local = td_p / f"rb_{rb_i}.py"
-                    rb_local.write_text(rb_src, encoding="utf-8")
-                    subprocess.run(["docker", "cp", str(rb_local), f"{agent_cid}:{rb_fp}"], capture_output=True, timeout=20)
+            orig_sha = hashlib.sha256(orig_raw_bytes).hexdigest()
+            # Record BEFORE `docker cp` so a timeout or partial write on `container_fp` is ALWAYS rolled back!
+            potentially_touched.append((container_fp, orig_raw_bytes, orig_sha))
+            write_failed = False
+            try:
+                cp_out = subprocess.run(["docker", "cp", str(local_out), f"{agent_cid}:{container_fp}"], capture_output=True, timeout=20)
+                if cp_out.returncode != 0:
+                    write_failed = True
+                    errors.append(f"docker_cp_write_failed:{container_fp}:rc={cp_out.returncode}")
+            except subprocess.TimeoutExpired as tex:
+                write_failed = True
+                errors.append(f"docker_cp_write_timeout:{container_fp}:timeout={tex.timeout}s")
+            except Exception as wex:
+                write_failed = True
+                errors.append(f"docker_cp_write_exception:{container_fp}:{type(wex).__name__}:{wex}")
+
+            if write_failed:
+                rb_ok, rb_errs = _rollback_and_verify()
+                errors.extend(rb_errs)
                 return {
                     "attempted": True,
                     "ok": False,
                     "scan_ok": True,
-                    "rolled_back": True,
+                    "rolled_back": rb_ok,
+                    "rollback_verified": rb_ok,
                     "packaged_files": [],
                     "errors": errors,
                 }
-            written_fps.append((container_fp, orig_raw_src))
-            subprocess.run(["docker", "exec", agent_cid, "chmod", "a+r", container_fp], capture_output=True, timeout=10)
+
+            try:
+                subprocess.run(["docker", "exec", agent_cid, "chmod", "a+r", container_fp], capture_output=True, timeout=10)
+            except Exception:
+                pass
             packaged_files.append(
                 {
                     "container_path": container_fp,
@@ -2747,15 +3279,19 @@ def auto_package_wormhole_imports_in_container(
         "ok": len(packaged_files) > 0,
         "scan_ok": True,
         "rolled_back": False,
+        "rollback_verified": True,
         "packaged_files": packaged_files,
         "errors": [],
     }
 
 
-def _canonical_ast_function_dump(fn: ast.FunctionDef) -> str:
-    """Normalize `@track_wormhole_skill` and PEP 563 stringified annotations to check exact AST source alignment (`M8.8`)."""
-    out = deepcopy(fn)
-    out.decorator_list = []
+def _canonical_ast_stmt_dump(stmt: ast.AST) -> str:
+    """Normalize `@track_wormhole_skill` and PEP 563 stringified annotations across Functions, Classes, and Constants (`M8.9` `D3`)."""
+    out = deepcopy(stmt)
+    if isinstance(out, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        out.decorator_list = [
+            d for d in out.decorator_list if not _is_track_wormhole_decorator(d)
+        ]
     for node in ast.walk(out):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             ann_fields: list[tuple[Any, str]] = [(node, "returns")]
@@ -2786,21 +3322,33 @@ def _canonical_ast_function_dump(fn: ast.FunctionDef) -> str:
     return ast.dump(out, include_attributes=False)
 
 
+def _canonical_ast_function_dump(fn: ast.FunctionDef) -> str:
+    return _canonical_ast_stmt_dump(fn)
+
+
 def inspect_final_deliverable_skill_retention(
     snapshot_dir: Path | None,
     reference_modules_by_stem: dict[str, str] | None,
+    *,
+    declared_entrypoints: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Read-only AST inspection of final selected deliverable(s) (`M88-FUNNEL-EXACT`):
-    computes exact source-matched retained modules/functions AND entrypoint static call-reachability.
+    """Read-only AST inspection of final selected deliverable(s) (`M8.9` `D3` Closure-Exact Retention & Alias-Resolved Reachability):
+    - Verifies the COMPLETE loader closure (`FunctionDef`, `ClassDef`, AND module-level constants `Assign`/`AnnAssign`) against `reference_modules_by_stem`.
+    - Fails closed (`all_retained_ast_match_source = False`, excluded from `final_retained_*`) if `reference_modules_by_stem` is missing the stem OR any helper/constant/function in the loader was altered!
+    - Resolves `from hegel_wormhole_skills.<mod> import <fn> as <alias>` back to canonical `<mod>.<fn>`!
+    - Traces static reachability from `declared_entrypoints` (or canonical non-dead public entrypoints when unspecified), keeping `any_public_function_reachable_functions` separate for diagnostics.
     """
     empty_res = {
         "inspected_file_count": 0,
+        "declared_entrypoints": list(declared_entrypoints),
         "final_retained_modules": [],
         "final_retained_l1_modules": [],
         "final_retained_functions": [],
         "final_retained_l1_functions": [],
         "entrypoint_reachable_functions": [],
         "entrypoint_reachable_l1_functions": [],
+        "any_public_function_reachable_functions": [],
+        "modified_or_unverified_loader_modules": [],
         "all_retained_ast_match_source": True,
         "files": [],
     }
@@ -2817,6 +3365,8 @@ def inspect_final_deliverable_skill_retention(
     ret_l1_fns: set[str] = set()
     reach_fns: set[str] = set()
     reach_l1_fns: set[str] = set()
+    any_pub_reach_fns: set[str] = set()
+    modified_or_unverified_mods: set[str] = set()
     all_ast_match = True
     file_entries: list[dict[str, Any]] = []
 
@@ -2829,16 +3379,15 @@ def inspect_final_deliverable_skill_retention(
             continue
         top_funcs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
         loader_matches: list[dict[str, Any]] = []
-        file_prim_names: set[str] = set()
-        fn_to_stem: dict[str, str] = {}
+        alias_to_mod_and_sym: dict[str, tuple[str, str]] = {}
         ns_var_to_stem: dict[str, str] = {}
 
-        # Map `__hegel_skill_ns_<stem> = __hegel_load_skill_<stem>()` and bound aliases `fn = ns.fn`
         loader_fn_to_stem: dict[str, str] = {}
         for nm in top_funcs:
             if nm.startswith("__hegel_load_skill_"):
-                raw_st = re.sub(r"_\d+$", "", nm[len("__hegel_load_skill_") :])
-                st = nm[len("__hegel_load_skill_") :] if nm[len("__hegel_load_skill_") :] in ref_map else raw_st
+                suffix = nm[len("__hegel_load_skill_") :]
+                raw_st = re.sub(r"_\d+$", "", suffix)
+                st = suffix if suffix in ref_map else raw_st
                 loader_fn_to_stem[nm] = st
 
         for stmt in tree.body:
@@ -2848,50 +3397,103 @@ def inspect_final_deliverable_skill_retention(
                     ns_var_to_stem[lhs] = loader_fn_to_stem[stmt.value.func.id]
                 elif isinstance(stmt.value, ast.Attribute) and isinstance(stmt.value.value, ast.Name) and stmt.value.value.id in ns_var_to_stem:
                     st_m = ns_var_to_stem[stmt.value.value.id]
-                    file_prim_names.add(lhs)
-                    fn_to_stem[lhs] = st_m
+                    alias_to_mod_and_sym[lhs] = (st_m, stmt.value.attr)
                 elif isinstance(stmt.value, ast.Name) and stmt.value.id in ns_var_to_stem:
                     ns_var_to_stem[lhs] = ns_var_to_stem[stmt.value.id]
+                elif isinstance(stmt.value, ast.Name) and stmt.value.id in alias_to_mod_and_sym:
+                    alias_to_mod_and_sym[lhs] = alias_to_mod_and_sym[stmt.value.id]
+
+        verified_stems_in_file: set[str] = set()
+        verified_symbols_in_file: set[str] = set()
 
         for nm, loader in top_funcs.items():
             if nm not in loader_fn_to_stem:
                 continue
             stem = loader_fn_to_stem[nm]
             src_code = ref_map.get(stem, "")
-            expected_fns: dict[str, ast.FunctionDef] = {}
+            expected_stmt_dumps: set[str] = set()
+            expected_fns: dict[str, str] = {}
+            src_parse_ok = False
             if src_code:
                 try:
                     s_tree = ast.parse(src_code)
-                    expected_fns = {n.name: n for n in s_tree.body if isinstance(n, ast.FunctionDef)}
+                    src_parse_ok = True
+                    for s_node in s_tree.body:
+                        if isinstance(s_node, ast.Expr) and isinstance(s_node.value, ast.Constant) and isinstance(s_node.value.value, str):
+                            continue
+                        if isinstance(s_node, ast.ImportFrom) and (s_node.module or "") in {"__future__", "hegel_wormhole_skills"}:
+                            continue
+                        d_str = _canonical_ast_stmt_dump(s_node)
+                        expected_stmt_dumps.add(d_str)
+                        if isinstance(s_node, ast.FunctionDef):
+                            expected_fns[s_node.name] = d_str
                 except SyntaxError:
-                    expected_fns = {}
-            ret_mods.add(stem)
-            if stem.startswith("autogenous_prim_"):
-                ret_l1_mods.add(stem)
-            for sub_fn in loader.body:
-                if not isinstance(sub_fn, ast.FunctionDef):
-                    continue
-                fn_id = f"{stem}.{sub_fn.name}"
-                ret_fns.add(fn_id)
-                if stem.startswith("autogenous_prim_"):
-                    ret_l1_fns.add(fn_id)
-                ast_ok = bool(
-                    sub_fn.name in expected_fns
-                    and _canonical_ast_function_dump(sub_fn) == _canonical_ast_function_dump(expected_fns[sub_fn.name])
-                )
-                if src_code and not ast_ok:
-                    all_ast_match = False
-                loader_matches.append(
-                    {
-                        "module": stem,
-                        "function": sub_fn.name,
-                        "ast_matches_source": ast_ok if src_code else None,
-                        "source_module_sha256": hashlib.sha256(src_code.encode("utf-8")).hexdigest() if src_code else None,
-                    }
-                )
+                    src_parse_ok = False
 
-        # Static call reachability from public non-loader functions
-        pub_entrypoints = [k for k in top_funcs if not k.startswith("_")]
+            loader_closure_ok = bool(src_code and src_parse_ok)
+            loader_fn_names: list[str] = []
+            for sub_stmt in loader.body:
+                if isinstance(sub_stmt, ast.Return):
+                    continue
+                if isinstance(sub_stmt, ast.Import) and all(
+                    a.name == "types" and (a.asname or "").startswith("__hegel_types") for a in sub_stmt.names
+                ):
+                    continue
+                if (
+                    isinstance(sub_stmt, ast.ImportFrom)
+                    and (sub_stmt.module or "") == "types"
+                    and any(a.name == "SimpleNamespace" for a in sub_stmt.names)
+                ):
+                    continue
+                if isinstance(sub_stmt, ast.FunctionDef) and sub_stmt.name == "track_wormhole_skill":
+                    continue
+                sub_dump = _canonical_ast_stmt_dump(sub_stmt)
+                stmt_ok = bool(src_parse_ok and (sub_dump in expected_stmt_dumps))
+                if not stmt_ok:
+                    loader_closure_ok = False
+                if isinstance(sub_stmt, ast.FunctionDef):
+                    fn_ok = bool(src_parse_ok and sub_stmt.name in expected_fns and sub_dump == expected_fns[sub_stmt.name])
+                    if not fn_ok:
+                        loader_closure_ok = False
+                    loader_fn_names.append(sub_stmt.name)
+                    loader_matches.append(
+                        {
+                            "module": stem,
+                            "function": sub_stmt.name,
+                            "ast_matches_source": fn_ok,
+                            "loader_closure_matches_source": None,  # backfilled below
+                            "source_module_sha256": hashlib.sha256(src_code.encode("utf-8")).hexdigest() if src_code else None,
+                        }
+                    )
+
+            for lm in loader_matches:
+                if lm["module"] == stem and lm["loader_closure_matches_source"] is None:
+                    lm["loader_closure_matches_source"] = loader_closure_ok
+
+            if loader_closure_ok:
+                verified_stems_in_file.add(stem)
+                ret_mods.add(stem)
+                if stem.startswith("autogenous_prim_"):
+                    ret_l1_mods.add(stem)
+                for fn_nm in loader_fn_names:
+                    q_id = f"{stem}.{fn_nm}"
+                    verified_symbols_in_file.add(q_id)
+                    ret_fns.add(q_id)
+                    if stem.startswith("autogenous_prim_"):
+                        ret_l1_fns.add(q_id)
+            else:
+                all_ast_match = False
+                modified_or_unverified_mods.add(stem)
+
+        all_pub_funcs = [k for k in top_funcs if not k.startswith("_")]
+        if declared_entrypoints:
+            eff_entrypoints = [k for k in declared_entrypoints if k in top_funcs]
+        else:
+            non_dead_pub = [
+                k for k in all_pub_funcs if not k.startswith(("unused_", "debug_", "scratch_", "test_", "smoke_"))
+            ]
+            eff_entrypoints = non_dead_pub if non_dead_pub else all_pub_funcs
+
         direct_calls: dict[str, list[str]] = {}
         direct_ns_attr_calls: dict[str, list[tuple[str, str]]] = {}
         for fn_k, fn_ast in top_funcs.items():
@@ -2908,47 +3510,61 @@ def inspect_final_deliverable_skill_retention(
             direct_calls[fn_k] = sorted(c_names)
             direct_ns_attr_calls[fn_k] = sorted(c_attrs)
 
-        todo = list(pub_entrypoints)
-        seen: set[str] = set()
-        file_reach: set[str] = set()
-        while todo:
-            cur = todo.pop()
-            if cur in seen:
-                continue
-            seen.add(cur)
-            for callee in direct_calls.get(cur, ()):
-                if callee in file_prim_names:
-                    st_c = fn_to_stem[callee]
-                    q_nm = f"{st_c}.{callee}"
-                    file_reach.add(q_nm)
-                if callee in direct_calls and callee not in seen:
-                    todo.append(callee)
-            for st_a, attr_a in direct_ns_attr_calls.get(cur, ()):
-                file_reach.add(f"{st_a}.{attr_a}")
+        def _trace_reachable(seed_fns: list[str]) -> set[str]:
+            todo = list(seed_fns)
+            seen: set[str] = set()
+            found: set[str] = set()
+            while todo:
+                cur = todo.pop()
+                if cur in seen:
+                    continue
+                seen.add(cur)
+                for callee in direct_calls.get(cur, ()):
+                    if callee in alias_to_mod_and_sym:
+                        st_c, orig_sym = alias_to_mod_and_sym[callee]
+                        q_nm = f"{st_c}.{orig_sym}"
+                        if q_nm in verified_symbols_in_file or (st_c in verified_stems_in_file):
+                            found.add(q_nm)
+                    if callee in direct_calls and callee not in seen:
+                        todo.append(callee)
+                for st_a, attr_a in direct_ns_attr_calls.get(cur, ()):
+                    q_attr = f"{st_a}.{attr_a}"
+                    if q_attr in verified_symbols_in_file or (st_a in verified_stems_in_file):
+                        found.add(q_attr)
+            return found
+
+        file_reach = _trace_reachable(eff_entrypoints)
+        file_any_pub_reach = _trace_reachable(all_pub_funcs)
 
         for q_r in file_reach:
             reach_fns.add(q_r)
             if q_r.startswith("autogenous_prim_"):
                 reach_l1_fns.add(q_r)
+        any_pub_reach_fns.update(file_any_pub_reach)
 
         file_entries.append(
             {
                 "filename": fp.relative_to(snapshot_dir).as_posix(),
                 "final_file_sha256": f_sha,
-                "public_entrypoints": pub_entrypoints,
+                "public_entrypoints": all_pub_funcs,
+                "effective_entrypoints": eff_entrypoints,
                 "retained_loader_functions": loader_matches,
                 "entrypoint_reachable_skill_functions": sorted(file_reach),
+                "any_public_function_reachable_skill_functions": sorted(file_any_pub_reach),
             }
         )
 
     return {
         "inspected_file_count": len(file_entries),
+        "declared_entrypoints": list(declared_entrypoints),
         "final_retained_modules": sorted(ret_mods),
         "final_retained_l1_modules": sorted(ret_l1_mods),
         "final_retained_functions": sorted(ret_fns),
         "final_retained_l1_functions": sorted(ret_l1_fns),
         "entrypoint_reachable_functions": sorted(reach_fns),
         "entrypoint_reachable_l1_functions": sorted(reach_l1_fns),
+        "any_public_function_reachable_functions": sorted(any_pub_reach_fns),
+        "modified_or_unverified_loader_modules": sorted(modified_or_unverified_mods),
         "all_retained_ast_match_source": all_ast_match,
         "files": file_entries,
     }

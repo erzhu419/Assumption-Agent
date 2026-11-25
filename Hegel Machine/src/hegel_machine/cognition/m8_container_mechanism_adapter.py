@@ -1113,6 +1113,23 @@ def execute_in_container_local_repair(
     guard_hints = [{"guard_id": m.mechanism_id, "principle": m.provenance_note} for m in recalled_guards]
     blinded_task_ref = "container_task_" + hashlib.sha256(str(task.task_id).encode("utf-8")).hexdigest()[:8]
 
+    repair_skill_cards: list[str] = []
+    if staged_skill_sources_by_stem:
+        from .m6_4_executable_wormhole_library import build_compact_skill_index_cards_from_sources
+
+        repair_skill_cards = build_compact_skill_index_cards_from_sources(
+            staged_skill_sources_by_stem,
+            query_text=f"{task.instruction_text} {fam_before} {json.dumps(public_probe_before, ensure_ascii=False)}",
+            max_cards=8,
+        )
+
+    skill_repair_clause = (
+        "\nOptional Verified Skill Library: `available_wormhole_skill_cards` lists pure NumPy/SciPy primitives (`from hegel_wormhole_skills.<mod> import <fn>`); "
+        "if imported in `repaired_python_code`, our host static dependency packager automatically bundles their self-contained closure before verification."
+        if repair_skill_cards
+        else ""
+    )
+
     sys_prompt = (
         "You are the `Hegel-M8.4` Budgeted Container Mechanism & Symmetry Repair Planner.\n"
         "A primary scientific Python deliverable failed our strictly PUBLIC contract, calibration, or symmetry/gauge-invariance "
@@ -1121,18 +1138,19 @@ def execute_in_container_local_repair(
         "that fixes the diagnosed defect from first principles (projecting out declared nuisance drifts/gradients, preserving "
         "sample/variable permutation equivariance and identifier-renaming invariance, and populating all required keys with "
         "finite values) without any hardcoded test-seed or prefix shortcuts!"
+        + skill_repair_clause
     )
-    user_payload = json.dumps(
-        {
-            "task_ref": blinded_task_ref,
-            "task_instruction": task.instruction_text,
-            "declared_artifact": artifact_rel,
-            "public_probe_diagnostics": public_probe_before,
-            "recalled_persistent_invariance_guards": guard_hints,
-            "current_candidate_python_code": orig_code,
-        },
-        ensure_ascii=False,
-    )
+    payload_dict: dict[str, Any] = {
+        "task_ref": blinded_task_ref,
+        "task_instruction": task.instruction_text,
+        "declared_artifact": artifact_rel,
+        "public_probe_diagnostics": public_probe_before,
+        "recalled_persistent_invariance_guards": guard_hints,
+        "current_candidate_python_code": orig_code,
+    }
+    if repair_skill_cards:
+        payload_dict["available_wormhole_skill_cards"] = repair_skill_cards
+    user_payload = json.dumps(payload_dict, ensure_ascii=False)
     llm_res = codex_client.call_structured(
         stage_subdir=stage_subdir,
         system_prompt=sys_prompt,

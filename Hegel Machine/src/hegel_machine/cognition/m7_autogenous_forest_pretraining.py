@@ -1778,22 +1778,84 @@ def consolidate_wave1_via_aufhebung_compiler(
                 or (anti_sum.get("candidate_identities") or {}).get("active_antithesis_sha256")
                 or ""
             ).strip()
+            decl_arts_t = tuple(getattr(task, "declared_artifacts", ()) or ())
+            expected_digest_kind = str(
+                rep_sum.get("repaired_digest_kind")
+                or (
+                    "raw_single_file_sha256"
+                    if (rep_sum.get("repaired_candidate_sha256") and len(decl_arts_t) <= 1)
+                    else "declared-artifact-bundle-v1"
+                )
+            )
 
             py_sources: dict[str, str] = {}
             resolved_source_kind = "none"
 
-            def _bundle_matches_expected_sha(cand_files: dict[str, str], exp_sha: str) -> bool:
-                """`M88-WAVE1-MULTIFILE-DIGEST`: Require non-empty `exp_sha` and verify BOTH single-file and multi-file candidate digests!"""
-                if not exp_sha or not cand_files:
-                    return False
-                if len(cand_files) == 1:
-                    only_txt = next(iter(cand_files.values()))
-                    if hashlib.sha256(only_txt.encode("utf-8")).hexdigest() == exp_sha:
-                        return True
+            def _snapshot_matches_canonical_identity(sdir: Path, exp_sha: str, digest_kind: str) -> dict[str, str] | None:
+                """`M89-UNIFIED-BUNDLE-ID`: Recompute the EXACT canonical `declared-artifact-bundle-v1` digest
+                (`declared_path + NUL + sha256(raw_bytes).digest()`) from raw snapshot bytes (`0` basename flattening,
+                `0` lossy text transcoding, `0` blind multi-algorithm guessing!).
+                """
+                if not exp_sha or not sdir.is_dir():
+                    return None
+                arts = tuple(task.declared_artifacts) if getattr(task, "declared_artifacts", None) else tuple(
+                    f"/{p.name}" for p in sorted(sdir.glob("*.py"))
+                )
+                if not arts:
+                    return None
                 h_bundle = hashlib.sha256()
-                for fn_k in sorted(cand_files.keys()):
-                    h_bundle.update(fn_k.encode("utf-8") + b"\0" + cand_files[fn_k].encode("utf-8") + b"\0")
-                return h_bundle.hexdigest() == exp_sha
+                raw_file_shas: list[str] = []
+                py_map: dict[str, str] = {}
+                for idx_a, art in enumerate(arts):
+                    art_clean = str(art).rstrip("/") or str(art)
+                    bname = Path(art_clean).name or f"art_{idx_a}"
+                    cands = [
+                        sdir / art_clean.lstrip("/"),
+                        sdir / f"slot_{idx_a:02d}__{bname}",
+                        sdir / bname,
+                    ]
+                    fp_hit = next((cp for cp in cands if cp.exists()), None)
+                    if fp_hit is None:
+                        return None
+                    if fp_hit.is_file():
+                        rb = fp_hit.read_bytes()
+                        if not rb:
+                            return None
+                        f_sha = hashlib.sha256(rb).hexdigest()
+                        raw_file_shas.append(f_sha)
+                        h_bundle.update(art_clean.encode("utf-8") + b"\0" + bytes.fromhex(f_sha))
+                        if art_clean.endswith(".py"):
+                            try:
+                                txt = rb.decode("utf-8")
+                            except UnicodeDecodeError:
+                                return None
+                            if txt.strip():
+                                py_map[bname if bname not in py_map else art_clean.lstrip("/")] = txt
+                    elif fp_hit.is_dir():
+                        subs = [
+                            sp for sp in sorted(fp_hit.rglob("*"))
+                            if sp.is_file() and "__pycache__" not in sp.parts and not sp.name.endswith(".pyc")
+                        ]
+                        if not subs:
+                            return None
+                        for sp in sorted(subs, key=lambda x: f"{art_clean}/{x.relative_to(fp_hit).as_posix()}"):
+                            rb = sp.read_bytes()
+                            sub_decl = f"{art_clean}/{sp.relative_to(fp_hit).as_posix()}"
+                            f_sha = hashlib.sha256(rb).hexdigest()
+                            raw_file_shas.append(f_sha)
+                            h_bundle.update(sub_decl.encode("utf-8") + b"\0" + bytes.fromhex(f_sha))
+                            if sub_decl.endswith(".py"):
+                                try:
+                                    txt = rb.decode("utf-8")
+                                except UnicodeDecodeError:
+                                    return None
+                                if txt.strip():
+                                    py_map[sub_decl.lstrip("/")] = txt
+                if not py_map:
+                    return None
+                if digest_kind == "raw_single_file_sha256" and len(raw_file_shas) == 1:
+                    return py_map if (raw_file_shas[0] == exp_sha or h_bundle.hexdigest() == exp_sha) else None
+                return py_map if h_bundle.hexdigest() == exp_sha else None
 
             if rep_verified:
                 repaired_snap_dirs: list[Path] = []
@@ -1801,32 +1863,18 @@ def consolidate_wave1_via_aufhebung_compiler(
                     repaired_snap_dirs.append(Path(str(rep_sum["repaired_snapshot_dir"])))
                 repaired_snap_dirs.append(anti_dir / "04a_repaired_antithesis_snapshot")
                 for sdir in repaired_snap_dirs:
-                    if not sdir.is_dir():
-                        continue
-                    cand_map = {
-                        p.name: p.read_text(encoding="utf-8", errors="ignore")
-                        for p in sorted(sdir.glob("*.py"))
-                    }
-                    cand_map = {k: v for k, v in cand_map.items() if v.strip()}
-                    if not cand_map:
-                        continue
-                    if not _bundle_matches_expected_sha(cand_map, expected_rep_sha):
-                        continue
-                    py_sources = cand_map
-                    resolved_source_kind = "repaired_active_snapshot"
-                    break
+                    matched_py = _snapshot_matches_canonical_identity(sdir, expected_rep_sha, expected_digest_kind)
+                    if matched_py is not None:
+                        py_sources = matched_py
+                        resolved_source_kind = "repaired_active_snapshot"
+                        break
                 if not py_sources:
-                    # Also accept `04_submitted_artifacts_snapshot` ONLY if `expected_rep_sha` is present AND matches byte-for-byte!
+                    # Also accept `04_submitted_artifacts_snapshot` ONLY if `expected_rep_sha` is present AND matches canonical identity!
                     sub_dir = anti_dir / "04_submitted_artifacts_snapshot"
-                    if expected_rep_sha and sub_dir.is_dir():
-                        cand_sub = {
-                            p.name: p.read_text(encoding="utf-8", errors="ignore")
-                            for p in sorted(sub_dir.glob("*.py"))
-                        }
-                        cand_sub = {k: v for k, v in cand_sub.items() if v.strip()}
-                        if _bundle_matches_expected_sha(cand_sub, expected_rep_sha):
-                            py_sources = cand_sub
-                            resolved_source_kind = "repaired_hash_verified_submitted_snapshot"
+                    matched_sub = _snapshot_matches_canonical_identity(sub_dir, expected_rep_sha, expected_digest_kind)
+                    if matched_sub is not None:
+                        py_sources = matched_sub
+                        resolved_source_kind = "repaired_hash_verified_submitted_snapshot"
                 if not py_sources:
                     events.append(
                         {
@@ -1994,17 +2042,28 @@ _DEFAULT_V3_L1_MATHEMATICAL_PRECONDITIONS: dict[str, list[str]] = {
     ],
     "autogenous_prim_box_ridge_bounds": [
         "box >= 0, activation_cost >= 0, ridge >= 0; design (n, p) and target (n,) finite.",
-        "diagonal (if supplied) MUST be a valid PSD diagonal minorant satisfying (X.T @ X + ridge * I) - diag(diagonal) >= 0 (prefer gram_diagonal_minorant(design)).",
+        "diagonal (if supplied) MUST be a valid PSD diagonal minorant of design.T @ design WITHOUT ridge ((X.T @ X) - diag(diagonal) >= 0; prefer gram_diagonal_minorant(design)).",
     ],
 }
 
 
-def enrich_and_harden_l1_primitive_contracts(archive: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """`M88-PRIMITIVE-CONTRACTS`: Ensure every existing `L1` module in `archive` carries explicit non-empty
-    `mathematical_preconditions` (`scope_preconditions`) AND enforce PSD-minorant entry validation on `box_ridge_cube_lower_bound`!
+def enrich_and_harden_l1_primitive_contracts(
+    archive: dict[str, dict[str, Any]],
+    *,
+    reverify_in_clean_container: bool = False,
+) -> dict[str, Any]:
+    """`M88-PRIMITIVE-CONTRACTS` + `M89-EXACT-MINORANT`:
+    - Ensures every `L1` module in `archive` carries explicit non-empty `mathematical_preconditions`.
+    - Enforces exact `(X.T @ X) - diag(d) >= 0` PSD minorant verification across ALL dimensions `p` (zero `p > 512` skip!)
+      plus conservative box quadratic compensation `_psd_slack_m89` on any tiny `-1e-9 <= min_eig < 0` floating-point slack!
+    - Marks any mutated `L1` module's prior receipt as `withdrawn_qualifications` (`stale_pending_container_reverification`),
+      and when `reverify_in_clean_container=True`, runs `verify_autogenous_module_in_clean_container` to issue a fresh
+      `unit_test_receipt` bound to the new `compiled_code_sha256`!
     """
     updated_modules: list[str] = []
     minorant_hardened_nodes: list[str] = []
+    reverified_modules: list[str] = []
+
     for nid, rec in iter_live_archive_nodes(archive):
         for mod in rec.get("autogenous_wormhole_modules") or []:
             fname = str(mod.get("filename") or "")
@@ -2016,50 +2075,161 @@ def enrich_and_harden_l1_primitive_contracts(archive: dict[str, dict[str, Any]])
                 ["Inputs must be finite NumPy arrays matching documented axis dimensions and positive regularization/scale parameters."],
             )
             cur_pre = list(mod.get("mathematical_preconditions") or mod.get("scope_preconditions") or [])
-            if not cur_pre:
-                mod["scope_preconditions"] = list(default_pre)
-                mod["mathematical_preconditions"] = list(default_pre)
+            if stem == "autogenous_prim_box_ridge_bounds":
+                # Upgrade outdated `(X.T @ X + ridge * I)` precondition text to exact `(X.T @ X) - diag(diagonal) >= 0`
+                cur_pre = list(_DEFAULT_V3_L1_MATHEMATICAL_PRECONDITIONS["autogenous_prim_box_ridge_bounds"])
                 if stem not in updated_modules:
                     updated_modules.append(stem)
-            else:
-                mod["mathematical_preconditions"] = cur_pre
-                mod["scope_preconditions"] = cur_pre
+            elif not cur_pre:
+                cur_pre = list(default_pre)
+                if stem not in updated_modules:
+                    updated_modules.append(stem)
+            mod["mathematical_preconditions"] = list(cur_pre)
+            mod["scope_preconditions"] = list(cur_pre)
 
-            # Harden `box_ridge_cube_lower_bound` against invalid non-minorant `diagonal` (`M8.7 Audit §6` counterexample: X=[[1]], diagonal=[2])
             py_code = str(mod.get("python_code") or "")
-            if stem == "autogenous_prim_box_ridge_bounds" and "psd_minorant_guard_m88" not in py_code and "def box_ridge_cube_lower_bound" in py_code:
+            old_sha = hashlib.sha256(py_code.encode("utf-8")).hexdigest()
+            if stem == "autogenous_prim_box_ridge_bounds" and "psd_minorant_guard_m89" not in py_code and "def box_ridge_cube_lower_bound" in py_code:
+                # Strip legacy `psd_minorant_guard_m88` block if present so we replace cleanly with `psd_minorant_guard_m89`
+                clean_lines: list[str] = []
+                skip_m88 = False
+                for ln in py_code.splitlines():
+                    if "# psd_minorant_guard_m88:" in ln:
+                        skip_m88 = True
+                        continue
+                    if skip_m88:
+                        if ln.startswith("    if diagonal is not None:") or ln.startswith("        "):
+                            continue
+                        skip_m88 = False
+                    clean_lines.append(ln)
+
                 guard_snippet = (
-                    "    # psd_minorant_guard_m88: reject invalid `diagonal` that violates `X.T @ X + ridge * I - diag(d) >= 0`\n"
+                    "    # psd_minorant_guard_m89: exact `(X.T @ X) - diag(d) >= 0` across ALL `p` + conservative box slack compensation\n"
+                    "    _psd_slack_m89 = 0.0\n"
                     "    if diagonal is not None:\n"
                     "        _X_chk = np.asarray(design, dtype=float)\n"
                     "        _d_chk = np.asarray(diagonal, dtype=float).ravel()\n"
-                    "        if _X_chk.ndim == 2 and _d_chk.size == _X_chk.shape[1] and _X_chk.shape[1] <= 512:\n"
-                    "            _G_chk = (_X_chk.T @ _X_chk) + float(ridge) * np.eye(_X_chk.shape[1]) - np.diag(_d_chk)\n"
-                    "            _min_eig = float(np.linalg.eigvalsh(0.5 * (_G_chk + _G_chk.T))[0]) if _X_chk.shape[1] > 0 else 0.0\n"
-                    "            if _min_eig < -1e-7 * max(1.0, float(np.max(np.abs(_d_chk))) if _d_chk.size else 1.0):\n"
-                    "                raise ValueError('diagonal must be a valid PSD minorant of design.T @ design + ridge * I')\n"
+                    "        if _X_chk.ndim != 2 or _d_chk.size != _X_chk.shape[1] or not np.all(np.isfinite(_d_chk)) or not np.all(np.isfinite(_X_chk)):\n"
+                    "            raise ValueError('diagonal must be a finite 1-D vector matching design columns')\n"
+                    "        _p_chk = _X_chk.shape[1]\n"
+                    "        if _p_chk > 0:\n"
+                    "            _col_sq = np.sum(_X_chk * _X_chk, axis=0)\n"
+                    "            if np.any(_d_chk > _col_sq + 1e-9 * np.maximum(1.0, _col_sq)):\n"
+                    "                raise ValueError('diagonal must be a valid PSD minorant of design.T @ design (d_j <= ||X_:,j||_2^2)')\n"
+                    "            _G_chk = (_X_chk.T @ _X_chk) - np.diag(_d_chk)\n"
+                    "            if _p_chk <= 1536:\n"
+                    "                _min_eig = float(np.linalg.eigvalsh(0.5 * (_G_chk + _G_chk.T))[0])\n"
+                    "            else:\n"
+                    "                _off_g = np.sum(np.abs(_G_chk), axis=1) - np.abs(np.diag(_G_chk))\n"
+                    "                _min_eig = float(np.min(np.diag(_G_chk) - _off_g))\n"
+                    "            _scale_eig = max(1.0, float(np.max(_col_sq)), float(np.max(np.abs(_d_chk))))\n"
+                    "            if _min_eig < -1e-9 * _scale_eig:\n"
+                    "                raise ValueError('diagonal must be a valid PSD minorant of design.T @ design (without ridge)')\n"
+                    "            if _min_eig < 0.0:\n"
+                    "                _c_chk = np.asarray(center, dtype=float).ravel()\n"
+                    "                if _c_chk.size == _p_chk and np.all(np.isfinite(_c_chk)) and np.isfinite(float(box)):\n"
+                    "                    _psd_slack_m89 = 0.5 * (-_min_eig + 2e-15 * _scale_eig) * float(np.sum((abs(float(box)) + np.abs(_c_chk)) ** 2))\n"
                 )
-                lines = py_code.splitlines()
                 out_lines: list[str] = []
                 inserted = False
                 in_target = False
-                for i_ln, ln in enumerate(lines):
+                for i_ln, ln in enumerate(clean_lines):
+                    if in_target and "return float(np.nextafter(float(value - err), -np.inf))" in ln:
+                        ln = ln.replace(
+                            "return float(np.nextafter(float(value - err), -np.inf))",
+                            "return float(np.nextafter(float(value - err) - _psd_slack_m89, -np.inf))",
+                        )
+                        in_target = False
                     out_lines.append(ln)
                     if ln.startswith("def box_ridge_cube_lower_bound"):
                         in_target = True
                     elif in_target and not inserted and ln.strip().endswith('"""') and i_ln > 0:
                         out_lines.extend(guard_snippet.rstrip("\n").splitlines())
                         inserted = True
-                        in_target = False
                 if inserted:
                     new_py = "\n".join(out_lines) + "\n"
-                    compile(new_py, "<hardened_box_ridge>", "exec")
+                    compile(new_py, "<hardened_box_ridge_m89>", "exec")
+                    new_sha = hashlib.sha256(new_py.encode("utf-8")).hexdigest()
+                    prev_ut = deepcopy(mod.get("unit_test_receipt"))
+                    withdrawn = list(mod.get("withdrawn_qualifications") or [])
+                    withdrawn.append(
+                        {
+                            "withdrawn_compiled_code_sha256": mod.get("compiled_code_sha256") or old_sha,
+                            "reason": "superseded_by_m89_exact_G_minus_D_minorant_guard_and_box_compensation",
+                            "previous_unit_test_receipt": prev_ut,
+                        }
+                    )
+                    mod["withdrawn_qualifications"] = withdrawn
                     mod["python_code"] = new_py
-                    mod["compiled_code_sha256"] = hashlib.sha256(new_py.encode("utf-8")).hexdigest()
+                    mod["compiled_code_sha256"] = new_sha
+                    mod["unit_test_verified"] = False
+                    mod["unit_test_receipt"] = None
+                    mod["qualification_status"] = "stale_pending_container_reverification"
                     minorant_hardened_nodes.append(nid)
+
+            # Stamp `verified_code_sha256` on already-consistent untouched `L1` receipts
+            cur_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+            if mod.get("compiled_code_sha256") and mod["compiled_code_sha256"] != cur_sha:
+                mod["compiled_code_sha256"] = cur_sha
+                mod["unit_test_verified"] = False
+                mod["qualification_status"] = "stale_code_sha_changed"
+            elif mod.get("unit_test_verified") and isinstance(mod.get("unit_test_receipt"), dict):
+                ut_r = mod["unit_test_receipt"]
+                if not ut_r.get("verified_code_sha256"):
+                    ut_r["verified_code_sha256"] = cur_sha
+                if ut_r["verified_code_sha256"] != cur_sha:
+                    mod["unit_test_verified"] = False
+                    mod["qualification_status"] = "stale_receipt_sha_mismatch"
+
+    if reverify_in_clean_container:
+        stale_by_stem: dict[str, dict[str, Any]] = {}
+        for _, rec in iter_live_archive_nodes(archive):
+            for mod in rec.get("autogenous_wormhole_modules") or []:
+                fname = str(mod.get("filename") or "")
+                stem = Path(fname).stem
+                if not (fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive"):
+                    continue
+                cur_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+                ut_r = mod.get("unit_test_receipt")
+                if not (mod.get("unit_test_verified") and isinstance(ut_r, dict) and ut_r.get("verified_code_sha256") == cur_sha):
+                    stale_by_stem.setdefault(stem, mod)
+        if stale_by_stem:
+            ensure_clean_scipy_sandbox_image()
+            cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="1536m", cpus="2", network_mode="none")
+            try:
+                for stem, rep_mod in sorted(stale_by_stem.items()):
+                    py_s = str(rep_mod.get("python_code") or "")
+                    ut_s = str(rep_mod.get("synthetic_unit_test_code") or "")
+                    pub_fns = list(rep_mod.get("function_names") or [])
+                    c_sha = hashlib.sha256(py_s.encode("utf-8")).hexdigest()
+                    ut_res = verify_autogenous_module_in_clean_container(
+                        sandbox_cid=cid,
+                        mod_stem=stem,
+                        packaged_module_code=py_s,
+                        synthetic_unit_test_code=ut_s,
+                        public_fn_names=pub_fns,
+                        require_all_public_fns_called=True,
+                    )
+                    ut_res["verified_code_sha256"] = c_sha
+                    ut_res["synthetic_unit_test_sha256"] = hashlib.sha256(ut_s.encode("utf-8")).hexdigest()
+                    for _, rec2 in iter_live_archive_nodes(archive):
+                        for mod2 in rec2.get("autogenous_wormhole_modules") or []:
+                            if Path(str(mod2.get("filename") or "")).stem == stem:
+                                mod2["compiled_code_sha256"] = c_sha
+                                mod2["unit_test_receipt"] = deepcopy(ut_res)
+                                mod2["unit_test_verified"] = bool(ut_res.get("passed"))
+                                mod2["qualification_status"] = (
+                                    "qualified_code_and_test_sha_bound" if ut_res.get("passed") else "failed_container_reverification"
+                                )
+                    if ut_res.get("passed"):
+                        reverified_modules.append(stem)
+            finally:
+                m6f.stop_container_safely(cid)
+
     return {
         "preconditions_populated_modules": updated_modules,
         "minorant_hardened_nodes": minorant_hardened_nodes,
+        "reverified_modules": reverified_modules,
     }
 
 
@@ -2102,14 +2272,14 @@ def sublate_autogenous_forest_into_compositional_primitives(
                         f"Benchmark/Holdout provenance `{tag}` on node `{nid}` forbidden when `require_pretraining_only=True`!"
                     )
 
-    enrich_receipt = enrich_and_harden_l1_primitive_contracts(archive)
+    enrich_receipt = enrich_and_harden_l1_primitive_contracts(archive, reverify_in_clean_container=False)
     qual_status = (
         "pretraining_only_l1_primitive_sublation"
         if require_pretraining_only
         else "online_or_mixed_l1_primitive_sublation"
     )
 
-    # Collect unique coarse `L2` autogenous modules + check existing verified `L1` modules by recomputed source SHA-256
+    # Collect unique coarse `L2` autogenous modules + check existing verified `L1` modules STRICTLY by recomputed source SHA-256 (`M89-STRICT-SRC-DEDUP`)!
     source_mods_by_fname: dict[str, dict[str, Any]] = {}
     node_ids_by_fname: dict[str, list[str]] = {}
     existing_l1_by_src_sha: dict[str, dict[str, Any]] = {}
@@ -2124,7 +2294,14 @@ def sublate_autogenous_forest_into_compositional_primitives(
                 continue
             if fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive":
                 used_prim_stems.add(Path(fname).stem)
-                if mod.get("unit_test_verified") and mod.get("source_candidate_sha256"):
+                actual_l1_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+                ut_rec = mod.get("unit_test_receipt")
+                ut_sha_ok = (
+                    isinstance(ut_rec, dict)
+                    and bool(ut_rec.get("passed", True))
+                    and str(ut_rec.get("verified_code_sha256") or mod.get("compiled_code_sha256") or "") == actual_l1_sha
+                ) or (ut_rec is None and bool(mod.get("unit_test_verified")) and str(mod.get("compiled_code_sha256") or "") == actual_l1_sha)
+                if bool(mod.get("unit_test_verified")) and ut_sha_ok and mod.get("source_candidate_sha256"):
                     existing_l1_by_src_sha[str(mod["source_candidate_sha256"])] = deepcopy(mod)
                 continue
             node_ids_by_fname.setdefault(fname, []).append(nid)
@@ -2135,6 +2312,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     "mod": deepcopy(mod),
                     "recomputed_source_sha256": recomputed_sha,
                     "declared_source_sha256": declared_sha,
+                    "declared_sha_mismatch": bool(declared_sha and declared_sha != recomputed_sha),
                     "representative_node_id": nid,
                     "methodology_principle": str(rec.get("methodology_principle") or ""),
                     "consolidated_nogoods": list(rec.get("wave1_consolidated_nogoods") or []),
@@ -2156,7 +2334,23 @@ def sublate_autogenous_forest_into_compositional_primitives(
     for src_fname, bundle_item in sorted(source_mods_by_fname.items()):
         recomp_sha = bundle_item["recomputed_source_sha256"]
         decl_sha = bundle_item["declared_source_sha256"]
-        existing_match = existing_l1_by_src_sha.get(recomp_sha) or (existing_l1_by_src_sha.get(decl_sha) if decl_sha else None)
+        decl_mismatch = bool(bundle_item["declared_sha_mismatch"])
+        # `M89-STRICT-SRC-DEDUP`: NEVER fall back to `declared_sha`! If `declared_sha` mismatches `recomputed_sha`, reject stale qualification!
+        existing_match = None if decl_mismatch else existing_l1_by_src_sha.get(recomp_sha)
+        if decl_mismatch:
+            events_by_fname[src_fname] = {
+                "source_l2_module": src_fname,
+                "source_provenance_episode_id": str(bundle_item["mod"].get("provenance_episode_id") or ""),
+                "representative_node_id": bundle_item["representative_node_id"],
+                "recomputed_source_sha256": recomp_sha,
+                "declared_source_sha256": decl_sha,
+                "status": "rejected_stale_declared_source_sha_mismatch",
+                "compiled_ok": False,
+                "error": f"declared_source_sha256({decl_sha[:12]}) != recomputed_source_sha256({recomp_sha[:12]})",
+                "attempts": [],
+                "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
+            }
+            continue
         if skip_already_compiled_sources and existing_match is not None:
             retained_count += 1
             events_by_fname[src_fname] = {

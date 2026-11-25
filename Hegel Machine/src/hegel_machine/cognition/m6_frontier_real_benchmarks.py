@@ -2039,6 +2039,21 @@ def _format_obs_for_history(
     }
 
 
+def _extract_declared_python_entrypoints(instruction_text: str) -> tuple[str, ...]:
+    """Extract required callable Python function entrypoints (`def foo(` or `` `foo(...)` ``) from `task.instruction_text` (`M8.9` `D3`)."""
+    found: list[str] = []
+    for pat in (
+        r"`def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
+        r"(?:implement|define|expose|export|callable)\s+(?:function\s+)?`([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
+        r"`([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^`\n]{1,140}\)`",
+    ):
+        for m in re.finditer(pat, instruction_text or "", flags=re.IGNORECASE):
+            fn = m.group(1)
+            if fn not in {"open", "print", "len", "range", "min", "max", "sum", "abs", "dict", "list"} and fn not in found:
+                found.append(fn)
+    return tuple(found[:6])
+
+
 def _build_system_and_initial_brief(
     task: FrontierBenchmarkTask,
     arm: str,
@@ -2049,6 +2064,7 @@ def _build_system_and_initial_brief(
     max_turns: int,
     cmd_timeout_sec: int,
     enable_auto_skill_packaging: bool = True,
+    disclosure_mode: str = "dedup_full",
 ) -> tuple[str, dict[str, Any]]:
     is_m6 = arm in {
         "Hegel_M6_Frontier_LiveGPT",
@@ -2130,10 +2146,15 @@ def _build_system_and_initial_brief(
             else "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if a staged wormhole operator (or hybrid) strictly improves worst-slice validation, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
         )
         if staged_wormhole_manifest and is_autogenous_blank:
+            prog_line = (
+                "   - PROGRESSIVE CONTRACT DISCLOSURE (`M8.9A` READ-ONLY CLI): `mounted_executable_wormhole_skills` shows compact 1-line index cards with critical veto flags (`REQ: ...`). Before calling or adapting any skill whose subtle edge-case preconditions matter, run `python3 -m hegel_wormhole_skills --describe <mod>.<fn>` (or `--list` to browse all qualified modules, zero arbitrary code import)!\n"
+                if disclosure_mode == "progressive"
+                else "   - `mounted_executable_wormhole_skills` lists exact AST function signatures, 1-sentence contracts, and deduplicated module-level mathematical preconditions (`python3 -m hegel_wormhole_skills --describe <mod>.<fn>` is also available).\n"
+            )
             exec_skill_rules = (
                 "5. AUTOGENOUSLY GROWN WORMHOLE PYTHON LIBRARY (`/tmp/hegel_wormhole_skills` — `PYTHONPATH=/tmp` PRE-CONFIGURED):\n"
-                "   - Autogenously discovered, unit-tested Python scientific modules bound to your recalled `PhilosophicalForest` nodes are mounted at `/tmp/hegel_wormhole_skills` (`mounted_executable_wormhole_skills` lists exact AST function signatures, 1-sentence contracts, and mathematical preconditions; zero hand-authored prior templates).\n"
-                "   - Whenever a mounted function matches a mathematical subproblem in your `/tmp` diagnostic scripts OR your declared target `.py` solver, you may import and call it directly (`from hegel_wormhole_skills.<mod> import <fn>`) after checking its mathematical preconditions and benchmarking against your problem-specific physics across regime corners!\n"
+                + prog_line
+                + "   - Whenever a mounted function genuinely matches a mathematical subproblem in your `/tmp` diagnostic scripts OR your declared target `.py` solver, you may import and call it directly (`from hegel_wormhole_skills.<mod> import <fn>`) after checking its mathematical preconditions; if its boundary/dimensional assumptions mismatch your physics, solve cleanly from first principles without forcing a mismatch!\n"
                 + pkg_rule_line
             )
         elif staged_wormhole_manifest:
@@ -2166,8 +2187,8 @@ def _build_system_and_initial_brief(
             "3. DECOUPLED DELIVERABLES, MULTI-SCALE `Pi_fold` & COMPLETE SCHEMA BOUNDARIES:\n"
             "   - Audit EVERY deliverable metric & required output column independently (including secondary event columns like `pop_in_load_uN`, Mahalanobis outlier precision/recall, `hold_end` unloading onset vs creep/thermal drift, closed-form Variable Projection `(a_s, b_s)` with smooth Fourier basis, and testing BOTH initial relay/meter modes `{0, 1}` across ordinary and delayed cadences)!\n"
             "4. TOLERANCE-AWARE BOTTLENECK PROMOTION & HASH-BOUND VERIFICATION (NO PREMATURE BASELINE FREEZE):\n"
-            "   - Every target edit is archived at `/tmp/.hegel_candidate_archive/vXX_<sha8>`. Do NOT freeze an early conservative baseline over tiny sub-tolerance proxy fluctuations (`e.g. 0.16° -> 0.18°` well inside `< 0.25°`) when a challenger fixes a primary bottleneck (extrinsic rotation/scale, worst-scenario batch productivity ratio, or residual drift)!\n"
-            "   - Use your 28-turn budget thoroughly to close worst-case specification margins before locking, then run a clean-process Python verification on the exact final target artifact before `submit_completed_task`.\n"
+            "   - Every target edit is archived at `/tmp/.hegel_candidate_archive/vXX_<sha8>` (note: `vXX_<sha8>` is a snapshot DIRECTORY, and `current_candidate_sha256` is the canonical multi-artifact bundle digest printed in `[HOST ARTIFACT IDENTITY]`, NOT a single-file `sha256sum`). Do NOT freeze an early conservative baseline over tiny sub-tolerance proxy fluctuations (`e.g. 0.16° -> 0.18°` well inside `< 0.25°`) when a challenger fixes a primary bottleneck (extrinsic rotation/scale, worst-scenario batch productivity ratio, or residual drift)!\n"
+            f"   - Manage your `{max_turns}`-turn budget judiciously: close genuine worst-case specification margins, run a clean-process Python verification (`python3 -I`) on the exact final target artifact, and call `submit_completed_task` promptly once contract and stress checks pass (never burn extra turns re-checking container hashes).\n"
             + exec_skill_rules
             + "Return a single valid JSON object matching the Hegel lean decision schema."
         )
@@ -2675,6 +2696,8 @@ def run_frontier_episode(
     defer_official_verifier: bool = False,
     enable_auto_skill_packaging: bool = True,
     allow_l1_primitives: bool = True,
+    disclosure_mode: str = "dedup_full",
+    staging_policy: str = "all_compatible",
 ) -> dict[str, Any]:
     """Execute one containerized multi-step frontier scientific episode and persist full forensic post-mortem logs."""
     assert arm in {
@@ -2747,7 +2770,7 @@ def run_frontier_episode(
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/workspace/data", "/workspace/scratch"], capture_output=True, timeout=15)
             subprocess.run(["docker", "cp", f"{task.biomystery_data_dir}/.", f"{agent_cid}:/workspace/data/"], capture_output=True, timeout=45)
             subprocess.run(["docker", "exec", agent_cid, "chmod", "-R", "a-w", "/workspace/data"], capture_output=True, timeout=15)
-        elif task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4"} and task.holdout_public_setup_py:
+        elif task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4"} and task.holdout_public_setup_py:
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
             with tempfile.TemporaryDirectory(prefix="hegel_ho_boot_") as td_h:
                 setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -2900,6 +2923,8 @@ def run_frontier_episode(
                     task_query_text=(task.instruction_text if is_autogenous_blank else ""),
                     max_l1_modules=4,
                     allow_sklearn=allow_sklearn_flag,
+                    disclosure_mode=disclosure_mode,
+                    staging_policy=staging_policy,
                     return_diagnostics=True,
                 )
                 staged_skill_sources_by_stem = {Path(fn).stem: src for fn, src in staged_mods_map.items()}
@@ -2913,6 +2938,8 @@ def run_frontier_episode(
                     task_query_text=(task.instruction_text if is_autogenous_blank else ""),
                     max_l1_modules=4,
                     allow_sklearn=allow_sklearn_flag,
+                    disclosure_mode=disclosure_mode,
+                    staging_policy=staging_policy,
                 )
                 prev_fs = snapshot_container_files(agent_cid)
                 last_parent = ledger.record_decision(
@@ -2921,7 +2948,9 @@ def run_frontier_episode(
                     evidence_inputs={
                         "recalled_node_ids": [n["node_id"] for n in recalled_notes],
                         "allow_l1_primitives": bool(allow_l1_primitives),
-                        "l1_selection_diagnostics": l1_sel_diag,
+                        "disclosure_mode": disclosure_mode,
+                        "staging_policy": staging_policy,
+                        "l1_selection_diagnostics": {k: v for k, v in l1_sel_diag.items() if k != "contracts_catalog_json"},
                     },
                     candidates_evaluated=[{"module_import": m["module_import"]} for m in staged_wormhole_manifest],
                     chosen_option={"staged_module_count": len(staged_wormhole_manifest), "staged_modules": staged_wormhole_manifest},
@@ -2949,12 +2978,15 @@ def run_frontier_episode(
             max_turns=max_turns,
             cmd_timeout_sec=cmd_timeout_sec,
             enable_auto_skill_packaging=enable_auto_skill_packaging,
+            disclosure_mode=disclosure_mode,
         )
 
         raw_exec_observations: list[dict[str, Any]] = []
         assistant_decisions: list[dict[str, Any]] = []
         turn_logs: list[dict[str, Any]] = []
         nogoods_recorded: list[dict[str, Any]] = []
+        pending_nogood_resolutions: list[dict[str, Any]] = []
+        nogood_resolution_events: list[dict[str, Any]] = []
         skill_packaging_events: list[dict[str, Any]] = []
         latest_checklist: list[dict[str, Any]] = []
         latest_hyp_chain: list[dict[str, Any]] = []
@@ -3122,15 +3154,28 @@ def run_frontier_episode(
                     latest_hyp_chain = list(parsed.get("nested_hypothesis_chain") or [])
                 ng_upd = parsed.get("nogood_update") or {}
                 resolves_ids = {str(rid).strip() for rid in (ng_upd.get("resolves_nogood_ids") or []) if str(rid).strip()}
+                has_actual_new_ng = bool(ng_upd.get("has_new_nogood") and ng_upd.get("assumption_refuted"))
                 new_ng_id = f"ng_t{turn_idx:02d}"
+                # `M8.9` `P1-7` (`C5`) Witness-Bound Nogood Resolution:
+                # NEVER mark `prior_ng["resolved"] = True` before bash/verification executes, and NEVER attach a dangling `superseded_by` ID!
                 if resolves_ids and nogoods_recorded:
-                    for prior_ng in nogoods_recorded:
-                        if str(prior_ng.get("nogood_id") or "") in resolves_ids:
-                            prior_ng["resolved"] = True
-                            prior_ng["superseded_by"] = new_ng_id
-                            prior_ng["resolved_at_turn"] = turn_idx
-                            prior_ng["resolved_candidate_sha256"] = current_candidate_sha256 or None
-                if ng_upd.get("has_new_nogood") and ng_upd.get("assumption_refuted"):
+                    matched_prior_ids = [
+                        str(prior_ng.get("nogood_id"))
+                        for prior_ng in nogoods_recorded
+                        if str(prior_ng.get("nogood_id") or "") in resolves_ids and not prior_ng.get("resolved")
+                    ]
+                    if matched_prior_ids:
+                        for prior_ng in nogoods_recorded:
+                            if str(prior_ng.get("nogood_id") or "") in matched_prior_ids:
+                                prior_ng["pending_resolution_proposed_at_turn"] = turn_idx
+                        pending_nogood_resolutions.append(
+                            {
+                                "proposed_turn": turn_idx,
+                                "resolves_ids": matched_prior_ids,
+                                "proposed_by_nogood_id": (new_ng_id if has_actual_new_ng else None),
+                            }
+                        )
+                if has_actual_new_ng:
                     from .m8_offline_container_planner import _has_unresolved_target_identifiability_nogood
 
                     ng_rung_s = str(ng_upd.get("nogood_rung") or "NONE")
@@ -3149,6 +3194,7 @@ def run_frontier_episode(
                             else ("algebraic_or_symmetry_gap" if ng_rung_s.startswith("RUNG_2") else "physical_or_causal_mechanism")
                         )
                     )
+                    # Self-`resolved=true` on a brand-new nogood is also disallowed until an execution witness verifies a candidate!
                     nogoods_recorded.append(
                         {
                             "nogood_id": new_ng_id,
@@ -3156,9 +3202,9 @@ def run_frontier_episode(
                             "nogood_rung": ng_rung_s,
                             "risk_kind": inferred_risk,
                             "candidate_sha256": current_candidate_sha256 or None,
-                            "resolved": bool(ng_upd.get("resolved", False)),
-                            "superseded_by": ng_upd.get("superseded_by"),
-                            "resolves_nogood_ids": sorted(resolves_ids),
+                            "resolved": False,
+                            "superseded_by": None,
+                            "proposed_resolves_nogood_ids": sorted(resolves_ids),
                             "assumption_refuted": ng_upd.get("assumption_refuted"),
                             "empirical_witness": ng_upd.get("empirical_witness"),
                             "causal_blanket_diagnosis": ng_upd.get("causal_blanket_diagnosis"),
@@ -3578,6 +3624,51 @@ def run_frontier_episode(
                         }
                         verification_receipts_by_sha[current_candidate_sha256] = v_rec
                         validated_incumbent = v_rec
+                        # `M8.9` `P1-7` (`C5`): Promote pending nogood resolutions ONLY NOW after a real `VerificationReceipt` (`exit_code==0` & contract accepted)!
+                        if pending_nogood_resolutions and nogoods_recorded:
+                            existing_ng_ids = {str(g.get("nogood_id") or "") for g in nogoods_recorded}
+                            still_pending: list[dict[str, Any]] = []
+                            for pend in pending_nogood_resolutions:
+                                prop_ng = pend.get("proposed_by_nogood_id")
+                                valid_sup = prop_ng if (prop_ng and prop_ng in existing_ng_ids) else None
+                                resolved_now: list[str] = []
+                                for prior_ng in nogoods_recorded:
+                                    pid = str(prior_ng.get("nogood_id") or "")
+                                    if pid in pend["resolves_ids"] and not prior_ng.get("resolved"):
+                                        prior_ng["resolved"] = True
+                                        prior_ng["superseded_by"] = valid_sup
+                                        prior_ng["resolved_at_turn"] = turn_idx
+                                        prior_ng["resolved_candidate_sha256"] = current_candidate_sha256
+                                        prior_ng["resolution_witness_command"] = cmd_str[:200]
+                                        resolved_now.append(pid)
+                                if resolved_now:
+                                    nogood_resolution_events.append(
+                                        {
+                                            "proposed_turn": pend["proposed_turn"],
+                                            "verified_turn": turn_idx,
+                                            "resolved_nogood_ids": resolved_now,
+                                            "superseded_by": valid_sup,
+                                            "verified_candidate_sha256": current_candidate_sha256,
+                                            "verification_command": cmd_str[:200],
+                                        }
+                                    )
+                            pending_nogood_resolutions = still_pending
+
+                # `M8.9` §6.2 Explicit Host Artifact Identity Notice: eliminate single-file `sha256sum` vs bundle-digest & archive-directory confusion!
+                if is_sovereign_m6 and current_candidate_sha256 and (art_touched or current_candidate_sha256 == verified_candidate_sha256):
+                    latest_arch_p = host_candidate_archive[-1]["archive_path"] if host_candidate_archive else "/tmp/.hegel_candidate_archive"
+                    is_ver_bound = bool(
+                        current_candidate_sha256 in verification_receipts_by_sha
+                        and (not artifacts_modified_since_last_verify)
+                        and current_candidate_sha256 == verified_candidate_sha256
+                    )
+                    if "[HOST ARTIFACT IDENTITY]" not in str(ex_res.get("stdout") or ""):
+                        ex_res["stdout"] = (
+                            str(ex_res.get("stdout") or "")
+                            + f"\n[HOST ARTIFACT IDENTITY]: candidate_bundle_sha256={current_candidate_sha256[:16]} "
+                            f"(canonical path+NUL+sha256(bytes) bundle digest, NOT raw `sha256sum <file>`) | "
+                            f"verification_receipt_bound={is_ver_bound} | latest_snapshot_dir={latest_arch_p} (directory)."
+                        )
 
                 # Mid-to-late budget-aware structured probe pilot (`M6.8-B'` + single-shot `Hegel_M6_9_Antithesis_LiveGPT` head-to-head diagnostic!)
                 if (
@@ -3831,6 +3922,11 @@ def run_frontier_episode(
 
             verifier_report = run_unseen_postfreeze_private_verifier_for_container(task.task_id, agent_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M89-HardStress-4":
+            from .m8_9_hard_stress_benchmark import run_hard_stress_private_verifier_for_container
+
+            verifier_report = run_hard_stress_private_verifier_for_container(task.task_id, agent_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             verifier_report = run_tb_separate_verifier(task, agent_cid)
             failure_tax = classify_tb_failure_taxonomy(
@@ -3865,7 +3961,18 @@ def run_frontier_episode(
         tots = ledger.totals
         total_ep_wall_ms = round((monotonic() - ep_t0) * 1000.0, 2)
 
-        from .m6_4_executable_wormhole_library import inspect_final_deliverable_skill_retention
+        from .m6_4_executable_wormhole_library import (
+            harvest_container_skill_inspections,
+            inspect_final_deliverable_skill_retention,
+        )
+
+        skill_inspections = harvest_container_skill_inspections(agent_cid) if (is_exec_wormhole_m6 and not is_bm and agent_cid != "mock") else []
+        if skill_inspections:
+            (episode_out_dir / "04d_skill_contract_inspections.jsonl").write_text(
+                "\n".join(json.dumps(r, ensure_ascii=False) for r in skill_inspections) + "\n",
+                encoding="utf-8",
+            )
+        declared_eps = _extract_declared_python_entrypoints(task.instruction_text)
 
         all_archive_skill_sources: dict[str, str] = dict(staged_skill_sources_by_stem)
         for _anid, _arec in (forest_archive or {}).items():
@@ -3879,16 +3986,20 @@ def run_frontier_episode(
             inspect_final_deliverable_skill_retention(
                 episode_out_dir / "04_submitted_artifacts_snapshot",
                 all_archive_skill_sources,
+                declared_entrypoints=declared_eps,
             )
             if (not is_bm)
             else {
                 "inspected_file_count": 0,
+                "declared_entrypoints": [],
                 "final_retained_modules": [],
                 "final_retained_l1_modules": [],
                 "final_retained_functions": [],
                 "final_retained_l1_functions": [],
                 "entrypoint_reachable_functions": [],
                 "entrypoint_reachable_l1_functions": [],
+                "any_public_function_reachable_functions": [],
+                "modified_or_unverified_loader_modules": [],
                 "all_retained_ast_match_source": True,
                 "files": [],
             }
@@ -3943,6 +4054,8 @@ def run_frontier_episode(
             "auth_mode": str(codex_info["auth_mode"]),
             "arm": arm,
             "allow_l1_primitives": bool(allow_l1_primitives),
+            "disclosure_mode": disclosure_mode,
+            "staging_policy": staging_policy,
             "strict_pass": strict_pass,
             "reward": reward_val,
             "failure_taxonomy": failure_tax,
@@ -3958,6 +4071,7 @@ def run_frontier_episode(
             "incumbent_checkpoint_alerts_fired": incumbent_checkpoint_alerts_fired,
             "nogood_count": len(nogoods_recorded),
             "nogoods_recorded": nogoods_recorded,
+            "nogood_resolution_events": nogood_resolution_events,
             "recalled_node_ids": [n["node_id"] for n in recalled_notes],
             "staged_wormhole_modules": staged_wormhole_manifest,
             "host_wormhole_gate_executed": host_wormhole_gate_executed,
@@ -3969,11 +4083,19 @@ def run_frontier_episode(
             "skill_packaging_events": skill_packaging_events,
             "skill_adoption_funnel": {
                 "allow_l1_primitives": bool(allow_l1_primitives),
+                "disclosure_mode": disclosure_mode,
+                "staging_policy": staging_policy,
                 "recalled_node_count": len(recalled_notes),
                 "staged_module_count": len(staged_wormhole_manifest),
                 "staged_l1_primitive_count": sum(
                     1 for m in staged_wormhole_manifest if m.get("granularity_tier") == "L1_compositional_primitive"
                 ),
+                "describe_skill_inspection_count": sum(1 for ev in skill_inspections if ev.get("event") == "skill_contract_delivered"),
+                "describe_skill_queries": [
+                    str(ev.get("target") or ev.get("query") or "")
+                    for ev in skill_inspections
+                    if ev.get("event") == "skill_contract_delivered"
+                ][:25],
                 "inspected_in_bash": any(
                     "hegel_wormhole_skills" in str(t.get("bash_command") or "")
                     for t in turn_logs

@@ -1921,33 +1921,56 @@ class M8VariationalPlanner:
                 wormhole_linked_ids.add(str(o_nid))
 
         # Phase A (Zero-Fit Descriptor Screening & Alignment Ranking): enumerate role-mapped candidates WITHOUT calling `fit_and_score_task_model`!
-        # `M88-CACHE-VIEW` Fix: bind train/val data view digest + incumbent structure digest + mechanism scope guard into negative cache keys!
+        # `M88-CACHE-VIEW` + `M89-TEMPORAL-CACHE` Fix: bind complete dataset prediction view (including all temporal history/timestamps/trajectory_ids/initial_memory_states without lossy rounding!) + full incumbent prediction state + mechanism scope guard!
+        def _hash_array_exact(h: Any, tag: str, arr_like: Any, *, dtype: Any = float) -> None:
+            a = np.ascontiguousarray(np.asarray(arr_like, dtype=dtype))
+            h.update(f"{tag}:{a.dtype.str}:{a.shape}:".encode("utf-8"))
+            h.update(a.tobytes())
+
+        def _hash_dataset_split_exact(h: Any, prefix: str, ds_split: dict[str, Any]) -> None:
+            for _vk, _vv in sorted((ds_split.get("x") or {}).items()):
+                _hash_array_exact(h, f"{prefix}.x.{_vk}", _vv, dtype=float)
+            _hash_array_exact(h, f"{prefix}.y", ds_split["y"], dtype=float)
+            if ds_split.get("past_driver_history") is not None:
+                _hash_array_exact(h, f"{prefix}.past_driver_history", ds_split["past_driver_history"], dtype=float)
+            if ds_split.get("history_dt") is not None:
+                _hash_array_exact(h, f"{prefix}.history_dt", [float(ds_split["history_dt"])], dtype=float)
+            if ds_split.get("timestamps") is not None:
+                _hash_array_exact(h, f"{prefix}.timestamps", ds_split["timestamps"], dtype=float)
+            if ds_split.get("trajectory_ids") is not None:
+                _hash_array_exact(h, f"{prefix}.trajectory_ids", ds_split["trajectory_ids"], dtype=np.int64)
+            if ds_split.get("initial_memory_states") is not None:
+                for _mk, _mv in sorted(ds_split["initial_memory_states"].items()):
+                    _hash_array_exact(h, f"{prefix}.init_mem.{_mk}", _mv, dtype=float)
+
         _view_hasher = hashlib.sha256()
-        for _vk, _vv in sorted(ds_tr.get("x", {}).items()):
-            _view_hasher.update(f"tr:{_vk}:".encode("utf-8") + np.round(np.asarray(_vv, dtype=float).ravel(), 7).tobytes())
-        _view_hasher.update(b"tr_y:" + np.round(np.asarray(ds_tr["y"], dtype=float).ravel(), 7).tobytes())
-        for _vk, _vv in sorted(ds_va.get("x", {}).items()):
-            _view_hasher.update(f"va:{_vk}:".encode("utf-8") + np.round(np.asarray(_vv, dtype=float).ravel(), 7).tobytes())
-        _view_hasher.update(b"va_y:" + np.round(np.asarray(ds_va["y"], dtype=float).ravel(), 7).tobytes())
-        view_sha10 = _view_hasher.hexdigest()[:10]
+        _hash_dataset_split_exact(_view_hasher, "tr", ds_tr)
+        _hash_dataset_split_exact(_view_hasher, "va", ds_va)
+        view_sha16 = _view_hasher.hexdigest()[:16]
+
+        _bound_mech_ids = [incumbent.shared_upstream_id, *incumbent.interaction_lift_ids]
+        if incumbent.temporal_memory_id:
+            _bound_mech_ids.append(incumbent.temporal_memory_id)
+        _bound_mech_specs = {
+            _bmid: self.graph.mechanisms[_bmid].to_dict()
+            for _bmid in sorted(set(_bound_mech_ids))
+            if _bmid and _bmid in self.graph.mechanisms
+        }
+        _inc_dict = incumbent.to_dict()
+        _inc_dict.pop("fit_summary", None)
         inc_sig = hashlib.sha256(
             json.dumps(
-                {
-                    "features": list(incumbent.feature_names),
-                    "lifts": list(incumbent.interaction_lift_ids),
-                    "mem": incumbent.temporal_memory_id,
-                    "role_maps": incumbent.lift_role_maps,
-                },
+                {"incumbent_model": _inc_dict, "bound_mechanisms": _bound_mech_specs},
                 sort_keys=True,
             ).encode("utf-8")
-        ).hexdigest()[:10]
+        ).hexdigest()[:16]
 
         staged_specs: list[tuple[float, str, dict[str, Any]]] = []
         for mid, mech in sorted(self.graph.mechanisms.items()):
             scope_sig6 = hashlib.sha256(
                 json.dumps({"sg": mech.scope_guard, "sb": mech.support_bounds}, sort_keys=True).encode("utf-8")
             ).hexdigest()[:6]
-            neg_scope_key = f"{task_id}@v{mech.version}:n{n_tr_rows}:vw={view_sha10}:inc={inc_sig}:sc={scope_sig6}"
+            neg_scope_key = f"{task_id}@v{mech.version}:n{n_tr_rows}:vw={view_sha16}:inc={inc_sig}:sc={scope_sig6}"
             if mech.epistemic_status != "SUPPORTED_IN_SCOPE" or neg_scope_key in mech.inapplicable_task_ids:
                 continue
 

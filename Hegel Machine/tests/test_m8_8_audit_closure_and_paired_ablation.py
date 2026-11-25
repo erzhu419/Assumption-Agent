@@ -173,7 +173,8 @@ def test_m8_8_wave1_multifile_and_missing_hash_source_qualification_fail_closed(
         (d3 / "04a_repaired_antithesis_snapshot" / "a.py").write_text("x = 1\n", encoding="utf-8")
         (d3 / "04a_repaired_antithesis_snapshot" / "b.py").write_text("y = 2\n", encoding="utf-8")
         hb = hashlib.sha256()
-        hb.update(b"a.py\0x = 1\n\0b.py\0y = 2\n\0")
+        hb.update(b"/app/a.py\0" + hashlib.sha256(b"x = 1\n").digest())
+        hb.update(b"/app/b.py\0" + hashlib.sha256(b"y = 2\n").digest())
         s3 = {"ended_by_finish": True, "local_container_repair_summary": {"repaired_verified": True, "repaired_candidate_sha256": hb.hexdigest()}}
 
         out = m7a.consolidate_wave1_via_aufhebung_compiler(
@@ -339,7 +340,7 @@ def test_m8_8_l1_compiler_bare_alias_full_attempt_archival_psd_minorant_guard_an
     """Verify bare-module test alias, full-export execution check, PSD minorant guard on `v3`, failure archival, and capability retrieval."""
     v3_fp = REPO_ROOT / "docs/evidence/m8_7_compositional_primitives_and_ood_adoption_20261125/pretrained_autogenous_forest_v3_primitives.json"
     forest, archive, _, _ = m7a.load_autogenous_forest_bundle(v3_fp)
-    enr = m7a.enrich_and_harden_l1_primitive_contracts(archive)
+    enr = m7a.enrich_and_harden_l1_primitive_contracts(archive, reverify_in_clean_container=True)
     assert len(enr["preconditions_populated_modules"]) == 4
 
     # Verify PSD minorant guard on `box_ridge_cube_lower_bound` rejects GPT-6's invalid `diagonal=[2.0]` when `X=[[1.0]]`!
