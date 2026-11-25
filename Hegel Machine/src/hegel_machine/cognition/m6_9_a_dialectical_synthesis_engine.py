@@ -1834,8 +1834,16 @@ def run_m6_9_a_two_branch_episode(
                             )
                         )
                         if use_m8_repair and probe_failed:
+                            from .m8_container_mechanism_adapter import (
+                                _restore_graph_mutable_state,
+                                _snapshot_graph_mutable_state,
+                            )
+
                             step_idx_r = (len(m8_mechanism_graph.decision_ledger) + 1 if m8_mechanism_graph is not None else 1)
-                            repair_dec_id = f"m8_rep_dec_{step_idx_r:03d}_{task.task_id}"
+                            r_clean = "".join(ch if ch.isalnum() else "_" for ch in str(run_id)).strip("_")[:16]
+                            r_sha6 = hashlib.sha256(str(run_id).encode("utf-8")).hexdigest()[:6]
+                            r_tag = f"{r_clean}_{r_sha6}" if r_clean else r_sha6
+                            repair_dec_id = f"m8_rep_dec_{r_tag}_s{step_idx_r:03d}_{task.task_id}"
                             repair_pre_state = {
                                 "task_id": task.task_id,
                                 "raw_candidate_sha256": raw_antithesis_sha256,
@@ -1914,6 +1922,11 @@ def run_m6_9_a_two_branch_episode(
                                     )
                                     if local_repair_summary.get("repaired_verified"):
                                         repaired_tar = antithesis_dir / "repaired_declared_artifacts.tar"
+                                        pre_guard_graph_snap = (
+                                            _snapshot_graph_mutable_state(m8_mechanism_graph)
+                                            if m8_mechanism_graph is not None
+                                            else None
+                                        )
                                         try:
                                             raw_pre_repair_tar = antithesis_dir / "raw_pre_repair_declared_artifacts.tar"
                                             if orig_tar_bytes is not None:
@@ -1984,11 +1997,18 @@ def run_m6_9_a_two_branch_episode(
                                                 active_antithesis_sha256 = raw_antithesis_sha256
                                         except Exception as accept_exc:
                                             repaired_tar.unlink(missing_ok=True)
+                                            if m8_mechanism_graph is not None and pre_guard_graph_snap is not None:
+                                                _restore_graph_mutable_state(m8_mechanism_graph, pre_guard_graph_snap)
                                             outer_tx_exc_msg = f"outer_acceptance_exception:{type(accept_exc).__name__}:{accept_exc}"
                                             local_repair_summary["repaired_verified"] = False
                                             local_repair_summary["persisted_guard_id"] = None
                                             local_repair_summary["outer_acceptance_exception"] = outer_tx_exc_msg
                                             local_repair_summary["reason"] = outer_tx_exc_msg
+                                            if (episode_out_dir / "04a_repaired_antithesis_snapshot").is_dir():
+                                                shutil.rmtree(episode_out_dir / "04a_repaired_antithesis_snapshot", ignore_errors=True)
+                                            if antithesis_dir != episode_out_dir and (antithesis_dir / "04a_repaired_antithesis_snapshot").is_dir():
+                                                shutil.rmtree(antithesis_dir / "04a_repaired_antithesis_snapshot", ignore_errors=True)
+                                            local_repair_summary.pop("repaired_snapshot_dir", None)
                                             if orig_tar_bytes is not None:
                                                 try:
                                                     antithesis_tar.write_bytes(orig_tar_bytes)
@@ -2070,6 +2090,7 @@ def run_m6_9_a_two_branch_episode(
                                         m8_mechanism_graph.action_return_history.setdefault("LocalContainerRepair", []).append(
                                             {
                                                 "event_id": r_dec.decision_id,
+                                                "run_id": str(run_id),
                                                 "task_id": str(task.task_id),
                                                 "step_index": int(step_idx_r),
                                                 "metric_kind": "observed_public_repair_acceptance",
@@ -2097,7 +2118,14 @@ def run_m6_9_a_two_branch_episode(
             pre_st["episode_nominal_budget_remaining"] = round(rem_nominal_budget, 4)
             pre_st["candidate_repaired_in_tier1"] = bool(local_repair_summary and local_repair_summary.get("repaired_verified"))
             step_idx_b = (len(m8_mechanism_graph.decision_ledger) + 1 if m8_mechanism_graph is not None else 2)
-            selective_decision = m8_container_planner.decide_second_branch(pre_st, step_index=step_idx_b, record_to_ledger=False)
+            try:
+                selective_decision = m8_container_planner.decide_second_branch(
+                    pre_st, step_index=step_idx_b, record_to_ledger=False, run_id=run_id
+                )
+            except TypeError:
+                selective_decision = m8_container_planner.decide_second_branch(
+                    pre_st, step_index=step_idx_b, record_to_ledger=False
+                )
             if selective_decision.get("spawn_second_branch") and rem_nominal_budget + 1e-9 < 1.0:
                 selective_decision["spawn_second_branch"] = False
                 selective_decision["selected_action"] = "CommitPrimary1x"
@@ -2147,6 +2175,7 @@ def run_m6_9_a_two_branch_episode(
                 m8_mechanism_graph.action_return_history.setdefault(b_rec.selected_action, []).append(
                     {
                         "event_id": b_rec.decision_id,
+                        "run_id": str(run_id),
                         "task_id": str(task.task_id),
                         "step_index": int(b_rec.step_index),
                         "metric_kind": "predicted_net_accuracy_utility",
@@ -2546,6 +2575,8 @@ def run_m6_9_a_two_branch_episode(
         "thesis_producer_skill_manifest_summary": (thesis_sum.get("producer_skill_manifest_summary") if thesis_sum else None),
         "skill_activation_count": skill_call_total,
         "skill_activations": list(anti_sum.get("skill_activations", []))[:50],
+        "skill_packaging_events": list(anti_sum.get("skill_packaging_events", [])),
+        "skill_adoption_funnel": anti_sum.get("skill_adoption_funnel"),
         "saved_artifact_snapshots": saved_snapshots,
         "submitted_final_answer": submitted_final_ans,
         "decision_count": tots["decision_count"],

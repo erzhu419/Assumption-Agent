@@ -846,26 +846,53 @@ def recall_persisted_container_invariance_guards(
     return out
 
 
+def _snapshot_graph_mutable_state(graph: PersistentMechanismGraph) -> dict[str, Any]:
+    return {
+        "mechanisms": deepcopy(graph.mechanisms),
+        "mechanism_lineage": deepcopy(graph.mechanism_lineage),
+        "nodes": deepcopy(graph.forest.nodes),
+        "node_history": deepcopy(graph.forest.node_history),
+        "local_implication_edges": deepcopy(graph.forest.local_implication_edges),
+        "questions": deepcopy(graph.forest.questions),
+        "mutation_epoch": int(graph.forest.mutation_epoch),
+    }
+
+
+def _restore_graph_mutable_state(graph: PersistentMechanismGraph, snap: dict[str, Any]) -> None:
+    graph.mechanisms = deepcopy(snap["mechanisms"])
+    graph.mechanism_lineage = deepcopy(snap["mechanism_lineage"])
+    graph.forest.nodes = deepcopy(snap["nodes"])
+    graph.forest.node_history = deepcopy(snap["node_history"])
+    graph.forest.local_implication_edges = deepcopy(snap["local_implication_edges"])
+    graph.forest.questions = deepcopy(snap["questions"])
+    graph.forest.mutation_epoch = int(snap["mutation_epoch"])
+
+
 def commit_verified_container_guard(
     graph: PersistentMechanismGraph | None,
     pending_guard: dict[str, Any] | None,
     *,
     checkpoint_path: Path | None = None,
 ) -> str | None:
-    """Commit a `pending_guard` to `graph` ONLY AFTER all public probes AND artifact contracts pass!"""
+    """Atomically commit a `pending_guard` to `graph` ONLY AFTER all public probes, contracts & checkpoint saves pass (`M85-TXN`)!"""
     if graph is None or not isinstance(pending_guard, dict):
         return None
+    pre_snap = _snapshot_graph_mutable_state(graph)
     mech = TypedMechanism.from_dict(pending_guard)
     mech.epistemic_status = "SUPPORTED_IN_SCOPE"
-    if mech.mechanism_id in graph.mechanisms:
-        existing = graph.mechanisms[mech.mechanism_id]
-        existing.dependent_task_ids |= mech.dependent_task_ids
-        existing.epistemic_status = "SUPPORTED_IN_SCOPE"
-        graph.sync_authoritative_state_to_forest()
-    else:
-        graph.register_mechanism(mech, tree_id="tree_container_invariance")
-    if checkpoint_path is not None:
-        graph.save_checkpoint(checkpoint_path)
+    try:
+        if mech.mechanism_id in graph.mechanisms:
+            existing = graph.mechanisms[mech.mechanism_id]
+            existing.dependent_task_ids |= mech.dependent_task_ids
+            existing.epistemic_status = "SUPPORTED_IN_SCOPE"
+            graph.sync_authoritative_state_to_forest()
+        else:
+            graph.register_mechanism(mech, tree_id="tree_container_invariance")
+        if checkpoint_path is not None:
+            graph.save_checkpoint(checkpoint_path)
+    except Exception:
+        _restore_graph_mutable_state(graph, pre_snap)
+        raise
     return mech.mechanism_id
 
 
@@ -934,9 +961,27 @@ def compile_verified_repair_to_executable_skill(
 
     if not bool(repair_summary.get("repaired_verified")):
         return {"compiled_and_consolidated": False, "reason": "repair_not_verified"}
-    rep_code = str(repair_summary.get("repaired_python_code") or "").strip()
+    raw_rep_code = str(repair_summary.get("repaired_python_code") or "")
+    rep_code = raw_rep_code.strip()
     if not rep_code:
         return {"compiled_and_consolidated": False, "reason": "missing_repaired_python_code"}
+
+    # `M85-BIND` Fix: Cryptographically bind `repaired_python_code` to `repaired_candidate_sha256` AND verified `probe_after` receipt!
+    expected_rep_sha = str(repair_summary.get("repaired_candidate_sha256") or "").strip()
+    computed_raw_sha = hashlib.sha256(raw_rep_code.encode("utf-8")).hexdigest()
+    computed_strip_sha = hashlib.sha256(rep_code.encode("utf-8")).hexdigest()
+    if not expected_rep_sha or expected_rep_sha not in {computed_raw_sha, computed_strip_sha}:
+        return {
+            "compiled_and_consolidated": False,
+            "reason": f"repaired_candidate_sha256_mismatch_or_missing(expected={expected_rep_sha[:16]},actual={computed_raw_sha[:16]})",
+        }
+    probe_after_rec = repair_summary.get("probe_after") or {}
+    if not (
+        isinstance(probe_after_rec, dict)
+        and probe_after_rec.get("public_output_contract_ok") is True
+        and probe_after_rec.get("id_renaming_invariant_ok") is True
+    ):
+        return {"compiled_and_consolidated": False, "reason": "unverified_public_probe_after_receipt"}
 
     ensure_clean_scipy_sandbox_image()
     sandbox_cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")
@@ -987,6 +1032,7 @@ def compile_verified_repair_to_executable_skill(
             | {s for s in pub_sigs if s in m7a.ALL_PUBLIC_ROUTING_SIGNATURES}
         ) or ["sig:robust_physical_calibration_and_safety_margins"]
         comp["source_qualification_status"] = "verified_container_repair_operator"
+        comp["source_candidate_sha256"] = expected_rep_sha
         cons = m7a.consolidate_autogenous_episode_into_forest(
             forest=forest,
             archive=archive,
@@ -1008,6 +1054,9 @@ def compile_verified_repair_to_executable_skill(
             "module_filename": comp.get("filename"),
             "exported_functions": comp.get("function_names", []),
             "compiled_code_sha256": comp.get("compiled_code_sha256"),
+            "source_candidate_sha256": expected_rep_sha,
+            "synthetic_unit_test_code": comp.get("synthetic_unit_test_code"),
+            "synthetic_unit_test_sha256": comp.get("synthetic_unit_test_sha256"),
             "unit_test_receipt": comp.get("unit_test_receipt"),
             "routed_signatures": comp.get("routed_signatures", []),
             "consolidation": cons,
@@ -1028,6 +1077,7 @@ def execute_in_container_local_repair(
     step_index: int = 1,
     stage_subdir: str = "m8_local_container_repair",
     defer_guard_commit: bool = False,
+    staged_skill_sources_by_stem: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Execute 1-turn targeted `LocalContainerRepair` inside live `probe_cid` with exception-safe rollback & token preservation!"""
     _ = step_index
@@ -1124,6 +1174,29 @@ def execute_in_container_local_repair(
             "llm_tokens": tok_bundle,
             "wall_ms": round((monotonic() - t0) * 1000.0, 2),
         }
+
+    # `M86-CLOSURE`: If repaired code imports `hegel_wormhole_skills`, statically bundle transitive closure BEFORE probing & hashing!
+    packaging_receipt: dict[str, Any] | None = None
+    if staged_skill_sources_by_stem:
+        from .m6_4_executable_wormhole_library import package_self_contained_wormhole_dependencies
+
+        pkg_res = package_self_contained_wormhole_dependencies(repaired_code, staged_skill_sources_by_stem)
+        if pkg_res.get("had_skill_imports"):
+            packaging_receipt = {k: v for k, v in pkg_res.items() if k != "packaged_python_code"}
+            if not pkg_res.get("ok"):
+                return {
+                    "attempted": True,
+                    "repaired_verified": False,
+                    "attempted_repaired_python_code": repaired_code,
+                    "reason": f"repaired_skill_packaging_failed:{pkg_res.get('error')}",
+                    "skill_packaging_receipt": packaging_receipt,
+                    "recalled_guard_ids": [m.mechanism_id for m in recalled_guards],
+                    "persisted_guard_id": None,
+                    "pending_guard": None,
+                    "llm_tokens": tok_bundle,
+                    "wall_ms": round((monotonic() - t0) * 1000.0, 2),
+                }
+            repaired_code = str(pkg_res["packaged_python_code"])
 
     orig_sha = hashlib.sha256(orig_code.encode("utf-8")).hexdigest()
     rep_sha = hashlib.sha256(repaired_code.encode("utf-8")).hexdigest()

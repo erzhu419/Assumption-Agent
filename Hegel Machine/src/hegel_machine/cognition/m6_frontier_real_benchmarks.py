@@ -2024,6 +2024,7 @@ def _build_system_and_initial_brief(
     staged_wormhole_manifest: list[dict[str, Any]] | None = None,
     max_turns: int,
     cmd_timeout_sec: int,
+    enable_auto_skill_packaging: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     is_m6 = arm in {
         "Hegel_M6_Frontier_LiveGPT",
@@ -2099,18 +2100,23 @@ def _build_system_and_initial_brief(
 
     if is_m6_8_1:
         is_autogenous_blank = bool(recalled_m6_notes) and all(bool(n.get("autogenous_only")) for n in recalled_m6_notes)
+        pkg_rule_line = (
+            "   - SELF-CONTAINED STATIC PACKAGING (`M8.6` ENABLED): You may import & call mounted operators directly (`from hegel_wormhole_skills.<mod> import <fn>`) in BOTH `/tmp` screening scripts AND your declared target `.py` artifact(s)! Whenever a declared target `.py` file imports from `hegel_wormhole_skills`, our host static dependency packager automatically bundles the complete pure NumPy/SciPy/sklearn transitive closure into your target `.py` file before clean-room verification and separate-verifier grading (or you may inline/adapt pure operators directly)!\n"
+            if enable_auto_skill_packaging
+            else "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if a staged wormhole operator (or hybrid) strictly improves worst-slice validation, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
+        )
         if staged_wormhole_manifest and is_autogenous_blank:
             exec_skill_rules = (
                 "5. AUTOGENOUSLY GROWN & WAVE-1 SUBLATED WORMHOLE LIBRARY (`/tmp/hegel_wormhole_skills` — `PYTHONPATH=/tmp` PRE-CONFIGURED):\n"
                 "   - Autogenously discovered, unit-tested Python scientific operators bound to your recalled `PhilosophicalForest` nodes are mounted at `/tmp/hegel_wormhole_skills` (listed in `mounted_executable_wormhole_skills`, zero hand-authored prior templates).\n"
                 "   - ACTIVELY inspect their docstrings & source (`python3 -c \"import inspect; from hegel_wormhole_skills.<mod> import <fn>; print(inspect.getsource(<fn>))\"`), check their `scope_preconditions`, and benchmark them (or hybrids combining their sublated nuisance-projection / regularization / dispersion / cross-slice logic with your problem-specific physics) head-to-head against your baseline across ALL regime corners!\n"
-                "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if an autogenous wormhole operator (or hybrid) strictly improves worst-slice validation, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
+                + pkg_rule_line
             )
         elif staged_wormhole_manifest:
             exec_skill_rules = (
                 "5. DOMAIN-MATCHED EXECUTABLE WORMHOLE MICRO-LIBRARY (`/tmp/hegel_wormhole_skills` — `PYTHONPATH=/tmp` PRE-CONFIGURED):\n"
                 "   - Family-matched Python operators AND Wave-1 confirmed producer closures bound to your recalled `PhilosophicalForest` nodes are mounted at `/tmp/hegel_wormhole_skills` (listed in `mounted_executable_wormhole_skills`).\n"
-                "   - Pull and call them selectively in `/tmp` diagnostic/screening scripts whenever helpful (`from hegel_wormhole_skills.<mod> import ...`) while keeping exact problem-specific equations/controllers intact! "
+                "   - Pull and call them selectively in `/tmp` diagnostic/screening scripts or target `.py` modules whenever helpful (`from hegel_wormhole_skills.<mod> import ...`) while keeping exact problem-specific equations/controllers intact! "
                 "(Examples: `null_calibrated_symbolic_scanner` + nested outer-fold `oof_macro_f1_evaluator` before picking nonlinear interactions; "
                 "`cohort_shift_aligner` + `leave_one_cohort_out_calibrated_cv` + within-batch balanced-accuracy checks across ALL cohorts; "
                 "`godunov_concave_flux_rollout` + `minimax_consensus_candidate_selector` testing BOTH discrete initial relay/meter modes `{False, True}` (`{0, 1}`) on EVERY input cadence; "
@@ -2118,7 +2124,7 @@ def _build_system_and_initial_brief(
                 "`iterated_binary_cube_sibling_compactor` for multi-pass branch-and-bound certificate leaf reduction; "
                 "`direct_packet_irls_attenuation_tomography` + `virtual_baseline_dispersion_warped_tomography` + `analytic_hilbert_envelope` + `leave_one_pair_out_grid_stability` — ACTIVELY inspect (`python3 -c \"import inspect; from hegel_wormhole_skills.<mod> import <fn>; print(inspect.getsource(<fn>))\"`) and benchmark `virtual_baseline_dispersion_warped_tomography(simulated_baseline, inspection_signals, metadata)` / `direct_packet_irls_attenuation_tomography` head-to-head against your candidate across matched, scaled, stretched, perimeter, pure-coda, and pure-shadow suites; "
                 "`detect_hold_to_unload_breakpoint` + `feng_ngan_creep_corrected_stiffness` + `mahalanobis_innovation_scores` + `pi_fold_temporal_regime_selector` for multi-scale memory/creep & outlier gating.)\n"
-                "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if a staged wormhole operator (or hybrid) strictly improves your worst validation slice, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
+                + pkg_rule_line
             )
         else:
             exec_skill_rules = ""
@@ -2643,6 +2649,7 @@ def run_frontier_episode(
     reasoning_effort: str = "medium",
     export_artifacts_tar_path: Path | None = None,
     defer_official_verifier: bool = False,
+    enable_auto_skill_packaging: bool = True,
 ) -> dict[str, Any]:
     """Execute one containerized multi-step frontier scientific episode and persist full forensic post-mortem logs."""
     assert arm in {
@@ -2758,6 +2765,7 @@ def run_frontier_episode(
 
         recalled_notes: list[dict[str, Any]] = []
         staged_wormhole_manifest: list[dict[str, Any]] = []
+        staged_skill_sources_by_stem: dict[str, str] = {}
         if is_m6:
             pub_sigs = extract_public_task_signatures(task)
             disable_wh = bool(forest_archive.get("__disable_wormholes__"))
@@ -2849,6 +2857,14 @@ def run_frontier_episode(
                         else recalled_notes
                     )
                 )
+                from .m6_4_executable_wormhole_library import collect_recalled_executable_wormhole_sources
+
+                staged_mods_map, _ = collect_recalled_executable_wormhole_sources(
+                    stage_notes,
+                    extra_modules=extra_mods,
+                    include_foundational_skills=(not is_autogenous_blank),
+                )
+                staged_skill_sources_by_stem = {Path(fn).stem: src for fn, src in staged_mods_map.items()}
                 staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(
                     agent_cid,
                     stage_notes,
@@ -2885,12 +2901,14 @@ def run_frontier_episode(
             staged_wormhole_manifest=staged_wormhole_manifest,
             max_turns=max_turns,
             cmd_timeout_sec=cmd_timeout_sec,
+            enable_auto_skill_packaging=enable_auto_skill_packaging,
         )
 
         raw_exec_observations: list[dict[str, Any]] = []
         assistant_decisions: list[dict[str, Any]] = []
         turn_logs: list[dict[str, Any]] = []
         nogoods_recorded: list[dict[str, Any]] = []
+        skill_packaging_events: list[dict[str, Any]] = []
         latest_checklist: list[dict[str, Any]] = []
         latest_hyp_chain: list[dict[str, Any]] = []
         host_candidate_archive: list[dict[str, Any]] = []
@@ -3057,10 +3075,33 @@ def run_frontier_episode(
                     latest_hyp_chain = list(parsed.get("nested_hypothesis_chain") or [])
                 ng_upd = parsed.get("nogood_update") or {}
                 if ng_upd.get("has_new_nogood") and ng_upd.get("assumption_refuted"):
+                    from .m8_offline_container_planner import _has_unresolved_target_identifiability_nogood
+
+                    ng_rung_s = str(ng_upd.get("nogood_rung") or "NONE")
+                    probe_ng = {
+                        "nogood_rung": ng_rung_s,
+                        "assumption_refuted": ng_upd.get("assumption_refuted"),
+                        "empirical_witness": ng_upd.get("empirical_witness"),
+                        "causal_blanket_diagnosis": ng_upd.get("causal_blanket_diagnosis"),
+                    }
+                    inferred_risk = (
+                        str(ng_upd.get("risk_kind"))
+                        if ng_upd.get("risk_kind")
+                        else (
+                            "target_identifiability"
+                            if _has_unresolved_target_identifiability_nogood([probe_ng])
+                            else ("algebraic_or_symmetry_gap" if ng_rung_s.startswith("RUNG_2") else "physical_or_causal_mechanism")
+                        )
+                    )
                     nogoods_recorded.append(
                         {
+                            "nogood_id": f"ng_t{turn_idx:02d}",
                             "turn_idx": turn_idx,
-                            "nogood_rung": str(ng_upd.get("nogood_rung") or "NONE"),
+                            "nogood_rung": ng_rung_s,
+                            "risk_kind": inferred_risk,
+                            "candidate_sha256": current_candidate_sha256 or None,
+                            "resolved": bool(ng_upd.get("resolved", False)),
+                            "superseded_by": ng_upd.get("superseded_by"),
                             "assumption_refuted": ng_upd.get("assumption_refuted"),
                             "empirical_witness": ng_upd.get("empirical_witness"),
                             "causal_blanket_diagnosis": ng_upd.get("causal_blanket_diagnosis"),
@@ -3346,6 +3387,43 @@ def run_frontier_episode(
             cur_fs = snapshot_container_files(agent_cid)
             fdiff = compute_filesystem_diff(prev_fs, cur_fs)
             prev_fs = cur_fs
+
+            # `M8.6` Static Dependency Closure Packager (`M86-CLOSURE`): bundle any `hegel_wormhole_skills` imports in declared `.py`
+            # artifacts BEFORE computing `current_candidate_sha256` or running clean-room `verify_candidate_artifact_contract_in_container`!
+            if (
+                enable_auto_skill_packaging
+                and is_exec_wormhole_m6
+                and (not is_bm)
+                and task.declared_artifacts
+                and staged_skill_sources_by_stem
+                and agent_cid != "mock"
+            ):
+                from .m6_4_executable_wormhole_library import auto_package_wormhole_imports_in_container
+
+                pkg_out = auto_package_wormhole_imports_in_container(
+                    agent_cid,
+                    task.declared_artifacts,
+                    staged_skill_sources_by_stem,
+                )
+                if pkg_out.get("attempted"):
+                    pkg_event = {"turn_idx": turn_idx, **pkg_out}
+                    skill_packaging_events.append(pkg_event)
+                    if pkg_out.get("ok"):
+                        cur_fs = snapshot_container_files(agent_cid)
+                        prev_fs = cur_fs
+                    last_parent = ledger.record_decision(
+                        decision_type="D_STATIC_SKILL_CLOSURE_PACKAGED",
+                        parent_decision_id=last_parent,
+                        evidence_inputs={"turn_idx": turn_idx, "declared_artifacts": list(task.declared_artifacts)},
+                        candidates_evaluated=list(pkg_out.get("packaged_files", [])),
+                        chosen_option={"ok": bool(pkg_out.get("ok")), "packaged_file_count": len(pkg_out.get("packaged_files", []))},
+                        rejection_reasons=({"packaging_errors": "; ".join(pkg_out.get("errors", []))} if not pkg_out.get("ok") else {}),
+                        rationale_summary=(
+                            f"M8.6 static AST packager bundled `hegel_wormhole_skills` transitive closure into {len(pkg_out.get('packaged_files', []))} target file(s)."
+                            if pkg_out.get("ok")
+                            else f"M8.6 static AST packager rejected unsupported skill import: {pkg_out.get('errors')}"
+                        ),
+                    )
 
             # Update candidate SHA-256, host version archive (`/tmp/.hegel_candidate_archive`), and candidate-hash-bound verification status!
             touched_set = {x["path"] for x in fdiff["created"]} | {x["path"] for x in fdiff["modified"]}
@@ -3720,6 +3798,18 @@ def run_frontier_episode(
             "producer_skill_manifest_summary": manifest_summary,
             "skill_activation_count": skill_call_total,
             "skill_activations": skill_activations[:50],
+            "skill_packaging_events": skill_packaging_events,
+            "skill_adoption_funnel": {
+                "recalled_node_count": len(recalled_notes),
+                "staged_module_count": len(staged_wormhole_manifest),
+                "inspected_in_bash": any(
+                    "hegel_wormhole_skills" in str(t.get("bash_command") or "")
+                    for t in turn_logs
+                ),
+                "dynamic_skill_activation_count": skill_call_total,
+                "static_packaged_deliverable_count": sum(len(ev.get("packaged_files", [])) for ev in skill_packaging_events if ev.get("ok")),
+                "static_packaging_attempt_count": len(skill_packaging_events),
+            },
             "saved_artifact_snapshots": saved_snapshots,
             "submitted_final_answer": submitted_final_answer if is_bm else None,
             "decision_count": tots["decision_count"],

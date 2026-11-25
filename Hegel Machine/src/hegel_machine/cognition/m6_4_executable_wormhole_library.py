@@ -28,6 +28,7 @@ from __future__ import annotations
 import ast
 import builtins
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -1602,19 +1603,13 @@ NODE_TO_EXECUTABLE_WORMHOLE_MODULE: dict[str, tuple[str, str, str]] = {
 }
 
 
-def stage_recalled_executable_wormholes_in_container(
-    agent_cid: str,
+def collect_recalled_executable_wormhole_sources(
     recalled_notes: list[dict[str, Any]],
     *,
     extra_modules: list[tuple[str, str, str, str]] | None = None,
     include_foundational_skills: bool = True,
-) -> list[dict[str, Any]]:
-    """Mount ONLY the executable Python modules bound to recalled `PhilosophicalForest` nodes into `/tmp/hegel_wormhole_skills/`.
-
-    When `include_foundational_skills=False` (or recalled nodes carry `autogenous_only=True`), ALL hand-authored
-    `SKILL_01..07` foundational modules are physically excluded — mounting ONLY autogenously pretrained/sublated
-    wormhole modules (`autogenous_wormhole_modules` & `wave1_executable_modules`).
-    """
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """Collect `{filename: python_code}` and `manifest_entries` for recalled wormhole modules without touching Docker."""
     is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
     allow_foundational = bool(include_foundational_skills) and (not is_autogenous_blank)
 
@@ -1677,7 +1672,27 @@ def stage_recalled_executable_wormholes_in_container(
                         "exported_apis": sub_mod.get("exported_apis") or ", ".join(sub_mod.get("function_names", [])),
                     }
                 )
+    return modules_to_write, manifest_entries
 
+
+def stage_recalled_executable_wormholes_in_container(
+    agent_cid: str,
+    recalled_notes: list[dict[str, Any]],
+    *,
+    extra_modules: list[tuple[str, str, str, str]] | None = None,
+    include_foundational_skills: bool = True,
+) -> list[dict[str, Any]]:
+    """Mount ONLY the executable Python modules bound to recalled `PhilosophicalForest` nodes into `/tmp/hegel_wormhole_skills/`.
+
+    When `include_foundational_skills=False` (or recalled nodes carry `autogenous_only=True`), ALL hand-authored
+    `SKILL_01..07` foundational modules are physically excluded — mounting ONLY autogenously pretrained/sublated
+    wormhole modules (`autogenous_wormhole_modules` & `wave1_executable_modules`).
+    """
+    modules_to_write, manifest_entries = collect_recalled_executable_wormhole_sources(
+        recalled_notes,
+        extra_modules=extra_modules,
+        include_foundational_skills=include_foundational_skills,
+    )
     if not modules_to_write:
         return []
 
@@ -1733,18 +1748,596 @@ def sum_skill_activation_calls(activations: list[dict[str, Any]]) -> int:
     return total
 
 
+def _python_source_has_wormhole_skill_imports(py_source: str) -> bool:
+    """AST-accurate check for `hegel_wormhole_skills` imports or dynamic import calls (ignoring comments/docstrings)."""
+    if "hegel_wormhole_skills" not in py_source:
+        return False
+    try:
+        tree = ast.parse(py_source)
+    except SyntaxError:
+        return True
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(al.name == "hegel_wormhole_skills" or al.name.startswith("hegel_wormhole_skills.") for al in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if mod == "hegel_wormhole_skills" or mod.startswith("hegel_wormhole_skills."):
+                return True
+        elif isinstance(node, ast.Call):
+            fn_nm = node.func.id if isinstance(node.func, ast.Name) else (node.func.attr if isinstance(node.func, ast.Attribute) else "")
+            if fn_nm in {"__import__", "import_module"} and node.args:
+                a0 = node.args[0]
+                if isinstance(a0, ast.Constant) and isinstance(a0.value, str) and "hegel_wormhole_skills" in a0.value:
+                    return True
+    return False
+
+
+_SAFE_SKILL_DECORATOR_IDS = frozenset({"staticmethod", "classmethod", "property", "dataclass", "lru_cache", "cache"})
+
+
+def _stringify_annotations_in_place(stmt: ast.AST) -> None:
+    """Preserve PEP 563 `from __future__ import annotations` semantics inside generated module loader functions."""
+    for sub in ast.walk(stmt):
+        if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if sub.returns is not None and not (isinstance(sub.returns, ast.Constant) and isinstance(sub.returns.value, str)):
+                sub.returns = ast.Constant(value=ast.unparse(sub.returns))
+            for a in (
+                *sub.args.posonlyargs,
+                *sub.args.args,
+                *sub.args.kwonlyargs,
+                *([sub.args.vararg] if sub.args.vararg else []),
+                *([sub.args.kwarg] if sub.args.kwarg else []),
+            ):
+                if a.annotation is not None and not (isinstance(a.annotation, ast.Constant) and isinstance(a.annotation.value, str)):
+                    a.annotation = ast.Constant(value=ast.unparse(a.annotation))
+        elif isinstance(sub, ast.AnnAssign):
+            if not (isinstance(sub.annotation, ast.Constant) and isinstance(sub.annotation.value, str)):
+                sub.annotation = ast.Constant(value=ast.unparse(sub.annotation))
+
+
+def _is_track_wormhole_decorator(dec: ast.AST) -> bool:
+    if isinstance(dec, ast.Name) and dec.id == "track_wormhole_skill":
+        return True
+    if isinstance(dec, ast.Attribute) and dec.attr == "track_wormhole_skill":
+        return True
+    if isinstance(dec, ast.Call):
+        return _is_track_wormhole_decorator(dec.func)
+    return False
+
+
+def _build_skill_module_loader_ast(
+    mod_stem: str,
+    skill_src: str,
+    requested_symbols: set[str] | None,
+    *,
+    loader_fn_name: str,
+    ns_var_name: str,
+) -> tuple[bool, str, list[ast.stmt], list[str], list[str]]:
+    """Build a lexical-collision-free static transitive dependency closure for `hegel_wormhole_skills.<mod_stem>`.
+
+    Guarantees (`M8.6` `M86-CLOSURE`):
+    - Pure host-side AST analysis (`0` host `exec` calls).
+    - Strips `@track_wormhole_skill` decorators while rejecting unknown semantic decorators fail-closed.
+    - Includes ALL top-level scientific imports, module constants, default-arg references, private `_helper`s,
+      classes, and unexecuted conditional-branch references transitively (`0` function-count or line-count truncation!).
+    """
+    try:
+        skill_tree = ast.parse(skill_src)
+    except SyntaxError as exc:
+        return False, f"skill_module_syntax_error:{mod_stem}:{exc}", [], [], []
+
+    has_future_annotations = False
+    cleaned_stmts: list[ast.stmt] = []
+    defined_by_idx: dict[int, list[str]] = {}
+    loaded_by_idx: dict[int, set[str]] = {}
+    name_to_indices: dict[str, list[int]] = {}
+    non_import_defs_in_order: list[str] = []
+
+    for stmt_i, raw_stmt in enumerate(skill_tree.body):
+        # Skip module docstring
+        if (
+            stmt_i == 0
+            and isinstance(raw_stmt, ast.Expr)
+            and isinstance(raw_stmt.value, ast.Constant)
+            and isinstance(raw_stmt.value.value, str)
+        ):
+            continue
+        if isinstance(raw_stmt, ast.ImportFrom) and raw_stmt.module == "__future__":
+            if any(al.name == "annotations" for al in raw_stmt.names):
+                has_future_annotations = True
+            continue
+        if isinstance(raw_stmt, ast.ImportFrom):
+            mod_nm = raw_stmt.module or ""
+            kept_aliases = [al for al in raw_stmt.names if al.name != "track_wormhole_skill"]
+            if (raw_stmt.level > 0 or mod_nm == "hegel_wormhole_skills") and not kept_aliases:
+                continue
+            if raw_stmt.level > 0 or mod_nm.startswith("hegel_wormhole_skills"):
+                return False, f"unsupported_relative_or_nested_skill_import:{mod_stem}:{mod_nm}", [], [], []
+            if any(al.name == "*" for al in kept_aliases):
+                return False, f"wildcard_import_in_skill_module:{mod_stem}:{mod_nm}", [], [], []
+            stmt_cp: ast.stmt = ast.ImportFrom(module=raw_stmt.module, names=deepcopy(kept_aliases), level=0)
+            defs = [al.asname or al.name for al in kept_aliases]
+            is_imp = True
+        elif isinstance(raw_stmt, ast.Import):
+            if any(al.name.startswith("hegel_wormhole_skills") for al in raw_stmt.names):
+                return False, f"nested_skill_import_in_module:{mod_stem}", [], [], []
+            stmt_cp = deepcopy(raw_stmt)
+            defs = [al.asname or al.name.split(".")[0] for al in raw_stmt.names]
+            is_imp = True
+        elif isinstance(raw_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if any(isinstance(sub, ast.Global) for sub in ast.walk(raw_stmt)):
+                return False, f"global_statement_in_skill_unsupported:{mod_stem}.{raw_stmt.name}", [], [], []
+            fn_cp = deepcopy(raw_stmt)
+            kept_decs: list[ast.expr] = []
+            for dec in fn_cp.decorator_list:
+                if _is_track_wormhole_decorator(dec):
+                    continue
+                dec_id = (
+                    dec.id
+                    if isinstance(dec, ast.Name)
+                    else (
+                        dec.attr
+                        if isinstance(dec, ast.Attribute)
+                        else (
+                            dec.func.id
+                            if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name)
+                            else (dec.func.attr if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) else "")
+                        )
+                    )
+                )
+                if dec_id not in _SAFE_SKILL_DECORATOR_IDS:
+                    return False, f"unsupported_semantic_decorator:{mod_stem}.{fn_cp.name}:@{ast.unparse(dec)}", [], [], []
+                kept_decs.append(dec)
+            fn_cp.decorator_list = kept_decs
+            if has_future_annotations:
+                _stringify_annotations_in_place(fn_cp)
+            stmt_cp = fn_cp
+            defs = [fn_cp.name]
+            is_imp = False
+        elif isinstance(raw_stmt, ast.Assign):
+            stmt_cp = deepcopy(raw_stmt)
+            defs = [
+                t.id
+                for tgt in stmt_cp.targets
+                for t in ast.walk(tgt)
+                if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)
+            ]
+            if not defs:
+                return False, f"unsupported_assign_target_in_skill:{mod_stem}", [], [], []
+            is_imp = False
+        elif isinstance(raw_stmt, ast.AnnAssign) and isinstance(raw_stmt.target, ast.Name):
+            ann_cp = deepcopy(raw_stmt)
+            if has_future_annotations:
+                _stringify_annotations_in_place(ann_cp)
+            stmt_cp = ann_cp
+            defs = [ann_cp.target.id]
+            is_imp = False
+        else:
+            return False, f"impure_top_level_skill_statement:{mod_stem}:{type(raw_stmt).__name__}", [], [], []
+
+        idx = len(cleaned_stmts)
+        cleaned_stmts.append(stmt_cp)
+        defined_by_idx[idx] = defs
+        loaded_by_idx[idx] = {
+            sub.id for sub in ast.walk(stmt_cp) if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
+        }
+        for d_nm in defs:
+            name_to_indices.setdefault(d_nm, []).append(idx)
+            if not is_imp and d_nm not in non_import_defs_in_order:
+                non_import_defs_in_order.append(d_nm)
+
+    if requested_symbols is None:
+        # Whole-module import (`import hegel_wormhole_skills.<mod> [as m]`): export all public definitions (or all non-import defs if none public)
+        pub_defs = [nm for nm in non_import_defs_in_order if not nm.startswith("_")]
+        export_syms = pub_defs if pub_defs else list(non_import_defs_in_order)
+        if not export_syms:
+            return False, f"empty_skill_module:{mod_stem}", [], [], []
+    else:
+        missing = sorted(s for s in requested_symbols if s not in name_to_indices)
+        if missing:
+            return False, f"missing_skill_symbol:{mod_stem}.{missing[0]}", [], [], []
+        export_syms = sorted(requested_symbols)
+
+    # Complete transitive static closure across ALL loaded identifiers (including defaults, module constants & unexecuted branches!)
+    needed_indices: set[int] = set()
+    seen_syms: set[str] = set()
+    worklist = list(export_syms)
+    while worklist:
+        cur_sym = worklist.pop()
+        if cur_sym in seen_syms:
+            continue
+        seen_syms.add(cur_sym)
+        for s_idx in name_to_indices.get(cur_sym, ()):
+            if s_idx not in needed_indices:
+                needed_indices.add(s_idx)
+                for ref_nm in sorted(loaded_by_idx[s_idx]):
+                    if ref_nm in name_to_indices and ref_nm not in seen_syms:
+                        worklist.append(ref_nm)
+
+    ordered_kept_stmts = [cleaned_stmts[i] for i in sorted(needed_indices)]
+    included_non_import_defs = [
+        d_nm
+        for i in sorted(needed_indices)
+        for d_nm in defined_by_idx[i]
+        if d_nm in non_import_defs_in_order
+    ]
+
+    types_alias = "__hegel_types"
+    body_stmts: list[ast.stmt] = [
+        ast.Import(names=[ast.alias(name="types", asname=types_alias)]),
+        *ordered_kept_stmts,
+        ast.Return(
+            value=ast.Call(
+                func=ast.Attribute(value=ast.Name(id=types_alias, ctx=ast.Load()), attr="SimpleNamespace", ctx=ast.Load()),
+                args=[],
+                keywords=[
+                    ast.keyword(arg=sym, value=ast.Name(id=sym, ctx=ast.Load()))
+                    for sym in export_syms
+                ],
+            )
+        ),
+    ]
+    loader_def = ast.FunctionDef(
+        name=loader_fn_name,
+        args=ast.arguments(posonlyargs=[], args=[], vararg=None, kwonlyargs=[], kw_defaults=[], defaults=[]),
+        body=body_stmts,
+        decorator_list=[],
+        returns=None,
+    )
+    ns_assign = ast.Assign(
+        targets=[ast.Name(id=ns_var_name, ctx=ast.Store())],
+        value=ast.Call(func=ast.Name(id=loader_fn_name, ctx=ast.Load()), args=[], keywords=[]),
+    )
+    return True, "ok", [loader_def, ns_assign], export_syms, included_non_import_defs
+
+
+def package_self_contained_wormhole_dependencies(
+    candidate_py: str,
+    staged_modules_by_stem: dict[str, str],
+) -> dict[str, Any]:
+    """Statically bundle any `hegel_wormhole_skills` imports in `candidate_py` into a 100% self-contained Python module (`M8.6`).
+
+    - Pure AST static transformation on host (`0` host `exec` calls).
+    - Preserves `candidate_py` byte-for-byte when `had_skill_imports == False`.
+    - Fails closed on dynamic imports, `import *`, unknown modules/symbols, or unsupported semantic decorators.
+    """
+    if not _python_source_has_wormhole_skill_imports(candidate_py):
+        return {
+            "had_skill_imports": False,
+            "ok": True,
+            "packaged_python_code": candidate_py,
+            "packaged_modules": [],
+            "packaged_symbols": {},
+            "included_definitions": {},
+        }
+
+    try:
+        cand_tree = ast.parse(candidate_py)
+    except SyntaxError as exc:
+        return {
+            "had_skill_imports": True,
+            "ok": False,
+            "error": f"candidate_syntax_error:{exc}",
+            "packaged_python_code": candidate_py,
+        }
+
+    # 1. Fail-closed check for dynamic imports + collect static import specs
+    requested_syms_by_mod: dict[str, set[str]] = {}
+    whole_mod_imports: set[str] = set()
+    bare_dotted_mods: set[str] = set()
+    needs_noop_decorator = False
+    existing_names = {n.id for n in ast.walk(cand_tree) if isinstance(n, ast.Name)}
+
+    for node in ast.walk(cand_tree):
+        if isinstance(node, ast.Call):
+            fn_nm = node.func.id if isinstance(node.func, ast.Name) else (node.func.attr if isinstance(node.func, ast.Attribute) else "")
+            if fn_nm in {"__import__", "import_module"} and node.args:
+                a0 = node.args[0]
+                if isinstance(a0, ast.Constant) and isinstance(a0.value, str) and "hegel_wormhole_skills" in a0.value:
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": f"dynamic_skill_import_unsupported:{a0.value}",
+                        "packaged_python_code": candidate_py,
+                    }
+        elif isinstance(node, ast.Import):
+            for al in node.names:
+                if al.name == "hegel_wormhole_skills":
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": "bare_package_skill_import_unsupported",
+                        "packaged_python_code": candidate_py,
+                    }
+                if al.name.startswith("hegel_wormhole_skills."):
+                    parts = al.name.split(".")
+                    if len(parts) != 2:
+                        return {
+                            "had_skill_imports": True,
+                            "ok": False,
+                            "error": f"invalid_skill_submodule:{al.name}",
+                            "packaged_python_code": candidate_py,
+                        }
+                    m_stem = parts[1]
+                    if m_stem not in staged_modules_by_stem:
+                        return {
+                            "had_skill_imports": True,
+                            "ok": False,
+                            "error": f"unknown_staged_skill_module:{m_stem}",
+                            "packaged_python_code": candidate_py,
+                        }
+                    whole_mod_imports.add(m_stem)
+                    if al.asname is None:
+                        bare_dotted_mods.add(m_stem)
+        elif isinstance(node, ast.ImportFrom):
+            mod_nm = node.module or ""
+            if mod_nm == "hegel_wormhole_skills":
+                for al in node.names:
+                    if al.name == "*":
+                        return {
+                            "had_skill_imports": True,
+                            "ok": False,
+                            "error": "wildcard_skill_import_unsupported:hegel_wormhole_skills",
+                            "packaged_python_code": candidate_py,
+                        }
+                    if al.name == "track_wormhole_skill":
+                        needs_noop_decorator = True
+                    elif al.name in staged_modules_by_stem:
+                        whole_mod_imports.add(al.name)
+                    else:
+                        return {
+                            "had_skill_imports": True,
+                            "ok": False,
+                            "error": f"unknown_staged_skill_module:{al.name}",
+                            "packaged_python_code": candidate_py,
+                        }
+            elif mod_nm.startswith("hegel_wormhole_skills."):
+                parts = mod_nm.split(".")
+                if len(parts) != 2:
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": f"invalid_skill_submodule:{mod_nm}",
+                        "packaged_python_code": candidate_py,
+                    }
+                m_stem = parts[1]
+                if m_stem not in staged_modules_by_stem:
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": f"unknown_staged_skill_module:{m_stem}",
+                        "packaged_python_code": candidate_py,
+                    }
+                for al in node.names:
+                    if al.name == "*":
+                        return {
+                            "had_skill_imports": True,
+                            "ok": False,
+                            "error": f"wildcard_skill_import_unsupported:{m_stem}",
+                            "packaged_python_code": candidate_py,
+                        }
+                    requested_syms_by_mod.setdefault(m_stem, set()).add(al.name)
+
+    all_referenced_mods = sorted(set(requested_syms_by_mod.keys()) | whole_mod_imports)
+    ns_var_by_mod: dict[str, str] = {}
+    preamble_stmts: list[ast.stmt] = []
+    packaged_symbols: dict[str, list[str]] = {}
+    included_definitions: dict[str, list[str]] = {}
+
+    def _fresh_ident(base: str) -> str:
+        cand = base
+        k = 1
+        while cand in existing_names:
+            cand = f"{base}_{k}"
+            k += 1
+        existing_names.add(cand)
+        return cand
+
+    noop_dec_var = ""
+    if needs_noop_decorator:
+        noop_dec_var = _fresh_ident("__hegel_noop_track_skill")
+        noop_ast = ast.parse(
+            f"def {noop_dec_var}(*_a, **_kw):\n"
+            "    if len(_a) == 1 and callable(_a[0]) and not _kw:\n"
+            "        return _a[0]\n"
+            "    return lambda _fn: _fn\n"
+        ).body
+        preamble_stmts.extend(noop_ast)
+
+    for m_stem in all_referenced_mods:
+        loader_nm = _fresh_ident(f"__hegel_load_skill_{m_stem}")
+        ns_nm = _fresh_ident(f"__hegel_skill_ns_{m_stem}")
+        ns_var_by_mod[m_stem] = ns_nm
+        req_set = None if m_stem in whole_mod_imports else requested_syms_by_mod.get(m_stem, set())
+        ok_m, err_m, m_stmts, exp_syms, inc_defs = _build_skill_module_loader_ast(
+            m_stem,
+            staged_modules_by_stem[m_stem],
+            req_set,
+            loader_fn_name=loader_nm,
+            ns_var_name=ns_nm,
+        )
+        if not ok_m:
+            return {
+                "had_skill_imports": True,
+                "ok": False,
+                "error": err_m,
+                "packaged_python_code": candidate_py,
+            }
+        if m_stem in whole_mod_imports and m_stem in requested_syms_by_mod:
+            missing_extra = sorted(s for s in requested_syms_by_mod[m_stem] if s not in set(exp_syms))
+            if missing_extra:
+                # Re-run with explicit union if a private `_helper` was ALSO imported directly
+                ok_m, err_m, m_stmts, exp_syms, inc_defs = _build_skill_module_loader_ast(
+                    m_stem,
+                    staged_modules_by_stem[m_stem],
+                    set(exp_syms) | requested_syms_by_mod[m_stem],
+                    loader_fn_name=loader_nm,
+                    ns_var_name=ns_nm,
+                )
+                if not ok_m:
+                    return {
+                        "had_skill_imports": True,
+                        "ok": False,
+                        "error": err_m,
+                        "packaged_python_code": candidate_py,
+                    }
+        preamble_stmts.extend(m_stmts)
+        packaged_symbols[m_stem] = exp_syms
+        included_definitions[m_stem] = inc_defs
+
+    # 2. Rewrite candidate imports & bare `hegel_wormhole_skills.<mod_stem>` attribute chains
+    class _SkillImportRewriter(ast.NodeTransformer):
+        def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
+            self.generic_visit(node)
+            if (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "hegel_wormhole_skills"
+                and node.attr in bare_dotted_mods
+            ):
+                return ast.Name(id=ns_var_by_mod[node.attr], ctx=node.ctx)
+            return node
+
+        def visit_Import(self, node: ast.Import) -> Any:
+            new_stmts: list[ast.stmt] = []
+            kept_std: list[ast.alias] = []
+            for al in node.names:
+                if al.name.startswith("hegel_wormhole_skills."):
+                    m_stem = al.name.split(".")[1]
+                    if al.asname is not None:
+                        new_stmts.append(
+                            ast.Assign(
+                                targets=[ast.Name(id=al.asname, ctx=ast.Store())],
+                                value=ast.Name(id=ns_var_by_mod[m_stem], ctx=ast.Load()),
+                            )
+                        )
+                else:
+                    kept_std.append(al)
+            if kept_std:
+                new_stmts.insert(0, ast.Import(names=kept_std))
+            return new_stmts if new_stmts else ast.Pass()
+
+        def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:
+            mod_nm = node.module or ""
+            if mod_nm == "hegel_wormhole_skills":
+                assigns: list[ast.stmt] = []
+                for al in node.names:
+                    tgt_nm = al.asname or al.name
+                    if al.name == "track_wormhole_skill":
+                        assigns.append(
+                            ast.Assign(
+                                targets=[ast.Name(id=tgt_nm, ctx=ast.Store())],
+                                value=ast.Name(id=noop_dec_var, ctx=ast.Load()),
+                            )
+                        )
+                    else:
+                        assigns.append(
+                            ast.Assign(
+                                targets=[ast.Name(id=tgt_nm, ctx=ast.Store())],
+                                value=ast.Name(id=ns_var_by_mod[al.name], ctx=ast.Load()),
+                            )
+                        )
+                return assigns if assigns else ast.Pass()
+            if mod_nm.startswith("hegel_wormhole_skills."):
+                m_stem = mod_nm.split(".")[1]
+                ns_id = ns_var_by_mod[m_stem]
+                assigns = [
+                    ast.Assign(
+                        targets=[ast.Name(id=(al.asname or al.name), ctx=ast.Store())],
+                        value=ast.Attribute(
+                            value=ast.Name(id=ns_id, ctx=ast.Load()),
+                            attr=al.name,
+                            ctx=ast.Load(),
+                        ),
+                    )
+                    for al in node.names
+                ]
+                return assigns if assigns else ast.Pass()
+            return node
+
+    rewritten_tree = _SkillImportRewriter().visit(deepcopy(cand_tree))
+    assert isinstance(rewritten_tree, ast.Module)
+
+    # 3. Insert self-contained module loaders right after docstring & `from __future__` imports
+    insert_pos = 0
+    if (
+        rewritten_tree.body
+        and isinstance(rewritten_tree.body[0], ast.Expr)
+        and isinstance(rewritten_tree.body[0].value, ast.Constant)
+        and isinstance(rewritten_tree.body[0].value.value, str)
+    ):
+        insert_pos = 1
+    while (
+        insert_pos < len(rewritten_tree.body)
+        and isinstance(rewritten_tree.body[insert_pos], ast.ImportFrom)
+        and rewritten_tree.body[insert_pos].module == "__future__"
+    ):
+        insert_pos += 1
+
+    rewritten_tree.body = [
+        *rewritten_tree.body[:insert_pos],
+        *preamble_stmts,
+        *rewritten_tree.body[insert_pos:],
+    ]
+    ast.fix_missing_locations(rewritten_tree)
+    packaged_code = ast.unparse(rewritten_tree) + "\n"
+
+    # 4. Final static compile & zero-residual-import self-check
+    try:
+        compile(packaged_code, "<hegel_packaged_candidate>", "exec")
+    except SyntaxError as exc:
+        return {
+            "had_skill_imports": True,
+            "ok": False,
+            "error": f"packaged_compile_error:{exc}",
+            "packaged_python_code": candidate_py,
+        }
+    if _python_source_has_wormhole_skill_imports(packaged_code) or any(
+        isinstance(n, ast.Name) and n.id == "hegel_wormhole_skills" for n in ast.walk(ast.parse(packaged_code))
+    ):
+        return {
+            "had_skill_imports": True,
+            "ok": False,
+            "error": "residual_hegel_wormhole_skills_reference_after_packaging",
+            "packaged_python_code": candidate_py,
+        }
+
+    return {
+        "had_skill_imports": True,
+        "ok": True,
+        "packaged_python_code": packaged_code,
+        "pre_package_sha256": hashlib.sha256(candidate_py.encode("utf-8")).hexdigest(),
+        "post_package_sha256": hashlib.sha256(packaged_code.encode("utf-8")).hexdigest(),
+        "packaged_modules": all_referenced_mods,
+        "packaged_symbols": packaged_symbols,
+        "included_definitions": included_definitions,
+    }
+
+
 def find_uninlined_wormhole_imports_in_container(agent_cid: str, declared_artifacts: tuple[str, ...]) -> list[str]:
-    """Check whether any declared target file inside `<agent_cid>` still imports `hegel_wormhole_skills`."""
+    """Check whether any declared target file inside `<agent_cid>` still imports `hegel_wormhole_skills` (AST-accurate for `.py`)."""
     if not declared_artifacts:
         return []
     py_chk = (
-        "import json, os, sys\n"
+        "import ast, json, os, sys\n"
         "arts = json.loads(sys.argv[1])\n"
+        "def _has_wh(fp, txt):\n"
+        "    if 'hegel_wormhole_skills' not in txt: return False\n"
+        "    if not fp.endswith('.py'): return True\n"
+        "    try: t = ast.parse(txt)\n"
+        "    except SyntaxError: return True\n"
+        "    for n in ast.walk(t):\n"
+        "        if isinstance(n, ast.Import) and any(a.name == 'hegel_wormhole_skills' or a.name.startswith('hegel_wormhole_skills.') for a in n.names): return True\n"
+        "        if isinstance(n, ast.ImportFrom) and ((n.module or '') == 'hegel_wormhole_skills' or (n.module or '').startswith('hegel_wormhole_skills.')): return True\n"
+        "        if isinstance(n, ast.Call):\n"
+        "            fn = n.func.id if isinstance(n.func, ast.Name) else (n.func.attr if isinstance(n.func, ast.Attribute) else '')\n"
+        "            if fn in ('__import__', 'import_module') and n.args and isinstance(n.args[0], ast.Constant) and 'hegel_wormhole_skills' in str(n.args[0].value): return True\n"
+        "    return False\n"
         "hits = []\n"
         "for a in arts:\n"
         "    if os.path.isfile(a):\n"
         "        txt = open(a, 'r', encoding='utf-8', errors='ignore').read()\n"
-        "        if 'hegel_wormhole_skills' in txt: hits.append(a)\n"
+        "        if _has_wh(a, txt): hits.append(a)\n"
         "    elif os.path.isdir(a):\n"
         "        for dp, _, fns in os.walk(a):\n"
         "            if '__pycache__' in dp: continue\n"
@@ -1752,7 +2345,7 @@ def find_uninlined_wormhole_imports_in_container(agent_cid: str, declared_artifa
         "                if fn.endswith(('.py', '.sh')):\n"
         "                    fp = os.path.join(dp, fn)\n"
         "                    txt = open(fp, 'r', encoding='utf-8', errors='ignore').read()\n"
-        "                    if 'hegel_wormhole_skills' in txt: hits.append(fp)\n"
+        "                    if _has_wh(fp, txt): hits.append(fp)\n"
         "print(json.dumps(hits))\n"
     )
     proc = subprocess.run(
@@ -1765,6 +2358,60 @@ def find_uninlined_wormhole_imports_in_container(agent_cid: str, declared_artifa
         return list(json.loads(proc.stdout.strip() or "[]"))
     except json.JSONDecodeError:
         return []
+
+
+def auto_package_wormhole_imports_in_container(
+    agent_cid: str,
+    declared_artifacts: tuple[str, ...],
+    staged_modules_by_stem: dict[str, str],
+) -> dict[str, Any]:
+    """Automatically bundle `hegel_wormhole_skills` transitive closures into modified `.py` declared artifacts inside `<agent_cid>` (`M8.6`)."""
+    hits = [p for p in find_uninlined_wormhole_imports_in_container(agent_cid, declared_artifacts) if p.endswith(".py")]
+    if not hits:
+        return {"attempted": False, "ok": True, "packaged_files": [], "errors": []}
+    if not staged_modules_by_stem:
+        return {"attempted": True, "ok": False, "packaged_files": [], "errors": ["no_staged_modules_available_for_packaging"]}
+
+    packaged_files: list[dict[str, Any]] = []
+    errors: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="hegel_m86_autopkg_") as td:
+        td_p = Path(td)
+        for idx, container_fp in enumerate(hits):
+            local_in = td_p / f"in_{idx}.py"
+            local_out = td_p / f"out_{idx}.py"
+            cp_in = subprocess.run(["docker", "cp", f"{agent_cid}:{container_fp}", str(local_in)], capture_output=True, timeout=20)
+            if cp_in.returncode != 0 or not local_in.is_file():
+                errors.append(f"docker_cp_read_failed:{container_fp}")
+                continue
+            raw_src = local_in.read_text(encoding="utf-8", errors="ignore")
+            pkg_res = package_self_contained_wormhole_dependencies(raw_src, staged_modules_by_stem)
+            if not pkg_res.get("ok"):
+                errors.append(f"{container_fp}:{pkg_res.get('error')}")
+                continue
+            if not pkg_res.get("had_skill_imports"):
+                continue
+            local_out.write_text(str(pkg_res["packaged_python_code"]), encoding="utf-8")
+            cp_out = subprocess.run(["docker", "cp", str(local_out), f"{agent_cid}:{container_fp}"], capture_output=True, timeout=20)
+            if cp_out.returncode != 0:
+                errors.append(f"docker_cp_write_failed:{container_fp}")
+                continue
+            subprocess.run(["docker", "exec", agent_cid, "chmod", "a+r", container_fp], capture_output=True, timeout=10)
+            packaged_files.append(
+                {
+                    "container_path": container_fp,
+                    "pre_package_sha256": pkg_res["pre_package_sha256"],
+                    "post_package_sha256": pkg_res["post_package_sha256"],
+                    "packaged_modules": pkg_res["packaged_modules"],
+                    "packaged_symbols": pkg_res["packaged_symbols"],
+                    "included_definitions": pkg_res["included_definitions"],
+                }
+            )
+    return {
+        "attempted": True,
+        "ok": len(errors) == 0 and len(packaged_files) > 0,
+        "packaged_files": packaged_files,
+        "errors": errors,
+    }
 
 
 _FORBIDDEN_WAVE1_EXPORT_TOKENS = (

@@ -515,8 +515,9 @@ class M8OfflineContainerPlanner:
         *,
         step_index: int = 1,
         record_to_ledger: bool = True,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
-        """Compute exact decomposed expected net accuracy utility `ucb_fail * p_rec - (1 - mu_fail) * p_dmg - cost_lambda` (`R01`)."""
+        """Compute exact decomposed UCB-adjusted net accuracy utility `ucb_fail * p_rec - (1 - mu_fail) * p_dmg - cost_lambda` (`R01`)."""
         x_vec = build_pre_action_feature_vector(pre_state)[None, :]
         eff_fail_nig = self.fail_nig_fit if self.fail_nig_fit is not None else self.nig_fit
         pred_fail = predict_nig_student_t_log_score(eff_fail_nig, x_vec, np.zeros(1))
@@ -566,8 +567,17 @@ class M8OfflineContainerPlanner:
 
         selected_action = "SpawnDialecticalChallenger" if spawn else "CommitPrimary1x"
         est_cost = 2.0 if spawn else 1.0
+        if run_id:
+            import hashlib as _hl
+
+            r_clean = "".join(ch if ch.isalnum() else "_" for ch in str(run_id)).strip("_")[:16]
+            r_sha6 = _hl.sha256(str(run_id).encode("utf-8")).hexdigest()[:6]
+            r_tag = f"{r_clean}_{r_sha6}" if r_clean else r_sha6
+            dec_id = f"m8_cnt_dec_{r_tag}_s{step_index:03d}_{pre_state['task_id']}"
+        else:
+            dec_id = f"m8_cnt_dec_{step_index:03d}_{pre_state['task_id']}"
         rec = ResearchDecisionRecord(
-            decision_id=f"m8_cnt_dec_{step_index:03d}_{pre_state['task_id']}",
+            decision_id=dec_id,
             step_index=int(step_index),
             task_id=str(pre_state["task_id"]),
             pre_action_state=deepcopy(pre_state),
@@ -600,7 +610,11 @@ class M8OfflineContainerPlanner:
             "expected_collateral_damage": round(expected_collateral_damage, 5),
             "epistemic_std_gain": round(epistemic_std, 5),
             "net_variational_utility": round(net_variational_utility, 5),
-            "utility_unit": "expected_net_accuracy_gain_minus_cost_lambda",
+            "utility_unit": (
+                "ucb_adjusted_net_accuracy_gain_estimate"
+                if abs(float(self.epistemic_ucb_beta)) > 1e-12
+                else "expected_net_accuracy_gain_minus_cost_lambda"
+            ),
             "public_verification_state": pre_state["public_verification_state"],
             "decision_record": rec.to_dict(),
         }
@@ -642,12 +656,18 @@ class M8OfflineContainerPlanner:
         }
 
     @classmethod
-    def from_json_dict(cls, data: dict[str, Any]) -> M8OfflineContainerPlanner:
+    def from_json_dict(cls, data: dict[str, Any], *, allow_legacy_mixed_target: bool = False) -> M8OfflineContainerPlanner:
         nig_raw = cls._deser_nig(data["nig_fit"])
         assert nig_raw is not None
+        fail_nig = cls._deser_nig(data.get("fail_nig_fit"))
+        if fail_nig is None and not allow_legacy_mixed_target:
+            raise ValueError(
+                "Legacy planner JSON lacks pure `fail_nig_fit` (`hegel_m8_calibrated_container_planner_v4`); "
+                "re-calibrate with `fit_from_historical_records` or pass `allow_legacy_mixed_target=True` explicitly."
+            )
         return cls(
             nig_fit=nig_raw,
-            fail_nig_fit=cls._deser_nig(data.get("fail_nig_fit")),
+            fail_nig_fit=fail_nig,
             damage_nig_fit=cls._deser_nig(data.get("damage_nig_fit")),
             posterior_recovery_rate=float(data.get("posterior_recovery_rate", 0.35)),
             posterior_damage_rate=float(data.get("posterior_damage_rate", 0.04)),

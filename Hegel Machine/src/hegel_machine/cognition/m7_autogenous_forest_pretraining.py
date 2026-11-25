@@ -1175,6 +1175,16 @@ def compile_episode_dialectical_sublation(
         )
         if ut_res["passed"]:
             code_sha = hashlib.sha256(packaged_code.encode("utf-8")).hexdigest()
+            ut_src = str(parsed["synthetic_unit_test_code"])
+            ut_sha = hashlib.sha256(ut_src.encode("utf-8")).hexdigest()
+            if len(raw_python_sources) == 1:
+                src_cand_sha = hashlib.sha256(next(iter(raw_python_sources.values())).encode("utf-8")).hexdigest()
+            elif raw_python_sources:
+                src_cand_sha = hashlib.sha256(
+                    "\n\n".join(f"{k}:{v}" for k, v in sorted(raw_python_sources.items())).encode("utf-8")
+                ).hexdigest()
+            else:
+                src_cand_sha = ""
             clean_preconds = [
                 p
                 for p in parsed.get("scope_preconditions", [])
@@ -1196,6 +1206,9 @@ def compile_episode_dialectical_sublation(
                 "exported_apis": "; ".join(parsed.get("exported_api_signatures") or pub_fns),
                 "packaged_python_code": packaged_code,
                 "compiled_code_sha256": code_sha,
+                "source_candidate_sha256": src_cand_sha,
+                "synthetic_unit_test_code": ut_src,
+                "synthetic_unit_test_sha256": ut_sha,
                 "unit_test_receipt": ut_res,
                 "sublated_methodology_principle": str(parsed["sublated_methodology_principle"]).strip(),
                 "routed_signatures": sorted(set(routed_sigs)),
@@ -1327,10 +1340,13 @@ def consolidate_autogenous_episode_into_forest(
         "origin": compilation["compilation_mode"],
         "unit_test_verified": ut_verified,
         "source_qualification_status": str(compilation.get("source_qualification_status") or "public_episode"),
+        "source_candidate_sha256": compilation.get("source_candidate_sha256"),
         "function_names": list(compilation["function_names"]),
         "exported_apis": str(compilation["exported_apis"]),
         "python_code": str(compilation["packaged_python_code"]),
         "compiled_code_sha256": str(compilation["compiled_code_sha256"]),
+        "synthetic_unit_test_code": compilation.get("synthetic_unit_test_code"),
+        "synthetic_unit_test_sha256": compilation.get("synthetic_unit_test_sha256"),
         "scope_preconditions": list(compilation.get("scope_preconditions", [])),
         "provenance_episode_id": ep_id,
     }
@@ -1704,38 +1720,79 @@ def consolidate_wave1_via_aufhebung_compiler(
                 events.append({"task_id": task.task_id, "status": "skipped_public_refuted_candidate"})
                 continue
 
-            # Resolve active accepted deliverable (`M8.5` Fix `M01`: prefer `04a_repaired_antithesis_snapshot` when `repaired_verified=True`
-            # so broken pre-repair `04_submitted_artifacts_snapshot` in `branch_2_antithesis_wormhole` is NEVER compiled as verified!)
+            # Resolve active accepted deliverable (`M8.5.1` `M85-SOURCE` Fix: NEVER fall back to unverified raw pre-repair code
+            # or grant `repaired_public_verified_episode` when `04a_repaired_antithesis_snapshot` is missing or hash-mismatched!)
             rep_sum = anti_sum.get("local_container_repair_summary") or (anti_sum.get("selective_router_decision") or {}).get("local_container_repair") or {}
             rep_verified = bool(rep_sum.get("repaired_verified"))
-            candidate_snap_dirs: list[Path] = []
-            if rep_verified:
-                if rep_sum.get("repaired_snapshot_dir"):
-                    candidate_snap_dirs.append(Path(str(rep_sum["repaired_snapshot_dir"])))
-                candidate_snap_dirs.append(anti_dir / "04a_repaired_antithesis_snapshot")
-            candidate_snap_dirs.append(anti_dir / "04_submitted_artifacts_snapshot")
+            expected_rep_sha = str(
+                rep_sum.get("repaired_candidate_sha256")
+                or (anti_sum.get("candidate_identities") or {}).get("active_antithesis_sha256")
+                or ""
+            ).strip()
 
             py_sources: dict[str, str] = {}
             resolved_source_kind = "none"
-            for sdir in candidate_snap_dirs:
+            if rep_verified:
+                repaired_snap_dirs: list[Path] = []
+                if rep_sum.get("repaired_snapshot_dir"):
+                    repaired_snap_dirs.append(Path(str(rep_sum["repaired_snapshot_dir"])))
+                repaired_snap_dirs.append(anti_dir / "04a_repaired_antithesis_snapshot")
+                for sdir in repaired_snap_dirs:
+                    if not sdir.is_dir():
+                        continue
+                    cand_map = {
+                        p.name: p.read_text(encoding="utf-8", errors="ignore")
+                        for p in sorted(sdir.glob("*.py"))
+                    }
+                    cand_map = {k: v for k, v in cand_map.items() if v.strip()}
+                    if not cand_map:
+                        continue
+                    if expected_rep_sha and len(cand_map) == 1:
+                        only_txt = next(iter(cand_map.values()))
+                        if hashlib.sha256(only_txt.encode("utf-8")).hexdigest() != expected_rep_sha:
+                            continue
+                    py_sources = cand_map
+                    resolved_source_kind = "repaired_active_snapshot"
+                    break
+                if not py_sources:
+                    # Also accept `04_submitted_artifacts_snapshot` ONLY if `expected_rep_sha` is present AND matches byte-for-byte!
+                    sub_dir = anti_dir / "04_submitted_artifacts_snapshot"
+                    if expected_rep_sha and sub_dir.is_dir():
+                        cand_sub = {
+                            p.name: p.read_text(encoding="utf-8", errors="ignore")
+                            for p in sorted(sub_dir.glob("*.py"))
+                        }
+                        cand_sub = {k: v for k, v in cand_sub.items() if v.strip()}
+                        if len(cand_sub) == 1 and hashlib.sha256(next(iter(cand_sub.values())).encode("utf-8")).hexdigest() == expected_rep_sha:
+                            py_sources = cand_sub
+                            resolved_source_kind = "repaired_hash_verified_submitted_snapshot"
+                if not py_sources:
+                    events.append(
+                        {
+                            "task_id": task.task_id,
+                            "status": "skipped_missing_or_mismatched_repaired_snapshot",
+                            "source_qualification_status": "missing_verified_repaired_snapshot",
+                        }
+                    )
+                    continue
+            else:
+                sdir = anti_dir / "04_submitted_artifacts_snapshot"
                 if sdir.is_dir():
                     for p in sorted(sdir.glob("*.py")):
                         txt = p.read_text(encoding="utf-8", errors="ignore")
                         if txt.strip():
                             py_sources[p.name] = txt
                     if py_sources:
-                        resolved_source_kind = "repaired_active_snapshot" if "04a_repaired" in sdir.name else "submitted_snapshot"
-                        break
-
-            prod_dir = anti_dir / "04b_producer_skill_manifest" / "producers"
-            if not py_sources and prod_dir.is_dir():
-                for p in sorted(prod_dir.glob("*.py"))[:3]:
-                    if ".hegel" not in p.name and "wormhole" not in p.name:
-                        txt = p.read_text(encoding="utf-8", errors="ignore")
-                        if txt.strip():
-                            py_sources[p.name] = txt
-                if py_sources:
-                    resolved_source_kind = "producer_manifest"
+                        resolved_source_kind = "submitted_snapshot"
+                prod_dir = anti_dir / "04b_producer_skill_manifest" / "producers"
+                if not py_sources and prod_dir.is_dir():
+                    for p in sorted(prod_dir.glob("*.py"))[:3]:
+                        if ".hegel" not in p.name and "wormhole" not in p.name:
+                            txt = p.read_text(encoding="utf-8", errors="ignore")
+                            if txt.strip():
+                                py_sources[p.name] = txt
+                    if py_sources:
+                        resolved_source_kind = "producer_manifest"
             if not py_sources:
                 events.append({"task_id": task.task_id, "status": "skipped_no_python_deliverable"})
                 continue
@@ -1761,7 +1818,7 @@ def consolidate_wave1_via_aufhebung_compiler(
             )
             comp["source_qualification_status"] = (
                 "repaired_public_verified_episode"
-                if rep_verified
+                if (rep_verified and resolved_source_kind in {"repaired_active_snapshot", "repaired_hash_verified_submitted_snapshot"})
                 else ("completed_public_episode" if bool(anti_sum.get("ended_by_finish")) else "incomplete_exploratory_episode")
             )
             cons = consolidate_autogenous_episode_into_forest(

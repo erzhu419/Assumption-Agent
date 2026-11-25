@@ -567,15 +567,22 @@ def test_m8_5_boundary_sentinel_stderr_ho12_codon_ho05_binary_ast_and_compiler_c
             provenance_note="compound_renaming_and_well_permutation_equivariance: border-control evaporation projection",
         ).to_dict(),
     )
+    rep_fixture_py = "def estimate_compound_hill_parameters(plates):\n    return {}\n"
+    rep_fixture_sha = hashlib.sha256(rep_fixture_py.encode("utf-8")).hexdigest()
     comp_skill = adapter.compile_verified_repair_to_executable_skill(
         task=tasks["ho06__plate_evaporation_deconfounded_ic50"],
         repair_summary={
             "repaired_verified": True,
-            "repaired_python_code": "def estimate_compound_hill_parameters(plates):\n    return {}\n",
+            "repaired_python_code": rep_fixture_py,
+            "repaired_candidate_sha256": rep_fixture_sha,
             "persisted_guard_id": gid,
             "defect_diagnosis": "Ignored 2D plate evaporation confounding.",
             "invariance_principle": "Fit 2D quadratic evaporation field on DMSO border controls before Hill regression.",
-            "probe_after": {"public_consistency_metrics": {"pub_max_ic50_err": 0.005}},
+            "probe_after": {
+                "public_output_contract_ok": True,
+                "id_renaming_invariant_ok": True,
+                "public_consistency_metrics": {"pub_max_ic50_err": 0.005},
+            },
         },
         forest=forest,
         archive=archive,
@@ -584,6 +591,8 @@ def test_m8_5_boundary_sentinel_stderr_ho12_codon_ho05_binary_ast_and_compiler_c
     )
     assert comp_skill["compiled_and_consolidated"] is True
     assert comp_skill["unit_test_receipt"]["passed"] is True
+    assert comp_skill["source_candidate_sha256"] == rep_fixture_sha
+    assert "def run_self_test" in str(comp_skill["synthetic_unit_test_code"])
     assert "EXECUTABLE_SKILL" in g_skill.mechanisms[str(gid)].provenance_note
 
     # Verify HippoRAG recall + `@track_wormhole_skill` runtime execution receipt!

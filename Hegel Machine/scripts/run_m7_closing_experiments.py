@@ -346,10 +346,21 @@ def run_two_wave_autogenous_suite(
             w1_by_id = {t.task_id: t for t in waves["wave_1"]}
             for s in w1_summaries:
                 t_obj = w1_by_id[s["task_id"]]
+                ep_d = suite_dir / "runs" / f"{t_obj.wave}__{model}__{t_obj.task_id}"
                 anti_d = branches_root / f"{t_obj.wave}__{model}__{t_obj.task_id}" / "branch_2_antithesis_wormhole"
-                anti_sfp = anti_d / "00_episode_summary.json"
-                if anti_sfp.is_file():
-                    w1_anti_records.append((t_obj, json.loads(anti_sfp.read_text(encoding="utf-8")), anti_d))
+                if ep_d.is_dir() and (
+                    (ep_d / "04a_repaired_antithesis_snapshot").is_dir()
+                    or (ep_d / "04_submitted_artifacts_snapshot").is_dir()
+                ):
+                    w1_anti_records.append((t_obj, s, ep_d))
+                elif (anti_d / "00_episode_summary.json").is_file():
+                    merged_sum = {
+                        **json.loads((anti_d / "00_episode_summary.json").read_text(encoding="utf-8")),
+                        "selective_router_decision": s.get("selective_router_decision"),
+                        "local_container_repair_summary": s.get("local_container_repair_summary"),
+                        "candidate_identities": s.get("candidate_identities"),
+                    }
+                    w1_anti_records.append((t_obj, merged_sum, anti_d))
             print(f"[AUFHEBUNG] Compiling blind Wave-1 -> Wave-2 sublations across {len(w1_anti_records)} episodes...", flush=True)
             w1_cons = consolidate_wave1_via_aufhebung_compiler(
                 wave1_antithesis_episodes=w1_anti_records,

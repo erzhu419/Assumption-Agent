@@ -669,6 +669,7 @@ class TaskModel:
     committed_prior_shrinkage: float = 12.0
     reference_y_var: float | None = None
     train_initial_memory_states: dict[str, list[float]] = field(default_factory=dict)  # str(traj_id) -> [t_prev, z_prev, u_prev]
+    train_step_memory_states: dict[str, list[list[float]]] = field(default_factory=dict)  # str(traj_id) -> [[t_i, z_i, u_i], ...]
     train_time_bounds: dict[str, list[float]] = field(default_factory=dict)  # str(traj_id) -> [t_min, t_max]
     terminal_memory_states: dict[str, list[float]] = field(default_factory=dict)  # str(traj_id) -> [last_t, last_z, last_u]
     committed_nig_state: dict[str, Any] | None = None
@@ -746,6 +747,7 @@ class TaskModel:
             "committed_prior_shrinkage": self.committed_prior_shrinkage,
             "reference_y_var": self.reference_y_var,
             "train_initial_memory_states": deepcopy(self.train_initial_memory_states),
+            "train_step_memory_states": deepcopy(self.train_step_memory_states),
             "train_time_bounds": deepcopy(self.train_time_bounds),
             "terminal_memory_states": deepcopy(self.terminal_memory_states),
             "committed_nig_state": nig_ser,
@@ -779,6 +781,10 @@ class TaskModel:
             committed_prior_shrinkage=float(data.get("committed_prior_shrinkage", 12.0)),
             reference_y_var=(float(data["reference_y_var"]) if data.get("reference_y_var") is not None else None),
             train_initial_memory_states={str(k): [float(x) for x in v] for k, v in (data.get("train_initial_memory_states") or {}).items()},
+            train_step_memory_states={
+                str(k): [[float(x) for x in row] for row in rows]
+                for k, rows in (data.get("train_step_memory_states") or {}).items()
+            },
             train_time_bounds={str(k): [float(x) for x in v] for k, v in (data.get("train_time_bounds") or {}).items()},
             terminal_memory_states={str(k): [float(x) for x in v] for k, v in (data.get("terminal_memory_states") or {}).items()},
             committed_nig_state=nig_raw,
@@ -908,7 +914,14 @@ class PersistentMechanismGraph:
                 ResearchDecisionRecord.from_dict(rd)
                 for rd in (state_blob.get("decision_ledger") or [])
             ]
-            self.action_return_history = deepcopy(state_blob.get("action_return_history") or {})
+            raw_hist = deepcopy(state_blob.get("action_return_history") or {})
+            for act_k, rows in raw_hist.items():
+                if isinstance(rows, list):
+                    raw_hist[act_k] = [
+                        ({**r, "metric_kind": "legacy_untyped_m84_record"} if isinstance(r, dict) and "metric_kind" not in r else r)
+                        for r in rows
+                    ]
+            self.action_return_history = raw_hist
             return
 
         # Fallback node-level hydration if only forest nodes carry `m8_typed_mechanism`
@@ -1065,7 +1078,8 @@ def _compute_causal_memory_feature(
     *,
     initial_states: dict[str, list[float]] | None = None,
     return_terminal_states: bool = False,
-) -> np.ndarray | tuple[np.ndarray, dict[str, list[float]]]:
+    return_step_states: bool = False,
+) -> np.ndarray | tuple[np.ndarray, dict[str, list[float]]] | tuple[np.ndarray, dict[str, list[float]], dict[str, list[list[float]]]]:
     """Compute strictly prefix-causal (`<= t`) Mori-Zwanzig memory state WITH boundary carry-over (`M8.2` Fix!).
 
     When `initial_states` (or `dataset['initial_memory_states']`) provides `{str(traj_id): [t_prev, z_prev, u_prev]}`,
@@ -1082,6 +1096,8 @@ def _compute_causal_memory_feature(
         z = np.zeros(n, dtype=float)
         for step_idx in range(hist.shape[1]):
             z = decay * z + (1.0 - decay) * hist[:, step_idx]
+        if return_step_states:
+            return z, {}, {}
         if return_terminal_states:
             return z, {}
         return z
@@ -1093,6 +1109,7 @@ def _compute_causal_memory_feature(
 
     z = np.zeros(n, dtype=float)
     term_map: dict[str, list[float]] = {}
+    step_map: dict[str, list[list[float]]] = {}
     for i in range(n):
         tid_key = str(int(ep_ids[i]))
         if i == 0 or ep_ids[i] != ep_ids[i - 1]:
@@ -1115,8 +1132,13 @@ def _compute_causal_memory_feature(
             dt = max(float(ts[i] - ts[i - 1]), 1e-4)
             decay = math.exp(-dt / tau_pos)
             z[i] = decay * z[i - 1] + (1.0 - decay) * u[i - 1]
-        term_map[tid_key] = [float(ts[i]), float(z[i]), float(u[i])]
+        rec_i = [float(ts[i]), float(z[i]), float(u[i])]
+        term_map[tid_key] = rec_i
+        if return_step_states:
+            step_map.setdefault(tid_key, []).append(rec_i)
 
+    if return_step_states:
+        return z, term_map, step_map
     if return_terminal_states:
         return z, term_map
     return z
@@ -1243,25 +1265,43 @@ def build_task_design_matrix(
             rmap = model.lift_role_maps.get(lid, {})
             mapped_expr = remap_conduit_expression_roles(l_mech.python_expression, rmap)
             fn = compile_safe_feature_conduit(mapped_expr, model.feature_names)
-            lift_vec = fn(x_cols)
-            # Enforce declared `scope_guard` as a sample-wise execution gate (`M8.5` Fix `P02` — zero outside-guard leakage!)
+            # Enforce declared `scope_guard` BEFORE conduit evaluation (`M8.5.1` `M85-SCOPE` Fix: never evaluate partial-domain math like `log(a)` outside guard!)
             bound_guard = model.lift_scope_guards.get(lid)
             if bound_guard:
                 g_ok, g_mask = _compute_mapped_scope_guard_mask(bound_guard, x_cols, None)
-                lift_vec = np.where(g_mask, lift_vec, 0.0) if g_ok else np.zeros(n, dtype=float)
             elif l_mech.scope_guard:
                 g_ok, g_mask = _compute_mapped_scope_guard_mask(l_mech.scope_guard, x_cols, rmap)
-                lift_vec = np.where(g_mask, lift_vec, 0.0) if g_ok else np.zeros(n, dtype=float)
+            else:
+                g_ok, g_mask = True, None
+
+            if not g_ok:
+                lift_vec = np.zeros(n, dtype=float)
+                x_active_sub: dict[str, np.ndarray] | None = None
+            elif g_mask is None:
+                lift_vec = fn(x_cols)
+                x_active_sub = x_cols
+            else:
+                lift_vec = np.zeros(n, dtype=float)
+                if np.any(g_mask):
+                    x_active_sub = {k: np.asarray(v, dtype=float).ravel()[g_mask] for k, v in x_cols.items()}
+                    lift_vec[g_mask] = fn(x_active_sub)
+                else:
+                    x_active_sub = None
             design_blocks.append(lift_vec[:, None])
-            if l_mech.support_bounds:
+            if l_mech.support_bounds and x_active_sub is not None:
                 mapped_bounds = {rmap.get(k, k): v for k, v in l_mech.support_bounds.items()}
-                support_inflation += compute_out_of_support_inflation(
-                    x_cols,
+                sub_inf = compute_out_of_support_inflation(
+                    x_active_sub,
                     mapped_bounds,
                     lipschitz_scale=l_mech.empirical_lipschitz,
                 )
+                if g_mask is None:
+                    support_inflation += sub_inf
+                else:
+                    support_inflation[g_mask] += sub_inf
 
     term_states: dict[str, list[float]] = {}
+    step_states: dict[str, list[list[float]]] = {}
     if model.temporal_memory_id and model.temporal_memory_id in graph.mechanisms:
         t_mech = graph.mechanisms[model.temporal_memory_id]
         raw_drv = t_mech.temporal_driver_col or model.feature_names[0]
@@ -1273,14 +1313,19 @@ def build_task_design_matrix(
             float(t_mech.temporal_tau or 1.5),
             initial_states=initial_memory_states,
             return_terminal_states=True,
+            return_step_states=capture_terminal_memory,
         )
         assert isinstance(mem_res, tuple)
-        mem_vec, term_states = mem_res
+        if capture_terminal_memory:
+            mem_vec, term_states, step_states = mem_res  # type: ignore[misc]
+        else:
+            mem_vec, term_states = mem_res  # type: ignore[misc]
         design_blocks.append(mem_vec[:, None])
 
     Phi = np.hstack(design_blocks)
     if capture_terminal_memory:
         model.terminal_memory_states = term_states
+        model.train_step_memory_states = step_states
     return Phi, shared_offset, support_inflation, term_states
 
 
@@ -1288,10 +1333,13 @@ def _resolve_eval_initial_memory_states(
     model: TaskModel,
     eval_data: dict[str, Any],
 ) -> dict[str, list[float]] | None:
-    """Resolve initial memory states with strict precedence (`M8.5` Fix `P01`):
+    """Resolve initial memory states with strict precedence (`M8.5.1` `M85-TIME` Fix):
     1. Explicit `eval_data['initial_memory_states']` ALWAYS takes top precedence!
     2. Otherwise, for each trajectory in `eval_data['timestamps']`:
        - If `t_eval_start > last_train_t`, carry over `model.terminal_memory_states[tid]` (future continuation).
+       - Else if `t_eval_start > train_t_min` (interior slice), seed from the exact latest stored step `[t_k, z_k, u_k]`
+         with `t_k < t_eval_start` in `model.train_step_memory_states[tid]` (or raise `ValueError` if temporal memory is
+         active and interior history was omitted without an explicit boundary seed!).
        - Else if `tid` has `model.train_initial_memory_states[tid]`, replay from `train_initial_memory_states[tid]`.
     """
     explicit_init = eval_data.get("initial_memory_states")
@@ -1313,8 +1361,23 @@ def _resolve_eval_initial_memory_states(
     resolved: dict[str, list[float]] = {}
     for tk, t_start in first_t_by_tid.items():
         term_rec = model.terminal_memory_states.get(tk)
+        t_bounds = model.train_time_bounds.get(tk)
         if term_rec and len(term_rec) >= 2 and t_start > float(term_rec[0]) + 1e-12:
             resolved[tk] = list(term_rec)
+        elif t_bounds and len(t_bounds) >= 2 and t_start > float(t_bounds[0]) + 1e-12:
+            step_rows = model.train_step_memory_states.get(tk) or []
+            best_prev: list[float] | None = None
+            for s_row in step_rows:
+                if len(s_row) >= 2 and float(s_row[0]) < t_start - 1e-12:
+                    if best_prev is None or float(s_row[0]) > float(best_prev[0]):
+                        best_prev = list(s_row)
+            if best_prev is not None:
+                resolved[tk] = best_prev
+            elif model.temporal_memory_id:
+                raise ValueError(
+                    f"Interior temporal replay for trajectory `{tk}` starting at t={t_start} (> train_start={t_bounds[0]}) "
+                    "requires explicit `initial_memory_states` or committed `train_step_memory_states`!"
+                )
         elif tk in model.train_initial_memory_states:
             resolved[tk] = list(model.train_initial_memory_states[tk])
     return resolved or None
@@ -1876,26 +1939,37 @@ class M8VariationalPlanner:
             if mech.role == "interaction_lift" and mid not in incumbent.interaction_lift_ids and mech.python_expression:
                 seen_vec_hashes: set[str] = set()
                 for rm in role_maps_to_try[:6]:
+                    rm_neg_key = f"{neg_scope_key}:rm={json.dumps(rm, sort_keys=True, separators=(',', ':'))}"
+                    if rm_neg_key in mech.inapplicable_task_ids:
+                        continue
                     guard_ok, guard_frac = self._evaluate_mapped_scope_guard_fraction(mech.scope_guard, ds_tr["x"], rm)
                     if not guard_ok:
                         continue
                     try:
                         mapped_expr = remap_conduit_expression_roles(mech.python_expression, rm)
                         fn_c = compile_safe_feature_conduit(mapped_expr, incumbent.feature_names)
-                        cond = estimate_conduit_conditioning_and_domain(fn_c, ds_tr["x"])
-                        if not cond["finite_on_support"]:
-                            continue
-                        raw_vec = fn_c(ds_tr["x"])
                         mapped_guard: dict[str, Any] | None = None
                         if mech.scope_guard:
                             mapped_guard = {
                                 **deepcopy(mech.scope_guard),
                                 "field": rm.get(str(mech.scope_guard.get("field") or ""), str(mech.scope_guard.get("field") or "")),
                             }
-                            _, g_mask = _compute_mapped_scope_guard_mask(mapped_guard, ds_tr["x"], None)
-                            gated_vec = np.where(g_mask, raw_vec, 0.0)
+                            g_ok_m, g_mask = _compute_mapped_scope_guard_mask(mapped_guard, ds_tr["x"], None)
+                            if not g_ok_m or not np.any(g_mask):
+                                continue
+                            x_eval_sub = {k: np.asarray(v, dtype=float).ravel()[g_mask] for k, v in ds_tr["x"].items()}
                         else:
-                            gated_vec = raw_vec
+                            g_mask = None
+                            x_eval_sub = ds_tr["x"]
+                        # `M85-SCOPE` Fix: evaluate conditioning & domain finiteness strictly within the active guard subset!
+                        cond = estimate_conduit_conditioning_and_domain(fn_c, x_eval_sub)
+                        if not cond["finite_on_support"]:
+                            continue
+                        if g_mask is not None:
+                            gated_vec = np.zeros(n_tr_rows, dtype=float)
+                            gated_vec[g_mask] = fn_c(x_eval_sub)
+                        else:
+                            gated_vec = fn_c(ds_tr["x"])
                     except Exception:
                         continue
 
@@ -1909,7 +1983,7 @@ class M8VariationalPlanner:
                     in_bounds_frac = 1.0
                     if mech.support_bounds:
                         mapped_b = {rm.get(k, k): v for k, v in mech.support_bounds.items()}
-                        ood_inf = compute_out_of_support_inflation(ds_tr["x"], mapped_b, lipschitz_scale=mech.empirical_lipschitz)
+                        ood_inf = compute_out_of_support_inflation(x_eval_sub, mapped_b, lipschitz_scale=mech.empirical_lipschitz)
                         in_bounds_frac = float(np.mean(ood_inf <= 1e-9))
 
                     staged_specs.append(
@@ -1921,6 +1995,7 @@ class M8VariationalPlanner:
                                 "mid": mid,
                                 "mech": mech,
                                 "neg_scope_key": neg_scope_key,
+                                "rm_neg_key": rm_neg_key,
                                 "rm": rm,
                                 "mapped_expr": mapped_expr,
                                 "mapped_guard": mapped_guard,
@@ -1937,6 +2012,9 @@ class M8VariationalPlanner:
             ):
                 seen_drv_targets: set[str] = set()
                 for rm in role_maps_to_try[:6]:
+                    rm_neg_key = f"{neg_scope_key}:rm={json.dumps(rm, sort_keys=True, separators=(',', ':'))}"
+                    if rm_neg_key in mech.inapplicable_task_ids:
+                        continue
                     guard_ok, guard_frac = self._evaluate_mapped_scope_guard_fraction(mech.scope_guard, ds_tr["x"], rm)
                     if not guard_ok:
                         continue
@@ -1958,6 +2036,7 @@ class M8VariationalPlanner:
                                 "mid": mid,
                                 "mech": mech,
                                 "neg_scope_key": neg_scope_key,
+                                "rm_neg_key": rm_neg_key,
                                 "rm": dict(rm),
                                 "src_drv": src_drv,
                                 "tgt_drv": tgt_drv,
@@ -1971,16 +2050,20 @@ class M8VariationalPlanner:
 
         best_by_mid: dict[str, RevisionCandidate] = {}
         neg_keys_by_mid: dict[str, tuple[TypedMechanism, str]] = {}
+        evaluated_rm_gains_by_mid: dict[str, list[tuple[str, float]]] = {}
+        budget_skipped_mids: set[str] = set()
         ordered_mids: list[str] = []
 
-        # Phase B (Pre-Fit Budget-Reserved Posterior Fitting): reserve `0.05u` BEFORE EVERY `fit_and_score_task_model` call (`P03`)!
-        for _, mid, spec in staged_specs:
+        # Phase B (Pre-Fit Budget-Reserved Posterior Fitting): reserve `0.05u` BEFORE EVERY `fit_and_score_task_model` call (`P03` + `M85-CACHE`)!
+        for idx_spec, (_, mid, spec) in enumerate(staged_specs):
             desc_note = (
                 f"Autonomously recall & bind persisted mechanism `{mid}` via role map `{spec['rm']}`."
                 if spec["kind"] == "interaction_lift"
                 else f"Autonomously recall persisted temporal memory `{mid}` (`tau={spec['mech'].temporal_tau}`, driver `{spec['src_drv']}->{spec['tgt_drv']}`)."
             )
             if reserve_budget_fn is not None and not reserve_budget_fn("ReuseMechanism_probe", 0.05, desc_note):
+                for _, rem_mid, _ in staged_specs[idx_spec:]:
+                    budget_skipped_mids.add(rem_mid)
                 break
 
             if mid not in ordered_mids:
@@ -2081,6 +2164,7 @@ class M8VariationalPlanner:
                     },
                 )
 
+            evaluated_rm_gains_by_mid.setdefault(mid, []).append((str(spec["rm_neg_key"]), float(cand_obj.val_log_predictive_gain)))
             prev_best = best_by_mid.get(mid)
             if prev_best is None or cand_obj.val_log_predictive_gain > prev_best.val_log_predictive_gain:
                 best_by_mid[mid] = cand_obj
@@ -2088,8 +2172,12 @@ class M8VariationalPlanner:
         recalled: list[RevisionCandidate] = []
         for mid in ordered_mids:
             best_cand = best_by_mid[mid]
-            if best_cand.val_log_predictive_gain <= 0.0:
-                mech_ref, neg_key = neg_keys_by_mid[mid]
+            mech_ref, neg_key = neg_keys_by_mid[mid]
+            for rm_k, rm_gain in evaluated_rm_gains_by_mid.get(mid, ()):
+                if rm_gain <= 0.0:
+                    mech_ref.inapplicable_task_ids.add(rm_k)
+            # `M85-CACHE` Fix: ONLY record mechanism-level negative cache when NO eligible role maps were budget-skipped!
+            if best_cand.val_log_predictive_gain <= 0.0 and mid not in budget_skipped_mids:
                 mech_ref.inapplicable_task_ids.add(neg_key)
             recalled.append(best_cand)
         return recalled
@@ -2183,7 +2271,10 @@ class M8VariationalPlanner:
             return True
 
         def _empirical_action_bonus(act_type: str) -> float:
-            hist = self.graph.action_return_history.get(act_type) or []
+            hist = [
+                h for h in (self.graph.action_return_history.get(act_type) or [])
+                if isinstance(h, dict) and h.get("metric_kind") in {None, "heldout_log_predictive_delta_nats"}
+            ]
             if not hist:
                 return 0.0
             vals = [float(h.get("gain_nats", 0.0)) - self.cost_weight * float(h.get("cost_spent", 0.0)) for h in hist[-8:]]
