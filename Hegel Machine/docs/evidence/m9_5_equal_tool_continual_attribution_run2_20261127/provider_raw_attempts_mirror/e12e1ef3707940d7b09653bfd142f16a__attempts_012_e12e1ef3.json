@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e12e1ef3707940d7b09653bfd142f16a",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_02__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:15:18.648034+00:00",
+  "ended_at_utc": "2026-11-26T18:15:50.772003+00:00",
+  "request_sha256": "78779a8e2bb5b668239cee704050425d72a338d2be941da756dc02117d221579",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 73263,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36331,
+    "cached_tokens": 11136,
+    "completion_tokens": 1303
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cat > /tmp/polymer_audit.py <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w02_batch_02_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_alpha_w02_batch_02.pkl','rb'))[0]; d=p['dataset']; s=d['train']; q=d['test']; t=d['eval_times']; dt=d['past_dt']; l=s['lab_id']; n=len(l); X=m._features(s,q)[:n]; miss=~np.isfinite(s['coupon_features_raw']).all(1); st=m._stress(s,m._calibrate(d['calibration_load_cells'],d['yield_stress'])); y=np.c_[s['strain_curves_obs']-s['strain_0'][:,None],s['instant_rate_obs']]; den=np.maximum(abs(st[1]),.5)\\nprint('training labels, plastic states and largest absolute stresses',list(s),np.unique(s['residual_plastic_state']),max(np.max(abs(st[0])),np.max(abs(st[1]))),d['yield_stress']); print('stratum counts by lab',[(int(i),np.bincount(s['stratum'][l==i]).tolist()) for i in np.unique(l)])\\n# Every challenger is fixed before scoring; train labels never enter its held-out lab fit.\\nresults={k:[] for k in ['base','pairs','quotient','stress','memory_x','stratum']}\\nfor i in np.unique(l):\\n a=(l!=i)&~miss; b=(l==i)&~miss\\n tau,p=m._fit(tuple(x[a] for x in st),X[a],dt,t,y[a]); A=m._design(st,X,dt,t,np.log(tau)); pred=A@p; r=y-pred\\n x=X[:,1:]; u=st[1]/d['yield_stress']; v=m._memory(st,dt,tau); D=np.r_[t,1.];\\n extras={'pairs':np.c_[x*x,*[x[:,j]*x[:,k] for j in range(4) for k in range(j)]], 'quotient':np.c_[x/(1+u[:,None]**2)-x,u/(1+u*u)],'stress':np.c_[u,u*u,u**3,x*u[:,None]],'stratum':np.eye(3)[s['stratum']][:,1:]}\\n extras={k:z[:,None,:]*D[None,:,None] for k,z in extras.items()}; extras['memory_x']=(A[:,:,:2,None]*x[:,None,None,:]).reshape(len(l),len(D),-1)\\n for k in results:\\n  if k=='base': e=r[b,:-1]\\n  else:\\n   B=extras[k]; W=B[a].reshape(-1,B.shape[-1]); target=r[a].ravel(); c=np.linalg.lstsq(W,target,rcond=None)[0]\\n   for _ in range(12):\\n    w=1/np.hypot(1,(W@c-target)/.03);c=np.linalg.lstsq(W*w[:,None],target*w,rcond=None)[0]\\n   e=r[b,:-1]-B[b,:-1]@c\\n  results[k].append([np.median(abs(e)),np.median(abs(e[:,-1]/den[b])),np.median(abs(e@t/(t@t)))])\\n print('lab',i,'tau',np.round(tau,5),'complete baseline median rate / projected drift residual',np.round([np.median(r[b,-1]),np.median(r[b,:-1]@t/(t@t))],5))\\nfor k,z in results.items(): print(k,'worst lab median absolute strain/secant/drift',np.round(np.max(z,0),6),'mean of labs',np.round(np.mean(z,0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/polymer_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: calibrated affine drift and two hereditary modes → H2: retain them unless a fixed challenger improves lab-held-out strain and secant error; current worst-lab public RMSE is 0.016625 for strain, 0.044415 for secant, and 0.038191 for crossing time.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add relay-mode, Fokker–Planck, or classification checks\",\"rejected_reason\":\"The coupon task predicts continuous strain from stress and initial memory; it has no relay state, stochastic density equation, or class labels.\"}],\"rationale\":\"Use real training measurements to test whether pairwise feature products, rational stress interactions, feature-dependent memory amplitudes, or stratum offsets explain residuals across labs. Only a repeatable gain across held-out labs would justify adding terms; lab-level residuals also reveal offsets that pooled scores could hide.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "150cd4ff5572ca8734bc91bc91ee6ea741f2e569a7e74907b0d8b10d262a3475",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33055.72,
+      "usage_known": true,
+      "prompt_tokens": 36331,
+      "cached_tokens": 11136,
+      "completion_tokens": 1303
+    }
+  ]
+}

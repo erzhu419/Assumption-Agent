@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6cad69e009cf491f8ef5d72c782ab18e",
+  "call_seq": 14,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:45:53.780795+00:00",
+  "ended_at_utc": "2026-11-26T18:46:22.633543+00:00",
+  "request_sha256": "4ee5a1a89c46e1b3a474101cd4ca65bb92078be24ab63a1ad1e19974b5fdaba6",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 81390,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39798,
+    "cached_tokens": 6784,
+    "completion_tokens": 1165
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nr='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',r+'alpha_w01_batch_07_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(r+'public_alpha_w01_batch_07.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; mp=m._calibrate(d['calibration_load_cells']); x,xt,_,_=m._align(tr,te)\\ntau=np.array([.51,3.75]); theta=np.array([.68,.54,.08,.15,-.13,.11,-.09,.028,.009])\\n# Independent forward calculation: update branch memory interval by interval.\\nfor y in (1.15, 4.0):\\n def synth(b,features):\\n  gain,bias=mp[b['lab_id']].T; hold=b['stress_hold_cmd']*gain+bias; hist=b['past_stress_cmd']*gain[:,None]+bias[:,None]\\n  z=np.zeros((len(hold),2)); work=np.zeros(len(hold))\\n  for stress,width in zip(hist.T,dt):\\n   decay=np.exp(-width/tau); z=z*decay+stress[:,None]*(1-decay); work+=width*np.maximum(abs(stress)-y,0)**2\\n  ov=np.sign(hold)*np.maximum(abs(hold)-y,0)**2; drift=features@theta[2:7]+theta[7]*ov\\n  amp=(hold[:,None]-z)*theta[:2]; amp[:,0]+=theta[8]*hold*work\\n  curves=b['strain_0'][:,None]+amp@(1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*t\\n  return curves,amp@(1/tau)+drift,(hold,work)\\n yc,yr,_=synth(tr,x); tc,rr,(hold,work)=synth(te,xt)\\n data={**d,'yield_stress':y,'train':{**tr,'strain_curves_obs':yc,'instant_rate_obs':yr},'test':{**te,'instant_rate_obs':rr}}\\n out=m.solve_alpha_w01_batch_07(data); assert np.max(abs(out['estimated_taus']-tau)) < .002; assert np.max(abs(out['hereditary_weights']-theta[:7])) < .002\\n expected=theta[7:] if y==1.15 else np.zeros(2); assert np.max(abs(out['viscoplastic_weights']-expected)) < .0002\\n groups={'positive hold':hold>y,'negative hold':hold<-y,'history only':(abs(hold)<=y)&(work>0),'elastic only':(abs(hold)<=y)&(work==0)}\\n if y==1.15: assert all(groups[k].any() for k in ('positive hold','negative hold','history only'))\\n for label,q in groups.items():\\n  if q.any():\\n   a=np.max(abs(out['predicted_strain'][q]-tc[q])); b=np.max(abs(out['initial_rate_pred'][q]-rr[q])); print(y,label,int(q.sum()),'max strain / onset errors',a,b); assert max(a,b)<.002\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared drift alone -> H2 lab-specific drift correction; worst-lab public strain RMSE is 0.013689 and onset RMSE is 0.004267, with above-yield recovery still untested.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public validation\",\n      \"rejected_reason\": \"The public coupons never exceed yield, so they cannot detect a missing or mis-signed plastic term.\"\n    }\n  ],\n  \"rationale\": \"Test the exact saved solver against an independent forward calculation on the supplied stress histories. A failure isolated to positive hold, negative hold, or history-only loading would identify which plastic term needs correction; the elastic run checks that both plastic weights deactivate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "8aac080f35b8f86f0b1afa9a6cba0cbb745883c7a4f73ed4cf9b17dd8a7256ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29826.77,
+      "usage_known": true,
+      "prompt_tokens": 39798,
+      "cached_tokens": 6784,
+      "completion_tokens": 1165
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe0e24ca65fd4ac28fb4872c9c80cab0",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:02:29.066529+00:00",
+  "ended_at_utc": "2026-11-26T18:02:52.628372+00:00",
+  "request_sha256": "0cc988cc2150d212a555bda558b893debd49e3539de1ff78fe994ec93fc25895",
+  "system_prompt_chars": 5297,
+  "stdin_payload_chars": 54561,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30486,
+    "cached_tokens": 6784,
+    "completion_tokens": 858
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ntimeout 60s python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_w01_s00_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_w01_s00.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nte = d['test']\\na = s.solve_alpha_w01_s00(d)\\ntaus, w = a['estimated_taus'], a['hereditary_weights']\\nmaps = s._load_cells(d['calibration_load_cells'])\\nhist, hold = s._stress(te, maps)\\nz = np.zeros((len(hold), 2))\\nfor j, dt in enumerate(d['past_dt']):\\n    decay = np.exp(-dt / taus)\\n    z = decay * z + (1 - decay) * hist[:, j, None]\\njump = hold[:, None] - z\\nx = s._alignment(d['train'], te)[1]\\ndrift = w[2] + x @ w[3:]\\nrelax_rate = (jump / taus) @ w[:2]\\nmissing = ~np.isfinite(te['coupon_features_raw']).all(axis=1) & np.isfinite(te['instant_rate_obs'])\\ndrift[missing] = te['instant_rate_obs'][missing] - relax_rate[missing]\\nt = d['eval_times']\\ncurves = te['strain_0'][:, None] + (jump * w[:2]) @ (-np.expm1(-t[None, :] / taus[:, None])) + drift[:, None] * t\\ncurve_err = np.max(np.abs(curves - a['predicted_strain']))\\nrate_err = np.max(np.abs(relax_rate + drift - a['initial_rate_pred']))\\nprint(f'Direct recurrence: max strain discrepancy={curve_err:.3g}, max onset-rate discrepancy={rate_err:.3g}')\\nassert curve_err < 1e-10 and rate_err < 1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (in-batch affine calibration only) → H2 (robust in-batch calibration with historical fallback); public missing-feature strain/rate MAE is 0.02080/0.00759, and the synthetic sparse-EMI calibration error is below 6e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The timing wrapper was unavailable, so the isolated schema check never ran on this revision. Run it directly with a timeout to catch import, runtime, or schema failures, and independently compare both prediction outputs with the stepwise recurrence to catch an indexing or onset-derivative error before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "164399634855efa35c30728aa3b52a59f8ddec4a26a3655a6fe160bb043a74cd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24485.1,
+      "usage_known": true,
+      "prompt_tokens": 30486,
+      "cached_tokens": 6784,
+      "completion_tokens": 858
+    }
+  ]
+}

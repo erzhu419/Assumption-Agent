@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5bd09c96628244999f27d49e3022fa92",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:22:30.294305+00:00",
+  "ended_at_utc": "2026-11-26T18:23:03.217183+00:00",
+  "request_sha256": "e5e1cc8fd4d54e4573a52f2a67810763167fcae7c929abc161042a27859e1155",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44108,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27896,
+    "cached_tokens": 11136,
+    "completion_tokens": 1419
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem, = pickle.load(open('public_beta_w03_batch_04.pkl', 'rb'))\\ns, gt = item['study'], item['gt']\\nout = m.solve_beta_w03_batch_04(s)\\nrel = lambda a,b: np.linalg.norm(a-b)/np.linalg.norm(b)\\nc = out['kkt_certificate']\\nw, cap, budget = out['weights'], s['u_box'], s['total_budget']\\nprint('public weight_relerr, field_relerr, objective_abs_error, dual_gap:', rel(w,gt['w_opt']),rel(out['terminal_field'],gt['terminal_field_A']),abs(c['primal_objective']-gt['cert_opt']['primal_objective']),c['primal_objective']-c['dual_lower_bound'])\\nassert rel(w,gt['w_opt']) < 1e-6 and rel(out['terminal_field'],gt['terminal_field_A']) < 1e-6\\nZ = s['Z_nuisance']; y = m._calibrate(s)\\nyt = y - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T @ y)\\nSt = gt['S_tilde']; g = St.T @ (St @ w - yt) + s['source_ridge'] * w\\nlo, hi = c['lam_lower'], c['lam_upper']\\nassert abs(w.sum()-budget) < 1e-10 and w.min() >= 0 and w.max() <= cap\\nstationarity = np.max(abs(g-c['nu_sum']-lo+hi)); complementarity = max(np.max(abs(w*lo)),np.max(abs((cap-w)*hi)))\\nprint('stationarity, complementarity:', stationarity, complementarity)\\nassert stationarity < 1e-9 and complementarity < 1e-9 and abs(c['primal_objective']-c['dual_lower_bound']) < 1e-9\\nsw = s['sensor_calibration_sweeps']; banks = sw['bank_id']; max_delta = {}\\nfor label in ('single_spot', 'missing_bank', 'two_emi_spikes', 'three_spots_one_spike'):\\n    worst = 0.\\n    for b in range(4):\\n        ib = np.flatnonzero(banks == b)\\n        keep = np.ones(len(banks), dtype=bool)\\n        delta = np.zeros(len(banks))\\n        if label == 'single_spot': keep[ib[1:]] = False\\n        if label == 'missing_bank': keep[ib] = False\\n        if label == 'two_emi_spikes': delta[ib[[0,-1]]] = [.25,-.3]\\n        if label == 'three_spots_one_spike':\\n            keep[ib[3:]] = False\\n            delta[ib[0]] = .25\\n        sub = {k:v[keep].copy() for k,v in sw.items()}; sub['raw_readout'] += delta[keep]\\n        worst = max(worst, np.max(abs(m._calibrate(dict(s,sensor_calibration_sweeps=sub))-y)))\\n    max_delta[label] = worst\\nprint('worst calibrated-row drift by bank-coverage stress:', max_delta)\\nassert max(max_delta[k] for k in ('single_spot','missing_bank','two_emi_spikes')) < 1e-7\\nresp = m._responses(s); i,j = s['sensor_ij'].T\\nS = resp[:,:,i,j].transpose(0,2,1).reshape(len(y),len(w))\\nn = len(i); sensor = np.tile(np.arange(n), len(s['mu_shifts'])); worst = (0.,-1)\\nfor held in range(n):\\n    valid = sensor != held\\n    D = np.column_stack((S,y)); Zv = Z[valid]; Dv = D[valid]\\n    beta = np.linalg.solve(Zv.T @ Zv + s['nuisance_ridge'] * np.eye(Z.shape[1]), Zv.T @ Dv)\\n    P = Dv-Zv@beta\\n    ws, cs = m._box_simplex(P[:,:-1],P[:,-1],s['source_ridge'],cap,budget)\\n    drift = rel(np.einsum('m,mxy->xy', ws, resp[-1]),out['terminal_field'])\\n    worst = max(worst,(drift,held))\\n    assert abs(cs['primal_objective']-cs['dual_lower_bound']) < 1e-9\\nprint('leave-one-sensor-out worst field drift and sensor:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal separable FVM → H2 full vortex-enhanced FVM; public schema passed, and the public forward-design relative error is 5.43e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check the weights, field, and KKT certificate against the public reference, then test sensor loss and sparse or contaminated calibration. If sparse EMI produces an ambiguous affine fit, use archive agreement to break the tie without changing clean in-batch fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "34e9ce30bcf00f1849d492c6955983e228556556d3effabfa0bc819518b967cd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34816.34,
+      "usage_known": true,
+      "prompt_tokens": 27896,
+      "cached_tokens": 11136,
+      "completion_tokens": 1419
+    }
+  ]
+}

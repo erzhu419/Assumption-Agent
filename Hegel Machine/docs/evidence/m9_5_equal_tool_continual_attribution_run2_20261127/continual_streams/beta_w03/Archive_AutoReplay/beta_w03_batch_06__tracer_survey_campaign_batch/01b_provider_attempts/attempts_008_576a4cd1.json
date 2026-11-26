@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "576a4cd1eb8e492f9e5eeb15bf36485a",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:36:54.685569+00:00",
+  "ended_at_utc": "2026-11-26T18:37:27.581922+00:00",
+  "request_sha256": "5bdc33e8722b8f0453cc79e423bb5f2d80b9ed3adff43c4ebdf7322fdd918e99",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 50217,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28224,
+    "cached_tokens": 6784,
+    "completion_tokens": 1305
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; cat > /tmp/beta_w03_batch_06_audit.py <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nfrom pathlib import Path\\nfrom types import SimpleNamespace\\n\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', root / 'beta_w03_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nhist = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nworst = 0.0\\nfor idx, record in enumerate(hist):\\n    if not all(len(x) >= 4 for x, _ in m._sweeps(record)):\\n        continue\\n    other = [r for j, r in enumerate(hist) if idx != j]\\n    m.json = SimpleNamespace(loads=lambda _: other)\\n    bank = np.asarray(record['bank_id'], dtype=int)\\n    ref = np.asarray(record['ref_signal'])\\n    raw = np.asarray(record['raw_readout'])\\n    per_bank = np.zeros(4)\\n    for b in range(4):\\n        ix = np.flatnonzero(bank == b)\\n        for keep in ([ix[np.argmin(ref[ix])]], [ix[np.argmax(ref[ix])]], ix[[np.argmin(ref[ix]), np.argmax(ref[ix])]]):\\n            study = {'sensor_calibration_sweeps': {'bank_id': bank[keep], 'ref_signal': ref[keep], 'raw_readout': raw[keep]}, 'row_bank_id': bank, 'y_obs_raw': raw}\\n            err = np.abs(m._calibrate(study) - ref)\\n            held_out = np.ones(len(ref), dtype=bool)\\n            held_out[keep] = False\\n            per_bank = np.maximum(per_bank, [np.max(err[held_out & (bank == k)]) for k in range(4)])\\n    print(record['episode_short_name'], 'held-out bank residual Linf', per_bank.tolist())\\n    worst = max(worst, float(per_bank.max()))\\nm.json = json\\ns, g = [(item['study'], item['gt']) for item in pickle.loads((root / 'public_beta_w03_batch_06.pkl').read_bytes())][0]\\nR = m._responses(s)\\ni, j = s['sensor_ij'].T\\nD = R[:, :, i, j].transpose(0, 2, 1).reshape(-1, R.shape[1])\\nP = m._profile(np.c_[D, m._calibrate(s)], s['Z_nuisance'], s['nuisance_ridge'])\\nprint('public worst profiled design error by shift', np.max(np.abs(P[:, :-1] - g['S_tilde']).reshape(len(R), -1), axis=1).tolist())\\nprint('public profiled observation error by wing', [float(np.max(np.abs(P[:, -1] - g['r_y'])[np.isin(s['row_bank_id'], wing)])) for wing in ((0, 1), (2, 3))])\\nassert np.max(np.abs(P[:, :-1] - g['S_tilde'])) < 1e-12\\nassert worst < 1e-5, worst\\nPY\\npython3 -I /tmp/beta_w03_batch_06_audit.py\\npython3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: whole-wing calibration passes on the public campaign -> H2: measured archive profiles also transfer across held-out records; the current worst public stress-slice KKT gap is 1.74e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Exercise relay modes or classification balance\",\n      \"rejected_reason\": \"The study has neither relay state nor class labels; the relevant confound is campaign-dependent bank gain and offset.\"\n    }\n  ],\n  \"rationale\": \"Hold out each complete historical record and use only one or two measured spots to predict the other readings. A campaign-specific failure would warrant revisiting archive selection. Check the profiled design by shift and observations by wing to detect a stencil or calibration mismatch that a pooled objective could obscure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9c4a56bc71962750ce60e1c249cdbc2604ba51ebec5ba1fbcc43b405e43fe6f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33874.05,
+      "usage_known": true,
+      "prompt_tokens": 28224,
+      "cached_tokens": 6784,
+      "completion_tokens": 1305
+    }
+  ]
+}

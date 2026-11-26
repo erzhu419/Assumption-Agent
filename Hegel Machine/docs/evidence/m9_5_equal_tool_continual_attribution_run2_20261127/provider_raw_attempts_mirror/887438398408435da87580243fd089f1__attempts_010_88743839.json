@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "887438398408435da87580243fd089f1",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:42:16.388698+00:00",
+  "ended_at_utc": "2026-11-26T18:42:44.841760+00:00",
+  "request_sha256": "29d406058ec717e3db283ca0f773ac4797135a8fe9a9d7db9d46aa01e0572380",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 60028,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31918,
+    "cached_tokens": 6784,
+    "completion_tokens": 1137
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/polymer07_residual_audit.py <<'PY'\\nimport contextlib\\nimport io\\nimport runpy\\nimport numpy as np\\n\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    s = runpy.run_path('/tmp/polymer07_cv.py')\\nm, x, h, p, dt, t, q, z, rate, lab, complete, fold, err = (\\n    s[k] for k in ('m','x','h','p','dt','t','q','z','rate','lab','complete','fold','err'))\\ne = err[1]\\nlarge = np.abs(e) > 0.2\\nprint('large residuals by time', large.sum(axis=0).tolist())\\nprint('coupons by number of large residuals', np.bincount(large.sum(axis=1), minlength=len(t)+1).tolist())\\nprint('fraction of squared curve error at large residuals', round(np.sum(e[large]**2)/np.sum(e**2), 6))\\n\\n# Estimate a laboratory-specific drift offset using only the outer-training onset observations.\\n# Compare with the existing wing anchoring rule, without fitting to held-out curves.\\nraw_onset, adjusted_onset = np.empty(len(lab)), np.empty(len(lab))\\nadjusted_curve = e.copy()\\nfor k in range(4):\\n    tr, te = fold != k, fold == k\\n    fit = tr & complete\\n    tau, w = m._fit(x[fit],h[fit],p[fit],dt,t,q,z[fit],rate[fit])\\n    _, rf = m._design(tau,x[fit],h[fit],p[fit],dt,t,q)\\n    _, rv = m._design(tau,x[te],h[te],p[te],dt,t,q)\\n    u = rate[fit] - rf @ w\\n    offset = np.array([np.median(u[lab[fit] == j]) for j in range(4)])\\n    blend = m._wing_blend(x[tr],h[tr],p[tr],dt,t,q,z[tr],rate[tr],lab[tr],complete[tr])\\n    remain = np.where(complete[te], 1-blend[lab[te]//2], 0.)\\n    inc = remain*offset[lab[te]]\\n    raw_onset[te] = remain*(rv @ w-rate[te])\\n    adjusted_onset[te] = raw_onset[te]+inc\\n    adjusted_curve[te] += inc[:,None]*t\\nfor j in range(4):\\n    sel = lab == j\\n    print('lab',j,'curve MAE baseline/centered',np.round([np.abs(v[sel]).mean() for v in (e,adjusted_curve)],6),'curve median abs',np.round([np.median(np.abs(v[sel])) for v in (e,adjusted_curve)],6),'onset RMSE',np.round([np.sqrt(np.mean(v[sel]**2)) for v in (raw_onset,adjusted_onset)],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/polymer07_residual_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: separate large curve residuals from persistent lab-specific drift; current worst leave-one-lab-out curve RMSE is 0.3033, while holdout-lab median absolute errors are 0.0105–0.0147.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear drift and yield-margin checks\",\n      \"rejected_reason\": \"The prior audit found no consistent improvement from the tested nonlinear terms and measured a minimum test yield clearance of 0.4719 stress units.\"\n    }\n  ],\n  \"rationale\": \"The gap between RMSE and median error is the remaining actionable question. Residual counts distinguish isolated large errors from persistent coupon-level errors, while an offset estimated only from training-fold onset data tests whether laboratory centering improves both held-out strain and onset predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "573d50f00ac63137d82efa0c940506452f4e6515feac516116e278da5e741c80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29417.29,
+      "usage_known": true,
+      "prompt_tokens": 31918,
+      "cached_tokens": 6784,
+      "completion_tokens": 1137
+    }
+  ]
+}

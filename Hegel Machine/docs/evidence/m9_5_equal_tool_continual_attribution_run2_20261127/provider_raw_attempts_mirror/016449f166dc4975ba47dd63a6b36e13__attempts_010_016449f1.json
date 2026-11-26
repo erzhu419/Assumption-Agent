@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "016449f166dc4975ba47dd63a6b36e13",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T19:01:16.346089+00:00",
+  "ended_at_utc": "2026-11-26T19:01:55.945383+00:00",
+  "request_sha256": "df9e6f2a73ea457efc0dd1c894c066eb92c28decd956282ffc18919b6a94a8cb",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 66876,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34379,
+    "cached_tokens": 6784,
+    "completion_tokens": 1680
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/alpha_w01_batch_08_solver.py /tmp/poly_replay.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_w01_batch_08_solver.py')\\ns = p.read_text()\\ni = s.index('def solve_alpha_w01_batch_08')\\ns = s[:i] + '''def _lab_drift(train, labs, inputs, taus, weights, dt, time):\\n    curves, _ = _design(taus, inputs, dt, time)\\n    late = time >= np.median(time)\\n    residual = train['strain_curves_obs'] - train['strain_0'][:, None] - curves @ weights\\n    slope = np.median(residual[:, late] / time[late], axis=1)\\n    score = inputs[2][:, 1:] @ weights[3:7]\\n    corrections = np.zeros((4, 2))\\n    for lab in range(4):\\n        rows = labs == lab\\n        if rows.sum() < 3 or np.ptp(score[rows]) == 0:\\n            continue\\n        target = slope[rows]\\n        design = np.column_stack((np.ones(rows.sum()), score[rows]))\\n        scale = max(1e-4, 1.4826 * np.median(np.abs(target - np.median(target))))\\n        corrections[lab] = least_squares(lambda v: (design @ v - target) / scale,\\n                                         np.zeros(2), loss='soft_l1').x\\n    return corrections\\n\\n\\n''' + s[i:]\\ns = s.replace(\\\"    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\\", \\\"    labs = np.asarray(train['lab_id'], int)\\\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\\")\\ns = s.replace('        inputs = tuple(v[complete] for v in inputs)', '        inputs = tuple(v[complete] for v in inputs)\\\\n        labs = labs[complete]')\\ns = s.replace('    rate = b @ w\\\\n    curve = test[\\\\'strain_0\\\\'][:, None] + a @ w', '''    correction = _lab_drift(train, labs, inputs, taus, w, dt, time)\\n    test_labs = np.asarray(test['lab_id'], int)\\n    intercept, scale = correction[test_labs].T\\n    drift = intercept + scale * (xt @ w[3:7])\\n    rate = b @ w + drift\\n    curve = test['strain_0'][:, None] + a @ w + drift[:, None] * time''')\\ns = s.replace('            err = np.asarray(train[\\\\'instant_rate_obs\\\\']) - train_rate @ w', '''            train_intercept, train_scale = correction[labs].T\\n            err = (np.asarray(train['instant_rate_obs']) - train_rate @ w\\n                   - train_intercept - train_scale * (inputs[2][:, 1:] @ w[3:7]))''')\\ns = s.replace('latent_drift = x @ (missing[informed] * w[3:7]).T', 'latent_drift = x @ (missing[informed] * w[3:7]).T\\\\n            latent_drift *= 1 + scale[informed]')\\np.write_text(s)\\nPY\\ncat >/tmp/poly_score.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.solve_alpha_w01_batch_08\\n\\nrm = lambda a: float(np.sqrt(np.mean(a*a)))\\nfor o in pickle.load(open('/holdout_task/public_alpha_w01_batch_08.pkl', 'rb')):\\n    d,g=o['dataset'],o['gt']; te=d['test']; labs=te['lab_id']\\n    missing=~np.isfinite(te['coupon_features_raw']).all(axis=1)\\n    hist,hold = g['te_hist_true'],g['te_hold_true']\\n    above = (np.abs(hist)>d['yield_stress']).any(axis=1) | (np.abs(hold)>d['yield_stress'])\\n    slices = {'all': np.ones(len(labs),bool), 'complete': ~missing, 'missing': missing, 'above': above, 'below': ~above}\\n    slices.update({f'lab {i}': labs==i for i in range(4)})\\n    slices.update({f'wing {i}': labs//2==i for i in range(2)})\\n    for path in ('/tmp/poly_replay.py','/holdout_task/alpha_w01_batch_08_solver.py'):\\n        p=load(path)(d); ec=p['predicted_strain']-g['te_clean']; er=p['initial_rate_pred']-g['te_true_rate0']; print(path)\\n        for k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]:\\n            print(k,'estimate',p[k].round(7),'reference',np.asarray(g[j]).round(7),'max abs error',max(abs(p[k]-g[j])))\\n        for key, rows in slices.items():\\n            if rows.any(): print(key, rows.sum(), 'curve/rate RMSE',round(rm(ec[rows]),7),round(rm(er[rows]),7))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/poly_score.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared feature scaling -> H2: lab-specific affine drift correction; the correction reduced Lab 2 out-of-fold late-drift MAD from 0.00842 to 0.00152 and worst-lab complete-coupon public strain RMSE from 0.01713 to 0.00243.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit four independent feature slopes per lab\",\n      \"rejected_reason\": \"The extra slopes barely changed held-out curve errors and increased the worst public complete-coupon strain RMSE from 0.00243 to 0.00329 relative to the affine correction.\"\n    }\n  ],\n  \"rationale\": \"Promote the correction supported by held-out lab errors while leaving both relaxation branches and the plastic basis intact. Compare the exact artifact with replay on missing-feature coupons, threshold regimes, and both wings to detect any regression hidden by the complete-coupon gain.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ca388e28950b58891e76f8670afad900e8a074a24ffc72cb558029259433a574",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40610.68,
+      "usage_known": true,
+      "prompt_tokens": 34379,
+      "cached_tokens": 6784,
+      "completion_tokens": 1680
+    }
+  ]
+}

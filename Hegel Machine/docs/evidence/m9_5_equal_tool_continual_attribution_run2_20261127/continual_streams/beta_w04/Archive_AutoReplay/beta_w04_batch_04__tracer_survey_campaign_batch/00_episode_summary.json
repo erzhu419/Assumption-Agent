@@ -1,0 +1,540 @@
+{
+  "task_id": "beta_w04_batch_04__tracer_survey_campaign_batch",
+  "short_name": "beta_w04_batch_04",
+  "benchmark": "Hegel-M95-Equal-Tool-Continual-World",
+  "wave": "beta_w04_step_04",
+  "scientific_domain": "Multi-Wing Tracer Reaction-Transport & Continual Sensor Tomography Stream",
+  "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Archive_AutoReplay",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 13,
+  "max_turns": 18,
+  "final_candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+  "validated_incumbent_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json\nfrom pathlib import Path\nimport numpy as np\np = Path('beta_w04_batch_04_solver.py')\nspec = importlib.util.spec_from_file_location('candidate', p)\nm =",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+        "expected_candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+        "computed_candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_w04_batch_04_solver.py",
+            "bytes": 7127
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_d03305ef"
+    },
+    {
+      "candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w04_batch_04_solv",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+        "expected_candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+        "computed_candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_w04_batch_04_solver.py",
+            "bytes": 7991
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_d2ed1fb8"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t05",
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "omitted_spatial_interaction",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "The public reaction field can be represented by additive x- and y-axis terms.",
+      "empirical_witness": "Subtracting the best additive row and column fit leaves 54.13% of the reaction field's Frobenius norm, versus the specified 0.1% threshold.",
+      "causal_blanket_diagnosis": "Separate axis operators omit the mixed spatial reaction term; sensor gain and offset do not account for that term.",
+      "sublated_pivot": "Preserve the FVM axis stencils, add the full C-order reaction diagonal, and apply the prescribed 1.45 diffusivity multiplier.",
+      "pending_resolution_proposed_at_turn": 6,
+      "agent_claimed_probe": {
+        "turn": 6,
+        "command_preview": "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\narchive = Path('/tmp/hegel_continual_archive')\nsrc = (archive / 'beta_w04_s00_solver.py').read_text()\nb1 = (archive / 'beta_w04_batch_",
+        "stdout_preview": "def _forward(study):\n    nx, ny = study['nx'], study['ny']\n    v = np.asarray(study['V_reaction_2d'], dtype=float)\n    ax = _build_1d(study['Lx'], nx, study['kappa_x'], study['vel_x'], study['robin_x'],\n                   v.mean(axis=1) + n"
+      },
+      "probe_support_status": "verified_gauge_and_scientific_probe_in_scope",
+      "resolved_at_turn": 6,
+      "resolved_candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v1_m941",
+        "worker_process_isolated": true,
+        "probe_code_digest": "f63eff937c0905e82ddfa0baf57adef745b3a6dd7f17e278eb32b8f7636de9ec",
+        "public_input_digest": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+        "candidate_bundle_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "3172a9981e4a7548cf7e8efcaa51871379a9920ab24e6b0e2d989537b1e05ab2",
+          "/holdout_task/public_beta_w04_batch_04.pkl": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+          "/holdout_task/validate_public_schema.py": "7b89197fca344e3fc146449958561c68869d75e2fc22fd4ecdcaa4ee8c77bee9"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1e-08,
+          "kkt_duality_gap": 1.4e-09,
+          "weights_rel_l2": 4e-08
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "resolution_witness_scope_verified": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals"
+    },
+    {
+      "nogood_id": "ng_t11",
+      "turn_idx": 11,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "stale_calibration_prior",
+      "candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "The latest historical bank gains are a reliable calibration prior when one wing is sparsely observed.",
+      "empirical_witness": "The latest episode has unit gain on all banks, but the current episode matches the earlier non-unit gain profile on all four banks.",
+      "causal_blanket_diagnosis": "Calibration profiles recur across episodes; recency alone does not identify the current profile. A single spot can correct an offset but cannot identify a gain.",
+      "sublated_pivot": "Fit current banks with usable sweeps directly and use them to select a joint archive profile for sparse banks.",
+      "pending_resolution_proposed_at_turn": 12,
+      "agent_claimed_probe": {
+        "turn": 12,
+        "command_preview": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver",
+        "stdout_preview": "Worst sparse-sweep sensor correction errors by archive coverage: {'public': 5.493460939476336e-07, 'archive_profile_present': 0.0, 'archive_profile_absent': 1.8186981836473262}\n{\"schema_valid\": true, \"errors\": []}\n"
+      },
+      "probe_support_status": "verified_gauge_and_scientific_probe_in_scope",
+      "resolved_at_turn": 12,
+      "resolved_candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v1_m941",
+        "worker_process_isolated": true,
+        "probe_code_digest": "f63eff937c0905e82ddfa0baf57adef745b3a6dd7f17e278eb32b8f7636de9ec",
+        "public_input_digest": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+        "candidate_bundle_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "3172a9981e4a7548cf7e8efcaa51871379a9920ab24e6b0e2d989537b1e05ab2",
+          "/holdout_task/public_beta_w04_batch_04.pkl": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+          "/holdout_task/validate_public_schema.py": "7b89197fca344e3fc146449958561c68869d75e2fc22fd4ecdcaa4ee8c77bee9"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1e-08,
+          "kkt_duality_gap": 1.4e-09,
+          "weights_rel_l2": 4e-08
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "resolution_witness_scope_verified": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 6,
+      "verified_turn": 6,
+      "resolved_nogood_ids": [
+        "ng_t05"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v1_m941",
+        "worker_process_isolated": true,
+        "probe_code_digest": "f63eff937c0905e82ddfa0baf57adef745b3a6dd7f17e278eb32b8f7636de9ec",
+        "public_input_digest": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+        "candidate_bundle_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "3172a9981e4a7548cf7e8efcaa51871379a9920ab24e6b0e2d989537b1e05ab2",
+          "/holdout_task/public_beta_w04_batch_04.pkl": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+          "/holdout_task/validate_public_schema.py": "7b89197fca344e3fc146449958561c68869d75e2fc22fd4ecdcaa4ee8c77bee9"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1e-08,
+          "kkt_duality_gap": 1.4e-09,
+          "weights_rel_l2": 4e-08
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    },
+    {
+      "proposed_turn": 12,
+      "verified_turn": 12,
+      "resolved_nogood_ids": [
+        "ng_t11"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v1_m941",
+        "worker_process_isolated": true,
+        "probe_code_digest": "f63eff937c0905e82ddfa0baf57adef745b3a6dd7f17e278eb32b8f7636de9ec",
+        "public_input_digest": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+        "candidate_bundle_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "3172a9981e4a7548cf7e8efcaa51871379a9920ab24e6b0e2d989537b1e05ab2",
+          "/holdout_task/public_beta_w04_batch_04.pkl": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+          "/holdout_task/validate_public_schema.py": "7b89197fca344e3fc146449958561c68869d75e2fc22fd4ecdcaa4ee8c77bee9"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1e-08,
+          "kkt_duality_gap": 1.4e-09,
+          "weights_rel_l2": 4e-08
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_10_calibrated_separable_transpo",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_09_dispersive_wave_tomography"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "d03305ef3dd1a6c4b6de14ab4150c328134f9e3e0e1ae900ee6290ca79c129c7",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_beta_w04_batch_04_d2ed1fb8b204",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 5,
+    "exported_pure_functions": [
+      "_build_1d",
+      "_fit_bank",
+      "_forward",
+      "_profile",
+      "_box_simplex",
+      "_calibrate",
+      "solve_beta_w04_s00",
+      "solve_beta_w04_batch_01"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 2,
+    "search_skill_query_count": 1,
+    "demand_skill_hint_emitted": true,
+    "demand_skill_hint_turn": 2,
+    "demand_triggered_recommended_l1_count": 4,
+    "describe_skill_queries": [
+      "autogenous_calibrated_separable_transport.fit_box_simplex",
+      "autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "d2ed1fb8b204ede6b9b98b1c9fd076faccdf1a7f379714c37ef1f9ae14d285fc",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_beta_w04_batch_04"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "beta_w04_batch_04_solver.py",
+          "final_file_sha256": "48a5313fc981d1d1b7fffaae71d26048fa54eb913b2d323db927f27067c82740",
+          "public_entrypoints": [
+            "solve_beta_w04_batch_04"
+          ],
+          "effective_entrypoints": [
+            "solve_beta_w04_batch_04"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "beta_w04_batch_04_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_beta_w04_batch_04.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_asset_index.json": "3172a9981e4a7548cf7e8efcaa51871379a9920ab24e6b0e2d989537b1e05ab2",
+      "/holdout_task/public_beta_w04_batch_04.pkl": "ff63ee8e2b5a23bdb7327df57cc5f8ae139cb3d9c1482aa946f6c656e0f356a1",
+      "/holdout_task/validate_public_schema.py": "7b89197fca344e3fc146449958561c68869d75e2fc22fd4ecdcaa4ee8c77bee9"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5301,
+    "initial_user_payload_chars": 3660,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 14115
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 13,
+    "logical_agent_decision_calls": 13,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 13,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_08e41c9a.json",
+      "attempts_002_2e10aee5.json",
+      "attempts_003_4a063882.json",
+      "attempts_004_162d5c89.json",
+      "attempts_005_2728cff3.json",
+      "attempts_006_55a4797d.json",
+      "attempts_007_c88b4f5f.json",
+      "attempts_008_223e5f7f.json",
+      "attempts_009_b68cd77f.json",
+      "attempts_010_f2e4b7c6.json",
+      "attempts_011_991668ee.json",
+      "attempts_012_05e6e624.json",
+      "attempts_013_3d8a16cd.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 32,
+  "prompt_tokens": 329768,
+  "cached_tokens": 92544,
+  "completion_tokens": 10542,
+  "total_tokens": 340310,
+  "token_cost_proxy": 270902,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 270902,
+  "wall_ms": 334235.82,
+  "provenance_verified": true,
+  "terminal_record_sha256": "fa3041ff32ee6f19067ffd60e468dec2273396a1579c35835f868f401fb8346b",
+  "world_id": "beta_w04",
+  "family": "beta",
+  "stream_step": 4,
+  "causal_event": "C",
+  "event_category": "adaptation_discovery",
+  "execution_mode": "llm_synthesis_after_equal_tool_gate",
+  "solver_token_cost_proxy": 270902,
+  "consolidation_token_cost_proxy": 61523,
+  "total_lifecycle_token_cost_proxy": 332425,
+  "pre_llm_probe_wall_ms": 3849.54,
+  "consolidation_wall_ms": 181937.0,
+  "m8_wing_scoped_update": null,
+  "pre_llm_trial_receipt": {
+    "arm": "Archive_AutoReplay",
+    "accepted_pre_llm": false,
+    "pre_llm_probes_used": 1,
+    "selected_source_short_name": "beta_w04_batch_03",
+    "parameter_payload": null,
+    "probe_result": {
+      "accepted": false,
+      "schema_valid": false,
+      "schema_stdout": "{\"schema_valid\": false, \"errors\": [\"kkt_invalid:reported_primal_mismatch:4.717e-04\"]}\n",
+      "candidate_bundle_sha256": "bec2b41aaea503de13d3414bb7ab3a55e5e0f5e36449911ef9220a669bffb9e8",
+      "candidate_raw_sha256": "5b3b5b7465b8551f8fdfe26aa325070ec7d9fb91b8edf6398b35bb12015b827e",
+      "scientific_probe_receipt": null
+    },
+    "reason": "rejected_by_shared_public_scientific_gate"
+  },
+  "provenance_dag_verification": {
+    "valid": true,
+    "decision_count": 35,
+    "terminal_record_sha256": "45007a03189e84f5d38c5b286c56a988f14de20de1b0620e56b062deeaf63311",
+    "verified_measurement_cost": 0.0,
+    "verified_compute_cost": 8.7761,
+    "verified_composite_cost": 0.438805,
+    "verified_total_tokens": 340310
+  },
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": true,
+    "reward": 1.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/beta_w04_batch_04_solver.py": "FILE:7991"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": true,
+      "reward": 1.0,
+      "max_weights_rel_l2": 3e-08,
+      "max_field_rel_l2": 1e-08,
+      "max_kkt_gap": 3.1e-09,
+      "student_elapsed_sec": 0.1064,
+      "instance_diagnostics": [
+        {
+          "seed": 964461,
+          "w_rel_l2": 3e-08,
+          "field_rel_l2": 1e-08,
+          "kkt_gap": 3.1e-09
+        },
+        {
+          "seed": 964462,
+          "w_rel_l2": 2e-08,
+          "field_rel_l2": 1e-08,
+          "kkt_gap": 1.8e-09
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.041045,
+        "import_cpu_sec": 0.039822,
+        "candidate_call_wall_sec": 0.047322,
+        "candidate_call_cpu_sec": 0.045548,
+        "ipc_and_codec_wall_sec": 0.132205,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.058217,
+        "verifier_and_gt_cpu_sec": 0.091127,
+        "total_supervisor_wall_sec": 0.278789
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": true, \"reward\": 1.0, \"max_weights_rel_l2\": 3e-08, \"max_field_rel_l2\": 1e-08, \"max_kkt_gap\": 3.1e-09, \"student_elapsed_sec\": 0.1064, \"instance_diagnostics\": [{\"seed\": 964461, \"w_rel_l2\": 3e-08, \"field_rel_l2\": 1e-08, \"kkt_gap\": 3.1e-09}, {\"seed\": 964462, \"w_rel_l2\": 2e-08, \"field_rel_l2\": 1e-08, \"kkt_gap\": 1.8e-09}]}\n__HEGEL_VERIFIER_AUTH_f8a1e9f81491366e31b18cd14227823c__:{\"strict_pass\": true, \"reward\": 1.0, \"max_weights_rel_l2\": 3e-08, \"max_field_rel_l2\": 1e-08, \"max_kkt_gap\": 3.1e-09, \"student_elapsed_sec\": 0.1064, \"instance_diagnostics\": [{\"seed\": 964461, \"w_rel_l2\": 3e-08, \"field_rel_l2\": 1e-08, \"kkt_gap\": 3.1e-09}, {\"seed\": 964462, \"w_rel_l2\": 2e-08, \"field_rel_l2\": 1e-08, \"kkt_gap\": 1.8e-09}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.041045, \"import_cpu_sec\": 0.039822, \"candidate_call_wall_sec\": 0.047322, \"candidate_call_cpu_sec\": 0.045548, \"ipc_and_codec_wall_sec\": 0.132205, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.058217, \"verifier_and_gt_cpu_sec\": 0.091127, \"total_supervisor_wall_sec\": 0.278789}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 4616.98,
+    "failure_taxonomy": "PASSED_ALL_CHECKS"
+  }
+}

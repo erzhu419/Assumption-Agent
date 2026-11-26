@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "16d71f8a431645748101282f2793688a",
+  "call_seq": 4,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:38:46.985896+00:00",
+  "ended_at_utc": "2026-11-26T18:39:06.321277+00:00",
+  "request_sha256": "77c34a21e7222784dfb6d849024382bcd6ceaa6cb214841441c1b9a595052f9e",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 30510,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22236,
+    "cached_tokens": 6784,
+    "completion_tokens": 613
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; sed -n '45,116p' /tmp/hegel_continual_archive/beta_w01_batch_05_solver.py; python3 - <<'PY'\\nimport json,pathlib\\np=pathlib.Path('/tmp/hegel_continual_archive')\\nfor name in ('archive_manifest.json','archive_calibration_history.json'):\\n f=p/name; d=json.loads(f.read_text()); print(name, f.stat().st_size, type(d).__name__)\\n if isinstance(d,dict):\\n  for k,v in d.items(): print(k,type(v).__name__,str(v)[:450])\\n else:\\n  for v in d: print(str(v)[:350])\\nPY\\ncd /holdout_task; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_beta_w01_batch_06.pkl','rb'))[0]['study']; v=s['V_reaction_2d']; print('nonsep',np.linalg.norm(v-v.mean(0)-v.mean(1)[:,None]+v.mean())/np.linalg.norm(v)); print('rows per bank per shift', [np.bincount(r,minlength=4).tolist() for r in s['row_bank_id'].reshape(8,-1)]); print('bank0 affine',np.polyfit(s['sensor_calibration_sweeps']['ref_signal'],s['sensor_calibration_sweeps']['raw_readout'],1))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 in-batch fits for all four banks -> H2 full 2D transport with archive-backed calibration; banks 1–3 have zero public calibration points and the KKT gap is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit four independent affine maps from the current batch\",\"rejected_reason\":\"Only bank 0 has reference points; the other three maps cannot be determined from the current sweep alone.\"}],\"rationale\":\"Inspect compact archive metadata and the prior calibration rule to determine whether historical maps can fill the three missing banks. Measure reaction nonseparability and bank coverage to guide transport and calibration validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ef34fca8a521996fb8c2eca884562de252123ecc343df27f606e92040a5c79f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19303.69,
+      "usage_known": true,
+      "prompt_tokens": 22236,
+      "cached_tokens": 6784,
+      "completion_tokens": 613
+    }
+  ]
+}

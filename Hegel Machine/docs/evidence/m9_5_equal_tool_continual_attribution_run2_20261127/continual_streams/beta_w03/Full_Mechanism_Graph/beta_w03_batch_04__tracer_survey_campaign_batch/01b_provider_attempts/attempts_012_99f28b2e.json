@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99f28b2e619542599daf8049c6e26bc5",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:23:48.085832+00:00",
+  "ended_at_utc": "2026-11-26T18:24:15.081500+00:00",
+  "request_sha256": "5ddc3a1e5891e0369d6b589d9ff4ac48c192dcdba039ac8a2406357aaca92210",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 59163,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30789,
+    "cached_tokens": 11136,
+    "completion_tokens": 1030
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/beta_w03_calibration_replay.py <<'PY'\\nimport importlib.util\\nimport itertools\\nimport json\\nfrom pathlib import Path\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nhistory = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nkeys = ('bank_id', 'ref_signal', 'raw_readout')\\nfor episode in history:\\n    sweep = {k: np.asarray(episode[k]) for k in keys}\\n    b, x, y = (sweep[k] for k in keys)\\n    rows = [np.flatnonzero(b == bank) for bank in range(4)]\\n    fits = [m._fit_bank(x[r], y[r], (1., 0.)) for r in rows]\\n    full_error = np.max(np.abs(m._calibrate(dict(sensor_calibration_sweeps=sweep, row_bank_id=b, y_obs_raw=y)) - x))\\n    print(episode['episode_short_name'], 'bank sizes', [len(r) for r in rows], 'fits', np.round(fits, 8).tolist(), 'worst full-sweep error', full_error)\\n    for wing in (0, 1):\\n        local = np.flatnonzero(b // 2 == wing)\\n        other = np.flatnonzero(b // 2 != wing)\\n        first, second = rows[2*wing:2*wing+2]\\n        for label, choices in [('one spot on wing', ((i,) for i in local)), ('one spot per bank', itertools.product(first, second))]:\\n            worst = (-1., ())\\n            count = material = 0\\n            for idx in choices:\\n                keep = np.r_[other, np.asarray(idx, dtype=int)]\\n                hold = local[~np.isin(local, idx)]\\n                if not hold.size:\\n                    continue\\n                predicted = m._calibrate(dict(sensor_calibration_sweeps={k: v[keep] for k, v in sweep.items()}, row_bank_id=b[hold], y_obs_raw=y[hold]))\\n                error = float(np.max(np.abs(predicted-x[hold])))\\n                worst = max(worst, (error, tuple(int(i) for i in idx)))\\n                count += 1\\n                material += error > max(1e-5, 5*full_error)\\n            print('  wing', wing, label, 'trials', count, 'worst held-out error and kept spots', worst, 'material failures', material)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_w03_calibration_replay.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 axis-separable transport -> H2 full vortex-coupled transport; the worst public design-row error was 1.44e-15 and the worst sparse/EMI stress KKT gap was 6.17e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat public transport and calibration checks\",\n      \"rejected_reason\": \"They already passed and cannot expose selection of the wrong prior regime on historical spot checks.\"\n    }\n  ],\n  \"rationale\": \"Replay each measured historical campaign with one wing reduced to spot checks and score its withheld readings against the full-sweep error. A material error would identify which regime selector or fallback needs revision; a pass supports retaining the verified artifact for the observed regimes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d914949e48a71afead58a6ab220e251af5254d8babcb90e097adac7ad969dfb5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27910.88,
+      "usage_known": true,
+      "prompt_tokens": 30789,
+      "cached_tokens": 11136,
+      "completion_tokens": 1030
+    }
+  ]
+}

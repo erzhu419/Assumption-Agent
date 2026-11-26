@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c0a59034ef7946abb4abb11f7b11cbb7",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:13:30.136022+00:00",
+  "ended_at_utc": "2026-11-26T18:13:59.690014+00:00",
+  "request_sha256": "046ba2247b450eed621c9e0d8b3bd0c46da19d4e81f3482163d8ac8395054743",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 50204,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28140,
+    "cached_tokens": 13696,
+    "completion_tokens": 1168
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_beta_w01_batch_01.pkl', 'rb') as stream:\\n    cases = pickle.load(stream)\\nworst = np.zeros(3)\\nfor i, case in enumerate(cases):\\n    s, gt = case['study'], case['gt']\\n    c = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    for b in range(4):\\n        idx = np.flatnonzero(c['bank_id'] == b)\\n        idx = idx[np.argsort(c['ref_signal'][idx])]\\n        errors = np.zeros(3)\\n        for a, z in zip(idx[:-1], idx[1:]):\\n            keep = c['bank_id'] != b\\n            keep[[a, z]] = True\\n            pred = m.solve_beta_w01_batch_01(dict(s, sensor_calibration_sweeps={k: v[keep] for k, v in c.items()}))\\n            u = gt['terminal_field_mid_budget']\\n            point = [np.max(abs(pred['weights_by_budget'] - gt['weights_by_budget'])), np.linalg.norm(pred['terminal_field_mid_budget'] - u) / np.linalg.norm(u), max(abs(t['primal_objective'] - g['primal_objective']) for t, g in zip(pred['kkt_certificates'], gt['certs_by_budget']))]\\n            errors = np.maximum(errors, point)\\n        print('case', i, 'bank', b, 'two adjacent real references: max weight abs / field rel / objective abs', errors)\\n        worst = np.maximum(worst, errors)\\nprint('worst sparse narrow-span slice', worst)\\nassert np.all(worst < [2e-6, 2e-6, 1e-7]), worst\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bankwise affine calibration with historical fallback → H2 additive separable FVM with ridge-profiled optimization; the prior worst calibration stress slice changed weights by 3.53e-7, and the independent terminal flux residual was 2.16e-14 relative.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification or relay-mode audits\",\n      \"rejected_reason\": \"The study has continuous tracer measurements, no class labels, and no relay modes. The relevant discrete stencil was already verified independently.\"\n    }\n  ],\n  \"rationale\": \"Test the remaining sparse calibration case: two closely spaced real references can amplify measurement noise in the fitted gain, whereas a single reference uses historical gain. If the resulting weight, field, or objective error exceeds the audit margin, compare the narrow-span fit against the historical fallback before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bb30984f54214c54ebdc76dbeb97c120391d9d99ff60e4f90e0996e6a0c4a8b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30453.17,
+      "usage_known": true,
+      "prompt_tokens": 28140,
+      "cached_tokens": 13696,
+      "completion_tokens": 1168
+    }
+  ]
+}

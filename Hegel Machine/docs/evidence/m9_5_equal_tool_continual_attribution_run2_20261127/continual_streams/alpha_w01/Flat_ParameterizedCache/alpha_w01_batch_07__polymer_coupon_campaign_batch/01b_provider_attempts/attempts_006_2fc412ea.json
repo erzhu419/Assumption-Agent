@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2fc412ea2632436d84867a820c9fec82",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:41:21.901569+00:00",
+  "ended_at_utc": "2026-11-26T18:42:02.320704+00:00",
+  "request_sha256": "c40c81dbf32c58bfaa1d0209712b650917aa8b0eb2ae1ffeea22346121457d1c",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 45416,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28399,
+    "cached_tokens": 6784,
+    "completion_tokens": 1688
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/validate_public_schema.py; head -80 /holdout_task/public_asset_index.json; cat > /tmp/b07_joint.py <<'PY'\\nimport importlib.util as iu, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=iu.spec_from_file_location('prior','/tmp/hegel_continual_archive/alpha_w01_batch_06_solver.py'); p=iu.module_from_spec(s); s.loader.exec_module(p)\\nc=pickle.load(open('/holdout_task/public_alpha_w01_batch_07.pkl','rb'))[0]; d=c['dataset']; tr,te=d['train'],d['test']; dt,t,sy=[d[k] for k in ['past_dt','eval_times','yield_stress']]; x,_,complete,_=p._align(tr,te); lab=tr['lab_id']; maps=p._calibrate(d['calibration_load_cells']); print('public gt schema',[(k,np.shape(v)) for k,v in c['gt'].items()] if isinstance(c['gt'],dict) else type(c['gt']),flush=True)\\nbase_tau,base_th=p._fit(tr,x,complete,maps,dt,t,sy)\\ndef arrays(tau,mp,mask):\\n h,v=p._stress(tr,mp); a,b=p._design(tau,h,v,x,dt,t,*p._plastic(h,v,dt,sy)); return a[mask], b[mask]\\nyc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\\na,b=arrays(base_tau,maps,np.ones(len(lab),bool)); ec=a@base_th-yc; er=b@base_th-yr\\nprint('prior taus',base_tau,'weights',base_th,'history duration',sum(dt),'dt',dt.round(3),flush=True)\\nfor l in range(4):\\n use=lab==l; print('lab',l,'curve medabs by horizon',np.median(np.abs(ec[use]),axis=0).round(5),'rate abs quantiles',np.quantile(np.abs(er[use]),[.1,.5,.9,1]).round(5),'curve abs quantiles',np.quantile(np.abs(ec[use]),[.1,.5,.9,1]).round(5),flush=True)\\nrng=np.random.default_rng(7); val=np.zeros(len(lab),bool)\\nfor l in range(4):\\n ids=np.flatnonzero(lab==l); val[rng.permutation(ids)[:len(ids)//3]]=True\\nfit=~val&complete\\nfor use_rate in [True,False]:\\n for plastic in [False,True]:\\n  yc0=yc[fit]; yr0=yr[fit]; y=np.r_[yc0.ravel(),yr0] if use_rate else yc0.ravel()\\n  sc=np.r_[np.tile([max(.0003,p._mad(ec[fit,j])) for j in range(len(t))],fit.sum()), np.full(fit.sum(),max(.0003,p._mad(er[fit&(lab<2)])))] if use_rate else np.tile([max(.0003,p._mad(ec[fit,j])) for j in range(len(t))],fit.sum()); w=1/sc\\n  def profile(q,return_fit=False):\\n   tau=np.exp(q[:2]); mp=maps.copy(); mp[2:]=q[2:].reshape(2,2); a,b=arrays(tau,mp,fit); A=np.vstack([a.reshape(-1,9),b]) if use_rate else a.reshape(-1,9); A=A if plastic else A[:,:7]; A=A*w[:,None]; co=np.linalg.lstsq(A,y*w,rcond=1e-10)[0]; e=A@co-y*w\\n   if return_fit: return tau,mp,np.pad(co,(0,9-len(co))),e/w\\n   return e\\n  starts=[maps[2:].ravel(),[.604,4.569,1.246,-4.513],[1,0,1,0],[1.126,3.211,1.91,-3.25]] if plastic else [maps[2:].ravel()]\\n  for start in starts:\\n   q=np.r_[np.log(base_tau),start]; bounds=(np.r_[np.log([.10,1.05]),.15,-6,.15,-6],np.r_[np.log([1.049,24.9]),4.,6,4.,6]); q=np.clip(q,*bounds)\\n   for _ in range(5):\\n    q=least_squares(profile,q,bounds=bounds,max_nfev=55).x; tau,mp,th,e=profile(q,True); w[:]=1/sc/np.sqrt(1+(e/(2.5*sc))**2)\\n   a,b=arrays(tau,mp,val); e1=a@th-yc[val]; e2=b@th-yr[val]; lv=lab[val]; print('joint',use_rate,plastic,'start',np.round(start,2),'taus',tau.round(4),'maps',mp[2:].round(4),'weights',th.round(6),'val lab med curve/rate',[[round(np.median(np.abs(z[lv==l])),6) for l in range(4)] for z in (e1,e2)],flush=True)\\n   w[:]=1/sc\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/b07_joint.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed archived or pairwise Wing B lines -> H2 refine gains and biases jointly against coupon responses; the best fixed-pair comparison has worst-lab onset RMSE 0.1003 and strain RMSE 0.4038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the latest archived Wing B line\",\n      \"rejected_reason\": \"It beats the tested point-pair lines on onset RMSE, but residuals remain uneven across labs; test whether the current coupon responses identify a different map.\"\n    }\n  ],\n  \"rationale\": \"Measure error by horizon and lab to see whether gross curve observations obscure calibration comparisons. Fit a continuous Wing B map on the training split only, with and without onset and plastic terms, to see whether the gains remain identifiable and whether held-out errors improve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "252a71fd47007e44b2981dba25faaec46357d29bd6e95a3013d15d91446b76be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41404.9,
+      "usage_known": true,
+      "prompt_tokens": 28399,
+      "cached_tokens": 6784,
+      "completion_tokens": 1688
+    }
+  ]
+}

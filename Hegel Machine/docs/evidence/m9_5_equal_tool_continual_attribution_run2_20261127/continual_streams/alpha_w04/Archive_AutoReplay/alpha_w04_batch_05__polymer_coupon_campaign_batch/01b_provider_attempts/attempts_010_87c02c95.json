@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "87c02c95f3b4453b9900108e6d8d4717",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:33:54.992003+00:00",
+  "ended_at_utc": "2026-11-26T18:34:18.436860+00:00",
+  "request_sha256": "e008769b51de5015008b12ef7526871ca1aa2180307f5c1e7ed0659f0833dfa4",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 63656,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33852,
+    "cached_tokens": 11136,
+    "completion_tokens": 877
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/w04_drift_probe.py /tmp/w04_feature_probe.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/w04_feature_probe.py')\\ns=p.read_text().replace('x,_=m._align(a,b)', 'x,xt=m._align(a,b)').replace('corrections=np.zeros((3,len(te_innovation)))','corrections=np.zeros((5,len(te_innovation)))')\\nstart=s.index('        corrections[:,target]') if '        corrections[:,target]' in s else s.index('        r=np.clip')\\nend=s.index('    return out,corrections,fits',start)\\ns=s[:start]+'''        r=np.clip(te_innovation[target],*np.quantile(xx,[.02,.98]))\\n        corrections[:2,target]=[z[1]*r,np.median(yy)*np.ones_like(r)]\\n        for j, shrink in enumerate((2., 6., 15.)):\\n            X=np.c_[np.ones(good.sum()), x[good], xx/.012]\\n            XT=np.c_[np.ones(target.sum()), xt[target], r/.012]\\n            def fun(q):\\n                return np.r_[(X@q-yy)/.003, np.sqrt(shrink)*q[1:5]/.003]\\n            fit=least_squares(fun,np.r_[z[0],np.zeros(4),z[1]*.012],bounds=(np.r_[np.full(5,-np.inf),0.],np.r_[np.full(5,np.inf),.012]),loss='soft_l1').x\\n            if j==1: fits.append((c,np.round(fit,6).tolist()))\\n            corrections[2+j,target]=XT@fit\\n'''+s[end:]\\ns=s.replace('cs=np.zeros((4,len(r)))','cs=np.zeros((6,len(r)))')\\ns=s.replace(\\\"print('lab fits intercept, innovation-weight',fits)\\\",\\\"print('lab fits intercept, innovation-weight and feature slopes',fits)\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 /tmp/w04_feature_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared Prony law with rate-only drift adjustment → H2 test whether aligned coupon features explain the remaining lab-specific drift; the rate-only adjustment achieved worst-lab clean strain and rate RMSE of 0.02334 and 0.00687.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Trim strain points by a fixed residual cutoff\",\n      \"rejected_reason\": \"Large residuals cluster across several times on some coupons, so point trimming could remove genuine coupon-level deviations while the shared fit already downweights those observations.\"\n    }\n  ],\n  \"rationale\": \"Compare rate-only adjustments with regularized feature slopes fitted inside each fold. Promote the feature extension only if held-out strain slopes improve without materially worsening clean rate or another lab; otherwise retain the simpler rate-only adjustment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9f9d36082eb3c980bfc7b9a00415922d4ac9e70ed9ae34e100a75b9979585c8e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24358.95,
+      "usage_known": true,
+      "prompt_tokens": 33852,
+      "cached_tokens": 11136,
+      "completion_tokens": 877
+    }
+  ]
+}

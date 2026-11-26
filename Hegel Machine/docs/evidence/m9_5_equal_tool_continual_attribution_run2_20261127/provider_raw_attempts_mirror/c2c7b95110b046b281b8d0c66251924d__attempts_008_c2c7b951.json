@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2c7b95110b046b281b8d0c66251924d",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:20:01.634242+00:00",
+  "ended_at_utc": "2026-11-26T18:20:29.687960+00:00",
+  "request_sha256": "2c2a54f121369211d262440bc040ddbc2603d34729cdc4d6cc41097e96186751",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 42534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26082,
+    "cached_tokens": 11136,
+    "completion_tokens": 1125
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/beta_w02_batch_04_calibration_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\ndef load(name):\\n    spec = importlib.util.spec_from_file_location(name, root + name + '.py')\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nsolver = load('beta_w02_batch_04_solver')\\nvalidator = load('validate_public_schema')\\nwith open(root + 'public_beta_w02_batch_04.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\ns, gt = case['study'], case['gt']\\nsweeps = s['sensor_calibration_sweeps']\\nb, x, y = map(np.asarray, (sweeps['bank_id'], sweeps['ref_signal'], sweeps['raw_readout']))\\nbase = solver.solve_beta_w02_batch_04(s)\\nfor bank in np.unique(b):\\n    ids = np.flatnonzero(b == bank)\\n    held_out = weight_shift = field_shift = gap = 0.0\\n    for i in ids:\\n        keep = ids[ids != i]\\n        g, c = solver._bank_fit(x[keep], y[keep])\\n        held_out = max(held_out, abs(g*x[i] + c - y[i]))\\n        for spike in (-0.5, 0.5):\\n            noisy = y.copy()\\n            noisy[i] += spike\\n            out = solver.solve_beta_w02_batch_04(dict(s, sensor_calibration_sweeps=dict(sweeps, raw_readout=noisy)))\\n            weight_shift = max(weight_shift, np.max(np.abs(out['weights'] - base['weights'])))\\n            field_shift = max(field_shift, np.linalg.norm(out['terminal_field'] - base['terminal_field']) / np.linalg.norm(base['terminal_field']))\\n            check = validator.verify_box_simplex_kkt_certificate(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n            assert check['valid'], (bank, i, spike, check)\\n            gap = max(gap, abs(check['gap']))\\n    print(f'bank {bank}: held-out error={held_out:.3e}, spike weight delta={weight_shift:.3e}, relative field delta={field_shift:.3e}, independent gap={gap:.3e}', flush=True)\\n    assert held_out < 1e-7 and max(weight_shift, field_shift) < 1e-6\\n\\nD, _ = solver._forward(s)\\ny = solver._calibrate(s)\\nS, r = solver._profile(s, D, y)\\nZ = s['Z_nuisance']\\nF, T = np.column_stack((D, y)), np.column_stack((S, r))\\nC = Z.T @ F\\nref = F.T @ F - C.T @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), C)\\nerr = np.max(np.abs(T.T @ T - ref))\\nprint(f'nuisance Schur-complement max Gram error={err:.3e}', flush=True)\\nassert err < 1e-10\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_w02_batch_04_calibration_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: separable transport → H2: full 2D vortex coupling with 1.45× diffusivity; the verified worst-shift design error is 8.50e-17 and worst-bank profiled observation error is 8.44e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the existing public verification receipt\",\n      \"rejected_reason\": \"The last run returned only the schema result, not the calibration stress metrics requested by the gate.\"\n    }\n  ],\n  \"rationale\": \"Run the focused audit as a standalone script to obtain the missing per-bank stress results without editing the verified solver. Held-out errors or spike sensitivity would warrant revising calibration; a Schur-complement mismatch would warrant revising nuisance profiling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9a0b2e33b8613a973e1baf7781f34fee8514053959f90b9697a774f3b149e459",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29040.67,
+      "usage_known": true,
+      "prompt_tokens": 26082,
+      "cached_tokens": 11136,
+      "completion_tokens": 1125
+    }
+  ]
+}

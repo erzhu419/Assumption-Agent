@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1d2f3327b76e461f9f4d4cf0f9ee6a9d",
+  "call_seq": 2,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:20:52.106857+00:00",
+  "ended_at_utc": "2026-11-26T18:21:15.805166+00:00",
+  "request_sha256": "407a8a0df27152923a8ee3bbc72e36967b21aedd9537a5d62f39e8876c5fa69c",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 15471,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17388,
+    "cached_tokens": 11136,
+    "completion_tokens": 898
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\\nimport pickle,numpy as np\\np=pickle.load(open('public_beta_w01_batch_04.pkl','rb')); print('public case count',len(p))\\nfor i,r in enumerate(p):\\n s=r['study']; print('case',i,'sweep summary'); z=s['sensor_calibration_sweeps']; print(type(z).__name__)\\n if isinstance(z,dict):\\n  b,x,y=(np.asarray(z[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n else:\\n  b,x,y=(np.array([q[k] for q in z]) for k in ('bank_id','ref_signal','raw_readout'))\\n for j in range(4):\\n  a=b==j; X=np.c_[x[a],np.ones(a.sum())]; Y=y[a]; c=np.linalg.lstsq(X,Y,rcond=None)[0]; print(j,a.sum(),np.linalg.matrix_rank(X) if a.any() else 0,c,np.max(np.abs(X@c-Y)) if a.any() else None)\\n if i==0:\\n  for k,v in s.items(): print(k, (v.shape,str(v.dtype)) if isinstance(v,np.ndarray) else (type(v).__name__,len(v)) if isinstance(v,(dict,list)) else v)\\n  print('nonseparable ratio',np.linalg.norm(s['V_reaction_2d']-s['V_reaction_2d'].mean(0)-s['V_reaction_2d'].mean(1)[:,None]+s['V_reaction_2d'].mean())/np.linalg.norm(s['V_reaction_2d']))\\nPY\\nhead -c 1900 /tmp/hegel_continual_archive/archive_calibration_history.json; echo\\nsed -n '1,180p' /tmp/hegel_continual_archive/beta_w01_s00_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | head -55\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_calibrated_reaction_transport.calibrate_observations | head -45\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable transport -> H2 full two-dimensional vortex-enhanced transport; the gate reports a 0.54135 nonseparable residual ratio, and solver accuracy is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The reaction contribution is representable as a sum of one-dimensional axis terms.\",\n    \"empirical_witness\": \"The supplied public gate measured a 0.5413482328861372 additive-separability residual ratio against a 1e-6 tolerance.\",\n    \"causal_blanket_diagnosis\": \"Axis-wise stencil terms cannot represent the two-dimensional reaction coupling; bank calibration acts on observations, not this operator residual.\",\n    \"sublated_pivot\": \"Keep both conservative axis stencils, apply the specified 1.45 diffusivity multiplier, and add the full reaction map as a two-dimensional diagonal term.\",\n    \"risk_kind\": \"transport_operator_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use historical calibration for all four banks\",\n      \"rejected_reason\": \"Use current sweeps wherever they identify a reliable affine fit; inspect their rank and residuals before deciding whether archive reconciliation is needed.\"\n    }\n  ],\n  \"rationale\": \"Read the validator and prior stencil conventions to resolve the projection and certificate contract. Measure rank and residual by bank because those results determine whether direct fitting, outlier rejection, or historical calibration is needed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "28a5039f98ec9fb3f483b98932cf2f3c70619c607db900202e282e5c82872f04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24654.45,
+      "usage_known": true,
+      "prompt_tokens": 17388,
+      "cached_tokens": 11136,
+      "completion_tokens": 898
+    }
+  ]
+}

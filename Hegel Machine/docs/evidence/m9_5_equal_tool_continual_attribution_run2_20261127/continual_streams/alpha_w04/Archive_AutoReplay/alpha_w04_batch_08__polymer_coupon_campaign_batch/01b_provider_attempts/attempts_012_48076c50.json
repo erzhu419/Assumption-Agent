@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "48076c504d3643d6992ebecf86644a80",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:53:48.910698+00:00",
+  "ended_at_utc": "2026-11-26T18:54:24.204305+00:00",
+  "request_sha256": "e25f5e1c8f451b5491eb4e2627efdf4e6e4bca122efae26eb80287722540b901",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 73823,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36429,
+    "cached_tokens": 6784,
+    "completion_tokens": 1474
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/w04_calibration_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/alpha_w04_batch_08_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', path)\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_w04_batch_08.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\na, test = d['train'], d['test']\\ndt, t, sy, panel = (d[k] for k in ('past_dt', 'eval_times', 'yield_stress', 'calibration_load_cells'))\\nlab = a['lab_id']\\ncomplete = np.isfinite(a['coupon_features_raw']).all(axis=1)\\n\\ndef subset(i):\\n    return {k:v[i] for k,v in a.items()}\\n\\nx, z = s._align(a, test)\\ntau, aff, w = s._fit_batch(a, x, dt, t, sy, panel)\\nprint('fit taus', tau.round(6), 'affines', aff.round(6).tolist(), 'weights', w.round(6))\\nfor name, split in [('train', a), ('test', test)]:\\n    h, q = s._stress(split, aff)\\n    print(name, 'history and hold above yield by lab:', [(int(np.sum((split['lab_id']==j) & (np.max(abs(h),axis=1)>sy))), int(np.sum((split['lab_id']==j) & (abs(q)>sy)))) for j in range(4)])\\n\\n# Independently check the rate handoff on the actual stress histories.\\nh, q = s._stress(a, aff)\\nzero, rate = s._design(tau, dt, np.array([0.]), h, q, x, sy)\\nstep = 1e-5\\nforward, _ = s._design(tau, dt, np.array([step, 2*step]), h, q, x, sy)\\nfd = (4*forward[:,0]-forward[:,1]-3*zero[:,0])/(2*step)\\nnp.testing.assert_array_equal(zero, 0.)\\nnp.testing.assert_allclose(fd, rate, atol=1e-7, rtol=1e-7)\\nprint('t=0 strain/rate handoff max coefficient error', np.max(abs(fd-rate)))\\n\\n# Compare the production fit with complete-coupon estimation of the shared law.\\n# Both variants predict without using the validation rate for this comparison.\\nrng = np.random.default_rng(613)\\nfolds = [[] for _ in range(4)]\\nfor j in range(4):\\n    for c in (True, False):\\n        for fold, rows in zip(folds, np.array_split(rng.permutation(np.flatnonzero((lab==j)&(complete==c))),4)):\\n            fold.extend(rows)\\nerrors = {key:(np.empty_like(a['strain_curves_obs']), np.empty_like(a['instant_rate_obs'])) for key in ('all','complete_fit')}\\nfor fold in folds:\\n    j = np.asarray(fold); i = np.setdiff1d(np.arange(len(lab)),j)\\n    tr, te = subset(i), subset(j)\\n    x, z = s._align(tr, te)\\n    for name, use in [('all', np.ones(len(i), dtype=bool)), ('complete_fit', complete[i])]:\\n        model = s._fit_batch(subset(i[use]), x[use], dt, t, sy, panel)\\n        p, r = s._predict(tr,te,x,z,dt,t,sy,model,correction='none')\\n        errors[name][0][j] = p - te['strain_curves_obs']; errors[name][1][j] = r - te['instant_rate_obs']\\nfor name, (ce, re) in errors.items():\\n    med = []; bias = []\\n    for j in range(4):\\n        use = (lab==j)&complete\\n        med.append([np.median(abs(ce[use])), np.median(abs(re[use]))])\\n        bias.append([np.median(ce[use,-1]), np.median(re[use])])\\n    print(name, 'complete coupon OOF per-lab strain/rate MedAE', np.round(med,6).tolist(), 'signed late strain/rate bias', np.round(bias,6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w04_calibration_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared-law fit on all training coupons → H2 estimate the shared law on complete coupons if missing-feature imputation biases calibration; current worst lab × missingness OOF MedAE is 0.02682 for strain and 0.00812 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational terms or run a relay-mode and classification audit\",\n      \"rejected_reason\": \"The contract specifies a nine-term creep law and continuous responses from one campaign; there are no relay modes or class labels. Lab-stratified signed residuals are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Count actual plastic-history activations to determine whether that coefficient is identifiable, and independently check the derivative handoff on measured histories. Compare held-out lab errors without feeding validation rates back into predictions; change the fit population only if it materially reduces worst-lab error or bias.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "46e9d9c5d5f9bf2f51ec894974336c963390ee8272cd0ede2ce15665cc85c694",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36283.8,
+      "usage_known": true,
+      "prompt_tokens": 36429,
+      "cached_tokens": 6784,
+      "completion_tokens": 1474
+    }
+  ]
+}

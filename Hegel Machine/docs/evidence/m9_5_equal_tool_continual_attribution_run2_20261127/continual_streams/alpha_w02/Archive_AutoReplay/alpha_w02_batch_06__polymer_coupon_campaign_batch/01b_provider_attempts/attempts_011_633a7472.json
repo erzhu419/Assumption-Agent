@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "633a7472f77c4ef590ad3383d26335dd",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:42:19.687715+00:00",
+  "ended_at_utc": "2026-11-26T18:42:50.980999+00:00",
+  "request_sha256": "ceedae94e13cf3ea9941703b8d83d2ab2970f6d101f3ec9ce63c800ac2e59506",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 66074,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34300,
+    "cached_tokens": 6784,
+    "completion_tokens": 1276
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\ns = importlib.util.spec_from_file_location('candidate', 'alpha_w02_batch_06_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ncase = pickle.load(open('public_alpha_w02_batch_06.pkl', 'rb'))[0]\\nd = copy.deepcopy(case['dataset']); dt, t = d['past_dt'], d['eval_times']; sy = d['yield_stress']\\ntr, te = d['train'], d['test']; n = len(tr['lab_id'])\\ncal = m._calibrate(d['calibration_load_cells']); feat = m._features(tr, te)\\ntau = np.array([.53, 3.6]); coef = np.array([.65,.54,.08,.15,-.13,.11,-.09,.024,.013])\\nfor split, f in ((tr, feat[:n]), (te, feat[n:])):\\n    lab = split['lab_id']; gain, bias = cal[lab].T\\n    hist = gain[:,None]*split['past_stress_cmd'] + bias[:,None]\\n    hold = gain*split['stress_hold_cmd'] + bias\\n    i = np.arange(len(hold)); hold[i%4==0] = sy+.8; hold[i%4==1] = -sy-.65\\n    hist[i%3==0,-2:] = sy+1.1; hist[i%3==1,-4:-2] = -sy-.9\\n    split['past_stress_cmd'] = (hist-bias[:,None])/gain[:,None]\\n    split['stress_hold_cmd'] = (hold-bias)/gain\\n    state = np.zeros((len(hold),2))\\n    for j, step in enumerate(dt):\\n        decay = np.exp(-step/tau)\\n        state = decay*state + (1-decay)*hist[:,j,None]\\n    amplitude = (hold[:,None]-state)*coef[:2]\\n    work = (np.maximum(np.abs(hist)-sy,0)**2 @ dt)*hold\\n    over = np.sign(hold)*np.maximum(np.abs(hold)-sy,0)**2\\n    drift = np.column_stack((np.ones(len(f)), f[:, -4:])) @ coef[2:7] + coef[7]*over\\n    rate = amplitude @ (1/tau) + drift + coef[8]*work/tau[0]\\n    curves = split['strain_0'][:,None] + amplitude @ (1-np.exp(-t[None,:]/tau[:,None])) + drift[:,None]*t + coef[8]*work[:,None]*(1-np.exp(-t/tau[0]))\\n    split['instant_rate_obs'] = rate\\n    if split is tr:\\n        split['strain_curves_obs'] = curves\\n    else:\\n        target_curves, target_rate, target_hold, target_work = curves, rate, hold, work\\nout = m.solve_alpha_w02_batch_06(d)\\nfor name, expected in [('estimated_taus',tau),('hereditary_weights',coef[:7]),('viscoplastic_weights',coef[7:])]:\\n    np.testing.assert_allclose(out[name], expected, atol=2e-5, rtol=0)\\nfor label, use in [('positive hold',target_hold>sy),('negative hold',target_hold<-sy),('history only',(np.abs(target_hold)<=sy)&(target_work!=0)),('subyield',(np.abs(target_hold)<=sy)&(target_work==0))]:\\n    assert use.any(), label\\n    e = np.max(np.abs(out['predicted_strain'][use] - target_curves[use])); r = np.max(np.abs(out['initial_rate_pred'][use] - target_rate[use]))\\n    print(label, int(use.sum()), 'max curve/rate errors', e, r)\\n    assert max(e, r)<2e-5\\npublic = m.solve_alpha_w02_batch_06(case['dataset'])\\nnp.testing.assert_array_equal(public['viscoplastic_weights'], np.zeros(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared drift → H2 training-selected lab-specific drift with shared Prony relaxation; worst public lab strain/rate RMSE fell from 0.0531/0.0169 to 0.0203/0.00648.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t10\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema and lab-slice checks\",\n      \"rejected_reason\": \"The public measurements are entirely subyield and cannot detect a sign, history, or onset-rate error in the plastic terms.\"\n    }\n  ],\n  \"rationale\": \"Check the exact artifact against an independent stress-history recurrence with both overstress signs and history-only yielding. If coefficient recovery or either prediction fails, inspect the corresponding plastic term before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5d84acfe41808081156e9a576c938b2678a17d28605c9333c3b43bf6779eb17c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32260.94,
+      "usage_known": true,
+      "prompt_tokens": 34300,
+      "cached_tokens": 6784,
+      "completion_tokens": 1276
+    }
+  ]
+}

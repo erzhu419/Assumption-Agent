@@ -1,0 +1,130 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_w02_s00_8d739d4ed2fd",
+    "source_hash": "8d739d4ed2fdf418f3fb2d98f7a5386e0be5a93868727189cd58fe766f4fa4e5",
+    "parent_ids": [],
+    "source_episode_id": "beta_w02_s00__tracer_tomography_baseline",
+    "task_id": "beta_w02_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/beta_operator_audit.py",
+        "archived_relpath": "producers/tmp__beta_operator_audit.py",
+        "bytes": 3061,
+        "sha256": "40668a2f79261af08a88686ce09c8b2432f3e05d948493b961f181c099b14b45"
+      },
+      {
+        "container_path": "/tmp/beta_probe.py",
+        "archived_relpath": "producers/tmp__beta_probe.py",
+        "bytes": 2246,
+        "sha256": "a42bb26115259ad02d6a59271a658bbd4c9130548131025b36932d46a916d906"
+      },
+      {
+        "container_path": "/tmp/beta_stencil.py",
+        "archived_relpath": "producers/tmp__beta_stencil.py",
+        "bytes": 2248,
+        "sha256": "8734b3a8dbea4a54ddbf8c787011d941c109ac56689e90863c85dafcbd9f3cb4"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task; cat /holdout_task/public_asset_index.json /holdout_task/validate_public_schema.py; printf '\\nArchive inventory:\\n'; find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s bytes\\n' 2>/dev/null | head -60; printf '\\nPrimitive lookup:\\n'; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling; box simplex KKT; robust calibration' 2>&1; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_beta_w02_s00.pkl','rb') as f: s=pickle.load(f)\nfor k,v in s.items():\n if isinstance(v,np.ndarray):\n  print(k,v.shape,v.dtype,",
+      "cat /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; python3 - <<'PY'\nimport pickle,numpy as np\ncases=pickle.load(open('/holdout_task/public_beta_w02_s00.pkl','rb')); print('cases',len(cases)); s=cases[0]['study']; g=cases[0]['gt']\nfor k,v in s.items():\n if isinstance(v,np.ndarray): print(k,v.shape,v.dtype, v.ravel()[:12])\n elif isinstance(v,dict): print(k,[(a,np.shape(b),np.asarray(b).ravel()[:12]) for a,b in v.items()])\n elif isinstance(v,(list,tuple)): print(k,len(v),repr(v[:2])[:",
+      "sed -n '43,130p' /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\ns,g=(lambda c:(c['study'],c['gt']))(pickle.load(open('/holdout_task/public_beta_w02_s00.pkl','rb'))[0]); print('keys',list(s)); z=s['Z_nuisance']; r=s['nuisance_ridge']; y=s['y_obs_raw']; q=z@np.linalg.solve(z.T@z+r*np.eye(z.shape[1]),z.T); a,d,_=np.linalg.svd(z,full_matrices=False); sq=lambda x:x-a@((1-np.sqrt(r/(d*d+r)))*(a.T@x)); print('target errors residual, sqrt',np.max(abs(y-q@y-g['r_y'])), np.max(abs(sq(y)-g['r_y']))); print('V separability error',np.max(abs(s['V_",
+      "cat > /tmp/beta_stencil.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\n\ncases=pickle.load(open('/holdout_task/public_beta_w02_s00.pkl','rb'))\ns,g=cases[0]['study'],cases[0]['gt']\nU=g['terminal_field_A']; nx,ny=U.shape\nV=s['V_reaction_2d']; axes=[]\nfor p,dx in zip('xy',(V.mean(1),V.mean(0)-V.mean())):\n k,v,rg,L=[s[b] for b in ('kappa_'+p,'vel_'+p,'robin_'+p,'L'+p)]\n h=L/len(k); d=2*k[:-1]*k[1:]/(k[:-1]+k[1:])/h**2\n main=dx.copy(); main[:-1]+=d; main[1:]+=d; main[[0,-1]]+=rg*k[[0,-1]]/(h*(rg*.5*h+k[[0,-1]]))\n axes.append((main,-d,v/h))\ndef act(t,U):\n a,b,c=t",
+      "set -e\ncat > /holdout_task/beta_w02_s00_solver.py <<'PY'\n\"\"\"Separable tracer transport, bank calibration, and box-simplex inversion.\"\"\"\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    \"\"\"Return the three diagonals of the cell-centered FVM operator.\"\"\"\n    h = L / n\n    k = np.asarray(kappa, dtype=float)\n    v = np.asarray(vel, dtype=float) / h\n    diffusion = (2.0 * k[:-1] * k[1:] / (k[:-1] + k[1:])) / h**2\n    diag = np.array(diag_add, dtype=float, copy=True) + np.abs(v)\n    diag[:-1] += diffusion\n    diag[1:] += diffusion\n ",
+      "set -e\nprintf 'Continual archive inventory:\\n'\nif [ -d /tmp/hegel_continual_archive ]; then find /tmp/hegel_continual_archive -maxdepth 4 -type f -printf '%p %s bytes\\n' | head -40; else echo 'No continual archive directory'; fi\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/'; sp=importlib.util.spec_from_file_location('solver',p+'beta_w02_s00_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\ns=pickle.load(open(p+'public_beta_w02_s00.pkl','rb'))[0]['study']; rng=np.random.default_rng(420)\nworst_gap=worst_feas=0.",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, pickle\nimport numpy as np\np='/holdout_task/'\nsp=importlib.util.spec_from_file_location('solver',p+'beta_w02_s00_solver.py')\nm=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\nfor i,c in enumerate(pickle.load(open(p+'public_beta_w02_s00.pkl','rb'))):\n s,gt=c['study'],c['gt']; D,T=m._forward(s); S,y=m._profile(s,D,m._calibrate(s)); o=m.solve_beta_w02_s00(s)\n banks=s['row_bank_id']; blocks=np.arange(len(S))//len(s['sensor_ij'])\n",
+      "set -e\ncat > /tmp/beta_operator_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\np = '/holdout_task/'\ndef load(name):\n    spec = importlib.util.spec_from_file_location(name, p + name + '.py')\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod\n\nsolver = load('beta_w02_s00_solver')\nvalidator = load('validate_public_schema')\nfor case in pickle.load(open(p + 'public_beta_w02_s00.pkl', 'rb')):\n    s, gt = case['study'], case['gt']\n    nx, ny = s['nx'], s",
+      "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/beta_operator_audit.py')\ns = p.read_text()\nold = \"validator = load('validate_public_schema')\"\nassert old in s\np.write_text(s.replace(old, '''# The validator runs its CLI at import time. Load only the independent check.\nimport ast\nimport math\nfrom types import SimpleNamespace\npath = p + 'validate_public_schema.py'\ntree = ast.parse(open(path).read(), filename=path)\ncheck = next(node for node in tree.body if isinstance(node, ast.FunctionDef)\n             and node.name == 'verify_box_simplex_kkt_certificate')\nscope = {'np': np, 'ma"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__beta_operator_audit.py",
+      "primary_producer_container_path": "/tmp/beta_operator_audit.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_w02_s00_solver.py",
+        "filename": "beta_w02_s00_solver.py",
+        "bytes": 6316,
+        "sha256": "f4685d4f3858868c125acca346ab849c78401167cadb9e454d9c8301c973ae8f",
+        "content_addressed_ref": "content_addressed_blobs/f4685d4f3858868c125acca346ab849c78401167cadb9e454d9c8301c973ae8f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_w02_s00_solver.py"
+    ],
+    "exported_pure_functions": [
+      "build",
+      "forward",
+      "act",
+      "flux"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8d739d4ed2fdf418f3fb2d98f7a5386e0be5a93868727189cd58fe766f4fa4e5",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/beta_operator_audit.py')\ns = p.read_text()\nold = \"validator = load('validate_public_schema')\"\nassert old in s\np.write_text(s.replace(old, '''# The validator runs its CLI at ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8d739d4ed2fdf418f3fb2d98f7a5386e0be5a93868727189cd58fe766f4fa4e5",
+        "expected_candidate_sha256": "8d739d4ed2fdf418f3fb2d98f7a5386e0be5a93868727189cd58fe766f4fa4e5",
+        "computed_candidate_sha256": "8d739d4ed2fdf418f3fb2d98f7a5386e0be5a93868727189cd58fe766f4fa4e5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_w02_s00_solver.py",
+            "bytes": 6316
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_8d739d4e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "build",
+        "code": "def build(L, k, v, rg, d, mode=0, bound=True):\n    from scipy.linalg import eigh_tridiagonal\n    h = L / len(k)\n    diff = 2 * k[:-1] * k[1:] / (k[:-1] + k[1:]) / h ** 2\n    main = d.copy()\n    main[:-1] += diff\n    main[1:] += diff\n    main[[0, -1]] += rg * k[[0, -1]] / (h * (rg * 0.5 * h + k[[0, -1]]))\n    if mode in (0, 1):\n        pos = v.clip(0) / h\n        neg = (-v).clip(0) / h\n        lo = -diff - pos[1:]\n        hi = -diff - neg[:-1]\n        main += pos + neg\n        if not bound:\n            main[0] -= pos[0]\n            main[-1] -= neg[-1]\n    elif mode in (2, 3):\n        vf = (v[1:] + v[:-1]) / (2 * h)\n        pos = vf.clip(0)\n        neg = (-vf).clip(0)\n        lo = -diff - pos\n        hi = -diff - neg\n        if mode == 2:\n            main[:-1] += pos\n            main[1:] += neg\n        else:\n            main[1:] += pos\n            main[:-1] += neg\n        if bound:\n            main[0] += abs(v[0]) / h\n            main[-1] += abs(v[-1]) / h\n    eig, Q = eigh_tridiagonal(main, -np.sqrt(lo * hi))\n    scale = np.r_[1.0, np.cumprod(np.sqrt(lo / hi))]\n    return (eig, scale[:, None] * Q, Q.T / scale)"
+      },
+      {
+        "name": "forward",
+        "code": "def forward(s, mode, bound):\n    V = s['V_reaction_2d']\n    dx = V.mean(axis=1)\n    dy = V.mean(axis=0) - V.mean()\n    (a, X, Ui), (b, Y, Vi) = [build(s['L' + p], s['kappa_' + p], s['vel_' + p], s['robin_' + p], d, mode, bound) for p, d in zip('xy', (dx, dy))]\n    src = Ui @ s['source_modes'] @ Vi.T\n    u = X @ (src[None, ...] / (a[:, None] + b[None, :] + s['mu_shifts'][:, None, None, None])) @ Y.T\n    i, j = s['sensor_ij'].T\n    return (u[:, :, i, j].transpose(0, 2, 1), u[-1])"
+      },
+      {
+        "name": "act",
+        "code": "def act(t, U):\n    a, b, c = t\n    F = a[:, None] * U\n    F[1:] += b[:, None] * U[:-1]\n    F[:-1] += c[:, None] * U[1:]\n    return F"
+      },
+      {
+        "name": "flux",
+        "code": "def flux(main, d, v):\n    vf = (v[:-1] + v[1:]) / 2\n    pos = vf.clip(0)\n    neg = (-vf).clip(0)\n    main = main.copy()\n    main[:-1] += pos\n    main[1:] += neg\n    main[0] += max(-v[0], 0)\n    main[-1] += max(v[-1], 0)\n    return (main, d - pos, d - neg)"
+      }
+    ]
+  }
+}

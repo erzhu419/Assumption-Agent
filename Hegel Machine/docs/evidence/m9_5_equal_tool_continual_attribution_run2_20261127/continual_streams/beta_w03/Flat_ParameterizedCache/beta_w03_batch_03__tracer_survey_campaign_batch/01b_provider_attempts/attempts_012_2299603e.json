@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2299603e46da43b68d126fa5c9ee091c",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:15:06.208572+00:00",
+  "ended_at_utc": "2026-11-26T18:15:42.112358+00:00",
+  "request_sha256": "dea3ed9e6784b8d88ed114516d11d150e35183b49ebe11c0b0668ba6ff64c908",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 73356,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36329,
+    "cached_tokens": 11136,
+    "completion_tokens": 1504
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_w03_batch_03_solver.py')\\ns = p.read_text()\\ns = s.replace(\\\"if x.size > 1 and np.ptp(x) > 1e-10 * max(1., np.max(np.abs(x))):\\\", \\\"if x.size >= 4 and np.ptp(x) > 1e-10 * max(1., np.max(np.abs(x))):\\\")\\na = s.index('    options = []\\\\n')\\nb = s.index('    best_score =', a)\\ns = s[:a] + '''    options = []\\n    for bank, rows, x, z in sparse:\\n        choices = []\\n        tol = 5e-6\\n\\n        def add_fixed(g, off):\\n            misses = int(np.count_nonzero(np.abs(z - (g*x + off)) > tol))\\n            a = np.zeros_like(obs)\\n            a[rows] = (obs[rows] - off) / g\\n            choices.append((a, (), (), misses))\\n\\n        for g, off in _ARCHIVE_PROFILES[bank]:\\n            good = np.abs(z - (g*x + off)) <= tol\\n            if not x.size or good.any():\\n                add_fixed(g, off)\\n        for j in range(x.size):\\n            for k in range(j):\\n                dx = x[j] - x[k]\\n                if abs(dx) > 1e-10:\\n                    g = (z[j] - z[k]) / dx\\n                    if g > 0:\\n                        add_fixed(g, z[j] - g*x[j])\\n        if x.size >= 2:\\n            g, off = _fit_bank(x, z, (1., 0.))\\n            if np.max(np.abs(z - (g*x + off))) <= tol:\\n                add_fixed(g, off)\\n        if anchored.any():\\n            if x.size:\\n                for x0, z0 in zip(x, z):\\n                    a, col = np.zeros_like(obs), np.zeros_like(obs)\\n                    a[rows], col[rows] = x0, obs[rows] - z0\\n                    choices.append((a, (col,), (residual(col),), x.size-1))\\n            else:\\n                col = np.zeros_like(obs)\\n                col[rows] = obs[rows]\\n                free = (col, rows.astype(float))\\n                choices.append((np.zeros_like(obs), free, tuple(map(residual, free)), 0))\\n        if not choices:\\n            add_fixed(1., np.median(z - x) if x.size else 0.)\\n        options.append(choices)\\n\\n''' + s[b:]\\ns = s.replace(' + dim * np.log(len(row))', ' + (dim + 2 * sum(entry[3] for entry in selected)) * np.log(len(row))')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\ns = Path('/tmp/beta03_stress.py').read_text()\\ns = s.replace(\\\"if not all(c['valid'] for c in checks): print('certificate failure', name, tag, checks)\\\", \\\"failures[group] = failures.get(group, 0) + int(not all(c['valid'] for c in checks))\\\")\\ns = s.replace('    worst = {}', '''        for n in (2,3,4):\\n            keep = np.ones(len(ids),bool)\\n            spike = []\\n            for b in withheld:\\n                idx = np.flatnonzero(ids==b)\\n                keep[idx[n:]] = False\\n                spike.append(idx[0])\\n            scenarios.extend([(f'{withheld}/clean{n}',keep,()), (f'{withheld}/emi{n}',keep,tuple(spike))])\\n    worst, failures = {}, {}''')\\ns = s.replace('values[list(emi)] += [0.60,-0.48,0.83]', 'values[list(emi)] += np.array([0.60,-0.48,0.83])[:len(emi)]')\\ns = s.replace(\\\"else 'sparse'\\\", \\\"else tag.split('/')[-1].rstrip('234') or 'sparse'\\\")\\ns = s.replace(\\\"print(name,'worst by max weight error (weight,field,gap,slice)',worst)\\\", \\\"print(name,'worst (weight,field,gap,slice)',worst,'certificate failure counts',failures)\\\")\\nPath('/tmp/beta03_stress_extended.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta03_stress_extended.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use the shared waveform to choose among affine fits to sparse reference sweeps; one EMI spike previously raised worst calibrated-readout RMS error to 1.81.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Trust the affine fit whenever two distinct reference levels exist\",\n      \"rejected_reason\": \"Two levels identify the fit only if both readings are clean; the stress test showed large errors when one contained an EMI spike.\"\n    }\n  ],\n  \"rationale\": \"Retain direct robust fitting for banks with more reference points. For sparse banks, compare archived profiles, reference-pair fits, and single-reference fits against the shared waveform. The extended test checks whether this improves sparse EMI recovery without regressing clean sweeps or historical-profile replay.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b6daf3b3283c612645f74e284ecbb370f3114ea17b14fcac92f63a8119dafaac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36811.89,
+      "usage_known": true,
+      "prompt_tokens": 36329,
+      "cached_tokens": 11136,
+      "completion_tokens": 1504
+    }
+  ]
+}

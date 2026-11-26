@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b6e536205c4e44de8acfb35ea8933e98",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:21:00.467704+00:00",
+  "ended_at_utc": "2026-11-26T18:21:36.264437+00:00",
+  "request_sha256": "b5b73d395cb672571ac93868fd0f938ef2c1e0638cb38d0c263a3c38f5cb299b",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 45393,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27614,
+    "cached_tokens": 6784,
+    "completion_tokens": 1443
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\npath='/holdout_task/alpha_w02_batch_04_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',path); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\np=pickle.load(open('/holdout_task/public_alpha_w02_batch_04.pkl','rb'))[0]; d=p['dataset']; gt=p['gt']; sy=d['yield_stress']; dt=d['past_dt']; t=d['eval_times']; train=d['train']; test=d['test']; checks=d['calibration_load_cells']; n=len(train['lab_id']); cal=s._calibrate(checks,sy)\\nrmse=lambda x: np.sqrt(np.mean(x*x))\\ncross=lambda split: (abs(split['stress_hold_cmd']*cal[split['lab_id'],0]+cal[split['lab_id'],1])>sy) | np.any(abs(split['past_stress_cmd']*cal[split['lab_id'],0,None]+cal[split['lab_id'],1,None])>sy,axis=1)\\ndef report(out, tag):\\n e=out['predicted_strain']-gt['te_clean']; r=out['initial_rate_pred']-gt['te_true_rate0']; masks={'all':np.ones(len(r),bool),'above':cross(test),'below':~cross(test)}; masks.update({f'lab{i}':test['lab_id']==i for i in range(4)}); print(tag,{k:(int(m.sum()),round(rmse(e[m]),6),round(rmse(r[m]),6)) for k,m in masks.items() if m.any()},'horizon_max',round(max(rmse(e[:,j]) for j in range(e.shape[1])),6))\\nreport(s.solve_alpha_w02_batch_04(d),'public')\\nfeat=s._features(train,test)[:n]; y=np.c_[train['strain_curves_obs']-train['strain_0'][:,None],train['instant_rate_obs']]\\nfor lab in range(4):\\n m=train['lab_id']==lab; inputs=s._inputs(train,feat,cal,dt,sy); a=s._fit(tuple(v[~m] for v in inputs),dt,t,y[~m]); resid=(s._design(tuple(v[m] for v in inputs),dt,t,a[0])@a[1])-y[m]; print('leave_lab_out',lab,'tau',np.round(a[0],5),'curve_rmse',round(rmse(resid[:,:-1]),6),'rate_rmse',round(rmse(resid[:,-1]),6))\\nfor wing in ((0,1),(2,3)):\\n for scenario in ('spot_only','spot_plus_emi','three_narrow','no_checks'):\\n  c={k:v.copy() for k,v in checks.items()}; keep=~np.isin(c['lab_id'],wing)\\n  for lab in wing:\\n   ii=np.flatnonzero(c['lab_id']==lab); ii=ii[np.argsort(abs(c['cmd_stress'][ii]))];\\n   if scenario=='spot_only': keep[ii[:1]]=True\\n   if scenario=='spot_plus_emi': keep[ii[:2]]=True; c['true_stress'][ii[1]]+=.45\\n   if scenario=='three_narrow':\\n    idx=np.argsort(c['cmd_stress'][ii]); xs=c['cmd_stress'][ii[idx]]; j=np.argmin(xs[2:]-xs[:-2]); keep[ii[idx[j:j+3]]]=True\\n  c={k:v[keep] for k,v in c.items()}; altered=dict(d,calibration_load_cells=c); cc=s._calibrate(c,sy); print('calibration_delta',wing,scenario,np.round((cc-cal)[list(wing)],5)); report(s.solve_alpha_w02_batch_04(altered),str((wing,scenario)))\\n# Isolated genuinely subyield measurements: inactive columns must stay exactly zero.\\ninputs=s._inputs(train,feat,cal,dt,sy); below=~cross(train); tb,cb=s._fit(tuple(v[below] for v in inputs),dt,t,y[below]); assert np.array_equal(cb[7:],np.zeros(2)); print('subyield_rows',below.sum(),'taus',tb,'vp',cb[7:])\\n# Check the stated onset derivative independently against the time-domain expression.\\ninputs=s._inputs(test,s._features(train,test)[n:],cal,dt,sy); out=s.solve_alpha_w02_batch_04(d); w=np.r_[out['hereditary_weights'],out['viscoplastic_weights']]; eps=1e-7; A=s._design(inputs,dt,np.array([0.,eps]),out['estimated_taus']); err=np.max(np.abs(((A[:,1]-A[:,0])/eps-A[:,2])@w)); assert err < 5e-6; print('onset_derivative_max_abs',err)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct affine calibration → H2 archive-aware calibration and an exact nine-term creep law; public schema passes, with worst-lab and degraded-calibration errors pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema check\",\n      \"rejected_reason\": \"The schema does not detect a wrong onset derivative or unstable calibration when a wing has only narrow, sparse, or contaminated spot checks.\"\n    }\n  ],\n  \"rationale\": \"Measure strain and rate errors separately by lab, stress regime, and horizon. Degrade only calibration rows to isolate fallback failures; if prediction error rises materially, revise the calibration decision rather than changing the constitutive law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "31047f628421cbbf1099c3a4589e8ce060d7e48d9d291f55c4b24bc10d6a5cdb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36695.41,
+      "usage_known": true,
+      "prompt_tokens": 27614,
+      "cached_tokens": 6784,
+      "completion_tokens": 1443
+    }
+  ]
+}

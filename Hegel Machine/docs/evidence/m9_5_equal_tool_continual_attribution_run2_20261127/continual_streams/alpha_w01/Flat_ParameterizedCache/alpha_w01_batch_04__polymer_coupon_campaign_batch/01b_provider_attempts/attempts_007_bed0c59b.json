@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bed0c59b09084a888d06773dd68ed783",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:21:45.695959+00:00",
+  "ended_at_utc": "2026-11-26T18:22:20.157876+00:00",
+  "request_sha256": "5f319d47e3d23e8dda066a745d55a1243577759bebc5505322e6ab285f7fe8cd",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 48037,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28673,
+    "cached_tokens": 6784,
+    "completion_tokens": 1431
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/b04_stress.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'alpha_w01_batch_04_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open(p+'public_alpha_w01_batch_04.pkl','rb'))[0]['dataset']\\ntr,te=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; sy=d['yield_stress']; c=d['calibration_load_cells']\\nx,_,complete,_=s._align(tr,te); maps=s._calibrate(c)\\nh,hold=s._stress(tr,maps); ov,w=s._plastic(h,hold,dt,sy)\\nfor j in range(4):\\n    b=tr['lab_id']==j; a=~b\\n    tau,theta=s._fit({k:v[a] for k,v in tr.items()},x[a],complete[a],maps,dt,t,sy)\\n    A,B=s._design(tau,h[b],hold[b],x[b],dt,t,ov[b],w[b]); r=B@theta\\n    e=tr['strain_0'][b,None]+A@theta-tr['strain_curves_obs'][b]; re=r-tr['instant_rate_obs'][b]\\n    masks=[('all',np.ones(b.sum(),bool)),('complete',complete[b]),('missing',~complete[b]),('below',(ov[b]==0)&(w[b]==0)),('above',(ov[b]!=0)|(w[b]!=0))]\\n    print('lab',j)\\n    for name,m in masks:\\n        if m.any():\\n            err=e[m]-np.where(complete[b][m],0,re[m])[:,None]*t\\n            print(name,int(m.sum()),'curve abs p50/90/95/99',np.round(np.quantile(abs(err),[.5,.9,.95,.99]),5),'rate abs p50/90/95',np.round(np.quantile(abs(re[m]),[.5,.9,.95]),5))\\n    print('signed median by horizon',np.round(np.median(e[complete[b]],axis=0),5))\\nfor name, labs, retain, glitch in [('sparse A',(0,1),1,0),('sparse B',(2,3),1,0),('EMI A',(0,1),10,3),('EMI B',(2,3),10,3),('sparse+EMI B',(2,3),2,1)]:\\n    keep=np.ones(len(c['lab_id']),bool); y=c['true_stress'].copy()\\n    for j in labs:\\n        i=np.flatnonzero(c['lab_id']==j); keep[i[retain:]]=False; y[i[:glitch]]+=np.linspace(.3,.9,glitch)\\n    cand=s._calibrate(dict(lab_id=c['lab_id'][keep],cmd_stress=c['cmd_stress'][keep],true_stress=y[keep]))\\n    out=s.solve_alpha_w01_batch_04(dict(d,calibration_load_cells=dict(lab_id=c['lab_id'][keep],cmd_stress=c['cmd_stress'][keep],true_stress=y[keep])))\\n    print(name,'max calibration shift',np.max(abs(cand-maps)),'taus',out['estimated_taus'].round(6),'vp',out['viscoplastic_weights'].round(6))\\n    assert np.max(abs(cand-maps)) < .001\\n    assert np.isfinite(out['predicted_strain']).all()\\nsub=dict(d,yield_stress=1e6)\\nout=s.solve_alpha_w01_batch_04(sub)\\nassert np.array_equal(out['viscoplastic_weights'],np.zeros(2))\\n# Isolate the two threshold mechanisms; check their independent onset derivatives.\\nh2=np.array([[0.]*len(dt),[2*sy]*len(dt),[0.]*len(dt)])\\nhold2=np.array([2*sy,.5*sy,-2*sy]); o2,w2=s._plastic(h2,hold2,dt,sy)\\nassert np.array_equal(o2!=0,[True,False,True]) and np.array_equal(w2!=0,[False,True,False]) and o2[-1]<0\\nT=np.array([.5,4.2]); eps=1e-7\\nA,B=s._design(T,h2,hold2,np.ones((3,5)),dt,np.array([eps]),o2,w2)\\nnp.testing.assert_allclose(A[:,0,7:]/eps,B[:,7:],rtol=1e-6,atol=1e-10)\\nprint('plastic zero-activation, sign, and onset-derivative checks passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b04_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated linear Prony law -> H2: shared Prony law with both threshold terms; worst public lab curve RMSE is 0.02430, while worst leave-one-lab-out curve RMSE against recorded observations is 0.29691.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check whether the held-out observation error reflects sparse large residuals or a systematic horizon bias; only the latter would justify revisiting the fit. Separately withhold or corrupt calibration checks on each wing and isolate the threshold terms to detect failures the clean public case cannot expose.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cbf8b022b8344d546fcfa28496e58f60c8135e08cf45f47d3f1b5e489bd87159",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35393.96,
+      "usage_known": true,
+      "prompt_tokens": 28673,
+      "cached_tokens": 6784,
+      "completion_tokens": 1431
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d44b42a75fc4398957bda2ff872986a",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_03__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:15:00.763285+00:00",
+  "ended_at_utc": "2026-11-26T18:15:42.667593+00:00",
+  "request_sha256": "60259e68952e7b05e054f20f4d6ea72c91a1b470701ce012b7b122079f06d86b",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 82382,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41394,
+    "cached_tokens": 6784,
+    "completion_tokens": 1775
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_w03_batch_03_solver.py')\\ns = p.read_text()\\nold = \\\"    if not len(x):\\\\n        return priors[0]\\\\n    # Select a historical line using current agreement; then refit only supported directions.\\\"\\nnew = \\\"\\\"\\\"    if not len(x):\\n        return priors[0]\\n    # A separated current pair identifies both affine parameters, even after recalibration.\\n    if len(x) == 2 and np.ptp(x) >= .5:\\n        return _line(x, y)\\n    # A third point can independently confirm a shifted line.\\n    if len(x) == 3 and np.ptp(x) >= .5:\\n        trial = _line(x, y)\\n        if np.max(np.abs(y - (trial[0]*x + trial[1]))) <= .002:\\n            return trial\\n    # Otherwise use the archive to identify compatible spots or supply the missing slope.\\\"\\\"\\\"\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nbase = '/holdout_task/'\\nm = runpy.run_path(base+'alpha_w03_batch_03_solver.py')\\nsolve = m['solve_alpha_w03_batch_03']\\nr = pickle.load(open(base+'public_alpha_w03_batch_03.pkl','rb'))[0]\\nd, g = r['dataset'], r['gt']\\no = solve(d)\\nb = d['test']; end = d['eval_times'][-1]; truth = g['te_cross']\\nmiss = np.isnan(b['coupon_features_raw']).any(1)\\ntrans = (truth < end) & (g['te_clean'][:,-1] < b['critical_strain'])\\nassert np.array_equal(o['hazard_crossing_times'] < end, truth < end)\\nassert np.max(np.abs(o['hazard_crossing_times'][trans]-truth[trans])) < .05\\nassert np.max(np.abs(o['estimated_taus']/g['taus']-1)) < .005\\nassert np.sqrt(np.mean((o['predicted_strain'][miss]-g['te_clean'][miss])**2)) < .05\\nfor name, sel in [('early',truth<d['eval_times'][0]),('transient',trans),('missing',miss),('censored',truth==end)]+[(f'lab{i}',b['lab_id']==i) for i in range(4)]:\\n    print(name, [round(np.sqrt(np.mean((o[k][sel]-g[q][sel])**2)),6) for k,q in [('predicted_strain','te_clean'),('secant_compliance','te_secant'),('hazard_crossing_times','te_cross')]])\\nc = d['calibration_load_cells']; archive = m['_historical_lines']()\\nfor lab in range(4):\\n    x, y = m['_checks'](c,lab); ii = np.argsort(x); lo,mid,hi = ii[0],ii[len(ii)//2],ii[-1]\\n    expected = m['_supported_line'](x,y)\\n    for ids, bias in [([mid],[0]),([lo,mid,hi],[0,.35,0])]:\\n        f = m['_sparse_line'](x[ids],y[ids]+bias,archive,lab)\\n        assert np.max(np.abs((f[0]-expected[0])*x+f[1]-expected[1])) < .0005\\n    contaminated = y.copy(); contaminated[hi] += .35\\n    f = m['_supported_line'](x,contaminated)\\n    assert np.max(np.abs((f[0]-expected[0])*x+f[1]-expected[1])) < .0005\\n# Re-encode the same physical loads with changed gains on both wings; leave only two clean spots per lab.\\nz = copy.deepcopy(d); _,h,p = m['_prep'](d)\\nlabs = np.r_[d['train']['lab_id'],d['test']['lab_id']]; n = len(d['train']['lab_id']); rows=[]\\nfor lab,(gain,bias) in enumerate([(1.13,-.075),(.87,.08),(1.18,.06),(.91,-.11)]):\\n    x,_ = m['_checks'](c,lab); ends = x[[x.argmin(),x.argmax()]]\\n    rows.extend((lab,xx,gain*xx+bias) for xx in ends)\\n    for split,sl in [('train',slice(0,n)),('test',slice(n,None))]:\\n        sel = labs[sl]==lab\\n        z[split]['stress_hold_cmd'][sel] = (h[sl][sel]-bias)/gain\\n        z[split]['past_stress_cmd'][sel] = (p[sl][sel]-bias)/gain\\nz['calibration_load_cells'] = dict(zip(('lab_id','cmd_stress','true_stress'),np.array(rows).T))\\nw = solve(z)\\nfor k in o:\\n    delta = np.max(np.abs(o[k]-w[k])); print('shifted sparse',k,delta); assert delta < 1e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archive-gated sparse calibration → fit well-separated current checks directly; the prior logic missed a shifted affine line by up to 0.4363 stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A sparse current sweep must match an archived affine line before it can identify both calibration parameters.\",\n    \"empirical_witness\": \"With two well-separated clean checks under a changed affine calibration, the archive-gated fit erred by up to 0.436288 stress units over the observed command range.\",\n    \"causal_blanket_diagnosis\": \"Two distinct current commands identify gain and bias. The archived line constrains an underdetermined sweep but can bias a current sweep that already determines both parameters.\",\n    \"sublated_pivot\": \"Fit separated pairs or three consistent current checks directly; retain archive guidance for underdetermined or inconsistent checks.\",\n    \"risk_kind\": \"sparse calibration bias after a batch shift\",\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit every sparse sweep without historical support\",\n      \"rejected_reason\": \"One spot does not identify slope, and three inconsistent checks may contain an EMI outlier.\"\n    }\n  ],\n  \"rationale\": \"Test whether the calibration change recovers identical outputs after re-encoding the same physical loads on both wings. If one-spot or EMI accuracy regresses, retain archive guidance for those cases. Recheck the exact edited solver on the public missing-covariate and transient-crossing witnesses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8800fde7b4980ead9ed864e76f77d5e074a0f677f2b25551fd7a183d0c39c8de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42820.74,
+      "usage_known": true,
+      "prompt_tokens": 41394,
+      "cached_tokens": 6784,
+      "completion_tokens": 1775
+    }
+  ]
+}

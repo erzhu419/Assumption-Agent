@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4cd341a04f6e40e1af9de9a3f44d3592",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:25:07.868345+00:00",
+  "ended_at_utc": "2026-11-26T18:25:43.843986+00:00",
+  "request_sha256": "dd7253368f78e943f3b4b6d4558b2d86710333040e0c8bf972e7fd1e361028ff",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 76702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37107,
+    "cached_tokens": 11136,
+    "completion_tokens": 1538
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_alpha04.py <<'PY'\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_w02_batch_04_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nd = pickle.load(open(root + 'public_alpha_w02_batch_04.pkl', 'rb'))[0]['dataset']\\ntr, te, c = d['train'], d['test'], d['calibration_load_cells']\\ndt, t, sy = d['past_dt'], d['eval_times'], d['yield_stress']\\ncal = s._calibrate(c, sy)\\nlab = tr['lab_id']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nx = s._inputs(tr, s._features(tr, te)[:len(lab)], cal, dt, sy)\\ny = np.c_[tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']]\\nrmse = lambda a: np.sqrt(np.nanmean(a*a))\\nfor name, cols in [('full', ()), ('no_hold_overstress', (7,)), ('no_history_work', (8,))]:\\n    scores = []\\n    for i in range(4):\\n        train = complete & (lab != i)\\n        test = complete & (lab == i)\\n        u = tuple(a[train].copy() for a in x)\\n        if 7 in cols: u[2][:, -1] = 0\\n        if 8 in cols: u[3][:] = 0\\n        tau, w = s._fit(u, dt, t, y[train])\\n        e = s._design(tuple(a[test] for a in x), dt, t, tau) @ w - y[test]\\n        active = (x[2][test, -1] != 0) | (x[3][test] != 0)\\n        # Median per-lab residuals expose a systematic instrument offset without fitting one to a held-out lab.\\n        scores.append([rmse(e[active, :-1]), rmse(e[active, -1]), np.nanmedian(e[:, -1]), np.nanmedian(e[:, -2])])\\n    print(name, 'LOLO [above-yield strain RMSE, above-yield rate RMSE, median rate residual, median final-strain residual]', np.round(scores, 6).tolist())\\nfor i in range(4):\\n    ix = np.flatnonzero(c['lab_id'] == i)\\n    rows = lab == i\\n    cmd = np.r_[tr['past_stress_cmd'][rows].ravel(), tr['stress_hold_cmd'][rows]]\\n    lo, hi = cmd.min(), cmd.max()\\n    worst = (0., None)\\n    for size in (3, 4):\\n        for use in itertools.combinations(ix, size):\\n            keep = (c['lab_id'] != i) | np.isin(np.arange(len(c['lab_id'])), use)\\n            for bad in use:\\n                for emi in (-.22, .22):\\n                    cc = {k: v.copy() for k, v in c.items()}\\n                    cc['true_stress'][bad] += emi\\n                    gain, bias = s._calibrate({k: v[keep] for k, v in cc.items()}, sy)[i] - cal[i]\\n                    err = max(abs(gain*lo+bias), abs(gain*hi+bias))\\n                    if err > worst[0]: worst = (err, (use, bad, emi))\\n    print('lab', i, 'worst sparse-sweep physical stress delta and witness', worst)\\n    if worst[0] > .01:\\n        use, bad, emi = worst[1]\\n        keep = (c['lab_id'] != i) | np.isin(np.arange(len(c['lab_id'])), use)\\n        cc = {k: v.copy() for k, v in c.items()}\\n        cc['true_stress'][bad] += emi\\n        orig, changed = s.solve_alpha_w02_batch_04(d), s.solve_alpha_w02_batch_04(dict(d, calibration_load_cells={k:v[keep] for k,v in cc.items()}))\\n        m = te['lab_id'] == i\\n        print('affected lab strain/rate prediction RMSE shift', [rmse((changed[k]-orig[k])[m]) for k in ('predicted_strain','initial_rate_pred')])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_alpha04.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 early consensus → H2 archive-supported calibration and the specified nine-term creep law; worst public lab strain/rate RMSE is 0.141788/0.045016, with worst three-check EMI stress error 0.000371 on the tested subsets.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add unrelated rational, relay, or Fokker–Planck terms\",\n      \"rejected_reason\": \"The task specifies continuous creep and its onset derivative; the relevant algebraic audit is whether both specified plastic terms earn their place on held-out measurements.\"\n    },\n    {\n      \"option\": \"Center outcomes by lab to improve pooled fit\",\n      \"rejected_reason\": \"There is no classification target, and an offset fit using held-out outcomes would leak information. Inspect held-out residual medians after physical alignment instead.\"\n    }\n  ],\n  \"rationale\": \"Ablate each plastic term inside leave-one-lab-out folds and report signed residuals to detect a remaining lab offset. Test all three- and four-check subsets of the measured sweeps with one EMI perturbation; revise calibration only if a witness materially changes stress and predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "46375374c502825e8c5a4f9391aa1c10a3f0fa751665e426631fb73a97986b22",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37978.99,
+      "usage_known": true,
+      "prompt_tokens": 37107,
+      "cached_tokens": 11136,
+      "completion_tokens": 1538
+    }
+  ]
+}

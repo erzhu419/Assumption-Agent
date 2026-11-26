@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae3c0f5b1d8943bcb2598be725425cf3",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:22:53.813033+00:00",
+  "ended_at_utc": "2026-11-26T18:23:20.689016+00:00",
+  "request_sha256": "08caf5be944401bef8add0c1735f034317c3ae7865cf28fd82242b5f725a644d",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 60491,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31638,
+    "cached_tokens": 11136,
+    "completion_tokens": 1077
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/beta_w03_batch_04_margin.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\n\\nf = runpy.run_path('/holdout_task/beta_w03_batch_04_solver.py')\\nwith open('/holdout_task/public_beta_w03_batch_04.pkl', 'rb') as fp:\\n    item = pickle.load(fp)[0]\\ns, gt = item['study'], item['gt']\\nbank, ref, raw = (np.asarray(s['sensor_calibration_sweeps'][k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\nrows = np.asarray(s['row_bank_id'])\\nS, y = gt['S_tilde'], gt['r_y']\\nbase = f['_calibrate'](s)\\nrecords = []\\nfor b in range(4):\\n    wing = b // 2\\n    ids = np.flatnonzero(bank == b)\\n    mask = (bank // 2 != wing)\\n    for anchor in ids:\\n        keep = mask.copy()\\n        keep[anchor] = True\\n        for delta in (-0.18, 0., 0.18):\\n            altered = raw.copy()\\n            altered[anchor] += delta\\n            case = dict(s, sensor_calibration_sweeps=dict(bank_id=bank[keep], ref_signal=ref[keep], raw_readout=altered[keep]))\\n            error = np.max(np.abs(f['_calibrate'](case)[rows // 2 == wing] - base[rows // 2 == wing]))\\n            records.append((error, b, int(anchor), delta, case))\\nfor regime, selected in [('clean spot', [r for r in records if r[3] == 0]), ('EMI spot', [r for r in records if r[3] != 0])]:\\n    error, b, anchor, delta, case = max(selected, key=lambda r: r[0])\\n    out = f['solve_beta_w03_batch_04'](case)\\n    w, c = out['weights'], out['kkt_certificate']\\n    r = S @ w - y\\n    grad = S.T @ r + s['source_ridge'] * w\\n    p = .5 * (r @ r + s['source_ridge'] * (w @ w))\\n    nu = c['nu_sum']\\n    lb = p - grad @ w + nu * s['total_budget'] + s['u_box'] * np.minimum(grad - nu, 0).sum()\\n    print(regime, 'slices', len(selected), 'bank/anchor/EMI', (b, anchor, delta), 'max corrected observation drift', error, 'weight relative error', np.linalg.norm(w-gt['w_opt'])/np.linalg.norm(gt['w_opt']), 'field relative error', np.linalg.norm(out['terminal_field']-gt['terminal_field_A'])/np.linalg.norm(gt['terminal_field_A']), 'external gap', p-min(lb,c['dual_lower_bound']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_w03_batch_04_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single high-amplitude anchor per bank → all measured anchor positions as the sole wing spot check; the previous worst independent KKT gap was 8.69e-7 against a 1e-6 tolerance.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The prior combined test sampled only large-reference anchors. An EMI spike at another measured reference value could favor an incompatible archive profile. If that exhausts the certificate margin, change how sparse wing evidence is weighed against the intact wing; the verified transport stencil does not need another check.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "255dc044fc4de18d8c60a28a11a5fee58cfde4d003c65a2f4c6ba5bec5c9a433",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27807.14,
+      "usage_known": true,
+      "prompt_tokens": 31638,
+      "cached_tokens": 11136,
+      "completion_tokens": 1077
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "adafb52179f748b98aca17ed44f1301f",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:03:19.172654+00:00",
+  "ended_at_utc": "2026-11-26T18:03:49.729716+00:00",
+  "request_sha256": "898e82d8ee9bd4ad72419f69b0bf01e45a71ba3d90da4bb93bb3ee57dabaacb6",
+  "system_prompt_chars": 5297,
+  "stdin_payload_chars": 58540,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31162,
+    "cached_tokens": 0,
+    "completion_tokens": 1199
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_w01_s00_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_w01_s00.pkl', 'rb') as f:\\n    row = pickle.load(f)[0]\\nd, gt = row['dataset'], row['gt']\\no = s.solve_alpha_w01_s00(d)\\nte = d['test']\\nlab, stratum = te['lab_id'], te['stratum']\\nmissing = ~np.isfinite(te['coupon_features_raw']).all(axis=1)\\nmaps = s._load_cells(d['calibration_load_cells'])\\nhist, hold = s._stress(te, maps)\\ne = o['predicted_strain'] - gt['te_clean']\\nr = o['initial_rate_pred'] - gt['te_true_rate0']\\npeak = np.maximum(np.abs(hold), np.max(np.abs(hist), axis=1))\\nprint('minimum sub-yield margin', d['yield_stress'] - peak.max())\\nfor name, m in [(f'wing={i} stratum={v}', (lab//2 == i) & (stratum == v)) for i in (0,1) for v in np.unique(stratum)] + [('near-yield quartile', peak >= np.quantile(peak,.75)), ('negative hold', hold < 0), ('nonnegative hold', hold >= 0), ('missing features', missing)]:\\n    if m.any():\\n        print(name, 'n', m.sum(), 'curve MAE', round(np.mean(abs(e[m])),6), 'onset MAE', round(np.mean(abs(r[m])),6), 'terminal/onset median signed error', np.round([np.median(e[m,-1]),np.median(r[m])],6))\\n# Reflect the calibrated loading about zero, holding coupon drift fixed.\\nx = s._alignment(d['train'], te)[1]\\ncov = np.c_[np.ones(len(x)), x]\\ntaus, w = o['estimated_taus'], o['hereditary_weights']\\na,b = s._design(taus,hist,hold,cov,d['past_dt'],d['eval_times'])\\nar,br = s._design(taus,-hist,-hold,cov,d['past_dt'],d['eval_times'])\\ncurve_reflection = np.max(np.abs((a+ar) @ w - 2*(cov @ w[2:])[:,None]*d['eval_times']))\\nrate_reflection = np.max(np.abs((b+br) @ w - 2*(cov @ w[2:])))\\nprint('signed-load reflection errors',curve_reflection,rate_reflection)\\nassert max(curve_reflection,rate_reflection) < 1e-10\\n# Jackknife actual calibration checks to expose dependence on a single reference point.\\nc = d['calibration_load_cells']\\nerrors = []\\nfor j, labj in enumerate(c['lab_id']):\\n    m = np.arange(len(c['lab_id'])) != j\\n    g, b0 = s._load_cells({k:v[m] for k,v in c.items()})[labj]\\n    errors.append(abs(g*c['cmd_stress'][j]+b0-c['true_stress'][j]))\\nprint('worst actual calibration jackknife stress error',max(errors))\\nPY\\ntimeout 60s python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nominal inputs and imputation alone) → H2 (calibrated signed-stress memory with missing-drift correction); the worst audited public feature slice has strain/onset MAE 0.02080/0.00759.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift operators, or classification balance\",\n      \"rejected_reason\": \"The specified task is deterministic sub-yield creep with continuous targets; signed-load symmetry and wing-by-stratum residuals are the relevant checks.\"\n    }\n  ],\n  \"rationale\": \"A reflected-load mismatch would require fixing the hereditary sign convention; large wing-by-stratum signed residuals would guide a calibration or alignment investigation, and a large jackknife error would flag undue reliance on one load-cell check. The near-yield slice tests the edge of the supplied regime before isolated schema verification.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9d62b351fdca3001ca7eb5c9d5a95702fb6b6665398576fea77466e5a296dec2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31439.02,
+      "usage_known": true,
+      "prompt_tokens": 31162,
+      "cached_tokens": 0,
+      "completion_tokens": 1199
+    }
+  ]
+}

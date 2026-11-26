@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4bbbfa29941f4879aaeb2bba757b839e",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:29:06.863950+00:00",
+  "ended_at_utc": "2026-11-26T18:29:33.148800+00:00",
+  "request_sha256": "225cc1cc7bf4f484df570d91dd3a1ad1d48f0fdf571b9e4dd152302f20e9e5e9",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 41490,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25898,
+    "cached_tokens": 6784,
+    "completion_tokens": 982
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nfrom pathlib import Path\\np=importlib.util.spec_from_file_location('solver','beta_w03_batch_05_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nt=pickle.load(open('public_beta_w03_batch_05.pkl','rb'))[0]; s,g=t['study'],t['gt']; u=m._responses(s); i,j=s['sensor_ij'].T; D=u[:,:,i,j].transpose(0,2,1).reshape(-1,u.shape[1]); y=m._calibrate(s); Z=s['Z_nuisance']; lam=s['nuisance_ridge']; P=m._profile(np.c_[D,y],Z,lam); r=P[:,-1]-g['r_y']; o=m.solve_beta_w03_batch_05(s); c=o['kkt_certificate']; w=o['weights']; G=g['S_tilde']; e=G@w-g['r_y']; grad=G.T@e+s['source_ridge']*w; j0=(e@e+s['source_ridge']*(w@w))/2; low=j0-grad@w+c['nu_sum']*s['total_budget']-s['u_box']*np.maximum(c['nu_sum']-grad,0).sum()\\nprint('design_max',np.max(abs(P[:,:-1]-G)), 'profiled_y_max',np.max(abs(r)),'per_bank_y_max',[np.max(abs(r[s['row_bank_id']==b])) for b in range(4)])\\nprint('weights_max',np.max(abs(w-g['w_opt'])),'terminal_max',np.max(abs(o['terminal_field']-g['terminal_field_A'])),'certificate_gap',j0-min(low,c['dual_lower_bound']),'certificate_stationarity',np.max(abs(grad-c['nu_sum']-c['lam_lower']+c['lam_upper'])))\\ncur=m._sweeps(s['sensor_calibration_sweeps']); x,y=cur[0]; print('current bank0',m._fit_sweep(x,y,(1.,0.)))\\nfor h in json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text()):\\n hfit=[m._fit_sweep(xb,yb,(1.,0.)) for xb,yb in m._sweeps(h)]; print(h['episode_short_name'],np.round(hfit,8).tolist(),'bank0 anchor maxerr',max(abs(y-hfit[0][0]*x-hfit[0][1])))\\nA=[m._build_1d(s['L'+a],s['n'+a],s['kappa_'+a],s['vel_'+a],s['robin_'+a],s['reaction_'+a]) for a in 'xy']; res=A[0]@u+u@A[1].T+(s['V_reaction_2d']+s['mu_shifts'][:,None,None,None])*u-s['source_modes']; print('worst_shift_mode_FVM_relative_residual',np.max(np.linalg.norm(res,axis=(-2,-1))/np.linalg.norm(s['source_modes'],axis=(-2,-1))))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived calibration -> H2 archive matching from the two bank-0 reference points; public schema passes and reaction nonseparability is 2.52e-16, but unobserved-bank error is not yet quantified.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Accept the public schema pass alone\",\"rejected_reason\":\"It does not report terminal-field accuracy or calibration error in the three banks without current sweeps.\"}],\"rationale\":\"Measure each output against the public references and check the transport residual for every mode and shift. Archive anchor residuals will show whether the current replay is supported by the measured bank or is just a recency tie.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "21fb4c8ea6e9c7458d33433eee7d58f8562755a4beee7556c09e266548b272a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27228.32,
+      "usage_known": true,
+      "prompt_tokens": 25898,
+      "cached_tokens": 6784,
+      "completion_tokens": 982
+    }
+  ]
+}

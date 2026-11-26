@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84bd35a1ddb549e6a62d81e7eff21da6",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:28:52.548562+00:00",
+  "ended_at_utc": "2026-11-26T18:29:21.322817+00:00",
+  "request_sha256": "e728b6f8197cf0f97dcb22b886ae6a2c655d675f6582f689b848916ed5f0fcc5",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 40334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25981,
+    "cached_tokens": 6784,
+    "completion_tokens": 1117
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, runpy, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w01_batch_05_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\ntry:\\n    verify = runpy.run_path('validate_public_schema.py')['verify_box_simplex_kkt_certificate']\\nexcept SystemExit as exc:\\n    assert exc.code == 0\\n    text = open('validate_public_schema.py').read().split('_d = os.path.dirname')[0]\\n    ns = {}; exec(text, ns)\\n    verify = ns['verify_box_simplex_kkt_certificate']\\nitem = pickle.load(open('public_beta_w01_batch_05.pkl', 'rb'))[0]\\ns, gt = item['study'], item['gt']\\nhistory = json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nscenarios = [('public_sparse', s)]\\nfor entry in history[-2:]:\\n    scenarios.append((entry['episode_short_name'] + '_complete', dict(s, sensor_calibration_sweeps={k: np.array(entry[k]) for k in ('bank_id', 'ref_signal', 'raw_readout')})))\\nfor wing in (0, 1):\\n    sweep = {k: np.array(history[-1][k]) for k in ('bank_id', 'ref_signal', 'raw_readout')}\\n    keep = sweep['bank_id'] // 2 != wing\\n    scenarios.append((f'wing_{wing}_sweeps_withheld', dict(s, sensor_calibration_sweeps={k: v[keep] for k, v in sweep.items()})))\\n    j = np.flatnonzero(sweep['bank_id'] // 2 == wing)[0]\\n    sweep['raw_readout'][j] += 0.2\\n    scenarios.append((f'wing_{wing}_emi', dict(s, sensor_calibration_sweeps=sweep)))\\ndesign, _ = mod._responses(s)\\nfor name, study in scenarios:\\n    out = mod.solve_beta_w01_batch_05(study)\\n    chk = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'], gap_tol=2e-4)\\n    b = study['row_bank_id']; gain, offset = mod._calibration(study)[b].T\\n    obs = (study['y_obs_raw'] - offset) / gain\\n    prof = mod._profile(study['Z_nuisance'], np.column_stack((design, obs)), study['nuisance_ridge'])\\n    werr = np.max(np.abs(out['weights'] - gt['w_opt']))\\n    ferr = np.linalg.norm(out['terminal_field'] - gt['terminal_field_A']) / np.linalg.norm(gt['terminal_field_A'])\\n    berr = max(np.max(np.abs(prof[b == i, -1] - gt['r_y'][b == i])) for i in range(4))\\n    print(f'{name}: worst_bank={berr:.3e} weights={werr:.3e} terminal={ferr:.3e} certificate_gap={chk[\\\"gap\\\"]:.3e}')\\n    assert chk['valid'], chk\\n    assert berr < 1e-5 and werr < 1e-5 and ferr < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable V replaces base axis reactions -> H2 V adds to base axis reactions; the public schema passes and the latest worst-bank profiled observation error is 1.01e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate does not measure terminal-field accuracy or exercise both wings’ calibration fallback. Check those on the saved solver using same-regime historical sweeps, wing-wise withholding, and one injected spike per wing. If a slice fails, the per-bank residual and independent field and certificate checks will distinguish a calibration failure from an inversion error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3af16e4fc933ed7768be638d18e56155a0b9119fe794982d8fd4b80b456b28a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29718.89,
+      "usage_known": true,
+      "prompt_tokens": 25981,
+      "cached_tokens": 6784,
+      "completion_tokens": 1117
+    }
+  ]
+}

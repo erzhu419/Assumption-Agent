@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01f55f326b214debb280a4ae7748d1c5",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:26:42.718282+00:00",
+  "ended_at_utc": "2026-11-26T18:27:21.877675+00:00",
+  "request_sha256": "eb10c188ed9f927b337fdaa12cba5c3c979a89771ab3173dd7af46f78ae46140",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 63750,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33086,
+    "cached_tokens": 11136,
+    "completion_tokens": 1653
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_w04_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nfor rec in pickle.load(open(p+'public_alpha_w04_batch_04.pkl','rb')):\\n d,g=rec['dataset'],rec['gt']; tr,te=d['train'],d['test']; dt=np.asarray(d['past_dt']); t=np.asarray(d['eval_times']); y=d['yield_stress']; o=m.solve_alpha_w04_batch_04(d); aa=m._calibrate(d['calibration_load_cells']); xs=m._align(tr,te)\\n # Independent chronological recurrence and signed-yield oracle, including exact threshold and reversal.\\n h=np.zeros((10,len(dt))); h[2:4,-1]=[2*y,-2*y]; h[6:8,:2]=[[2*y,-y],[-2*y,y]]; h[8:,-1]=[y,-y]\\n q=y*np.array([.5,-.5,.5,-.5,2.,-2.,2.,-2.,1.,-1.]); x=np.ones((len(h),5)); x[1::2]=-x[::2]; tau=o['estimated_taus']; state=np.zeros((len(h),2)); work=np.zeros(len(h))\\n for j,ds in enumerate(dt):\\n  state=h[:,j,None]+(state-h[:,j,None])*np.exp(-ds/tau)\\n  work+=np.maximum(0,np.abs(h[:,j])-y)**2*ds\\n ov=(np.maximum(q-y,0)**2-np.maximum(-q-y,0)**2); delta=q[:,None]-state; f=1-np.exp(-t[:,None]/tau)\\n A,B=m._design(tau,dt,t,(h,q,x,ov,work*q),(True,True)); oracle=np.concatenate((delta[:,None,:]*f, x[:,None,:]*t[None,:,None],(ov[:,None]*t)[:,:,None],((work*q)[:,None]*f[:,0])[:,:,None]),axis=-1)\\n np.testing.assert_allclose(A,oracle,rtol=2e-12,atol=2e-12); np.testing.assert_allclose(B,np.column_stack((delta/tau,x,ov,work*q/tau[0])),rtol=2e-12,atol=2e-12)\\n np.testing.assert_allclose(A[::2],-A[1::2],atol=2e-12); assert np.all(A[-2:,:,7:]==0)\\n # Check wing-level fallback with both labs sparse and one bad spot check per lab.\\n c=d['calibration_load_cells']; labels=np.asarray(c['lab_id']); cmd=np.asarray(c['cmd_stress']); rows=np.arange(len(labels))\\n for wing in ((0,1),(2,3)):\\n  retain=~np.isin(labels,wing); bad=[]\\n  for lab in wing:\\n   j=rows[labels==lab]; retain[j[np.argmin(cmd[j])]]=True; k=j[np.argmax(cmd[j])]; retain[k]=True; bad.append(k)\\n  panel={k:np.asarray(v)[retain].copy() for k,v in c.items()}; panel['true_stress'][np.isin(rows[retain],bad)]+=[0.16,-0.24]; recovered=m._calibrate(panel)\\n  err=float(np.max(np.abs(recovered-aa))); print('joint sparse+EMI wing',wing,'max coefficient delta',err); assert err<0.001\\n # Compare pooled errors with measured lab/stratum/yield slices and check if any lab has a systematic signed offset.\\n reg=(abs(g['te_hold_true'])>y).astype(int)+2*(abs(g['te_hist_true']).max(axis=1)>y); miss=np.isnan(te['coupon_features_raw']).any(axis=1)\\n err=o['predicted_strain']-g['te_clean']; er=o['initial_rate_pred']-g['te_true_rate0']\\n groups=[]\\n for lab in range(4):\\n  for stratum in np.unique(te['stratum']):\\n   for r in np.unique(reg):\\n    sel=(te['lab_id']==lab)&(te['stratum']==stratum)&(reg==r)\\n    if sel.any(): groups.append((int(sel.sum()),float(np.sqrt(np.mean(err[sel]**2))),float(np.sqrt(np.mean(er[sel]**2)))))\\n print('worst clean lab x stratum x yield RMSE',np.max(np.array(groups)[:,1:],axis=0)); print('complete-row signed curve/rate mean by lab',[(i,round(float(err[k].mean()),6),round(float(er[k].mean()),6)) for i in range(4) if (k:=(te['lab_id']==i)&~miss).any()]); assert max(gp[1] for gp in groups)<0.06 and max(gp[2] for gp in groups)<0.02\\n print('independent recurrence, sign symmetry, and yield cutoff passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cell-balanced imputation alone -> H2 measured-rate drift correction for incomplete coupons; verified worst clean lab-by-yield strain/rate RMSE is 0.01963/0.00636.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, interaction, or relay terms to the constitutive model\",\n      \"rejected_reason\": \"This task specifies a two-state Prony recurrence and signed quadratic yield terms, not a relay, diffusion operator, or classification problem. An independent recurrence and stratified residuals can test whether the specified basis or lab alignment is wrong.\"\n    }\n  ],\n  \"rationale\": \"Audit three failure modes not covered by the prior run: a history-order or sign error would require a basis fix, joint sparse and noisy checks across a wing would expose a calibration fallback failure, and finer clean-reference slices would show whether pooled performance hides a lab or stratum offset.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "03acd74df566ce67c8554a8d9036a69bf087b98e72298654cee8f3601d27fe48",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40108.4,
+      "usage_known": true,
+      "prompt_tokens": 33086,
+      "cached_tokens": 11136,
+      "completion_tokens": 1653
+    }
+  ]
+}

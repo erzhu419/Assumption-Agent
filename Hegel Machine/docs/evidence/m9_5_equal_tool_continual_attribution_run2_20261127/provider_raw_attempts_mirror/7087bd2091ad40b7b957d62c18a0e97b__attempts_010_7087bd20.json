@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7087bd2091ad40b7b957d62c18a0e97b",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:59:03.452572+00:00",
+  "ended_at_utc": "2026-11-26T18:59:42.579380+00:00",
+  "request_sha256": "f80d88ce57a6a96d57230f9d834e45d2495f3925360face89dc5bd3585b94c95",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 59893,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32985,
+    "cached_tokens": 6784,
+    "completion_tokens": 1653
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w03_batch_08_solver.py')\\ns = p.read_text()\\npos = s.index('def solve_alpha_w03_batch_08')\\ns = s[:pos] + '''def _panel_rate_correction(tr, x, h, p, labs, dt, t, sy, tau, coef, cal):\\n    # The reference-panel mismatch acts on the linear covariate rate,\\n    # not on either relaxation branch or the plastic history.\\n    n = len(tr['lab_id'])\\n    hp, pp = _physical(h[:n], p[:n], labs[:n], cal)\\n    design, _ = _design(tau, x[:n], hp, pp, dt, t, sy)\\n    residual = tr['strain_curves_obs'] - tr['strain_0'][:, None] - design @ coef\\n    late = (t >= np.median(t)) & (t > 0)\\n    slope = np.median(residual[:, late] / t[late], axis=1)\\n    complete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\n    signal = np.column_stack((np.ones(len(x)), x[:, 1:] @ coef[3:7]))\\n    correction = np.zeros(len(x) - n)\\n    for lab in np.unique(labs[n:]):\\n        fit = (labs[:n] == lab) & complete\\n        design, target = signal[:n][fit], slope[fit]\\n        if len(target) < 4 or np.linalg.matrix_rank(design) < 2:\\n            continue\\n        w = np.ones(len(target))\\n        for _ in range(5):\\n            beta = np.linalg.lstsq(design * w[:, None], target * w, rcond=None)[0]\\n            e = target - design @ beta\\n            scale = max(.001, 1.4826 * np.median(abs(e - np.median(e))))\\n            w = 1. / np.hypot(1., e / (3. * scale))\\n        pred = labs[n:] == lab\\n        correction[pred] = signal[n:][pred] @ beta\\n    return correction\\n\\n\\n''' + s[pos:]\\ns = s.replace('    h, p = _physical(h[n:], p[n:], labs[n:], cal)', '    correction = _panel_rate_correction(dataset[\\\\'train\\\\'], x, h, p, labs, dt, t, sy, tau, coef, cal)\\\\n    h, p = _physical(h[n:], p[n:], labs[n:], cal)')\\ns = s.replace('    curves[missing] += (observed[missing] - rates[missing])[:, None] * t\\\\n    rates[missing] = observed[missing]', '    correction[missing] = observed[missing] - rates[missing]\\\\n    curves += correction[:, None] * t\\\\n    rates += correction')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w03_batch_08_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor s in pickle.load(open('/holdout_task/public_alpha_w03_batch_08.pkl','rb')):\\n    d,g=s['dataset'],s['gt']; o=m.solve_alpha_w03_batch_08(d); te=d['test']; l=te['lab_id']; miss=~np.isfinite(te['coupon_features_raw']).all(1); sy=d['yield_stress']; ab=(abs(g['te_hold_true'])>sy)|(abs(g['te_hist_true'])>sy).any(1)\\n    e=o['predicted_strain']-g['te_clean']; r=o['initial_rate_pred']-g['te_true_rate0'];\\n    for name,z in [('all',l>=0),('wing A',l<2),('wing B',l>=2),('above',ab),('below',~ab),('missing',miss),('complete',~miss)]+[(f'lab {i}',l==i) for i in range(4)]:\\n        if z.any(): print(name,int(z.sum()),'strain/rate RMSE, max strain error',np.round([np.mean(e[z]**2)**.5,np.mean(r[z]**2)**.5,abs(e[z]).max()],6))\\n    for k,gk in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]: print(k,'max abs error',abs(o[k]-g[gk]).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared covariate scaling → H2 lab-specific linear rate correction; five-fold worst complete-lab late-slope RMSE fell from 0.00981 to 0.00212, with missing-feature RMSE unchanged at 0.00834.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"After affine stress calibration, one shared linear covariate scale suffices for prediction across labs.\",\n    \"empirical_witness\": \"A lab-by-covariate interaction reduced held-out coupon late-slope RMSE in lab 1 from 0.00981 to 0.00212 and in lab 2 from 0.00398 to 0.00169.\",\n    \"causal_blanket_diagnosis\": \"Residuals follow the covariate contribution to the linear strain rate; agreement with this term is stronger than evidence for a constant lab offset or a new relaxation branch.\",\n    \"sublated_pivot\": \"Retain the shared Prony and plastic-work fit, and learn a lab-specific intercept and scale on the linear covariate rate from training curves.\",\n    \"risk_kind\": \"systematic lab-specific prediction error\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expanded residual regression\",\n      \"rejected_reason\": \"It increased the worst complete-lab late-slope RMSE relative to the two-parameter correction.\"\n    },\n    {\n      \"option\": \"Blend onset innovations into complete-coupon predictions\",\n      \"rejected_reason\": \"It offered only a small additional gain in lab 1 and slightly worsened late-slope error in labs 0 and 2; keep onset observations for missing features, where their signal is much stronger.\"\n    }\n  ],\n  \"rationale\": \"Promote the correction supported by out-of-fold measurements. Verify the written artifact in an isolated Python process and compare strain, onset rate, and parameter errors independently to detect any regression hidden by the pooled score.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7001b30e5981647781ef7771bff8c5266a6d8128cb3e292319b5c496058b6ec3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40094.99,
+      "usage_known": true,
+      "prompt_tokens": 32985,
+      "cached_tokens": 6784,
+      "completion_tokens": 1653
+    }
+  ]
+}

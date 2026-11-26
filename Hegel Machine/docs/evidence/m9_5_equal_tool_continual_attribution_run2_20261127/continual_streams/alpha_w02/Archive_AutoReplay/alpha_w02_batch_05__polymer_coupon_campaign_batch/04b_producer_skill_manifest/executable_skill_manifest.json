@@ -1,0 +1,163 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_w02_batch_05_fd338f5d459c",
+    "source_hash": "fd338f5d459c0b918f0b28a4223a39c57fb1d1d484f8efe66de69896595452f9",
+    "parent_ids": [],
+    "source_episode_id": "alpha_w02_batch_05__polymer_coupon_campaign_batch",
+    "task_id": "alpha_w02_batch_05__polymer_coupon_campaign_batch",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_w02_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_w02_batch_01_solver.py",
+        "bytes": 13114,
+        "sha256": "e8715c08425e289db0b3ea7948d5104a33cb448e791d1fe7867d9fb28f98ed4e"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_w02_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_w02_batch_02_solver.py",
+        "bytes": 7561,
+        "sha256": "b08216ae03186e163780affaf10bb50a769a1f42eb57af2a89727cb6c79f7e8f"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_w02_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_w02_batch_03_solver.py",
+        "bytes": 17887,
+        "sha256": "812a1c2f968cc6240b9dc969664fc337568055b70f88fda00c1bcbdf872ca393"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_w02_batch_04_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_w02_batch_04_solver.py",
+        "bytes": 8755,
+        "sha256": "65ca8e864ffd917aef06010bcae790068b1b3d92f1e468580266b21e76252db8"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_w02_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_w02_s00_solver.py",
+        "bytes": 9538,
+        "sha256": "9f57043ecf378b3ab81f634e9a8edbc6faaf0b72f9c7a13fb543dc51eb5111b1"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 validate_public_schema.py && cat validate_public_schema.py && sed -n '1,180p' public_asset_index.json; a=/tmp/hegel_continual_archive; ls -lh \"$a\"; if test -f \"$a/alpha_w02_batch_04_solver.py\"; then sed -n '1,265p' \"$a/alpha_w02_batch_04_solver.py\"; fi; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation reference-panel alignment robust affine calibration' 2>&1 | head -40",
+      "cd /holdout_task; cat validate_public_schema.py; cat /tmp/hegel_continual_archive/alpha_w02_batch_04_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.align_reference_panel | head -35; python3 - <<'PY'\nimport pickle,json,numpy as np\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))\ndef walk(d,depth=0):\n for k,v in d.items():\n  if isinstance(v,dict): print(' '*depth,k); walk(v,depth+2)\n  else:\n   a=np.asarray(v); print(' '*depth,k,a.shape,a.dtype, (a.reshape(-1)[:6] if a.size>6 else v))\nwalk(p)\na=json.load(open('/tmp/hegel_c",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,json,numpy as np\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb')); print('public cases:',len(p))\nfor item in p:\n d=item['dataset']; print('case metadata:',{k:v for k,v in item.items() if k!='dataset'})\n def walk(obj,depth=0):\n  for k,v in obj.items():\n   if isinstance(v,dict): print(' '*depth,k); walk(v,depth+2)\n   else:\n    a=np.asarray(v); print(' '*depth,k,a.shape,a.dtype,a.ravel()[:5])\n walk(d); print('current checks by lab:')\n c=d['calibration_load_cells']; l=np.asarray(c['lab_id']); x=np.asarray(c['cmd_stress']); y=np.asarray(c[",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,json,numpy as np\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]['dataset']\nfor k,v in p.items():\n print(k, {kk:(np.shape(vv),str(np.asarray(vv).dtype)) for kk,vv in v.items()} if isinstance(v,dict) else (np.shape(v),str(np.asarray(v).dtype),v if np.size(v)<16 else None))\nfor name,tab in [('current',p['calibration_load_cells'])]+[(f'old{i}',t) for i,t in enumerate(json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')))]:\n lab,x,y=(np.asarray(tab[k]) for k in ('lab_id','cmd_stress','true_stress'))\n for i i",
+      "set -e\ncd /holdout_task\nsed 's/solve_alpha_w02_batch_04/solve_alpha_w02_batch_05/g' /tmp/hegel_continual_archive/alpha_w02_batch_04_solver.py > alpha_w02_batch_05_solver.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('alpha_w02_batch_05_solver.py'); s=p.read_text(); i=s.index('        prior = None'); j=s.index('        if prior is None:',i)\ns=s[:i]+'''        prior = None\n        recent = []\n        for sweep in reversed(archive):\n            sx, sy = _checks(sweep, lab)\n            old, count, width = _line(sx, sy)\n            if count < 4 or width < .5:\n                continue\n        ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, numpy as np\ns=importlib.util.spec_from_file_location('solver','alpha_w02_batch_05_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; o=m.solve_alpha_w02_batch_05(d)\ncal=m._calibrate(d['calibration_load_cells']); target=np.c_[g['stress_gains'],g['stress_biases']]; dt,t=d['past_dt'],d['eval_times']; inputs=m._inputs(te,cal,dt,d['yield_stress'],m._features(tr,t",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\ns=importlib.util.spec_from_file_location('solver','alpha_w02_batch_05_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; o=m.solve_alpha_w02_batch_05(d)\ndt,t=d['past_dt'],d['eval_times']; c=m._calibrate(d['calibration_load_cells']); n=len(tr['lab_id']); f=m._features(tr,te); x=m._inputs(tr,c,dt,d['yield_stress'],f[:n]); y=np.c_[tr['strain_curves_obs']-",
+      "cd /holdout_task && sed -n '/^def _condition_drift/,/^def solve/p' alpha_w02_batch_05_solver.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\ns=importlib.util.spec_from_file_location('solver','alpha_w02_batch_05_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; o=m.solve_alpha_w02_batch_05(d)\ndt,t=d['past_dt'],d['eval_times']; c=m._calibrate(d['calibration_load_cells']); n=len(tr['lab_id']); f=m._features(tr,te);",
+      "cd /holdout_task && sed -n '/^def _features/,/^def _fit/p' alpha_w02_batch_05_solver.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\ns=importlib.util.spec_from_file_location('solver','alpha_w02_batch_05_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nd=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; labs=tr['lab_id']; n=len(labs)\nf=m._features(tr,te); x=m._inputs(tr,m._calibrate(d['calibration_load_cells']),dt,d['yield_stress'],f[:n]); y=np.",
+      "set -e\ncd /holdout_task\nsed -n '1,/^def _features/p' alpha_w02_batch_05_solver.py\nsed -n '/^def _fit/,/^def _condition_drift/p' alpha_w02_batch_05_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\ns=importlib.util.spec_from_file_location('solver','alpha_w02_batch_05_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; dt,t=d['past_dt'],d['eval_times']; y=d['yield_stress']; te=d['test']; n=len(te['lab_id']); taus=g['taus']; c=np.r_[g['theta'],"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_w02_batch_03_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_w02_batch_03_solver.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_w02_batch_05_solver.py",
+        "filename": "alpha_w02_batch_05_solver.py",
+        "bytes": 9140,
+        "sha256": "4e172b35c9880080a130c005930496089dcb87652b1c19bac8bf4f621a81330d",
+        "content_addressed_ref": "content_addressed_blobs/4e172b35c9880080a130c005930496089dcb87652b1c19bac8bf4f621a81330d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_w02_batch_05_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_line",
+      "_features",
+      "_memory",
+      "_design",
+      "_fit",
+      "_condition_drift",
+      "_consensus",
+      "_with_prior"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "fd338f5d459c0b918f0b28a4223a39c57fb1d1d484f8efe66de69896595452f9",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\nsed -n '1,/^def _features/p' alpha_w02_batch_05_solver.py\nsed -n '/^def _fit/,/^def _condition_drift/p' alpha_w02_batch_05_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "fd338f5d459c0b918f0b28a4223a39c57fb1d1d484f8efe66de69896595452f9",
+        "expected_candidate_sha256": "fd338f5d459c0b918f0b28a4223a39c57fb1d1d484f8efe66de69896595452f9",
+        "computed_candidate_sha256": "fd338f5d459c0b918f0b28a4223a39c57fb1d1d484f8efe66de69896595452f9",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_w02_batch_05_solver.py",
+            "bytes": 9140
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_fd338f5d"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_line",
+        "code": "def _line(x, y, tol, span):\n    i, j = np.triu_indices(len(x), 1)\n    ok = abs(x[j] - x[i]) >= span\n    i, j = (i[ok], j[ok])\n    if not len(i):\n        return None\n    gain = (y[j] - y[i]) / (x[j] - x[i])\n    r = abs(y - y[i, None] - gain[:, None] * (x - x[i, None]))\n    inlier = r <= tol\n    count = inlier.sum(axis=1)\n    best = np.lexsort(((r * inlier).sum(axis=1), -count))[0]\n    if count[best] < max(3, len(x) // 2 + 1):\n        return None\n    use = inlier[best]\n    return np.linalg.lstsq(np.c_[x[use], np.ones(use.sum())], y[use], rcond=None)[0]"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(train, test):\n    lab, stratum = (np.r_[train[k], test[k]] for k in ('lab_id', 'stratum'))\n    feat = np.vstack([s['coupon_features_raw'] for s in (train, test)]).astype(float)\n    ref = np.vstack([s['ref_coupons'] for s in (train, test)])\n    for c in np.unique(lab):\n        rows = lab == c\n        r = ref[rows]\n        r = r[:, np.isfinite(r).sum(axis=0) >= 2]\n        feat[rows] = (feat[rows] - np.median(np.nanmean(r, axis=0))) / np.median(np.nanstd(r, axis=0))\n    _, cell = np.unique(np.c_[lab, stratum], axis=0, return_inverse=True)\n    cell = cell.ravel()\n    means = []\n    for k in np.unique(cell):\n        a = feat[cell == k]\n        n = np.isfinite(a).sum(axis=0)\n        means.append(np.divide(np.nansum(a, axis=0), n, out=np.full(a.shape[1], np.nan), where=n > 0))\n    means = np.asarray(means)\n    count = np.isfinite(means).sum(axis=0)\n    fill = np.divide(np.nansum(means, axis=0), count, out=np.zeros(feat.shape[1]), where=count > 0)\n    return np.c_[np.ones(len(feat)), np.where(np.isfinite(feat), feat, fill)]"
+      },
+      {
+        "name": "_memory",
+        "code": "def _memory(stress, dt, tau, jac=False):\n    past, hold, initial = stress\n    remaining = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\n    a, b = (remaining[:, None] / tau, dt[:, None] / tau)\n    ea = np.exp(-a)\n    mix = ea * -np.expm1(-b)\n    total = dt.sum() / tau\n    seed = initial * np.exp(-total)\n    delta = hold[:, None] - past @ mix - seed\n    if jac:\n        return (delta, -(past @ (a * mix - ea * b * np.exp(-b))) - seed * total)\n    return delta"
+      },
+      {
+        "name": "_design",
+        "code": "def _design(stress, feat, dt, t, logtau, jac=False):\n    tau = np.exp(logtau)\n    d = _memory(stress, dt, tau, jac)\n    if jac:\n        d, dd = d\n    u = t[:, None] / tau\n    f = -np.expm1(-u)\n    curve = np.concatenate((d[:, None, :] * f, feat[:, None, :] * t[None, :, None]), axis=2)\n    A = np.concatenate((curve, np.c_[d / tau, feat][:, None, :]), axis=1)\n    if not jac:\n        return A\n    dcurve = dd[:, None, :] * f - d[:, None, :] * (u * np.exp(-u))\n    return (A, np.concatenate((dcurve, ((dd - d) / tau)[:, None, :]), axis=1))"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(stress, feat, dt, t, y):\n    from scipy.optimize import least_squares\n    keep = np.isfinite(y)\n    obs = y[keep]\n    s = np.ones(len(obs))\n\n    def residual(p):\n        return (_design(stress, feat, dt, t, p[:2])[keep] @ p[2:] - obs) / s\n\n    def jac(p):\n        a, da = _design(stress, feat, dt, t, p[:2], True)\n        return np.c_[da[keep] * p[None, 2:4], a[keep]] / s[:, None]\n    bounds = (np.r_[np.log([0.08, 0.08]), np.full(7, -np.inf)], np.r_[np.log([15.0, 15.0]), np.full(7, np.inf)])\n    starts = []\n    grid = np.geomspace(0.18, 9.0, 8)\n    for i, a in enumerate(grid[:-1]):\n        for b in grid[i + 1:]:\n            logtau = np.log([a, b])\n            A = _design(stress, feat, dt, t, logtau)[keep]\n            coef = np.linalg.lstsq(A, obs, rcond=None)[0]\n            for _ in range(4):\n                w = 1 / np.hypot(1, (A @ coef - obs) / 0.04)\n                coef = np.linalg.lstsq(A * w[:, None], obs * w, rcond=None)[0]\n            starts.append((np.log1p(((A @ coef - obs) / 0.04) ** 2).sum(), np.r_[logtau, coef]))\n\n    def fit(start, scale):\n        return least_squares(residual, start, jac=jac, bounds=bounds, loss='cauchy', f_scale=scale, x_scale='jac', max_nfev=120)\n    first = [fit(p, 0.04) for _, p in sorted(starts, key=lambda a: a[0])[:3]]\n    p = min(first, key=lambda v: v.cost).x\n    errors = _design(stress, feat, dt, t, p[:2]) @ p[2:] - y\n    scales = [max(1e-05, 1.4826 * np.nanmedian(abs(a - np.nanmedian(a)))) for a in (errors[:, :-1], errors[:, -1])]\n    s = np.broadcast_to(np.r_[np.repeat(scales[0], len(t)), scales[1]], y.shape)[keep]\n    p = fit(p, 2.0).x\n    return (np.exp(p[:2]), p[2:])"
+      },
+      {
+        "name": "_condition_drift",
+        "code": "def _condition_drift(train, test, train_inputs, train_y, prediction, dt, times, taus, coef):\n    missing = ~np.isfinite(test['coupon_features_raw'])\n    use = missing.any(axis=1) & np.isfinite(test['instant_rate_obs'])\n    if not np.any(use):\n        return\n    observed = np.isfinite(train['coupon_features_raw'])\n    complete = observed.all(axis=1)\n    rate = _design(train_inputs, dt, times[:0], np.log(taus))[:, 0] @ coef\n    residual = (train_y[:, -1] - rate)[complete & np.isfinite(train_y[:, -1])]\n    if not residual.size:\n        return\n    noise = max(1e-05, 1.4826 * np.median(abs(residual - np.median(residual))))\n    aligned = np.where(observed, train_inputs[2][:, 1:], np.nan)\n    variance = np.nan_to_num(np.nanvar(aligned, axis=0)) * coef[3:7] ** 2\n    uncertainty = missing[use] @ variance\n    gain = uncertainty / (uncertainty + noise ** 2)\n    drift = gain * (test['instant_rate_obs'][use] - prediction[use, -1])\n    prediction[use] += drift[:, None] * np.r_[times, 1.0]"
+      },
+      {
+        "name": "_consensus",
+        "code": "def _consensus(x, y):\n    i, j = np.triu_indices(len(x), 1)\n    good = np.abs(x[i] - x[j]) > 1e-08\n    i, j = (i[good], j[good])\n    if not len(i):\n        return []\n    g = (y[j] - y[i]) / (x[j] - x[i])\n    r = y[None, :] - y[i, None] - g[:, None] * (x[None, :] - x[i, None])\n    keep = np.abs(r) <= 0.001\n    masks = np.unique(keep[keep.sum(axis=1) == keep.sum(axis=1).max()], axis=0)\n    fits = []\n    for m in masks:\n        fit = np.linalg.lstsq(np.c_[x[m], np.ones(m.sum())], y[m], rcond=None)[0]\n        fits.append((fit, m.sum(), np.ptp(x[m])))\n    return fits"
+      },
+      {
+        "name": "_with_prior",
+        "code": "def _with_prior(x, y, fits, prior):\n    gain, bias = prior\n    if not len(x):\n        return prior\n    offsets = y - gain * x - bias\n    center = np.median(offsets)\n    agreeing = np.abs(offsets - center) <= 0.004\n    if agreeing.sum() > len(x) // 2 and (len(x) > 1 or abs(center) < 0.1):\n        bias += np.median(offsets[agreeing])\n    else:\n        i = np.argmin(np.abs(offsets))\n        if abs(offsets[i]) < 0.1:\n            bias += offsets[i]\n    for fit, count, span in fits:\n        if count >= 3 and span >= 0.4 and (abs(fit[0] - gain) <= 0.01) and (abs(fit[1] - bias) <= 0.01):\n            return fit\n    return (gain, bias)"
+      }
+    ]
+  }
+}

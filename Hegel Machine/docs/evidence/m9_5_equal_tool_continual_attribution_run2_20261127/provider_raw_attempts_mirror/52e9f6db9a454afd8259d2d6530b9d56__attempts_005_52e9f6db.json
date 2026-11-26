@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "52e9f6db9a454afd8259d2d6530b9d56",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:31:50.401009+00:00",
+  "ended_at_utc": "2026-11-26T18:32:22.088023+00:00",
+  "request_sha256": "dfe09fc8e74b679f0da27af946a9716d63de01b53fde14c05df9dee9380a3dd2",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 40198,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26242,
+    "cached_tokens": 6784,
+    "completion_tokens": 1276
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/coupon_cv.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport sys\\nimport numpy as np\\n\\npath = sys.argv[1]\\nsp = importlib.util.spec_from_file_location('solver', path)\\ns = importlib.util.module_from_spec(sp)\\nsp.loader.exec_module(s)\\nsolver = getattr(s, 'solve_alpha_w01_batch_' + ('05' if '05' in path else '04'))\\nd = pickle.load(open('/holdout_task/public_alpha_w01_batch_05.pkl', 'rb'))[0]['dataset']\\ntr = d['train']\\nlab = tr['lab_id']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ncurve = np.empty_like(tr['strain_curves_obs'])\\nrates = np.empty_like(tr['instant_rate_obs'])\\nblind_curve = np.empty_like(curve)\\nblind_rate = np.empty_like(rates)\\nfor i in np.unique(lab):\\n    v = lab == i\\n    train = {k: a[~v] for k, a in tr.items()}\\n    test = {k: a[v] for k, a in tr.items() if k != 'strain_curves_obs'}\\n    ans = solver(dict(d, train=train, test=test))\\n    blind = solver(dict(d, train=train, test={k: a for k, a in test.items() if k != 'instant_rate_obs'}))\\n    curve[v], rates[v] = ans['predicted_strain'], ans['initial_rate_pred']\\n    blind_curve[v], blind_rate[v] = blind['predicted_strain'], blind['initial_rate_pred']\\n    print('held lab', i, 'taus', ans['estimated_taus'].round(5), 'theta', ans['hereditary_weights'].round(5), 'plastic', ans['viscoplastic_weights'])\\n\\ndef stats(err):\\n    return np.r_[np.sqrt(np.mean(err**2)), np.median(np.abs(err)), np.quantile(np.abs(err), .9)].round(5).tolist()\\n\\nerr = curve - tr['strain_curves_obs']\\nbe = blind_curve - tr['strain_curves_obs']\\nbr = blind_rate - tr['instant_rate_obs']\\nfor i in np.unique(lab):\\n    for c in (True, False):\\n        v = (lab == i) & (complete == c)\\n        print('slice', i, 'complete', c, 'n',sum(v),'curve_rmse/MedAE/P90',stats(err[v]),'blind curve',stats(be[v]),'blind rate',stats(br[v]))\\nprint('blind vs informed missing curves', stats(be[~complete]), stats(err[~complete]))\\nprint('complete curves per horizon quantiles', np.quantile(abs(err[complete]),[.5,.8,.9,.95,.99],axis=0).round(4))\\nprint('complete curve/rate signed residual quantiles', np.quantile(err[complete],[0,.01,.05,.5,.95,.99,1]).round(4), np.quantile(br[complete],[0,.01,.05,.5,.95,.99,1]).round(4))\\nprint('complete within-coupon end-to-end residual correlation', np.corrcoef(err[complete,0],err[complete,-1])[0,1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/coupon_cv.py /tmp/hegel_continual_archive/alpha_w01_batch_04_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: Recent calibration puts every public coupon below yield, so validate the elastic Prony fit across labs; the largest in-sample curve RMSE was 0.514 on incomplete lab-2 coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Estimate nonzero plastic coefficients for the public batch\",\n      \"rejected_reason\": \"Neither plastic basis column activates under the spot-checked calibration, so these coefficients are not identifiable in this batch.\"\n    }\n  ],\n  \"rationale\": \"Leave each lab out of the constitutive fit to test cross-wing transfer. Score onset rates without feeding held-out rates to the solver, and separately test whether those available rates improve curve prediction for incomplete coupons. Residual quantiles will distinguish typical curve error from large outliers.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "994bc8ac919b1a5da083c8b3ab58952e9bbfe7e0c7d40303f941b3890d87304c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32639.69,
+      "usage_known": true,
+      "prompt_tokens": 26242,
+      "cached_tokens": 6784,
+      "completion_tokens": 1276
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84f5d30ae7904f65adab1ffc01f7896c",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:31:32.596357+00:00",
+  "ended_at_utc": "2026-11-26T18:32:01.789913+00:00",
+  "request_sha256": "888661ae8de7cf376837c2249d3f246cd768a9f7e513d12169ee5cfc2364045c",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 60283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31352,
+    "cached_tokens": 6784,
+    "completion_tokens": 1191
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport ast, importlib.util, json, math, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w01_batch_05_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\npath = 'validate_public_schema.py'\\ntree = ast.parse(Path(path).read_text(), filename=path)\\nfn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'verify_box_simplex_kkt_certificate')\\nns = {'np': np, 'math': math}\\nexec(compile(ast.Module(body=[fn], type_ignores=[]), path, 'exec'), ns)\\nverify = ns[fn.name]\\ncase = pickle.load(open('public_beta_w01_batch_05.pkl', 'rb'))[0]\\ns, g = case['study'], case['gt']\\nhist = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\ncols = ('bank_id', 'ref_signal', 'raw_readout')\\ndef sweeps(e):\\n    return {k: np.array(e[k]) for k in cols}\\ncases = [('public_sparse', s['sensor_calibration_sweeps'])] + [(e['episode_short_name'], sweeps(e)) for e in hist[-2:]]\\nfor wing in (0, 1):\\n    sw = sweeps(hist[-1]); take = sw['bank_id'] // 2 == wing\\n    cases.append((f'withhold_{wing}', {k: v[~take] for k, v in sw.items()}))\\n    sw['raw_readout'][np.flatnonzero(take)[0]] += .2\\n    cases.append((f'emi_{wing}', sw))\\ndesign, _ = m._responses(s)\\nb = s['row_bank_id']\\nfor name, sw in cases:\\n    study = dict(s, sensor_calibration_sweeps=sw)\\n    out = m.solve_beta_w01_batch_05(study)\\n    cert = verify(g['S_tilde'], g['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n    gain, offset = m._calibration(study)[b].T\\n    data = np.column_stack((design, (s['y_obs_raw'] - offset) / gain))\\n    prof = m._profile(s['Z_nuisance'], data, s['nuisance_ridge'])\\n    berr = np.max(np.abs(prof[:, -1] - g['r_y']))\\n    werr = np.max(np.abs(out['weights'] - g['w_opt']))\\n    ferr = np.linalg.norm(out['terminal_field'] - g['terminal_field_A']) / np.linalg.norm(g['terminal_field_A'])\\n    print(f'{name}: bank={berr:.3e} weight={werr:.3e} field={ferr:.3e} KKT={cert}', flush=True)\\n    assert cert['valid'] and max(berr, werr, ferr) < 1e-5\\nsw = sweeps(hist[-1]); take = sw['bank_id'] == 1\\nexpected = np.array([1.193523, .142039])\\nsw['raw_readout'][take] = np.polyval(expected, sw['ref_signal'][take])\\nerr = np.max(np.abs(m._calibration(dict(s, sensor_calibration_sweeps=sw))[1] - expected))\\nprint(f'off-lattice calibration error={err:.3e}')\\nassert err < 1e-12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrounded same-regime calibration -> H2 narrow correction to the observed four-decimal lattice; H2 passed the public schema, but its seven-slice worst KKT gap is pending because the previous stress harness exited before running the cases.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous command printed the schema result twice and no slice metrics. Load only the independent verifier function to bypass the validator's top-level exit, then test the saved solver at the default KKT tolerance. If a slice fails or the off-lattice map is altered, revise the calibration correction rather than the verified transport stencil.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "6a26e3e27e49349408396e57e9dd0c4038ed54b4672928ee9f2ab9176c10091d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30147.6,
+      "usage_known": true,
+      "prompt_tokens": 31352,
+      "cached_tokens": 6784,
+      "completion_tokens": 1191
+    }
+  ]
+}

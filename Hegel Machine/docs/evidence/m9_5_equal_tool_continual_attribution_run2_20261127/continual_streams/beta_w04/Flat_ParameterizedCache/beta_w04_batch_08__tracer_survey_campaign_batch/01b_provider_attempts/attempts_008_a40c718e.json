@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a40c718e49734256b4ddf8b828096bf3",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_08__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:53:18.410305+00:00",
+  "ended_at_utc": "2026-11-26T18:53:57.931166+00:00",
+  "request_sha256": "e0930d06c080f2461f3d0f6c6bf9f08f0f906e8b54b4071611df2f1eeb6c6bc4",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 40925,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26225,
+    "cached_tokens": 6784,
+    "completion_tokens": 1630
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 -I validate_public_schema.py && python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_08_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\narchive = '/tmp/hegel_continual_archive/'\\nhist = {row['episode_short_name']: row for row in json.load(open(archive + 'archive_calibration_history.json'))}\\ndef sweep(name, bank):\\n    row = hist['beta_w04_batch_' + name]\\n    b, x, y = (np.asarray(row[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    return x[b == bank], y[b == bank]\\ncv = []\\nfor train, test in [('02', '04'), ('04', '02')]:\\n    for bank in (2, 3):\\n        x, y = sweep(train, bank)\\n        gain, offset = np.linalg.lstsq(np.c_[x, np.ones_like(x)], y, rcond=None)[0]\\n        x, y = sweep(test, bank)\\n        cv.append(np.max(np.abs(y - (gain*x + offset))))\\nprint('Wing B leave-epoch-out maximum raw reference error:', max(cv))\\nfor bank in (2, 3):\\n    x, y = sweep('07', bank)\\n    gain, offset = m._ARCHIVED_GAIN_OFFSET[bank]\\n    print('batch 07 Wing B absolute raw residuals, bank', bank, np.abs(y - (gain*x + offset)))\\n\\ndef axis_action(U, L, k, vel, robin, reaction):\\n    h = L / U.shape[0]\\n    k = 1.45*np.asarray(k)\\n    q = (2/h**2)/(1/k[:-1] + 1/k[1:])\\n    delta = U[1:] - U[:-1]\\n    R = reaction[:, None, None]*U\\n    R[:-1] -= q[:,None,None]*delta\\n    R[1:] += q[:,None,None]*delta\\n    padded = np.pad(U, ((1,1),(0,0),(0,0)))\\n    R += np.maximum(vel,0)[:,None,None]*(U-padded[:-2])/h\\n    R += np.maximum(-vel,0)[:,None,None]*(U-padded[2:])/h\\n    for i in (0, -1):\\n        R[i] += robin*k[i]/(h*(robin*h/2+k[i]))*U[i]\\n    return R\\n\\nfor item in pickle.load(open('public_beta_w04_batch_08.pkl','rb')):\\n    s, gt = item['study'], item['gt']\\n    design, U = m._forward(s)\\n    rhs = s['source_modes'].transpose(1,2,0)\\n    ax, by = (axis_action(F, *(s[k] for k in ('L'+a,'kappa_'+a,'vel_'+a,'robin_'+a,'reaction_'+a)))\\n              for a,F in [('x',U),('y',U.swapaxes(0,1))])\\n    residual = ax + by.swapaxes(0,1) + (s['V_reaction_2d']+s['mu_shifts'][-1])[...,None]*U - rhs\\n    print('independent terminal stencil relative residual:', np.linalg.norm(residual)/np.linalg.norm(rhs))\\n    b = np.asarray(s['row_bank_id'])\\n    shape = (len(s['mu_shifts']), len(s['sensor_ij']))\\n    results = {}\\n    for name, p in [('selected', m._calibration(s)), ('anchor held out', m._ARCHIVED_GAIN_OFFSET), ('flat cache', np.array([[.7531,-.1118],[1.2928,.1468],[1.7724308311,2.5786680965],[1.2186569647,-2.5871185031]]))]:\\n        y = (s['y_obs_raw']-p[b,1])/p[b,0]\\n        prof = m._profile(s['Z_nuisance'], np.c_[design,y], s['nuisance_ridge'])\\n        err = np.abs(prof[:,-1]-gt['r_y']).reshape(shape)\\n        slices = [(err[t][b.reshape(shape)[t] == bank].max(), t, bank)\\n                  for t in range(shape[0]) for bank in range(4) if np.any(b.reshape(shape)[t] == bank)]\\n        results[name] = max(slices)[0]\\n        print(name, 'worst profiled observation (error, shift index, bank):', max(slices))\\n    print('worst profiled design error across shifts:', np.max(np.abs(prof[:,:-1]-gt['S_tilde'])))\\n    assert np.max(np.abs(residual)) < 1e-10\\n    assert max(cv) < 3e-6\\n    assert max(results['selected'], results['anchor held out']) < 1e-6\\n    assert results['flat cache'] > results['selected']\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Full vortex transport and bank-specific archive calibration reproduce the public reference with a worst-bank profiled error of 1.68e-8; audit transfer and shift-by-bank margins.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification, relay, or HJB submodels\",\n      \"rejected_reason\": \"The study has no class labels, relay state, or control drift; the relevant checks are bank-by-shift calibration and the reaction-transport stencil.\"\n    }\n  ],\n  \"rationale\": \"Replay clean Wing B calibrations across held-out archive epochs and compare the current fit, spot-check omission, and rejected cache within each bank and shift. A failed transfer would reopen calibration; a failed independent stencil residual would reopen the forward operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ba454a75dda6de036e596deba6d727220287dfdd6e5e1059321e9d9f24578e0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40523.29,
+      "usage_known": true,
+      "prompt_tokens": 26225,
+      "cached_tokens": 6784,
+      "completion_tokens": 1630
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b2dfa8e4c5f4ad093b1b7988449f246",
+  "call_seq": 4,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:51:17.212363+00:00",
+  "ended_at_utc": "2026-11-26T18:51:41.437406+00:00",
+  "request_sha256": "1953ce2da4be8d7d20a6e7bb904f95c2f1d0d837d6379703bd5742fac259d18d",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 31936,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23675,
+    "cached_tokens": 6784,
+    "completion_tokens": 852
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '119,193p' /tmp/hegel_continual_archive/alpha_w01_batch_07_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_alpha_w01_batch_08.pkl','rb'))[0]['dataset']; h=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')); a=np.array([[1.21302,.12928],[.75580,-.13522],[.70751,-.11026],[1.28023,.13346]])\\nprint('total history duration',np.sum(p['past_dt']))\\nfor b in (h[-1],p['calibration_load_cells']):\\n for l in range(4):\\n  m=np.asarray(b['lab_id'])==l;x=np.asarray(b['cmd_stress'])[m];y=np.asarray(b['true_stress'])[m];print('check residuals',l,np.round(y-(a[l,0]*x+a[l,1]),6))\\nfor name in ('train','test'):\\n b=p[name]\\n for l in range(4):\\n  m=b['lab_id']==l; g,c=a[l]; H=np.abs(b['past_stress_cmd'][m]*g+c); S=np.abs(b['stress_hold_cmd'][m]*g+c);print(name,l,'n, peak history, peak hold, historical crossings, hold crossings:',sum(m),H.max(),S.max(),sum(H.max(axis=1)>p['yield_stress']),sum(S>p['yield_stress']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 latest clean calibration by lab → H2 training-validated yield-gated Prony law; the rejected batch-07 lines for labs 2 and 3 have maximum sweep residuals of 2.924 and 2.659 stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The most recent sweep identifies a reliable affine calibration in every lab.\",\n    \"empirical_witness\": \"The batch-07 affine fits leave maximum residuals of 2.924 and 2.659 in labs 2 and 3, compared with less than 0.0003 on clean full sweeps.\",\n    \"causal_blanket_diagnosis\": \"Three inconsistent checks do not identify a reliable new calibration; using their least-squares line can also change which coupons appear to cross yield.\",\n    \"sublated_pivot\": \"Check whether any batch-07 Wing B points agree with the older clean sweep, then test the resulting calibration against lab-wise training curves.\",\n    \"risk_kind\": \"calibration contamination\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the oldest clean calibration for all four labs\",\n      \"rejected_reason\": \"The current lab-0 checks agree with the newer Wing A regime, so a common rollback would discard supported evidence.\"\n    }\n  ],\n  \"rationale\": \"Check individual calibration residuals to decide whether Wing B has any usable recent points. Count yield crossings under the clean-map hypothesis to determine whether the plastic coefficients are supported or should be set to zero.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "84cc513c98d53f7006fd2b6406ca66bea1a1a7afd2226b33ba506af552da69fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24192.07,
+      "usage_known": true,
+      "prompt_tokens": 23675,
+      "cached_tokens": 6784,
+      "completion_tokens": 852
+    }
+  ]
+}

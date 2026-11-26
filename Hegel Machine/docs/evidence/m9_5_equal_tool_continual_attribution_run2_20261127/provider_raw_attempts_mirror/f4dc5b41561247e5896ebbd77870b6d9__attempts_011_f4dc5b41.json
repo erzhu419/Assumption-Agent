@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f4dc5b41561247e5896ebbd77870b6d9",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:15:31.281206+00:00",
+  "ended_at_utc": "2026-11-26T18:16:09.361542+00:00",
+  "request_sha256": "a260dbedde1ceb9597605bb27f3fa76cc34ec28fe64cd374aee3a981641b0041",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 58376,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31042,
+    "cached_tokens": 6784,
+    "completion_tokens": 1592
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','alpha_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('public_alpha_w01_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; maps=m._calibration(d['calibration_load_cells'])\\ndef features(x, hold):\\n    x=np.clip(x,-5,5)\\n    pair=np.column_stack([q for i in range(4) for j in range(i+1,4) for q in (x[:,i]+x[:,j],x[:,i]-x[:,j])]); triple=np.column_stack([np.prod(x[:,[i for i in range(4) if i!=j]],axis=1) for j in range(4)])\\n    return np.column_stack((pair**2,triple,np.column_stack((x,hold))*((1/(1+.25*hold**2)-1)[:,None])))\\ndef evaluate(train,val):\\n    x,xt=m._alignment(train,val); ai=m._inputs(train,x,maps); bi=m._inputs(val,xt,maps); taus,w=m._fit(train,ai,dt,t); a,_=m._design(taus,ai,dt,t); b,_=m._design(taus,bi,dt,t)\\n    full=np.isfinite(train['coupon_features_raw']).all(axis=1); fullv=np.isfinite(val['coupon_features_raw']).all(axis=1); lab=train['lab_id']; raw=np.median((train['strain_curves_obs']-train['strain_0'][:,None]-a@w)[:,-6:]/t[-6:],axis=1)\\n    fa,fb=features(x,ai[1]),features(xt,bi[1]); center=np.median(fa[full],axis=0); scale=np.maximum(fa[full].std(axis=0),.01); fa,fb=(fa-center)/scale,(fb-center)/scale\\n    for j in np.unique(lab[full]):\\n        ix=full&(lab==j); raw[ix]-=np.median(raw[ix]); loc=np.median(fa[ix],axis=0); fa[ix]-=loc; fb[val['lab_id']==j]-=loc\\n    A=fa[full]; y=raw[full]; w2=least_squares(lambda q:np.r_[A@q-y,4*q],np.zeros(A.shape[1]),loss='soft_l1',f_scale=.01).x\\n    base=m.solve_alpha_w01_batch_01({**d,'train':train,'test':val})['predicted_strain']; return base,base+(fullv*(fb@w2))[:,None]*t\\nx,xt=m._alignment(tr,te); ai=m._inputs(tr,x,maps); bi=m._inputs(te,xt,maps)\\nprint('peak calibrated stress/yield',max(np.max(np.abs(v)) for z in (ai,bi) for v in z[:2])/d['yield_stress'])\\na,_=m._design(g['taus'],bi,dt,t); structural=te['strain_0'][:,None]+a@g['theta']; ok=np.isfinite(te['coupon_features_raw']).all(axis=1); print('public fixed-reference structural residual, complete-row worst-lab final MAE',max(np.mean(abs(structural[ok&(te['lab_id']==j),-1]-g['te_clean'][ok&(te['lab_id']==j),-1])) for j in range(4)))\\nlab=tr['lab_id']; errors=np.empty((2,len(lab),len(t)))\\nfor j in np.unique(lab):\\n    keep=lab!=j; train={k:v[keep] for k,v in tr.items()}; val={k:v[~keep] for k,v in tr.items()}; val['critical_strain']=val['strain_0']+.25\\n    errors[:,~keep]=np.abs(np.asarray(evaluate(train,val))-val['strain_curves_obs'])\\nprint('leave-lab-out base/challenger worst-lab final strain MAE',[max(e[lab==j,-1].mean() for j in range(4)) for e in errors])\\nfor name,strain in zip(('base','challenger'),evaluate(tr,te)):\\n    lab=te['lab_id']; crossing=m._crossing(t,te['strain_0'],strain,te['critical_strain']); sec=(strain[:,-1]-te['strain_0'])/np.maximum(abs(bi[1]),.5)\\n    print(name,'public worst-lab MAEs',[max(np.mean(abs(v-g[k])[lab==j]) for j in range(4)) for v,k in ((strain,'te_clean'),(sec,'te_secant'),(crossing,'te_cross'))])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated two-mode recurrence with lab-centered drift → H2 additional nonlinear drift only if it improves held-out labs; current public worst-lab MAEs are 0.00573 for strain, 0.02779 for secant compliance, and 0.00557 for crossing time.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, Fokker–Planck operators, or classification balance\",\n      \"rejected_reason\": \"The dataset has continuous coupon trajectories, not relay states, probability densities, or class labels. Held-out lab regression is the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Test whether pairwise, three-way, or rational terms explain late-horizon residuals beyond lab offsets. Fit the challenger inside each fold and use public reference parameters only for a separate structural diagnostic. Revise the solver only if the challenger improves the held-out-lab bottleneck without materially degrading secant compliance or crossing time.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4d16b1b1465ed37dfd7f67150e90d7d363e6c54a71c34f1c3a0f881983325f41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39013.33,
+      "usage_known": true,
+      "prompt_tokens": 31042,
+      "cached_tokens": 6784,
+      "completion_tokens": 1592
+    }
+  ]
+}

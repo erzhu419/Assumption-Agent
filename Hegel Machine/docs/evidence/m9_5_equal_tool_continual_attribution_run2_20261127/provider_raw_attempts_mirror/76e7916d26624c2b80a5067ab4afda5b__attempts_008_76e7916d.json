@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76e7916d26624c2b80a5067ab4afda5b",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:05.898256+00:00",
+  "ended_at_utc": "2026-11-26T18:12:38.229552+00:00",
+  "request_sha256": "40a48529c5ea8679cd8204dc49a4d83121acedf399695ae6d5007d4b039c5bee",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 50583,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28919,
+    "cached_tokens": 6784,
+    "completion_tokens": 1269
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w04_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ncase = pickle.load(open('public_beta_w04_batch_01.pkl', 'rb'))[0]\\ns, gt = case['study'], case['gt']\\nsweep = s['sensor_calibration_sweeps']\\nrows = s['row_bank_id']\\nx, bank = sweep['ref_signal'], sweep['bank_id']\\nworst = 0.\\nfor i in range(len(x)):\\n    keep = np.arange(len(x)) != i\\n    same_bank = bank == bank[i]\\n    gain, offset = m._fit_bank(x[keep & same_bank], sweep['raw_readout'][keep & same_bank])\\n    worst = max(worst, abs(gain*x[i]+offset-sweep['raw_readout'][i]))\\nprint('worst held-out public sweep residual:', worst)\\nassert worst < 1e-7\\nfor label, gain, offset, sparse, spikes in [\\n    ('changed gains and wing EMI', [0.83, 1.13, 1.27, 0.91], [-0.17, 0.08, 0.21, -0.11], False, True),\\n    ('archived gain with a spot check and missing bank', [0.83, 1.13, 1., 1.], [-0.17, 0.08, 0.21, 0.], True, False),\\n]:\\n    gain, offset = np.array(gain), np.array(offset)\\n    y = s['y_obs_raw']\\n    readout = gain[bank]*x + offset[bank]\\n    keep = np.ones(len(x), dtype=bool)\\n    if spikes:\\n        for b in (2, 3):\\n            idx = np.flatnonzero(bank == b)\\n            readout[idx[[1, 5]]] += [0.55, -0.8]\\n    if sparse:\\n        keep[bank >= 2] = False\\n        keep[np.flatnonzero(bank == 2)[0]] = True\\n    study = dict(s, sensor_calibration_sweeps={'bank_id':bank[keep], 'ref_signal':x[keep], 'raw_readout':readout[keep]}, y_obs_raw=gain[rows]*y+offset[rows])\\n    bank_error = [np.max(np.abs((m._calibrate(study)-y)[rows == b])) for b in range(4)]\\n    out = m.solve_beta_w04_batch_01(study)\\n    w = out['weights_by_budget']\\n    weights_error = np.max(np.linalg.norm(w-gt['weights_by_budget'], axis=1)/np.linalg.norm(gt['weights_by_budget'], axis=1))\\n    field_error = np.linalg.norm(out['terminal_field_mid_budget']-gt['terminal_field_mid_budget']) / np.linalg.norm(gt['terminal_field_mid_budget'])\\n    S, r = gt['S_tilde'], gt['r_y']\\n    gaps = []\\n    for b, v, cert in zip(s['budget_grid'], w, out['kkt_certificates']):\\n        cap, nu = s['u_box'], cert['nu_sum']\\n        g = S.T @ (S @ v-r) + s['source_ridge']*v\\n        gaps.append(float(g@v-nu*b-cap*np.minimum(g-nu,0).sum()))\\n        assert abs(v.sum()-b) < 1e-7 and np.min(v) >= -1e-7 and np.max(v) <= cap+1e-7\\n    print(label, 'bank max absolute errors', bank_error, 'worst weight relative L2', weights_error, 'field relative L2', field_error, 'KKT gaps', gaps)\\n    assert max(bank_error) < 1e-12 and max(weights_error, field_error) < 1e-6 and max(gaps) < 1e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive reaction and bank-specific affine calibration → H2 certified three-budget inversion; the host verified a worst public KKT gap of 8.5e-9, with sparse and EMI calibration slices not yet tested.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case verifies transport and certificates but does not exercise sparse sweeps or EMI. Hold out real reference points and stress those two calibration branches while preserving the public inversion target. If either branch degrades bank recovery or a budget certificate, revise calibration without changing the validated transport operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b8f843cda6b8f38f93d3c1d6f3a85faceeaa45c52c69a9758735057af0514f47",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33237.7,
+      "usage_known": true,
+      "prompt_tokens": 28919,
+      "cached_tokens": 6784,
+      "completion_tokens": 1269
+    }
+  ]
+}

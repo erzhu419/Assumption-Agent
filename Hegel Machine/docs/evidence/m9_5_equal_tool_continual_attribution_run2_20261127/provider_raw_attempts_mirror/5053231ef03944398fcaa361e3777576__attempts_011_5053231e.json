@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5053231ef03944398fcaa361e3777576",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:24:26.247394+00:00",
+  "ended_at_utc": "2026-11-26T18:25:33.440304+00:00",
+  "request_sha256": "fe656971db7df16c68bcd8799f5960ac5bf57780198fc44671b29fc4ec47f225",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 54696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29849,
+    "cached_tokens": 11136,
+    "completion_tokens": 1499
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_w04_batch_04_solver.py')\\ns = p.read_text().replace('import numpy as np', 'import json\\\\n\\\\nimport numpy as np', 1)\\na = s.index('    gain, offset = np.array([_fit_bank(')\\nb = s.index('    rows = ', a)\\ns = s[:a] + '''    fits = []\\n    archived = None\\n    for bank in range(4):\\n        x, y = ref[banks == bank], raw[banks == bank]\\n        if x.size and np.ptp(x) > 1e-12 * max(1.0, np.max(np.abs(x))):\\n            fits.append(_fit_bank(x, y))\\n            continue\\n        if archived is None:\\n            # Batch 02 used the same calibration as this campaign; the intervening\\n            # batch used unit gains. Only borrow when the current gain is unidentified.\\n            with open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n                archived = next(e for e in json.load(f)\\n                                if e['episode_short_name'] == 'beta_w04_batch_02')\\n        mask = np.asarray(archived['bank_id']) == bank\\n        historical_gain, historical_offset = _fit_bank(\\n            np.asarray(archived['ref_signal'], dtype=float)[mask],\\n            np.asarray(archived['raw_readout'], dtype=float)[mask],\\n        )\\n        fits.append((historical_gain, float(np.median(y - historical_gain * x))\\n                     if x.size else historical_offset))\\n    gain, offset = np.asarray(fits).T\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'beta_w04_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_beta_w04_batch_04.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns, gt = item['study'], item['gt']\\nsweep = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\nbanks = sweep['bank_id']\\n\\ndef score(study):\\n    o = m.solve_beta_w04_batch_04(study)\\n    w, field = o['weights'], o['terminal_field']\\n    d, r = gt['S_tilde'], gt['r_y']\\n    g = d.T @ (d @ w - r) + s['source_ridge'] * w\\n    nu = o['kkt_certificate']['nu_sum']\\n    cap, budget = s['u_box'], s['total_budget']\\n    gap = g @ w - nu * budget - cap * np.minimum(g - nu, 0).sum()\\n    assert -1e-10 <= gap < 1e-6 and abs(w.sum() - budget) < 1e-7 and w.min() >= -1e-7 and w.max() <= cap + 1e-7\\n    errs = [np.linalg.norm(a-b) / np.linalg.norm(b) for a,b in ((w,gt['w_opt']), (field,gt['terminal_field_A']))]\\n    assert max(errs) < 1e-5, errs\\n    return np.array([*errs, gap])\\n\\nprint('public weights/field/gap:', score(s))\\nfor wing in ((0, 1), (2, 3)):\\n    ids = [np.flatnonzero(banks == b) for b in wing]\\n    base = ~np.isin(banks, wing)\\n    cases = [(base, sweep)]\\n    for i, j in zip(*ids):\\n        keep = base.copy(); keep[[i, j]] = True\\n        cases.append((keep, sweep))\\n    contaminated = {k: v.copy() for k, v in sweep.items()}\\n    for idx in ids:\\n        contaminated['raw_readout'][idx[len(idx)//2]] += 0.3\\n    cases.append((np.ones(len(banks), dtype=bool), contaminated))\\n    metrics = [score(dict(s, sensor_calibration_sweeps={k: v[keep] for k,v in data.items()})) for keep,data in cases]\\n    print(f'wing {wing}: {len(metrics)} cases, worst weights/field/gap:', np.max(metrics, axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current-only calibration → H2 current calibration with a same-regime archive fallback; batch 02 transfers within 1.99×10⁻⁷ raw units across all banks, and the baseline worst reference KKT gap is 9.62×10⁻⁹.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the latest archive entry or pool all historical sweeps\",\n      \"rejected_reason\": \"The latest entry and two earlier entries used unit gains and miss current reference readings by up to 0.556 raw units.\"\n    }\n  ],\n  \"rationale\": \"The current solver defaults to unit gain when a bank lacks two distinct references, but real archived sweeps identify the gain in this regime. Borrow it only when the current gain is unidentified, use any available spot check to update the offset, and verify the unchanged public result and both wings under sweep removal and EMI in isolated Python.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5b4480288da4aaafef3518f735cce8723d4f80a4801e17642a432a5d2ccc3ddb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 69179.59,
+      "usage_known": true,
+      "prompt_tokens": 29849,
+      "cached_tokens": 11136,
+      "completion_tokens": 1499
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08c893b1d1c14550a2190d41271ccf2d",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:11:13.856289+00:00",
+  "ended_at_utc": "2026-11-26T18:11:49.436162+00:00",
+  "request_sha256": "051bd8ce40867c308911f308003996831631f544cfa7bb628af411c505dd8bef",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 41324,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26448,
+    "cached_tokens": 6784,
+    "completion_tokens": 1432
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, json, pickle\\nimport numpy as np\\np = '/holdout_task/beta_w01_batch_01_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_beta_w01_batch_01.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\nbase, gt = case['study'], case['gt']\\nsweep = base['sensor_calibration_sweeps']\\nx, banks, rows = sweep['ref_signal'], sweep['bank_id'], base['row_bank_id']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    hist = json.load(f)[-1]\\nprior = [m._fit_calibration(*m._bank_points(hist, bank)) for bank in range(4)]\\nfor wing in (0, 1):\\n    for kind in ('emi', 'one_spot', 'absent'):\\n        s = copy.deepcopy(base)\\n        gain, offset = np.array([.88, 1.12, .95, 1.18]), np.array([.13, -.19, .21, -.07])\\n        bank = 2 * wing + 1\\n        if kind != 'emi':\\n            gain[bank] = prior[bank][0]\\n        if kind == 'absent':\\n            offset[bank] = prior[bank][1]\\n        raw = gain[banks] * x + offset[banks]\\n        keep = np.ones(len(x), dtype=bool)\\n        if kind == 'emi':\\n            for b in (2 * wing, 2 * wing + 1):\\n                i = np.flatnonzero(banks == b)\\n                raw[i[[0, 4, 8]]] += [0.6, -1.1, 1.7]\\n        else:\\n            i = np.flatnonzero(banks == bank)\\n            keep[i if kind == 'absent' else i[1:]] = False\\n        s['sensor_calibration_sweeps'] = dict(bank_id=banks[keep], ref_signal=x[keep], raw_readout=raw[keep])\\n        s['y_obs_raw'] = gain[rows] * base['y_obs_raw'] + offset[rows]\\n        o = m.solve_beta_w01_batch_01(s)\\n        ew = np.max(abs(o['weights_by_budget'] - gt['weights_by_budget']))\\n        ef = np.max(abs(o['terminal_field_mid_budget'] - gt['terminal_field_mid_budget']))\\n        print('wing', wing, kind, 'weight_error', ew, 'field_error', ef)\\n        assert ew < 1e-6 and ef < 1e-7\\ns = dict(base, u_box=.30)\\no = m.solve_beta_w01_batch_01(s)\\nA, y, ridge, cap = gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box']\\nhits = [0, 0]\\nfor budget, w, cert in zip(s['budget_grid'], o['weights_by_budget'], o['kkt_certificates']):\\n    resid = A@w-y\\n    g = A.T@resid+ridge*w\\n    j = .5*(resid@resid+ridge*(w@w))\\n    nu = cert['nu_sum']\\n    lb = j-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n    stat = np.max(abs(g-nu-cert['lam_lower']+cert['lam_upper']))\\n    lo, hi = np.count_nonzero(w < 1e-9), np.count_nonzero(w > cap-1e-9)\\n    hits[0] += lo; hits[1] += hi\\n    print('tight cap', budget, 'lower/upper bounds', lo, hi, 'gap', j-lb, 'stationarity', stat)\\n    assert np.min(w) >= -1e-10 and np.max(w) <= cap+1e-10 and abs(w.sum()-budget)<1e-10\\n    assert -1e-9 <= j-lb < 1e-7 and stat < 1e-7\\n    assert abs(cert['dual_lower_bound']-lb)<1e-6 and abs(cert['primal_objective']-j)<1e-6\\nassert hits[1]\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separable finite-volume transport and bankwise affine calibration → three nuisance-profiled budget optima; public schema passes, with maximum weight error 1.04e-8 and terminal-field error 2.54e-10.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public validation\",\n      \"rejected_reason\": \"The clean public sweeps do not exercise EMI rejection or the historical fallback, and the original cap does not establish upper-bound coverage.\"\n    }\n  ],\n  \"rationale\": \"Re-encode the public observations to test both wings without changing the expected solution. If the sparse or EMI slices drift, revise calibration; if the tight-cap certificates fail against the independent public design, revise the optimizer or certificate calculation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "04cb44c832b306550cc3fbec7f5be7a0963557238fa95b50e5c43d4b226c726c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36488.56,
+      "usage_known": true,
+      "prompt_tokens": 26448,
+      "cached_tokens": 6784,
+      "completion_tokens": 1432
+    }
+  ]
+}

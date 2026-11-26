@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d125f0080fb470cb403ccf864f95aa3",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:32:52.899277+00:00",
+  "ended_at_utc": "2026-11-26T18:33:26.875766+00:00",
+  "request_sha256": "7861cd6a7ac1b5eb6d980f1ff119195ca9778daf05bfe5faadad46606c4daa9d",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 46137,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28511,
+    "cached_tokens": 6784,
+    "completion_tokens": 1408
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,84p' /holdout_task/alpha_w01_batch_05_solver.py\\ngrep -niE 'instant_rate|archive|calibrat' /holdout_task/public_asset_index.json | cut -c1-240\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/coupon05_contract.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom numpy.testing import assert_allclose\\n\\npath = '/holdout_task/alpha_w01_batch_05_solver.py'\\nspec = importlib.util.spec_from_file_location('coupon_candidate', path)\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nd = pickle.load(open('/holdout_task/public_alpha_w01_batch_05.pkl', 'rb'))[0]['dataset']\\ntr, te = d['train'], d['test']\\npublic_maps = s._load_cells(d['calibration_load_cells'])\\nassert all(not np.any(term) for block in (tr, te) for term in s._inputs(block, np.zeros((len(block['lab_id']), 4)), public_maps, d['past_dt'], d['yield_stress'])[-2:])\\nassert_allclose(s.solve_alpha_w01_batch_05(d)['viscoplastic_weights'], 0, atol=0)\\n\\n# Supply known lab maps, with clean sweeps on one wing and one EMI glitch per lab on the other.\\nmaps = np.array([[.7536, -.1397], [1.2378, .0943], [.7075, -.1103], [1.2802, .1335]])\\nx = np.tile(np.linspace(-2.6, 2.6, 9), 4)\\nlabs = np.repeat(np.arange(4), 9)\\ny = maps[labs, 0] * x + maps[labs, 1]\\ny[[21, 32]] += [0.7, -0.6]\\nchecks = dict(lab_id=labs, cmd_stress=x, true_stress=y)\\nassert_allclose(s._load_cells(checks), maps, atol=1e-9)\\n\\ndt, t = d['past_dt'], d['eval_times']\\ntaus = np.array([.54, 3.91]); w = np.array([.68,.56,.08,.15,-.13,.11,-.09,.063,.037])\\nxa, xb = s._alignment(tr, te)\\ndef truth(block, cov, threshold):\\n    g,b = maps[block['lab_id']].T\\n    ph = g[:,None]*block['past_stress_cmd'] + b[:,None]\\n    hold = g*block['stress_hold_cmd'] + b\\n    # Advance internal state sequentially over piecewise-constant stress history.\\n    state = np.zeros((len(g),2))\\n    for duration, stress in zip(dt, ph.T):\\n        state = stress[:,None] + (state-stress[:,None])*np.exp(-duration/taus)\\n    amplitude = (hold[:,None] - state)*w[:2]\\n    work = np.sum(np.maximum(np.abs(ph)-threshold,0)**2*dt,axis=1)\\n    amplitude[:,0] += w[8]*work*hold\\n    flow = w[2] + cov@w[3:7] + w[7]*np.sign(hold)*np.maximum(np.abs(hold)-threshold,0)**2\\n    return block['strain_0'][:,None] + amplitude@(1-np.exp(-t[None,:]/taus[:,None])) + flow[:,None]*t, amplitude@(1/taus)+flow\\n\\nys = .85\\nc, r = truth(tr, xa, ys)\\nct, rt = truth(te, xb, ys)\\ntrain = dict(tr, strain_curves_obs=c, instant_rate_obs=r)\\ntest = {k:v for k,v in te.items() if k!='instant_rate_obs'}\\nout = s.solve_alpha_w01_batch_05(dict(d, train=train, test=test, yield_stress=ys, calibration_load_cells=checks))\\nfor key, ref in [('estimated_taus',taus),('hereditary_weights',w[:7]),('viscoplastic_weights',w[7:]),('predicted_strain',ct),('initial_rate_pred',rt)]:\\n    error = np.max(np.abs(out[key]-ref))\\n    print(key, 'above-yield max abs error', error)\\n    assert_allclose(out[key], ref, atol=2e-6, rtol=0)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/coupon05_contract.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: Pool compatible historical load-cell checks and fit a shared thresholded Prony law; worst held-lab curve RMSE is 0.343 with onset-assisted imputation, versus 0.506 without it.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after public cross-validation alone\",\n      \"rejected_reason\": \"Every public coupon is below yield, so those folds cannot detect an incorrect plastic-work term, overstress sign, or onset derivative.\"\n    }\n  ],\n  \"rationale\": \"Validate the exact artifact in an isolated process, then check both plastic coefficients and both predictions against independently propagated noiseless creep. The same stress test checks whether an EMI glitch displaces a well-identified calibration; any discrepancy identifies which equation or calibration branch to repair.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a38af78344f7c9bd2917ac1bb64ea5eddbd5f6e694e6d477b20ed8f279b3d736",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34931.17,
+      "usage_known": true,
+      "prompt_tokens": 28511,
+      "cached_tokens": 6784,
+      "completion_tokens": 1408
+    }
+  ]
+}

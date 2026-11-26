@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee04c753b41e40439e0751cbcc7809c3",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:16:12.710478+00:00",
+  "ended_at_utc": "2026-11-26T18:16:54.258621+00:00",
+  "request_sha256": "1279ea9d688638f8d52fc4b6b3d915dd16075c841376efd2f1aafbd31a099b0a",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 64061,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32758,
+    "cached_tokens": 11136,
+    "completion_tokens": 1816
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','alpha_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('public_alpha_w01_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; maps=m._calibration(d['calibration_load_cells'])\\ndef take(b,k): return {name:v[k] for name,v in b.items()}\\ndef evaluate(train,val):\\n x,xt=m._alignment(train,val); a=m._inputs(train,x,maps); b=m._inputs(val,xt,maps); tau,w=m._fit(train,a,dt,t); A,_=m._design(tau,a,dt,t); B,rate=m._design(tau,b,dt,t)\\n ok=np.isfinite(train['coupon_features_raw']).all(axis=1); okv=np.isfinite(val['coupon_features_raw']).all(axis=1); lab=train['lab_id']; lv=val['lab_id']; y=np.median((train['strain_curves_obs']-train['strain_0'][:,None]-A@w)[:,-6:]/t[-6:],axis=1); ro=val['instant_rate_obs']-rate@w\\n pred=val['strain_0'][:,None]+B@w\\n off=np.zeros(len(lv)); adj=np.zeros(len(lv));\\n for j in np.unique(lab[ok]):\\n  k=ok&(lab==j); v=lv==j; off[v]=np.median(y[k]); z=x[k]@w[3:]; med=np.median(z); span=max(.025,np.median(abs(z-med))*1.4826); u=(z-med)/span\\n  r=least_squares(lambda q:np.r_[q[0]+q[1]*u-y[k],2*q[1]],np.array([np.median(y[k]),0.]),loss='soft_l1',f_scale=.012).x\\n  adj[v]=r[0]+r[1]*(xt[v]@w[3:]-med)/span\\n def terms(x,h):\\n  x=np.clip(x,-5,5); pair=np.column_stack([q for i in range(4) for j in range(i+1,4) for q in (x[:,i]+x[:,j],x[:,i]-x[:,j])]); tri=np.column_stack([np.prod(x[:,[i for i in range(4) if i!=j]],axis=1) for j in range(4)]); return np.column_stack((pair**2,tri,np.column_stack((x,h))*(1/(1+.25*h[:,None]**2)-1)))\\n f,fv=terms(x,a[1]),terms(xt,b[1]); c=np.median(f[ok],axis=0); sc=np.maximum(f[ok].std(axis=0),.01); f,fv=(f-c)/sc,(fv-c)/sc; yr=y.copy()\\n for j in np.unique(lab[ok]):\\n  k=ok&(lab==j); loc=np.median(f[k],axis=0); f[k]-=loc; fv[lv==j]-=loc; yr[k]-=np.median(yr[k])\\n q=least_squares(lambda q:np.r_[f[ok]@q-yr[ok],4*q],np.zeros(f.shape[1]),loss='soft_l1',f_scale=.01).x\\n def blend(o): return np.where(np.isfinite(ro),np.where(okv,.75*o+.25*ro,ro),o)\\n return np.stack([pred+blend(off)[:,None]*t,pred+blend(adj)[:,None]*t,pred+(blend(off)+okv*(fv@q))[:,None]*t])\\nlab=tr['lab_id']; fold=lab.copy(); rng=np.random.default_rng(203)\\nfor j in range(4):\\n i=rng.permutation(np.flatnonzero(lab==j)); fold[i]=np.arange(len(i))%4\\nfor name,indices in [('within',fold),('leave_lab',lab),('leave_wing',lab//2)]:\\n errors=np.empty((3,len(lab),len(t)))\\n for j in np.unique(indices):\\n  k=indices!=j; v=take(tr,~k); errors[:,~k]=abs(evaluate(take(tr,k),v)-v['strain_curves_obs'])\\n print(name,'base/affine/nonlinear worst lab curve, final, median final',[[round(max(fn(e[lab==j]) for j in range(4)),6) for fn in (np.mean,lambda a:a[:,-1].mean(),lambda a:np.median(a[:,-1]))] for e in errors])\\nlab=te['lab_id']; initial=te['strain_0']; hold=m._inputs(te,np.zeros((len(lab),4)),maps)[1]; den=np.maximum(abs(hold),.5)\\nfor name,strain in zip(('base','affine','nonlinear'),evaluate(tr,te)):\\n errors=[abs(strain-g['te_clean']),abs((strain[:,-1]-initial)/den-g['te_secant']),abs(m._crossing(t,initial,strain,te['critical_strain'])-g['te_cross'])]; print('public',name,'worst lab', [max(e[lab==j].mean() for j in range(4)) for e in errors], 'pooled',[e.mean() for e in errors])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 lab-centered drift → H2 reference-scale correction or nonlinear drift; the nonlinear probe reduced worst-lab final strain MAE from 0.18437 to 0.18282 on held-out labs.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the nonlinear correction immediately\",\n      \"rejected_reason\": \"Its gains are small enough that a simpler lab-level scale correction or a held-out-wing regression could change the choice.\"\n    }\n  ],\n  \"rationale\": \"A reference-scale error would appear as a lab-specific slope on the existing coupon drift, rather than requiring new physical interactions. Compare that simpler correction with the nonlinear challenger and the verified solver, fitting each inside the same folds. This detects corrections that improve a worst-lab proxy but degrade transfer across an entire wing or worsen a required endpoint.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b6fe9a8febf756fc252f41019528c2da609145c8a793bc8fefb7b1b1707e79da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43448.59,
+      "usage_known": true,
+      "prompt_tokens": 32758,
+      "cached_tokens": 11136,
+      "completion_tokens": 1816
+    }
+  ]
+}

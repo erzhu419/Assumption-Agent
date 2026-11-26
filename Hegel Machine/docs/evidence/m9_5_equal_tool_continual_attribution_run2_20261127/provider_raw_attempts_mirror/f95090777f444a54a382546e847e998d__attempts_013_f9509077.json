@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f95090777f444a54a382546e847e998d",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:44:56.136790+00:00",
+  "ended_at_utc": "2026-11-26T18:45:30.233370+00:00",
+  "request_sha256": "0c59c4321075297c1a7b557f5d52a4d7d48ffdb6e78946acc0b16233f84f38a8",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 67491,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33902,
+    "cached_tokens": 6784,
+    "completion_tokens": 1402
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\ns = importlib.util.spec_from_file_location('solver', p+'alpha_w01_batch_06_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_alpha_w01_batch_06.pkl', 'rb') as f:\\n    row, = pickle.load(f)\\nd, g = row['dataset'], row['gt']\\ntr, te = d['train'], d['test']\\ndt, t, y = d['past_dt'], d['eval_times'], d['yield_stress']\\nmaps = m._load_cells(d['calibration_load_cells'])\\no = m.solve_alpha_w01_batch_06(d)\\ntau = o['estimated_taus']\\nx, xt = m._alignment(tr, te)\\nu = m._inputs(te, xt, maps, dt, y)\\nh, hold, cov = u[:3]\\n# Independently integrate the two branch states in chronological order.\\nstate = np.zeros((len(hold), 2))\\nwork = np.zeros(len(hold))\\nfor j, step in enumerate(dt):\\n    decay = np.exp(-step/tau)\\n    state = state*decay + h[:, j, None]*(1-decay)\\n    work += np.maximum(np.abs(h[:, j])-y, 0)**2*step\\nlin = np.column_stack((cov, np.sign(hold)*np.maximum(np.abs(hold)-y, 0)**2))\\njump = hold[:, None] - state\\nhist_amp = work*hold\\nbasis, onset = m._design(tau, u, dt, t)\\nfor j, tj in enumerate(t):\\n    f = 1-np.exp(-tj/tau)\\n    np.testing.assert_allclose(basis[:, j, :], np.column_stack((jump*f, lin*tj, hist_amp*f[0])), atol=1e-12)\\nnp.testing.assert_allclose(onset, np.column_stack((jump/tau, lin, hist_amp/tau[0])), atol=1e-12)\\nprint('Recursive state integration agrees with all nine basis columns and their onset derivatives.')\\nrm = lambda v: float(np.sqrt(np.mean(v*v)))\\nmad = lambda v: float(1.4826*np.median(np.abs(v-np.median(v))))\\nfor held in (0, 1):\\n    k = tr['lab_id']//2 == held\\n    take = lambda mask: {name: value[mask] for name, value in tr.items()}\\n    va = take(k)\\n    z = m.solve_alpha_w01_batch_06({**d, 'train': take(~k), 'test': va})\\n    a,b,*_ = m._inputs(va,np.zeros((k.sum(),4)),maps,dt,y)\\n    crossing = (np.max(np.abs(a), axis=1)>y)|(np.abs(b)>y)\\n    e = z['predicted_strain'] - va['strain_curves_obs']; r = z['initial_rate_pred'] - va['instant_rate_obs']\\n    for above in (False, True):\\n        w = crossing == above\\n        print('held wing, above yield, n, curve MAD, final median abs error, onset RMSE, median onset residual:', held, int(above), int(w.sum()), *(round(v,6) for v in (mad(e[w]),np.median(np.abs(e[w,-1])),rm(r[w]),np.median(r[w]))))\\ntruth_h, truth_s = np.asarray(g['te_hist_true']), np.asarray(g['te_hold_true'])\\nprint('max calibration stress errors [history, hold]:',np.max(np.abs(h-truth_h)),np.max(np.abs(hold-truth_s)))\\nassert np.array_equal(np.abs(h)>y,np.abs(truth_h)>y)\\nassert np.array_equal(np.abs(hold)>y,np.abs(truth_s)>y)\\nec = o['predicted_strain']-g['te_clean']; er = o['initial_rate_pred']-g['te_true_rate0']\\nfor name, mask in [('negative above-yield hold', hold < -y), ('positive above-yield hold', hold > y), ('closest-to-yield hold', np.argsort(np.abs(np.abs(hold)-y))[:10])]:\\n    print(name, 'strain RMSE', round(rm(ec[mask]),6), 'onset RMSE', round(rm(er[mask]),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: pooled validation of the archived threshold law → independent basis verification and leave-one-wing-out transfer; worst clean public slice RMSE remains 0.02563 for strain and 0.00713 for onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test rational, relay, or classification models\",\n      \"rejected_reason\": \"The specified model has nine continuous strain terms and no relay modes or class labels. An independent recurrence and held-out wing predictions test the applicable algebra and nuisance effects directly.\"\n    }\n  ],\n  \"rationale\": \"The independent recurrence can expose a history-order or sign error that would require correcting the design. Holding out an entire wing tests whether the shared fit depends on wing-specific effects. Comparing calibrated stresses with public references tests whether calibration errors change which terms activate near yield.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "96213d2f1c10bba8c668f5d2476619a79035029b485c8da27ce48c37c66efcd2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36099.22,
+      "usage_known": true,
+      "prompt_tokens": 33902,
+      "cached_tokens": 6784,
+      "completion_tokens": 1402
+    }
+  ]
+}

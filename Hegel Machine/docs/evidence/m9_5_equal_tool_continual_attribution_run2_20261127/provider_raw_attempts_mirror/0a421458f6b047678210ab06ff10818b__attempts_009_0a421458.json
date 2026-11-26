@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0a421458f6b047678210ab06ff10818b",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:28:08.049553+00:00",
+  "ended_at_utc": "2026-11-26T18:28:55.006108+00:00",
+  "request_sha256": "d933b38a756e255fde519a0a912c3d28006721e2b45da10993e6797c476298c3",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 47198,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27634,
+    "cached_tokens": 6784,
+    "completion_tokens": 2069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_w04_batch_04_solver.py')\\ns = p.read_text().replace('import numpy as np', 'import json\\\\n\\\\nimport numpy as np', 1)\\na = s.index('def _calibrate(')\\nb = s.index('def _forward(', a)\\ns = s[:a] + '''def _bank_sweeps(sweeps):\\n    banks = np.asarray(sweeps['bank_id'])\\n    ref = np.asarray(sweeps['ref_signal'], dtype=float)\\n    raw = np.asarray(sweeps['raw_readout'], dtype=float)\\n    return [(ref[banks == b], raw[banks == b]) for b in range(4)]\\n\\n\\ndef _historical_profile(current):\\n    with open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n        history = json.load(f)\\n    profiles = [np.array([_fit_bank(x, y) for x, y in _bank_sweeps(e)])\\n                for e in history]\\n    observed = [(b, x, y) for b, (x, y) in enumerate(current) if x.size]\\n\\n    def agreement(profile):\\n        # Give each observed bank equal weight; a spike cannot dominate a vote.\\n        votes, errors = [], []\\n        for b, x, y in observed:\\n            gain, offset = profile[b]\\n            error = np.abs(gain * x + offset - y) / np.maximum(1.0, np.abs(y))\\n            votes.append(np.mean(error <= 1e-5))\\n            errors.append(np.median(error))\\n        return sum(votes), -sum(errors)\\n\\n    return max(reversed(profiles), key=agreement)\\n\\n\\ndef _calibrate(study):\\n    current = _bank_sweeps(study['sensor_calibration_sweeps'])\\n    parameters = np.array([_fit_bank(x, y) for x, y in current])\\n    sparse = [b for b, (x, _) in enumerate(current)\\n              if x.size < 4 or np.ptp(x) <= 1e-12]\\n    if sparse:\\n        history = _historical_profile(current)\\n        for b in sparse:\\n            x, y = current[b]\\n            gain, offset = history[b]\\n            # Keep a new, identifiable line unless the historical line explains\\n            # a majority of the spot checks (including one bad check out of three).\\n            if x.size < 2 or np.ptp(x) <= 1e-12:\\n                parameters[b] = history[b]\\n            else:\\n                agrees = np.abs(gain * x + offset - y) <= 1e-5 * np.maximum(1.0, np.abs(y))\\n                if 2 * np.count_nonzero(agrees) > x.size:\\n                    parameters[b] = history[b]\\n    gain, offset = parameters.T\\n    rows = np.asarray(study['row_bank_id'], dtype=int)\\n    return (np.asarray(study['y_obs_raw'], dtype=float) - offset[rows]) / gain[rows]\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('solver','beta_w04_batch_04_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\np=pickle.load(open('public_beta_w04_batch_04.pkl','rb'))[0]; s,g=p['study'],p['gt']; d=s['sensor_calibration_sweeps']; b,x,y=[np.asarray(d[k]) for k in ('bank_id','ref_signal','raw_readout')]; idx=np.arange(b.size)\\nmetrics={}\\ndef run(label,keep,spike=None):\\n    v=y.copy()\\n    if spike is not None: v[spike]+=.5\\n    q=dict(s, sensor_calibration_sweeps={'bank_id':b[keep],'ref_signal':x[keep],'raw_readout':v[keep]})\\n    o=m.solve_beta_w04_batch_04(q); w=o['weights']; c=o['kkt_certificate']; nu=c['nu_sum']; cap=s['u_box']; budget=s['total_budget']; S=g['S_tilde']; r=g['r_y']; grad=S.T@(S@w-r)+s['source_ridge']*w\\n    gap=grad@w-nu*budget-cap*np.minimum(grad-nu,0).sum()\\n    scores=np.array([np.max(np.abs(w-g['w_opt'])), np.linalg.norm(o['terminal_field']-g['terminal_field_A'])/np.linalg.norm(g['terminal_field_A']), gap]); metrics[label]=np.maximum(metrics.get(label,0),scores)\\n    assert abs(w.sum()-budget)<1e-9 and w.min()>=0 and w.max()<=cap\\nfor bank in range(4):\\n    t=np.flatnonzero(b==bank); ordered=t[np.argsort(x[t])]\\n    for k in t: run('single spot', (b!=bank)|(idx==k))\\n    run('two distant spots', (b!=bank)|np.isin(idx,ordered[[0,-1]]))\\n    run('dense EMI', np.ones(b.shape,bool), ordered[-1])\\n    run('three spots with EMI', (b!=bank)|np.isin(idx,ordered[[0,5,-1]]), ordered[-1])\\nfor wing in (0,1): run('wing without sweeps',b//2!=wing)\\nfirst=[np.flatnonzero(b==bank)[0] for bank in range(4)]\\nrun('all banks single, one EMI',np.isin(idx,first),first[-1])\\nfor k,v in metrics.items(): print(k, 'max weight error / relative field error / reference KKT gap:', v)\\nassert max(np.max(v) for v in metrics.values()) < 2e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace the unit-gain fallback with a historical profile selected by current sweeps; the prior worst single-spot errors were 0.508 in weight and 44.3% in terminal field.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use historical gains for all banks\",\n      \"rejected_reason\": \"Complete current sweeps already identify all four affine maps, and the archive contains more than one calibration regime.\"\n    }\n  ],\n  \"rationale\": \"Keep the accurate transport and dense calibration unchanged. Verify that the sparse fallback improves weights, terminal field, and reference KKT gap across banks, including an unobserved wing and spot checks contaminated by EMI.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "db577ae875eb56471670b8cb3a5a0cfc287e41f830415169b34ad1f3d87d8abd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48872.16,
+      "usage_known": true,
+      "prompt_tokens": 27634,
+      "cached_tokens": 6784,
+      "completion_tokens": 2069
+    }
+  ]
+}

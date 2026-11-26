@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0e6bb30e8964ead8768db84e01cef69",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:30.627059+00:00",
+  "ended_at_utc": "2026-11-26T18:13:15.885723+00:00",
+  "request_sha256": "da122f2be30600f59aeda5d44b6dd9d1234ca1b80f652511a05c34fd53513693",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 47226,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27842,
+    "cached_tokens": 6784,
+    "completion_tokens": 1962
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/w04_fusion_probe.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nimport alpha_w04_batch_01_solver as s\\nc=pickle.load(open('/holdout_task/public_alpha_w04_batch_01.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=s._calibrate(d['calibration_load_cells']); x,xt=s._align(tr,te); h,u=s._stress(tr,cal); ht,ut=s._stress(te,cal); z,zt=tr['initial_memory_states'],te['initial_memory_states']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; miss=np.isnan(tr['coupon_features_raw']).any(axis=1); mt=np.isnan(te['coupon_features_raw']).any(axis=1); lab=tr['lab_id']; lt=te['lab_id']\\nrmse=lambda e:np.sqrt(np.mean(e**2))\\nrng=np.random.default_rng(544); folds=np.empty(len(y),int)\\nfor l in range(4):\\n for missing in (0,1):\\n  ii=np.flatnonzero((lab==l)&(miss==missing)); folds[rng.permutation(ii)]=np.arange(len(ii))%4\\n\\ndef run(fit, params_on_complete, use_test):\\n chosen=fit & ~miss if params_on_complete else fit\\n tau,w=s._fit(dt,t,h[chosen],u[chosen],x[chosen],z[chosen],y[chosen],r[chosen]); a,b=s._design(tau,dt,t,h,u,x,z); base=a@w; drift=b@w\\n # Each late strain reading measures linear drift after subtracting the hereditary response.\\n slope=np.median((y-base)[:,t>=1]/t[t>=1],axis=1); score=x@w[3:]\\n p=np.zeros((4,2)); variance=np.zeros(4); mad=lambda q:1.4826*np.median(abs(q-np.median(q)))\\n for l in range(4):\\n  idx=fit&~miss&(lab==l)\\n  if idx.sum()>=8:\\n   mat=np.column_stack([np.ones(idx.sum()),score[idx]])\\n   p[l]=least_squares(lambda q:mat@q-slope[idx],np.zeros(2),loss='soft_l1',f_scale=.004).x\\n   variance[l]=mad(slope[idx]-mat@p[l])**2\\n  else:\\n   variance[l]=mad(slope[fit&~miss])**2\\n if use_test:\\n  a,b=s._design(tau,dt,t,ht,ut,xt,zt); base=a@w; drift=b@w; R=te['instant_rate_obs']; M=mt; L=lt; S=xt@w[3:]; Y=g['te_clean']-te['strain_0'][:,None]; H=ut; i0=te['strain_0']; critical=te['critical_strain']; Cross=g['te_cross']\\n else:\\n  j=~fit; base=base[j]; drift=drift[j]; R=r[j]; M=miss[j]; L=lab[j]; S=score[j]; Y=y[j]; H=u[j]\\n corr=R-drift; offset=p[L,0]+S*p[L,1]; alpha=variance[L]/(variance[L]+max(.003,mad((r-bt(tau,w))[fit&~miss]))**2); alpha=np.minimum(alpha,.65)\\n methods=[np.zeros_like(corr),np.where(M,corr,.25*corr),np.where(M,corr,offset),np.where(M,corr,offset+.25*(corr-offset)),np.where(M,corr,offset+alpha*(corr-offset))]\\n pred=np.array([base+q[:,None]*t for q in methods]); e=pred-Y\\n if use_test:\\n  print('complete-only fit',params_on_complete,'taus',tau,'lab corrections',p.round(5).tolist(),'noise estimates',np.sqrt(variance).round(5),'rate fusion',np.round([alpha[L==l][0] for l in range(4)],3))\\n  for l in range(4):\\n   j=L==l\\n   print(l,'curve',np.sqrt(np.mean(e[:,j]**2,axis=(1,2))).round(5),'secant',np.sqrt(np.mean((e[:,j,-1]/np.maximum(abs(H[j]),.5))**2,axis=1)).round(5),'cross',np.array([rmse(s._crossing(t,A+i0[:,None],i0,critical)[j]-Cross[j]) for A in pred]).round(5))\\n return L,M,e\\n\\ndef bt(tau,w):\\n return s._design(tau,dt,t,h,u,x,z)[1]@w\\nfor opt in (False,True):\\n for protocol in ('within','lab'):\\n  results=[run((folds if protocol=='within' else lab)!=i,opt,False) for i in range(4)]\\n  L=np.concatenate([q[0] for q in results]); M=np.concatenate([q[1] for q in results]); E=np.concatenate([q[2] for q in results],axis=1)[:,:,-1]\\n  print(opt,protocol,'[baseline,shared fusion,lab adjustment,lab fusion,variance fusion]')\\n  for l in range(4):\\n   for m in (False,True):\\n    ii=(L==l)&(M==m); err=E[:,ii]; print(l,m,ii.sum(),'rmse',np.sqrt(np.mean(err**2,axis=1)).round(4),'medAE',np.median(abs(err),axis=1).round(4))\\n run(np.ones(len(y),bool),opt,True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/w04_fusion_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 feature-only drift → H2 use the observed rate for missing-feature coupons and test a smaller correction for complete coupons; full anchoring cuts the worst public missing-feature endpoint RMSE from 1.70615 to 0.07252.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the kinetics fit with drift profiling\",\"rejected_reason\":\"Profiling moves the public slow relaxation time from 3.44965 to 3.09681 against the reference 3.557 and does not consistently improve held-out complete-coupon endpoint error.\"},{\"option\":\"Fully anchor all coupons\",\"rejected_reason\":\"On complete-feature public coupons, full anchoring increases endpoint RMSE in three of four labs.\"}],\"rationale\":\"Test whether residual lab-level feature offsets and scale differences explain complete-coupon errors, fitting those corrections inside each fold. Within-lab folds test calibration when the lab has training coupons; held-out labs test the shared-model fallback. Public diagnostics score strain, compliance, and crossing separately without using reference outputs to fit the challengers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "41cac3071e305efc9b80bcac212cd9d9e689dded42b4789c10f474f537db0667",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47122.11,
+      "usage_known": true,
+      "prompt_tokens": 27842,
+      "cached_tokens": 6784,
+      "completion_tokens": 1962
+    }
+  ]
+}

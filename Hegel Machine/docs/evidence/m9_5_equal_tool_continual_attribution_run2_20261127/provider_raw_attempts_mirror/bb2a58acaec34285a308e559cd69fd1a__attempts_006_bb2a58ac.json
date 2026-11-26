@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb2a58acaec34285a308e559cd69fd1a",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:11:59.113064+00:00",
+  "ended_at_utc": "2026-11-26T18:12:46.195495+00:00",
+  "request_sha256": "539245e5053d70e372fd7fe1855e5ddf086780ac235b39802aea5312e5267011",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 47054,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29531,
+    "cached_tokens": 6784,
+    "completion_tokens": 2003
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import spsolve\\n\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w02_batch_02_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_beta_w02_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]\\ns, gt = d['study'], d['gt']\\no = m.solve_beta_w02_batch_02(s)\\nvalidate = {}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d = ', 1)[0], validate)\\nverify = validate['verify_box_simplex_kkt_certificate']\\nq = s['sensor_calibration_sweeps']\\nids, x, y = map(np.asarray, (q['bank_id'], q['ref_signal'], q['raw_readout']))\\nloo = np.zeros(4)\\nfor k in range(x.size):\\n    b = ids[k]\\n    train = (ids == b) & (np.arange(x.size) != k)\\n    a, off = m._affine_sweep(x[train], y[train])\\n    loo[b] = max(loo[b], abs(a*x[k] + off - y[k]))\\nprint('leave-one-reference-out max readout error by bank:', loo)\\nassert max(loo) < 1e-7\\n\\n# Keep the actual observation layout and physics; replace only the instrument response.\\nreference = m._calibrate(s)\\nrow_bank = s['row_bank_id']\\nworst_obs = worst_w = worst_field = worst_gap = 0.0\\nfor sj in range(4):\\n    for nref in (0, 1, 2, 4, 12):\\n        gains = np.array([0.91, 1.18, 0.86, 1.09])\\n        offsets = np.array([0.13, -0.17, 0.24, -0.05])\\n        if nref <= 1:\\n            gains[sj] = 1.0  # no current slope information: use historically stable gain\\n        if nref == 0:\\n            offsets[sj] = 0.0\\n        keep = (ids != sj)\\n        spot = np.flatnonzero(ids == sj)[:nref]\\n        keep[spot] = True\\n        readout = gains[ids]*x + offsets[ids]\\n        if nref >= 4:\\n            readout[spot[np.argmax(x[spot])]] += 0.8  # leverage spike on the stressed bank\\n        st = dict(s, y_obs_raw=gains[row_bank]*reference + offsets[row_bank],\\n                  sensor_calibration_sweeps=dict(bank_id=ids[keep], ref_signal=x[keep], raw_readout=readout[keep]))\\n        err = float(np.max(np.abs(m._calibrate(st) - reference)))\\n        assert err < 1e-10, (sj, nref, err)\\n        p = m.solve_beta_w02_batch_02(st)\\n        worst_obs = max(worst_obs, err)\\n        worst_w = max(worst_w, float(np.max(np.abs(p['weights_by_budget'] - o['weights_by_budget']))))\\n        worst_field = max(worst_field, float(np.max(np.abs(p['terminal_field_mid_budget'] - o['terminal_field_mid_budget']))))\\n        for budget, cert in zip(st['budget_grid'], p['kkt_certificates']):\\n            result = verify(gt['S_tilde'], gt['r_y'], st['source_ridge'], st['u_box'], budget, cert)\\n            assert result['valid'], (sj, nref, result)\\n            worst_gap = max(worst_gap, result['gap'])\\nprint('20 bank stress slices: max obs, weight, field errors and verified gap:', worst_obs, worst_w, worst_field, worst_gap)\\nassert worst_w < 1e-9 and worst_field < 1e-10\\n\\n# Assemble the unsplit 2D operator to verify indexing and the terminal shift.\\naxes = []\\nfor axis in ('x', 'y'):\\n    n = s['n'+axis]\\n    h = s['L'+axis]/n\\n    k, v = s['kappa_'+axis], s['vel_'+axis]\\n    robin = s['robin_'+axis]\\n    A = np.diag(s['reaction_'+axis].copy())\\n    for i in range(n-1):\\n        D = 2/(1/k[i]+1/k[i+1])/h**2\\n        A[i,i] += D\\n        A[i+1,i+1] += D\\n        A[i,i+1] -= D\\n        A[i+1,i] -= D\\n    for i in (0, n-1):\\n        A[i,i] += robin*k[i]/(h*(robin*h/2+k[i]))\\n    for i, vi in enumerate(v/h):\\n        A[i,i] += abs(vi)\\n        j = i-1 if vi >= 0 else i+1\\n        if 0 <= j < n:\\n            A[i,j] -= abs(vi)\\n    axes.append(diags([np.diag(A,-1), np.diag(A), np.diag(A,1)], [-1,0,1], format='csr'))\\nnx, ny = s['nx'], s['ny']\\nA = kron(axes[0], eye(ny)) + kron(eye(nx), axes[1]) + diags(s['V_reaction_2d'].ravel())\\nI = eye(nx*ny)\\nB = s['source_modes'].reshape(-1, nx*ny).T\\nij = s['sensor_ij']\\nrows = ij[:,0]*ny + ij[:,1]\\nblocks = []\\nfor shift in s['mu_shifts']:\\n    f = spsolve((A+shift*I).tocsc(), B)\\n    blocks.append(f[rows])\\ntarget_design, _ = m._forward(s)\\ndesign_err = float(np.max(np.abs(np.concatenate(blocks) - target_design)))\\nfield_err = float(np.max(np.abs((f @ o['weights_by_budget'][1]).reshape(nx, ny) - o['terminal_field_mid_budget'])))\\nprint('independent unsplit FVM max design and terminal errors:', design_err, field_err)\\nassert max(design_err, field_err) < 1e-11\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable FVM with robust per-bank calibration → H2 historical gain only when current sweeps cannot identify it; the public validator passes, with maximum weight error 5.78e-8 and terminal-field error 7.99e-10.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public case passes\",\n      \"rejected_reason\": \"The public case does not exercise sparse sweeps or EMI spikes, and its schema validator checks only the terminal field's shape.\"\n    }\n  ],\n  \"rationale\": \"Hold out real calibration references and stress each bank with sparse sweeps and leverage spikes. A failure would identify which calibration branch needs revision. Compare with an independently assembled unsplit FVM to catch sensor-indexing or terminal-shift errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "68d09cb907e31451f745343f1d8c295da5984b54e2eb08516baf866f6e7dd84a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48925.79,
+      "usage_known": true,
+      "prompt_tokens": 29531,
+      "cached_tokens": 6784,
+      "completion_tokens": 2003
+    }
+  ]
+}

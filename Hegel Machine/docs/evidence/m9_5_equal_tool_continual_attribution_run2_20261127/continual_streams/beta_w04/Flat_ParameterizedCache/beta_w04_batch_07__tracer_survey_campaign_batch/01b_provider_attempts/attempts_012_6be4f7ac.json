@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6be4f7ac592f49b181a9d9cd75fe1747",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:47:10.464457+00:00",
+  "ended_at_utc": "2026-11-26T18:47:39.965752+00:00",
+  "request_sha256": "07cb3421e91e1d495e459ab5d9c2cc434d5dfecf203db69a56605c20e7269ad0",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 57305,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30324,
+    "cached_tokens": 6784,
+    "completion_tokens": 1184
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_beta_w04_residual_cv.py <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nm = runpy.run_path(root + 'beta_w04_batch_07_solver.py')\\ncached = np.array([[.7531, -.1118], [1.2928, .1468], [1.7724308310991952, 2.578668096514746], [1.218656964656964, -2.5871185031185027]])\\nwith open(root + 'public_beta_w04_batch_07.pkl', 'rb') as f:\\n    entries = pickle.load(f)\\nfor e in entries:\\n    s, gt = e['study'], e['gt']\\n    D, _ = m['_forward'](s)\\n    Z, raw, b = s['Z_nuisance'], s['y_obs_raw'], s['row_bank_id']\\n    p = m['_calibration'](s)\\n    I = s['nuisance_ridge'] * np.eye(Z.shape[1])\\n    ridge = s['source_ridge'] * np.eye(D.shape[1])\\n    X = np.c_[D, (raw-p[b, 1])/p[b, 0]]\\n    R = X - Z @ np.linalg.solve(Z.T @ Z + I, Z.T @ X)\\n    G = R.T @ R - np.c_[gt['S_tilde'], gt['r_y']].T @ np.c_[gt['S_tilde'], gt['r_y']]\\n    h_err, c_err = np.max(abs(G[:-1, :-1])), np.max(abs(G[:-1, -1]))\\n    print('P^2 source Hessian and linear-term discrepancies:', h_err, c_err)\\n    assert h_err < 1e-8 and c_err < 1e-7\\n    ns, nk = len(s['sensor_ij']), len(s['mu_shifts'])\\n    for order, group in [('shift-major', np.arange(len(b)) % ns), ('sensor-major', np.arange(len(b)) // nk)]:\\n        scores = []\\n        for pars in (p, cached):\\n            y = (raw-pars[b, 1])/pars[b, 0]\\n            err = np.empty_like(y)\\n            for j in range(ns):\\n                test = group == j\\n                d, z, t = D[~test], Z[~test], y[~test]\\n                A = np.linalg.solve(z.T @ z + I, z.T @ np.c_[d, t])\\n                R = np.c_[d, t] - z @ A\\n                S, r = R[:, :-1], R[:, -1]\\n                w, _ = m['_box_simplex'](S.T @ S + ridge, -S.T @ r, s['u_box'], s['total_budget'])\\n                a = A[:, -1] - A[:, :-1] @ w\\n                prediction = pars[b[test], 0] * (D[test] @ w + Z[test] @ a) + pars[b[test], 1]\\n                err[test] = (raw[test] - prediction) / p[b[test], 0]\\n            scores.append(np.array([np.sqrt(np.mean(err[b == j]**2)) for j in range(4)]))\\n        print(order, 'held-out RMSE by bank (candidate, cache):', *[v.tolist() for v in scores])\\n        assert np.all(scores[0] < scores[1])\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_beta_w04_residual_cv.py && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 joint-ridge Schur objective → H2 squared ridge-residual objective; the public source linear term matches within 1.61e-9, and the bank-wise advantage still needs confirmation with the exact solver objective inside each fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the earlier held-out RMSE as validation of the exact solver objective\",\n      \"rejected_reason\": \"That audit fit each training fold with the joint-ridge Schur objective, not the squared ridge-residual objective used by the solver.\"\n    }\n  ],\n  \"rationale\": \"Fit the exact public objective and nuisance coefficients using training rows only, then compare candidate and cached calibration on each held-out bank. If any bank loses the advantage under the correct objective, revisit that bank's calibration evidence. The audit does not modify the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "307ab85cd3f39af7e57edffe8197f7c829a00cf43c5c20f4846bebc65af2dd84",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30527.68,
+      "usage_known": true,
+      "prompt_tokens": 30324,
+      "cached_tokens": 6784,
+      "completion_tokens": 1184
+    }
+  ]
+}

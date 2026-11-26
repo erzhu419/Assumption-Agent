@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "98d3fb08df46493cacae244c0668052e",
+  "call_seq": 14,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:25:47.465915+00:00",
+  "ended_at_utc": "2026-11-26T18:26:08.439515+00:00",
+  "request_sha256": "54ba8455bf0a1cd9d426c0abf037ae32d481a57e2b582def3249d2368a53b6d0",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 87902,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40344,
+    "cached_tokens": 11136,
+    "completion_tokens": 714
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport copy\\nexec(open('/tmp/creep04_oof.py').read().split('for linear in')[0])\\nsolve = s.solve_alpha_w03_batch_04\\nbase = solve(d)\\nworst = dict.fromkeys(base, 0.)\\nfor rows in ([5], [5, 6]):\\n    challenge = copy.deepcopy(d)\\n    tab = challenge['calibration_load_cells']\\n    wing_lab = np.flatnonzero(tab['lab_id'] == 3)\\n    tab['true_stress'][wing_lab[5]] += .35\\n    keep = (tab['lab_id'] != 3) | np.isin(np.arange(len(tab['lab_id'])), wing_lab[rows])\\n    challenge['calibration_load_cells'] = {k: np.asarray(v)[keep] for k, v in tab.items()}\\n    out = solve(challenge)\\n    err = {k: float(np.max(np.abs(out[k] - base[k]))) for k in base}\\n    print('lab 3 retained rows', rows, 'maximum change by output', err)\\n    for k in worst:\\n        worst[k] = max(worst[k], err[k])\\nassert worst['predicted_strain'] < .01 and worst['initial_rate_pred'] < .005, worst\\nassert np.max(np.abs(base['estimated_taus'])) > 0 and worst['estimated_taus'] < .02, worst\\nassert max(worst['hereditary_weights'], worst['viscoplastic_weights']) < .005, worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local-first archive selection -> H2 companion-lab corroboration for sparse checks; across 684 combined sparse-and-EMI replays, the worst stress deviation fell from 0.860 to 0.000375 at commands ±3.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t13\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the constitutive basis\",\n      \"rejected_reason\": \"The held-out interaction and rational-term challengers did not improve the worst complete-feature strain slice; the measured failure was in calibration.\"\n    }\n  ],\n  \"rationale\": \"The calibration replay established that companion-lab corroboration fixes the stress error. Run the two previously worst cases through the full solver in an isolated process to detect whether the remaining calibration perturbation is amplified by thresholding or refitting; revise the fallback only if that occurs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "d67bdbf5f540cc7b7d44e94c292d177c0c1ae5206a6c9d7afccea34b21ad2780",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20940.06,
+      "usage_known": true,
+      "prompt_tokens": 40344,
+      "cached_tokens": 11136,
+      "completion_tokens": 714
+    }
+  ]
+}

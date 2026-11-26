@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "acb42c78582f493d831e53816e30e0c2",
+  "call_seq": 14,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:49:46.635682+00:00",
+  "ended_at_utc": "2026-11-26T18:50:13.834379+00:00",
+  "request_sha256": "818d970aa9b10ad3bb16d6308bbb616848423f183eeabee86767b0f75c78f2ae",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 67066,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32817,
+    "cached_tokens": 6784,
+    "completion_tokens": 1082
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport ast\\nimport importlib.util\\nimport math\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_w03_batch_07_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\npath = root / 'validate_public_schema.py'\\nnode = next(n for n in ast.parse(path.read_text()).body if isinstance(n, ast.FunctionDef) and n.name == 'verify_box_simplex_kkt_certificate')\\nns = {'np': np, 'math': math}\\nexec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), ns)\\nverify = ns[node.name]\\nworst = np.zeros(3)\\ncount = 0\\nfor item in pickle.loads((root / 'public_beta_w03_batch_07.pkl').read_bytes()):\\n    study, gt = item['study'], item['gt']\\n    sweep = {k: np.asarray(v) for k, v in study['sensor_calibration_sweeps'].items()}\\n    bank, ref, raw = (sweep[k] for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    idx = np.arange(len(bank))\\n    g, o = solver._ARCHIVE[1, bank].T\\n    emi = (bank >= 2) & (abs(raw - g * ref - o) > 2e-6)\\n    cases = {'intact': idx, 'reversed': idx[::-1], 'remove_emi': idx[~emi], 'remove_both_clean_anchors': idx[(bank < 2) | emi]}\\n    cases.update({f'omit_{j}': idx[idx != j] for j in idx})\\n    for name, keep in cases.items():\\n        out = solver.solve_beta_w03_batch_07(dict(study, sensor_calibration_sweeps={k: v[keep] for k, v in sweep.items()}))\\n        cert = out['kkt_certificate']\\n        check = verify(gt['S_tilde'], gt['r_y'], study['source_ridge'], study['u_box'], study['total_budget'], cert)\\n        w, f = out['weights'], out['terminal_field']\\n        assert w.shape == gt['w_opt'].shape and f.shape == gt['terminal_field_A'].shape, name\\n        assert np.allclose(w, cert['weights'], rtol=0, atol=1e-10), name\\n        we = np.linalg.norm(w - gt['w_opt']) / np.linalg.norm(gt['w_opt'])\\n        fe = np.linalg.norm(f - gt['terminal_field_A']) / np.linalg.norm(gt['terminal_field_A'])\\n        assert check['valid'] and we < 1e-5 and fe < 1e-5, (name, check, we, fe)\\n        worst = np.maximum(worst, [we, fe, check['gap']])\\n        count += 1\\nprint(f'{count} slices: worst relative weight error={worst[0]:.3g}, field error={worst[1]:.3g}, independently verified KKT gap={worst[2]:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archive reuse requires a clean spot) -> H2 (independent Wing A predictions can support archive reuse): after omitting both clean Wing B anchors, relative weight and field errors were 5.09e-08 and 3.28e-08, with a reference KKT gap of 3.27e-09.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t13\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The fallback recovered the reference solution in the failing slices. Run the complete certificate verifier on the updated artifact across all single-spot omissions and simultaneous loss of both clean Wing B anchors. A failure would distinguish a certificate mismatch from a calibration regression before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "10e109e16515aa6102b4c14d3116d288679d756e38dd4b3bb2b0a9ebf6623b56",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28187.36,
+      "usage_known": true,
+      "prompt_tokens": 32817,
+      "cached_tokens": 6784,
+      "completion_tokens": 1082
+    }
+  ]
+}

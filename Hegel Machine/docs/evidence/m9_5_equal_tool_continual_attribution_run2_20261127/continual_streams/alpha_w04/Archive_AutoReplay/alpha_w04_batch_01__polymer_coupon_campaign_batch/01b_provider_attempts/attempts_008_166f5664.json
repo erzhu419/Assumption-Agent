@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "166f5664ecae4bf2b083cde9a42161d6",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:48.683648+00:00",
+  "ended_at_utc": "2026-11-26T18:13:30.198666+00:00",
+  "request_sha256": "b7e18ad315d01f01b7f21fd7d957fb76214f7df01714b39819d85a7f707f5511",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 55342,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30933,
+    "cached_tokens": 6784,
+    "completion_tokens": 1752
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/polymer_validation.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w04_batch_01_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nw=pickle.load(open('/holdout_task/public_alpha_w04_batch_01.pkl','rb'))[0];d=w['dataset']; a,b=d['train'],d['test']; q=w['gt']; dt=d['past_dt']; t=d['eval_times']; x,xt=m._align(a,b); cal=m._calibrate(d['calibration_load_cells']); h,s=m._stress(a,cal); ht,st=m._stress(b,cal); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; z=a['initial_memory_states']; lab=a['lab_id']; ok=np.isfinite(a['coupon_features_raw']).all(1)\\n\\ndef fit(ids,kind):\\n    tau,theta=m._fit(dt,t,h[ids],s[ids],x[ids],y[ids],r[ids],z[ids])\\n    if not kind:return tau,theta,np.zeros(4)\\n    labs=np.eye(4)[lab[ids]]; tar=np.r_[y[ids].ravel(),r[ids]]; n=len(ids)\\n    def res(p):\\n        v,u=m._design(p[:2],dt,t,h[ids],s[ids],x[ids],z[ids]); offset=labs@p[9:];\\n        return np.r_[(v@p[2:9]+offset[:,None]*t).ravel(),u@p[2:9]+offset]-tar\\n    p=np.r_[tau,theta,np.zeros(4)]; er=res(p); mad=lambda v:max(1e-6,1.4826*np.median(abs(v-np.median(v))));\\n    scale=np.r_[np.repeat(1.,n*len(t))*mad(er[:-n]),np.repeat(mad(er[-n:]),n)]*kind\\n    f=least_squares(lambda p:res(p)/scale,p,bounds=(np.r_[.2,.3,[-np.inf]*11],np.r_[8.,10.,[np.inf]*11]),loss='cauchy',max_nfev=70,x_scale='jac').x\\n    return f[:2],f[2:9],f[9:]-f[9:].mean()\\n\\nrng=np.random.default_rng(42); fold=np.empty(len(y),int)\\nfor g in range(4):\\n    ix=np.flatnonzero(lab==g); rng.shuffle(ix); fold[ix]=np.arange(len(ix))%5\\nfor kind in [0,1.5,2.385,4.]:\\n    mm={f:np.empty_like(y) for f in [0.,.25,.5,1.]}; params=[]\\n    for i in range(5):\\n        te=fold==i; tau,theta,off=fit((~te)&ok,kind); params.append(tau); v,u=m._design(tau,dt,t,h[te],s[te],x[te],z[te]); base=v[:,:,:2]@theta[:2]; f=theta[2]+x[te]@theta[3:]+off[lab[te]]; delta=r[te]-u[:,:2]@theta[:2]-f\\n        for share in mm:\\n            drift=f+np.where(ok[te],share*np.clip(delta,-.035,.035),delta); mm[share][te]=base+drift[:,None]*t\\n    print('variant',kind,'OOF tau range',np.round(np.array(params).min(0),4),np.round(np.array(params).max(0),4))\\n    for share,pred in mm.items():\\n        e=abs(pred-y); print(' share',share,'worst lab terminal median',max(np.median(e[(lab==j)&ok,-1]) for j in range(4)),'all late median',np.median(e[ok,-3:]),'worst lab full clipped RMSE',max(np.mean(np.minimum(e[(lab==j)&ok],.075)**2)**.5 for j in range(4)))\\n    tau,theta,off=fit(ok,kind); print(' fitted',tau,off); v,u=m._design(tau,dt,t,ht,st,xt,b['initial_memory_states']); full=np.isfinite(b['coupon_features_raw']).all(1); f=theta[2]+xt@theta[3:]+off[b['lab_id']]; delta=b['instant_rate_obs']-u[:,:2]@theta[:2]-f\\n    for share in mm:\\n        p=b['strain_0'][:,None]+v[:,:,:2]@theta[:2]+(f+np.where(full,share*np.clip(delta,-.035,.035),delta))[:,None]*t\\n        ee=[p-q['te_clean'],(p[:,-1]-b['strain_0'])/np.maximum(abs(st),.5)-q['te_secant'],m._crossing(t,b['strain_0'],p,b['critical_strain'])-q['te_cross']]; print(' public',share,[round(max(np.mean(e[b['lab_id']==j]**2)**.5 for j in range(4)),5) for e in ee])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/polymer_validation.py; sed -n '1,112p' /holdout_task/alpha_w04_batch_01_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 feature-only drift → H2 onset-rate recovery on incomplete coupons; current worst-lab public RMSE is 0.0280 for strain, 0.0853 for compliance, and 0.0796 for crossing time.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the measured onset rate for every coupon\",\n      \"rejected_reason\": \"On complete coupons this can carry rate noise into the entire trajectory; test bounded blending against held-out training curves instead.\"\n    }\n  ],\n  \"rationale\": \"Verify whether the remaining terminal-strain error reflects persistent lab drift or noisy onset rates. Compare the alternatives on stratified held-out training coupons and retain the current artifact unless a challenger improves the worst slices without degrading the other outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "11e996918152f476d115c3a4839de9aedcc2615f966a8ac6b0c297fe55704306",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42424.44,
+      "usage_known": true,
+      "prompt_tokens": 30933,
+      "cached_tokens": 6784,
+      "completion_tokens": 1752
+    }
+  ]
+}

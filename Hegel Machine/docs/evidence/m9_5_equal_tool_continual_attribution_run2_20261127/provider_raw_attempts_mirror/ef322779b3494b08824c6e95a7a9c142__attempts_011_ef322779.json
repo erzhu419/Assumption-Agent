@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef322779b3494b08824c6e95a7a9c142",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:38:20.459690+00:00",
+  "ended_at_utc": "2026-11-26T18:38:48.620826+00:00",
+  "request_sha256": "ce663222b6fd6cfba58cf1ee84b81c2345dea639e37bbdeba9a42110de5038bb",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 51886,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28836,
+    "cached_tokens": 6784,
+    "completion_tokens": 1123
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_06_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\narchive = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nworst = dict(weights_rel_l2=0., terminal_rel_l2=0.)\\nmatched = set()\\nfor record in pickle.loads(Path('public_beta_w04_batch_06.pkl').read_bytes()):\\n    study = record['study']\\n    baseline = solver.solve_beta_w04_batch_06(study)\\n    check = study['sensor_calibration_sweeps']\\n    b, x, y = (np.asarray(check[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    for entry in archive:\\n        ab, ax, ay = (np.asarray(entry[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n        if min(np.bincount(ab, minlength=4)) < 2:\\n            continue\\n        profile = np.array([np.polyfit(ax[ab == bank], ay[ab == bank], 1) for bank in range(4)])\\n        if np.max(np.abs(profile[b, 0]*x + profile[b, 1] - y)) > 5e-6:\\n            continue\\n        matched.add(entry['episode_short_name'])\\n        sample = dict(study, sensor_calibration_sweeps=dict(bank_id=ab, ref_signal=ax, raw_readout=ay))\\n        alternate = solver.solve_beta_w04_batch_06(sample)\\n        for key, metric in [('weights', 'weights_rel_l2'), ('terminal_field', 'terminal_rel_l2')]:\\n            delta = np.linalg.norm(alternate[key] - baseline[key]) / np.linalg.norm(baseline[key])\\n            assert np.isfinite(delta)\\n            worst[metric] = max(worst[metric], float(delta))\\nassert len(matched) >= 2, matched\\nresult = dict(matching_campaigns=sorted(matched), worst_relative_output_change=worst)\\nPath('/tmp/beta_w04_batch_06_calibration_sensitivity.json').write_text(json.dumps(result)+'\\\\n')\\nprint(json.dumps(result))\\nassert max(worst.values()) < 1e-5, result\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Additive separable transport → archive-calibrated inversion; the wing-by-shift stencil comparison passed at 1e-10 relative L2, and the independent public probe reported zero KKT gap.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the stencil and held-out bank checks\",\n      \"rejected_reason\": \"Those checks passed. They did not directly measure how disagreement between matching historical sweeps propagates into the recovered weights and field.\"\n    }\n  ],\n  \"rationale\": \"Use each complete historical sweep that independently matches the current spot checks to measure how observed calibration variation affects the two scientific outputs. If the change is material, inspect which bank drives it before choosing a calibration update; otherwise retain the already verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "36cffc7dabbfc6bab3fa2a3253b940847d27df4eebc111f41d8f9007bc81ff6b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29134.56,
+      "usage_known": true,
+      "prompt_tokens": 28836,
+      "cached_tokens": 6784,
+      "completion_tokens": 1123
+    }
+  ]
+}

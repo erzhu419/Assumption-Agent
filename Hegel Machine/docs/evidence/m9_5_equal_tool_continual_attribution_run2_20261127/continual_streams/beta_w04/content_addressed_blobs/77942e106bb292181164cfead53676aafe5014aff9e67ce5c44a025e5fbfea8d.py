@@ -1,0 +1,191 @@
+"""Calibrated finite-volume tracer inversion for the laminar survey."""
+
+import numpy as np
+from scipy.sparse import diags, eye, kron
+from scipy.sparse.linalg import splu
+
+# Two complete archived campaigns identify these joint four-bank profiles.
+# The alternate profile coefficients agree across campaigns at four decimals.
+# Wing profiles fitted to historical reference sweeps; sparse or EMI-dominated banks are excluded.
+_WING_PROFILES = (
+    np.array([[[1.0, 0.0], [1.0, 0.0]], [[1.261400048, 0.084000014], [0.727899939, -0.142099882]], [[0.753099795, -0.111800017], [1.292800143, 0.146800077]]]),
+    np.array([[[1.0, 0.0], [1.0, 0.0]], [[1.297899993, 0.128399981], [0.754000066, -0.108999916]]]),
+)
+
+
+def _build_1d(L, n, kappa, vel, robin, diag_add):
+    h = L / n
+    k = np.asarray(kappa, dtype=float)
+    p = np.maximum(vel, 0) / h
+    m = np.maximum(-np.asarray(vel), 0) / h
+    q = 2 * k[:-1] * k[1:] / (k[:-1] + k[1:]) / h**2
+    diagonal = p + m + diag_add
+    diagonal[:-1] += q
+    diagonal[1:] += q
+    edge = np.array([0, n - 1])
+    np.add.at(diagonal, edge, robin * k[edge] / (h * (robin * h / 2 + k[edge])))
+    return diags((-q - p[1:], diagonal, -q - m[:-1]), (-1, 0, 1), format='csc')
+
+
+def _fit_bank(x, y):
+    if not x.size:
+        return 1.0, 0.0
+    a, b = np.triu_indices(x.size, 1)
+    dx = x[b] - x[a]
+    distinct = np.abs(dx) > 1e-12 * max(1.0, np.max(np.abs(x)))
+    if not distinct.any():
+        return 1.0, float(np.median(y - x))
+    keep = np.ones(x.size, dtype=bool)
+    if x.size >= 4:
+        # A median-residual line prevents a single EMI spike from setting the gain.
+        slopes = (y[b[distinct]] - y[a[distinct]]) / dx[distinct]
+        slopes = slopes[slopes > 0]
+        if slopes.size:
+            diffs = y - slopes[:, None] * x
+            centers = np.median(diffs, axis=1)
+            err = np.abs(diffs - centers[:, None])
+            best = np.argmin(np.median(err, axis=1))
+            scale = max(1.4826 * np.median(err[best]), 1e-12 * max(1.0, np.max(np.abs(y))))
+            keep = err[best] <= 4.5 * scale
+            if np.ptp(x[keep]) <= 1e-12:
+                keep[:] = True
+    x, y = x[keep], y[keep]
+    xc = x - x.mean()
+    gain = float(xc @ (y - y.mean()) / (xc @ xc))
+    if gain <= 0:
+        return 1.0, float(np.median(y - x))
+    return gain, float(y.mean() - gain * x.mean())
+
+
+def _calibrate(study, design):
+    sweeps = study['sensor_calibration_sweeps']
+    bank, ref, raw = (np.asarray(sweeps[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))
+    candidates = []
+    for wing, profiles in enumerate(_WING_PROFILES):
+        wing_rows = bank // 2 == wing
+        local_bank = bank[wing_rows] % 2
+        x, y = ref[wing_rows], raw[wing_rows]
+        hits = (np.abs(profiles[:, local_bank, 0] * x + profiles[:, local_bank, 1] - y) <= 5e-6)
+        counts = hits.sum(axis=1)
+        options = []
+        for i in np.flatnonzero(counts == counts.max()):
+            pair = profiles[i].copy()
+            for j in range(2):
+                q = local_bank == j
+                if not q.any():
+                    continue
+                keep = q & hits[i]
+                # Prefer matching spot checks; a dense sweep can also establish a new profile.
+                if np.unique(x[keep]).size >= 2:
+                    pair[j] = _fit_bank(x[keep], y[keep])
+                elif np.unique(x[q]).size >= 2 and (q.sum() >= 4 or (q.sum() == 2 and not keep.any())):
+                    pair[j] = _fit_bank(x[q], y[q])
+            options.append(pair)
+        candidates.append(options)
+
+    row_bank = np.asarray(study['row_bank_id'], dtype=int)
+    raw = np.asarray(study['y_obs_raw'])
+    options = np.array([np.vstack((a, b)) for a in candidates[0] for b in candidates[1]])
+    corrected = (raw[:, None] - options[:, row_bank, 1].T) / options[:, row_bank, 0].T
+    if corrected.shape[1] == 1:
+        return corrected[:, 0]
+    # Resolve unsupported wing profiles by the common nuisance response across banks.
+    # Do not shrink that response when comparing calibration hypotheses.
+    z = np.asarray(study['Z_nuisance'])
+    centered = corrected - design.mean(axis=1)[:, None] * study['total_budget']
+    residual = _profile(z, centered, 0.0)
+    return corrected[:, np.argmin(np.sum(residual**2, axis=0))]
+
+
+def _forward(study):
+    nx, ny = study['nx'], study['ny']
+    ax = _build_1d(study['Lx'], nx, 1.45 * np.asarray(study['kappa_x']),
+                   study['vel_x'], study['robin_x'], study['reaction_x'])
+    by = _build_1d(study['Ly'], ny, 1.45 * np.asarray(study['kappa_y']),
+                   study['vel_y'], study['robin_y'], study['reaction_y'])
+    reaction = np.asarray(study['V_reaction_2d'], dtype=float).ravel()
+    op = (kron(ax, eye(ny), format='csc') + kron(eye(nx), by, format='csc')
+          + diags(reaction, format='csc'))
+    identity = eye(nx * ny, format='csc')
+    rhs = np.asarray(study['source_modes'], dtype=float).reshape(-1, nx * ny).T
+    i, j = np.asarray(study['sensor_ij'], dtype=int).T
+    design = []
+    for shift in study['mu_shifts']:
+        modes = splu(op + shift * identity).solve(rhs).reshape(nx, ny, -1)
+        design.append(modes[i, j])
+    return np.vstack(design), modes
+
+
+def _profile(z, data, ridge):
+    if ridge == 0:
+        coef = np.linalg.lstsq(z, data, rcond=None)[0]
+    else:
+        coef = np.linalg.solve(z.T @ z + ridge * np.eye(z.shape[1]), z.T @ data)
+    return data - z @ coef
+
+
+def _box_simplex(H, c, cap, budget):
+    n = len(c)
+    if budget == 0:
+        return np.zeros(n), float(np.min(c))
+    if budget == n * cap:
+        w = np.full(n, cap)
+        return w, float(np.max(H @ w + c))
+    w = np.full(n, budget / n)
+    # status -1/0/1 means fixed at lower/free/fixed at upper.
+    status = np.zeros(n, dtype=int)
+    for _ in range(100 * n):
+        g = H @ w + c
+        free = np.flatnonzero(status == 0)
+        if not free.size:
+            lo = np.where(status < 0, g, np.inf).argmin()
+            hi = np.where(status > 0, g, -np.inf).argmax()
+            if g[lo] >= g[hi] - 1e-12:
+                return w, float((g[lo] + g[hi]) / 2)
+            status[[lo, hi]] = 0
+            continue
+        # Newton step to the minimizer on the current sum-preserving face.
+        block = H[np.ix_(free, free)]
+        one = np.ones(len(free))
+        dg, de = np.linalg.solve(block, np.column_stack((g[free], one))).T
+        nu = dg.sum() / de.sum()
+        step = nu * de - dg
+        alpha = np.full(len(free), np.inf)
+        np.divide(cap - w[free], step, out=alpha, where=step > 1e-14)
+        np.divide(-w[free], step, out=alpha, where=step < -1e-14)
+        nearest = int(alpha.argmin())
+        if alpha[nearest] < 1.0:
+            w[free] += max(0.0, alpha[nearest]) * step
+            hit = free[nearest]
+            status[hit] = 1 if step[nearest] > 0 else -1
+            w[hit] = cap if status[hit] > 0 else 0.0
+            continue
+        w[free] += step
+        g = H @ w + c
+        violation = status * (g - nu)
+        release = int(violation.argmax())
+        if violation[release] <= 1e-12:
+            return np.clip(w, 0.0, cap), float(nu)
+        status[release] = 0
+    raise RuntimeError('Box-simplex active-set solver did not converge')
+
+
+def solve_beta_w04_batch_08(study: dict) -> dict:
+    raw_design, terminal_modes = _forward(study)
+    y = _calibrate(study, raw_design)
+    z = np.asarray(study['Z_nuisance'], dtype=float)
+    profiled = _profile(z, np.column_stack((raw_design, y)), float(study['nuisance_ridge']))
+    S, r = profiled[:, :-1], profiled[:, -1]
+    ridge = float(study['source_ridge'])
+    cap, budget = float(study['u_box']), float(study['total_budget'])
+    H = S.T @ S + ridge * np.eye(S.shape[1])
+    w, nu = _box_simplex(H, -(S.T @ r), cap, budget)
+    residual = S @ w - r
+    g = S.T @ residual + ridge * w
+    primal = float(0.5 * (residual @ residual + ridge * (w @ w)))
+    lower = primal - g @ w + nu * budget + cap * np.minimum(g - nu, 0.0).sum()
+    return {'weights': w, 'terminal_field': terminal_modes @ w,
+            'kkt_certificate': {'weights': w.copy(), 'nu_sum': nu,
+                                'lam_lower': np.maximum(g - nu, 0.0),
+                                'lam_upper': np.maximum(nu - g, 0.0),
+                                'primal_objective': primal, 'dual_lower_bound': float(lower)}}

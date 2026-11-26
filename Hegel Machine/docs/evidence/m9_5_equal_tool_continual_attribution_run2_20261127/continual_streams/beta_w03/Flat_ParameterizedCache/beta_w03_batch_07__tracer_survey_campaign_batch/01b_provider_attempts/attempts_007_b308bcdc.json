@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b308bcdcbd874a70a7398af03ca69525",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:46:51.152045+00:00",
+  "ended_at_utc": "2026-11-26T18:47:19.623175+00:00",
+  "request_sha256": "c9b17d20a7e8fcbe4103416caf6d865793670714ceba50afcf8b14fb1bf03b68",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 49858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28776,
+    "cached_tokens": 6784,
+    "completion_tokens": 1113
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_w03_batch_07_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nchecks = {}\\nexec((root / 'validate_public_schema.py').read_text().split('\\\\n_n_d =', 1)[0], checks)\\nitems = pickle.loads((root / 'public_beta_w03_batch_07.pkl').read_bytes())\\nrng = np.random.default_rng(7)\\nworst = np.zeros(3)\\ncount = 0\\nfor item in items:\\n    study, gt = item['study'], item['gt']\\n    sweep = study['sensor_calibration_sweeps']\\n    bank = sweep['bank_id']\\n    cases = {'public': np.arange(len(bank)), 'reordered': rng.permutation(len(bank))}\\n    for j in np.flatnonzero(bank < 2):\\n        cases[f'leave_dense_spot_{j}_out'] = np.flatnonzero(np.arange(len(bank)) != j)\\n    for b in (2, 3):\\n        idx = np.flatnonzero(bank == b)\\n        for j in idx:\\n            keep = np.arange(len(bank)) != j\\n            ref = sweep['ref_signal'][j]\\n            value = sweep['raw_readout'][j]\\n            # Hold out contaminated spots, retaining the corroborating anchor.\\n            gain, offset = ((.7039, -.1116), (1.2107, .1055))[b - 2]\\n            if abs(value - gain * ref - offset) > 2e-6:\\n                cases[f'leave_emi_spot_{j}_out'] = np.flatnonzero(keep)\\n    for label, idx in cases.items():\\n        case = dict(study, sensor_calibration_sweeps={k: np.asarray(v)[idx] for k, v in sweep.items()})\\n        out = solver.solve_beta_w03_batch_07(case)\\n        cert = checks['verify_box_simplex_kkt_certificate'](gt['S_tilde'], gt['r_y'], study['source_ridge'], study['u_box'], study['total_budget'], out['kkt_certificate'], gap_tol=2e-4)\\n        w, f = out['weights'], out['terminal_field']\\n        assert w.shape == gt['w_opt'].shape and f.shape == gt['terminal_field_A'].shape, label\\n        assert np.allclose(w, out['kkt_certificate']['weights'], rtol=0, atol=1e-10), label\\n        werr = np.linalg.norm(w-gt['w_opt']) / np.linalg.norm(gt['w_opt'])\\n        ferr = np.linalg.norm(f-gt['terminal_field_A']) / np.linalg.norm(gt['terminal_field_A'])\\n        assert cert['valid'] and werr < 1e-5 and ferr < 1e-5, (label, cert, werr, ferr)\\n        worst = np.maximum(worst, [werr, ferr, cert['gap']])\\n        count += 1\\nprint(f'{count} slices: worst weights relative L2={worst[0]:.3g}, terminal field relative L2={worst[1]:.3g}, independent KKT gap={worst[2]:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (all-point affine sweep fits) -> H2 (cross-wing prediction and spot-confirmed historical calibration); the independent public probe reports relative weight error 5e-8, relative field error 3e-8, and KKT gap 3.3e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress the exact artifact against sweep ordering, dense-reference jackknifes, and removal of known contaminated checks. These tests can expose candidate-selection instability hidden by the public aggregate; a failure would trigger a calibration fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8645e59798813afd0d22e1c74f7399c85857406e39b9af62dfa6ee96f87404c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29463.81,
+      "usage_known": true,
+      "prompt_tokens": 28776,
+      "cached_tokens": 6784,
+      "completion_tokens": 1113
+    }
+  ]
+}

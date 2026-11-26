@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3fbb15afa67e4faca555ecce70cce61f",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:23:16.803038+00:00",
+  "ended_at_utc": "2026-11-26T18:23:39.354563+00:00",
+  "request_sha256": "c474626fab810ab217ca39ad60b807eb00861abc9bbebb6481ab213e7b0bf83a",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 67702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34775,
+    "cached_tokens": 11136,
+    "completion_tokens": 836
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/tmp/w03_b04_stress.py')\\ns = p.read_text()\\na = s.index('c,r=m._design(base[')\\nb = s.index('\\\\nsub=dict', a)\\ns = s[:a] + '''tau = base['estimated_taus']\\nstep = 1e-6\\nc, r = m._design(tau, x, h, z, dt, np.array([0., step/2, step]), y)\\nassert np.all(c[:, 0] == 0)\\nforward = c[:, 2] / step\\n# The first-order error of a branch with rate r and time constant tau\\n# is bounded by |r| * step / (2*tau). Linear columns are exact.\\ntruncation = np.zeros_like(r)\\ntruncation[:, [0, 1, 8]] = abs(r[:, [0, 1, 8]]) * step / (2 * tau[[0, 1, 0]])\\nroundoff = 1e-12 * np.maximum(1., abs(r))\\nassert np.all(abs(forward - r) <= truncation + roundoff)\\nrichardson = 2 * c[:, 1] / (step/2) - forward\\nrelative_error = np.max(abs(richardson - r) / np.maximum(1., abs(r)))\\nprint('onset derivative: raw max error', np.max(abs(forward-r)), 'Richardson scaled max error', relative_error)\\nassert relative_error < 1e-10\\n''' + s[b:]\\ns = s.replace(\\\"np.array([.622,4.064])\\\", \\\"base['estimated_taus']\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w03_b04_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 mean imputation and recency-only calibration -> H2 missing-only rate correction and evidence-matched archive calibration; across both wing stress tests, worst clean slice RMSE was 0.04089 for curves and 0.01241 for rates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Raise the absolute derivative-test tolerance\",\n      \"rejected_reason\": \"That would not distinguish finite-step truncation from a wrong onset derivative, especially for the large plastic-history column.\"\n    }\n  ],\n  \"rationale\": \"Leave the solver unchanged. Use the exponential basis's finite-step error bound and a Richardson estimate to distinguish truncation from a derivative mismatch. If the derivative passes, complete the previously unreached sub-yield test and bind isolated verification to the same candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0b9d3e27cbd85c8152d330048c820f8a59e02970a1070a9475f5bbc99adffa77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23478.54,
+      "usage_known": true,
+      "prompt_tokens": 34775,
+      "cached_tokens": 11136,
+      "completion_tokens": 836
+    }
+  ]
+}

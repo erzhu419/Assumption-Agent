@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "401d8e72d3814d098d6ffa3bf9ee95c1",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:23:31.330065+00:00",
+  "ended_at_utc": "2026-11-26T18:24:03.148652+00:00",
+  "request_sha256": "aa6c7322d6c95584d8c994c28490f800c1769941a32434a2dc57abf17a033f5e",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 57534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31057,
+    "cached_tokens": 11136,
+    "completion_tokens": 1283
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/alpha04_wing_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\np = '/holdout_task/alpha_w01_batch_04_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', p)\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_w01_batch_04.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, time, sy = d['past_dt'], d['eval_times'], d['yield_stress']\\nmaps = s._calibrate(d['calibration_load_cells'])\\n\\ndef sub(block, mask):\\n    return {k: np.asarray(v)[mask] for k, v in block.items()}\\n\\ndef rmse(x):\\n    return float(np.sqrt(np.mean(x*x)))\\n\\nworst = {}\\nfor wing in (0, 1):\\n    loc = tr['lab_id']//2 == wing\\n    fit, val = sub(tr, ~loc), sub(tr, loc)\\n    panel = {k: np.concatenate((val[k], te[k])) for k in te if k in val}\\n    x, complete, n = s._alignment(fit, panel)\\n    m = len(val['lab_id'])\\n    keep, good = complete[:n], complete[n:n+m]\\n    fit = sub(fit, keep)\\n    xi = s._inputs(fit, x[:n][keep], maps, dt, sy)\\n    vi = s._inputs(val, x[n:n+m], maps, dt, sy)\\n    gate = (vi[-2] != 0).astype(int) + 2*(vi[-1] != 0)\\n    for plastic in (False, True):\\n        tau, w = s._fit(fit, xi, dt, time, plastic=plastic)\\n        a, b = s._design(tau, vi, dt, time)\\n        r = b @ w - val['instant_rate_obs']\\n        e = val['strain_0'][:, None] + a @ w - val['strain_curves_obs']\\n        ec = e - np.where(~good & np.isfinite(r), r, 0.)[:, None]*time\\n        print('wing', wing, 'plastic', plastic, 'taus', tau.round(4), 'plastic weights', w[7:].round(5), 'rate RMSE (without using held-out rate)', round(rmse(r), 5))\\n        for j in range(4):\\n            mask = gate == j\\n            if mask.any():\\n                metric = rmse(ec[mask])\\n                worst[plastic] = max(worst.get(plastic, 0.), metric)\\n                print('  regime', j, 'n', mask.sum(), 'curve RMSE', round(metric, 5), 'curve MAE', round(np.mean(abs(ec[mask])), 5), 'rate median abs', round(np.median(abs(r[mask])), 5))\\n        if plastic and (~good).any():\\n            print('  missing-feature curve RMSE without/with rate correction', round(rmse(e[~good]), 5), round(rmse(ec[~good]), 5))\\nprint('maximum leave-one-wing-out regime RMSE: linear', worst[False], 'gated', worst[True])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha04_wing_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear Prony memory → H2 calibrated yield-gated memory: worst held-out lab/yield strain RMSE fell from 1.253 to 0.313; whole-wing transfer and separate hold-only and history-only slices are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Search for rational, relay, or stochastic-drift terms\",\n      \"rejected_reason\": \"The specified creep law has two separately testable yield terms and no relay state, diffusion, or control objective. The relevant algebraic failure would be poor transfer in a hold-only or history-only slice.\"\n    },\n    {\n      \"option\": \"Use pooled error to judge nuisance confounding\",\n      \"rejected_reason\": \"Holding out each wing's response data and reporting errors by yield regime tests transfer without relying on pooled averages or classification metrics irrelevant to continuous strain.\"\n    }\n  ],\n  \"rationale\": \"Hold out both labs in each wing at once to test whether the fitted constitutive weights transfer across calibration groups. Report uncorrected rate errors separately so the observed-rate correction cannot inflate rate validation, and compare corrected versus uncorrected curve error on missing-feature coupons to decide whether that correction should stay.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9665f74ce08309a0e5510568abcb4a12ac23d85f4d8bd91319f1b9f2029f861c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32749.82,
+      "usage_known": true,
+      "prompt_tokens": 31057,
+      "cached_tokens": 11136,
+      "completion_tokens": 1283
+    }
+  ]
+}

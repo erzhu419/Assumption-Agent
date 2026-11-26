@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb6f7acee8f04315817f6298a3247623",
+  "call_seq": 3,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:35:17.136879+00:00",
+  "ended_at_utc": "2026-11-26T18:35:36.101358+00:00",
+  "request_sha256": "215979e6ff21357c510d33d595c23ddd3694e1973156037ec3b080cfff9114b9",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 23402,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19725,
+    "cached_tokens": 6784,
+    "completion_tokens": 679
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat /tmp/hegel_continual_archive/beta_w01_batch_05_solver.py && tail -42 validate_public_schema.py && python3 - <<'PY'\\nimport pickle, numpy as np\\nD=pickle.load(open('public_beta_w01_batch_06.pkl','rb')); print('CASES:',len(D))\\nfor i,c in enumerate(D):\\n s=c['study']; q=s['sensor_calibration_sweeps']; print('CASE',i,'gt keys',list(c['gt']));\\n if i==0: print('study',[(k, v if np.isscalar(v) else np.shape(v)) for k,v in s.items() if k!='sensor_calibration_sweeps']); print('sweep format', type(q),str(q)[:280]);\\n if isinstance(q,dict):\\n  b,x,y=(np.asarray(q[k]).ravel() for k in ('bank_id','ref_signal','raw_readout'))\\n else:\\n  b,x,y=(np.array([r[k] for r in q]).ravel() for k in ('bank_id','ref_signal','raw_readout'))\\n for j in range(4):\\n  a,z=x[b==j],y[b==j]; vals=[]\\n  if np.unique(a).size>1:\\n   g,o=np.polyfit(a,z,1); vals=[round(g,7),round(o,7),float(np.max(np.abs(z-g*a-o)))];\\n  print('bank',j,'n',a.size,'unique',np.unique(a).size,'ols gain/offset/maxres',vals, 'rows' if a.size<=4 else '', list(zip(a,z)) if a.size<=4 else '')\\n v=s['V_reaction_2d']; print('relative interaction',np.linalg.norm(v-v.mean(0)-v.mean(1)[:,None]+v.mean())/np.linalg.norm(v))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived calibration → H2 bankwise in-batch calibration with coupled transport; worst-bank error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the archived solver unchanged.\",\n      \"rejected_reason\": \"Its stencil and optimization conventions may be reusable, but the requested transport regime differs and cached calibration failed the public gate.\"\n    }\n  ],\n  \"rationale\": \"The previous output was truncated. Retain the prior solver and certificate conventions, but summarize sweep coverage and fit residuals to decide which banks need outlier rejection or historical support.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6d2b356dd3967e45863fb331d1649c3f3ea2ba993119978d1a05c399b28d03c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19910.69,
+      "usage_known": true,
+      "prompt_tokens": 19725,
+      "cached_tokens": 6784,
+      "completion_tokens": 679
+    }
+  ]
+}

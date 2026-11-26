@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "113f78d5f3ec4d89b907dcec8e3b4802",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:26:01.329372+00:00",
+  "ended_at_utc": "2026-11-26T18:26:41.906471+00:00",
+  "request_sha256": "98008644d3876b850d4033761fc748b7c7245ddbc1da5f74f8116c36c7d69884",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 71413,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35607,
+    "cached_tokens": 11136,
+    "completion_tokens": 1684
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/audit_batch04_full_drift.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_w02_batch_04_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\n\\ndef subset(block, mask):\\n    return {k: v[mask] for k, v in block.items()}\\n\\ndef rmse(x):\\n    return np.sqrt(np.nanmean(x*x))\\n\\nfor case in pickle.load(open('/holdout_task/public_alpha_w02_batch_04.pkl', 'rb')):\\n    d, g = case['dataset'], case['gt']\\n    tr, te = d['train'], d['test']\\n    dt, t, y = d['past_dt'], d['eval_times'], d['yield_stress']\\n    cal = s._calibrate(d['calibration_load_cells'])\\n    n = len(tr['lab_id'])\\n    x = s._features(tr, te)\\n    tr_in = s._inputs(tr, cal, dt, y, x[:n])\\n    te_in = s._inputs(te, cal, dt, y, x[n:])\\n    obs = np.c_[tr['strain_curves_obs']-tr['strain_0'][:, None], tr['instant_rate_obs']]\\n    clean = np.c_[g['te_clean']-te['strain_0'][:, None], g['te_true_rate0']]\\n    miss = ~np.isfinite(tr['coupon_features_raw']).all(1)\\n    testmiss = ~np.isfinite(te['coupon_features_raw']).all(1)\\n    lab = tr['lab_id']\\n    yielded = (tr_in[3] != 0) | (tr_in[4] != 0)\\n    testyield = (te_in[3] != 0) | (te_in[4] != 0)\\n    fold = np.empty(n, int)\\n    rng = np.random.default_rng(318)\\n    for l in range(4):\\n        for j in (False, True):\\n            for m in (False, True):\\n                ids = rng.permutation(np.flatnonzero((lab == l) & (yielded == j) & (miss == m)))\\n                fold[ids] = (np.arange(len(ids))+rng.integers(4)) % 4\\n    errors = np.empty((2, *obs.shape))\\n    for k in [0, 1, 2, 3, None]:\\n        fit = np.ones(n, bool) if k is None else fold != k\\n        inp = tuple(z[fit] for z in tr_in)\\n        tau, c = s._fit(inp, dt, t, obs[fit])\\n        residual = obs[fit] - s._design(inp, dt, t, np.log(tau)) @ c\\n        slopes = np.nanmedian(residual[:, :-1]/t, axis=1)\\n        shifts = np.array([np.nanmedian(slopes[(lab[fit] == l) & ~miss[fit]]) for l in range(4)])\\n        block = te if k is None else subset(tr, ~fit)\\n        held = te_in if k is None else tuple(z[~fit] for z in tr_in)\\n        a = s._design(held, dt, t, np.log(tau)) @ c\\n        b = a + shifts[block['lab_id'], None]*np.r_[t, 1.]\\n        for q in (a, b):\\n            s._condition_drift(subset(tr, fit), block, inp, obs[fit], q, dt, t, tau, c)\\n        if k is None:\\n            independent = np.stack((a-clean, b-clean))\\n        else:\\n            errors[:, ~fit] = np.stack((a-obs[~fit], b-obs[~fit]))\\n        print('fold, fitted lab drifts', k, np.round(shifts, 6))\\n    for name,e,labs,regime,missing,metric in [\\n        ('real OOF curve observations', errors, lab, yielded, miss, lambda a: np.nanmedian(abs(a))),\\n        ('independent clean test', independent, te['lab_id'], testyield, testmiss, rmse)]:\\n        for group,use in [('all', np.ones(len(labs), bool)), ('complete', ~missing), ('incomplete', missing)]:\\n            results=[]\\n            for l in range(4):\\n                for r in (False, True):\\n                    z=use & (labs == l) & (regime == r)\\n                    if z.any():\\n                        results.append([metric(e[0,z,:-1]),metric(e[1,z,:-1]),metric(e[0,z,-1]),metric(e[1,z,-1])])\\n            print(name, group, 'worst curve base/centered, rate base/centered', np.round(np.max(results,axis=0), 7))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch04_full_drift.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated constitutive law with onset correction -> H2: remove reproducible lab-specific drift before onset conditioning; complete-row clean worst-slice RMSE improved from 0.01345/0.00425 to 0.01001/0.00323, but the full-solver worst slice remains 0.0232/0.00712.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Immediately add the lab correction\",\n      \"rejected_reason\": \"The earlier comparison excluded incomplete coupons, which dominate the current worst slice, and did not test the correction with the final full-data fit.\"\n    }\n  ],\n  \"rationale\": \"Test the lab correction before onset conditioning on complete and incomplete coupons separately. Unstable fitted offsets or worse incomplete-coupon errors would argue against shipping the correction; consistent gains would support checking whether it can be implemented without changing the prescribed constitutive law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "e4c850a4abcffd99f58a6e1acd456b93f1150c420a74f99ad303113b25959f92",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41503.16,
+      "usage_known": true,
+      "prompt_tokens": 35607,
+      "cached_tokens": 11136,
+      "completion_tokens": 1684
+    }
+  ]
+}

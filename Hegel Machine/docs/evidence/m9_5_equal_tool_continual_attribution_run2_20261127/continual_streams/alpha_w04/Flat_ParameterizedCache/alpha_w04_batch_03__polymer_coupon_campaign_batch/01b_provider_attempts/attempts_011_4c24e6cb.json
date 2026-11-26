@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4c24e6cb7db04419962d9c3c77f0ea11",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_03__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:27:00.313381+00:00",
+  "ended_at_utc": "2026-11-26T18:27:44.318662+00:00",
+  "request_sha256": "ee3675abae4e5e5c02af8ebc562d7b7409b80484268f07a8df793a4fe98fe30e",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 69846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34433,
+    "cached_tokens": 6784,
+    "completion_tokens": 1926
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w04_batch_03_solver.py')\\ns = p.read_text()\\nstart = s.index('    return {\\\\'estimated_taus\\\\': taus,')\\ns = s[:start] + '''    predicted_rate = rate @ weights\\n    predicted_strain = test['strain_0'][:, None] + curves @ weights\\n\\n    # Keep the cell-mean feature alignment. When a feature is missing, the\\n    # observed onset rate can resolve its unidentified time-linear drift.\\n    missing = ~np.isfinite(test['coupon_features_raw'])\\n    if 'instant_rate_obs' in test:\\n        observed = np.asarray(test['instant_rate_obs'])\\n        use = missing.any(axis=1) & np.isfinite(observed)\\n        if use.any():\\n            # Bound the update by the empirical variation of the omitted\\n            # feature contribution, not by the magnitude of the observation.\\n            centered = x - x.mean(axis=0)\\n            contribution = missing[use] * weights[3:7]\\n            limit = 3. * np.std(centered @ contribution.T, axis=0)\\n            update = np.clip(observed[use] - predicted_rate[use], -limit, limit)\\n            predicted_rate[use] += update\\n            predicted_strain[use] += update[:, None] * times\\n\\n    return {'estimated_taus': taus, 'hereditary_weights': weights[:7],\\n            'viscoplastic_weights': weights[7:], 'predicted_strain': predicted_strain,\\n            'initial_rate_pred': predicted_rate}\\n'''\\nPath('/tmp/w04_update_candidate.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py /tmp/w04_update_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\n\\ndef load(path):\\n sp=importlib.util.spec_from_file_location('solver',path); mod=importlib.util.module_from_spec(sp); sp.loader.exec_module(mod); return mod.solve_alpha_w04_batch_03\\nbase=load('alpha_w04_batch_03_solver.py'); upgraded=load('/tmp/w04_update_candidate.py')\\np=pickle.load(open('public_alpha_w04_batch_03.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; t=d['eval_times']; tr=d['train']; te=d['test']\\nrmse=lambda z: np.sqrt(np.mean(np.square(z)))\\nfor lab in range(4):\\n a=tr['lab_id']!=lab; b=~a\\n fold=dict(d,train={k:v[a] for k,v in tr.items()},test={k:v[b] for k,v in tr.items()})\\n prior,post=base(fold),upgraded(fold)\\n miss=~np.isfinite(fold['test']['coupon_features_raw']).all(axis=1); target=fold['test']['strain_curves_obs']\\n ea=prior['predicted_strain']-target; eb=post['predicted_strain']-target\\n da=rmse((ea[miss]@t)/(t@t)); db=rmse((eb[miss]@t)/(t@t))\\n print('held-out training lab',lab,'imputed drift RMSE',da,db,'imputed curve RMSE',rmse(ea[miss]),rmse(eb[miss]))\\n assert db<da and rmse(eb[miss])<rmse(ea[miss])\\n assert np.array_equal(ea[~miss],eb[~miss])\\nprior,post=base(d),upgraded(d); miss=~np.isfinite(te['coupon_features_raw']).all(axis=1)\\nfor k in ('estimated_taus','hereditary_weights','viscoplastic_weights'): assert np.array_equal(prior[k],post[k])\\nfor lab in range(4):\\n for sel in (te['lab_id']==lab,(te['lab_id']==lab)&miss):\\n  c=rmse((post['predicted_strain']-g['te_clean'])[sel]); r=rmse((post['initial_rate_pred']-g['te_true_rate0'])[sel]); print('public',lab,sel.sum(),'strain/onset RMSE',c,r)\\nassert rmse(post['predicted_strain']-g['te_clean']) < .5*rmse(prior['predicted_strain']-g['te_clean'])\\n# A gross onset error must not propagate unboundedly or affect complete rows.\\nbad=upgraded(dict(d,test=dict(te,instant_rate_obs=te['instant_rate_obs']+1e6)))\\ndelta=bad['initial_rate_pred']-prior['initial_rate_pred']; print('gross onset max update',max(abs(delta)))\\nassert max(abs(delta))<1 and np.all(delta[~miss]==0)\\nnp.testing.assert_allclose(bad['predicted_strain']-prior['predicted_strain'],delta[:,None]*t,atol=1e-14)\\nPY\\ncp /tmp/w04_update_candidate.py /holdout_task/alpha_w04_batch_03_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w04_stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 mean imputation alone → H2 bounded onset-rate conditioning of the time-linear drift for incomplete coupons; leave-one-lab-out worst imputed drift RMSE fell from 0.152 to 0.0364 in an initial unbounded probe.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"Cell-mean imputation alone is sufficient to recover coupon-specific drift when a feature is missing.\",\"empirical_witness\":\"In all four held-out training labs, onset-rate innovations reduced imputed-coupon drift RMSE; for lab 1 it fell from 0.152 to 0.0364.\",\"causal_blanket_diagnosis\":\"Missing coupon features obscure the time-linear drift; the supplied onset measurement observes that drift together with the already modeled hereditary and plastic rates.\",\"sublated_pivot\":\"Preserve the required feature alignment and constitutive fit, and use only a bounded test-time drift update for incomplete coupons.\",\"risk_kind\":\"missing-feature drift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Anchor all coupons to their measured onset rate\",\"rejected_reason\":\"The real leave-one-lab-out curves did not show a consistent benefit on complete coupons.\"}],\"rationale\":\"Promote the bounded update only if it improves the incomplete slice in every real held-out lab, leaves complete predictions and fitted parameters unchanged, and limits gross onset errors. Re-run the isolated schema and activation tests on the promoted artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cb2bc73571cc08e509cf970409306ea1e4f7b9e71bb76307981c7a00a321d5d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45915.3,
+      "usage_known": true,
+      "prompt_tokens": 34433,
+      "cached_tokens": 6784,
+      "completion_tokens": 1926
+    }
+  ]
+}

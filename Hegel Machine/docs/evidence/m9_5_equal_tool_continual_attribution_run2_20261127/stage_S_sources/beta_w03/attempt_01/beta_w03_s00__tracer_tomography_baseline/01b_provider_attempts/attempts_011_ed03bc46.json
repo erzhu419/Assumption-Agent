@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed03bc4676904bf591ed8d4c6dcae3ed",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_s00__tracer_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:03:40.989799+00:00",
+  "ended_at_utc": "2026-11-26T18:04:24.592249+00:00",
+  "request_sha256": "82406f5ed2fb8557e5e42b990338f1be9ce0f7ebf20171d21de078cbd2a11bbe",
+  "system_prompt_chars": 5296,
+  "stdin_payload_chars": 64750,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34153,
+    "cached_tokens": 11136,
+    "completion_tokens": 1813
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\np='/holdout_task/beta_w03_s00_solver.py'\\ns=open(p).read(); start=s.index('def _calibrate('); end=s.index('\\\\n\\\\ndef _project',start)\\ns=s[:start]+'''def _calibrate(study, S, Z):\\n    sweep = study['sensor_calibration_sweeps']\\n    ids = np.asarray(sweep['bank_id'])\\n    ref = np.asarray(sweep['ref_signal'], dtype=float)\\n    raw = np.asarray(sweep['raw_readout'], dtype=float)\\n    row = np.asarray(study['row_bank_id'], dtype=int)\\n    obs = np.asarray(study['y_obs_raw'], dtype=float)\\n    y = np.empty_like(obs)\\n    sparse = []\\n    anchored = False\\n    for bank in range(4):\\n        rows = row == bank\\n        if not rows.any():\\n            continue\\n        x, z = ref[ids == bank], raw[ids == bank]\\n        gain, offset = _fit_bank(x, z, (1., 0.))\\n        y[rows] = (obs[rows] - offset) / gain\\n        if x.size and np.ptp(x) > 1e-10 * max(1., np.max(np.abs(x))):\\n            anchored = True\\n        else:\\n            sparse.append((rows, x, z))\\n    if not sparse or not anchored:\\n        return y\\n\\n    # Use calibrated banks to anchor a shared transport/nuisance waveform.\\n    # A single spot constrains offset conditional on gain; no spot leaves\\n    # both gain and offset to be estimated from the shared waveform.\\n    base = y.copy()\\n    columns = []\\n    gain_columns = []\\n    for rows, x, z in sparse:\\n        anchor = float(np.median(x)) if x.size else 0.\\n        base[rows] = anchor\\n        gain_columns.append(len(columns))\\n        columns.append(np.where(rows, y - anchor, 0.))\\n        if not z.size:\\n            columns.append(rows.astype(float))\\n    Q = np.column_stack(columns)\\n    m = S.shape[1]\\n    tangent = np.linalg.qr(np.column_stack((np.ones(m), np.eye(m)[:, :-1])))[0][:, 1:]\\n    uniform = S.sum(axis=1) * (study['total_budget'] / m)\\n    model = np.column_stack((S @ tangent, Z, -Q))\\n    penalty = np.zeros((m - 1, model.shape[1]))\\n    penalty[:, :m - 1] = np.sqrt(study['source_ridge']) * np.eye(m - 1)\\n    theta, _, rank, _ = np.linalg.lstsq(np.vstack((model, penalty)),\\n                                       np.r_[base - uniform, np.zeros(m - 1)], rcond=None)\\n    if rank == model.shape[1]:\\n        scales = theta[-Q.shape[1]:]\\n        if np.all(scales[gain_columns] > 0):\\n            return base + Q @ scales\\n    return y\\n'''+s[end:]\\ns=s.replace(\\\"    y = _calibrate(study)\\\\n    Z = np.asarray(study['Z_nuisance'], dtype=float)\\\",\\\"    Z = np.asarray(study['Z_nuisance'], dtype=float)\\\\n    y = _calibrate(study, S, Z)\\\")\\nopen(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\npython3 - <<'PY'\\np='/tmp/w03_sparse_probe.py'; s=open(p).read(); needle=\\\"   for name,v in [('identity',np.ones(len(sparse)))\\\"; idx=s.index(needle); end=s.index('\\\\nprint(',idx)\\ns=s[:idx]+'''   keep=~np.isin(ids,sparse)\\n   for b in sparse:\\n    keep[np.flatnonzero((ids==b)&(x==spots[b]))[0]]=True\\n   trial=dict(s,y_obs_raw=raw,sensor_calibration_sweeps=dict(bank_id=ids[keep],ref_signal=x[keep],raw_readout=(gains[ids]*x+offsets[ids])[keep]))\\n   calibrated=m._calibrate(trial,S,Z)\\n   assert np.max(abs(calibrated-(x0+Q@zz[A.shape[1]:])))<1e-9\\n   out=m.solve_beta_w03_s00(trial); local=out['kkt_certificate']; assert local['primal_objective']-local['dual_lower_bound']<1e-10\\n   val=metrics(calibrated); worst['solver']=np.maximum(worst.get('solver',0),val); passed['solver']=passed.get('solver',0)+int(val[2]<2e-4 and val[3]<2e-4 and val[4]<1e-4)\\n   assert np.isclose(np.max(abs(out['weights']-g['w_opt'])),val[0],atol=1e-12)\\n'''+s[end:];open('/tmp/w03_candidate_sparse.py','w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w03_candidate_sparse.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Use joint waveform calibration only for underdetermined banks; on 30 single-spot perturbations it reduced worst field error from 84.9% to 0.81% and worst reference KKT gap from 1.07 to 4.47e-3.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use bank-centered waveforms to estimate gain\",\"rejected_reason\":\"Worst field error increased to 1.40–1.98% and worst reference gap to 9.79e-3 or higher.\"}],\"rationale\":\"Promote the joint inverse estimate because it protects the worst field slice without changing fully identified calibration. Check the saved solver against the independently probed estimate and verify its certificate for the reconstructed data; the certificate against the original calibration remains a separate, tighter test.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3b95d8dd1ef42e8578ad826e610bbe43191b72e2104d9f2e1a4aed9de76002d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45417.16,
+      "usage_known": true,
+      "prompt_tokens": 34153,
+      "cached_tokens": 11136,
+      "completion_tokens": 1813
+    }
+  ]
+}

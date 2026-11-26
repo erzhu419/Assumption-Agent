@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5b15577537440f193da0a19359e54ee",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:34:30.041083+00:00",
+  "ended_at_utc": "2026-11-26T18:35:08.014388+00:00",
+  "request_sha256": "844ddd8c0aa4f148ba2c479f8ac26698119205e7bebb25bf38aa67db6c02dfe7",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 55961,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31373,
+    "cached_tokens": 6784,
+    "completion_tokens": 1619
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w01_batch_06_solver.py')\\ns = p.read_text()\\nold = \\\"    drift_delta = np.where(~complete_test & np.isfinite(observed), observed-rate, 0.)\\\"\\nnew = \\\"    # A missing feature leaves its linear drift unidentified; with complete\\\\n    # features, shrink the onset innovation to limit measurement noise.\\\\n    onset_weight = np.where(complete_test, .25, 1.)\\\\n    drift_delta = np.where(np.isfinite(observed), onset_weight*(observed-rate), 0.)\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('b06', 'alpha_w01_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('public_alpha_w01_batch_06.pkl','rb'))[0]['dataset']\\ntr = d['train']\\nt = d['eval_times']\\nresults = []\\nfor lab in range(4):\\n    held = tr['lab_id'] == lab\\n    fold = dict(d, train={k:v[~held] for k,v in tr.items()}, test={k:v[held] for k,v in tr.items()})\\n    pred = m.solve_alpha_w01_batch_06(fold)\\n    e = pred['predicted_strain']-fold['test']['strain_curves_obs']\\n    er = pred['initial_rate_pred']-fold['test']['instant_rate_obs']\\n    _, u = m._stress(fold['test'], m._calibrate(d['calibration_load_cells']))\\n    for above in (False, True):\\n        take = (np.abs(u)>d['yield_stress']) == above\\n        clipped = np.minimum(np.abs(e[take]), .12+.012*t)\\n        scores = [np.sqrt(np.mean(e[take]**2)), np.sqrt(np.mean(clipped**2)), np.sqrt(np.mean(er[take]**2)), np.sqrt(np.max(np.mean(clipped**2, axis=0)))]\\n        results.append(scores)\\n        print('held lab',lab,'above yield',above,'n',take.sum(),'raw curve / clipped curve / rate / clipped worst horizon',np.round(scores,6))\\nprint('worst',np.round(np.max(results,axis=0),6))\\n\\n# Construct exact curves and derivatives independently, retaining the public\\n# reference panels, missingness patterns, stress diversity, and lab assignments.\\nfor elastic in (True, False):\\n    ds = copy.deepcopy(d)\\n    if elastic:\\n        ds['yield_stress'] = 10.\\n    maps = m._calibrate(ds['calibration_load_cells'])\\n    dt = ds['past_dt']\\n    y = ds['yield_stress']\\n    tau = np.array([.56, 4.3])\\n    theta = np.array([.73,.56,.08,.15,-.13,.11,-.09,.27,.18])\\n    xa,xb,_,_ = m._align(ds['train'], ds['test'])\\n    edges = np.r_[np.cumsum(dt[::-1])[::-1],0.]\\n    for name,x in (('train',xa),('test',xb)):\\n        b = ds[name]\\n        gain,bias = maps[b['lab_id']].T\\n        h = gain[:,None]*b['past_stress_cmd']+bias[:,None]\\n        u = gain*b['stress_hold_cmd']+bias\\n        hold_ov = np.sign(u)*np.maximum(np.abs(u)-y,0)**2\\n        plastic = u*np.sum(np.maximum(np.abs(h)-y,0)**2*dt,axis=1)\\n        jump = u[:,None]-h @ np.diff(np.exp(-edges[:,None]/tau),axis=0)\\n        branch = jump*theta[:2]\\n        branch[:,0] += theta[8]*plastic\\n        drift = x @ theta[2:7] + theta[7]*hold_ov\\n        b['instant_rate_obs'] = branch @ (1/tau)+drift\\n        curve = b['strain_0'][:,None]+branch @ (1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*t\\n        if name=='train':\\n            b['strain_curves_obs'] = curve\\n    out = m.solve_alpha_w01_batch_06(ds)\\n    errs = [np.max(abs(out['estimated_taus']-tau)), np.max(abs(out['hereditary_weights']-theta[:7])), np.max(abs(out['viscoplastic_weights']-(np.zeros(2) if elastic else theta[7:]))), np.max(abs(out['predicted_strain']-curve)), np.max(abs(out['initial_rate_pred']-b['instant_rate_obs']))]\\n    print('exact elastic' if elastic else 'exact mixed yield', 'max errors:',errs)\\n    assert max(errs) < 1e-4\\n    if elastic:\\n        assert np.array_equal(out['viscoplastic_weights'], np.zeros(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 onset correction only for missing features -> H2 full correction for missing features and quarter correction otherwise; nested validation reduced worst clipped curve RMSE from 0.054885 to 0.054610 and worst onset-rate RMSE from 0.013698 to 0.010273.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep zero onset correction for complete coupons\",\n      \"rejected_reason\": \"Every inner fold chose quarter correction; it improved clipped strain error in every outer slice without materially changing worst raw strain RMSE.\"\n    }\n  ],\n  \"rationale\": \"Check the exact saved solver on held-out lab × yield slices to catch a mismatch between the validation prototype and the public entry point. Independently generated elastic and mixed-yield cases check coefficient recovery, onset/curve consistency, and exact zero plastic weights below yield; a failure would point to the affected basis or output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3a315b3e48611e8fa8afca1a27c6edd86ccf9239d32cbd6bddb9f9ce0fdad625",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40004.18,
+      "usage_known": true,
+      "prompt_tokens": 31373,
+      "cached_tokens": 6784,
+      "completion_tokens": 1619
+    }
+  ]
+}

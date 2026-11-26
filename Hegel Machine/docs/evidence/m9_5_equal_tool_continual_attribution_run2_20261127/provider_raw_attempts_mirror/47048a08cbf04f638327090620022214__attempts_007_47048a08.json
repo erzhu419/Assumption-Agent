@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47048a08cbf04f638327090620022214",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:51:51.900324+00:00",
+  "ended_at_utc": "2026-11-26T18:52:28.594345+00:00",
+  "request_sha256": "8759cbddfbabc1ec2ee313464ababc5ba9c93c0d31c0fa3e4e19c0a18f6042a3",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 60100,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32721,
+    "cached_tokens": 6784,
+    "completion_tokens": 1529
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch07', '/holdout_task/alpha_w01_batch_07_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_w01_batch_07.pkl', 'rb') as f:\\n    public = pickle.load(f)[0]['dataset']\\n\\ndef check_schema(d, out):\\n    n, k = len(d['test']['lab_id']), len(d['eval_times'])\\n    shapes = {'estimated_taus': (2,), 'hereditary_weights': (7,), 'viscoplastic_weights': (2,), 'predicted_strain': (n,k), 'initial_rate_pred': (n,)}\\n    assert out.keys() == shapes.keys()\\n    for key, shape in shapes.items():\\n        a = np.asarray(out[key]); assert a.shape == shape and np.isfinite(a).all(), key\\n    assert 0 < out['estimated_taus'][0] < out['estimated_taus'][1]\\n\\nout = m.solve_alpha_w01_batch_07(public)\\ncheck_schema(public, out)\\nassert np.array_equal(out['viscoplastic_weights'], np.zeros(2)), out['viscoplastic_weights']\\nprint('Public: all five outputs valid; both plastic coefficients exactly zero.')\\n\\n# Known-parameter experiment crossing yield in both stress polarities.\\nrng = np.random.default_rng(17)\\nd = dict(public, yield_stress=1.2)\\ncal = m._load_cells(d['calibration_load_cells'])\\ntaus = np.array([.52, 3.9]); w = np.array([.69,.54,.08,.15,-.13,.11,-.09,.19,.055])\\nfor split in ('train','test'):\\n    a = dict(d[split]); d[split] = a\\n    raw = a['coupon_features_raw'].copy(); raw[~np.isfinite(raw)] = 0.; a['coupon_features_raw'] = raw\\n    n = len(raw); dt = np.asarray(d['past_dt']); l = a['lab_id']\\n    h = rng.uniform(-2.7, 2.7, (n,len(dt))); s = rng.uniform(-2.9, 2.9, n)\\n    regime = np.arange(n) % 4\\n    h[(regime & 1)==0] *= .3; s[(regime & 2)==0] *= .3\\n    a['past_stress_cmd'] = (h-cal[l,1,None])/cal[l,0,None]\\n    a['stress_hold_cmd'] = (s-cal[l,1])/cal[l,0]\\n    a['_known_stresses'] = (h,s)\\nrefs = np.concatenate([d[x]['ref_coupons'] for x in ('train','test')]); labs = np.concatenate([d[x]['lab_id'] for x in ('train','test')]); t = np.asarray(d['eval_times'])\\nexpected = {}\\nfor split in ('train','test'):\\n    a = d[split]; h,s = a.pop('_known_stresses'); X = np.empty_like(a['coupon_features_raw'])\\n    for lab in range(4):\\n        ref = refs[labs==lab]; ref=ref[:,np.isfinite(ref).sum(axis=0)>=2]; keep = a['lab_id']==lab\\n        X[keep] = (a['coupon_features_raw'][keep]-np.median(np.nanmean(ref,axis=0)))/np.median(np.nanstd(ref,axis=0))\\n    ov = np.sign(s)*np.maximum(np.abs(s)-d['yield_stress'],0)**2\\n    work = (np.maximum(np.abs(h)-d['yield_stress'],0)**2 @ dt) * s\\n    drift = w[2] + X @ w[3:7] + w[7]*ov\\n    state = np.zeros((len(h),2))\\n    for j, duration in enumerate(dt):\\n        f = np.exp(-duration/taus); state = state*f + h[:,j,None]*(1-f)\\n    amp = (s[:,None]-state)*w[:2]; amp[:,0] += w[8]*work\\n    strain = a['strain_0'][:,None] + drift[:,None]*t + amp @ (1-np.exp(-t/taus[:,None]))\\n    rate = drift + amp @ (1/taus)\\n    a['instant_rate_obs'] = rate\\n    if split=='train': a['strain_curves_obs'] = strain\\n    else: expected = {'predicted_strain': strain, 'initial_rate_pred': rate, 'estimated_taus': taus, 'hereditary_weights': w[:7], 'viscoplastic_weights': w[7:]}\\nout = m.solve_alpha_w01_batch_07(d)\\ncheck_schema(d, out)\\nfor k in expected:\\n    e = np.max(np.abs(out[k]-expected[k])); print('Known-parameter max error', k, e); assert e < 1e-5, k\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (single curve noise scale) -> H2 (horizon-specific robust Prony fit); worst held-out lab RMSE is 0.30891 raw strain, 0.03722 clipped strain, and 0.01309 onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public and host checks alone\",\n      \"rejected_reason\": \"The public coupons stay below yield, so those checks do not exercise either plastic term.\"\n    }\n  ],\n  \"rationale\": \"The candidate improves worst-lab transfer and passes the host probe. Keep it unchanged while checking all five outputs and exercising both plastic terms with known parameters and an independent state recursion. Any mismatch would identify which part of the thresholded law needs correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "46280f3cf13d65b24ecb5301fcd41d5de2f5e0fb07e9cfd02e1ca54ad7b9e801",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37665.48,
+      "usage_known": true,
+      "prompt_tokens": 32721,
+      "cached_tokens": 6784,
+      "completion_tokens": 1529
+    }
+  ]
+}

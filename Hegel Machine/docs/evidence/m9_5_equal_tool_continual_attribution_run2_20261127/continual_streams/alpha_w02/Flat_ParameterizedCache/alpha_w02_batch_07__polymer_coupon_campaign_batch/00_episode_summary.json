@@ -1,0 +1,463 @@
+{
+  "task_id": "alpha_w02_batch_07__polymer_coupon_campaign_batch",
+  "short_name": "alpha_w02_batch_07",
+  "benchmark": "Hegel-M95-Equal-Tool-Continual-World",
+  "wave": "alpha_w02_step_07",
+  "scientific_domain": "Multi-Wing Polymer Coupon Hereditary Creep & Continual Calibration Stream",
+  "wormhole_family": "fam_hereditary_viscoelastic_memory",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Flat_ParameterizedCache",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 14,
+  "max_turns": 18,
+  "final_candidate_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+  "validated_incumbent_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | head -28\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/alpha_w02_batch_07_solver.py'); s=p.rea",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+        "expected_candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+        "computed_candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_w02_batch_07_solver.py",
+            "bytes": 10192
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1a5e8e6e"
+    },
+    {
+      "candidate_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat > /tmp/alpha07_margin_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\np = '/holdout_task/alpha_w02_batch_07_solver.py'\ns = importlib.ut",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+        "expected_candidate_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+        "computed_candidate_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_w02_batch_07_solver.py",
+            "bytes": 12578
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_b7abb240"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t04",
+      "turn_idx": 4,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "calibration_contamination",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "All in-batch load-cell readings in each lab are usable measurements of a single affine calibration.",
+      "empirical_witness": "Wing B OLS leaves maximum absolute residuals of 2.924 and 2.659 stress units in Labs 2 and 3, while Wing A and dense historical Wing B sweeps have residuals below 0.00025.",
+      "causal_blanket_diagnosis": "The affine law remains supported by clean sweeps. The discrepancy is in the current Wing B readings, and two-point consensus cannot identify the clean line from only three checks.",
+      "sublated_pivot": "Use dense historical sweeps to anchor the Wing B slope and bias where a current spot check corroborates the archive; keep current fitting for Wing A.",
+      "pending_resolution_proposed_at_turn": 5,
+      "agent_claimed_probe": {
+        "turn": 5,
+        "command_preview": "set -e\nsed 's/solve_alpha_w02_batch_06/solve_alpha_w02_batch_07/g' /tmp/hegel_continual_archive/alpha_w02_batch_06_solver.py > /holdout_task/alpha_w02_batch_07_solver.py\nsed -n '36,95p' /holdout_task/",
+        "stdout_preview": "        return fit, mask\n    return None, mask\n\n\ndef _calibrate(checks, sy):\n    history = json.loads(_ARCHIVE.read_text()) if _ARCHIVE.exists() else []\n    fits = []\n    tol = .045 * sy\n    tight = .004 * sy\n    for lab in range(4):\n      "
+      },
+      "probe_support_status": "verified_gauge_and_scientific_probe_in_scope",
+      "resolved_at_turn": 5,
+      "resolved_candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v1_m941",
+        "worker_process_isolated": true,
+        "probe_code_digest": "4095560732aa8dfb7a47cbb7888537f4cb772a7b7fd79cefcddf6971aefeddb3",
+        "public_input_digest": "16319d451af6db285041bfb87eadd7d21a8a76ce1a339987ef93c1e511dcf260",
+        "candidate_bundle_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_alpha_w02_batch_07.pkl": "16319d451af6db285041bfb87eadd7d21a8a76ce1a339987ef93c1e511dcf260",
+          "/holdout_task/public_asset_index.json": "238dc8f185492554927a6a22d8f05ad535cfa62f777bac1efbf66c4b7d44f625",
+          "/holdout_task/validate_public_schema.py": "154ab63bd214f5015b6d811205452d8bdff3f4629050b1c10e1cea0901680555"
+        },
+        "verified_scope": "full_7coeff_hereditary_handoff,panel_affine_gauge_invariance,quantitative_strain_and_spectrum_residuals",
+        "verified_claim_ids": [
+          "full_7coeff_hereditary_handoff",
+          "panel_affine_gauge_invariance",
+          "quantitative_strain_and_spectrum_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "curve_rate_handoff_max_err": 0.00135769,
+          "panel_affine_gauge_max_diff": 1e-08,
+          "strain_mae": 0.011508,
+          "tau_rel_err": 0.026699,
+          "test_complete_7coeff_prior_rate_median_err": 0.006975,
+          "train_complete_7coeff_rate_median_err": 0.008182,
+          "unbounded_innovation_violations": 0
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "resolution_witness_scope_verified": "full_7coeff_hereditary_handoff,panel_affine_gauge_invariance,quantitative_strain_and_spectrum_residuals"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 5,
+      "verified_turn": 5,
+      "resolved_nogood_ids": [
+        "ng_t04"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v1_m941",
+        "worker_process_isolated": true,
+        "probe_code_digest": "4095560732aa8dfb7a47cbb7888537f4cb772a7b7fd79cefcddf6971aefeddb3",
+        "public_input_digest": "16319d451af6db285041bfb87eadd7d21a8a76ce1a339987ef93c1e511dcf260",
+        "candidate_bundle_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_alpha_w02_batch_07.pkl": "16319d451af6db285041bfb87eadd7d21a8a76ce1a339987ef93c1e511dcf260",
+          "/holdout_task/public_asset_index.json": "238dc8f185492554927a6a22d8f05ad535cfa62f777bac1efbf66c4b7d44f625",
+          "/holdout_task/validate_public_schema.py": "154ab63bd214f5015b6d811205452d8bdff3f4629050b1c10e1cea0901680555"
+        },
+        "verified_scope": "full_7coeff_hereditary_handoff,panel_affine_gauge_invariance,quantitative_strain_and_spectrum_residuals",
+        "verified_claim_ids": [
+          "full_7coeff_hereditary_handoff",
+          "panel_affine_gauge_invariance",
+          "quantitative_strain_and_spectrum_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "curve_rate_handoff_max_err": 0.00135769,
+          "panel_affine_gauge_max_diff": 1e-08,
+          "strain_mae": 0.011508,
+          "tau_rel_err": 0.026699,
+          "test_complete_7coeff_prior_rate_median_err": 0.006975,
+          "train_complete_7coeff_rate_median_err": 0.008182,
+          "unbounded_innovation_violations": 0
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_12_split_thresholded_creep_transfer",
+    "node_auto_10_split_preloaded_creep_transfer",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_06_robust_network_assimilation"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "1a5e8e6e66c59c576f451d00ee1861443954701582796e3470ca3035ed24c638",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_alpha_w02_batch_07_b7abb240df84",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 15,
+    "exported_pure_functions": [
+      "_line",
+      "_features",
+      "_design",
+      "_mad",
+      "_fit_unprojected",
+      "_fit_profiled",
+      "_fit",
+      "_rate_gains"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 2,
+    "search_skill_query_count": 3,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 4,
+    "describe_skill_queries": [
+      "autogenous_thresholded_creep_transfer.fit_thresholded_creep",
+      "autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "b7abb240df84768e6212371c53d0d6cd9218f01270b1835872424a9ce0180b05",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_alpha_w02_batch_07"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "alpha_w02_batch_07_solver.py",
+          "final_file_sha256": "975899ec654487cc277b0b587b349b2068177a3a8780c0892552668b1f20f2f4",
+          "public_entrypoints": [
+            "solve_alpha_w02_batch_07"
+          ],
+          "effective_entrypoints": [
+            "solve_alpha_w02_batch_07"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "alpha_w02_batch_07_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_alpha_w02_batch_07.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_alpha_w02_batch_07.pkl": "16319d451af6db285041bfb87eadd7d21a8a76ce1a339987ef93c1e511dcf260",
+      "/holdout_task/public_asset_index.json": "238dc8f185492554927a6a22d8f05ad535cfa62f777bac1efbf66c4b7d44f625",
+      "/holdout_task/validate_public_schema.py": "154ab63bd214f5015b6d811205452d8bdff3f4629050b1c10e1cea0901680555"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5302,
+    "initial_user_payload_chars": 4449,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 14341
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 14,
+    "logical_agent_decision_calls": 14,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 14,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_2f262141.json",
+      "attempts_002_b3cadbbe.json",
+      "attempts_003_446eafe3.json",
+      "attempts_004_6175498f.json",
+      "attempts_005_491d3465.json",
+      "attempts_006_03dc8ebc.json",
+      "attempts_007_fbcc0fa9.json",
+      "attempts_008_3e662faf.json",
+      "attempts_009_5c7d5098.json",
+      "attempts_010_3cc2740e.json",
+      "attempts_011_dfa640c1.json",
+      "attempts_012_db47942f.json",
+      "attempts_013_996cf088.json",
+      "attempts_014_14b3d91b.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 34,
+  "prompt_tokens": 410390,
+  "cached_tokens": 92544,
+  "completion_tokens": 12382,
+  "total_tokens": 422772,
+  "token_cost_proxy": 353364,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 353364,
+  "wall_ms": 385829.27,
+  "provenance_verified": true,
+  "terminal_record_sha256": "3a63e02ea8b64b2d30b7b374f1ef8a611787bc00306677e044087ffe19f50d36",
+  "world_id": "alpha_w02",
+  "family": "alpha",
+  "stream_step": 7,
+  "causal_event": "G2",
+  "event_category": "continual_history_guard_fanout",
+  "execution_mode": "llm_synthesis_after_equal_tool_gate",
+  "solver_token_cost_proxy": 353364,
+  "consolidation_token_cost_proxy": 70455,
+  "total_lifecycle_token_cost_proxy": 423819,
+  "pre_llm_probe_wall_ms": 5559.99,
+  "consolidation_wall_ms": 205426.68,
+  "m8_wing_scoped_update": null,
+  "pre_llm_trial_receipt": {
+    "arm": "Flat_ParameterizedCache",
+    "accepted_pre_llm": false,
+    "pre_llm_probes_used": 1,
+    "selected_source_short_name": "alpha_w02_batch_06",
+    "parameter_payload": {
+      "stress_gains": [
+        0.7398285711656729,
+        1.2522280212680723,
+        1.654422270742358,
+        1.3926546558704451
+      ],
+      "stress_biases": [
+        -0.12774903763686007,
+        0.14514073450257875,
+        3.4536883551673934,
+        -3.5276995951416996
+      ]
+    },
+    "probe_result": {
+      "accepted": false,
+      "schema_valid": true,
+      "schema_stdout": "{\"schema_valid\": true, \"errors\": []}\n",
+      "candidate_bundle_sha256": "1b5cecadd6e0bae8b9105c5ccc16c1a36f8f85e3ee4577667b325f91220b6a08",
+      "candidate_raw_sha256": "942e9f2e337f8c8ee9da795188425f4e8b796a9ba9c75bf2d8a34654292653dc",
+      "scientific_probe_receipt": null
+    },
+    "reason": "rejected_by_shared_public_scientific_gate"
+  },
+  "provenance_dag_verification": {
+    "valid": true,
+    "decision_count": 37,
+    "terminal_record_sha256": "04f97b502b2f938b11d0e662bffc53ddcee2e7391320188b4a6e59b717d710c9",
+    "verified_measurement_cost": 0.0,
+    "verified_compute_cost": 14.302,
+    "verified_composite_cost": 0.7151,
+    "verified_total_tokens": 422772
+  },
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": false,
+    "reward": 0.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/alpha_w02_batch_07_solver.py": "FILE:12578"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": false,
+      "reward": 0.0,
+      "max_tau_rel_err": 0.0,
+      "max_strain_mae": 0.0,
+      "max_rate_mae": 0.0,
+      "max_vp_err": 0.0,
+      "student_elapsed_sec": 1.1245,
+      "instance_diagnostics": [
+        {
+          "seed": 952761,
+          "error": "weights_prediction_handoff_mismatch"
+        },
+        {
+          "seed": 952762,
+          "error": "weights_prediction_handoff_mismatch"
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.089983,
+        "import_cpu_sec": 0.08713,
+        "candidate_call_wall_sec": 1.073371,
+        "candidate_call_cpu_sec": 1.03932,
+        "ipc_and_codec_wall_sec": 0.130536,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.012964,
+        "verifier_and_gt_cpu_sec": 0.042547,
+        "total_supervisor_wall_sec": 1.306855
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": false, \"reward\": 0.0, \"max_tau_rel_err\": 0.0, \"max_strain_mae\": 0.0, \"max_rate_mae\": 0.0, \"max_vp_err\": 0.0, \"student_elapsed_sec\": 1.1245, \"instance_diagnostics\": [{\"seed\": 952761, \"error\": \"weights_prediction_handoff_mismatch\"}, {\"seed\": 952762, \"error\": \"weights_prediction_handoff_mismatch\"}]}\n__HEGEL_VERIFIER_AUTH_f0a95ed5b5104beecacffa7c87fade20__:{\"strict_pass\": false, \"reward\": 0.0, \"max_tau_rel_err\": 0.0, \"max_strain_mae\": 0.0, \"max_rate_mae\": 0.0, \"max_vp_err\": 0.0, \"student_elapsed_sec\": 1.1245, \"instance_diagnostics\": [{\"seed\": 952761, \"error\": \"weights_prediction_handoff_mismatch\"}, {\"seed\": 952762, \"error\": \"weights_prediction_handoff_mismatch\"}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.089983, \"import_cpu_sec\": 0.08713, \"candidate_call_wall_sec\": 1.073371, \"candidate_call_cpu_sec\": 1.03932, \"ipc_and_codec_wall_sec\": 0.130536, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.012964, \"verifier_and_gt_cpu_sec\": 0.042547, \"total_supervisor_wall_sec\": 1.306855}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 5412.14,
+    "failure_taxonomy": "NUMERICAL_ACCURACY_OR_MECHANISTIC_MODEL_DEFECT"
+  }
+}

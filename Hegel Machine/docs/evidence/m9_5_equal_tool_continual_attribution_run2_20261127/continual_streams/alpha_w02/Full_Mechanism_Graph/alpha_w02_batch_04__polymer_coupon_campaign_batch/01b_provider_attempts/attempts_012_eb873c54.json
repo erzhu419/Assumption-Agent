@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb873c54de11474395aa971e402ee8f0",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:24:06.942677+00:00",
+  "ended_at_utc": "2026-11-26T18:24:47.590071+00:00",
+  "request_sha256": "ff0c2a52cc281dadb0fd14de31a1ba578a4d0b79fdf1edae436f05197db3733d",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 76412,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37398,
+    "cached_tokens": 6784,
+    "completion_tokens": 1712
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha04_margin_audit.py <<'PY'\\nexec(open('/tmp/alpha_w02_batch04_cv.py').read().split('for a in s._archive_checks')[0])\\nfrom itertools import combinations\\nlabs = tr['lab_id']; dt=d['past_dt']; time=d['eval_times']; sy=d['yield_stress']\\ny=np.column_stack((tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']))\\nx=s._features(tr,d['test'])[:len(y)]; st=s._stress(tr,cal); p=s._plastic(st,dt,sy)\\nfor lab in range(4):\\n    fit=labs!=lab; val=~fit\\n    tau,b=s._fit(tuple(a[fit] for a in st),x[fit],tuple(a[fit] for a in p),dt,time,y[fit])\\n    r=y-s._design(st,x,p,dt,time,tau)@b\\n    # Predeclared smooth alternatives: saturation of each plastic term, and two-way/three-way feature interactions in the creep drift.\\n    hold=st[1]; ov,hist=p\\n    q=np.column_stack((ov/(1+np.maximum(abs(hold)-sy,0)**2),hist/(1+(hist/(1+abs(hold)))**2)))\\n    z=x[:,1:]; w=np.column_stack([z[:,i]*z[:,j] for i,j in combinations(range(4),2)]+[z[:,i]*z[:,j]*z[:,k] for i,j,k in combinations(range(4),3)]+[(z[:,0]+z[:,1])**2,(z[:,2]-z[:,3])**2]); w-=w[fit].mean(0)\\n    ramp=np.r_[time,1.]; rise=np.r_[-np.expm1(-time/tau[0]),1/tau[0]]\\n    alt=np.concatenate((q[:,0,None,None]*ramp[None,:,None],q[:,1,None,None]*rise[None,:,None],w[:,None,:]*ramp[None,:,None]),axis=2)\\n    std=np.maximum(1.4826*np.median(abs(r[fit]),axis=0),1e-6)\\n    a=(alt[fit]/std[None,:,None]).reshape(-1,alt.shape[-1]); t=(r[fit]/std).ravel(); weight=1/np.hypot(1,t/2.5)\\n    def report(e):\\n        return np.round([np.median(abs(e[:,:-1])),np.median(abs(e[:,-1])),np.max(np.abs(np.median(e[:,:-1],axis=0))),np.median(e[:,-1])],6).tolist()\\n    print('held lab',lab,'baseline (curve MAE median, rate MAE median, worst median horizon bias, rate median bias)',report(r[val]))\\n    for key,idx in [('saturation',slice(0,2)),('interactions',slice(2,None))]:\\n        coef=np.linalg.lstsq(a[:,idx]*weight[:,None],t*weight,rcond=1e-8)[0]\\n        print('   ',key,report(r[val]-alt[val][:,:,idx]@coef))\\n# Use only real calibration commands/readings to identify sensitivity to sparse panels.\\nc=d['calibration_load_cells']; labid=c['lab_id']; cmd=c['cmd_stress']; observed=c['true_stress']; gt=case['gt']; ref=np.column_stack((gt['stress_gains'],gt['stress_biases']))\\nfor lab in range(4):\\n    ids=np.flatnonzero(labid==lab); envelope=np.r_[st[0][labs==lab].ravel(),st[1][labs==lab]]; lo,hi=(np.array([envelope.min(),envelope.max()])-cal[lab,1])/cal[lab,0]\\n    err={}\\n    for n in (2,3,4):\\n        for subset in combinations(ids,n):\\n            keep=labid!=lab; keep[list(subset)]=True\\n            for noise in (False,True):\\n                yy=observed.copy()\\n                if noise: yy[subset[0]]+=.6\\n                fit=s._calibrate(dict(lab_id=labid[keep],cmd_stress=cmd[keep],true_stress=yy[keep]))[lab]\\n                delta=fit-ref[lab]; value=max(abs(delta[0]*lo+delta[1]),abs(delta[0]*hi+delta[1])); key=(n,noise)\\n                if key not in err or value>err[key][0]: err[key]=(value,np.ptp(cmd[list(subset)]))\\n    print('lab',lab,'worst stress errors across spot subsets (n, EMI, max error, span)',[(n,noise,round(v,6),round(span,3)) for (n,noise),(v,span) in err.items()])\\nPY\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /tmp/alpha04_margin_audit.py && python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust calibrated Prony–plastic law -> H2 augment only if saturation or feature interactions improve held-out residuals; public clean strain RMSE remains 0.346 on imputed coupons and 0.00915 on complete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay states, Fokker–Planck/HJB dynamics, or balanced classification accuracy\",\n      \"rejected_reason\": \"This batch has continuous coupon responses and no relay states, stochastic-control operator, or class labels. Held-out lab and horizon residuals measure the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Test whether rational saturation or feature interactions remove systematic errors on held-out labs without fitting their responses. Use real spot-check subsets to detect calibration failures that the earlier single-spot and full-sweep EMI tests could miss. Revise only if either audit identifies a material weakness.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9a81008fcfee71f74b840b4a0369073942fd9bd955575aea75dc41b107a2a7c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41584.7,
+      "usage_known": true,
+      "prompt_tokens": 37398,
+      "cached_tokens": 6784,
+      "completion_tokens": 1712
+    }
+  ]
+}

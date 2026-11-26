@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6afe23ad496341af9c8d156cbd56df89",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:51:00.838160+00:00",
+  "ended_at_utc": "2026-11-26T18:51:26.840116+00:00",
+  "request_sha256": "6875b5a5f58c651b9a9989f1d1f911c0552b23f511680c7dd64c10fd02b7cac8",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 51149,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31198,
+    "cached_tokens": 11136,
+    "completion_tokens": 1014
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w02_batch_07_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('public_alpha_w02_batch_07.pkl','rb'))[0]['dataset']\\nq=copy.deepcopy(d); q['yield_stress']=1.05\\nt,dt=q['eval_times'],q['past_dt']; tr,te=q['train'],q['test']; n=len(tr['lab_id']); f=s._features(tr,te); cal=s._calibrate(q['calibration_load_cells'])\\ntaus=np.array([.48,4.25]); w=np.array([.67,.54,.08,.14,-.13,.1,-.09,.16,.11]); after=np.sum(dt)-np.cumsum(dt)\\ndef truth(z,feat):\\n    g,b=cal[z['lab_id']].T; p=g[:,None]*z['past_stress_cmd']+b[:,None]; h=g*z['stress_hold_cmd']+b\\n    H=sum(p[:,j,None]*(np.exp(-after[j]/taus)-np.exp(-(after[j]+dt[j])/taus)) for j in range(len(dt)))\\n    a=(h[:,None]-H)*w[:2]; ov=np.sign(h)*np.maximum(abs(h)-q['yield_stress'],0)**2\\n    D=np.sum(np.maximum(abs(p)-q['yield_stress'],0)**2*dt,axis=1)\\n    v=feat@w[2:7]+w[7]*ov; u=w[8]*D*h\\n    return z['strain_0'][:,None]+a@(1-np.exp(-t[None,:]/taus[:,None]))+v[:,None]*t+u[:,None]*(1-np.exp(-t/taus[0])), a@(1/taus)+v+u/taus[0], ov, D\\ntr['strain_curves_obs'],tr['instant_rate_obs'],_,_=truth(tr,f[:n]); yp,rp,ov,D=truth(te,f[n:]); out=s.solve_alpha_w02_batch_07(q)\\nfor key,target in [('estimated_taus',taus),('hereditary_weights',w[:7]),('viscoplastic_weights',w[7:]),('predicted_strain',yp),('initial_rate_pred',rp)]:\\n    err=np.max(abs(out[key]-target)); print('above-yield',key,'max error',err); assert err<1e-5\\nassert np.any(ov>0) and np.any(ov<0) and np.any((ov==0)&(D>0)); print('positive/negative hold and history-only yield verified')\\nout=s.solve_alpha_w02_batch_07(d); assert np.array_equal(out['viscoplastic_weights'],np.zeros(2)); assert all(np.isfinite(v).all() for v in out.values()); print('public sub-yield: exact zero plastic weights and finite outputs')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 uncalibrated archive replay → H2 wing-specific affine calibration and a shared Prony law; worst held-out lab/horizon strain MAE is 0.2466 against noisy observations, and the host probe reports strain MAE 0.040418 and relative tau error 0.001099.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a lab-specific drift correction\",\"rejected_reason\":\"Held-out signed medians stay within 0.029 strain units, while the shared law passes the host calibration and handoff checks. A lab-specific fit is not supported by this transfer test.\"}],\"rationale\":\"The public record cannot detect a sign, onset, or history error in the plastic terms because it never crosses yield. An independent forward calculation tests both hold signs and history-only yield; any discrepancy would require correcting the corresponding basis term before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cf75988eaf1cbf2c9da0daeba14fb493703835e713a5f28ad75f5ff65fec19f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27010.13,
+      "usage_known": true,
+      "prompt_tokens": 31198,
+      "cached_tokens": 11136,
+      "completion_tokens": 1014
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7b6d7da12e948ab97321184895c20c3",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:10:52.740017+00:00",
+  "ended_at_utc": "2026-11-26T18:11:19.758415+00:00",
+  "request_sha256": "015aa9a0bb5b8ce0293a31c28306dca100adc876e24113b8af1c379b4e24e8b0",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 39782,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25670,
+    "cached_tokens": 11136,
+    "completion_tokens": 1082
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/beta_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nvsrc=open('validate_public_schema.py').read(); start=vsrc.index('def verify_box'); end=vsrc.index('\\\\n    # Unconditional',start); print(vsrc[end:end+1250])\\nfor item in pickle.load(open('public_beta_w01_batch_01.pkl','rb')):\\n s=item['study']; gt=item['gt']; S=gt['S_tilde']; r=gt['r_y']; lm=s['source_ridge']; cap=s['u_box']; rows=s['row_bank_id']; sw=s['sensor_calibration_sweeps']; bank=sw['bank_id']; d,t=m._responses(s); y=m._calibrated_observations(s,d,s['Z_nuisance']); print('bank affine fits', [m._fit_bank(sw['ref_signal'][bank==b],sw['raw_readout'][bank==b]) for b in range(4)]); print('design/target max mismatch',np.max(np.abs(m._profile(s['Z_nuisance'],d,s['nuisance_ridge'])-S)),np.max(np.abs(m._profile(s['Z_nuisance'],y[:,None],s['nuisance_ridge']).ravel()-r)))\\n def audit(name, st):\\n  out=m.solve_beta_w01_batch_01(st); w=out['weights_by_budget']; gaps=[]; objectives=[]\\n  for wi, b, c in zip(w,s['budget_grid'],out['kkt_certificates']):\\n   rr=S@wi-r; g=S.T@rr+lm*wi; nu=c['nu_sum']; gaps.append(float(g@wi-nu*b-cap*np.minimum(0,g-nu).sum())); objectives.append(float(.5*(rr@rr+lm*(wi@wi))-c['primal_objective']))\\n  e=out['terminal_field_mid_budget']-gt['terminal_field_mid_budget']; print(name,'gaps',gaps,'objective discrepancy',max(map(abs,objectives)),'weight_linf',np.max(np.abs(w-gt['weights_by_budget'])),'field_linf',np.max(np.abs(e)))\\n audit('public',s)\\n gains=np.array([1.06,.96,1.18,.85]); offsets=np.array([.02,-.03,.06,-.04]); changed=copy.deepcopy(s); changed['y_obs_raw']=gains[rows]*y+offsets[rows]; changed['sensor_calibration_sweeps']['raw_readout']=gains[bank]*sw['ref_signal']+offsets[bank]; audit('full affine change',changed)\\n for b in range(4): changed['sensor_calibration_sweeps']['raw_readout'][np.flatnonzero(bank==b)[0]]+=.75\\n audit('one EMI spike per bank',changed)\\n for wing in (0,1):\\n  for mode in ('unchanged','shifted'):\\n   trial=copy.deepcopy(s if mode=='unchanged' else changed); take=bank//2!=wing\\n   for b in (2*wing,2*wing+1): take[np.flatnonzero(bank==b)[1]]=True\\n   trial['sensor_calibration_sweeps']={k:v[take] for k,v in trial['sensor_calibration_sweeps'].items()}; audit(f'one spot per bank wing {wing}, {mode}',trial)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived separable transport → H2 shared calibrated transport with three budget solves; the public schema passes, and numerical margins under sparse and noisy calibration are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check all three budgets and the terminal field against the public reference. Then mask sweeps by wing and inject known gain changes and EMI spikes to see whether sparse calibration needs to prefer the historical reference over transport-based extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "bf8ebaaaf513189a4504c0e21c6248e5ec68d816549f20e5c9a5bf22126d77f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27972.96,
+      "usage_known": true,
+      "prompt_tokens": 25670,
+      "cached_tokens": 11136,
+      "completion_tokens": 1082
+    }
+  ]
+}

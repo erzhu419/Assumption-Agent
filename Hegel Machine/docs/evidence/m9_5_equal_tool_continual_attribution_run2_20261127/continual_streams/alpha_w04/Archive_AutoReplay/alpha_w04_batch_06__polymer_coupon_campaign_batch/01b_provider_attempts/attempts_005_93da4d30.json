@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93da4d30b1324f2aad68c647e0fb5efc",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:41:36.528158+00:00",
+  "ended_at_utc": "2026-11-26T18:42:11.545286+00:00",
+  "request_sha256": "d497108427fab7ed88c94e604d49d05debc009dcd1ef3c5ae7a4d13789a1ac90",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 42391,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26121,
+    "cached_tokens": 6784,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/alpha_w04_batch_05_solver.py')\\ns=p.read_text(); start=s.index('    path = Path('); end=s.index('\\\\n    def agreement',start)\\ns=s[:start]+'''    # Full archive sweeps show two recurring calibration regimes. Pool the\\n    # replicate sweeps within each regime, not across the regime switch.\\n    priors = np.array([\\n        [[1., 0.], [1., 0.], [1., 0.], [1., 0.]],\\n        [[1.223713, .139495], [.707866, -.088710],\\n         [1.199282, .084797], [.731615, -.140989]],\\n    ])\\n'''+s[end:]\\ns=s.replace('Estimate a shared two-branch creep law using calibrated coupon stresses.', 'Estimate the two-branch creep law and its thresholded plastic extensions.').replace('import json\\\\nfrom pathlib import Path\\\\n\\\\n','').replace('solve_alpha_w04_batch_05','solve_alpha_w04_batch_06')\\nPath('alpha_w04_batch_06_solver.py').write_text(s)\\nPY\\nsed -n '28,76p' alpha_w04_batch_06_solver.py\\nsed -n '158,207p' alpha_w04_batch_06_solver.py\\ncat > /tmp/w04cv.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w04_batch_06_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_w04_batch_06.pkl','rb'))[0]['dataset']; s=d['train']; dt,t,q=(d[k] for k in ('past_dt','eval_times','yield_stress')); x,_=m._align(s,d['test']); y=s['strain_curves_obs']-s['strain_0'][:,None]; r=s['instant_rate_obs']; g=m._calibrate(d['calibration_load_cells']); print('affine',g)\\nlabs=s['lab_id']; miss=~np.isfinite(s['coupon_features_raw']).all(1); pred=np.empty((4,*y.shape)); rate=np.empty((4,len(r))); rng=np.random.default_rng(26)\\nfold=np.empty(len(r),int)\\nfor lab in range(4):\\n ii=rng.permutation(np.flatnonzero(labs==lab)); fold[ii]=np.arange(len(ii))%5\\nfor f in range(5):\\n a=fold!=f; b=~a; tr={k:v[a] for k,v in s.items()}; te={k:v[b] for k,v in s.items()}\\n ts,w=m._fit(dt,t,*m._stress(tr,g),x[a],y[a],r[a],q); print('fold',f,'taus',ts.round(6),'weights',w.round(6))\\n ac,ar=m._design(ts,dt,t,*m._stress(tr,g),x[a],q); bc,br=m._design(ts,dt,t,*m._stress(te,g),x[b],q)\\n ep=y[a]-ac@w; er=r[a]-ar@w; ir=r[b]-br@w\\n dm=m._missing_drift(tr,te,x[a],x[b],w[3:7],ar@w,br@w)\\n da=m._alignment_drift(tr,te,x[a],x[b],ep,er,ir,t)\\n for j,c in enumerate([np.zeros(b.sum()),dm,da,dm+da]): pred[j,b]=bc@w+c[:,None]*t; rate[j,b]=br@w+c\\nfor name,b in [('all',np.ones(len(r),bool)),('missing',miss),('complete',~miss)]+[(f'lab{i}',labs==i) for i in range(4)]:\\n e=pred[:,b]-y[b]; z=rate[:,b]-r[b]; print(name,b.sum(),'strain MAE',np.abs(e).mean((1,2)).round(6),'late MAE',np.abs(e[:,:,-1]).mean(1).round(6),'strain RMSE',np.sqrt((e**2).mean((1,2))).round(6),'rate MAE',np.abs(z).mean(1).round(6),'rate RMSE',np.sqrt((z**2).mean(1)).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w04cv.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The current lab 0 affine fit (gain 1.223702, bias 0.139370) selects the shifted historical regime; all 280 public coupons are below yield under that calibration, and foldwise prediction errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Average all historical load-cell sweeps\",\n      \"rejected_reason\": \"The full sweeps form two distinct regimes, and the current spot checks match the shifted regime.\"\n    },\n    {\n      \"option\": \"Retain both archived drift corrections without comparison\",\n      \"rejected_reason\": \"Measure each correction separately on held-out coupons; remove it if it does not improve the slice it targets.\"\n    }\n  ],\n  \"rationale\": \"Build a standalone candidate using the exact strain and onset-rate basis, with zero coefficients for unexcited plastic terms. Five lab-stratified folds compare the constitutive baseline and each drift correction on the same coupons. The isolated schema check detects interface or finite-output failures before further refinement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7a13ce7ca6c82310cea1ec9ccca10a7ba822123198c3e0f7d0486c0ba417127a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35998.8,
+      "usage_known": true,
+      "prompt_tokens": 26121,
+      "cached_tokens": 6784,
+      "completion_tokens": 1462
+    }
+  ]
+}

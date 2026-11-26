@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9ed7311ffdb64c5fb061781bbc5e87ad",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:50:25.499429+00:00",
+  "ended_at_utc": "2026-11-26T18:51:04.497127+00:00",
+  "request_sha256": "900d8ba5cf73ab40fc415e00ceba48044125c601e2df61d806d207673feb7707",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 52630,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29360,
+    "cached_tokens": 6784,
+    "completion_tokens": 1657
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w03_batch_08_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('public_alpha_w03_batch_08.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr=d['train']; t=d['eval_times']; dt=d['past_dt']; sy=d['yield_stress']; x,lab,h,p,complete=s._prepare(d); n=len(tr['lab_id']); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; checks=d['calibration_load_cells']\\nrng=np.random.default_rng(164); fold=np.empty(n,int)\\nfor j in range(4):\\n for ok in (True,False):\\n  ids=rng.permutation(np.flatnonzero((lab[:n]==j)&(complete[:n]==ok))); fold[ids]=np.arange(len(ids))%4\\ncurve_err=np.empty((n,2,len(t))); rate_err=np.empty((n,2))\\nfor f in range(4):\\n a=np.flatnonzero((fold!=f)&complete[:n]); b=np.flatnonzero(fold==f)\\n tau,lines,w=s._fit(x[a],lab[a],h[a],p[a],dt,t,sy,y[a],rate[a],checks)\\n hh,pp=s._physical(lines,lab,h,p); c,r=s._design(tau,x,hh,pp,dt,t,sy)\\n # Independently integrate each piecewise-constant stress interval, then\\n # propagate the state into the hold. Compare contributions separately.\\n state=np.zeros((len(h),2)); work=np.zeros(len(h))\\n for j,step in enumerate(dt):\\n  decay=np.exp(-step/tau); state=decay*state+(1-decay)*pp[:,j,None]; work+=step*np.maximum(0,abs(pp[:,j])-sy)**2\\n gap=hh[:,None]-state; signed_ov=np.copysign(np.maximum(0,abs(hh)-sy)**2,hh)\\n np.testing.assert_allclose(r[:,:2],gap/tau,atol=1e-12); np.testing.assert_allclose(r[:,7],signed_ov,atol=1e-12); np.testing.assert_allclose(r[:,8],work*hh/tau[0],atol=1e-12)\\n for j,time in enumerate(t):\\n  modes=1-np.exp(-time/tau)\\n  np.testing.assert_allclose(c[:,j,:2],gap*modes,atol=1e-12)\\n  np.testing.assert_allclose(c[:,j,7],signed_ov*time,atol=1e-12); np.testing.assert_allclose(c[:,j,8],work*hh*modes[0],atol=1e-12)\\n # A residual lab-specific linear drift would indicate remaining lab confounding.\\n # Fit each intercept only on the outer training coupons, robustly pooling rate and slope.\\n resid_rate=rate[a]-r[a]@w; resid_slope=(y[a]-c[a]@w)@t/(t@t)\\n delta=np.zeros(4)\\n for j in range(4):\\n  m=lab[a]==j; z=np.r_[resid_rate[m],resid_slope[m]]; z=z[np.isfinite(z)]\\n  delta[j]=least_squares(lambda v:v[0]-z,[0.],loss='soft_l1',f_scale=.02).x[0]\\n rb=r[b]@w; cb=c[b]@w; use=(~complete[b])&np.isfinite(rate[b]); base=np.zeros(len(b)); base[use]=rate[b][use]-rb[use]\\n for k in range(2):\\n  corr=base+k*np.where(complete[b],delta[lab[b]],0.)\\n  curve_err[b,k]=cb+corr[:,None]*t-y[b]; rate_err[b,k]=rb+corr-rate[b]\\nfor j in range(4):\\n for ok in (True,False):\\n  m=(lab[:n]==j)&(complete[:n]==ok)\\n  if not m.any(): continue\\n  print('lab',j,'complete',ok,'n',m.sum(),'OOF curve and end-horizon RMSE, base vs lab drift',np.sqrt(np.nanmean(curve_err[m]**2,axis=(0,2))),np.sqrt(np.nanmean(curve_err[m,:,-1]**2,axis=0)))\\n  if ok: print('OOF onset RMSE, base vs lab drift',np.sqrt(np.nanmean(rate_err[m]**2,axis=0)))\\nprint('Independent signed stress recurrence, hold basis and onset basis agree on all measured coupons.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared calibrated creep with incomplete-coupon onset recovery) -> H2 (add lab-specific drift only if it improves held-out slices); current worst public lab RMSE is 0.0342 for strain and 0.0118 for onset.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational feature interactions, HJB terms, or relay modes\",\n      \"rejected_reason\": \"The specified constitutive law is a two-state Prony recurrence with two explicit plastic terms. It has no relay or stochastic control state, and arbitrary extra interactions would change the contract.\"\n    }\n  ],\n  \"rationale\": \"Check the hereditary basis against an independently integrated stress recurrence on real coupons. Test residual lab drift in held-out folds to distinguish a remaining calibration issue from noise, without using public test labels to choose a correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "430c17e62611254ba8d1003f9e753d128c8f6583b2ff57a5c1864f7256f80410",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39992.18,
+      "usage_known": true,
+      "prompt_tokens": 29360,
+      "cached_tokens": 6784,
+      "completion_tokens": 1657
+    }
+  ]
+}

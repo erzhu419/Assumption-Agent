@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "924496d6a1734620ac9f04f48e736d10",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:14:01.036583+00:00",
+  "ended_at_utc": "2026-11-26T18:14:31.139672+00:00",
+  "request_sha256": "13f184156ac80ec65edbc94cbb8df32789f21d483962c2749fe92d3f34ce9f94",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 57002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30873,
+    "cached_tokens": 6784,
+    "completion_tokens": 1205
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >/tmp/beta03_stress.py <<'PY'\\nimport itertools, pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\nm = runpy.run_path('beta_w03_batch_03_solver.py')\\nverify = {}\\nexec(Path('validate_public_schema.py').read_text().split('cand_p =')[0].split('_d =')[0], verify)\\ncheck = verify['verify_box_simplex_kkt_certificate']\\nq = pickle.load(open('public_beta_w03_batch_03.pkl', 'rb'))[0]\\ns, gt = q['study'], q['gt']\\nsw = s['sensor_calibration_sweeps']\\nids, ref = sw['bank_id'], sw['ref_signal']\\nrow = s['row_bank_id']\\nprofiles = np.array(m['_ARCHIVE_PROFILES'])\\nnonarch = np.array([[1.12,.079],[.92,-.073],[.86,.046],[1.19,-.12]])\\nsettings = {'identity':profiles[:,0], 'archive':profiles[:,-1], 'new':nonarch}\\nfor name, coeff in settings.items():\\n    gain, offset = coeff.T\\n    raw = gain[ids]*sw['raw_readout']+offset[ids]\\n    obs = gain[row]*s['y_obs_raw']+offset[row]\\n    scenarios=[('full', np.ones(len(ids),bool), ()), ('emi', np.ones(len(ids),bool), tuple(np.flatnonzero(ids==2)[[0,4,9]]))]\\n    for withheld in [(0,), (1,), (2,), (3,), (0,1), (2,3)]:\\n        for n in (0,1):\\n            keep = np.ones(len(ids),bool)\\n            for b in withheld:\\n                idx = np.flatnonzero(ids==b)\\n                keep[idx[n:]] = False\\n            scenarios.append((f'{withheld}/{n}',keep,()))\\n    worst = {}\\n    for tag, keep, emi in scenarios:\\n        values = raw.copy()\\n        if emi: values[list(emi)] += [0.60,-0.48,0.83]\\n        st = dict(s, y_obs_raw=obs, sensor_calibration_sweeps={'bank_id':ids[keep], 'ref_signal':ref[keep], 'raw_readout':values[keep]})\\n        out=m['solve_beta_w03_batch_03'](st)\\n        checks=[check(gt['S_tilde'],gt['r_y'],s['source_ridge'],s['u_box'],float(b),c,gap_tol=2e-4) for b,c in zip(s['budget_grid'],out['kkt_certificates'])]\\n        err = float(np.max(np.abs(out['weights_by_budget']-gt['weights_by_budget'])))\\n        field = float(np.linalg.norm(out['terminal_field_mid_budget']-gt['terminal_field_mid_budget'])/np.linalg.norm(gt['terminal_field_mid_budget']))\\n        gap = max(c['gap'] for c in checks)\\n        group = 'full_or_emi' if tag in ('full','emi') else 'sparse'\\n        if group not in worst or err>worst[group][0]: worst[group]=(err,field,gap,tag)\\n        if not all(c['valid'] for c in checks): print('certificate failure', name, tag, checks)\\n    print(name,'worst by max weight error (weight,field,gap,slice)',worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta03_stress.py\\nsed -n '1,44p' beta_w03_batch_03_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use current affine fits for well-observed banks and joint waveform evidence for sparse banks; the verified public full-sweep KKT gap is 3.01e-8, and sparse-sweep accuracy is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public validator passes\",\n      \"rejected_reason\": \"The public study has twelve clean sweeps per bank and does not exercise the sparse or EMI calibration paths.\"\n    }\n  ],\n  \"rationale\": \"Withhold sweeps from individual banks and whole wings, inject EMI spikes, and replay both historical and new gain profiles on the public observations. Compare all three certificates and both numerical outputs against the unchanged calibrated reference. Failures on archived profiles would point to profile selection; failures confined to unseen sparse profiles would quantify the fallback's calibration uncertainty.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9b792f61924a47797e196b202767bc9e2f4d51fcce4832582e1b01218a7b275e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31013.4,
+      "usage_known": true,
+      "prompt_tokens": 30873,
+      "cached_tokens": 6784,
+      "completion_tokens": 1205
+    }
+  ]
+}

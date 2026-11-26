@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "996cf0886c384a6f84279b1c67ba29ca",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:48:02.517121+00:00",
+  "ended_at_utc": "2026-11-26T18:48:37.838816+00:00",
+  "request_sha256": "a562c72e5059c371eb5b86ff4723ee82aab1c2887700a972c7c4e61071d5f18f",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 77289,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37322,
+    "cached_tokens": 6784,
+    "completion_tokens": 1465
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/alpha07_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np = '/holdout_task/alpha_w02_batch_07_solver.py'\\ns = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_alpha_w02_batch_07.pkl','rb'))[0]['dataset']\\ntr,te = d['train'],d['test']; lab = tr['lab_id']; n = len(lab)\\ndt,t,sy = (d[k] for k in ('past_dt','eval_times','yield_stress'))\\nf = m._features(tr,te)[:n]; cal = m._calibrate(d['calibration_load_cells'],sy)\\nx = m._inputs(tr,f,cal,dt,sy); sx = lambda mask: tuple(v[mask] for v in x)\\ny = np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]\\nfull = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nhold = x[1]/sy; past = x[0]; z = f[:,1:]\\n# Pairwise sums and differences alone are already in the linear feature span.\\n# Add their squares through the equivalent pair products; also test stress-dependent saturation.\\npairs = np.column_stack([z[:,i]*z[:,j] for i in range(z.shape[1]) for j in range(i+1,z.shape[1])])\\nrational = np.column_stack([hold/(1+hold**2), z* (hold**2/(1+hold**2))[:,None], (past[:,-1]/sy)/(1+hold**2)])\\nblocks = {'pairs':pairs, 'saturation':rational, 'offset':np.ones((n,1))}\\n\\ndef residual(fit,val):\\n    tau,b = m._fit(sx(fit),dt,t,y[fit]); a = m._design(sx(val),dt,t,tau)\\n    return y[val]-a@b,tau\\n\\ndef slope(r):\\n    return np.nanmedian(r[:,:-1]/t,axis=1)\\n\\ndef scores(r):\\n    return tuple(round(float(v),6) for v in (np.nanmedian(abs(slope(r))),np.nanmedian(abs(r[:,-1]))))\\n\\ndef correction(a,b,target):\\n    good=np.isfinite(target); a=a[good]; target=target[good]\\n    norm=np.maximum(np.sqrt(np.mean(a*a,axis=0)),1e-9); a=a/norm; b=b/norm\\n    scale=max(m._mad(target),1e-6)\\n    coef=least_squares(lambda c: a@c-target,np.zeros(a.shape[1]),loss='soft_l1',f_scale=scale).x\\n    return b@coef\\n\\nfor j in np.unique(lab):\\n    train=full&(lab!=j); val=full&(lab==j); r,tau=residual(train,val)\\n    inner=np.full_like(y,np.nan)\\n    for k in np.unique(lab[train]):\\n        a=train&(lab==k); inner[a]=residual(train&~a,a)[0]\\n    h=np.r_[t,1.]\\n    print('lab',j,'n',int(val.sum()),'median abs slope/rate',scores(r),'tau',np.round(tau,5),flush=True)\\n    for label,b in blocks.items():\\n        delta=correction(b[train],b[val],slope(inner[train]))\\n        print(' ',label,scores(r-delta[:,None]*h),flush=True)\\n    st=tr['stratum'][val]\\n    print('  within stratum signed slope medians',[(int(k),int((st==k).sum()),round(float(np.nanmedian(slope(r)[st==k])),6)) for k in np.unique(st)])\\n    # Verify the analytic t=0+ column against a forward secant on actual histories.\\n    a=m._design(sx(val),dt,np.array([1e-6]),tau)\\n    print('  onset operator max secant error',np.max(abs(a[:,0,:]/1e-6-a[:,1,:])))\\nPY\\npython3 -I /tmp/alpha07_margin_audit.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: profiled two-branch Prony law with calibrated stresses → H2: add a nonlinear correction only if it transfers to held-out labs; current worst public strain RMSE is 0.03713 on incomplete panels and slow-time relative error is 0.51%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add relay, stochastic-control, or classification terms\",\n      \"rejected_reason\": \"The dataset has no relay state, stochastic-control observable, or class label. The relevant confounding check is whether residual drift transfers across labs and strata.\"\n    }\n  ],\n  \"rationale\": \"Use nested lab holdouts on real training observations to test whether pair interactions or stress saturation explain residual drift beyond a pooled offset. Promote a correction only if it improves the worst held-out lab without degrading onset rate. Check the onset derivative on actual histories and rerun the schema in isolated Python without changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "1294d6e32479540f815f676f6bd4a416dffd7644ff6488f4c3ffb46b0d7348bb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37304.61,
+      "usage_known": true,
+      "prompt_tokens": 37322,
+      "cached_tokens": 6784,
+      "completion_tokens": 1465
+    }
+  ]
+}

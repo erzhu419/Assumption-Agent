@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e2b79e221604ed4b16987e4371fc81c",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:25:16.100152+00:00",
+  "ended_at_utc": "2026-11-26T18:25:57.928853+00:00",
+  "request_sha256": "4dd2a6e29499fcc923e79ede9d14173dae640fd4eef583d2be390aba058a5d84",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 65145,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33672,
+    "cached_tokens": 6784,
+    "completion_tokens": 1759
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >/tmp/audit_batch04_wing.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_w02_batch_04_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nrmse = lambda e: np.sqrt(np.nanmean(e**2))\\nfor case in pickle.load(open('/holdout_task/public_alpha_w02_batch_04.pkl', 'rb')):\\n    d, g = case['dataset'], case['gt']\\n    tr, te = d['train'], d['test']\\n    dt, t, y = d['past_dt'], d['eval_times'], d['yield_stress']\\n    cal = s._calibrate(d['calibration_load_cells'])\\n    f = s._features(tr, te)\\n    n = len(tr['lab_id'])\\n    tr_in = s._inputs(tr, cal, dt, y, f[:n])\\n    te_in = s._inputs(te, cal, dt, y, f[n:])\\n    tau = s.solve_alpha_w02_batch_04(d)['estimated_taus']\\n    reflected = dict(te)\\n    gain, bias = cal[te['lab_id']].T\\n    reflected['stress_hold_cmd'] = -te['stress_hold_cmd'] - 2*bias/gain\\n    reflected['past_stress_cmd'] = -te['past_stress_cmd'] - (2*bias/gain)[:, None]\\n    a = s._design(te_in, dt, t, np.log(tau))\\n    b = s._design(s._inputs(reflected, cal, dt, y, f[n:]), dt, t, np.log(tau))\\n    np.testing.assert_allclose(a[:, :, [0,1,7,8]], -b[:, :, [0,1,7,8]], rtol=1e-11, atol=1e-11)\\n    np.testing.assert_array_equal(a[:, :, 2:7], b[:, :, 2:7])\\n    print('Stress-reversal parity passed for Prony and both plastic terms, including onset rate')\\n    lab = tr['lab_id']\\n    complete = np.isfinite(tr['coupon_features_raw']).all(1)\\n    yielded = (tr_in[3] != 0) | (tr_in[4] != 0)\\n    obs = np.c_[tr['strain_curves_obs']-tr['strain_0'][:, None], tr['instant_rate_obs']]\\n    fold = np.full(n, -1)\\n    rng = np.random.default_rng(318)\\n    for l in range(4):\\n        for j in (False, True):\\n            ids = rng.permutation(np.flatnonzero(complete & (lab == l) & (yielded == j)))\\n            fold[ids] = np.arange(len(ids)) % 4\\n    errors = np.full((2, *obs.shape), np.nan)\\n    public = []\\n    for k in range(4):\\n        fit, val = complete & (fold != k), fold == k\\n        tau, c = s._fit(tuple(v[fit] for v in tr_in), dt, t, obs[fit])\\n        raw = s._design(tr_in, dt, t, np.log(tau)) @ c\\n        res = obs - raw\\n        slope = np.nanmedian(res[:, :-1]/t, axis=1)\\n        shift = np.array([np.nanmedian(slope[fit & (lab == l)]) for l in range(4)])\\n        errors[0,val] = res[val]\\n        errors[1,val] = res[val] - shift[lab[val],None]*np.r_[t,1.]\\n        pred = s._design(te_in, dt, t, np.log(tau)) @ c\\n        pred_plus = pred + shift[te['lab_id'],None]*np.r_[t,1.]\\n        clean = np.c_[g['te_clean']-te['strain_0'][:,None], g['te_true_rate0']]\\n        public.append(np.stack((pred-clean, pred_plus-clean)))\\n    def report(name, e, labs, regime, use, metric):\\n        values = []\\n        for l in range(4):\\n            for r in (False, True):\\n                m = use & (labs == l) & (regime == r)\\n                if m.any():\\n                    values.append([metric(x[m,:-1]) for x in e] + [metric(x[m,-1]) for x in e])\\n        print(name, 'worst slice: curve base/centered then rate base/centered', np.round(np.max(values,axis=0),7))\\n    report('Complete-row cross-fitted observations', errors, lab, yielded, complete, lambda e: np.nanmedian(abs(e)))\\n    report('Complete-row independent clean test (fold ensemble)', np.mean(public,axis=0), te['lab_id'], (te_in[3]!=0)|(te_in[4]!=0), np.isfinite(te['coupon_features_raw']).all(1), rmse)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch04_wing.py && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the calibrated constitutive law and onset correction suffice -> H2: a reproducible lab-specific drift remains; verified worst public lab-by-yield strain/rate RMSE is 0.0232/0.00712.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-term or relay audit\",\n      \"rejected_reason\": \"Rational terms already failed to improve held-out errors, and the coupon data have no relay state. The signed drift shared by strata within each lab is the remaining testable nuisance.\"\n    }\n  ],\n  \"rationale\": \"A stress-reversal failure would identify a sign error in the Prony or yielding terms. Stratified cross-fitting and independent clean curves test whether the signed lab residual is reproducible rather than a pooled artifact; only a consistent worst-slice gain would justify investigating a contract-preserving alignment change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "846ec6c91c90489f8a02634e2308c1d6e3b818a39c7a23b134f3c683c6dfa597",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42789.85,
+      "usage_known": true,
+      "prompt_tokens": 33672,
+      "cached_tokens": 6784,
+      "completion_tokens": 1759
+    }
+  ]
+}

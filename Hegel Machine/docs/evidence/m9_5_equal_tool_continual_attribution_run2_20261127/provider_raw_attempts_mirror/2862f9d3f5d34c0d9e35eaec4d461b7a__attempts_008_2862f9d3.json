@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2862f9d3f5d34c0d9e35eaec4d461b7a",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:44:14.779836+00:00",
+  "ended_at_utc": "2026-11-26T18:44:49.994173+00:00",
+  "request_sha256": "d7c327bb7f601becb9159e4b7777005ca81f1789e6c8cd5f81f1938a8e741e2b",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 43354,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26343,
+    "cached_tokens": 6784,
+    "completion_tokens": 1455
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom scipy.sparse import csr_matrix, diags, eye, kron\\nfrom scipy.sparse.linalg import spsolve\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/beta_w03_batch_07_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ncase=pickle.load(open('public_beta_w03_batch_07.pkl','rb'))[0]\\ns=case['study']; v=s['V_reaction_2d']; nx,ny=v.shape\\naxes=[csr_matrix(m._build_1d(s['L'+a],s['n'+a],s['kappa_'+a],s['vel_'+a],s['robin_'+a],s['reaction_'+a])) for a in 'xy']\\nfull=kron(axes[0],eye(ny))+kron(eye(nx),axes[1])+diags(v.ravel()); ident=eye(nx*ny,format='csc')\\nf=s['source_modes']; rhs=f.reshape(len(f),-1).T\\nu=m._responses(s)\\nerr=max(np.linalg.norm(u[k].reshape(len(f),-1)-direct,axis=1).__truediv__(np.linalg.norm(direct,axis=1)).max() for k,mu in enumerate(s['mu_shifts']) for direct in [spsolve((full+mu*ident).tocsc(),rhs).T])\\nprint('worst full-vs-separable shift/mode relative L2',err); assert err < 1e-9\\n# Select eligible calibrated epochs using sample coverage and their own departure from identity, not current Wing B readings.\\nhistory=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nd=s['sensor_calibration_sweeps']; db,dx,dy=(np.asarray(d[k]) for k in ('bank_id','ref_signal','raw_readout'))\\nhist=[]\\nfor rec in history:\\n    b,x,y=(np.asarray(rec[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    if min(np.sum(b==j) for j in range(4))<8 or np.max(abs(y-x))<1e-3: continue\\n    hist.append((rec['episode_short_name'],np.array([np.polyfit(x[b==j],y[b==j],1) for j in range(4)])))\\nassert len(hist)>=2\\nraw=np.asarray(s['y_obs_raw']); banks=np.asarray(s['row_bank_id']); cal=m._calibrate(s)\\nfor j in (2,3):\\n    idx=db==j; rows=banks==j\\n    print('Wing B bank',j,'identity best spot error',np.min(abs(dy[idx]-dx[idx])))\\n    for name,p in hist:\\n        gain,offset=p[j]; spot=np.sort(abs(dy[idx]-gain*dx[idx]-offset)); obs_err=np.max(abs((raw[rows]-offset)/gain-cal[rows]))\\n        print(name,'sorted spot residuals',spot,'max corrected-observation change',obs_err)\\n        assert spot[0]<2e-6 and obs_err<3e-6\\n# Keep held-bank observations out of both weights and nuisance coefficient fits.\\ni,j=np.asarray(s['sensor_ij']).T\\nD=u[:,:,i,j].transpose(0,2,1).reshape(len(raw),len(f)); Z=np.asarray(s['Z_nuisance']); lam=s['nuisance_ridge']\\nfor b in range(4):\\n    hold=banks==b; train=~hold\\n    R=m._profile(np.column_stack((D[train],cal[train])),Z[train],lam)\\n    w,_=m._box_simplex(R[:,:-1],R[:,-1],s['source_ridge'],s['u_box'],s['total_budget'])\\n    beta=np.linalg.lstsq(np.vstack((Z[train],np.sqrt(lam)*np.eye(Z.shape[1]))),np.r_[cal[train]-D[train]@w,np.zeros(Z.shape[1])],rcond=None)[0]\\n    r=cal[hold]-D[hold]@w-Z[hold]@beta\\n    print('held bank',b,'RMSE',np.sqrt(np.mean(r*r)),'mean residual',r.mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current-only calibration → H2 current Wing A fits and historically anchored Wing B calibration; verified worst shift/mode PDE residual is 1.37e-13, with cross-epoch and held-bank checks pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear, relay, or classification-specific terms\",\n      \"rejected_reason\": \"The supplied model is a linear finite-volume inverse problem with continuous observations and no relay state or class labels. The relevant checks are full-stencil equivalence and held-bank residuals.\"\n    }\n  ],\n  \"rationale\": \"A full sparse solve tests whether separability drops a required operator term; disagreement would trigger a stencil or decomposition correction. Independent archive epochs test whether the Wing B fallback depends on one sweep, and held-bank fits can reveal systematic residuals masked by pooled nuisance profiling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "50bbafd573ef1c6c821300c45e11548454bcaeae63d774b8aa7aa994b5037655",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36174.13,
+      "usage_known": true,
+      "prompt_tokens": 26343,
+      "cached_tokens": 6784,
+      "completion_tokens": 1455
+    }
+  ]
+}

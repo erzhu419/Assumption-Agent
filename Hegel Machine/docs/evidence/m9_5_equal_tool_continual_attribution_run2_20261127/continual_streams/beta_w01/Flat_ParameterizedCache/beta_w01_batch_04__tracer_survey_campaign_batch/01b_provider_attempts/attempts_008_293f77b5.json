@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "293f77b5151446b2be1832eb83fc16d5",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:22:02.263574+00:00",
+  "ended_at_utc": "2026-11-26T18:22:30.048464+00:00",
+  "request_sha256": "cdd3478c9687aa80910d83df3ea530954bb2e964e71419fd925c147cd2299310",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 52273,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29409,
+    "cached_tokens": 6784,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport ast, importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w01_batch_04_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\n# Load just the verifier function: the validator's CLI exits the process.\\ntree = ast.parse(Path('validate_public_schema.py').read_text())\\nfn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'verify_box_simplex_kkt_certificate')\\nimport math\\nns = {'np': np, 'math': math}\\nexec(compile(ast.Module(body=[fn], type_ignores=[]), 'validate_public_schema.py', 'exec'), ns)\\ncheck = ns[fn.name]\\nwith open('public_beta_w01_batch_04.pkl', 'rb') as handle:\\n    items = pickle.load(handle)\\nworst = dict(weight=0., terminal=0., gap=0., leave_one_reference=0., emi=0., sparse=0.)\\nfor item in items:\\n    s, gt = item['study'], item['gt']\\n    out = mod.solve_beta_w01_batch_04(s)\\n    cert = check(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n    assert cert['valid'], cert\\n    worst['gap'] = max(worst['gap'], cert['gap'])\\n    worst['weight'] = max(worst['weight'], np.max(np.abs(out['weights'] - gt['w_opt'])))\\n    worst['terminal'] = max(worst['terminal'], np.max(np.abs(out['terminal_field'] - gt['terminal_field_A'])))\\n    ref = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    bank = ref['bank_id']\\n    base = mod._calibrated_observations(s)\\n    def update(metric, sweep):\\n        shifted = mod._calibrated_observations(dict(s, sensor_calibration_sweeps=sweep))\\n        worst[metric] = max(worst[metric], np.max(np.abs(shifted - base)))\\n    for i in range(len(bank)):\\n        keep = np.arange(len(bank)) != i\\n        update('leave_one_reference', {k: v[keep] for k, v in ref.items()})\\n        for spike in (-1., 1.):\\n            raw = ref['raw_readout'].copy()\\n            raw[i] += spike\\n            update('emi', dict(ref, raw_readout=raw))\\n    for b in range(4):\\n        ix = np.flatnonzero(bank == b)\\n        if ix.size:\\n            keep = bank != b\\n            keep[ix[ix.size // 2]] = True\\n            update('sparse', {k: v[keep] for k, v in ref.items()})\\nprint('Public studies:', len(items), 'worst absolute errors and perturbations:', worst)\\nfor k, tol in dict(weight=1e-6, terminal=1e-7, leave_one_reference=1e-7, emi=1e-7, sparse=3e-6).items():\\n    assert worst[k] < tol, (k, worst[k], tol)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separable reaction → full coupled vortex stencil; independent public verification measured a KKT gap of 2.09×10⁻⁸, relative weight error of 5×10⁻⁸, and relative field error of 2×10⁻⁸.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The prior command exited after the schema validator, before running the calibration stress checks. Load the certificate verifier without its CLI so the same saved solver is tested under dropped references, EMI spikes, and sparse bank coverage. A failure would identify whether to change the robust fit or its historical fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0047423dba916c48666c2dd9d6915486df51c3cc2c9f4980e2cf88e2fbcbf680",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27743.11,
+      "usage_known": true,
+      "prompt_tokens": 29409,
+      "cached_tokens": 6784,
+      "completion_tokens": 1074
+    }
+  ]
+}

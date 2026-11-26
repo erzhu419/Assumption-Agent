@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64f5b4ae89e346bd89eb91eba36277e7",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:54:05.325852+00:00",
+  "ended_at_utc": "2026-11-26T18:54:29.170566+00:00",
+  "request_sha256": "5fdeeb889258a8b34b28e07e20530aaed0295da03a39fe2873fbd0fca4f1d16f",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 53779,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29488,
+    "cached_tokens": 11136,
+    "completion_tokens": 918
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('coupon08', root / 'alpha_w01_batch_08_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\narchive = solver._ARCHIVE\\nwith (root / 'public_alpha_w01_batch_08.pkl').open('rb') as f:\\n    cases = pickle.load(f)\\nfor case in cases:\\n    d, gt = case['dataset'], case['gt']\\n    lab = d['test']['lab_id']\\n    sy = d['yield_stress']\\n    hist, hold = gt['te_hist_true'], gt['te_hold_true']\\n    crossing = (np.abs(hist).max(axis=1) > sy) | (np.abs(hold) > sy)\\n    results = []\\n    for name, path in [('mounted', archive), ('standalone', Path('/tmp/coupon08_no_archive/archive_calibration_history.json'))]:\\n        solver._ARCHIVE = path\\n        out = solver.solve_alpha_w01_batch_08(d)\\n        assert all(np.isfinite(v).all() for v in out.values())\\n        h, u = solver._stress(d['test'], solver._calibrate(d['calibration_load_cells']))\\n        gates = np.count_nonzero((np.abs(h)>sy)!=(np.abs(hist)>sy)) + np.count_nonzero((np.abs(u)>sy)!=(np.abs(hold)>sy))\\n        e = np.abs(out['predicted_strain']-gt['te_clean'])\\n        r = np.abs(out['initial_rate_pred']-gt['te_true_rate0'])\\n        masks = [(lab==a)&(crossing==b) for a in np.unique(lab) for b in (False,True)]\\n        worst_curve = max(e[m].mean() for m in masks if m.any())\\n        worst_rate = max(r[m].mean() for m in masks if m.any())\\n        print(name, 'yield disagreements', gates, 'worst lab-by-yield curve/rate MAE', worst_curve, worst_rate, flush=True)\\n        assert gates == 0\\n        results.append((worst_curve, worst_rate))\\n    np.testing.assert_allclose(results[1], results[0], rtol=0, atol=1e-4)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 clean lab-specific affine calibration → H2 shared yield-gated Prony law; worst public lab-by-yield strain MAE is 0.006816, with zero yield disagreements.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the exact-basis and yield-margin audit\",\n      \"rejected_reason\": \"The prior isolated audit verified those properties on the unchanged artifact; repeating it would not test a new failure mode.\"\n    }\n  ],\n  \"rationale\": \"Test whether the standalone calibration fallback preserves yield decisions and worst-slice accuracy on real public coupons when the history mount is absent. If it does not, update the fallback from the verified clean sweeps rather than changing the constitutive basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e959a0bda6fece8d9a536a37808ee3ce7d3d32f3a89812d06cba13ae9aab8b0e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24837.24,
+      "usage_known": true,
+      "prompt_tokens": 29488,
+      "cached_tokens": 11136,
+      "completion_tokens": 918
+    }
+  ]
+}

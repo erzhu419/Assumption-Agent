@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "716b07a5cbd54d50a6ee1555fc3498e0",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T19:02:35.820588+00:00",
+  "ended_at_utc": "2026-11-26T19:03:01.231028+00:00",
+  "request_sha256": "113a85a1416c38dce9cdae5bfaae8b3e8baebcdec3224d612bad4555e843bee2",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 74203,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36504,
+    "cached_tokens": 11136,
+    "completion_tokens": 995
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nm = runpy.run_path(root + 'alpha_w02_batch_08_solver.py')\\nfor entry in pickle.load(open(root + 'public_alpha_w02_batch_08.pkl', 'rb')):\\n    d, g = entry['dataset'], entry['gt']\\n    out = m['solve_alpha_w02_batch_08'](d)\\n    tr, te = d['train'], d['test']\\n    cal = m['_calibrate'](d['calibration_load_cells'])\\n    dt, t = d['past_dt'], d['eval_times']\\n    features = m['_features'](tr, te)[len(tr['lab_id']):]\\n    inputs = m['_inputs'](te, cal, dt, d['yield_stress'], features)\\n    weights = np.r_[out['hereditary_weights'], out['viscoplastic_weights']]\\n    baseline = m['_design'](inputs, dt, t, np.log(out['estimated_taus'])) @ weights\\n    baseline[:, :-1] += te['strain_0'][:, None]\\n    rmse = lambda a: float(np.sqrt(np.mean(a*a)))\\n    for key, target in [('estimated_taus','taus'), ('hereditary_weights','theta'), ('viscoplastic_weights','vp_theta')]:\\n        assert out[key].shape == np.shape(g[target])\\n        print(key, 'max absolute error', np.max(np.abs(out[key]-g[target])))\\n    print('calibration max gain/bias/physical history/hold errors', np.max(abs(cal[:,0]-g['stress_gains'])), np.max(abs(cal[:,1]-g['stress_biases'])), np.max(abs(inputs[0]-g['te_hist_true'])), np.max(abs(inputs[1]-g['te_hold_true'])))\\n    hot = ((np.abs(g['te_hist_true']) > d['yield_stress']).any(1) | (np.abs(g['te_hold_true']) > d['yield_stress']))\\n    missing = ~np.isfinite(te['coupon_features_raw']).all(1)\\n    sr = out['predicted_strain'] - g['te_clean']\\n    rr = out['initial_rate_pred'] - g['te_true_rate0']\\n    sb = baseline[:, :-1] - g['te_clean']\\n    rb = baseline[:, -1] - g['te_true_rate0']\\n    for name, q in [('all', np.ones(len(hot), bool)), ('below', ~hot), ('active', hot), ('missing', missing), ('complete', ~missing)] + [(f'lab{i}', te['lab_id']==i) for i in range(4)]:\\n        if q.any():\\n            print(name, int(q.sum()), 'strain/rate RMSE (unconditioned -> solver)', np.round([rmse(sb[q]), rmse(rb[q]), rmse(sr[q]), rmse(rr[q])], 6), 'late strain RMSE', round(rmse(sr[q,-1]), 6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 imputed drift → H2 onset-conditioned drift; worst-lab out-of-fold capped strain RMSE fell from 0.0558 to 0.0485, pending comparison against independent clean targets.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the passing schema and below-yield checks\",\n      \"rejected_reason\": \"The previous ground-truth check skipped scoring because output and reference names differ; independent onset-rate accuracy remains unverified.\"\n    }\n  ],\n  \"rationale\": \"Map the published references explicitly and score the unchanged solver against clean strain and latent onset rate. Compare with the unconditioned model to detect whether onset conditioning transfers measurement noise into either output, and audit the inferred calibration separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "eccd4becbaae91c633d83c70a9ac31eb950ee80f8660917223ef55adcafc04cb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26424.85,
+      "usage_known": true,
+      "prompt_tokens": 36504,
+      "cached_tokens": 11136,
+      "completion_tokens": 995
+    }
+  ]
+}

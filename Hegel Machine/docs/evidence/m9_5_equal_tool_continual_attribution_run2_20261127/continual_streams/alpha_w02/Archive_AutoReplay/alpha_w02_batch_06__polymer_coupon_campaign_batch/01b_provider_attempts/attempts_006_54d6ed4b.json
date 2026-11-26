@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54d6ed4b0c214880b42c42c607740b1e",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:39:32.540478+00:00",
+  "ended_at_utc": "2026-11-26T18:39:57.274660+00:00",
+  "request_sha256": "4046e3ba520d12f80ffc2d29f334d5e68361eb85e05f4dc2011106a893721795",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 45368,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28353,
+    "cached_tokens": 6784,
+    "completion_tokens": 957
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed 's/solve_alpha_w02_batch_05/solve_alpha_w02_batch_06/' /tmp/hegel_continual_archive/alpha_w02_batch_05_solver.py > alpha_w02_batch_06_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('candidate','alpha_w02_batch_06_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\ncase=pickle.load(open('public_alpha_w02_batch_06.pkl','rb'))[0]; d,g=case['dataset'],case['gt']; o=m.solve_alpha_w02_batch_06(d); a,b=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; cal=m._calibrate(d['calibration_load_cells']); f=m._features(a,b); v=m._inputs(b,cal,dt,d['yield_stress'],f[len(a['lab_id']):]); base=m._design(v,dt,t,np.log(o['estimated_taus']))@np.r_[o['hereditary_weights'],o['viscoplastic_weights']]; rate=b['instant_rate_obs']-g['te_true_rate0']; print('tau error',o['estimated_taus']-g['taus'],'weight error',o['hereditary_weights']-g['theta']); print('calibration max error',np.max(abs(cal-np.c_[g['stress_gains'],g['stress_biases']]),axis=0));\\nfor label,mask in [('all',np.ones(len(rate),bool)),('missing',~np.isfinite(b['coupon_features_raw']).all(axis=1))]+[(f'lab {i}',b['lab_id']==i) for i in range(4)]:\\n if not mask.any(): continue\\n def err(p,q): return round(np.sqrt(np.mean((p[mask]-q[mask])**2)),6)\\n print(label,'n',sum(mask),'curve base/final',err(base[:,:-1]+b['strain_0'][:,None],g['te_clean']),err(o['predicted_strain'],g['te_clean']),'rate base/final/observed',err(base[:,-1],g['te_true_rate0']),err(o['initial_rate_pred'],g['te_true_rate0']),err(b['instant_rate_obs'],g['te_true_rate0']),'obs error max',max(abs(rate[mask])))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust Cauchy IRLS variable projection ridge nuisance profiling' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additional relaxation needed → H2 retain two branches and separate measurement spikes from missing-feature drift; worst held-out lab median strain error is 0.0302 on complete rows versus 0.270 on rows with missing features.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add a constitutive branch\",\"rejected_reason\":\"The largest complete-row errors are isolated time-point spikes, whereas missing-feature errors grow roughly linearly in time. Neither pattern calls for another exponential.\"}],\"rationale\":\"Save a runnable baseline and measure its errors against the clean public outputs by lab and missingness. Comparing unconditioned and rate-conditioned predictions will show where the observed rate helps and where its noise limits correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "96934cb11b08ef73bc9588c885198de54b6b3f4a096ad6f7f9313f3ecdd914dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25750.52,
+      "usage_known": true,
+      "prompt_tokens": 28353,
+      "cached_tokens": 6784,
+      "completion_tokens": 957
+    }
+  ]
+}

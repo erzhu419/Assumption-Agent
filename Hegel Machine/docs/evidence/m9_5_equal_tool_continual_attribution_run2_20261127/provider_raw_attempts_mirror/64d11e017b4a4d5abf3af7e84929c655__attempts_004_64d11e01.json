@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64d11e017b4a4d5abf3af7e84929c655",
+  "call_seq": 4,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:28:41.426302+00:00",
+  "ended_at_utc": "2026-11-26T18:29:03.242275+00:00",
+  "request_sha256": "f4d2a6492a7feb73b819e910b53d24a7289f994535896ef48369476c347abd86",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 31468,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23445,
+    "cached_tokens": 6784,
+    "completion_tokens": 776
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,145p' /tmp/hegel_continual_archive/beta_w01_batch_04_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json, pickle\\nimport numpy as np\\np='/tmp/hegel_continual_archive/'\\nhist=json.load(open(p+'archive_calibration_history.json'))\\nst=pickle.load(open('/holdout_task/public_beta_w01_batch_05.pkl','rb'))[0]['study']\\nfor h in hist+[dict(st['sensor_calibration_sweeps'],episode_short_name='live')]:\\n print(h['episode_short_name'])\\n b,x,y=map(np.asarray,(h['bank_id'],h['ref_signal'],h['raw_readout']))\\n for bank in np.unique(b):\\n  X,Y=x[b==bank],y[b==bank]; A=np.c_[X,np.ones(len(X))]; ls=np.linalg.lstsq(A,Y,rcond=None)[0]\\n  i,j=np.triu_indices(len(X),1); good=np.abs(X[j]-X[i])>.1\\n  m=np.median((Y[j[good]]-Y[i[good]])/(X[j[good]]-X[i[good]])); c=np.median(Y-m*X)\\n  err=np.abs(Y-m*X-c); mask=err<=max(1e-5,5*np.median(err)); fitted=np.linalg.lstsq(A[mask],Y[mask],rcond=None)[0]\\n  print(bank, 'n/clean',len(X),mask.sum(),'ols',np.round(ls,7),'robust',np.round(fitted,7),'median/max residual',np.round([np.median(err),max(err)],7))\\nprint('bank counts by shift:',np.bincount(st['row_bank_id']), np.array([np.bincount(row,minlength=4) for row in st['row_bank_id'].reshape(8,36)]).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 frozen calibration -> H2 live bank-0 calibration plus robust historical estimates for unswept banks; public reaction nonseparability is 2.52e-16, and held-out bank calibration error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply ordinary least squares to pooled archived readings\",\n      \"rejected_reason\": \"Pooling could hide episode drift or let a few EMI spikes dominate the unswept-bank estimates.\"\n    }\n  ],\n  \"rationale\": \"Bank 0 already matches the rejected parameter payload. Compare ordinary and robust fits bank by bank and episode by episode to distinguish outlier bias from calibration drift. Read the previous stencil and profiling code to preserve the observation and certificate conventions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "1bb6973fd29756414a47c3b05adbcbc04a9cc144783cd322e11a15fdb4b409f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22762.4,
+      "usage_known": true,
+      "prompt_tokens": 23445,
+      "cached_tokens": 6784,
+      "completion_tokens": 776
+    }
+  ]
+}

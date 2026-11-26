@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2ebed00ea32f4baa9487ba1a577e7df4",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:31:12.836321+00:00",
+  "ended_at_utc": "2026-11-26T18:31:40.190211+00:00",
+  "request_sha256": "45e088bea16859527fbb487c13082ab6adf45ae2c98ac3af9494b2a0238f87be",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 41266,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26136,
+    "cached_tokens": 6784,
+    "completion_tokens": 1047
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed 's/solve_alpha_w02_batch_04/solve_alpha_w02_batch_05/g' /tmp/hegel_continual_archive/alpha_w02_batch_04_solver.py > alpha_w02_batch_05_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('alpha_w02_batch_05_solver.py'); s=p.read_text(); i=s.index('        prior = None'); j=s.index('        if prior is None:',i)\\ns=s[:i]+'''        prior = None\\n        recent = []\\n        for sweep in reversed(archive):\\n            sx, sy = _checks(sweep, lab)\\n            old, count, width = _line(sx, sy)\\n            if count < 4 or width < .5:\\n                continue\\n            if prior is None:\\n                prior = old\\n            elif np.max(np.abs(sy - prior[0]*sx - prior[1])) > 3*_CAL_TOL:\\n                break\\n            recent.append((sx, sy))\\n        if recent:\\n            px = np.concatenate([u for u, _ in recent])\\n            py = np.concatenate([v for _, v in recent])\\n            prior = _line(px, py, prior)[0]\\n'''+s[j:]; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_w02_batch_05_solver as s\\np=pickle.load(open('public_alpha_w02_batch_05.pkl','rb'))[0]; d=p['dataset']; g=p['gt']; o=s.solve_alpha_w02_batch_05(d)\\nprint('truth fields', [(k,np.shape(v)) for k,v in g.items()]); print('calibration',s._calibrate(d['calibration_load_cells']).round(7)); print('fit',o['estimated_taus'],o['hereditary_weights'],o['viscoplastic_weights'])\\nte=d['test']; err=g['te_clean']-o['predicted_strain']; rate_res=te['instant_rate_obs']-o['initial_rate_pred']; z=te['residual_plastic_state']; b=np.isfinite(z); print('residual state finite/range',b.sum(), np.nanmin(z),np.nanmax(z)); print('corr with error', np.corrcoef(np.c_[z[b],rate_res[b],err[b]].T)[0,1:].round(4)); print('worst-horizon MAE',np.abs(err).mean(0).max()); print('lab MAE',[(i,np.abs(err[te['lab_id']==i]).mean()) for i in range(4)]); print('state extrema',np.sort(z)[[0,1,2,-3,-2,-1]]); print('rate obs-vs-pred RMSE',np.mean(rate_res**2)**.5)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: replay a single archived sweep → H2: pool only compatible recent sweeps and retain the yield-gated Prony basis; worst-slice error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool every historical sweep\",\n      \"rejected_reason\": \"The earliest three sweeps are near identity, while the two recent sweeps agree with the non-identity current spot checks.\"\n    },\n    {\n      \"option\": \"Add the test-only plastic-state field directly to the fitted model\",\n      \"rejected_reason\": \"It has no training counterpart or specified coefficient; first check whether the explicit plastic-work term leaves a systematic residual.\"\n    }\n  ],\n  \"rationale\": \"Build the required solver with calibration from the current regime. The isolated validator detects contract failures, while lab and horizon errors and their relation to the test-only state distinguish calibration drift from a missing constitutive term.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "de8957781eecf2fc6c0baa605ecacbff083639a5946376bd4c8217ee20d7c853",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28297.44,
+      "usage_known": true,
+      "prompt_tokens": 26136,
+      "cached_tokens": 6784,
+      "completion_tokens": 1047
+    }
+  ]
+}

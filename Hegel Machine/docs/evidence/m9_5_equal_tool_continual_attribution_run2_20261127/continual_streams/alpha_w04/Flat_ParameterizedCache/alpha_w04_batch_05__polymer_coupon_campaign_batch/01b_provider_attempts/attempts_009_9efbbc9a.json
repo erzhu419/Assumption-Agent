@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9efbbc9a6f17489585218f2abe7d5575",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:35:44.038981+00:00",
+  "ended_at_utc": "2026-11-26T18:36:17.202831+00:00",
+  "request_sha256": "6336ad9c882977f3344a5ab34dea9c83379d912c6a3a7fe2dc4a444ed37600da",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 57892,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31793,
+    "cached_tokens": 6784,
+    "completion_tokens": 1341
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_w04_batch_05_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nrecords = pickle.load(open('public_alpha_w04_batch_05.pkl','rb'))\\nfor ix, record in enumerate(records):\\n    d, g = record['dataset'], record['gt']\\n    panel = d['calibration_load_cells']; affine = s._calibrate(panel)\\n    expected = np.c_[g['stress_gains'], g['stress_biases']]\\n    print(ix, 'public affine max error', np.max(np.abs(affine-expected)))\\n    good = {k:np.asarray(v) for k,v in panel.items()}\\n    for lab in range(4):\\n        for cmd, offset in [(-2., -.25), (2., .25)]:\\n            row = dict(lab_id=lab, cmd_stress=cmd, true_stress=expected[lab]@[cmd,1.] + offset)\\n            contaminated = {k:np.r_[v,row[k]] for k,v in good.items()}\\n            err = np.max(np.abs(s._calibrate(contaminated)-expected))\\n            print('EMI calibration max error', lab, cmd, err)\\n            assert err < .003\\n    for retain in range(len(good['lab_id'])):\\n        single = {k:v[retain:retain+1] for k,v in good.items()}\\n        assert np.max(np.abs(s._calibrate(single)-expected)) < .003\\n    # Exercise the strictly subyield case end to end using the same lab and reference panels.\\n    dt, t, y = d['past_dt'], d['eval_times'], d['yield_stress']; taus = g['taus']\\n    w = np.r_[g['theta'], 0., 0.]\\n    x, xt = s._align(d['train'], d['test']); ds = dict(d)\\n    ideal = {}\\n    for split, feat in [('train', x), ('test', xt)]:\\n        z = dict(d[split]); p,h = s._stress(z,affine)\\n        p = np.clip(p*.1,-.9*y,.9*y); h = np.clip(h*.1,-.9*y,.9*y)\\n        gain,bias = affine[z['lab_id']].T\\n        z['past_stress_cmd'] = (p-bias[:,None])/gain[:,None]\\n        z['stress_hold_cmd'] = (h-bias)/gain\\n        a,b = s._design(taus,t,s._prepare(dt,p,h,feat,y))\\n        z['instant_rate_obs'] = b@w\\n        ideal[split] = z['strain_0'][:,None]+a@w\\n        if split=='train': z['strain_curves_obs'] = ideal[split]\\n        ds[split] = z\\n    out = s.solve_alpha_w04_batch_05(ds)\\n    assert np.array_equal(out['viscoplastic_weights'], [0., 0.])\\n    err = np.max(np.abs(out['predicted_strain']-ideal['test']))\\n    print('subyield replay max strain error',err,'taus',out['estimated_taus'])\\n    assert err < 1e-5\\n    # An independent small-time difference checks the derivative of both active plastic branches.\\n    p,h = s._stress(d['test'],affine); state = s._prepare(dt,p,h,xt,y)\\n    a,b = s._design(taus,np.array([1e-7]),state)\\n    err = np.max(np.abs(a[:,0,:]/1e-7-b))\\n    print('onset finite-difference max basis error',err)\\n    assert err < 1e-4\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Keep the prescribed reference alignment and test calibration and onset limits; worst public lab-by-yield strain/rate RMSE is 0.03635/0.01068, and lab-specific corrections did not consistently improve out-of-fold error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a Lab 0 drift correction\",\n      \"rejected_reason\": \"Lab-specific offsets and gains did not improve out-of-fold projection errors consistently across labs, and the task prescribes reference-panel alignment.\"\n    }\n  ],\n  \"rationale\": \"Check whether losing one spot check or adding an EMI outlier changes the selected calibration; a failure would call for revising the archive consensus. A subyield replay and a finite-difference onset check target plastic activation and derivative errors that the schema validator cannot detect.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bf5a54990ef3effb743e447ae66d07368b04890137788e7541477ec6808ab40c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34133.94,
+      "usage_known": true,
+      "prompt_tokens": 31793,
+      "cached_tokens": 6784,
+      "completion_tokens": 1341
+    }
+  ]
+}

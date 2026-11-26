@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eaec50b42c2441d8af70261003940c0f",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:24:44.333666+00:00",
+  "ended_at_utc": "2026-11-26T18:25:12.609183+00:00",
+  "request_sha256": "06439be761f5b76a4ee3c5103e4560ca2d10c4f24ed06bd97f3877c26658f6f9",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 49746,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29612,
+    "cached_tokens": 6784,
+    "completion_tokens": 1119
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_w04_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nfor rec in pickle.load(open(p+'public_alpha_w04_batch_04.pkl','rb')):\\n d,g=rec['dataset'],rec['gt']; out=m.solve_alpha_w04_batch_04(d); te=d['test']; dt=d['past_dt']; ts=d['eval_times']; ys=d['yield_stress']; cal=m._calibrate(d['calibration_load_cells']); aligned=m._align(d['train'],te)[1]; a=m._inputs(te,cal,aligned,dt,ys)\\n for k,gk in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]:\\n  print(k,'reference',g[gk],'absolute error',np.abs(out[k]-g[gk]))\\n for k,x in [('gain',cal[:,0]-g['stress_gains']),('bias',cal[:,1]-g['stress_biases'])]: print(k,'max abs error',np.max(np.abs(x)))\\n errs=[out['predicted_strain']-g['te_clean'],out['initial_rate_pred']-g['te_true_rate0']]; lab=te['lab_id']; regime=(np.abs(a[1])>ys).astype(int)+2*(np.max(np.abs(a[0]),axis=1)>ys); missing=np.isnan(te['coupon_features_raw']).any(axis=1)\\n for name,mask in [('all',np.ones(len(lab),bool)),('complete',~missing),('missing',missing)]+[(f'lab={i} regime={j}',(lab==i)&(regime==j)) for i in range(4) for j in range(4)]:\\n  if mask.any(): print(name,mask.sum(),'clean curve/rate RMSE',*[round(float(np.sqrt(np.mean(e[mask]**2))),7) for e in errs])\\n split={k:v[:4].copy() for k,v in te.items()}; split['lab_id'][:]=0; split['past_stress_cmd'][:]=0; split['past_stress_cmd'][2:,-1]=(2*ys-cal[0,1])/cal[0,0]; split['stress_hold_cmd'][:]=(0.5*ys-cal[0,1])/cal[0,0]; split['stress_hold_cmd'][[1,3]]=(-2*ys-cal[0,1])/cal[0,0]; z=m._inputs(split,cal,aligned[:4],dt,ys); expected=np.array([[0,0],[-1,0],[0,1],[-1,-1]]); assert np.array_equal(np.sign(np.column_stack(z[-2:])),expected); eps=1e-7\\n design,rate=m._design(out['estimated_taus'],dt,np.array([0.,eps]),z,(True,True)); assert np.all(design[:,0,:]==0); np.testing.assert_allclose(design[:,1,:]/eps,rate,rtol=2e-6,atol=1e-8); print('all four yield combinations and initial derivatives verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 lab-specific affine calibration with archive fallback -> H2 exact Prony and overstress regression; worst leave-one-lab-out RMSE against noisy observations is 0.3763 for strain and 0.0801 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the fitter based on the noisy leave-one-lab-out strain error\",\n      \"rejected_reason\": \"The public clean references can distinguish model error from observation noise before any edit.\"\n    }\n  ],\n  \"rationale\": \"The previous run discovered the public reference names but did not score them. Compare each output to its clean reference and test the two mixed-yield regimes absent from the public folds. A clean error concentrated in missing-feature rows would point to alignment, while a mixed-regime failure would require a basis correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d8382bb03c1c2c697c1fae80c81bc3f237e668140affce90070e5bd2f6df2fde",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29287.26,
+      "usage_known": true,
+      "prompt_tokens": 29612,
+      "cached_tokens": 6784,
+      "completion_tokens": 1119
+    }
+  ]
+}

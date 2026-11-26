@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70905b6725e1492a97f5e612e88a0bbe",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:45:33.198569+00:00",
+  "ended_at_utc": "2026-11-26T18:46:14.318271+00:00",
+  "request_sha256": "1d99d1d28b1f5c483b0c15c850cba8d0e557d366b05cef3fd2d20febc3303f09",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 62062,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33117,
+    "cached_tokens": 6784,
+    "completion_tokens": 1726
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/alpha_w04_batch_07_solver.py')\\ns=p.read_text().split('\\\\n\\\\ndef solve_alpha_w04_batch_07(')[0].replace('def solve_alpha_w04_batch_05(', 'def solve_alpha_w04_batch_07(')\\nold=\\\"\\\"\\\"    taus, weights = _fit(times, tr, train['strain_curves_obs'] - train['strain_0'][:, None],\\n                         train['instant_rate_obs'])\\\"\\\"\\\"\\nnew=\\\"\\\"\\\"    strain = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    rate_obs = train['instant_rate_obs']\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    # Missing features add an unknown drift to the calibration observations.\\n    # Keep those rows if excluding them would remove support for a yield term.\\n    if complete.sum() >= 2 * x.shape[1] and all(not np.any(v) or np.any(v[complete]) for v in tr[-2:]):\\n        tr_fit = tr[:2] + tuple(v[complete] for v in tr[2:])\\n        taus, weights = _fit(times, tr_fit, strain[complete], rate_obs[complete])\\n    else:\\n        taus, weights = _fit(times, tr, strain, rate_obs)\\\"\\\"\\\"\\nassert old in s\\ns=s.replace(old,new).replace('    # observed onset rate can resolve its unidentified time-linear drift.','    # observed onset rate can resolve its unidentified time-linear drift in\\\\n    # the curve forecast. The independently predicted onset rate stays unchanged.').replace('            predicted_rate[use] += update\\\\n','')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/alpha_w04_batch_07_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_w04_batch_07.pkl','rb'))[0]['dataset']; solve=m.solve_alpha_w04_batch_07\\nbase=solve(d)\\nassert np.array_equal(base['viscoplastic_weights'],[0.,0.])\\nblind=dict(d,test={k:v for k,v in d['test'].items() if k!='instant_rate_obs'}); cf=solve(blind)\\nmissing=~np.isfinite(d['test']['coupon_features_raw']).all(axis=1)\\nassert np.array_equal(base['initial_rate_pred'],cf['initial_rate_pred'])\\nassert np.array_equal(base['predicted_strain'][~missing],cf['predicted_strain'][~missing])\\nprint('Public taus and weights:',base['estimated_taus'],base['hereditary_weights'])\\n# Independent above-yield fixture: distinct positive/negative overstress and prior plastic work.\\nrng=np.random.default_rng(401); n,h=96,18; dt=np.linspace(.08,.52,h); t=np.array([.08,.23,.61,1.1,2.,4.,7.]); sy=2.3\\nhistory=rng.uniform(-4,4,(n,h)); hold=rng.uniform(-4.4,4.4,n); x=rng.normal(size=(n,4)); taus=np.array([.49,3.9]); w=np.array([.67,.54,.08,.15,-.13,.11,-.09,.12,.048]); y0=rng.normal(size=n)\\nmem=np.zeros((n,2))\\nfor j in range(h):\\n decay=np.exp(-dt[j]/taus); mem=mem*decay+history[:,j,None]*(1-decay)\\nph=np.sum(np.maximum(abs(history)-sy,0)**2*dt,axis=1)*hold\\nod=np.sign(hold)*np.maximum(abs(hold)-sy,0)**2\\ndrift=w[2]+x@w[3:7]+w[7]*od\\njump=(hold[:,None]-mem)*w[:2]; jump[:,0]+=w[8]*ph\\ntruth=y0[:,None]+jump@(1-np.exp(-t[:,None]/taus)).T+drift[:,None]*t\\nspeed=drift+jump@(1/taus)\\naffine=m._calibrate(d['calibration_load_cells']); lab=np.arange(n)%4; g,b=affine[lab].T\\nsplit={'lab_id':lab,'stratum':np.arange(n)%3,'ref_coupons':np.tile(np.array([-1.,1.]*48)[:,None],(1,32)),'coupon_features_raw':x,'past_stress_cmd':(history-b[:,None])/g[:,None],'stress_hold_cmd':(hold-b)/g,'strain_0':y0,'strain_curves_obs':truth,'instant_rate_obs':speed}\\n# Each lab needs both reference levels within train-plus-test.\\nsplit['ref_coupons']=np.tile(np.where((np.arange(n)//4)%2,1.,-1.)[:,None],(1,32))\\nz=lambda rows:{k:v[rows] for k,v in split.items()}\\nf=solve(dict(d,train=z(slice(0,64)),test=z(slice(64,None)),past_dt=dt,eval_times=t,yield_stress=sy))\\nerrors=[np.max(abs(v-u)) for v,u in [(f['estimated_taus'],taus),(f['hereditary_weights'],w[:7]),(f['viscoplastic_weights'],w[7:]),(f['predicted_strain'],truth[64:]),(f['initial_rate_pred'],speed[64:])]]\\nprint('Above-yield signed-stress fixture max errors:',errors); assert max(errors)<1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"All-coupon fitting → complete-feature fitting with archive-backed calibration; worst leave-one-lab-out median strain/rate errors were 0.02297/0.01123 versus 0.02344/0.01106.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Feed the observed test onset rate back into the returned rate prediction\",\n      \"rejected_reason\": \"Held-out results support its use for missing-feature strain forecasts, but not as a substitute for the independently predicted rate.\"\n    }\n  ],\n  \"rationale\": \"Complete-feature fitting slightly improves the worst strain slice with little change in rate and retains both plastic terms whenever supported. Isolated verification checks that test onset observations cannot alter the returned rate and that both yield coefficients and both prediction outputs recover on independently generated signed-stress data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "12a0d377265505d224fe98752534f516242a96f8dbeb4925b0e5418c39ca9b7c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42087.13,
+      "usage_known": true,
+      "prompt_tokens": 33117,
+      "cached_tokens": 6784,
+      "completion_tokens": 1726
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2aed4316ab74ae285816d2cce578064",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:44:31.604652+00:00",
+  "ended_at_utc": "2026-11-26T18:45:10.857902+00:00",
+  "request_sha256": "6f15a65f5ab21843993f65d3ff1af1a28a44cb59d363c480a618ae8097d6ec44",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 78242,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39238,
+    "cached_tokens": 6784,
+    "completion_tokens": 1660
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/b07_drift.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nr='/holdout_task/'\\ns=importlib.util.spec_from_file_location('m',r+'alpha_w01_batch_07_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nc=pickle.load(open(r+'public_alpha_w01_batch_07.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; tr,te=d['train'],d['test']; t,dt,sy=(d[k] for k in ('eval_times','past_dt','yield_stress')); mp=m._calibrate(d['calibration_load_cells']); x,xt,co,ct=m._align(tr,te); lab=tr['lab_id']; fold=np.load('/tmp/b07_oof.npz')['fold']\\ndef pred(b,xx,ts,w):\\n h,v=m._stress(b,mp); A,B=m._design(ts,h,v,xx,dt,t,*m._plastic(h,v,dt,sy)); return b['strain_0'][:,None]+A@w,B@w\\ndef slope(curve,observed):\\n z=(observed-curve)[:,t>=np.median(t)]/t[t>=np.median(t)]; return np.median(z,axis=1)\\ndef correction(z,err):\\n A=np.column_stack((np.ones(len(z)),z)); w=np.ones(len(z));\\n for _ in range(5):\\n  p=np.linalg.lstsq(A*w[:,None],err*w,rcond=None)[0]; e=err-A@p; w=1/np.sqrt(1+(e/(2.5*m._mad(e)))**2)\\n return p\\nfor external in (False,True):\\n results=[[] for _ in range(3)]\\n for f in ([None] if external else range(5)):\\n  fit=np.ones(len(lab),bool) if external else fold!=f; v=~fit; sub={k:vv[fit] for k,vv in tr.items()}; val=te if external else {k:vv[v] for k,vv in tr.items()}; xv=xt if external else x[v]; cv=ct if external else co[v]; lv=val['lab_id']; ts,w=m._fit(sub,x[fit],co[fit],mp,dt,t,sy); p,b=pred(sub,x[fit],ts,w); err=slope(p,sub['strain_curves_obs']); obs=sub['instant_rate_obs']-b; drift=x[fit,1:]@w[3:7]\\n  coeffs=[]\\n  for l in range(4):\\n   q=(lab[fit]==l)&co[fit]; coeffs.append([correction(drift[q],y[q]) for y in (err,obs)])\\n  coeffs=np.array(coeffs); p,b=pred(val,xv,ts,w); z=xv[:,1:]@w[3:7]; inn=val['instant_rate_obs']-b; target=g['te_true_rate0']-b if external else slope(p,val['strain_curves_obs']); base=np.where(cv,.25,1.)*inn\\n  for j,kind in enumerate(('baseline','curve','curve+rate')):\\n   cf=coeffs[:,0] if j==1 else coeffs.mean(axis=1); shift=0 if j==0 else (cf[lv,0]+cf[lv,1]*z)*cv*.75\\n   pred_delta=base+shift; e=pred_delta-target; curve_err=p+pred_delta[:,None]*t-g['te_clean'] if external else e[:,None]*t\\n   results[j].append(np.column_stack((lv,cv,e,np.mean(curve_err**2,axis=1))))\\n  if external: print('Lab intercept and drift multiplier adjustments from training curve and onset:\\\\n',coeffs.round(5))\\n for kind,runs in zip(('baseline','curve','curve+rate'),results):\\n  a=np.concatenate(runs); mask=a[:,1].astype(bool); print('public' if external else 'OOF',kind,'complete rate/slope RMSE per lab',[round(np.sqrt(np.mean(np.clip(a[(a[:,0]==l)&mask,2],-.05,.05)**2)),6) for l in range(4)],'all curve RMSE per lab',[round(np.sqrt(np.mean(a[a[:,0]==l,3])),6) for l in range(4)] if external else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b07_drift.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared onset blend -> H2 test a lab-specific affine drift correction with calibration and constitutive structure fixed; baseline worst-lab public strain RMSE is 0.03067.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase the onset weight for Lab 3\",\n      \"rejected_reason\": \"The held-out training coupons do not support a larger onset weight for that lab.\"\n    }\n  ],\n  \"rationale\": \"Complete-coupon errors closely track feature drift. Fit an affine correction inside each outer fold, using the same pooled reference panel, to see whether the relationship generalizes. Keep the existing candidate if the correction does not improve the worst slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "e47a1ac1870eeaae1ca8eab41d56085b6df10339b7910b9a673bd1deaff7c2b8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40232.38,
+      "usage_known": true,
+      "prompt_tokens": 39238,
+      "cached_tokens": 6784,
+      "completion_tokens": 1660
+    }
+  ]
+}

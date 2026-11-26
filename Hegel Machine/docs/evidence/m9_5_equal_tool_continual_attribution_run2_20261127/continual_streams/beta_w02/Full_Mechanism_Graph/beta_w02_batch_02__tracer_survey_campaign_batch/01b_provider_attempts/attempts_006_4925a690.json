@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4925a69052724e40aff09f75d535468e",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:11:27.412770+00:00",
+  "ended_at_utc": "2026-11-26T18:11:54.872461+00:00",
+  "request_sha256": "64593871001515b8975217ffc4336597f8b9092a1bdc8649a0b63ca2f26bfdf4",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 40864,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26167,
+    "cached_tokens": 14208,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w02_batch_02_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ntext = Path('validate_public_schema.py').read_text()\\nns = {}; exec(text.split('\\\\n_d = ')[0], ns); verify = ns['verify_box_simplex_kkt_certificate']\\nq = pickle.load(open('public_beta_w02_batch_02.pkl','rb'))[0]; st, gt = q['study'], q['gt']; sweeps = st['sensor_calibration_sweeps']; bank = sweeps['bank_id']; refs = sweeps['ref_signal']; rows = st['row_bank_id']\\nbase = m._calibrate(st); indices = np.arange(len(bank)); wg = gt['weights_by_budget']; fg = gt['terminal_field_mid_budget']\\ndef run(s, wref, fref, design, target):\\n    out = m.solve_beta_w02_batch_02(s)\\n    we = np.max(np.abs(out['weights_by_budget'] - wref)); fe = np.linalg.norm(out['terminal_field_mid_budget'] - fref) / np.linalg.norm(fref)\\n    gaps = []\\n    for bg, cert in zip(s['budget_grid'], out['kkt_certificates']):\\n        verdict = verify(design, target, s['source_ridge'], s['u_box'], bg, cert)\\n        assert verdict['valid'], (bg, verdict)\\n        gaps.append(verdict['gap'])\\n    assert we < 1e-6 and fe < 1e-6, (we, fe)\\n    return np.array([we, fe, max(gaps)])\\ndef masked(s, keep):\\n    return dict(s, sensor_calibration_sweeps={k: v[keep] for k,v in s['sensor_calibration_sweeps'].items()})\\nS, y = gt['S_tilde'], gt['r_y']\\nresults = {'public': run(st,wg,fg,S,y), 'leave_one_sweep_out': np.max([run(masked(st,indices!=i),wg,fg,S,y) for i in indices], axis=0)}\\ngain = np.array([0.84,1.21,1.37,0.71]); off = np.array([0.13,-0.08,0.44,-0.29]); raw = gain[bank]*refs+off[bank]; raw[[0,12,24,36]] += [9,-7,5,-4]\\nspiked = dict(st, y_obs_raw=gain[rows]*base+off[rows], sensor_calibration_sweeps=dict(sweeps, raw_readout=raw)); results['EMI_all_banks'] = run(spiked,wg,fg,S,y)\\nfor missing_wing in (0, 1):\\n    results[f'archive_identity_missing_wing_{missing_wing}'] = run(masked(st,bank//2!=missing_wing),wg,fg,S,y)\\nfor label, result in results.items(): print(label, 'max_weight_abs, terminal_rel_l2, worst_KKT_gap:', *result)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the calibrated separable model passes all three public certificates; worst public weight error is 5.77e-8 and terminal relative L2 error is 5.07e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the exact artifact with withheld sweep points, missing-wing sweeps under the observed identity calibration, and injected EMI on nonidentity banks. A failure isolated to those slices would call for changing calibration rather than transport or optimization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0171b468c120b07b7f55d14b06a1f69c2e7f7839c1c057268d0bc0ab5f278e6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28369.9,
+      "usage_known": true,
+      "prompt_tokens": 26167,
+      "cached_tokens": 14208,
+      "completion_tokens": 1071
+    }
+  ]
+}

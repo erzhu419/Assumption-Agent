@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "944ea4bc67784bc49e290a0541db57aa",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:11:42.912305+00:00",
+  "ended_at_utc": "2026-11-26T18:12:18.481834+00:00",
+  "request_sha256": "1c0f7b9accfdaf8657f0d0c62ad495b1a554bf704a00fef35450951c74a24a1a",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44787,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27432,
+    "cached_tokens": 0,
+    "completion_tokens": 1469
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ncase = pickle.load(open('public_beta_w01_batch_01.pkl', 'rb'))[0]\\ns, gt = case['study'], case['gt']\\nc = s['sensor_calibration_sweeps']\\nbase = m.solve_beta_w01_batch_01(s)\\nworst = {}\\ndef compare(label, study):\\n    out = m.solve_beta_w01_batch_01(study)\\n    e = np.max(np.abs(out['weights_by_budget'] - base['weights_by_budget']))\\n    f = np.linalg.norm(out['terminal_field_mid_budget'] - base['terminal_field_mid_budget']) / np.linalg.norm(base['terminal_field_mid_budget'])\\n    worst[label] = np.maximum(worst.get(label, (0., 0.)), (e, f))\\n\\ndef subset(sweeps, keep):\\n    return {key: np.asarray(value)[keep] for key, value in sweeps.items()}\\n\\nfor i in range(len(c['bank_id'])):\\n    compare('real leave-one-sweep-out', dict(s, sensor_calibration_sweeps=subset(c, np.arange(len(c['bank_id'])) != i)))\\nfor b in range(4):\\n    hit = np.flatnonzero(c['bank_id'] == b)\\n    keep = c['bank_id'] != b\\n    compare('missing one bank; stable history', dict(s, sensor_calibration_sweeps=subset(c, keep)))\\n    for i in hit:\\n        take = keep.copy(); take[i] = True\\n        compare('one spot check; stable history', dict(s, sensor_calibration_sweeps=subset(c, take)))\\nfor wing in (0, 1):\\n    gains = np.array([0.73, 1.31, 0.81, 1.42]); offsets = np.array([0.19, -0.28, 0.33, -0.17])\\n    bank, raw = c['bank_id'], c['raw_readout']\\n    altered = gains[bank] * raw + offsets[bank]\\n    for b in (2*wing, 2*wing+1):\\n        sl = np.flatnonzero(bank == b)\\n        altered[sl[np.argsort(c['ref_signal'][sl])[[0, 2, -1]]]] += [1.4, -1.9, 0.8]\\n    row = s['row_bank_id']\\n    compare('bank affine shifts plus EMI on one wing', dict(s, y_obs_raw=gains[row]*s['y_obs_raw']+offsets[row], sensor_calibration_sweeps=dict(c, raw_readout=altered)))\\nfor label, errors in worst.items():\\n    print(label, 'worst weight abs / field relative', errors)\\n    assert max(errors) < 2e-6, label\\n\\nD, _ = m._responses(s)\\ny = m._calibrated_observations(s)\\nP = m._profile(s['Z_nuisance'], np.column_stack((D,y)), s['nuisance_ridge']); D, y = P[:, :-1], P[:, -1]\\nridge, cap = s['source_ridge'], s['u_box']\\nworst_kkt = 0.\\nfor budgets in (s['budget_grid'], [0., cap, D.shape[1]*cap], [1e-6, 2*cap, D.shape[1]*cap-1e-6]):\\n    out = m.solve_beta_w01_batch_01(dict(s, budget_grid=budgets))\\n    for B, w, c0 in zip(budgets, out['weights_by_budget'], out['kkt_certificates']):\\n        r = D @ w - y; g = D.T @ r + ridge*w\\n        lower, upper = np.array(c0['lam_lower']), np.array(c0['lam_upper'])\\n        obj = 0.5*(r@r+ridge*(w@w)); gap = obj-c0['dual_lower_bound']\\n        err = max(abs(w.sum()-B), max(-w.min(),w.max()-cap), max(-lower.min(),-upper.min()), np.max(abs(g-c0['nu_sum']-lower+upper)), np.max(abs(lower*w)), np.max(abs(upper*(cap-w))), abs(obj-c0['primal_objective']), abs(gap), np.max(abs(w-c0['weights'])))\\n        worst_kkt = max(worst_kkt, err)\\n        assert err < 1e-9, (B,err)\\nprint('worst independently recomputed KKT residual',worst_kkt)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current bankwise affine calibration with sparse historical fallback → H2 additive separable FVM and ridge-profiled optimization; public maximum weight error is 2.22e-8, terminal relative error is 3.66e-8, and maximum reported dual gap is 6.94e-17.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema and reference checks\",\n      \"rejected_reason\": \"The public sweeps are dense and clean; they do not exercise historical fallback, wing-level EMI, or budget endpoints.\"\n    }\n  ],\n  \"rationale\": \"Check whether losing a reference point or a bank sweep, or corrupting one wing, changes the inferred weights under known calibration conditions. Independently recompute KKT residuals at interior and endpoint budgets to detect active-set or certificate errors before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "012a657d4efbb0200b137965fd51a86e7332c222120bdec772d7cbab85298555",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36466.5,
+      "usage_known": true,
+      "prompt_tokens": 27432,
+      "cached_tokens": 0,
+      "completion_tokens": 1469
+    }
+  ]
+}

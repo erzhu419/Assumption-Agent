@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d290e11a360b409aafbb5c1375a2227e",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:26:22.059861+00:00",
+  "ended_at_utc": "2026-11-26T18:26:54.825188+00:00",
+  "request_sha256": "645e7126648b944edf0ffd6f65d3b282a1446e9a32efa2a9770eea9d3a9d2865",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 39106,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26163,
+    "cached_tokens": 6784,
+    "completion_tokens": 1343
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom itertools import product\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver','beta_w02_batch_05_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem = pickle.load(open('public_beta_w02_batch_05.pkl','rb'))[0]\\ns, gt = item['study'], item['gt']\\nhistory = json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))[-2:]\\n\\ndef arrays(sweep):\\n    return tuple(np.asarray(sweep[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n\\n# Predict a complete recent sweep from the other episode, within each bank.\\nworst = np.zeros(4)\\nfor train, test in ((history[0],history[1]),(history[1],history[0])):\\n    b,x,y = arrays(train); bt,xt,yt = arrays(test)\\n    for i in range(4):\\n        gain,offset = m._bank_fit(x[b==i],y[b==i]); keep = bt==i\\n        worst[i] = max(worst[i], np.max(np.abs(gain*xt[keep]+offset-yt[keep])))\\nprint('recent held-out sweep max residual by bank:',worst.tolist())\\nassert worst.max() < 3e-6\\n\\n# Simulate a single EMI spike on each actual sweep point, one at a time;\\n# assess recovery against the original reference readings, not the perturbed ones.\\nworst = np.zeros(4)\\nfor episode in history:\\n    banks,xx,yy = arrays(episode)\\n    for i in range(4):\\n        x,y = xx[banks==i],yy[banks==i]\\n        for j, sign in product(range(x.size),(-1,1)):\\n            noisy=y.copy(); noisy[j] += sign*0.5\\n            gain,offset=m._bank_fit(x,noisy)\\n            worst[i] = max(worst[i],np.max(np.abs(gain*x+offset-y)))\\nprint('single-spike stress max residual by bank:',worst.tolist())\\n\\n# Independently apply the exact FVM stencil to the reconstructed terminal field.\\no = m.solve_beta_w02_batch_05(s)\\nu = o['terminal_field']; nx,ny=u.shape\\nv = (s['V_reaction_2d'] + s['reaction_x'][:,None] + s['reaction_y'][None,:] + s['mu_shifts'][-1])*u\\nfor j, axis in enumerate('xy'):\\n    field = np.moveaxis(u,j,0); out = np.moveaxis(v,j,0)\\n    h=s['L'+axis]/field.shape[0]; k=1.45*s['kappa_'+axis]; speed=s['vel_'+axis]/h; robin=s['robin_'+axis]\\n    diff=2*k[:-1]*k[1:]/(k[:-1]+k[1:])/h**2\\n    flux=diff[:,None]*(field[:-1]-field[1:]); out[:-1]+=flux; out[1:]-=flux\\n    prev=np.pad(field[:-1],((1,0),(0,0))); nxt=np.pad(field[1:],((0,1),(0,0)))\\n    out+=np.maximum(speed,0)[:,None]*(field-prev)+np.maximum(-speed,0)[:,None]*(field-nxt)\\n    for loc in (0,-1): out[loc]+=robin*k[loc]/(h*(k[loc]+robin*h/2))*field[loc]\\nrhs=np.tensordot(o['weights'],s['source_modes'],axes=1)\\nprint('independent FVM terminal residual max:',np.max(np.abs(v-rhs)))\\nassert np.max(np.abs(v-rhs)) < 1e-10\\nD,_=m._forward(s); S,y=m._profile(s,D,m._calibrate(s)); w=o['weights']; cert=o['kkt_certificate']; nu=cert['nu_sum']; g=gt['S_tilde'].T@(gt['S_tilde']@w-gt['r_y'])+s['source_ridge']*w\\nprint('reference tangential gap:',float(g@w-nu*s['total_budget']-s['u_box']*np.minimum(0,g-nu).sum()))\\nPY\\npython3 -I validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Identity fallback → recent bankwise calibration reduced the public worst-bank profiled observation error from 1.356 to 7.77e-7; held-out sweep and spike margins are under audit.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, HJB terms, or classification confounding\",\"rejected_reason\":\"The task has no relay states, classification labels, or stochastic drift operator; its specified algebra is the harmonic/upwind/Robin FVM stencil and the convex box-simplex inverse.\"}],\"rationale\":\"Held-out recent sweeps test whether bank calibrations transfer across episodes; single-spike stresses test the robust fit's stated operating condition. An independent terminal stencil residual would expose an axis, sign, or flux error not checked by the schema gate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "317c5d92d1ea622e6c36d630a4954232d4cac47b3f10e57f332b55626f0b5045",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33693.12,
+      "usage_known": true,
+      "prompt_tokens": 26163,
+      "cached_tokens": 6784,
+      "completion_tokens": 1343
+    }
+  ]
+}

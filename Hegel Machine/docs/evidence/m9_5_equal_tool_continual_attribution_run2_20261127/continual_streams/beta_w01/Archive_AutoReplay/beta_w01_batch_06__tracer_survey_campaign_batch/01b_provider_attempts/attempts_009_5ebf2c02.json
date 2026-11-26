@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ebf2c02a7754304b59839445409674d",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:40:45.537496+00:00",
+  "ended_at_utc": "2026-11-26T18:41:10.574286+00:00",
+  "request_sha256": "b6786a934a8d58aad2003aeaefdec4f698199ab11d93de15fc750b7ffed08ef3",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 39916,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25041,
+    "cached_tokens": 6784,
+    "completion_tokens": 926
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', 'beta_w01_batch_06_solver.py')\\nc = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(c)\\nwith open('public_beta_w01_batch_06.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    d, _ = c._responses(s)\\n    z, banks = s['Z_nuisance'], s['row_bank_id']\\n    nr = s['nuisance_ridge']\\n    gain, offset = c._calibration(s)[banks].T\\n    y = (s['y_obs_raw'] - offset) / gain\\n    full_w = c.solve_beta_w01_batch_06(s)['weights']\\n    for wing in (0, 1):\\n        test = banks // 2 == wing\\n        train = ~test\\n        dt, zt, yt = d[train], z[train], y[train]\\n        a = c._profile(zt, np.column_stack((dt, yt)), nr)\\n        w, cert = c._box_simplex(a[:, :-1], a[:, -1], s['source_ridge'], s['u_box'], s['total_budget'])\\n        nuisance = np.linalg.solve(zt.T @ zt + nr * np.eye(zt.shape[1]), zt.T @ (yt - dt @ w))\\n        error = d[test] @ w + z[test] @ nuisance - y[test]\\n        by_shift = np.sqrt(np.mean(error.reshape(len(s['mu_shifts']), -1)**2, axis=1))\\n        gap = cert['primal_objective'] - cert['dual_lower_bound']\\n        print(f'held wing {wing}: RMSE={np.sqrt(np.mean(error**2)):.6g}, signed bias={np.mean(error):.6g}, worst shift={np.argmax(by_shift)}, worst shift RMSE={np.max(by_shift):.6g}, max weight change={np.max(np.abs(w-full_w)):.6g}, KKT gap={gap:.3g}')\\n        assert np.isfinite(error).all() and -1e-9 <= gap <= 1e-6\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable replay -> H2 full 2D vortex transport with archive-backed calibration; the worst leave-one-sensor-out RMSE was 0.01871 and the worst fold KKT gap was 2.78e-17.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Holding out a whole wing can expose a calibration bias or nuisance term that neighboring sensors masked in the individual holdouts. Refit weights and nuisance coefficients on the retained wing only. If errors are coherent by wing, inspect the contributing bank maps before changing the solver; if the certificate fails, revisit the constrained fit. The existing shift ablations already test the applicable transport terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1d4b73ff7ac93d5284132d0029a90b29b8bf53ace3554352cfced16d55a2c83d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25004.01,
+      "usage_known": true,
+      "prompt_tokens": 25041,
+      "cached_tokens": 6784,
+      "completion_tokens": 926
+    }
+  ]
+}

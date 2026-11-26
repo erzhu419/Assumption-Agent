@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7988119b90a44433ab6df3c12fd4f1fc",
+  "call_seq": 14,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:35:50.422743+00:00",
+  "ended_at_utc": "2026-11-26T18:36:27.595917+00:00",
+  "request_sha256": "61c929894766c31bca228a261a994030d155b177fbe623ddef06583985d0cbdf",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 72733,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36035,
+    "cached_tokens": 6784,
+    "completion_tokens": 1561
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_w01_batch_05_solver.py')\\ns = p.read_text()\\na = '''            good = np.abs(y - np.polyval(prior, x)) < .001\\n            current = np.polyfit'''\\nb = '''            good = np.abs(y - np.polyval(prior, x)) < .001\\n            # One discordant spot may be EMI; two separated discordant spots\\n            # support a new map when they are the only available measurements.\\n            if len(x) == 2 and not good.any() and np.ptp(x) >= .5:\\n                gain = (y[1] - y[0]) / (x[1] - x[0])\\n                if gain > 0:\\n                    maps.append(np.array([gain, y[0] - gain*x[0]]))\\n                    continue\\n            current = np.polyfit'''\\nassert s.count(a) == 1\\nPath('/tmp/coupon05_shift.py').write_text(s.replace(a,b))\\nPY\\ncat >/tmp/coupon05_shift_audit.py <<'PY'\\nimport importlib.util, itertools, json, pickle\\nfrom pathlib import Path\\nfrom tempfile import TemporaryDirectory\\nimport numpy as np\\n\\ndef load(path):\\n    sp = importlib.util.spec_from_file_location('candidate', path)\\n    module = importlib.util.module_from_spec(sp)\\n    sp.loader.exec_module(module)\\n    return module\\nold = load('/holdout_task/alpha_w01_batch_05_solver.py')\\nnew = load('/tmp/coupon05_shift.py')\\nhistory = json.loads(old._ARCHIVE.read_text())\\nd = pickle.load(open('/holdout_task/public_alpha_w01_batch_05.pkl','rb'))[0]['dataset']\\nnp.testing.assert_array_equal(old._load_cells(d['calibration_load_cells']),new._load_cells(d['calibration_load_cells']))\\nwith TemporaryDirectory() as td:\\n    old._ARCHIVE = new._ARCHIVE = Path(td)/'previous.json'\\n    for i,row in enumerate(history[1:],1):\\n        old._ARCHIVE.write_text(json.dumps(history[:i]))\\n        scores, glitches = [], []\\n        for lab in range(4):\\n            x,y = old._checks(row,lab)\\n            truth,ok = old._consensus(x,y,np.array([1.,0.]))\\n            if not ok: continue\\n            xp = x[[x.argmin(), x.argmax()]]\\n            for j,k in itertools.combinations(range(len(x)),2):\\n                if abs(x[j]-x[k]) < .5: continue\\n                spot = dict(lab_id=[lab,lab],cmd_stress=x[[j,k]],true_stress=y[[j,k]])\\n                err = lambda m: np.max(abs(np.polyval(m._load_cells(spot)[lab]-truth,xp)))\\n                scores.append([err(old),err(new)])\\n                if i != 3:\\n                    spot['true_stress'] = spot['true_stress'] + [.7,0.]\\n                    glitches.append([err(old),err(new)])\\n        print(row['episode_short_name'], 'measured pairs',len(scores),'median/p90/max stress error: baseline vs challenger',np.round(np.quantile(scores,[.5,.9,1],axis=0),6).tolist())\\n        if glitches: print('single injected EMI, max stress error',np.max(glitches,axis=0).round(6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/coupon05_shift_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: Let two separated checks that both disagree with the archive indicate a calibration change; the archive-first estimator missed the measured batch-03 shift by up to 0.806 stress units.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The latest historical load-cell map is reliable whenever there are only two current checks.\",\"empirical_witness\":\"On batch 03, archive fallback missed the full-sweep calibration by up to 0.806 stress units, while separated measured pairs recovered it with per-lab P90 error at most 0.00079.\",\"causal_blanket_diagnosis\":\"A real load-cell calibration change can make both present-day checks disagree with the archive; that is different from a single EMI-contaminated check.\",\"sublated_pivot\":\"Test a two-check update only when both checks disagree with the historical map and span at least 0.5 stress units; retain the archive when either check corroborates it.\",\"risk_kind\":\"Sparse load-cell calibration drift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Always trust two-point fits\",\"rejected_reason\":\"That would discard the more accurate archived estimate in stable batches and give a single EMI glitch control of the fitted slope.\"}],\"rationale\":\"Compare the challenger on chronological measured-pair replays, then inject one EMI glitch into stable measured pairs. Promote only if it fixes the observed calibration shift without material regression in the stable batches or changing the current public calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "5a06afd2ff065d417f9a6aaae6ef2cae68a40dc30b9c0d9e2a24d90e194e17b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38142.06,
+      "usage_known": true,
+      "prompt_tokens": 36035,
+      "cached_tokens": 6784,
+      "completion_tokens": 1561
+    }
+  ]
+}

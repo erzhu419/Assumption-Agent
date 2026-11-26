@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "718acc055dcc46d78932f4cc47774a33",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_03__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:13:42.345112+00:00",
+  "ended_at_utc": "2026-11-26T18:14:21.668174+00:00",
+  "request_sha256": "a921b5b4b315683c1d57bfb5fb86dc903e558f5ce33d6a61ea824465782164e9",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 61111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33285,
+    "cached_tokens": 13696,
+    "completion_tokens": 1632
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w03_batch_03_solver.py')\\ns = p.read_text()\\nold = \\\"    c, _, _, _ = _design(tau, x[n:], h[n:], p[n:], dt, t, test['initial_memory_states'])\\\\n    delta = c @ coef\\\\n\\\"\\nnew = \\\"    c, rate_basis, _, _ = _design(tau, x[n:], h[n:], p[n:], dt, t, test['initial_memory_states'])\\\\n    delta = c @ coef\\\\n    # The rate innovation observes the linear drift left unresolved by imputation.\\\\n    observed_rate = np.asarray(test['instant_rate_obs'])\\\\n    incomplete = np.isnan(test['coupon_features_raw']).any(axis=1) & np.isfinite(observed_rate)\\\\n    innovation = observed_rate[incomplete] - rate_basis[incomplete] @ coef\\\\n    delta[incomplete] += 0.95 * innovation[:, None] * t\\\\n\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_w03_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_w03_batch_03.pkl','rb') as f:\\n    v = pickle.load(f)[0]\\nd,g = v['dataset'],v['gt']; o = m.solve_alpha_w03_batch_03(d)\\nlab = d['test']['lab_id']; miss = np.isnan(d['test']['coupon_features_raw']).any(axis=1); t=d['eval_times']\\nrmse=lambda e: float(np.sqrt(np.mean(e**2)))\\nprint('tau relative errors',abs(o['estimated_taus']/g['taus']-1))\\nfor a,b in [('predicted_strain','te_clean'),('secant_compliance','te_secant'),('hazard_crossing_times','te_cross')]:\\n    e=o[a]-g[b]\\n    print(a,'overall RMSE',rmse(e),'max abs',np.max(abs(e)),'by lab',[rmse(e[lab==i]) for i in range(4)],'complete/missing',[rmse(e[~miss]),rmse(e[miss])])\\n    if e.ndim==2: print('worst horizon RMSE',max(map(rmse,e.T)))\\n    assert np.isfinite(o[a]).all()\\nq=d['test']['critical_strain']; crossing=o['hazard_crossing_times']; assert np.all((crossing>=0)&(crossing<=t[-1]))\\nprint('crossing censor disagreements',np.count_nonzero((crossing==t[-1])!=(g['te_cross']==t[-1])))\\nchanged=copy.deepcopy(d); cal=changed['calibration_load_cells']; priors=m._archive_calibration(range(4)); before=m._prep(d)\\n# Express the same applied stresses in the archived gauges. One lab per wing\\n# receives two spot checks; the other two retain full sweeps with EMI spikes.\\nkeep=np.ones(len(cal['lab_id']),dtype=bool)\\nfor i in range(4):\\n    s=cal['lab_id']==i; ii=np.flatnonzero(s); prev=m._supported_line(*m._checks(d['calibration_load_cells'],i)); slope,bias=priors[i]\\n    cal['cmd_stress'][s]=(cal['cmd_stress'][s]*prev[0]+prev[1]-bias)/slope\\n    for name in ('train','test'):\\n        a=changed[name]; k=a['lab_id']==i\\n        for key in ('stress_hold_cmd','past_stress_cmd'):\\n            a[key][k]=(a[key][k]*prev[0]+prev[1]-bias)/slope\\n    if i in (0,2):\\n        order=ii[np.argsort(cal['cmd_stress'][ii])]; keep[order[1:-1]]=False\\n    else:\\n        cal['true_stress'][ii[[0,-1]]] += [.45,-.6]\\nchanged['calibration_load_cells']={k:val[keep] for k,val in cal.items()}\\nafter=m._prep(changed); errors=[np.max(abs(after[k]-before[k])) for k in (1,2)]; print('re-gauged sparse/EMI max hold and history deltas',errors); assert max(errors)<0.002\\nalt=m.solve_alpha_w03_batch_03(changed)\\nfor a in o:\\n    err=np.max(abs(alt[a]-o[a])); print('re-gauged sparse/EMI max output delta',a,err); assert err < 0.03\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 feature-only drift -> H2 rate-anchored drift on incomplete rows: leave-one-lab-out worst projected drift RMSE fell from 0.1248 to 0.0388 at a 0.90 weight, while complete rows showed no consistent benefit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t10\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply the rate correction to complete rows\",\n      \"rejected_reason\": \"Leave-one-lab-out results show no consistent improvement; full weighting increased projected drift RMSE in all four labs.\"\n    },\n    {\n      \"option\": \"Use the observed rate without shrinkage on incomplete rows\",\n      \"rejected_reason\": \"Weights from 0.90 to 0.98 produced a lower worst-lab drift RMSE than full weighting; 0.95 retains a small contribution from the feature estimate.\"\n    }\n  ],\n  \"rationale\": \"Keep the calibrated hereditary modes and correct only the unresolved linear drift. The isolated run checks every output by lab or horizon, checks whether crossing censoring changed, and tests whether sparse sweeps and EMI preserve predictions when the same physical loading is expressed in archived gauges.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f5215a76a316123c395bb353bbdd97467328d0682aa9fecaf0af5998dea5aca5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40235.67,
+      "usage_known": true,
+      "prompt_tokens": 33285,
+      "cached_tokens": 13696,
+      "completion_tokens": 1632
+    }
+  ]
+}

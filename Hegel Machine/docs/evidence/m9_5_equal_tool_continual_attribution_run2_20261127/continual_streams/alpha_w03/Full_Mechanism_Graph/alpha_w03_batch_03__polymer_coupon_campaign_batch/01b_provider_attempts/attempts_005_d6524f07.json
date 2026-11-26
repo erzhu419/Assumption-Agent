@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d6524f07fe364eb0b0b63a913c20e923",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_03__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:11:02.058857+00:00",
+  "ended_at_utc": "2026-11-26T18:11:34.009072+00:00",
+  "request_sha256": "75b5057f456533583895075f55020658f733b822f1045071031c98439a2cf48a",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 41599,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27771,
+    "cached_tokens": 6784,
+    "completion_tokens": 1300
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '120,150p' /tmp/w03_prior.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/holdout_task/'; a=json.load(open(p+'public_asset_index.json')); print(str(a)[:2000]); b=pickle.load(open(p+'public_alpha_w03_batch_03.pkl','rb'))[0]; print('published reference fields',[(k,np.shape(v)) for k,v in b['gt'].items()]); d=b['dataset']; print('t, stress max',d['eval_times'],[(s,np.max(abs(d[s]['past_stress_cmd'])),np.max(abs(d[s]['stress_hold_cmd']))) for s in ('train','test')]); print('residual plastic quantiles',np.quantile(d['test']['residual_plastic_state'],[0,.5,1])); print('correlation on train, OLS noise diagnostic below')\\nPY\\ncat > /tmp/w03_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom w03_prior import _prep\\nD=pickle.load(open('/holdout_task/public_alpha_w03_batch_03.pkl','rb'))[0]['dataset']; tr=D['train']; n=len(tr['lab_id']); x,h,p=(a[:n] for a in _prep(D)); u=tr['initial_memory_states']; dt=D['past_dt']; t=D['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; target=np.c_[y,r]; lab=tr['lab_id']; end=np.cumsum(dt); lag=end[-1]-end\\n\\ndef bases(tau,kind,drift):\\n e=np.exp(-dt[:,None]/tau); z=p@((1-e)*np.exp(-lag[:,None]/tau)); pre=u*np.exp(-end[-1]/tau); g=h[:,None]-z; q=-np.expm1(-t[:,None]/tau); shape=np.r_[q,1/tau]; tm=np.r_[t,1.]\\n if kind=='fixed': m=(g-pre,)\\n elif kind=='free': m=(g,pre)\\n else: m=(g,)\\n mats=[v[:,None,:]*shape for v in m]; w=np.c_[np.ones(n),x]; mats.append(w[:,None,:]*tm[None,:,None]);\\n if drift=='stress': mats.append(((h[:,None])*w)[:,None,:]*tm[None,:,None]);\\n return np.concatenate(mats,axis=2)\\n\\ndef run(kind,drift,hold,rate_weight):\\n fit=lab!=hold; test=~fit; scale=np.r_[np.ones(len(t)),rate_weight];\\n def ls(tau):\\n  a=bases(tau,kind,drift); aa=(a[fit]*scale[None,:,None]).reshape(-1,a.shape[-1]); b=(target[fit]*scale).ravel(); c=np.linalg.lstsq(aa,b,rcond=None)[0]; return a,c,aa@c-b\\n def fun(v): return ls([v[0],v[0]+v[1]])[2]\\n best=min([least_squares(fun,v,bounds=([.051,.02],[5.,19.]),ftol=1e-8) for v in ((.35,2),(.75,4),(1.4,6))],key=lambda r:r.cost); tau=np.cumsum(best.x); a,c,_=ls(tau); pred=a@c; res=pred[test]-target[test]; return tau,c,np.sqrt(np.mean(res**2,axis=0))\\nfor kind in ('fixed','free','empty'):\\n for drift in ('plain','stress'):\\n  for rate_weight in (.35,1.,4.):\\n   out=[run(kind,drift,l,rate_weight) for l in range(4)]; err=np.array([a[2] for a in out]); print(kind,drift,rate_weight,'tau',np.round([a[0] for a in out],3),'coef',np.round(out[0][1],3),'worst curves',np.round(np.sqrt(np.mean(err[:,:-1]**2,axis=1)).max(),5),'worst rate',round(err[:,-1].max(),5),'split horizons',np.round(err.max(axis=0),3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/w03_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived two-mode creep → compare physical preload, free preload amplitude, and zero preload in held-out labs; current calibration residuals are below 0.0002 stress units per lab.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the previous fit unchanged\",\"rejected_reason\":\"It does not propagate the measured initial states or produce the required secant and crossing outputs.\"}],\"rationale\":\"Hold out each lab to test whether the measured preload follows the expected exponential recurrence and whether drift needs a stress interaction. Compare curve and rate errors separately before selecting the model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "925a394cc5b06f06e91a0e71336306015b0f031f8b0ac220478509e4ac41d40f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32911.75,
+      "usage_known": true,
+      "prompt_tokens": 27771,
+      "cached_tokens": 6784,
+      "completion_tokens": 1300
+    }
+  ]
+}

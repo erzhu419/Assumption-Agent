@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea3bb98574f146b489b1cb17fbc90423",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:23:19.102430+00:00",
+  "ended_at_utc": "2026-11-26T18:23:51.796823+00:00",
+  "request_sha256": "e4f47350f232bcef24be76acd2ba3d933dbfab2a7f7fa36c31f31350f8364de5",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 76372,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39252,
+    "cached_tokens": 11136,
+    "completion_tokens": 1254
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nexec(open('/tmp/alpha_w02_batch04_cv.py').read().split('for a in s._archive_checks')[0])\\n# Use public coupon inputs but generate exact responses independently by stepping the internal states.\\nfor mode in ('subyield', 'mixed'):\\n    dd = dict(d, train=dict(tr), test=dict(d['test']))\\n    tau = np.array([.62, 3.9]); theta = np.array([.68, .53, .07, .14, -.12, .10, -.08]); vp = np.array([.22, .17]) if mode == 'mixed' else np.zeros(2)\\n    sy = dd['yield_stress']; x = s._features(dd['train'], dd['test']); start = 0\\n    for split in (dd['train'], dd['test']):\\n        n = len(split['lab_id']); gain,bias = cal[split['lab_id']].T\\n        past,hold = s._stress(split,cal)\\n        past = np.clip(past, -.8*sy, .8*sy); hold = np.clip(hold,-.8*sy,.8*sy)\\n        row = np.arange(n); group = row % 4\\n        if mode == 'mixed':\\n            past[group == 1, -3] = 1.6*sy\\n            past[group == 3, -5] = -1.8*sy\\n            hold[group == 2] = 1.5*sy\\n            hold[group == 3] = -1.7*sy\\n        split['past_stress_cmd'] = (past-bias[:,None])/gain[:,None]\\n        split['stress_hold_cmd'] = (hold-bias)/gain\\n        state = np.zeros((n,2)); work = np.zeros(n)\\n        for j, duration in enumerate(dt):\\n            decay = np.exp(-duration/tau)\\n            state = decay*state + (1-decay)*past[:,j,None]\\n            work += duration * np.maximum(abs(past[:,j])-sy, 0)**2\\n        drift = x[start:start+n]@theta[2:] + vp[0]*np.sign(hold)*np.maximum(abs(hold)-sy,0)**2\\n        amp = (hold[:,None]-state)*theta[:2]\\n        amp[:,0] += vp[1]*work*hold\\n        rate = drift + np.sum(amp/tau, axis=1)\\n        curves = split['strain_0'][:,None] + np.column_stack([drift*t + amp@(1-np.exp(-t/tau)) for t in time])\\n        if start == 0:\\n            split['instant_rate_obs'] = rate; split['strain_curves_obs'] = curves\\n        start += n\\n    got = s.solve_alpha_w02_batch_04(dd)\\n    for key, ref in [('estimated_taus',tau), ('hereditary_weights',theta), ('viscoplastic_weights',vp), ('predicted_strain',curves), ('initial_rate_pred',rate)]:\\n        np.testing.assert_allclose(got[key], ref, atol=2e-5, rtol=0, err_msg=f'{mode} {key}')\\n    if mode == 'subyield': np.testing.assert_array_equal(got['viscoplastic_weights'], np.zeros(2))\\n    for k in np.unique(group):\\n        m = group == k\\n        print(mode, ['subyield','history-only','hold-only','both'][k] if mode == 'mixed' else f'group {k}', 'max strain/rate error', np.max(abs(got['predicted_strain'][m]-curves[m])), np.max(abs(got['initial_rate_pred'][m]-rate[m])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust Prony–plastic fit on observed regimes -> H2 the same fit covers independently activated history and hold terms; worst measured public clean strain RMSE is 0.346 on imputed coupons versus 0.00915 on complete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch to own-cell imputation\",\n      \"rejected_reason\": \"Masked-feature errors did not consistently improve across labs, and the specified cell-balanced fill preserves the verified alignment.\"\n    }\n  ],\n  \"rationale\": \"The wing perturbations passed. Verify the final file in an isolated process and exercise the history-only and entirely subyield cases absent from the observed comparison. A discrepancy against independently stepped internal states would require correcting the activation or onset derivative before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0c7bb62a47f89cc3b0f60f9951857427fd7ca275571d50ede8658b7ec1496deb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33628.81,
+      "usage_known": true,
+      "prompt_tokens": 39252,
+      "cached_tokens": 11136,
+      "completion_tokens": 1254
+    }
+  ]
+}

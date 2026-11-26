@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "75286ffd07454164a8331a642c3bb5f8",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:23:14.030789+00:00",
+  "ended_at_utc": "2026-11-26T18:23:52.078395+00:00",
+  "request_sha256": "52c6162cf987a5a912f86ee292f57c243e7e020e102e5a6b6de32bcead43c145",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 53749,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30058,
+    "cached_tokens": 6784,
+    "completion_tokens": 1601
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_alpha_w03_batch_04.py <<'PY'\\nimport copy\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\n\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'alpha_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ncase = pickle.loads((root / 'public_alpha_w03_batch_04.pkl').read_bytes())[0]\\nd, g = case['dataset'], case['gt']\\ntr, te = d['train'], d['test']\\nx, h, p = m._prep(d)\\nn = len(tr['lab_id'])\\nt, dt, yld = d['eval_times'], d['past_dt'], d['yield_stress']\\nprint('train fields:', sorted(tr), 'test fields:', sorted(te))\\n# Check the endpoint recurrence independently, including signs and threshold equality.\\ntau = np.array([.7, 3.2])\\naudit_h = np.array([-2*yld, -yld, 0., yld, 2*yld])\\naudit_p = np.vstack((p[n:n+2], np.full((1, len(dt)), 2*yld), np.full((1, len(dt)), yld), p[n+2:n+3]))\\nmem = np.zeros((len(audit_h), 2))\\nfor j, dur in enumerate(dt):\\n    fac = np.exp(-dur/tau)\\n    mem = mem*fac + audit_p[:, j, None]*(1-fac)\\nc, r = m._design(tau, np.zeros((len(audit_h), 5)), audit_h, audit_p, dt, t, yld)\\nnp.testing.assert_allclose(c[:, :, :2], (audit_h[:, None]-mem)[:, None, :]*(1-np.exp(-t[:, None]/tau)))\\nov = np.array([-yld*yld, 0., 0., 0., yld*yld])\\nwork = np.sum(np.maximum(np.abs(audit_p)-yld, 0.)**2*dt, axis=1)*audit_h\\nnp.testing.assert_allclose(c[:, :, 7], ov[:, None]*t)\\nnp.testing.assert_allclose(c[:, :, 8], work[:, None]*(1-np.exp(-t/tau[0])))\\nnp.testing.assert_allclose(r[:, 7:], np.column_stack((ov, work/tau[0])))\\nassert np.all(c[3,:,7:] == 0.)\\nprint('Independent signed Prony and plastic basis checks passed')\\n\\nfor variant in ('public', 'one_clean_spot_per_lab_on_wing_A_and_EMI_on_wing_B'):\\n    batch = copy.deepcopy(d)\\n    if variant != 'public':\\n        cc = batch['calibration_load_cells']; retain = np.ones(len(cc['lab_id']), bool)\\n        for lab in (0, 1):\\n            ids = np.flatnonzero(cc['lab_id'] == lab)\\n            retain[ids[1:]] = False\\n        for lab in (2, 3):\\n            ids = np.flatnonzero(cc['lab_id'] == lab)\\n            cc['true_stress'][ids[:3]] += [.17, -.23, .32]\\n        batch['calibration_load_cells'] = {k:v[retain] for k,v in cc.items()}\\n    _, bh, bp = m._prep(batch)\\n    o = m.solve_alpha_w03_batch_04(batch)\\n    ce, re = o['predicted_strain']-g['te_clean'], o['initial_rate_pred']-g['te_true_rate0']\\n    true_h, true_p = g['te_hold_true'], g['te_hist_true']\\n    stress_err = np.maximum(np.abs(bh[n:]-true_h), np.max(np.abs(bp[n:]-true_p), axis=1))\\n    due_hold = np.abs(true_h) > yld\\n    due_hist = np.max(np.abs(true_p), axis=1) > yld\\n    miss = ~np.isfinite(te['coupon_features_raw']).all(axis=1)\\n    rmse = lambda a: np.sqrt(np.mean(a*a))\\n    print(variant)\\n    for lab in range(4):\\n        idx = te['lab_id'] == lab\\n        print('lab', lab, 'n', idx.sum(), 'max stress error', round(stress_err[idx].max(), 6), 'strain/onset/final RMSE', np.round([rmse(ce[idx]), rmse(re[idx]), rmse(ce[idx,-1])], 6), 'onset residual mean', round(re[idx].mean(), 6))\\n    for name, idx in [('hold-only', due_hold & ~due_hist), ('history-only', due_hist & ~due_hold), ('both', due_hold & due_hist), ('neither', ~due_hold & ~due_hist), ('negative hold yield', due_hold & (true_h < 0)), ('positive hold yield', due_hold & (true_h > 0)), ('missing', miss)]:\\n        if idx.any():\\n            print(name, idx.sum(), 'strain/onset/final RMSE', np.round([rmse(ce[idx]), rmse(re[idx]), rmse(ce[idx,-1])], 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_alpha_w03_batch_04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: cell-balanced imputation alone → H2: onset-anchored drift with affine calibration; worst verified slice RMSE is 0.02134 for strain and 0.00659 for onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational terms, relay modes, or batch-centered classification\",\n      \"rejected_reason\": \"The contract specifies continuous creep and onset-rate outputs with an explicit constitutive basis; it has no relay states or classification labels.\"\n    }\n  ],\n  \"rationale\": \"Use an independent recurrence to catch sign, time-index, or yield-boundary errors. Break out hold-only and history-only observations so pooled error cannot hide a missing term. Test one-spot historical transfer separately from EMI rejection; if per-lab stress errors increase, revisit calibration rather than altering the creep law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "abec2a55f4883c78c61c9adc724ad2e9a437558e067537db71907c02a90f195d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38982.64,
+      "usage_known": true,
+      "prompt_tokens": 30058,
+      "cached_tokens": 6784,
+      "completion_tokens": 1601
+    }
+  ]
+}

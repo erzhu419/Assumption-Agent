@@ -1,0 +1,110 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_w01_s00_c8fb88b1108d",
+    "source_hash": "c8fb88b1108dc6ec9524e1877eeb9e5ed3fea1812013a181dcd7c6fb65c07b23",
+    "parent_ids": [],
+    "source_episode_id": "alpha_w01_s00__coupon_creep_baseline",
+    "task_id": "alpha_w01_s00__coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/alpha_calibration_edit.py",
+        "archived_relpath": "producers/tmp__alpha_calibration_edit.py",
+        "bytes": 4406,
+        "sha256": "45676da994318baf2bbec22e655f6dc8df62191e5c07b20ef33d2f1d1eb65fb0"
+      },
+      {
+        "container_path": "/tmp/alpha_w01_compare.py",
+        "archived_relpath": "producers/tmp__alpha_w01_compare.py",
+        "bytes": 1863,
+        "sha256": "715b6ef1da16e3d279be0a945c7142fa64930355caa519a2ae4e9efb3e3fc7b2"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_alpha_w01_s00.pkl','rb') as f: d=pickle.load(f)\ndef show(o, path='dataset', depth=0):\n if isinstance(o,dict):\n  for k,v in o.items(): show(v,path+'.'+str(k),depth+1)\n elif isinstance(o,np.ndarray):\n  print(path,o.shape,o.dtype, 'sample',repr(o.reshape(-1)[:8]))\n elif isinstance(o,(list,tuple)):\n  print(path,type(o).__name__,len(o));\n  if o and depth<5: show(o[0],path+'[0]',depth+1)\n else: print(path,str(o)[:200])\nshow(d)\nPY\nprintf '\\nContinual archiv",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nrows=pickle.load(open('public_alpha_w01_s00.pkl','rb')); print('case count',len(rows)); d=rows[0]['dataset']; print('keys',list(d));\nfor part,v in d.items():\n if isinstance(v,dict):\n  print(part,[(k,np.shape(x),str(getattr(x,'dtype',type(x).__name__))) for k,x in v.items()]);\n  if 'lab_id' in v: print('labs',np.unique(v['lab_id'],return_counts=True))\n  for k,x in v.items():\n   a=np.asarray(x)\n   if a.dtype.kind=='f': print(' ',k,'missing',np.isnan(a).sum(),'quantiles',np.nanquantile(a,[0,.01,.5,.99,1]))\n else: print(part,repr(v)[:",
+      "cd /holdout_task && cat > alpha_w01_s00_solver.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _load_cells(checks):\n    \"\"\"Fit a per-lab affine map, using pair consensus before a clean refit.\"\"\"\n    labs = np.asarray(checks['lab_id'])\n    x_all = np.asarray(checks['cmd_stress'])\n    y_all = np.asarray(checks['true_stress'])\n    maps = np.tile([1., 0.], (4, 1))\n    for lab in range(4):\n        keep = (labs == lab) & np.isfinite(x_all) & np.isfinite(y_all)\n        x, y = x_all[keep], y_all[keep]\n        if not len(x):\n            continue\n        if np.ptp(x) < 1e-3:\n",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport alpha_w01_s00_solver as s\nrow = pickle.load(open('public_alpha_w01_s00.pkl', 'rb'))[0]\nd, gt = row['dataset'], row['gt']\ntr, te = d['train'], d['test']\no = s.solve_alpha_w01_s00(d)\ndef metrics(a):\n    z = np.abs(a)\n    return f'MAE={z.mean():.5f} med={np.median(z):.5f} p95={np.quantile(z,.95):.5f}'\ne = o['predicted_strain'] - gt['te_clean']\nr = o['initial_rate_pred'] - gt['te_true_rate0']\nprint('public clean:', metrics(e), 'rate:', metrics(r), 'observed-rate error:', metrics(te['instant_rate_obs",
+      "cd /holdout_task && cat > /tmp/alpha_w01_compare.py <<'PY'\nimport sys, pickle, numpy as np\nsys.path.insert(0, '/holdout_task')\nimport alpha_w01_s00_solver as s\nrow = pickle.load(open('/holdout_task/public_alpha_w01_s00.pkl','rb'))[0]\nd, gt = row['dataset'], row['gt']\ndef run(d, fit_complete, correction):\n    tr, te = d['train'], d['test']\n    dt,t=d['past_dt'],d['eval_times']\n    maps=s._load_cells(d['calibration_load_cells'])\n    x,xt=s._alignment(tr,te)\n    m=np.isfinite(tr['coupon_features_raw']).all(axis=1) if fit_complete else np.ones(len(x),bool)\n    taus,w=s._fit({k:v[m] for k,v in tr.i",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_w01_s00_solver.py')\ns = p.read_text()\ns = s.replace('    taus, w = _fit(train, x, maps, dt, time)\\n', '''    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\n    # Estimate shared weights without treating imputed features as measurements.\n    if complete.sum() >= 12:\n        fit_train = {key: np.asarray(train[key])[complete] for key in (\n            'lab_id', 'past_stress_cmd', 'stress_hold_cmd', 'strain_0',\n            'strain_curves_obs', 'instant_rate_obs')}\n        taus, w = _fit(fit_train, x[comp",
+      "cd /holdout_task && cat > /tmp/alpha_calibration_edit.py <<'PY'\nfrom pathlib import Path\np = Path('alpha_w01_s00_solver.py')\ns = p.read_text().replace('import numpy as np', 'import json\\nimport pickle\\nfrom pathlib import Path\\n\\nimport numpy as np', 1)\nstart, end = s.index('def _load_cells('), s.index('def _alignment(')\ns = s[:start] + '''def _lab_checks(checks, lab):\n    labs = np.asarray(checks['lab_id'])\n    x = np.asarray(checks['cmd_stress'], dtype=float)\n    y = np.asarray(checks['true_stress'], dtype=float)\n    good = (labs == lab) & np.isfinite(x) & np.isfinite(y)\n    return x[good], ",
+      "set -e\ncd /holdout_task\ntimeout 60s python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_w01_s00_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('public_alpha_w01_s00.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\nte = d['test']\na = s.solve_alpha_w01_s00(d)\ntaus, w = a['estimated_taus'], a['hereditary_weights']\nmaps = s._load_cells(d['calibration_load_cells'])\nhist, hold = s._stress(te, map",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_w01_s00_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('public_alpha_w01_s00.pkl', 'rb') as f:\n    row = pickle.load(f)[0]\nd, gt = row['dataset'], row['gt']\no = s.solve_alpha_w01_s00(d)\nte = d['test']\nlab, stratum = te['lab_id'], te['stratum']\nmissing = ~np.isfinite(te['coupon_features_raw']).all(axis=1)\nmaps = s._load_cells(d['calibration_load_cells']",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_w01_s00_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('public_alpha_w01_s00.pkl','rb') as f:\n    row = pickle.load(f)[0]\nd, gt = row['dataset'], row['gt']\nc = d['calibration_load_cells']\nbaseline = s._load_cells(c)\nlab = np.asarray(c['lab_id'])\nx = np.asarray(c['cmd_stress'])\ny = np.asarray(c['true_stress'])\nte = d['"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__alpha_calibration_edit.py",
+      "primary_producer_container_path": "/tmp/alpha_calibration_edit.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_w01_s00_solver.py",
+        "filename": "alpha_w01_s00_solver.py",
+        "bytes": 9191,
+        "sha256": "22c5aaf3c2fa79cd1b4e01ef0f7fc028a33d0b4a2175192b0eb2943a8f265778",
+        "content_addressed_ref": "content_addressed_blobs/22c5aaf3c2fa79cd1b4e01ef0f7fc028a33d0b4a2175192b0eb2943a8f265778.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_w01_s00_solver.py"
+    ],
+    "exported_pure_functions": [
+      "report"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c8fb88b1108dc6ec9524e1877eeb9e5ed3fea1812013a181dcd7c6fb65c07b23",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_w01",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c8fb88b1108dc6ec9524e1877eeb9e5ed3fea1812013a181dcd7c6fb65c07b23",
+        "expected_candidate_sha256": "c8fb88b1108dc6ec9524e1877eeb9e5ed3fea1812013a181dcd7c6fb65c07b23",
+        "computed_candidate_sha256": "c8fb88b1108dc6ec9524e1877eeb9e5ed3fea1812013a181dcd7c6fb65c07b23",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_w01_s00_solver.py",
+            "bytes": 9191
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_c8fb88b1"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "report",
+        "code": "def report(label, te, e, r):\n    miss = ~np.isfinite(te['coupon_features_raw']).all(axis=1)\n    mae = lambda z: np.mean(abs(z))\n    print(label, 'strain/rate MAE', [(round(mae(e[m]), 5), round(mae(r[m]), 5)) if m.any() else None for m in (np.ones(len(e), bool), miss, ~miss)], 'early/late', np.round(np.median(abs(e), axis=0)[[0, -1]], 5))"
+      }
+    ]
+  }
+}

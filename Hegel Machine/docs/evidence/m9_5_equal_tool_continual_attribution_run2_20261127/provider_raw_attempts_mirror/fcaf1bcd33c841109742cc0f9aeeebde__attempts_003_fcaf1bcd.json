@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fcaf1bcd33c841109742cc0f9aeeebde",
+  "call_seq": 3,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:33:56.582324+00:00",
+  "ended_at_utc": "2026-11-26T18:34:15.174426+00:00",
+  "request_sha256": "04dc9de4715011ce23199f00a1af51f42c643a38dcf3e6950382a8fba28246d4",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 23949,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20415,
+    "cached_tokens": 6784,
+    "completion_tokens": 624
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/polymer_batch05_source.py; cd /holdout_task && python3 - <<'PY'\\nimport json, pickle, numpy as np\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor r in h:\\n print(r['episode_short_name'])\\n lab,x,y = (np.asarray(r[k]) for k in ('lab_id','cmd_stress','true_stress'))\\n for j in range(4):\\n  a,b=x[lab==j],y[lab==j]\\n  if len(a)<2: print(j, 'sparse',len(a)); continue\\n  ds=a[:,None]-a; db=b[:,None]-b; mask=np.triu(abs(ds)>0.15,1)\\n  if not mask.any(): print(j,'span',np.ptp(a));continue\\n  g=np.median(db[mask]/ds[mask]); c=np.median(b-g*a); e=abs(b-g*a-c)\\n  print(j,len(a), np.round([g,c,np.ptp(a),np.median(e),max(e)],7))\\nd=pickle.load(open('public_alpha_w02_batch_06.pkl','rb'))[0]['dataset'];\\nfor sp in ('train','test'):\\n z=d[sp]; l=z['lab_id'];print(sp,'labs',np.bincount(l),'cells',np.unique(z['stratum'],return_counts=True),'feature missing',np.isnan(z['coupon_features_raw']).sum(axis=0),'ref missing',np.isnan(z['ref_coupons']).sum(),'hold range',[(j,float(z['stress_hold_cmd'][l==j].min()),float(z['stress_hold_cmd'][l==j].max())) for j in range(4)])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single cached calibration -> H2 lab-specific archive calibration with current spot checks as anchors; Labs 1–3 have zero in-batch checks and worst-lab predictive error has not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool historical rows before estimating affine corrections\",\"rejected_reason\":\"A pooled line could mix distinct calibration regimes; within-sweep robust fits will show which episodes are compatible with transfer.\"}],\"rationale\":\"Recover the full constitutive design and summarize each historical sweep by lab. Slope and intercept changes would call for recent-regime calibration rather than indiscriminate pooling; residual spikes would call for outlier rejection within a sweep.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "54be7ea566eb2a9659c1fa5c651c53626b3b978ed00cf0462a073ee4d1dc83e5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19504.19,
+      "usage_known": true,
+      "prompt_tokens": 20415,
+      "cached_tokens": 6784,
+      "completion_tokens": 624
+    }
+  ]
+}

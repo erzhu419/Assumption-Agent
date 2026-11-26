@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70b4ee1b18e5410d92ba4bfcf27ebc17",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:22:01.840948+00:00",
+  "ended_at_utc": "2026-11-26T18:22:25.215531+00:00",
+  "request_sha256": "3fcf81345dd49d608d555f219921d4e35ba8f997ec14dacf986078e299b61fb1",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 46081,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27438,
+    "cached_tokens": 6784,
+    "completion_tokens": 847
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >> /tmp/alpha04_cv.py <<'PY'\\ne=err['gated+imputation correction']; r=rates['gated']\\nfor label,m in [('complete',~missing),('missing',missing),('elastic',~active),('plastic',active)]:\\n    print(label,'curve abs q50/90/99/max',np.quantile(abs(e[m]),[.5,.9,.99,1]),'rate abs q50/90/99/max',np.quantile(abs(r[m]),[.5,.9,.99,1]),'curve mean by horizon',np.round(e[m].mean(0),4))\\nprint('largest curve residuals (lab, horizon, residual):',[(int(lab[i]),float(time[j]),round(float(e[i,j]),3)) for i,j in np.dstack(np.unravel_index(np.argsort(abs(e).ravel())[-12:],e.shape))[0]])\\nprint('complete residual cross-horizon correlation median',np.median(np.corrcoef(e[~missing],rowvar=False)[np.triu_indices(len(time),1)]))\\nprint('archive/current maps')\\nimport json\\nfor sweep in json.loads(s._ARCHIVE.read_text()):\\n    print(sweep['episode_short_name'],np.round(np.array([s._supported_line(*s._checks(sweep,k)) for k in range(4)]),5).tolist())\\nprint('current',np.round(maps,5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha04_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear Prony memory → H2 yield-gated hold and history terms: worst leave-one-lab-out lab/yield strain RMSE fell from 1.253 to 0.313 with missing-feature correction; worst lab onset-rate RMSE before correction fell from 2.204 to 0.0472.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Calibrated two-branch linear Prony memory is sufficient across both yield regimes.\",\n    \"empirical_witness\": \"In leave-one-lab-out validation, adding the two specified yield-gated basis terms reduced worst lab/yield strain RMSE from 1.253 to 0.340 before any missing-feature correction and worst lab onset-rate RMSE from 2.204 to 0.0472.\",\n    \"causal_blanket_diagnosis\": \"The linear basis omits signed hold overstress and accumulated above-yield history, even after command stress is converted to physical stress.\",\n    \"sublated_pivot\": \"Retain the calibrated linear basis below yield and add the contract's two thresholded columns and their onset derivatives above yield.\",\n    \"risk_kind\": \"Constitutive basis omission\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add another constitutive term to reduce residual RMSE\",\n      \"rejected_reason\": \"The aggregate RMSE does not distinguish a missing mechanism from noisy observations; horizon bias and residual correlation will guide that decision.\"\n    }\n  ],\n  \"rationale\": \"Inspect residuals by horizon and yield regime to distinguish persistent model bias from isolated measurement errors. Compare current and archived calibrations before testing sparse fallback: if historical maps have shifted, they are not valid reference values for that stress test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cfaa3115153bd47091bdd962c4d39c6d5b34867398ff775ed4dd38264ca227aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23341.52,
+      "usage_known": true,
+      "prompt_tokens": 27438,
+      "cached_tokens": 6784,
+      "completion_tokens": 847
+    }
+  ]
+}

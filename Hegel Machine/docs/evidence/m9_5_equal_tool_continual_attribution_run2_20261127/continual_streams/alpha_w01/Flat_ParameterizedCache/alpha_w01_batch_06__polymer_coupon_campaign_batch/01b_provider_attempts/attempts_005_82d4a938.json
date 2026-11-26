@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82d4a9389d0b4a5d9fb7f20541cd0a32",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:32:12.528188+00:00",
+  "ended_at_utc": "2026-11-26T18:32:33.696756+00:00",
+  "request_sha256": "e0d21f5d5e61baca07f31ad2dcabd80c84e9f869602aa32a75c5669810ef00bb",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 42231,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26443,
+    "cached_tokens": 11136,
+    "completion_tokens": 774
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '64,190p' /tmp/hegel_continual_archive/alpha_w01_batch_04_solver.py\\nsed 's/solve_alpha_w01_batch_04/solve_alpha_w01_batch_06/g' /tmp/hegel_continual_archive/alpha_w01_batch_04_solver.py > alpha_w01_batch_06_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_w01_batch_06_solver as s\\nd=pickle.load(open('public_alpha_w01_batch_06.pkl','rb'))[0]['dataset']\\nm=s._calibrate(d['calibration_load_cells']); print('baseline maps:',m.tolist())\\nfor block in ('train','test'):\\n b=d[block]; h,u=s._stress(b,m); y=d['yield_stress']; print(block,'overstress rows, by lab:')\\n for l in range(4):\\n  i=b['lab_id']==l; print(l,int((np.max(np.abs(h[i]),axis=1)>y).sum()),int((abs(u[i])>y).sum()),np.round([np.max(abs(h[i])),np.max(abs(u[i]))],4))\\no=s.solve_alpha_w01_batch_06(d)\\nfor k in ('estimated_taus','hereditary_weights','viscoplastic_weights'): print(k,o[k])\\nb=d['test']; e=o['initial_rate_pred']-b['instant_rate_obs']; print('test rate residual RMSE vs observed by lab:',[round(np.mean(e[b['lab_id']==l]**2)**.5,6) for l in range(4)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 predecessor’s archive-anchored fit -> H2 batch-specific calibration and constitutive reconciliation; latest full archived sweep has maximum residual 0.000198 stress units, and out-of-fold error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume the public batch is entirely below yield\",\n      \"rejected_reason\": \"Zero test residual plastic state alone does not establish the train or test hold-stress regime; check both calibrated history and hold stresses.\"\n    }\n  ],\n  \"rationale\": \"Establish a runnable predecessor baseline and check whether its calibration creates overstress support or systematic onset-rate errors in any lab. Those diagnostics distinguish an inactive plastic basis from a calibration or model mismatch and determine what to test out of fold.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "21aadab40a8d529cb023f2c19cb9fcce91dde0038b32943c475bca6655899572",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22126.99,
+      "usage_known": true,
+      "prompt_tokens": 26443,
+      "cached_tokens": 11136,
+      "completion_tokens": 774
+    }
+  ]
+}

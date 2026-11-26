@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e933d82fe9e44639be4a11ff42b914d5",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_02__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:14:04.744501+00:00",
+  "ended_at_utc": "2026-11-26T18:14:42.623308+00:00",
+  "request_sha256": "c6fcf2ab02c430c5d84f5f3097cde9204d3fef5d8e91ea895c715ce0bd5c976b",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 57429,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31829,
+    "cached_tokens": 0,
+    "completion_tokens": 1568
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/polymer_gate_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import brentq\\nsys.path.insert(0, '/holdout_task')\\nimport alpha_w02_batch_02_solver as m\\nwith open('/holdout_task/public_alpha_w02_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nt = d['train']; n = len(t['lab_id']); labs = t['lab_id']; st = t['stratum']\\na = m._inputs(d); tr = tuple(v[:n] for v in a); dt, ts = d['past_dt'], d['eval_times']\\ny = np.c_[t['strain_curves_obs']-t['strain_0'][:,None], t['instant_rate_obs']]\\nmissing = np.isnan(t['coupon_features_raw']).any(axis=1)\\noriginal = m._components\\n# Pairwise linear combinations are already in the affine span; check nonlinear\\n# stress and feature couplings, and a fixed saturating stress denominator.\\ndef expanded(inputs, dt, tau, variant):\\n    delta, z = original(inputs, dt, tau)\\n    past, hold, mem, feat = inputs\\n    if variant == 1:\\n        i,j = np.triu_indices(feat.shape[1]); z = np.c_[z, feat[:,i]*feat[:,j], hold[:,None]*z]\\n    if variant == 2:\\n        q = hold/d['yield_stress']; z = np.c_[z, z*(q*q/(1+q*q))[:,None]]\\n    return delta,z\\nm._components = expanded\\nfor v in range(3):\\n    r = np.empty_like(y)\\n    for lab in np.unique(labs):\\n        test = labs==lab; train = ~test\\n        tau,c = m._fit(tuple(w[train] for w in tr),dt,ts,y[train],v)\\n        r[test] = m._design(tuple(w[test] for w in tr),dt,ts,tau,v)@c-y[test]\\n    r[missing,:-1] -= r[missing,-1,None]*ts\\n    print('basis',v,'worst lab complete/missing median curve error',*[round(max(np.median(abs(r[(labs==lab)&(missing==flag),:-1])) for lab in np.unique(labs)),6) for flag in (False,True)],'worst complete lab endpoint median AE', round(max(np.median(abs(r[(labs==lab)&~missing,-2])) for lab in np.unique(labs)),6))\\n    if v==0:\\n        print('complete-case rate residual signed median by lab x stratum',np.array([[np.median(r[(labs==lab)&(st==s)&~missing,-1]) for s in np.unique(st)] for lab in np.unique(labs)]).round(5))\\nm._components = original\\nu=d['test']; tau,c=m._fit(tr,dt,ts,y); test=tuple(w[n:] for w in a)\\ndelta,z=m._components(test,dt,tau); amp=delta*c[:2]; drift=z@c[2:]; miss=np.isnan(u['coupon_features_raw']).any(axis=1); drift[miss]=u['instant_rate_obs'][miss]-amp[miss]@(1/tau)\\n# Check first crossing against a fine bracketing grid on fitted real coupons,\\n# including thresholds just below an interior maximum when one is present.\\ngrid=np.linspace(0,ts[-1],20001); initial=u['strain_0']; threshold=u['critical_strain'].copy(); errors=[]; turning=0; pulses=0\\nfor pass_id in range(2):\\n    pred=m._hazard(initial,threshold,ts,tau,amp,drift)\\n    for i in range(len(initial)):\\n        def value(t): return initial[i]+(-np.expm1(-np.asarray(t)[...,None]/tau))@amp[i]+drift[i]*t\\n        wave=value(grid); j=np.argmax(wave)\\n        hits=np.flatnonzero(wave>=threshold[i]); ref=ts[-1] if not len(hits) else (0. if hits[0]==0 else brentq(lambda t:value(t)-threshold[i],grid[hits[0]-1],grid[hits[0]]))\\n        errors.append(abs(ref-pred[i]))\\n        if pass_id==0:\\n            turning+=int(np.any(np.diff(wave)[:-1]*np.diff(wave)[1:]<0))\\n            if 0<j<len(grid)-1 and wave[j]>max(wave[0],wave[-1]):\\n                threshold[i]=wave[j]-.01*(wave[j]-max(wave[0],wave[-1])); pulses+=1\\nprint('real fitted turning trajectories',turning,'interior-only crossing stress cases',pulses,'max first-crossing discrepancy',max(errors)); assert max(errors)<1e-8\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/polymer_gate_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: imputed drift alone → H2: robust two-mode creep with observed-rate correction; worst held-out-lab median endpoint error on incomplete rows fell from 1.072 to 0.098.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add Fokker–Planck/HJB dynamics, relay modes, or classification metrics\",\n      \"rejected_reason\": \"The measured system has deterministic coupon memory and continuous outcomes, with no relay state or labeled classification task. Lab-by-stratum signed residuals are relevant to checking nuisance confounding.\"\n    }\n  ],\n  \"rationale\": \"Check whether nonlinear drift terms improve held-out labs, whether signed residuals show a coherent lab offset within strata, and whether the hazard routine misses crossings before a trajectory turns. A clear improvement or a crossing discrepancy would require changing the corresponding component.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "068ef43d621da4b2d1533cda2001a566b7db10244d3b98840474ad523770e200",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38789.96,
+      "usage_known": true,
+      "prompt_tokens": 31829,
+      "cached_tokens": 0,
+      "completion_tokens": 1568
+    }
+  ]
+}

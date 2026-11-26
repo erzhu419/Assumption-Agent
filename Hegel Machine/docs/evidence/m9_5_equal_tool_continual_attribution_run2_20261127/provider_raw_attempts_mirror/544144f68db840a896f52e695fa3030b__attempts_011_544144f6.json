@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "544144f68db840a896f52e695fa3030b",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:27:35.770340+00:00",
+  "ended_at_utc": "2026-11-26T18:28:03.147687+00:00",
+  "request_sha256": "b06d6b6299610992116336a24214faeb9b2673bc4a9b7369bab62cbdab3d9c48",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 50784,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29073,
+    "cached_tokens": 6784,
+    "completion_tokens": 1088
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w02_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nv = {}; exec(Path('validate_public_schema.py').read_text().split('\\\\n_d = ')[0], v)\\nwith open('public_beta_w02_batch_06.pkl','rb') as f: case = pickle.load(f)[0]\\ns, gt = case['study'], case['gt']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f: hist = json.load(f)\\nbase = np.array(m._ARCHIVED_CALIBRATION)\\nrounded = np.round(base, 4).astype(np.float32).astype(float)\\nprint('archive rounding delta', np.max(np.abs(rounded-base)))\\nfor e in hist:\\n    if not e['episode_short_name'].endswith(('_03','_04','_05')): continue\\n    b,x,y = (np.asarray(e[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    print(e['episode_short_name'], 'max affine residual', [float(np.max(np.abs(y-x*p[b,0]-p[b,1]))) for p in (base, rounded)])\\nsweeps = [('public',s['sensor_calibration_sweeps'])]\\nfor e in hist:\\n    if not e['episode_short_name'].endswith(('_03','_04')): continue\\n    b,x,y = (np.asarray(e[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    for j in range(4):\\n        q=b!=j\\n        sweeps.append((e['episode_short_name'][-2:]+f'_omit{j}',dict(bank_id=b[q],ref_signal=x[q],raw_readout=y[q])))\\nfor label, sweep in sweeps:\\n    stats=[]\\n    for p in (base,rounded):\\n        m._ARCHIVED_CALIBRATION=p\\n        out=m.solve_beta_w02_batch_06({**s,'sensor_calibration_sweeps':sweep})\\n        cert=v['verify_box_simplex_kkt_certificate'](gt['S_tilde'],gt['r_y'],s['source_ridge'],s['u_box'],s['total_budget'],out['kkt_certificate'])\\n        stats.append((cert['gap'],float(np.max(np.abs(out['weights']-gt['w_opt'])))))\\n    print(label,'(gap, weight error) baseline / rounded',stats)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unconstrained archive coefficients -> H2 shared four-decimal archive calibration with the current sweep retained; the verified baseline worst KKT gap is 7.37e-7 against a 1e-6 limit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonseparable reaction terms\",\n      \"rejected_reason\": \"The measured interaction defect is 2.67e-16, and the profiled design agrees with the reference to 1.03e-15 maximum absolute error.\"\n    }\n  ],\n  \"rationale\": \"The two complete sweeps estimate gains and offsets near the same four-decimal values, and the two latest spot checks independently support that precision for bank 0. Compare rounded and unrounded fallback coefficients without editing the artifact. Promote rounding only if it improves the certificate margin without worsening the worst archive-withholding slice materially.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cc1c0e3538cb9fafc7f04f89326894257d3d329ddb5e6ef1b6ca1c09a2994004",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28307.85,
+      "usage_known": true,
+      "prompt_tokens": 29073,
+      "cached_tokens": 6784,
+      "completion_tokens": 1088
+    }
+  ]
+}

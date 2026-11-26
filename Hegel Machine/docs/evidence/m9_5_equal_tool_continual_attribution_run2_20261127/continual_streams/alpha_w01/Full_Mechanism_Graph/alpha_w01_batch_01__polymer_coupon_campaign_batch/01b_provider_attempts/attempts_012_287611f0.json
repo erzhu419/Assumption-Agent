@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "287611f09f8746a38e00a2f71c6d5b63",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:14:03.688334+00:00",
+  "ended_at_utc": "2026-11-26T18:14:34.366592+00:00",
+  "request_sha256": "dc2c198c36573f9bb59716c8e0fbba0fe341f4750f430c6a3d232f6f177f4fce",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 68720,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34781,
+    "cached_tokens": 11136,
+    "completion_tokens": 1233
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nimport alpha_w01_batch_01_solver as m\\np=pickle.load(open('public_alpha_w01_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; a,b=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; x,xt=m._alignment(a,b); maps=m._load_cells(d['calibration_load_cells']); complete=np.isfinite(a['coupon_features_raw']).all(1); rng=np.random.default_rng(20)\\nfold=np.empty(len(x),int)\\nfor lab in range(4):\\n for s in np.unique(a['stratum']):\\n  j=rng.permutation(np.flatnonzero((a['lab_id']==lab)&(a['stratum']==s))); fold[j]=np.arange(len(j))%5\\n\\ndef trial(fit,block,features):\\n taus,w=m._fit({k:v[fit] for k,v in a.items()},x[fit],maps,dt,t); c,h=m._predict(block,features,maps,dt,t,taus,w); ac,_=m._predict(a,x,maps,dt,t,taus,w); e=a['strain_curves_obs']-ac; drift=x@w[3:]; V=np.c_[np.ones(len(x)),drift]; Vt=np.c_[np.ones(len(features)),features@w[3:]]; delta=np.zeros(len(c));\\n for lab in range(4):\\n  k=fit&(a['lab_id']==lab); q=(block['lab_id']==lab)&np.isfinite(block['coupon_features_raw']).all(1); target=np.median(e[k,6:]/t[6:],axis=1); s=m._mad(target); coef=least_squares(lambda z:(V[k]@z-target)/s,np.zeros(2),loss='soft_l1',f_scale=1.5).x; delta[q]=Vt[q]@coef\\n return c,h,delta\\n\\noof=np.zeros((len(x),len(t))); dx=np.zeros(len(x)); hh=np.zeros(len(x))\\nfor f in range(5):\\n v=fold==f; oof[v],hh[v],dx[v]=trial(complete&~v,{k:w[v] for k,w in a.items()},x[v])\\nc,h,delta=trial(complete,b,xt)\\nfor name,block,base,hold,shift,truth,good in [('OOF',a,oof,hh,dx,a['strain_curves_obs'],complete),('public',b,c,h,delta,g['te_clean'],np.isfinite(b['coupon_features_raw']).all(1))]:\\n for lab in range(4):\\n  k=(block['lab_id']==lab)&good; print(name,lab,[(f,round(np.median(abs((base+f*shift[:,None]*t-truth)[k,6:])),6),round(np.mean(abs((base+f*shift[:,None]*t-truth)[k,-1])/np.maximum(abs(hold[k]),.5)),6)) for f in (0,.5,1)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test a lab-affine drift correction learned from training coupons; baseline worst public lab secant MAE is 0.03333 and worst leave-one-lab-out late median strain error is 0.01452.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The combined reference panel removes all lab-affine error from the shared feature drift.\",\n    \"empirical_witness\": \"With true stresses and relaxation parameters, the remaining clean strain error is linear in time and affine in feature drift within each lab to under 2e-16; lab 0 has a -2.10% drift-scale discrepancy.\",\n    \"causal_blanket_diagnosis\": \"Finite reference-panel center and scale errors affect the covariate drift without changing the two-mode relaxation law.\",\n    \"sublated_pivot\": \"Keep combined-panel standardization and test a training-only lab offset and drift-scale correction on held-out coupons.\",\n    \"risk_kind\": \"reference_panel_affine_drift\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit lab-specific relaxation times\",\n      \"rejected_reason\": \"The clean residual has no measurable nonlinear component once the known recurrence is applied.\"\n    }\n  ],\n  \"rationale\": \"Hold out coupons within each lab and stratum to test whether calibration learned on labeled coupons transfers to unseen coupons in the same lab. Use public clean labels only for evaluation. If the affine correction fails to improve the worst slice without materially worsening other labs, retain the shared drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d6c4cf64e6b557575e0cc25b824b3894999573cd3b4ab01c59a0c1c3dcd31c28",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31587.03,
+      "usage_known": true,
+      "prompt_tokens": 34781,
+      "cached_tokens": 11136,
+      "completion_tokens": 1233
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28183c6dba0a4b159250b6f34765e476",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:45:52.605925+00:00",
+  "ended_at_utc": "2026-11-26T18:46:29.179819+00:00",
+  "request_sha256": "356ba3faa340e948f4e1409e18aeaf26e4eaf59937c1d50325788db7b0136986",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44962,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26831,
+    "cached_tokens": 6784,
+    "completion_tokens": 1571
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_beta_w04_batch_07.py <<'PY'\\nimport json\\nimport pickle\\nimport runpy\\nfrom pathlib import Path\\n\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nm = runpy.run_path(str(root / 'beta_w04_batch_07_solver.py'))\\narchive = Path('/tmp/hegel_continual_archive')\\nhistory = json.loads((archive / 'archive_calibration_history.json').read_text())\\ncached = np.array([[.7531, -.1118], [1.2928, .1468], [1.7724308310991952, 2.578668096514746], [1.218656964656964, -2.5871185031185027]])\\nfor e in pickle.loads((root / 'public_beta_w04_batch_07.pkl').read_bytes()):\\n    s, gt = e['study'], e['gt']\\n    v = s['V_reaction_2d']\\n    mixed = np.diff(np.diff(v, axis=0), axis=1)\\n    print('max mixed reaction difference:', np.max(abs(mixed)))\\n    assert np.linalg.norm(mixed) <= 1e-6 * np.linalg.norm(v)\\n    params = m['_calibration'](s)\\n    q = s['sensor_calibration_sweeps']\\n    qb, x, y = (np.asarray(q[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    for episode in ('beta_w04_batch_02', 'beta_w04_batch_04'):\\n        h = next(h for h in history if h['episode_short_name'] == episode)\\n        hb, hx, hy = (np.asarray(h[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n        scores = []\\n        for b in (2, 3):\\n            k = hb == b\\n            p = np.linalg.lstsq(np.c_[hx[k], np.ones(k.sum())], hy[k], rcond=None)[0]\\n            k = qb == b\\n            r = y[k] - (p[0]*x[k] + p[1])\\n            scores.append(float(np.max(abs(r - np.round(r, 1)))))\\n            assert np.min(abs(r)) < 3e-6 and scores[-1] < 3e-6\\n        print('independent archive episode', episode, 'Wing B corrected residuals:', scores)\\n    design, _ = m['_forward'](s)\\n    z, b = s['Z_nuisance'], s['row_bank_id']\\n    raw = s['y_obs_raw']\\n    rho, lam = s['nuisance_ridge'], s['source_ridge']\\n    sensor_count = len(s['sensor_ij'])\\n    for order, group in [('shift-major', np.arange(len(b)) % sensor_count), ('sensor-major', np.arange(len(b)) // len(s['mu_shifts']))]:\\n        bank_rmse = []\\n        for p in (params, cached):\\n            y = (raw-p[b, 1])/p[b, 0]\\n            error = np.empty_like(y)\\n            for j in range(sensor_count):\\n                test = group == j\\n                train = ~test\\n                d, zz, yy = design[train], z[train], y[train]\\n                N = zz.T @ zz + rho*np.eye(z.shape[1])\\n                pd = d - zz @ np.linalg.solve(N, zz.T @ d)\\n                py = yy - zz @ np.linalg.solve(N, zz.T @ yy)\\n                w, _ = m['_box_simplex'](d.T @ pd + lam*np.eye(design.shape[1]), -d.T @ py, s['u_box'], s['total_budget'])\\n                a = np.linalg.solve(N, zz.T @ (yy-d@w))\\n                error[test] = (raw[test] - (p[b[test], 0]*(design[test]@w + z[test]@a) + p[b[test], 1])) / params[b[test], 0]\\n            bank_rmse.append([float(np.sqrt(np.mean(error[b==j]**2))) for j in range(4)])\\n        print(order, 'held-out RMSE by bank (current, cached), common scale:', bank_rmse)\\n    y = (raw-params[b, 1])/params[b, 0]\\n    N = z.T @ z + rho*np.eye(z.shape[1])\\n    P = np.eye(len(b))-z @ np.linalg.solve(N, z.T)\\n    assert np.max(abs(design.T@P@design - gt['S_tilde'].T@gt['S_tilde'])) < 1e-8\\n    assert np.max(abs(design.T@P@y - gt['S_tilde'].T@gt['r_y'])) < 1e-7\\n    print('Independent ridge Schur complement matches the public quadratic and linear terms.')\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_beta_w04_batch_07.py && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent affine fits → H2 direct Wing A and archive-supported Wing B calibration; the verified worst held-out Wing A residual is 2.17e-8 and the independent KKT gap is 1.20e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or stochastic drift terms\",\n      \"rejected_reason\": \"The study has none of these mechanisms or labels. Reaction separability, bank-specific errors, and ridge profiling are the relevant checks.\"\n    }\n  ],\n  \"rationale\": \"Check for an omitted reaction interaction, dependence on one archived calibration episode, and bank errors hidden by pooling. A failed separability or Schur-complement check would reopen the forward model or profiling; conflicting archive or held-out bank evidence would reopen calibration. Leave the verified artifact unchanged during the audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9507f22edf6e7f783089910f8dd2d9380ca379e4d1354767d979637d7e1f4695",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38553.77,
+      "usage_known": true,
+      "prompt_tokens": 26831,
+      "cached_tokens": 6784,
+      "completion_tokens": 1571
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a267cdd76ffd42439162361494b4eacc",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:53:30.268730+00:00",
+  "ended_at_utc": "2026-11-26T18:54:03.495644+00:00",
+  "request_sha256": "d162e1c348f6a8d47c62d858b6a82c83973f22da19a27e4706a706c8db4fbb29",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 61878,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32197,
+    "cached_tokens": 11136,
+    "completion_tokens": 1343
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nimport tempfile\\nfrom pathlib import Path\\nimport numpy as np\\n\\npath = '/holdout_task/alpha_w01_batch_07_solver.py'\\nspec = importlib.util.spec_from_file_location('batch07', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_w01_batch_07.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\npanel = d['calibration_load_cells']\\narchive = m._ARCHIVE\\nhistory = json.loads(archive.read_text())\\nbase = m._load_cells(panel)\\n# Remove one actual historical sweep at a time, not a synthetic corruption.\\nperturbations = []\\nwith tempfile.TemporaryDirectory(dir='/tmp') as folder:\\n    m._ARCHIVE = Path(folder) / 'history.json'\\n    for i, episode in enumerate(history):\\n        if not np.any(np.isin(episode['lab_id'], [2, 3])):\\n            continue\\n        m._ARCHIVE.write_text(json.dumps(history[:i] + history[i+1:]))\\n        alt = m._load_cells(panel)\\n        margin = np.inf\\n        for split in ('train', 'test'):\\n            a = d[split]; l = a['lab_id']\\n            h = a['past_stress_cmd'] * alt[l,0,None] + alt[l,1,None]\\n            v = a['stress_hold_cmd'] * alt[l,0] + alt[l,1]\\n            margin = min(margin, d['yield_stress'] - max(np.max(abs(h)), np.max(abs(v))))\\n        change = np.max(abs((alt[:,0,None]-base[:,0,None])*np.array([-4.,4.]) + (alt[:,1]-base[:,1])[:,None]))\\n        perturbations.append((change, margin, episode.get('episode_short_name', i)))\\n    m._ARCHIVE = archive\\nassert perturbations\\nprint('Archive sweep jackknife: maximum change on command interval [-4,4], minimum yield margin:', max(perturbations)[0], min(x[1] for x in perturbations))\\nassert min(x[1] for x in perturbations) > 0\\n# Hold out both labs of each wing together to detect wing-specific transfer failures.\\na = d['train']; wing = np.asarray(a['lab_id']) // 2\\nfor k in (0,1):\\n    te = wing == k; tr = ~te\\n    z = dict(d, train={key:v[tr] for key,v in a.items()}, test={key:v[te] for key,v in a.items() if key != 'strain_curves_obs'})\\n    o = m.solve_alpha_w01_batch_07(z)\\n    err = o['predicted_strain'] - a['strain_curves_obs'][te]\\n    rate = o['initial_rate_pred'] - a['instant_rate_obs'][te]\\n    lab = np.asarray(a['lab_id'])[te]; stratum = np.asarray(a['stratum'])[te]\\n    for L in np.unique(lab):\\n        for S in np.unique(stratum[lab==L]):\\n            q = (lab==L) & (stratum==S)\\n            print('Held-out wing/lab/stratum/n', k, L, S, q.sum(), 'clipped strain RMSE, signed median last-horizon error, rate RMSE', *np.round([np.sqrt(np.mean(np.minimum(abs(err[q]),.08)**2)), np.median(err[q,-1]), np.sqrt(np.mean(rate[q]**2))], 5))\\n    print('Wing fit taus', k, o['estimated_taus'])\\n    assert np.array_equal(o['viscoplastic_weights'], np.zeros(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (lab-wise transfer) -> H2 (shared Prony law transfers to an entirely held-out wing and is insensitive to any single archived sweep); current worst leave-one-lab-out RMSE is 0.03722 for clipped strain and 0.01309 for onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, stochastic-drift, or relay terms\",\n      \"rejected_reason\": \"The specified law is continuous and already passed an independent test of both threshold terms and the onset derivative. The remaining question is transfer across wings, not an unstated mechanism.\"\n    }\n  ],\n  \"rationale\": \"Holding out an entire wing can expose a calibration or alignment bias hidden by single-lab folds; report signed residuals within each lab and stratum rather than pooling them. Dropping each real archived sweep in turn checks whether the below-yield result depends on one calibration record. A coherent wing-specific residual would motivate investigating alignment; a yield crossing would motivate revisiting calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7c946a2a169425accaa1c8d98fcce57bd297c7f8439d3ccd0dbe89c8f8139f53",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34223.78,
+      "usage_known": true,
+      "prompt_tokens": 32197,
+      "cached_tokens": 11136,
+      "completion_tokens": 1343
+    }
+  ]
+}

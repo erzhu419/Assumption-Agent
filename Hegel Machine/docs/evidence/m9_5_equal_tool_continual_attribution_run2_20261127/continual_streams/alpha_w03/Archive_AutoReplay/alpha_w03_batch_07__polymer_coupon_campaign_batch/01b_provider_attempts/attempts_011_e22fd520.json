@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e22fd520bc5b43908aec3af8eab9fefb",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:50:16.233594+00:00",
+  "ended_at_utc": "2026-11-26T18:50:49.449740+00:00",
+  "request_sha256": "eee4eb3084e54e327d6161a69ddef21e29cccaf04ed6febbeac0f27383a861d4",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 59800,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31837,
+    "cached_tokens": 6784,
+    "completion_tokens": 1375
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/w03_batch07_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch07', root + 'alpha_w03_batch_07_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open(root + 'public_alpha_w03_batch_07.pkl', 'rb'))[0]['dataset']\\ntr, te = d['train'], d['test']\\nlabs = tr['lab_id']\\nbase = m._calibrate\\nfits = base(d['calibration_load_cells'], labs)\\nfor lab, f in fits.items():\\n    x, y = m._checks(d['calibration_load_cells'], lab)\\n    print('lab', lab, 'absolute spot residuals', np.round(np.sort(abs(y-np.polyval(f,x))), 6))\\n\\n# Fixed calibration challengers; no held-out strain or rate used to choose a fit.\\ndef calibration(mode):\\n    def fit(table, labels):\\n        result = base(table, labels)\\n        for lab in (2, 3):\\n            if lab not in result:\\n                continue\\n            if mode == 'identity Wing B':\\n                result[lab] = np.array([1., 0.])\\n            elif mode == 'one-spot bias adjustment':\\n                x, y = m._checks(table, lab)\\n                r = y - np.polyval(result[lab], x)\\n                result[lab] = result[lab] + [0., r[np.argmin(abs(r))]]\\n        return result\\n    return fit\\n\\n_, h, p = m._prep(d)\\nh = h[:len(labs)]\\np = p[:len(labs)]\\nmiss = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nslices = {f'lab {j}': labs == j for j in np.unique(labs)}\\nslices.update({'missing': miss, 'complete': ~miss, 'high |hold|': abs(h) >= np.quantile(abs(h), .85), 'stress reversal': np.sign(h) != np.sign(p[:, -1])})\\nfor mode in ('archive', 'one-spot bias adjustment', 'identity Wing B'):\\n    m._calibrate = calibration(mode)\\n    ec = np.empty_like(tr['strain_curves_obs']); er = np.empty_like(tr['instant_rate_obs'])\\n    for lab in np.unique(labs):\\n        val = labs == lab\\n        # Keep the reference panel fixed. Only unobserved covariates enter test.\\n        fold = dict(d, train={k:v[~val] for k,v in tr.items()}, test={k:np.concatenate((tr[k][val],v)) for k,v in te.items() if k in tr and k not in ('strain_curves_obs','instant_rate_obs')})\\n        out = m.solve_alpha_w03_batch_07(fold)\\n        ec[val] = out['predicted_strain'][:val.sum()] - tr['strain_curves_obs'][val]\\n        er[val] = out['initial_rate_pred'][:val.sum()] - tr['instant_rate_obs'][val]\\n    print(mode)\\n    for name, mask in slices.items():\\n        if mask.any():\\n            print(name, int(mask.sum()), 'p90 curve/rate', np.round([np.quantile(abs(ec[mask]), .9), np.quantile(abs(er[mask]), .9)], 6), 'signed median curve/rate', np.round([np.median(ec[mask]), np.median(er[mask])], 6))\\n    if mode == 'archive':\\n        for lab in np.unique(labs):\\n            mask = labs == lab\\n            corr = np.corrcoef(np.column_stack((ec[mask,-1], er[mask], h[mask], h[mask]-p[mask,-1], h[mask]**2)), rowvar=False)\\n            print('lab', lab, 'late curve/rate residual correlation with hold, last stress gap, squared hold', np.round(corr[:2,2:], 3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w03_batch07_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: archived Wing B slopes and biases isolate the shared Prony law; worst-lab leave-one-lab-out p90 strain error is 0.0695 before the calibration sensitivity audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, classification balance, or PDE drift terms\",\n      \"rejected_reason\": \"This dataset contains coupon strain and rate measurements, not relay states, class labels, or a PDE. The applicable tests are stress-history algebra and within-lab residuals.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed calibration alternatives on held-out labs and inspect signed residuals within each lab. A consistent improvement from the clean spot would justify a bias adjustment; residuals that depend on physical load or stress reversal would justify inspecting the constitutive basis. Neither finding is established by pooled error alone.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "00d6dafad47669c34fa889369d110591a11a1878651c51ab60c2435ae2a1efc6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34206.64,
+      "usage_known": true,
+      "prompt_tokens": 31837,
+      "cached_tokens": 6784,
+      "completion_tokens": 1375
+    }
+  ]
+}

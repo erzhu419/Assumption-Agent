@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "05e6e624f6674eb1833f2744d15e9b44",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:21:27.267140+00:00",
+  "ended_at_utc": "2026-11-26T18:21:55.020707+00:00",
+  "request_sha256": "68c1ea379e6e0283a9ad7ff22fb5121dd0c65dc3ba3bface9903e2f3f9bcb7e0",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 60688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31069,
+    "cached_tokens": 6784,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w04_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_beta_w04_batch_04.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nh = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nkeys = ('bank_id', 'ref_signal', 'raw_readout')\\nworst = {'public': 0., 'archive_profile_present': 0., 'archive_profile_absent': 0.}\\nfor epoch, episode in enumerate(h + [s['sensor_calibration_sweeps']]):\\n    current = {k: np.asarray(episode[k]) for k in keys}\\n    history = [e for i, e in enumerate(h) if i != epoch]\\n    class History:\\n        def __init__(self, path): pass\\n        def is_file(self): return True\\n        def read_text(self): return json.dumps(history)\\n    m.Path = History\\n    study = dict(s, sensor_calibration_sweeps=current)\\n    base = m._calibrate(study)\\n    bank = current['bank_id']\\n    ids = [np.flatnonzero(bank == b) for b in range(4)]\\n    def gains(e):\\n        b, x, y = [np.asarray(e[k]) for k in keys]\\n        return [m._fit_bank(x[b == j], y[b == j])[0] for j in range(4)]\\n    label = 'public' if epoch == len(h) else ('archive_profile_present' if any(np.allclose(gains(episode), gains(e), rtol=0, atol=1e-6) for e in history) else 'archive_profile_absent')\\n    for sparse in ((0, 1), (2, 3), (0, 1, 2, 3)):\\n        positions = list(range(min(len(ids[b]) for b in sparse)))\\n        if len(sparse) == 2:\\n            positions.append(None)\\n        for pos in positions:\\n            keep = ~np.isin(bank, sparse)\\n            if pos is not None:\\n                for b in sparse:\\n                    keep[ids[b][pos]] = True\\n            sweeps = {k: v[keep] for k, v in current.items()}\\n            err = float(np.max(np.abs(m._calibrate(dict(study, sensor_calibration_sweeps=sweeps)) - base)))\\n            worst[label] = max(worst[label], err)\\nprint('Worst sparse-sweep sensor correction errors by archive coverage:', worst)\\nassert max(worst['public'], worst['archive_profile_present']) < 1e-6, worst\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reuse the latest archive gains -> H2 match a joint bank profile to current references; the latest gains miss by up to 0.672 raw units, and sparse-sweep validation of H2 is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Revert to the last verified artifact.\",\n      \"rejected_reason\": \"The public schema passed on the new artifact. The sparse-sweep test failed because its input slicer included scalar metadata, not because the solver returned an incorrect result.\"\n    }\n  ],\n  \"rationale\": \"Slice only the three reference arrays and test both sparse wings across the available spot positions. A failure with a matching archive profile would warrant revising the selector; error when the profile is absent measures an extrapolation limitation. Run the isolated public validator on the unchanged candidate after the stress test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "82e6cb1fc622273b149ad64ffaad058ef356a1efa714e66127479eaa98e48bfc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28639.3,
+      "usage_known": true,
+      "prompt_tokens": 31069,
+      "cached_tokens": 6784,
+      "completion_tokens": 1069
+    }
+  ]
+}

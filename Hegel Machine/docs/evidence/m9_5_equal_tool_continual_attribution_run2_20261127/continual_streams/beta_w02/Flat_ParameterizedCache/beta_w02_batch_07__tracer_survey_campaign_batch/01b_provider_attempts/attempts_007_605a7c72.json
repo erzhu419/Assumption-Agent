@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "605a7c72c1434371ab57f76fa91d2806",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:33:44.930371+00:00",
+  "ended_at_utc": "2026-11-26T18:34:17.679540+00:00",
+  "request_sha256": "e5507986081ef1fda8d4f54041c11d586bc4f9c90dabb7d29b2a9ed570cee706",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 38290,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25116,
+    "cached_tokens": 6784,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, json, pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/beta_w02_batch_07_solver.py')\\nv = runpy.run_path('/holdout_task/validate_public_schema.py')\\ns, gt = (lambda c: (c['study'], c['gt']))(pickle.loads(Path('public_beta_w02_batch_07.pkl').read_bytes())[0])\\nh = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\ndef bank(e, b):\\n    ids, x, y = [np.asarray(e[k]) for k in ('bank_id', 'ref_signal', 'raw_readout')]\\n    return x[ids == b], y[ids == b]\\nfor b in (2, 3):\\n    for train, test in ((h[3], h[4]), (h[4], h[3])):\\n        x,y = bank(train,b); a,c = np.polyfit(x,y,1)\\n        u,z = bank(test,b); err = np.max(abs(z-(a*u+c)))\\n        u,z = bank(s['sensor_calibration_sweeps'],b)\\n        print('wing B bank', b, train['episode_short_name'], 'held-out history max', err, 'current signed deviations', np.round(z-(a*u+c),7))\\n        assert err < 3e-6 and np.sum(abs(z-(a*u+c)) < 3e-6) == 1\\nD, last = m['_forward'](s)\\ny = m['_calibrate'](s)\\nZ = s['Z_nuisance']; U,d,_ = np.linalg.svd(Z,full_matrices=False)\\n# Independent symmetric square root of the ridge residual operator.\\nP = np.eye(len(y)) - (U*(1-np.sqrt(s['nuisance_ridge']/(d*d+s['nuisance_ridge'])))) @ U.T\\nS, r = m['_profile'](s,D,y)\\nprint('independent nuisance square-root max errors', np.max(abs(P@D-S)), np.max(abs(P@y-r)))\\nassert np.allclose(P@D,S,rtol=0,atol=1e-12) and np.allclose(P@y,r,rtol=0,atol=1e-12)\\nfor k, mu in enumerate(s['mu_shifts']):\\n    sl = slice(k*len(s['sensor_ij']),(k+1)*len(s['sensor_ij']))\\n    e = np.max(abs(S[sl]-gt['S_tilde'][sl])); print('mu',mu,'design max',e); assert e < 1e-11\\nq = s['sensor_calibration_sweeps']; ids = np.asarray(q['bank_id']); rows = s['row_bank_id']; worst = 0.\\nfor t in np.flatnonzero(ids < 2):\\n    alt = dict(s, sensor_calibration_sweeps={k: np.delete(a,t) for k,a in q.items()})\\n    take = rows == ids[t]\\n    worst = max(worst, np.max(abs((P @ m['_calibrate'](alt) - gt['r_y'])[take])))\\nprint('Wing A leave-one-reference-out worst profiled error',worst); assert worst < 3e-7\\nout = m['solve_beta_w02_batch_07'](s)\\ncert = v['verify_box_simplex_kkt_certificate'](gt['S_tilde'],gt['r_y'],s['source_ridge'],s['u_box'],s['total_budget'],out['kkt_certificate'])\\nprint('independent default-tolerance KKT:',cert); assert cert['valid']\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current-only calibration -> H2 current Wing A fits with historically corroborated Wing B calibration; the worst public bank error remains 9.44e-8 before the stress audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or unrelated drift operators\",\n      \"rejected_reason\": \"The documented task is a continuous steady-state inversion with no relay, class labels, or time-dependent drift operator. The relevant checks are shift-wise separable transport and continuous nuisance profiling.\"\n    }\n  ],\n  \"rationale\": \"Cross-predict real historical bank sweeps to test calibration transfer, omit real Wing A checks to detect high-leverage points, and audit each shift and the nuisance transformation separately. A failure would identify whether to revise calibration, the forward operator, or the ridge profile; the default-tolerance certificate checks the remaining margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c6250d5f2ff5f9e6831c66f4b278e40d25a1f32d63bc72425823ae935056288b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33662.67,
+      "usage_known": true,
+      "prompt_tokens": 25116,
+      "cached_tokens": 6784,
+      "completion_tokens": 1353
+    }
+  ]
+}

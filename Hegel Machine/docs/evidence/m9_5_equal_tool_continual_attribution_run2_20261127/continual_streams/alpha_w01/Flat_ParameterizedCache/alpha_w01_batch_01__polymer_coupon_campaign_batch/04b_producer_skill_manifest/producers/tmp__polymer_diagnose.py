@@ -1,0 +1,10 @@
+exec(open('/tmp/polymer_eval.py').read().split("print('taus predicted")[0])
+tr=d['train']; dt=d['past_dt']; t=d['eval_times']; maps=m._load_cells(d['calibration_load_cells']); x,xt=m._alignment(tr,q); keep=np.isfinite(tr['coupon_features_raw']).all(axis=1)
+taus,w,b=m._fit({k:v[keep] for k,v in tr.items()},x[keep],maps,dt,t)
+for s,X,target in [(tr,x,tr['strain_curves_obs']),(q,xt,g['te_clean'])]:
+ h,p=m._stress(s,maps); amp=m._jump(taus,h,p,s['initial_memory_states'],dt)*w; drift=np.c_[np.ones(len(X)),X]@b; phi=-np.expm1(-t[:,None]/taus); target=target-s['strain_0'][:,None]; base=amp@phi.T+drift[:,None]*t; corr=s['instant_rate_obs']-amp@(1/taus)-drift; actual=(target-base)@t/(t@t); missing=~np.isfinite(s['coupon_features_raw']).all(axis=1)
+ for label,k in [('missing',missing),('complete',~missing)]:
+  print('train' if s is tr else 'test',label,'n',sum(k),'drift rms',np.sqrt(np.mean(actual[k]**2)),'corrected',np.sqrt(np.mean((actual[k]-corr[k])**2)), 'rate drift correlation',np.corrcoef(actual[k],corr[k])[0,1]); print('rate residual inliers quantiles',np.quantile(abs((actual-corr)[k]),[.5,.9,1.]));
+  if s is q and label=='missing': print('missing drift observations', np.c_[actual[k],corr[k]])
+ if s is q:
+  f=q['critical_strain']-q['strain_0']; tc=g['te_cross']; hit=tc<t[-1]; tau0=g['taus']; hg,pg=g['te_hist_true'],g['te_hold_true']; ag=m._jump(tau0,hg,pg,q['initial_memory_states'],dt)*g['theta'][:2]; dg=(target-ag@(-np.expm1(-t[:,None]/tau0)).T)@t/(t@t); cross=m._crossings(ag,dg,f,tau0,t[-1]); z=np.r_[0,t]; Y=np.c_[np.zeros(len(f)),target]; linear=np.array([np.interp(fi,y[:(idx:=np.argmax(y>=fi))+1],z[:idx+1]) if (y>=fi).any() else z[-1] for fi,y in zip(f,Y)]); print('oracle basis max residual',np.max(abs(target-ag@(-np.expm1(-t[:,None]/tau0)).T-dg[:,None]*t))); print('cross benchmark first 12 true/analytic/sample linear',np.c_[tc,cross,linear][:12]); print('cross error analytic/sample linear', np.sqrt(np.mean((cross-tc)**2)),np.sqrt(np.mean((linear-tc)**2))); print('exact trajectory crossing hit max',np.max(abs(cross[hit]-tc[hit]))); print('complete end error rms',np.sqrt(np.mean((target-base)[~missing,-1]**2)))

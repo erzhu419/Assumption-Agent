@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b63b6bc6e4d48ff91fc8537703873df",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:34:45.460065+00:00",
+  "ended_at_utc": "2026-11-26T18:35:13.658884+00:00",
+  "request_sha256": "1655bea74e29071e008d6883f47bae7fe50d82978e8afdfb547ed951b7ea1593",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 63487,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33726,
+    "cached_tokens": 6784,
+    "completion_tokens": 1044
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom pathlib import Path\\nfrom tempfile import TemporaryDirectory\\np = '/holdout_task/alpha_w01_batch_05_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', p)\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nhistory = json.loads(s._ARCHIVE.read_text())\\nd = pickle.load(open('/holdout_task/public_alpha_w01_batch_05.pkl','rb'))[0]['dataset']\\ncurrent = d['calibration_load_cells']\\ncurrent_maps = s._load_cells(current)\\nwith TemporaryDirectory() as td:\\n    s._ARCHIVE = Path(td) / 'prior.json'\\n    for i in range(1, len(history)):\\n        row = history[i]\\n        s._ARCHIVE.write_text(json.dumps(history[:i]))\\n        sparse = {key: row[key][:0] for key in ('lab_id','cmd_stress','true_stress')}\\n        estimates = s._load_cells(sparse)\\n        for lab in range(4):\\n            x,y = s._checks(row, lab)\\n            full, reliable = s._consensus(x,y,np.array([1.,0.]))\\n            if reliable:\\n                observed_range = np.array([x.min(),x.max()])\\n                delta = np.max(abs(np.polyval(estimates[lab]-full, observed_range)))\\n                print(row['episode_short_name'], 'lab', lab, 'historical fallback max stress difference', round(float(delta),6))\\n    s._ARCHIVE.write_text(json.dumps(history))\\n    for lab in range(4):\\n        g,b = current_maps[lab]\\n        values = np.concatenate([np.r_[q['past_stress_cmd'][q['lab_id']==lab].ravel(), q['stress_hold_cmd'][q['lab_id']==lab]] for q in (d['train'],d['test'])])\\n        print('public lab',lab,'minimum physical yield clearance',round(float(d['yield_stress']-max(abs(g*values+b))),6))\\n    x,y = s._checks(current, 0)\\n    print('public lab 0 spot check residuals', (np.polyval(current_maps[0],x)-y).round(7).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: Pool compatible historical calibrations and retain the shared thresholded Prony law; worst held-lab strain RMSE was 0.343 with onset-assisted imputation and 0.506 without it.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the constitutive basis or repeat robust profiling\",\n      \"rejected_reason\": \"Held-out residuals did not support extra constitutive terms, and robust profiling did not improve transfer.\"\n    }\n  ],\n  \"rationale\": \"Use chronological archive holdouts to quantify the failure mode that sparse current checks cannot rule out: an unobserved calibration change. Compare that error with the current batch’s physical distance to yield. If the margins are comparable, revisit stress calibration before accepting zero plastic weights; otherwise retain the already verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "537f8fde46282591389dee08ab09c287583abe2a44c1bf036c7c0f0ff758867f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29245.04,
+      "usage_known": true,
+      "prompt_tokens": 33726,
+      "cached_tokens": 6784,
+      "completion_tokens": 1044
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f264a970cb8429e9fad1686647ecaec",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:45:05.660781+00:00",
+  "ended_at_utc": "2026-11-26T18:45:42.972848+00:00",
+  "request_sha256": "49fd182fbea273cc9309c12f719d6f130b1aa3f2ce2a04f03a4b086b6c010f2d",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 47150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27311,
+    "cached_tokens": 6784,
+    "completion_tokens": 1564
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/beta_w03_batch_07_margin_audit.py <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w03_batch_07_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_beta_w03_batch_07.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history = json.load(f)\\n\\nfor case in cases:\\n    s, gt = case['study'], case['gt']\\n    u = m._responses(s)\\n    i, j = np.asarray(s['sensor_ij']).T\\n    raw = np.asarray(s['y_obs_raw'])\\n    banks = np.asarray(s['row_bank_id'])\\n    d = u[:, :, i, j].transpose(0, 2, 1).reshape(len(raw), u.shape[1])\\n    z = np.asarray(s['Z_nuisance'])\\n    lam = s['nuisance_ridge']\\n    ridge, cap, budget = (s[k] for k in ('source_ridge', 'u_box', 'total_budget'))\\n    y = m._calibrate(s)\\n    deployed = m.solve_beta_w03_batch_07(s)\\n    a, r = gt['S_tilde'], gt['r_y']\\n    def tangent_gap(w):\\n        g = a.T @ (a @ w - r) + ridge * w\\n        order = np.argsort(g)\\n        v = np.zeros_like(w)\\n        v[order] = np.clip(budget - cap * np.arange(len(w)), 0, cap)\\n        return float(g @ (w-v))\\n    for record in history:\\n        hb, x, q = (np.asarray(record[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n        if np.max(np.abs(q-x), initial=0.) < 1e-3 or any(np.sum(hb == b) < 8 for b in range(4)):\\n            continue\\n        yy = y.copy()\\n        for b in (2, 3):\\n            gain, offset = np.polyfit(x[hb == b], q[hb == b], 1)\\n            yy[banks == b] = (raw[banks == b] - offset) / gain\\n        p = m._profile(np.column_stack((d, yy)), z, lam)\\n        w, _ = m._box_simplex(p[:, :-1], p[:, -1], ridge, cap, budget)\\n        field = np.einsum('m,mxy->xy', w, u[-1])\\n        wr = np.linalg.norm(w-gt['w_opt']) / np.linalg.norm(gt['w_opt'])\\n        fr = np.linalg.norm(field-gt['terminal_field_A']) / np.linalg.norm(gt['terminal_field_A'])\\n        gap = tangent_gap(w)\\n        print(record['episode_short_name'], 'weight relative L2', wr, 'field relative L2', fr, 'public-objective tangent gap', gap)\\n        assert max(wr, fr) < 1e-5 and gap < 1e-6\\n    # Predict the held physical sensors at every shift, without using their observations for either fit.\\n    sensor = np.tile(np.arange(len(i)), len(s['mu_shifts']))\\n    scores = np.empty((len(i), 2))\\n    for k in range(len(i)):\\n        test = sensor == k\\n        train = ~test\\n        ztr = z[train]\\n        aug = np.vstack((ztr, np.sqrt(lam)*np.eye(z.shape[1])))\\n        for mode in range(2):\\n            response = y if mode == 0 else np.where(banks >= 2, raw, y)\\n            p = m._profile(np.column_stack((d[train], response[train])), ztr, lam)\\n            w, _ = m._box_simplex(p[:, :-1], p[:, -1], ridge, cap, budget)\\n            coeff = np.linalg.lstsq(aug, np.r_[response[train]-d[train]@w, np.zeros(z.shape[1])], rcond=None)[0]\\n            resid = y[test] - d[test] @ w - z[test] @ coeff\\n            scores[k, mode] = np.sqrt(np.mean(resid**2))\\n    print('sensor jackknife worst RMSE, archive versus identity training:', scores.max(axis=0))\\n    print('sensor jackknife median RMSE, archive versus identity training:', np.median(scores, axis=0))\\n    print('sensor jackknife folds improved by archive:', int(np.sum(scores[:,0] < scores[:,1])), '/', len(scores))\\n    print('deployed public-objective tangent gap:', tangent_gap(deployed['weights']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_w03_batch_07_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 identity or current-only Wing B calibration → H2 archive-anchored Wing B calibration; worst held-bank RMSE was 0.0130, and full-versus-separable response error was 7.62e-14 relative L2.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the algebraic audit with rational, stochastic-drift, or relay terms\",\n      \"rejected_reason\": \"The public study has no such terms or states, and the full sparse solve already agrees with the separable solver across all shifts and source modes.\"\n    }\n  ],\n  \"rationale\": \"Test whether substituting either independently measured archive profile consumes the field, weight, or KKT tolerance. Also hold out each physical sensor at all shifts to test whether the benefit of archive calibration survives refitting both weights and nuisance coefficients without that sensor.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "18edf1d496664d71c527f071ee18aa1c988f25cbe8fff0fc21df70b0604702bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38294.7,
+      "usage_known": true,
+      "prompt_tokens": 27311,
+      "cached_tokens": 6784,
+      "completion_tokens": 1564
+    }
+  ]
+}

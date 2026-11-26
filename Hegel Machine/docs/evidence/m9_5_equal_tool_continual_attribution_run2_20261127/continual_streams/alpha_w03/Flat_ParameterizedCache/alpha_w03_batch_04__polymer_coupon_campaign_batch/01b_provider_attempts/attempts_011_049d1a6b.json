@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "049d1a6bf102480c8cf744a193a7327c",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:24:07.437679+00:00",
+  "ended_at_utc": "2026-11-26T18:24:42.472394+00:00",
+  "request_sha256": "1387ddefdff2c7a2aaf498564d572e4aa88a55ccd448dd9c0974d46e8a1c0e0a",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 59772,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31609,
+    "cached_tokens": 11136,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root/'alpha_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.loads((root/'public_alpha_w03_batch_04.pkl').read_bytes())[0]['dataset']\\ntr = d['train']; n = len(tr['lab_id']); lab = np.asarray(tr['lab_id']); st = np.asarray(tr['stratum'])\\nx, h, p = m._prep(d); x,h,p=x[:n],h[:n],p[:n]\\ndt,t,yld=d['past_dt'],d['eval_times'],d['yield_stress']\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\ncomplete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfold=np.zeros(n,dtype=int)\\nfor a in np.unique(lab):\\n    for b in np.unique(st[lab==a]):\\n        j=np.flatnonzero((lab==a)&(st==b)); fold[j]=np.arange(len(j))%5\\nbase=np.empty(n); center=np.empty(n)\\nfor k in range(5):\\n    fit=(fold!=k)&complete; val=fold==k\\n    tau,w=m._fit(x[fit],h[fit],p[fit],dt,t,yld,y[fit],r[fit])\\n    _,rates=m._design(tau,x,h,p,dt,t,yld)\\n    e=r-rates@w; base[val]=e[val]\\n    for a in np.unique(lab):\\n        qa=val&(lab==a); fa=fit&(lab==a)&np.isfinite(e)\\n        center[qa]=e[qa]-(np.median(e[fa]) if fa.any() else 0.)\\nrmse=lambda z: np.sqrt(np.nanmean(z*z))\\nfor a in np.unique(lab):\\n    for over in (False,True):\\n        q=(lab==a)&complete&(((np.abs(h)>yld)|(np.abs(p).max(axis=1)>yld))==over)\\n        if q.any(): print('rate OOF lab/yield/n',a,over,q.sum(),'bias/base/centered',np.round([np.nanmean(base[q]),rmse(base[q]),rmse(center[q])],6))\\nprint('pooled OOF rate RMSE base/centered',rmse(base[complete]),rmse(center[complete]))\\nrecords=json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nfor a in range(4):\\n    cx,cy=m._checks(d['calibration_load_cells'],a)\\n    current=m._supported_line(cx,cy)\\n    priors=[v for rec in reversed(records) if (v:=m._supported_line(*m._checks(rec,a))) is not None]\\n    commands=np.r_[tr['stress_hold_cmd'][lab==a],tr['past_stress_cmd'][lab==a].ravel()]\\n    errors=[]\\n    for j in range(len(cx)):\\n        v=m._sparse_line(cx[j:j+1],cy[j:j+1],priors)\\n        errors.append(np.max(np.abs((v[0]-current[0])*commands+v[1]-current[1])))\\n    print('one-spot sensitivity lab',a,'median/max physical stress change',np.round([np.median(errors),max(errors)],7))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration plus onset-anchored drift → H2: add a lab-specific residual correction only if it improves held-out slices; audited worst-slice RMSE is 0.02149 for strain and 0.00659 for onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the signed basis and selected one-spot tests\",\n      \"rejected_reason\": \"Those checks already passed. Sweeping every actual spot can reveal historical calibration ambiguity that the selected spot may have missed.\"\n    },\n    {\n      \"option\": \"Apply the classification confounding check literally\",\n      \"rejected_reason\": \"There are no class labels. The relevant check is whether lab centering improves held-out continuous rate errors within yield regimes.\"\n    }\n  ],\n  \"rationale\": \"Cross-fit the proposed lab correction so residual means are estimated without validation rows. Promote it only if it reduces a material within-lab error. Compare every real one-spot calibration against the full sweep to detect whether the choice of spot can select the wrong historical map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ed5d1f3b2e61d129dbeea2beff030643294c07be88d1687bc03624831e631ffb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35972.22,
+      "usage_known": true,
+      "prompt_tokens": 31609,
+      "cached_tokens": 11136,
+      "completion_tokens": 1434
+    }
+  ]
+}

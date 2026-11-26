@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ca690c054714294b4c09b8838abb447",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:36.905441+00:00",
+  "ended_at_utc": "2026-11-26T18:13:10.481537+00:00",
+  "request_sha256": "d35211588fd67520afce6eb7242269eec4e41583ce7e335dbd43441f02df7270",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 46651,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27767,
+    "cached_tokens": 6784,
+    "completion_tokens": 1432
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\np=pickle.load(open('public_alpha_w01_batch_01.pkl','rb'))[0];d,g=p['dataset'],p['gt'];tr,te=d['train'],d['test'];dt,t=d['past_dt'],d['eval_times']; maps=m._calibration(d['calibration_load_cells'])\\nprint('dataset keys',list(d)); print('train rows/lab',np.bincount(tr['lab_id']))\\ndef take(b,i):return {k:v[i] for k,v in b.items()}\\ndef evaluate(train,val):\\n x,xt=m._alignment(train,val); tau,w=m._fit(train,m._inputs(train,x,maps),dt,t)\\n a,_=m._design(tau,m._inputs(train,x,maps),dt,t); e=train['strain_curves_obs']-train['strain_0'][:,None]-a@w\\n inferred=np.median(e[:,-6:]/t[-6:],axis=1); lab=train['lab_id']; ok=np.isfinite(train['coupon_features_raw']).all(axis=1)\\n offset={int(j):np.median(inferred[(lab==j)&ok]) for j in np.unique(lab[ok])}\\n out=m.solve_alpha_w01_batch_01({**d,'train':train,'test':val}); base=out['predicted_strain']; a,b=m._design(tau,m._inputs(val,xt,maps),dt,t)\\n good=np.isfinite(val['coupon_features_raw']).all(axis=1); off=np.array([offset.get(j,0.) for j in val['lab_id']]); rate=val['instant_rate_obs']-b@w\\n return np.stack([base,base+(good*off)[:,None]*t,base+np.where(good,.75*off+.25*rate,0.)[:,None]*t,base+np.where(good,.5*rate,0.)[:,None]*t]),offset\\nfold=np.empty(len(tr['lab_id']),int);rng=np.random.default_rng(101)\\nfor j in range(4):\\n i=rng.permutation(np.flatnonzero(tr['lab_id']==j));fold[i]=np.arange(len(i))%4\\nfor kind in ('within','leave_lab','public'):\\n if kind=='public':\\n  pred,offset=evaluate(tr,te); target=g['te_clean']; lab=te['lab_id']; print('full training drift offsets',offset)\\n else:\\n  lab=tr['lab_id'];target=tr['strain_curves_obs'];pred=np.empty((4,*target.shape)); labels=fold if kind=='within' else lab\\n  for k in range(4):\\n   valid=labels==k; val=take(tr,valid); val['critical_strain']=val['strain_0']+.25;pred[:,valid],_=evaluate(take(tr,~valid),val)\\n e=abs(pred-target); print(kind,'worst lab curve MAE',e.reshape(4,-1,12).shape[0] and [round(max(a[lab==j].mean() for j in range(4)),6) for a in e]);print(kind,'worst lab final MAE',[round(max(a[lab==j,-1].mean() for j in range(4)),6) for a in e]);print(kind,'lab median final abs error',np.round([[np.median(a[lab==j,-1]) for j in range(4)] for a in e],6))\\n if kind=='public':\\n  den=np.maximum(abs(m._inputs(te,np.zeros((len(lab),4)),maps)[1]),.5)\\n  for pp in pred:\\n   sec=(pp[:,-1]-te['strain_0'])/den;cross=m._crossing(t,te['strain_0'],pp,te['critical_strain']);print('public worst-lab secondary',*[max(abs(prediction-truth)[lab==j].mean() for j in range(4)) for prediction,truth in [(sec,g['te_secant']),(cross,g['te_cross'])]])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared drift after reference alignment -> H2 residual lab drift identified from training curves; current public worst-lab secant MAE is 0.03333 and leave-one-lab-out final strain MAE is 0.18797 against noisy observations.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace drift predictions with observed onset rates across all rows\",\"rejected_reason\":\"The onset observer has public MAE 0.00920, and using it directly would amplify that noise over the hold interval.\"}],\"rationale\":\"Test whether training-only lab offsets reduce the dominant late-horizon error without harming strain or crossing accuracy. Use held-out rows within each lab to test the offset and leave-one-lab-out folds to test the fallback when no labeled rows are available.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c79156024c4f90314fd7ec25496c9a0264e4ebfc23a15038a124f9c447efb575",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35432.93,
+      "usage_known": true,
+      "prompt_tokens": 27767,
+      "cached_tokens": 6784,
+      "completion_tokens": 1432
+    }
+  ]
+}

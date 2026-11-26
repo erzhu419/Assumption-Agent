@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "970f8915e4a04a6ba6ef07371861a33b",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:33.264954+00:00",
+  "ended_at_utc": "2026-11-26T18:12:52.597696+00:00",
+  "request_sha256": "20a3bde5498ba0d2d47a0171e776b4bece4491df9b19648a1b990df8d9250e42",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44656,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26920,
+    "cached_tokens": 11136,
+    "completion_tokens": 709
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 -I - <<'PY'\\nimport json,numpy as np\\nfrom pathlib import Path\\nroot=Path('/tmp/hegel_continual_archive')\\nfor name in ('archive_manifest.json','archive_calibration_history.json','pre_llm_gate_diagnostic.json'):\\n obj=json.loads((root/name).read_text())\\n def summarize(x,level=0):\\n  if isinstance(x,dict):\\n   if {'bank_id','ref_signal','raw_readout'}<=x.keys():\\n    b=np.asarray(x['bank_id']); r=np.asarray(x['ref_signal']); y=np.asarray(x['raw_readout']); fits={}\\n    for i in np.unique(b):\\n     take=b==i; a=r[take]; v=y[take]; fits[str(i)]=(len(a),float(np.ptp(a)),np.polyfit(a,v,1).tolist() if len(a)>1 and np.ptp(a)>0 else (a.tolist(),v.tolist()))\\n    return {'sweep_fits':fits,'metadata':{k:summarize(v,level+1) for k,v in x.items() if k not in ('bank_id','ref_signal','raw_readout')}}\\n   return {k:summarize(v,level+1) for k,v in x.items()} if level<6 else list(x)\\n  if isinstance(x,list): return [summarize(v,level+1) for v in x[:8]]+([f'{len(x)} total entries'] if len(x)>8 else [])\\n  return x\\n print(name,json.dumps(summarize(obj))[:3200])\\nPY\\nsed -n '/^def _fit_bank/,/^def _calibrated_observations/p' beta_w01_batch_01_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 observation-only sparse calibration → H2 archive-backed gain and offset estimates; public full sweeps give a 4.39e-9 worst KKT gap, while box-constrained joint estimation reaches 7.20e-3 on the shifted sparse-wing stress tests.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote box-constrained joint estimation as the default sparse calibration\",\"rejected_reason\":\"Its worst gap is still 7.20e-3. One spot check constrains gain and offset together, and measurement noise limits the precision recoverable from transport observations alone.\"}],\"rationale\":\"Inspect historical sweep fits by bank and their metadata, without dumping the arrays. Whether the archive contains matching or incompatible calibration versions determines when to reuse archived gains and when to estimate a drift from the current observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "91124667a981c0e4984f1fa66db7b15955a48ff662d4f83ec06f3e64bf577dfd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20253.84,
+      "usage_known": true,
+      "prompt_tokens": 26920,
+      "cached_tokens": 11136,
+      "completion_tokens": 709
+    }
+  ]
+}

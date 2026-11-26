@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef835c7bc14242cb9d5821f162a07761",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:10:38.857729+00:00",
+  "ended_at_utc": "2026-11-26T18:11:17.971844+00:00",
+  "request_sha256": "0762426a835f8644d9826c225dd50a93727e0a742bf93b87e3149148f555239c",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 38420,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24838,
+    "cached_tokens": 6784,
+    "completion_tokens": 1636
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/alpha_w04_s00_solver.py').read_text()\\nshared = src[src.index('def _rows'):src.index('def _design')]\\nstart = shared.index('def _archive_panels')\\nend = shared.index('def _calibrate', start)\\nshared = shared[:start] + '''def _archive_panels():\\n    path = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n    if path.is_file():\\n        for panel in reversed(json.loads(path.read_text())):\\n            yield {key: np.asarray(panel[key]) for key in ('lab_id', 'cmd_stress', 'true_stress')}\\n\\n\\n''' + shared[end:]\\nfit = src[src.index('def _fit'):src.index('def solve_alpha_w04_s00')].replace('aligned, curves, rate):', 'aligned, initial, curves, rate):').replace('hist, hold, aligned)', 'hist, hold, aligned, initial)').replace('(8. - p[0])', '(24.99 - p[0])').replace('8. - 1e-5', '24.99 - 1e-5').replace('(8.-a)', '(24.99-a)').replace('np.r_[0.20,', 'np.r_[0.05001,')\\nPath('alpha_w04_batch_01_solver.py').write_text('''\\\"\\\"\\\"Calibrated two-mode hereditary creep for the coupon campaign.\\\"\\\"\\\"\\nimport json\\nfrom pathlib import Path\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\n''' + shared + '''def _design(taus, dt, times, hist, hold, aligned, initial):\\n    after = np.cumsum(dt[::-1])[::-1] - dt\\n    kernel = np.exp(-after[:, None] / taus) * (-np.expm1(-dt[:, None] / taus))\\n    memory = initial * np.exp(-dt.sum() / taus) + hist @ kernel\\n    delta = hold[:, None] - memory\\n    drift = np.column_stack((np.ones(len(hold)), aligned))\\n    rate = np.column_stack((delta / taus, drift))\\n    curves = np.concatenate((delta[:, None, :] * (-np.expm1(-times[:, None] / taus)),\\n                             drift[:, None, :] * times[None, :, None]), axis=2)\\n    return curves, rate\\n\\n\\n''' + fit + '''def _crossing(times, predicted, initial, critical):\\n    grid = np.r_[0., times]\\n    strain = np.column_stack((initial, predicted))\\n    hit = strain >= critical[:, None]\\n    first = hit.argmax(axis=1)\\n    out = np.full(len(initial), times[-1])\\n    out[hit[:, 0]] = 0.\\n    rows = np.flatnonzero(first > 0)\\n    hi = first[rows]\\n    lo = hi - 1\\n    frac = (critical[rows] - strain[rows, lo]) / (strain[rows, hi] - strain[rows, lo])\\n    out[rows] = grid[lo] + frac * (grid[hi] - grid[lo])\\n    return out\\n\\n\\ndef solve_alpha_w04_batch_01(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    affine = _calibrate(dataset['calibration_load_cells'])\\n    x, xt = _align(train, test)\\n    hist, hold = _stress(train, affine)\\n    taus, theta = _fit(dt, times, hist, hold, x, train['initial_memory_states'],\\n                       train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])\\n    hist, hold = _stress(test, affine)\\n    design, _ = _design(taus, dt, times, hist, hold, xt, test['initial_memory_states'])\\n    predicted = test['strain_0'][:, None] + design @ theta\\n    return {'estimated_taus': taus,\\n            'predicted_strain': predicted,\\n            'secant_compliance': (predicted[:, -1] - test['strain_0']) / np.maximum(np.abs(hold), 0.5),\\n            'hazard_crossing_times': _crossing(times, predicted, test['strain_0'], test['critical_strain'])}\\n''')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np\\nimport alpha_w04_batch_01_solver as s\\nc=pickle.load(open('public_alpha_w04_batch_01.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; p=s.solve_alpha_w04_batch_01(d)\\nprint('taus fitted/reference', p['estimated_taus'],g['taus'])\\nfor lab in range(4):\\n m=d['test']['lab_id']==lab\\n print('lab',lab,'curve/secant/crossing RMSE',*[round(np.mean((p[k][m]-g[j][m])**2)**.5,6) for k,j in [('predicted_strain','te_clean'),('secant_compliance','te_secant'),('hazard_crossing_times','te_cross')]])\\nt=d['test']; cross=g['te_cross']; expected=s._crossing(d['eval_times'],g['te_clean'],t['strain_0'],t['critical_strain']); hit=(g['te_clean']>=t['critical_strain'][:,None]).any(axis=1)\\nprint('cross ref for no grid hits',np.unique(cross[~hit],return_counts=True)); print('true grid hits',sum(hit),'linear interpolation discrepancy on hits',np.max(np.abs(cross[hit]-expected[hit])) if hit.any() else None)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived zero-state recurrence → H2 calibrated recurrence with preloaded memory; public stresses top out at 2.478 versus yield 2.95, with predictive slice metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add active plastic flow\",\"rejected_reason\":\"Public loads remain below yield and the supplied residual plastic states are zero.\"}],\"rationale\":\"Reuse the supported calibration and reference alignment, and propagate the supplied initial states through the history. The isolated schema run catches interface errors; lab-level public residuals identify which output needs refinement, and crossing diagnostics on clean curves distinguish a hazard rule mismatch from a strain prediction error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c0d20b52101339c001a8db87e65648f89e10557a510eecf7c3b9221dffa73cc7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40067.81,
+      "usage_known": true,
+      "prompt_tokens": 24838,
+      "cached_tokens": 6784,
+      "completion_tokens": 1636
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "27e8d4ea054b4fc78744af4a63c7d701",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:22:27.370557+00:00",
+  "ended_at_utc": "2026-11-26T18:23:03.790261+00:00",
+  "request_sha256": "610a7a172a9026672bac710fec1e52943061a4532f31a888d3b235a24693a5b4",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 49027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28508,
+    "cached_tokens": 6784,
+    "completion_tokens": 1561
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I - <<'PY'\\nimport copy\\nimport importlib.util\\nimport pickle\\nimport time\\nimport numpy as np\\np='/holdout_task/alpha_w01_batch_04_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p)\\ns=importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_w01_batch_04.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\nstart=time.monotonic()\\ny=s.solve_alpha_w01_batch_04(d)\\nprint('public solve seconds:', round(time.monotonic()-start, 3), 'taus:', y['estimated_taus'], 'viscoplastic weights:', y['viscoplastic_weights'], flush=True)\\nfor key,shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'viscoplastic_weights':(2,), 'predicted_strain':(len(d['test']['lab_id']),len(d['eval_times'])), 'initial_rate_pred':(len(d['test']['lab_id']),)}.items():\\n    assert np.shape(y[key])==shape and np.isfinite(y[key]).all(), key\\nchecks=d['calibration_load_cells']; labs=checks['lab_id']; ref=s._calibrate(checks)\\nfor lab in range(4):\\n    idx=np.flatnonzero(labs==lab)\\n    for mode in ('absent','sparse','emi'):\\n        if mode=='emi':\\n            panel=copy.deepcopy(checks)\\n            panel['true_stress'][idx[[0,2,5,7]]]+=[1.,-1.,.75,-.7]\\n        else:\\n            keep=labs!=lab\\n            if mode=='sparse': keep[idx[0]]=True\\n            panel={k:v[keep] for k,v in checks.items()}\\n        delta=np.max(abs(s._calibrate(panel)-ref)); print('calibration', lab, mode, 'max coefficient change', delta)\\n        assert delta<.0005\\n# Exercise both yield terms separately with positive/negative hold and histories.\\nsy=d['yield_stress']; dt=d['past_dt']; t=np.array([1.e-6,.25,5.2]); tau=y['estimated_taus']; zeros=np.zeros(len(dt))\\nhist=np.stack((zeros,zeros,zeros,np.full(len(dt),sy+.4),np.full(len(dt),-sy-.4)))\\nhold=np.array([sy,sy+.3,-sy-.3,.7,-.7])\\nblock={'lab_id':np.zeros(len(hold),dtype=int),'past_stress_cmd':hist,'stress_hold_cmd':hold}\\ninputs=s._inputs(block,np.zeros((len(hold),4)),np.tile([1.,0.],(4,1)),dt,sy)\\na,b=s._design(tau,inputs,dt,t)\\nnp.testing.assert_allclose(a[:, :, 7], np.array([0.,.09,-.09,0.,0.])[:,None]*t, atol=1.e-13)\\nnp.testing.assert_allclose(a[:, :, 8],np.array([0.,0.,0.,.7,-.7])[:,None]*.16*dt.sum()*-np.expm1(-t/tau[0]),atol=1.e-13)\\nnp.testing.assert_allclose(a[:,0,:]/t[0],b,atol=3.e-6,rtol=3.e-6)\\n# Fit noiseless elastic labels on real histories to verify the zero-weight output path.\\ne=copy.deepcopy(d); e['yield_stress']=100.\\nx,_,n=s._alignment(e['train'],e['test']); a,b=s._design(tau,s._inputs(e['train'],x[:n],ref,dt,e['yield_stress']),dt,e['eval_times']); w=np.r_[y['hereditary_weights'],0.,0.]\\ne['train']['strain_curves_obs']=e['train']['strain_0'][:,None]+a@w; e['train']['instant_rate_obs']=b@w\\nelastic=s.solve_alpha_w01_batch_04(e)\\nnp.testing.assert_array_equal(elastic['viscoplastic_weights'],[0.,0.]); np.testing.assert_allclose(elastic['estimated_taus'],tau,rtol=1.e-5)\\nprint('signed yield terms, onset derivatives, and elastic recovery passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear Prony memory → H2 calibrated yield-gated memory: worst leave-one-lab-out lab/yield strain RMSE fell from 1.253 to 0.313; worst lab onset-rate RMSE before missing-feature correction fell from 2.204 to 0.0472.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add another creep mechanism\",\n      \"rejected_reason\": \"The median complete-coupon absolute curve error is 0.0125 and median cross-horizon residual correlation is 0.014; the largest residuals are isolated rather than evidence of a persistent missing term.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the final artifact for sparse and EMI-contaminated calibration, sign errors in both yield terms, and nonzero plastic weights below yield. A failure would warrant a targeted fix to calibration or the constitutive basis rather than a new mechanism.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "58a858978fd3386507326282c292dc6934623d46e5f0cfc397f06569ba0a7745",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38315.96,
+      "usage_known": true,
+      "prompt_tokens": 28508,
+      "cached_tokens": 6784,
+      "completion_tokens": 1561
+    }
+  ]
+}

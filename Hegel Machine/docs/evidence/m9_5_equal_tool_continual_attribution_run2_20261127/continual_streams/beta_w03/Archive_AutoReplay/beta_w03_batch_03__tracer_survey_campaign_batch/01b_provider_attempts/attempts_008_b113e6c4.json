@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b113e6c46f93408385da5e06bda10a42",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:48.682653+00:00",
+  "ended_at_utc": "2026-11-26T18:13:20.135333+00:00",
+  "request_sha256": "52a6069543e5c74fb8794d319fbd023743c4802a3265b7709e4428602ef81187",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 50193,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29542,
+    "cached_tokens": 6784,
+    "completion_tokens": 1277
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('solver',p/'beta_w03_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nvs=importlib.util.spec_from_file_location('validator',p/'validate_public_schema.py'); v=importlib.util.module_from_spec(vs); vs.loader.exec_module(v)\\nq=pickle.loads((p/'public_beta_w03_batch_03.pkl').read_bytes())[0]; s,g=q['study'],q['gt']; c=s['sensor_calibration_sweeps']; bank=c['bank_id']; x=c['ref_signal']; raw=c['raw_readout']\\nfor b in range(4):\\n idx=np.flatnonzero(bank==b); errs=[]\\n for j in idx:\\n  train=idx[idx!=j]; a,d=m._fit_bank(x[train],raw[train],(1.,0.)); errs.append(abs(a*x[j]+d-raw[j]))\\n print('bank',b,'leave-one-reference-out max',max(errs)); assert max(errs)<1e-7\\nfor wing in range(2):\\n gains=np.array([.86,1.18,.93,1.08]); offsets=np.array([.06,-.09,.04,-.03]); y=gains[bank]*x+offsets[bank]; y=y.copy()\\n for b in range(2*wing,2*wing+2):\\n  idx=np.flatnonzero(bank==b); idx=idx[np.argsort(x[idx])]; y[idx[[0,-1]]]+=[.5,-.7]\\n ids=s['row_bank_id']; t=dict(s,sensor_calibration_sweeps=dict(c,raw_readout=y),y_obs_raw=gains[ids]*s['y_obs_raw']+offsets[ids]); r=m.solve_beta_w03_batch_03(t)\\n checks=[v.verify_box_simplex_kkt_certificate(g['S_tilde'],g['r_y'],s['source_ridge'],s['u_box'],b,cert) for b,cert in zip(s['budget_grid'],r['kkt_certificates'])]; werr=np.max(abs(r['weights_by_budget']-g['weights_by_budget'])); ferr=np.max(abs(r['terminal_field_mid_budget']-g['terminal_field_mid_budget'])); print('EMI wing',wing,'weight/field max error',werr,ferr,'budget KKT',checks); assert all(z['valid'] for z in checks) and werr<1e-6 and ferr<1e-7\\nh=json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text()); print('history layout',type(h).__name__,len(h),list(h[-1]) if isinstance(h,list) else list(h))\\nfor b in range(4):\\n record=next(z for z in reversed(h) if np.ptp(np.asarray(z['ref_signal'])[np.asarray(z['bank_id'])==b])>1e-10); mask=np.asarray(record['bank_id'])==b; a,d=m._fit_bank(np.asarray(record['ref_signal'])[mask],np.asarray(record['raw_readout'])[mask],(1.,0.)); keep=(bank!=b); raw_case=s['y_obs_raw'].copy(); rows=s['row_bank_id']==b; raw_case[rows]=a*raw_case[rows]+d\\n t=dict(s,sensor_calibration_sweeps={k:val[keep] for k,val in c.items()},y_obs_raw=raw_case); err=np.max(abs(m._calibrate(t)[rows]-s['y_obs_raw'][rows])); print('archive-only bank',b,'observation max error',err); assert err<1e-12\\n j=np.flatnonzero(bank==b)[0]; keep[j]=True; drift=.04; raw_case[rows]+=drift; sweeps={k:val[keep].copy() for k,val in c.items()}; spot=sweeps['bank_id']==b; sweeps['raw_readout'][spot]=a*sweeps['ref_signal'][spot]+d+drift; t.update(sensor_calibration_sweeps=sweeps,y_obs_raw=raw_case); err=np.max(abs(m._calibrate(t)[rows]-s['y_obs_raw'][rows])); print('single spot bank',b,'observation max error',err); assert err<1e-12\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (explicit reaction grid alone) -> H2 (grid plus archived axis terms and per-bank affine calibration); the bound public verification reports a worst-budget KKT gap of 3.01e-8 and terminal relative L2 error of 1e-8.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Public verification establishes the transport and budget solution but does not exercise the documented sparse-sweep or EMI cases. Test those cases by bank and wing; a failure would identify whether to repair archive handling or spike rejection before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "db9e3ae1d4b943bc62e664ea77009dc378528b524e120b0531470becd1cde911",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32361.68,
+      "usage_known": true,
+      "prompt_tokens": 29542,
+      "cached_tokens": 6784,
+      "completion_tokens": 1277
+    }
+  ]
+}

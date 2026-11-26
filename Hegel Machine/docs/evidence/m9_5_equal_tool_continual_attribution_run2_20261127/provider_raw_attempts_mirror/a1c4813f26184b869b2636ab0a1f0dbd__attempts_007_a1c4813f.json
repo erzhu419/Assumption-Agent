@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a1c4813f26184b869b2636ab0a1f0dbd",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:24:14.612360+00:00",
+  "ended_at_utc": "2026-11-26T18:24:44.400796+00:00",
+  "request_sha256": "0f55fef34d63c136495321bdab64ff23f960ca9208dfce89664aefb418e69ad8",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 47182,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28711,
+    "cached_tokens": 11136,
+    "completion_tokens": 1215
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w01_batch_04_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nrow=pickle.load(open('public_alpha_w01_batch_04.pkl','rb'))[0]; d=row['dataset']; b=d['train']; labs=b['lab_id']; miss=~np.isfinite(b['coupon_features_raw']).all(1); dt=d['past_dt']; t=d['eval_times']; ys=d['yield_stress']; panel=d['calibration_load_cells']; maps=s._load_cells(panel)\\ndef sub(block, mask, drop=()): return {k:np.asarray(v)[mask] for k,v in block.items() if k not in drop}\\ndrop=('strain_curves_obs','instant_rate_obs')\\nfor held in ([0],[1],[2],[3],[0,1],[2,3]):\\n    v=np.isin(labs,held); fold={**d,'train':sub(b,~v),'test':sub(b,v,drop)}; out=s.solve_alpha_w01_batch_04(fold)\\n    _,_,_,ov,work=s._inputs(fold['test'],np.zeros((v.sum(),4)),maps,dt,ys); active=(ov!=0)|(work!=0)\\n    ep=out['predicted_strain']-b['strain_curves_obs'][v]; er=out['initial_rate_pred']-b['instant_rate_obs'][v]\\n    print('holdout',held,'taus',out['estimated_taus'].round(4),'vp',out['viscoplastic_weights'].round(4))\\n    for name,m in [('elastic',~active),('plastic',active),('complete',~miss[v]),('imputed',miss[v])]:\\n        if m.any(): print(name,int(m.sum()),'curve MAE, RMSE, late MAE, rate MAE:', np.round([np.mean(abs(ep[m])),np.mean(ep[m]**2)**.5,np.mean(abs(ep[m,-1])),np.mean(abs(er[m]))],5))\\nfor lab in range(4):\\n    ids=np.flatnonzero(panel['lab_id']==lab)\\n    for scenario in ('spot','bad spot','EMI'):\\n        keep=np.ones(len(panel['lab_id']),bool); y=panel['true_stress'].copy()\\n        if 'spot' in scenario: keep[ids[1:]]=False\\n        if scenario=='bad spot': y[ids[0]]+=.15\\n        if scenario=='EMI': y[ids[[0,-1]]]+=[.15,-.15]\\n        other=s._load_cells(sub({**panel,'true_stress':y},keep))\\n        delta=other[lab]-maps[lab]; err=np.max(np.abs(np.array([-3.,3.])*delta[0]+delta[1])); print('calibration',lab,scenario,round(err,7)); assert err < .0015\\nout=s.solve_alpha_w01_batch_04(d); print('public fitted',out['estimated_taus'],out['hereditary_weights'],out['viscoplastic_weights']); print('public ground truth parameters (audit only)',{k:row['gt'][k] for k in ('taus','theta','vp_theta')})\\nxt=s._alignment(b,d['test'])[1]; i=s._inputs(d['test'],xt,maps,dt,ys); ha,ra=s._design(out['estimated_taus'],i,dt,np.array([0.,1e-7])); np.testing.assert_allclose((ha[:,1]-ha[:,0])/1e-7,ra,rtol=3e-6,atol=1e-7)\\nfor key in ('strain_curves_obs','instant_rate_obs'):\\n    assert key not in fold['test']\\nquiet=s.solve_alpha_w01_batch_04({**d,'yield_stress':1e6}); np.testing.assert_array_equal(quiet['viscoplastic_weights'],[0.,0.]); print('onset derivative and zero activation passed')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Robust load-cell calibration and the thresholded Prony model pass the public schema; worst held-out prediction error has not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Hold out each lab and wing without exposing its strain or rate labels to detect transfer errors by yield regime and missingness. Spot-check and EMI scenarios test whether archive fallback preserves the affine maps; derivative and no-activation checks catch errors in the plastic terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4fc8626b2c1c9433b73598d8f614e86e2ed19f54e1ad1f702eb7316a03c05544",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30727.74,
+      "usage_known": true,
+      "prompt_tokens": 28711,
+      "cached_tokens": 11136,
+      "completion_tokens": 1215
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56a93f586e5e4b5fb08a8a5d76a86755",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:16:57.705828+00:00",
+  "ended_at_utc": "2026-11-26T18:17:34.147994+00:00",
+  "request_sha256": "ec366e564abdd28237d24b3e77ef9309c69a9f1563026166b176ef1241a89c50",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 70645,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35003,
+    "cached_tokens": 11136,
+    "completion_tokens": 1540
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp alpha_w01_batch_01_solver.py /tmp/alpha_w01_batch_01_offset.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w01_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('    # Curve residuals estimate')\\nb = s.index('    rate = np.asarray', a)\\ns = s[:a] + '''    # Correct residual lab shifts in the reference-aligned coupon drift.\\n    train_design, _ = _design(taus, _inputs(train, x, maps), dt, time)\\n    train_error = train['strain_curves_obs'] - train['strain_0'][:, None] - train_design @ w\\n    late = np.median(train_error[:, -6:] / time[-6:], axis=1)\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    train_score, test_score = x @ w[3:], xt @ w[3:]\\n    offset = np.zeros(len(test['lab_id']))\\n    for lab in np.unique(train['lab_id'][complete]):\\n        rows = complete & (train['lab_id'] == lab)\\n        target = test['lab_id'] == lab\\n        center = np.median(train_score[rows])\\n        scale = max(.025, _mad(train_score[rows]))\\n        score = (train_score[rows] - center) / scale\\n        y = late[rows]\\n        intercept, slope = least_squares(\\n            lambda q: np.r_[q[0] + q[1] * score - y, 2 * q[1]],\\n            [np.median(y), 0.], loss='soft_l1', f_scale=.012,\\n        ).x\\n        offset[target] = intercept + slope * (test_score[target] - center) / scale\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.solve_alpha_w01_batch_01\\n\\nmodels = [load(p) for p in ('/tmp/alpha_w01_batch_01_offset.py', 'alpha_w01_batch_01_solver.py')]\\np = pickle.load(open('public_alpha_w01_batch_01.pkl','rb'))[0]\\nd, g = p['dataset'], p['gt']; tr, te = d['train'], d['test']; t = d['eval_times']\\nouts = [f(d) for f in models]\\nnp.testing.assert_array_equal(outs[0]['estimated_taus'], outs[1]['estimated_taus'])\\nfor key, ref in [('predicted_strain','te_clean'),('secant_compliance','te_secant'),('hazard_crossing_times','te_cross')]:\\n    e = [abs(o[key]-g[ref]) for o in outs]\\n    worst = [max(a[te['lab_id']==j].mean() for j in range(4)) for a in e]\\n    pooled = [a.mean() for a in e]\\n    print(key, 'worst-lab', worst, 'pooled', pooled)\\n    assert worst[1] < worst[0] and pooled[1] < pooled[0]\\nlab = tr['lab_id']; folds = lab.copy(); rng = np.random.default_rng(203)\\nfor j in range(4):\\n    i = rng.permutation(np.flatnonzero(lab == j)); folds[i] = np.arange(len(i))%4\\nfor name, grouping in [('within-lab',folds), ('leave-lab',lab), ('leave-wing',lab//2)]:\\n    e = np.empty((2, len(lab), len(t)))\\n    for j in np.unique(grouping):\\n        keep = grouping != j\\n        train = {k:v[keep] for k,v in tr.items()}; val = {k:v[~keep] for k,v in tr.items()}\\n        val['critical_strain'] = val['strain_0'] + .25\\n        pred = [f({**d, 'train':train, 'test':val})['predicted_strain'] for f in models]\\n        if name != 'within-lab':\\n            np.testing.assert_array_equal(*pred)\\n        e[:,~keep] = abs(np.asarray(pred)-val['strain_curves_obs'])\\n    metrics = [[max(a[lab==j].mean() for j in range(4)), max(a[lab==j,-1].mean() for j in range(4))] for a in e]\\n    print(name, 'worst-lab curve and final MAE', metrics)\\n    if name == 'within-lab':\\n        assert all(b < a for a,b in zip(*metrics))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 constant lab drift offsets → H2 affine correction on the existing coupon drift; the probe lowered within-lab out-of-fold worst-lab final strain MAE from 0.17786 to 0.17243 and public worst-lab secant MAE from 0.02779 to 0.02493.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add pairwise, triple, and rational drift terms\",\n      \"rejected_reason\": \"They improved held-out-wing final-horizon MAE slightly, but worsened its all-horizon MAE and public pooled crossing-time MAE. The affine correction improved every public endpoint while preserving the unseen-lab and unseen-wing fallback.\"\n    }\n  ],\n  \"rationale\": \"Promote the affine correction because it improves prediction for labs with labeled coupons without changing predictions for unseen labs. Verify the exact edited solver in isolation: require gains in all three public endpoints, unchanged time constants and unseen-lab predictions, and lower within-lab out-of-fold error. If any of these checks fail, diagnose the discrepancy before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "1c890f69ce5a712c13d4bc5690afe585d827f885ee1da7cff50f805e530728de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37363.59,
+      "usage_known": true,
+      "prompt_tokens": 35003,
+      "cached_tokens": 11136,
+      "completion_tokens": 1540
+    }
+  ]
+}

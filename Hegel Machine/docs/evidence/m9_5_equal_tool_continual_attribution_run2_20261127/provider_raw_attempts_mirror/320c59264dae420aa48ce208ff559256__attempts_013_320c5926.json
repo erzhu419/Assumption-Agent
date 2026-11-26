@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "320c59264dae420aa48ce208ff559256",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:38:37.848100+00:00",
+  "ended_at_utc": "2026-11-26T18:39:10.169316+00:00",
+  "request_sha256": "75d85a0bf9a53845788c23bd9830c0efcbf3f16af19b39c8172295f94540c207",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 70299,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35327,
+    "cached_tokens": 11136,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm=runpy.run_path('alpha_w02_batch_06_solver.py')\\nd=pickle.load(open('public_alpha_w02_batch_06.pkl','rb'))[0]['dataset']\\ntr,te=d['train'],d['test']; lab=tr['lab_id']; n=len(lab)\\ndt,t,sy=(d[k] for k in ('past_dt','eval_times','yield_stress'))\\ncal=m['_calibrate'](d['calibration_load_cells'],sy)\\nx=m['_features'](tr,te)[:n]; a=m['_inputs'](tr,x,cal,dt,sy)\\ny=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]\\nfull=np.isfinite(tr['coupon_features_raw']).all(1)&np.isfinite(y).all(1)\\n# Project out linear creep in time before fitting the two exponential branches.\\n# This removes any reference-panel drift, regardless of its dependence on the features or lab.\\nbasis=np.linalg.qr(t[:,None],mode='complete')[0][:,1:]\\nphys=np.empty_like(y[:,:-1]); ref=np.empty_like(phys)\\nfor j in np.unique(lab):\\n    q=full&(lab!=j); v=full&(lab==j)\\n    fit=tuple(s[q] for s in a); val=tuple(s[v] for s in a)\\n    tau,w=m['_fit'](fit,dt,t,y[q]); base=m['_design'](val,dt,t,tau)@w\\n    target=(y[q,:-1]@basis).ravel()\\n    def profile(z):\\n        times=np.sort(np.exp(z)); B=m['_design'](fit,dt,t,times)[:,:-1,:2]\\n        A=np.einsum('ntb,tk->nkb',B,basis).reshape(-1,2)\\n        coef=np.linalg.lstsq(A,target,rcond=None)[0]\\n        return A@coef-target,coef\\n    sol=m['least_squares'](lambda z: profile(z)[0],np.log(tau),bounds=np.log(([.051,.051],[24.99,24.99])))\\n    alt_tau=np.sort(np.exp(sol.x)); _,coef=profile(sol.x)\\n    alt=m['_design'](val,dt,t,alt_tau)[:,:-1,:2]@coef\\n    rm=lambda e: float(np.sqrt(np.mean(e*e)))\\n    ref[v]=y[v,:-1]-base[:,:-1]; phys[v]=y[v,:-1]-alt\\n    drift=ref[v]@t/(t@t); feature=x[v,1:]@w[3:7]\\n    err=ref[v]@basis\\n    print('lab',j,'n',v.sum(),'tau shared/projected',np.round([tau,alt_tau],4).tolist(),'curvature rmse shared/projected',np.round([rm(err),rm(phys[v]@basis)],6).tolist(),'drift residual mean',round(float(drift.mean()),6),'within-lab drift-residual slope vs feature score',round(float(np.linalg.lstsq(np.c_[np.ones(v.sum()),feature],drift,rcond=None)[0][1]),5))\\n    print('  curvature RMSE early/late',np.round([rm((err@basis.T)[:,:len(t)//2]),rm((err@basis.T)[:,len(t)//2:])],6).tolist())\\nprint('all held-out complete coupons: curvature rmse shared/projected',*[round(float(np.sqrt(np.mean((e[full]@basis)**2))),6) for e in (ref,phys)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unresolved lab effects distort relaxation -> H2 lab effects primarily change linear drift; verified worst public lab NRMSE is 1.48% for strain and 0.386% for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add unrelated rational, relay, or transport terms\",\n      \"rejected_reason\": \"The supplied model describes continuous creep with no relay states or classification labels. The independent forward test already verified the signed overstress, history integral, and initial derivative across all four yield combinations.\"\n    }\n  ],\n  \"rationale\": \"Fit relaxation after algebraically removing linear drift, then compare curvature errors on each held-out lab. If this improves the worst lab, investigate whether reference alignment is biasing relaxation; otherwise retain the verified fit. The audit uses only training measurements and leaves the solver unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "2b0db470d301655cb9fc6cf8593adab4a94efa49c67e1ed701663ec31f294d98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33294.9,
+      "usage_known": true,
+      "prompt_tokens": 35327,
+      "cached_tokens": 11136,
+      "completion_tokens": 1320
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "30bfd3e066534125a7506163c54f301a",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:01:52.407836+00:00",
+  "ended_at_utc": "2026-11-26T18:02:17.288035+00:00",
+  "request_sha256": "85172fe093074b3e10397531e9481493835c0c78a49c1217884bc530aa39d633",
+  "system_prompt_chars": 5297,
+  "stdin_payload_chars": 50812,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28595,
+    "cached_tokens": 6784,
+    "completion_tokens": 940
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task/alpha_w02_s00_solver.py'); s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nr=pickle.load(open('/holdout_task/public_alpha_w02_s00.pkl','rb'))[0]; d=r['dataset']; gt=r['gt']; c=d['calibration_load_cells']; rng=np.random.default_rng(10)\\ng=np.array([1.14,.91,1.06,.95]); b=np.array([-.12,.07,.13,-.05]); lab=c['lab_id']; x=c['cmd_stress']; noise=c['true_stress']-x; y=g[lab]*x+b[lab]+noise\\nwith tempfile.TemporaryDirectory() as td:\\n root=Path(td); np.savez(root/'previous.npz',lab_id=lab,cmd_stress=x,true_stress=y)\\n for shift in (0.,.005,.025):\\n  for n in (0,1,2,3,4):\\n   err=[]\\n   for trial in range(100):\\n    idx=np.concatenate([rng.choice(np.flatnonzero(lab==k),n,replace=False) for k in range(4)])\\n    curr=y[idx]+shift\\n    if n>=3:\\n     curr[np.arange(4)*n+rng.integers(n,size=4)]+=rng.choice([-.4,.4],size=4)\\n    cal=m._calibrate(dict(lab_id=lab[idx],cmd_stress=x[idx],true_stress=curr),root)\\n    err.extend(np.max(abs((cal[:,0]-g)[:,None]*np.array([-2.5,2.5])+cal[:,1,None]-b[:,None]-shift),axis=1))\\n   print('bias drift',shift,'checks per lab',n,'stress p90/max',np.quantile(err,[.9,1]).round(6))\\ntr,te=d['train'],d['test']; out=m.solve_alpha_w02_s00(d); miss=~np.isfinite(te['coupon_features_raw']).all(axis=1)\\nfor name,pred,ref in [('strain',out['predicted_strain'],gt['te_clean']),('onset',out['initial_rate_pred'],gt['te_true_rate0'])]:\\n for wing in (0,1):\\n  for missing in (False,True):\\n   q=(te['lab_id']//2==wing)&(miss==missing); e=(pred-ref)[q]; print(name,'wing',wing,'missing',missing,'n',q.sum(),'rmse',np.sqrt(np.mean(e**2)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (in-batch consensus) -> H2 (same-lab archive support for ambiguous checks); public worst-lab clean strain/rate RMSE is 0.1075/0.0342 and maximum relative tau error is 0.86%.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the public schema and clean-label checks\",\"rejected_reason\":\"The public run has dense checks and no mounted archive, so it has not exercised the required sparse-check fallback.\"}],\"rationale\":\"Exercise the archive path with public check locations and noise, injecting known gains, bias drift, and EMI. If agreeing current checks cannot recover drift, revise how the archived calibration is updated. Break out clean strain and onset errors by wing and missingness to locate the remaining public prediction error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ddc2949b75416fe7523eb086057a5bffadfca24b28ae1dfb49d1e01535248642",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25805.73,
+      "usage_known": true,
+      "prompt_tokens": 28595,
+      "cached_tokens": 6784,
+      "completion_tokens": 940
+    }
+  ]
+}

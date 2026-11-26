@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eeac4138d5fa46abaa1d6a78b8d730c4",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:49:49.210979+00:00",
+  "ended_at_utc": "2026-11-26T18:50:17.817579+00:00",
+  "request_sha256": "cb8f9566a68106e03000ed18e4aa0b5d3af7212aa5300d917f49e55f1fccbfc7",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 63968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32544,
+    "cached_tokens": 6784,
+    "completion_tokens": 1119
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/batch07_nuisance_audit.py <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\np = runpy.run_path('/holdout_task/beta_w01_batch_07_solver.py')\\nwith open('public_beta_w01_batch_07.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nworst_profile = worst_equivariance = 0.\\nerrors = []\\nfor case in cases:\\n    s = case['study']\\n    banks = np.asarray(s['row_bank_id'])\\n    S, _ = p['_responses'](s)\\n    gain, offset = p['_calibration'](s)[banks].T\\n    y = (s['y_obs_raw'] - offset) / gain\\n    Z = s['Z_nuisance']\\n    ridge = s['nuisance_ridge']\\n    vals = np.column_stack((S, y))\\n    U, d, _ = np.linalg.svd(Z, full_matrices=False)\\n    independent = vals - U @ ((d*d/(d*d + ridge))[:, None] * (U.T @ vals))\\n    actual = p['_profile'](Z, vals, ridge)\\n    for b in np.unique(banks):\\n        keep = banks != b\\n        def fit(profile):\\n            V = profile(Z[keep], vals[keep], ridge)\\n            return p['_box_simplex'](V[:, :-1], V[:, -1], s['source_ridge'], s['u_box'], s['total_budget'])[0]\\n        w = fit(p['_profile'])\\n        w0 = fit(lambda z, v, r: v)\\n        R = Z[~keep]\\n        B = Z[keep]\\n        beta = np.linalg.solve(B.T @ B + ridge*np.eye(B.shape[1]), B.T @ (y[keep] - S[keep] @ w))\\n        errors.append((int(b), float(np.sqrt(np.mean((S[~keep] @ w + R @ beta - y[~keep])**2))), float(np.sqrt(np.mean((S[~keep] @ w0 - y[~keep])**2)))))\\n        worst_profile = max(worst_profile, np.max(np.abs(actual[~keep] - independent[~keep])))\\n    Q, _ = np.linalg.qr(np.random.default_rng(7).normal(size=(Z.shape[1], Z.shape[1])))\\n    solve = p['solve_beta_w01_batch_07']\\n    out, rotated = solve(s), solve(dict(s, Z_nuisance=Z @ Q))\\n    worst_equivariance = max(worst_equivariance, np.max(np.abs(out['weights'] - rotated['weights'])))\\nprint('held-out bank, profiled RMSE, no-nuisance RMSE:', errors)\\nprint(dict(worst_independent_profile_abs=worst_profile, worst_nuisance_rotation_weights_abs=worst_equivariance))\\nassert worst_profile < 1e-10 and worst_equivariance < 1e-7\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch07_nuisance_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current-only calibration and replacement reaction → H2 archive-corroborated calibration and additive separable transport; the worst bank-by-shift target error remains 8.36e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the full stencil and spike-deletion audits\",\n      \"rejected_reason\": \"Both passed on the unchanged candidate; the new audit targets nuisance profiling instead.\"\n    }\n  ],\n  \"rationale\": \"An independent SVD calculation checks the nuisance operator, while a basis rotation tests whether equivalent nuisance coordinates alter the recovered weights. A failure would require correcting the profile; held-out bank errors quantify the effect of omitting it. This regression study has no class labels or relay state.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f127f78cebcd2f8ee89614ccfa96479a36bc270d95f798f837487261621e79c7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29589.92,
+      "usage_known": true,
+      "prompt_tokens": 32544,
+      "cached_tokens": 6784,
+      "completion_tokens": 1119
+    }
+  ]
+}

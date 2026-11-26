@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "be65bc982c8e4d6497042dcf21ace5a7",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:07.582142+00:00",
+  "ended_at_utc": "2026-11-26T18:12:36.825292+00:00",
+  "request_sha256": "b61cbcda1209ddebea65cf20b60a22b0dec01c730879b474e9782252924d5648",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 42641,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26459,
+    "cached_tokens": 6784,
+    "completion_tokens": 1129
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('alpha_w01_batch_01_solver.py')\\ns=p.read_text(); i=s.index('def _crossings('); j=s.index('\\\\n\\\\ndef solve_',i)\\ns=s[:i]+'''def _crossings(curve, threshold, times, strain_0):\\n    values = np.column_stack((strain_0, curve))\\n    grid = np.r_[0., times]\\n    above = values >= threshold[:, None]\\n    rows = np.arange(len(values))\\n    hi = above.argmax(axis=1)\\n    lo = np.maximum(hi - 1, 0)\\n    span = values[rows, hi] - values[rows, lo]\\n    fraction = np.divide(threshold - values[rows, lo], span,\\n                         out=np.zeros(len(rows)), where=span > 0)\\n    crossing = grid[lo] + fraction * (grid[hi] - grid[lo])\\n    return np.where(above.any(axis=1), crossing, grid[-1])\\n'''+s[j:]\\ns=s.replace(\\\"_crossings(curve, test['critical_strain'], times)\\\",\\\"_crossings(curve, test['critical_strain'], times, test['strain_0'])\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_w01_batch_01_solver as m\\np=pickle.load(open('public_alpha_w01_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; a,b=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; o=m.solve_alpha_w01_batch_01(d)\\nassert np.allclose(m._crossings(g['te_clean'],b['critical_strain'],t,b['strain_0']),g['te_cross'],rtol=0,atol=1e-12)\\nfor lab in range(4):\\n k=b['lab_id']==lab; print('public lab',lab,'strain RMSE, secant MAE, hazard MAE',np.sqrt(np.mean((o['predicted_strain'][k]-g['te_clean'][k])**2)),np.mean(abs(o['secant_compliance'][k]-g['te_secant'][k])),np.mean(abs(o['hazard_crossing_times'][k]-g['te_cross'][k])))\\nprint('tau relative error',np.max(abs(o['estimated_taus']/g['taus']-1)))\\nfor lab in range(4):\\n k=a['lab_id']==lab; fold={**d,'train':{f:v[~k] for f,v in a.items()},'test':{f:np.concatenate([v[k],b[f]]) if f in b else v[k] for f,v in a.items() if f in b or f=='strain_curves_obs'}}\\n fold['test'].pop('strain_curves_obs',None)\\n if 'critical_strain' not in fold['test']: fold['test']['critical_strain']=np.full(k.sum()+len(b['lab_id']),1e8)\\n oo=m.solve_alpha_w01_batch_01(fold); e=np.abs(oo['predicted_strain'][:k.sum()]-a['strain_curves_obs'][k]); print('held-out lab',lab,'median absolute strain by early/late',np.median(e[:,:6]),np.median(e[:,6:]),'90th per-coupon MAE',np.quantile(e.mean(1),.9),'taus',oo['estimated_taus'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: interpolate threshold crossings from the onset anchor; this matched all 80 clean public targets, reducing pooled predicted hazard MAE from the sampled rule to 0.00186 in the diagnostic.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Solve the continuous relaxation equation for the crossing\",\"rejected_reason\":\"Onset-anchored linear interpolation exactly reproduces the public crossing convention.\"}],\"rationale\":\"Verify the corrected crossing operator independently on clean curves, then measure every output by lab. Leave-one-lab-out fits test whether the shared coefficients transfer across labs rather than benefiting from seeing their strain labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ab02f6b22986347355001f73f5270df09c3e840dbdd32c887432579cc5f29bfa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29202.83,
+      "usage_known": true,
+      "prompt_tokens": 26459,
+      "cached_tokens": 6784,
+      "completion_tokens": 1129
+    }
+  ]
+}

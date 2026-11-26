@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac0ac4e353574f27824f227568fbdcba",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_07__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:48:53.545592+00:00",
+  "ended_at_utc": "2026-11-26T18:49:16.749293+00:00",
+  "request_sha256": "e907e8551f2ae6f2dd724a89ae2d3477e9f347c6dd4b277bad8829b5b5bc1b19",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 56377,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29808,
+    "cached_tokens": 6784,
+    "completion_tokens": 864
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/beta07_anchor_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_w03_batch_07_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nfor item in pickle.loads((root / 'public_beta_w03_batch_07.pkl').read_bytes()):\\n    s, gt = item['study'], item['gt']\\n    sweep = {k: np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}\\n    bank, x, y = (sweep[k] for k in ('bank_id','ref_signal','raw_readout'))\\n    g, o = mod._ARCHIVE[1, bank].T\\n    clean = np.abs(y - g*x - o) <= 2e-6\\n    for name, omit in [('public', np.zeros(len(bank), dtype=bool)), ('hold_out_bank_2_anchor', (bank==2)&clean), ('hold_out_bank_3_anchor', (bank==3)&clean), ('hold_out_both_anchors', (bank>=2)&clean)]:\\n        out = mod.solve_beta_w03_batch_07(dict(s, sensor_calibration_sweeps={k:v[~omit] for k,v in sweep.items()}))\\n        w, f = out['weights'], out['terminal_field']\\n        D, z = gt['S_tilde'], gt['r_y']\\n        grad = D.T @ (D @ w-z) + s['source_ridge']*w\\n        nu = out['kkt_certificate']['nu_sum']\\n        gap = grad@w - nu*s['total_budget'] - s['u_box']*np.minimum(0, grad-nu).sum()\\n        errors = [np.linalg.norm(a-b)/np.linalg.norm(b) for a,b in [(w,gt['w_opt']), (f,gt['terminal_field_A'])]]\\n        print(name, 'omitted', omit.sum(), 'weight/field relative L2', *errors, 'reference KKT gap',gap)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta07_anchor_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (spot-confirmed historical calibration) -> H2 (test whether transport can identify the historical state without its sole clean spot); verified worst held-out Wing B RMS is 0.013768 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the previous spot-omission audit\",\n      \"rejected_reason\": \"It retained the sole clean Wing B spot in every slice, so it could not detect dependence on that spot.\"\n    }\n  ],\n  \"rationale\": \"Sparse sweeps are documented. Hold out each clean Wing B anchor from the recorded sweep while keeping the survey measurements fixed. If output errors rise materially, test whether an archived state corroborated by cross-wing predictions can recover calibration without a matching spot.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9651150d1ed7c886a8b8c182515bafb4005a3b14338f4b0503e32c624887fe50",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24196.85,
+      "usage_known": true,
+      "prompt_tokens": 29808,
+      "cached_tokens": 6784,
+      "completion_tokens": 864
+    }
+  ]
+}

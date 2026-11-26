@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "991668ee6f574f08b422d1b6eaee21fc",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:20:46.727807+00:00",
+  "ended_at_utc": "2026-11-26T18:21:25.209237+00:00",
+  "request_sha256": "b0b410e5250fd4152b0b53fa3f0640d5a7e54cccb012f5668c4fde0dc151c437",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 52622,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28861,
+    "cached_tokens": 6784,
+    "completion_tokens": 1603
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_w04_batch_04_solver.py')\\ns = p.read_text()\\na = s.index('    checks = split(')\\nb = s.index('    gain, offset = np.asarray(params).T', a)\\ns = s[:a] + '''    checks = split(study['sensor_calibration_sweeps'])\\n    current = [_fit_bank(x, y) if has_span(x) else None for x, y in checks]\\n    prior = [(1., 0.)] * 4\\n    if any(fit is None for fit in current):\\n        path = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n        if path.is_file():\\n            profiles = []\\n            for episode in json.loads(path.read_text()):\\n                banks = split(episode)\\n                if all(has_span(x) for x, _ in banks):\\n                    profiles.append([_fit_bank(x, y) for x, y in banks])\\n\\n            def mismatch(profile):\\n                # Identify the historical instrument profile from the observed banks.\\n                # Use spot readouts only when no current slope can be estimated.\\n                dense, spot = [], []\\n                for (x, y), fit, (g, o) in zip(checks, current, profile):\\n                    if fit is not None:\\n                        gc, oc = fit\\n                        dense.append(np.hypot(g - gc, o - oc))\\n                    elif x.size:\\n                        spot.append(np.median(np.abs(g * x + o - y)))\\n                errors = dense or spot\\n                return np.median(errors) if errors else 0.\\n\\n            if profiles:\\n                prior = min(reversed(profiles), key=mismatch)\\n    params = []\\n    for (x, y), fit, (gain, offset) in zip(checks, current, prior):\\n        if fit is not None:\\n            gain, offset = fit\\n        elif x.size:\\n            offset = float(np.median(y - gain * x))\\n        params.append((gain, offset))\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w04_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('public_beta_w04_batch_04.pkl','rb'))[0]['study']\\nh = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nworst = {'public': 0., 'archive_LOEO': 0.}\\n# Leave each historical episode out of profile selection without altering the archive.\\nreal_path = m.Path\\nfor epoch, episode in enumerate(h + [s['sensor_calibration_sweeps']]):\\n    current = {k: np.asarray(v) for k, v in episode.items()}\\n    label = 'public' if epoch == len(h) else 'archive_LOEO'\\n    class History:\\n        def __init__(self, path): pass\\n        def is_file(self): return True\\n        def read_text(self): return json.dumps([e for i,e in enumerate(h) if i != epoch])\\n    m.Path = History\\n    study = dict(s, sensor_calibration_sweeps=current)\\n    base = m._calibrate(study)\\n    bank = current['bank_id']\\n    for sparse in ((0,1), (2,3), (0,1,2,3)):\\n        for spot in (True, False):\\n            if not spot and len(sparse) == 4:\\n                continue\\n            keep = ~np.isin(bank, sparse)\\n            if spot:\\n                for b in sparse:\\n                    keep[np.flatnonzero(bank == b)[0]] = True\\n            sweeps = {k: v[keep] for k, v in current.items()}\\n            err = np.max(np.abs(m._calibrate(dict(study, sensor_calibration_sweeps=sweeps)) - base))\\n            worst[label] = max(worst[label], float(err))\\n    m.Path = real_path\\nprint('Worst sensor correction errors against full-sweep fits:', worst)\\nassert worst['public'] < 1e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 most-recent archive gains persist -> H2 select a joint bank profile from current references; the latest gains miss the current sweep by up to 0.672 raw units across a bank’s span.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The latest historical bank gains are a reliable calibration prior when one wing is sparsely observed.\",\n    \"empirical_witness\": \"The latest episode has unit gain on all banks, but the current episode matches the earlier non-unit gain profile on all four banks.\",\n    \"causal_blanket_diagnosis\": \"Calibration profiles recur across episodes; recency alone does not identify the current profile. A single spot can correct an offset but cannot identify a gain.\",\n    \"sublated_pivot\": \"Fit current banks with usable sweeps directly and use them to select a joint archive profile for sparse banks.\",\n    \"risk_kind\": \"stale_calibration_prior\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use the earlier non-unit profile.\",\n      \"rejected_reason\": \"It matches the current batch but would miscalibrate the observed unit-gain episodes.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified transport and dense calibration unchanged. Thin real sweeps to one spot per bank or remove a wing’s sweeps entirely to test the new fallback. Leave each historical episode out of the profile library to distinguish recovering a recurring profile from extrapolating to a profile absent from the archive.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b5104ecf994c3ad8d63c9a81397397b702debdd5ca3db0482fd4bb65e5bd5d50",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39432.59,
+      "usage_known": true,
+      "prompt_tokens": 28861,
+      "cached_tokens": 6784,
+      "completion_tokens": 1603
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa0465f16a5b495c8057c901ce63d452",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:13:01.772828+00:00",
+  "ended_at_utc": "2026-11-26T18:13:33.905185+00:00",
+  "request_sha256": "8f4c9a7f06a09baf3f32e607b238b4945d1189e16b2505c57f9b3db79102f14a",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 58015,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31281,
+    "cached_tokens": 11136,
+    "completion_tokens": 1290
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/polymer_stress.py <<'PY'\\nexec(open('/tmp/polymer_eval.py').read().split(\\\"print('taus predicted\\\")[0])\\ntr = d['train']; dt = d['past_dt']; t = d['eval_times']; lab = tr['lab_id']; maps = m._load_cells(d['calibration_load_cells']); x, xt = m._alignment(tr, q); keep = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor k in range(4):\\n    sel = keep & (lab != k)\\n    taus, w, b = m._fit({key: val[sel] for key, val in tr.items()}, x[sel], maps, dt, t)\\n    h, p = m._stress(q, maps); amp = m._jump(taus, h, p, q['initial_memory_states'], dt)*w\\n    drift = np.c_[np.ones(len(xt)),xt] @ b\\n    miss = ~np.isfinite(q['coupon_features_raw']).all(axis=1)\\n    drift[miss] = q['instant_rate_obs'][miss] - amp[miss] @ (1/taus)\\n    y0 = q['strain_0']; y = y0[:,None] + amp @ (-np.expm1(-t[:,None]/taus)).T + drift[:,None]*t\\n    outputs = (y, (y[:,-1]-y0)/np.maximum(abs(p),.5), m._crossings(y,y0,q['critical_strain'],t))\\n    j = q['lab_id']==k\\n    print('withheld responses only lab', k, 'tau max relative', max(abs(taus/g['taus']-1)), 'strain/secant/hazard RMSE', [np.sqrt(np.mean((v[j]-g[target][j])**2)) for v,target in zip(outputs,['te_clean','te_secant','te_cross'])])\\nprint('public true and fitted gain/bias', np.c_[g['stress_gains'],g['stress_biases'],maps]); print('public theta', g['theta']); print('fitted theta', np.r_[m._fit({key: val[keep] for key,val in tr.items()},x[keep],maps,dt,t)[1:][0], m._fit({key: val[keep] for key,val in tr.items()},x[keep],maps,dt,t)[2]])\\nimport json\\nhistory = json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))[-1]\\nc = d['calibration_load_cells']; nominal = (1.,0.); command = np.asarray(c['cmd_stress']); labs = np.asarray(c['lab_id'])\\nfor k in range(4):\\n    prior, ok = m._affine(*m._lab_checks(history,k), nominal)\\n    assert ok\\n    idx = np.flatnonzero(labs==k); idx = idx[np.argsort(command[idx])]\\n    print('archive lab',k,prior,'current check endpoints', command[idx[[0,-1]]])\\n    for label, retained, corrupt in [('single spot',idx[:1],False),('two spots',idx[[0,-1]],False),('three checks with EMI',idx[[0,len(idx)//2,-1]],True),('full sweep with EMI',idx,True)]:\\n        rows = np.r_[np.flatnonzero(labs!=k),retained]; j=labs[rows]==k\\n        panel = {key: np.asarray(val)[rows].copy() for key,val in c.items()}\\n        if corrupt:\\n            panel['true_stress'][np.flatnonzero(j)[0]] += .4\\n        est = m._load_cells(panel)[k]\\n        error = max(abs(np.c_[command[idx], np.ones(len(idx))] @ (est-maps[k])))\\n        print(label, 'max stress discrepancy against full public sweep', round(error,6))\\na = m._crossings(np.array([[.2,1.],[.1,.2],[1.,0.]]),np.array([0.,0.,1.]),np.array([.1,.5,1.]),np.array([.5,1.]))\\nassert np.allclose(a,[.25,1.,0.])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/polymer_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 leave out responses and reference rows together -> H2 leave out responses while retaining available reference rows; current worst public lab RMSE is 0.01100 strain, 0.04231 secant, and 0.02013 crossing time.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Separate constitutive transfer from loss of reference rows. Mask current calibration checks and inject EMI to see whether archive fallback overrides usable current measurements; change the fallback only if those tests expose a material error. Verify first-segment, no-hit, and onset crossings directly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c16ee217495270c177f9753690739b15596cc40d104373fb88263b93a2434582",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33034.17,
+      "usage_known": true,
+      "prompt_tokens": 31281,
+      "cached_tokens": 11136,
+      "completion_tokens": 1290
+    }
+  ]
+}

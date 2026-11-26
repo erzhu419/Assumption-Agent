@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "138d1d950a4041ecba5bc31ad3211573",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:38:01.788774+00:00",
+  "ended_at_utc": "2026-11-26T18:38:34.602146+00:00",
+  "request_sha256": "6020d9b12de7dca348efbc368724fe510ed09ef4f15f1616d067c9b9381e0552",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 39206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25899,
+    "cached_tokens": 6784,
+    "completion_tokens": 1261
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_w03_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('public_beta_w03_batch_06.pkl', 'rb'))[0]\\ns, gt = item['study'], item['gt']\\nout = m.solve_beta_w03_batch_06(s)\\nfor key, ref in [('weights', 'w_opt'), ('terminal_field', 'terminal_field_A')]:\\n    np.testing.assert_allclose(out[key], gt[ref], atol=1e-10, rtol=1e-9)\\nbase = m._calibrate(s)\\nworst = 0.\\nfor keep in (0, 1, 2):\\n    sweeps = {k: v[:keep] for k, v in s['sensor_calibration_sweeps'].items()}\\n    e = np.max(np.abs(m._calibrate(dict(s, sensor_calibration_sweeps=sweeps)) - base))\\n    worst = max(worst, e)\\n    assert e < 2e-6, (keep, e)\\nhistory = json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor ep in history[:-1]:\\n    b, x, y = [np.array(ep[k]) for k in ('bank_id', 'ref_signal', 'raw_readout')]\\n    for wing in ((0, 1), (2, 3)):\\n        contaminated = y.copy()\\n        for bank in wing:\\n            ix = np.flatnonzero(b == bank)\\n            contaminated[ix[[0, -1]]] += [0.4, -0.4]\\n        pred = m._calibrate(dict(s, sensor_calibration_sweeps=dict(bank_id=b, ref_signal=x, raw_readout=contaminated), row_bank_id=b, y_obs_raw=y))\\n        e = np.max(np.abs(pred - x))\\n        worst = max(worst, e)\\n        assert e < 3e-6, (ep['episode_short_name'], wing, e)\\nS = gt['S_tilde']\\ny = gt['r_y']\\ncap = s['u_box']\\nridge = s['source_ridge']\\nworst_gap = 0.\\nfor budget in (0., .01, 1., s['total_budget'], 11.99, 12.):\\n    for yy in (y, y + 10 * S[:, 0] - 10 * S[:, -1]):\\n        w, c = m._box_simplex(S, yy, ridge, cap, budget)\\n        assert abs(w.sum() - budget) < 1e-9 and np.all((w >= 0) & (w <= cap))\\n        r = S @ w - yy\\n        j = .5 * (r @ r + ridge * (w @ w))\\n        g = S.T @ r + ridge * w\\n        nu = c['nu_sum']\\n        lb = j - g @ w + nu * budget + cap * np.minimum(0, g - nu).sum()\\n        np.testing.assert_allclose(g - nu - c['lam_lower'] + c['lam_upper'], 0, atol=1e-10)\\n        assert abs(j - c['primal_objective']) < 1e-10 and c['dual_lower_bound'] <= lb + 1e-10\\n        gap = j - min(lb, c['dual_lower_bound'])\\n        worst_gap = max(worst_gap, gap)\\n        assert gap < 2e-8, (budget, gap)\\nprint(f'Worst sparse/EMI calibration error: {worst:.3e}; worst box-simplex stress gap: {worst_gap:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived laminar transport -> H2: full vortex-enhanced transport; public validation passed, with worst per-bank profiled residual error 1.55e-15 and terminal-field relative error 7.07e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the public calibration\",\n      \"rejected_reason\": \"The archived state already reproduces the public profiled observations to floating-point precision.\"\n    }\n  ],\n  \"rationale\": \"Stress the two behaviors not exercised by the clean public case: calibration with missing checks or wing-specific spikes, and certification on active or saturated box faces. A failure would identify whether to revise the calibration fallback or the constrained optimizer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b066c4bbacfa336b2098d428a636bf3d02be7879c20f09d21b4c8a250b8b45a3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33769.44,
+      "usage_known": true,
+      "prompt_tokens": 25899,
+      "cached_tokens": 6784,
+      "completion_tokens": 1261
+    }
+  ]
+}

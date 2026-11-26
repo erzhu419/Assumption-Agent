@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6121f7c808f4c57ba310154fafbcca0",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:14:37.534273+00:00",
+  "ended_at_utc": "2026-11-26T18:15:17.083063+00:00",
+  "request_sha256": "a3dcb214e1c68ddfb385aeb119275b6daa39882f6b216e6e765ee1528408acca",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 75041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36874,
+    "cached_tokens": 11136,
+    "completion_tokens": 1721
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w01_batch_01_solver.py')\\ns = p.read_text()\\npos = s.index('def _crossings(')\\ns = s[:pos] + '''def _lab_drift(train, x, maps, dt, times, taus, weights):\\n    # Reference-panel center and scale errors affect the linear drift, not memory.\\n    fitted, _ = _predict(train, x, maps, dt, times, taus, weights)\\n    late = slice(len(times) // 2, None)\\n    residual = train['strain_curves_obs'][:, late] - fitted[:, late]\\n    target = np.median(residual / times[late], axis=1)\\n    drift = x @ weights[3:]\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    correction = np.zeros((len(maps), 2))\\n    for lab in range(len(maps)):\\n        rows = (train['lab_id'] == lab) & complete\\n        if rows.sum() < 3:\\n            continue\\n        design = np.column_stack((np.ones(rows.sum()), drift[rows]))\\n        if np.linalg.matrix_rank(design) < 2:\\n            continue\\n        y = target[rows]\\n        correction[lab] = least_squares(\\n            lambda coef: (design @ coef - y) / _mad(y), np.zeros(2),\\n            loss='soft_l1', f_scale=1.5).x\\n    return correction\\n\\n\\n''' + s[pos:]\\nold = \\\"    curve, hold = _predict(test, xt, maps, dt, times, taus, weights)\\\\n\\\"\\nnew = old + \\\"    offset, slope = _lab_drift(train, x, maps, dt, times, taus, weights)[test['lab_id']].T\\\\n    complete_test = np.isfinite(test['coupon_features_raw']).all(axis=1)\\\\n    drift = np.where(complete_test, offset + slope * (xt @ weights[3:]), 0.)\\\\n    curve += drift[:, None] * times\\\\n\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\ncat > /tmp/verify_polymer_final.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'alpha_w01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\np = pickle.load(open(root+'public_alpha_w01_batch_01.pkl','rb'))[0]\\nd, g = p['dataset'], p['gt']\\na, b, t = d['train'], d['test'], d['eval_times']\\nsolve = m.solve_alpha_w01_batch_01\\no = solve(d)\\ncurve = o['predicted_strain']\\n_, hold = m._stress(b, m._load_cells(d['calibration_load_cells']))\\nnp.testing.assert_allclose(o['secant_compliance'], (curve[:,-1]-b['strain_0'])/np.maximum(abs(hold),.5), atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(m._crossings(g['te_clean'], b['critical_strain'], t, b['strain_0']), g['te_cross'], atol=1e-12, rtol=0)\\nassert np.all(np.diff(o['estimated_taus']) > 0)\\nprint('tau max relative error', np.max(abs(o['estimated_taus']/g['taus']-1)))\\nfor lab in range(4):\\n    k = b['lab_id'] == lab\\n    print('public lab', lab, 'strain RMSE, secant MAE, hazard MAE', np.mean((curve[k]-g['te_clean'][k])**2)**.5, np.mean(abs(o['secant_compliance'][k]-g['te_secant'][k])), np.mean(abs(o['hazard_crossing_times'][k]-g['te_cross'][k])))\\n# A change of lab feature units and origin must cancel through reference alignment.\\nmoved = dict(d)\\nfor part in ('train', 'test'):\\n    block = d[part]; lab = block['lab_id']; scale = np.array([1.3, .6, 2., .8])[lab,None]; shift = np.array([2., -1., .4, -2.])[lab,None]\\n    moved[part] = dict(block, **{k: block[k]*scale+shift for k in ('ref_coupons','coupon_features_raw')})\\nfor k, v in solve(moved).items():\\n    np.testing.assert_allclose(v, o[k], atol=2e-6, rtol=0)\\nprint('panel affine gauge passed')\\n# Sparse/EMI perturbation: one clean spot on lab 2, one bad reading on lab 3.\\nc = d['calibration_load_cells']; ids = c['lab_id']; keep = ids != 2; keep[np.flatnonzero(ids==2)[0]] = True\\nchecks = {k: v[keep].copy() for k,v in c.items()}\\nchecks['true_stress'][np.flatnonzero(checks['lab_id']==3)[0]] += 1.\\nstress = solve(dict(d, calibration_load_cells=checks))\\nerr = np.max(abs(stress['predicted_strain'] - curve), axis=1)\\nassert np.max(err) < .01\\nprint('sparse and EMI worst strain change', np.max(err))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_polymer_final.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: add a training-only lab-affine drift correction to the shared memory law; the held-out coupon trial cut worst-lab late median strain error from 0.01270 to 0.00722 and worst public complete-coupon lab secant MAE from 0.03336 to 0.00352.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t12\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply half the fitted drift correction\",\n      \"rejected_reason\": \"Full correction improved the worst held-out lab more, while lab 2's late median error increased by only 0.00037 from baseline.\"\n    }\n  ],\n  \"rationale\": \"Promote the correction supported by held-out coupons without changing the memory law or the missing-feature prediction path. Check the saved artifact in an isolated process: output errors by lab catch a regression from integration, the affine-unit test catches misplaced correction terms, and sparse and noisy load-cell checks exercise the two calibration paths.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "26e5c6f275e3169a7a5dcf4e54e257e4c693b3438cd4bae284945efe214ed8fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41404.18,
+      "usage_known": true,
+      "prompt_tokens": 36874,
+      "cached_tokens": 11136,
+      "completion_tokens": 1721
+    }
+  ]
+}

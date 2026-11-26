@@ -1,0 +1,121 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_w03_s00_a8315dcb22ed",
+    "source_hash": "a8315dcb22eda281dac0ac17071ced23d9aa6b648c7f20a0fa4549f75d0b7712",
+    "parent_ids": [],
+    "source_episode_id": "alpha_w03_s00__coupon_creep_baseline",
+    "task_id": "alpha_w03_s00__coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/creep_margin_audit.py",
+        "archived_relpath": "producers/tmp__creep_margin_audit.py",
+        "bytes": 2882,
+        "sha256": "1908840caf8a46ce48147c2ec207e57b705c32141445bb7b6faf327921dd7305"
+      },
+      {
+        "container_path": "/tmp/creep_missing_cv.py",
+        "archived_relpath": "producers/tmp__creep_missing_cv.py",
+        "bytes": 1055,
+        "sha256": "2409cd242e14b288ad4222a3f8e7f333cf0c91765380a7a941d68bdfe51240dd"
+      },
+      {
+        "container_path": "/tmp/creep_validate.py",
+        "archived_relpath": "producers/tmp__creep_validate.py",
+        "bytes": 1671,
+        "sha256": "0a56292e894eb96172d2a6517f692fe6e678541a055c2c62d3d493f737cde03c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -la /tmp/hegel_continual_archive /tmp/hegel_wormhole_skills 2>/dev/null; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation Cauchy robust IRLS reference panel alignment'; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nD=pickle.load(open('public_alpha_w03_s00.pkl','rb'))\ndef brief(d,level=0):\n for k,v in d.items():\n  if isinstance(v,dict):\n   print(' '*level,k,':');brief(v,level+2)\n  else:\n   a=np.asarray(v)\n   print(' '*level,k,type(v).__name__,a.shape,a.dtype,",
+      "for f in autogenous_prim_robust_trend_decomposition.cauchy_linear_fit autogenous_prim_reference_panel_balancing.align_reference_panel autogenous_prim_reference_panel_balancing.balanced_cell_weights autogenous_prim_reference_panel_balancing.weighted_column_fill; do PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe \"$f\"; done\nls -ld /tmp/hegel_continual_archive 2>/dev/null; find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s bytes\\n' 2>/dev/null | head -30\ncd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nL=pickle.load(open('public_alpha_w03_s00.pkl','rb')",
+      "cd /holdout_task && cat > alpha_w03_s00_solver.py <<'PY'\n\"\"\"Affine-calibrated, two-branch sub-yield hereditary creep.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _line(x, y):\n    \"\"\"Resistant pairwise slope start, then refit with bounded influence.\"\"\"\n    i, j = np.triu_indices(len(x), 1)\n    dx = x[i] - x[j]\n    good = np.abs(dx) > 1e-6\n    if not good.any():\n        return np.array([1., np.median(y - x) if len(x) else 0.])\n    slope = np.median((y[i[good]] - y[j[good]]) / dx[good])\n    b = np.array([slope, np.median(y - slope*x)])\n    a = np.column_stack((x, np.ones(",
+      "cd /holdout_task && cat > /tmp/creep_validate.py <<'PY'\nimport importlib.util, pickle, numpy as np\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w03_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nd=pickle.load(open('/holdout_task/public_alpha_w03_s00.pkl','rb'))[0]['dataset']; a=d['train']; x,h,p=m._prep(d); dt,t=d['past_dt'],d['eval_times']; y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; n=len(y); x,h,p=x[:n],h[:n],p[:n]\nfor col in ['lab_id','stratum']:\n for i in np.unique(a[col]):\n  v=a[col]==i; f=~v; tau,w=m.",
+      "sed '/^for col/,$d' /tmp/creep_validate.py > /tmp/creep_missing_cv.py\ncat >> /tmp/creep_missing_cv.py <<'PY'\nfrom itertools import product\ncomplete=np.isfinite(a['coupon_features_raw']).all(axis=1)\nfor col in ['lab_id','stratum']:\n for i in np.unique(a[col]):\n  v=a[col]==i\n  for mode in ('all','complete'):\n   f=~v if mode=='all' else ~v & complete\n   tau,w=m._fit(x[f],h[f],p[f],dt,t,y[f],r[f]); c,b,*_=m._design(tau,x[v],h[v],p[v],dt,t)\n   ce=np.abs(c@w-y[v]); re=np.abs(b@w-r[v]); vc=complete[v]\n   print(col,i,mode,'tau',tau.round(5),'all curve/rate med',np.round([np.median(ce),np.median(re)],6",
+      "cd /holdout_task && grep -inE 'archive|calibrat|artifact|sparse|constraint|scipy' public_asset_index.json | head -35; python3 -I - <<'PY'\nimport numpy as np, scipy\nprint('numpy', np.__version__, 'scipy', scipy.__version__)\ntry:\n from threadpoolctl import threadpool_info\n print([(x['internal_api'],x['num_threads']) for x in threadpool_info()])\nexcept ImportError:\n pass\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w03_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exe",
+      "cd /holdout_task && sed -n '1,155p' public_asset_index.json && printf '\\nArchive documentation or mounts:\\n' && find /pretrain_task -maxdepth 2 -type f -printf '%f\\n' | head -25 && grep -E 'hegel_continual|holdout_task' /proc/self/mountinfo | cut -c1-220; cd /holdout_task && /usr/bin/time -f 'default BLAS: %e s' timeout 25s python3 -I validate_public_schema.py",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_w03_s00_solver.py')\ns = p.read_text().replace('import numpy as np', 'import json\\nimport pickle\\nfrom pathlib import Path\\n\\nimport numpy as np', 1)\npos = s.index('\\ndef _prep(d):')\ns = s[:pos] + '''\n_ARCHIVE = Path('/tmp/hegel_continual_archive')\n\n\ndef _checks(calibration, lab):\n    x = np.asarray(calibration['cmd_stress'], dtype=float)\n    y = np.asarray(calibration['true_stress'], dtype=float)\n    use = (np.asarray(calibration['lab_id']) == lab) & np.isfinite(x) & np.isfinite(y)\n    return x[use], y[use]\n\n\ndef _su",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/creep_validate.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('/holdout_task/public_alpha_w03_s00.pkl', 'rb') as f:\n    original = pickle.load(f)[0]['dataset']\nbase = m.solve_alpha_w03_s00(original)\nwith tempfile.TemporaryDirectory() as directory:\n    m._ARCHIVE = Path(directory)\n    for",
+      "set -e\ncat > /tmp/creep_margin_audit.py <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root+'alpha_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open(root+'public_alpha_w03_s00.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\na = d['train']; n = len(a['lab_id']); lab = a['lab_id']; wing = lab//2\nx,h,p = (v[:n] for v in m._prep(d)); dt,t = d['past_dt'],d['eval_times']\ny = a['strain_curves_o"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__creep_margin_audit.py",
+      "primary_producer_container_path": "/tmp/creep_margin_audit.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_w03_s00_solver.py",
+        "filename": "alpha_w03_s00_solver.py",
+        "bytes": 8709,
+        "sha256": "7f06c1f8bdafb13498da03c9ecd183d2643ff118eb78f9cb632c57205110fa49",
+        "content_addressed_ref": "content_addressed_blobs/7f06c1f8bdafb13498da03c9ecd183d2643ff118eb78f9cb632c57205110fa49.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_w03_s00_solver.py"
+    ],
+    "exported_pure_functions": [
+      "mad",
+      "metrics"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a8315dcb22eda281dac0ac17071ced23d9aa6b648c7f20a0fa4549f75d0b7712",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncat > /tmp/creep_margin_audit.py <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver',",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a8315dcb22eda281dac0ac17071ced23d9aa6b648c7f20a0fa4549f75d0b7712",
+        "expected_candidate_sha256": "a8315dcb22eda281dac0ac17071ced23d9aa6b648c7f20a0fa4549f75d0b7712",
+        "computed_candidate_sha256": "a8315dcb22eda281dac0ac17071ced23d9aa6b648c7f20a0fa4549f75d0b7712",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_w03_s00_solver.py",
+            "bytes": 8709
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a8315dcb"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "mad",
+        "code": "def mad(z):\n    return max(1e-06, 1.4826 * np.median(np.abs(z - np.median(z))))"
+      },
+      {
+        "name": "metrics",
+        "code": "def metrics(ec, er):\n    return np.array([np.median(abs(ec)), np.quantile(abs(er), 0.9), np.max(np.median(abs(ec), axis=0))])"
+      }
+    ]
+  }
+}

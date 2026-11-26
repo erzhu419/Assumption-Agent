@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "070e9d1b45904f368b8cd650e807a7ea",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:27:24.176382+00:00",
+  "ended_at_utc": "2026-11-26T18:27:57.414983+00:00",
+  "request_sha256": "91b69fe7015fa12aab56348963e15291dd124d6c143fc279e1b0f207a4905484",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44156,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26650,
+    "cached_tokens": 6784,
+    "completion_tokens": 1345
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_05_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem, = pickle.load(open('public_beta_w04_batch_05.pkl', 'rb'))\\ns, gt = item['study'], item['gt']\\nout = m.solve_beta_w04_batch_05(s)\\nw = out['weights']; c = out['kkt_certificate']; S, r = gt['S_tilde'], gt['r_y']; ridge, cap, budget = (s[k] for k in ('source_ridge', 'u_box', 'total_budget'))\\ng = S.T @ (S @ w - r) + ridge * w\\nnu = c['nu_sum']\\ngap = g @ w - nu * budget - cap * np.minimum(g - nu, 0).sum()\\nfield = out['terminal_field']; ref = gt['terminal_field_A']\\nfield_error = np.linalg.norm(field-ref) / np.linalg.norm(ref)\\nassert abs(w.sum()-budget) < 1e-10 and w.min() >= 0 and w.max() <= cap\\nassert -1e-12 <= gap < 1e-6 and field_error < 1e-5\\nD, _ = m._forward(s)\\nR = m._profile(s['Z_nuisance'], np.column_stack((D, m._calibrate(s))), s['nuisance_ridge'])\\nshift_error = np.max(np.abs(R[:, :-1] - S).reshape(len(s['mu_shifts']), -1), axis=1)\\nassert shift_error.max() < 1e-12\\nhistory = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\narchive_profiles = m._ARCHIVE_PROFILES.copy()\\nprofiles = []\\nfor e in history:\\n    bank, x, y = (np.asarray(e[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    profiles.append(np.array([m._fit_bank(x[bank == b], y[bank == b]) for b in range(4)]))\\nrows = s['row_bank_id']; physical = np.linspace(-0.2, 0.2, len(rows)); worst = 0.; count = 0\\nfor i, profile in enumerate(profiles):\\n    m._ARCHIVE_PROFILES = np.asarray([p for j, p in enumerate(profiles) if j != i])\\n    for b in range(4):\\n        x = np.array([-0.95, 1.25])\\n        for spike_position in range(2):\\n            for spike in (-0.168, 0.168):\\n                y = x * profile[b, 0] + profile[b, 1]\\n                y[spike_position] += spike\\n                test = dict(s, sensor_calibration_sweeps=dict(bank_id=np.full(2,b), ref_signal=x, raw_readout=y), y_obs_raw=physical * profile[rows,0] + profile[rows,1])\\n                worst = max(worst, np.max(np.abs(m._calibrate(test) - physical)))\\n                count += 1\\nm._ARCHIVE_PROFILES = archive_profiles\\nassert worst < 3e-6, worst\\nH = np.diag([1.,2.,3.,4.]); linear = np.array([-5., -1., 1., 5.])\\nfor budget in (0., 0.3, 1., 1.6, 2., 3.5, 4.):\\n    w, nu = m._box_simplex(H,linear,1.,budget)\\n    g = H @ w + linear\\n    gap_case = g @ w - nu * budget - np.minimum(g-nu, 0).sum()\\n    assert np.all((0 <= w) & (w <= 1)) and abs(w.sum()-budget)<1e-10 and abs(gap_case)<1e-10\\nprint(f'Public KKT gap: {gap:.3g}; terminal relative L2 error: {field_error:.3g}; worst shift design max error: {shift_error.max():.3g}; worst leave-episode-out calibration absolute error: {worst:.3g} ({count} stress slices); 7 budget cases passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse current sweeps → archived joint bank calibration with vortex-coupled transport; the public schema passes and the worst bank's projected observation error is 4.27×10⁻⁷.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public design agreement confirms that the full spatial interaction resolves the stencil omission. Stress the remaining failure modes before submission: a calibration profile that fails when its source episode is withheld would require revising profile selection, and a nonzero gap at a budget boundary would require correcting the active-set solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "520cac00fb3a11a56ac31ad6db8dcfbd4ce38e3435625b930cb64d1b4cc34b3f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34167.38,
+      "usage_known": true,
+      "prompt_tokens": 26650,
+      "cached_tokens": 6784,
+      "completion_tokens": 1345
+    }
+  ]
+}

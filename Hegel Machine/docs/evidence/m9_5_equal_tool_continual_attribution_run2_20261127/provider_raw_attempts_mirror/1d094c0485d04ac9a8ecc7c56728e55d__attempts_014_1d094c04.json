@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1d094c0485d04ac9a8ecc7c56728e55d",
+  "call_seq": 14,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:23:55.596705+00:00",
+  "ended_at_utc": "2026-11-26T18:24:23.461522+00:00",
+  "request_sha256": "14b3249c82698945b8523f6ed30eff25c3ee8105cf3a571b1ae3211238fc8781",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 70845,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34641,
+    "cached_tokens": 6784,
+    "completion_tokens": 1085
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\n\\nf = runpy.run_path('/holdout_task/beta_w03_batch_04_solver.py')\\nwith open('public_beta_w03_batch_04.pkl', 'rb') as fp:\\n    item = pickle.load(fp)[0]\\ns, gt = item['study'], item['gt']\\nbank, ref, raw = (np.asarray(s['sensor_calibration_sweeps'][k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\nS, y = gt['S_tilde'], gt['r_y']\\nregimes = {'clean': [], 'EMI': []}\\nfor anchor, b in enumerate(bank):\\n    keep = bank // 2 != b // 2\\n    keep[anchor] = True\\n    for delta in (0., -.18, .18):\\n        altered = raw.copy()\\n        altered[anchor] += delta\\n        case = dict(s, sensor_calibration_sweeps=dict(bank_id=bank[keep], ref_signal=ref[keep], raw_readout=altered[keep]))\\n        out = f['solve_beta_w03_batch_04'](case)\\n        w, c = out['weights'], out['kkt_certificate']\\n        r = S @ w - y\\n        g = S.T @ r + s['source_ridge'] * w\\n        p = .5 * (r @ r + s['source_ridge'] * (w @ w))\\n        nu = c['nu_sum']\\n        lb = p - g @ w + nu * s['total_budget'] + s['u_box'] * np.minimum(g - nu, 0).sum()\\n        metrics = [np.linalg.norm(w - gt['w_opt']) / np.linalg.norm(gt['w_opt']), np.linalg.norm(out['terminal_field'] - gt['terminal_field_A']) / np.linalg.norm(gt['terminal_field_A']), abs(c['primal_objective'] - p), p - min(lb, c['dual_lower_bound'])]\\n        regimes['EMI' if delta else 'clean'].append((metrics, (int(b), anchor, delta)))\\n        if anchor == 24 and b == 2 and delta == -.18:\\n            print('Exact EMI regression witness (weight, field, primal mismatch, external gap):', metrics)\\n        assert abs(w.sum() - s['total_budget']) <= 1e-7 and w.min() >= -1e-7 and w.max() <= s['u_box'] + 1e-7\\nfor regime, records in regimes.items():\\n    worst = [max((m[i], label) for m, label in records) for i in range(4)]\\n    print(regime, len(records), 'slices; per-metric maximum and (bank, anchor, spike):', worst)\\n    assert worst[3][0] <= 1e-6 and worst[2][0] <= 1e-6 and max(worst[0][0], worst[1][0]) <= 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single-spot archive selection → corroborated wing selection: the largest-drift EMI slice now has a 4.92e-8 external KKT gap, down from 0.122; per-metric maxima across all anchors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\n      \"ng_t13\"\n    ]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous audit solved only the slice with maximum observation drift, which need not maximize weight, field, or certificate error. Solve all 144 slices and replay the exact failure before submitting; if any gap exceeds tolerance, the reported bank and anchor will identify where to inspect calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "62e5a81a5b457847152537b798be8b901cdf9884a8afbc6b2f77ac5dc2092441",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28782.21,
+      "usage_known": true,
+      "prompt_tokens": 34641,
+      "cached_tokens": 6784,
+      "completion_tokens": 1085
+    }
+  ]
+}

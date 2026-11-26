@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc1f9efe81d74f7c9d28baeeccd1788e",
+  "call_seq": 14,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:33:29.766331+00:00",
+  "ended_at_utc": "2026-11-26T18:34:01.289797+00:00",
+  "request_sha256": "a407bd29cad866f8bc98f5f260e8e16d64573c68aebd33d8601065ae8993336e",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 70642,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35517,
+    "cached_tokens": 0,
+    "completion_tokens": 1293
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/holdout_task/alpha_w03_batch_05_solver.py\\ncp \\\"$p\\\" /tmp/creep_before_drift.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_w03_batch_05_solver.py')\\ns = p.read_text()\\na = s.index('    c, r = _design(tau, x[n:], h[n:], p[n:], dt, t, sy)')\\nb = s.index('    # Missing covariates', a)\\ns = s[:a] + '''    c, r = _design(tau, x[n:], h[n:], p[n:], dt, t, sy)\\n    curves = te['strain_0'][:, None] + c @ coef\\n    rates = r @ coef\\n    observed_rate = np.asarray(te['instant_rate_obs'])\\n    incomplete = ~np.isfinite(te['coupon_features_raw']).all(axis=1) & np.isfinite(observed_rate)\\n\\n    # Estimate persistent lab drift from late training measurements without\\n    # changing the shared hereditary or viscoplastic coefficients.\\n    late = (t >= np.median(t)) & (t > 0)\\n    if late.any():\\n        j = np.flatnonzero(complete)\\n        train_c, _ = _design(tau, x[j], h[j], p[j], dt, t[late], sy)\\n        residual = (tr['strain_curves_obs'][j][:, late] - tr['strain_0'][j, None]\\n                    - train_c @ coef)\\n        drift = np.median(residual / t[late], axis=1)\\n        train_labs = tr['lab_id'][j]\\n        for lab in np.unique(train_labs):\\n            use = (te['lab_id'] == lab) & ~incomplete\\n            correction = np.median(drift[train_labs == lab])\\n            curves[use] += correction * t\\n            rates[use] += correction\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/creep_stress.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ndef load(path):\\n    s = importlib.util.spec_from_file_location('solver', path)\\n    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\n    return m.solve_alpha_w03_batch_05\\ncase = pickle.load(open('/holdout_task/public_alpha_w03_batch_05.pkl', 'rb'))[0]\\nd,g=case['dataset'],case['gt']; te=d['test']; labs=te['lab_id']; missing=~np.isfinite(te['coupon_features_raw']).all(axis=1)\\nold=load('/tmp/creep_before_drift.py')(d); new=load('/holdout_task/alpha_w03_batch_05_solver.py')(d)\\nfor k in ('estimated_taus','hereditary_weights','viscoplastic_weights'):\\n    np.testing.assert_array_equal(old[k], new[k])\\nfor k, truth in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    np.testing.assert_array_equal(old[k][missing], new[k][missing])\\n    score=lambda v,q: np.sqrt(np.mean((v[k][q]-g[truth][q])**2))\\n    complete=[(labs==l)&~missing for l in np.unique(labs)]\\n    slices=complete+[(labs==l)&missing for l in np.unique(labs) if np.any((labs==l)&missing)]\\n    before,after=(max(score(v,q) for q in complete) for v in (old,new))\\n    print(k,'worst complete',before,after,'worst all slices',max(score(new,q) for q in slices))\\n    assert after < before\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared Prony law without lab drift) -> H2 (shared law with training-estimated lab drift); worst complete-cohort out-of-fold strain RMSE fell from 0.01385 to 0.01152, with the worst public missing-coupon slice unchanged at 0.02902.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Shrink the missing-feature onset-rate correction\",\n      \"rejected_reason\": \"The pooled out-of-fold gain was small, and one public missing-coupon slice got worse. Keep the existing correction.\"\n    }\n  ],\n  \"rationale\": \"Promote the lab drift correction because it improves the worst complete-coupon strain and onset-rate slices in both out-of-fold and clean public comparisons. Verify that the saved solver preserves the fitted material coefficients and missing-coupon outputs, and still passes the independent yield tests.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "a32dd1e0025e23f5653fb4270d23313fca04c0605d4987d2f9a486aa0e70fb67",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32431.27,
+      "usage_known": true,
+      "prompt_tokens": 35517,
+      "cached_tokens": 0,
+      "completion_tokens": 1293
+    }
+  ]
+}

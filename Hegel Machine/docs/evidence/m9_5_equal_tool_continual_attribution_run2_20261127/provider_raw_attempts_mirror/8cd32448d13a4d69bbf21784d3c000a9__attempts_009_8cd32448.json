@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8cd32448d13a4d69bbf21784d3c000a9",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:50.199174+00:00",
+  "ended_at_utc": "2026-11-26T18:13:12.187518+00:00",
+  "request_sha256": "9a2604376149d2f4f2f25d1e1d21d6b35369a7830a289afc3a01f96fa9119fa7",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 40920,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25255,
+    "cached_tokens": 6784,
+    "completion_tokens": 829
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nhistory = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nwith open('public_beta_w01_batch_01.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nprint('historical sweeps:', len(history))\\nfor case in cases:\\n    s = case['study']\\n    for bank in np.unique(s['row_bank_id']):\\n        x, y = m._bank_points(s['sensor_calibration_sweeps'], bank)\\n        current = m._fit_calibration(x, y)\\n        prior = [(i, m._fit_calibration(*m._bank_points(old, bank))) for i, old in enumerate(history)]\\n        prior = [(i, p) for i, p in prior if p is not None]\\n        if current is None or not prior:\\n            print('bank', bank, 'insufficient paired calibration coverage')\\n            continue\\n        i, (gain, offset) = prior[-1]\\n        absent = np.max(np.abs((y-offset)/gain-x))\\n        anchored = (y[None,:] - (y-gain*x)[:,None])/gain - x[None,:]\\n        print(f'bank={bank} archive_index={i} archive_gain={gain:.9g} current_gain={current[0]:.9g} no_spot_max_err={absent:.3e} one_spot_max_err={np.max(np.abs(anchored)):.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Bankwise affine calibration and separable finite-volume transport → nuisance-profiled budget optima; worst verified KKT gap is 3.09e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the reaction, ridge, and certificate audits\",\n      \"rejected_reason\": \"Those passed on the unchanged artifact. The sparse stress test matched the simulated gains to the archive and therefore did not measure historical calibration transfer on real readings.\"\n    }\n  ],\n  \"rationale\": \"Measure whether archived gains transfer to actual in-batch references with zero or one spot check. A material gain mismatch would prompt a comparison of archive-based and identity-gain estimates on real references before changing the fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e23e4f43b8eab95b7b88cc723f5dc8714a090fc6dd05ad5e4a07cc218a3ea009",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22895.59,
+      "usage_known": true,
+      "prompt_tokens": 25255,
+      "cached_tokens": 6784,
+      "completion_tokens": 829
+    }
+  ]
+}

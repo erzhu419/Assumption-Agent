@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf7371b13d7c4907b24049602e7b4a4e",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:59:45.737179+00:00",
+  "ended_at_utc": "2026-11-26T19:00:22.168436+00:00",
+  "request_sha256": "225543f550f88ec890f9b2e425d6a8b7a23a65d4a18ee8cd85508e4b57211881",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 68603,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35684,
+    "cached_tokens": 6784,
+    "completion_tokens": 1531
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_w03_batch_08_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('public_alpha_w03_batch_08.pkl', 'rb'))[0]\\ng = s['gt']\\nfor below in (True, False):\\n    d = copy.deepcopy(s['dataset'])\\n    tr, te = d['train'], d['test']\\n    cal = np.c_[g['stress_gains'], g['stress_biases']]\\n    # Clear only missing covariates in this constitutive fixture so rate noise\\n    # and imputation do not obscure a calibration or yield-gating failure.\\n    for split in (tr, te):\\n        raw = split['coupon_features_raw']\\n        raw[~np.isfinite(raw)] = 0.\\n    if below:\\n        for split in (tr, te):\\n            gain, bias = cal[split['lab_id']].T\\n            split['stress_hold_cmd'] = (np.clip(gain * split['stress_hold_cmd'] + bias, -1.2, 1.2) - bias) / gain\\n            split['past_stress_cmd'] = (np.clip(gain[:, None] * split['past_stress_cmd'] + bias[:, None], -1.2, 1.2) - bias[:, None]) / gain[:, None]\\n    else:\\n        labs = np.repeat(np.arange(4), 9)\\n        cmd = np.tile(np.linspace(-2.2, 2.2, 9), 4)\\n        actual = cal[labs, 0] * cmd + cal[labs, 1]\\n        actual[[19, 22, 28, 31]] += [4.7, -4.6, -4.8, 4.5]\\n        d['calibration_load_cells'] = dict(lab_id=labs, cmd_stress=cmd, true_stress=actual)\\n        start, fixed = m._calibration_start(d['calibration_load_cells'])\\n        assert fixed.all() and np.max(abs(start-cal)) < 1e-8\\n    x, h, p, lab = m._prep(d)\\n    h, p = m._physical(h, p, lab, cal)\\n    t, dt, sy = (d[k] for k in ('eval_times', 'past_dt', 'yield_stress'))\\n    tau = g['taus']\\n    weights = np.r_[g['theta'], np.zeros(2) if below else g['vp_theta']]\\n    after = np.array([dt[j+1:].sum() for j in range(len(dt))])\\n    state = p @ ((1-np.exp(-dt[:, None]/tau)) * np.exp(-after[:, None]/tau))\\n    gap = h[:, None] - state\\n    relax = 1-np.exp(-t[:, None]/tau)\\n    work = (np.maximum(abs(p)-sy, 0.)**2 @ dt) * h\\n    linear = x @ weights[2:7] + weights[7]*np.sign(h)*np.maximum(abs(h)-sy, 0.)**2\\n    target = (gap * weights[:2]) @ relax.T + linear[:, None]*t + weights[8]*work[:, None]*relax[:, 0]\\n    rate = (gap * (weights[:2]/tau)).sum(1) + linear + weights[8]*work/tau[0]\\n    n = len(tr['lab_id'])\\n    tr['strain_curves_obs'] = tr['strain_0'][:, None] + target[:n]\\n    tr['instant_rate_obs'] = rate[:n]\\n    te['instant_rate_obs'] = rate[n:]\\n    out = m.solve_alpha_w03_batch_08(d)\\n    errors = [np.max(abs(out['estimated_taus']-tau)), np.max(abs(out['hereditary_weights']-weights[:7])), np.max(abs(out['viscoplastic_weights']-weights[7:])), np.max(abs(out['predicted_strain']-te['strain_0'][:, None]-target[n:])), np.max(abs(out['initial_rate_pred']-rate[n:]))]\\n    print('all below with sparse checks' if below else 'mixed yield with Wing B EMI', 'max errors (taus, hereditary, plastic, strain, rate):', errors)\\n    assert max(errors) < 1e-4\\n    if below:\\n        np.testing.assert_array_equal(out['viscoplastic_weights'], np.zeros(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared covariate scaling → H2 lab-specific linear correction; public worst-lab strain RMSE is 0.01117, and the missing-feature slice remains worst at 0.02656 strain RMSE and 0.00776 rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t10\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add another correction for missing features\",\n      \"rejected_reason\": \"Their onset innovations closely track the missing linear contribution; there is no out-of-fold evidence that a more complex correction improves it.\"\n    }\n  ],\n  \"rationale\": \"The public data validate the lab correction but do not exercise an entirely below-yield batch or contaminated live Wing B sweeps. Check those two cases against an independently evaluated law: a below-yield failure would point to gating or identifiability, while an EMI failure would point to calibration consensus.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8250f421921d3e1daf3a28f8a2b50ecbb061b55c434d79305a7e499e50bd3dff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37422.48,
+      "usage_known": true,
+      "prompt_tokens": 35684,
+      "cached_tokens": 6784,
+      "completion_tokens": 1531
+    }
+  ]
+}

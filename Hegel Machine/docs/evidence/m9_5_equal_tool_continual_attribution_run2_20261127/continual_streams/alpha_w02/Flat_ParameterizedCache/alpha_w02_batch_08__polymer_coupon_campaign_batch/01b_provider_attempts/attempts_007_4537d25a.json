@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4537d25aa58d4a899591a9d9481fe54b",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:55:47.744685+00:00",
+  "ended_at_utc": "2026-11-26T18:56:19.009942+00:00",
+  "request_sha256": "a4849dfc5105e1cb2c5adad57e4f8be283d7c6e366536dbb1db82c1c2bd318c8",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 61791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34241,
+    "cached_tokens": 6784,
+    "completion_tokens": 1266
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport json,pickle,runpy,time\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/alpha_w02_batch_08_solver.py')\\nwith open('/holdout_task/public_alpha_w02_batch_08.pkl','rb') as f: cases=pickle.load(f)\\nwith open('/holdout_task/public_asset_index.json') as f: index=json.load(f)\\nprint('case count',len(cases),'index keys',list(index))\\nfor i,p in enumerate(cases):\\n d,g=p['dataset'],p['gt']; a,b=d['train'],d['test']; t=np.asarray(d['eval_times']); dt=np.asarray(d['past_dt']); sy=d['yield_stress']; lab=np.asarray(b['lab_id']); missing=~np.isfinite(b['coupon_features_raw']).all(1)\\n start=time.monotonic(); r=m['solve_alpha_w02_batch_08'](d); print('case',i,'elapsed',round(time.monotonic()-start,3),'yield',sy)\\n for k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]: print(k,'fit',r[k].round(6),'target',np.asarray(g[j]).round(6),'max abs error',float(np.max(abs(r[k]-g[j]))))\\n ec=r['predicted_strain']-g['te_clean']; er=r['initial_rate_pred']-g['te_true_rate0']; hold=np.asarray(g['te_hold_true']); hist=np.asarray(g['te_hist_true']); flow=abs(hold)>sy; work=(abs(hist)>sy).any(axis=1); excursion=np.maximum(abs(hold),abs(hist).max(axis=1));\\n def metrics(mask): return [int(mask.sum()),round(float(np.sqrt(np.mean(ec[mask]**2))),6),round(float(np.sqrt(np.mean(er[mask]**2))),6),round(float(np.max(abs(ec[mask]))),6)]\\n masks={'all':np.ones(len(lab),bool),'missing features':missing,'complete features':~missing,'hold overstress':flow,'history overstress only':work&~flow,'subyield':~(flow|work),'largest stress quintile':excursion>=np.quantile(excursion,.8)}\\n masks.update({f'lab {j}':lab==j for j in np.unique(lab)}); masks.update({f'lab {j} missing':(lab==j)&missing for j in np.unique(lab)})\\n print('slice [n, curve RMSE, rate RMSE, maximum curve abs error]',{k:metrics(v) for k,v in masks.items() if v.any()}); print('curve RMSE by horizon',np.sqrt(np.mean(ec**2,axis=0)).round(6))\\n f=m['_features'](a,b); seed,fixed=m['_calibration_seed'](d['calibration_load_cells'],sy); tau,c,cal=m['_regress'](a,f[:len(a['lab_id'])],dt,t,sy,seed,fixed); truth=np.c_[g['stress_gains'],g['stress_biases']]; print('seed, fixed',seed.round(6),fixed); print('calibration error [gain,bias]',(cal-truth).round(6)); print('hold & history RMSE by lab',[(int(j),round(float(np.sqrt(np.mean(((cal[lab,0]*b['stress_hold_cmd']+cal[lab,1]-hold)[lab==j])**2))),6),round(float(np.sqrt(np.mean(((cal[lab,0,None]*b['past_stress_cmd']+cal[lab,1,None]-hist)[lab==j])**2))),6)) for j in np.unique(lab)])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (fixed historical Wing B calibration) -> H2 (robust joint Prony and affine calibration fit); held-out worst-lab curve/rate RMSE was 0.394/0.0178 against contaminated observations, and clean-reference slice errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Submit on the schema receipt alone\",\"rejected_reason\":\"Output shapes and finiteness do not establish that the solver recovered the Wing B calibration or predicts well near and above yield.\"}],\"rationale\":\"Verify the saved solver in an isolated process, then compare its outputs with public clean references by lab, yield regime, missingness, and horizon. If errors concentrate in a particular slice, the calibration and parameter comparisons will distinguish a stress-conversion error from a constitutive or feature-alignment error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "74a4d0990c5b90f139247e4c1c3ea942e6f1c725c125b6ed8118297f76d7dd71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32247.99,
+      "usage_known": true,
+      "prompt_tokens": 34241,
+      "cached_tokens": 6784,
+      "completion_tokens": 1266
+    }
+  ]
+}

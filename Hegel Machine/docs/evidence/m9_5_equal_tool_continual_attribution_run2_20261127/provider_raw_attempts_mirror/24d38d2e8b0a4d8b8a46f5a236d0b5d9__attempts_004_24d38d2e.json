@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "24d38d2e8b0a4d8b8a46f5a236d0b5d9",
+  "call_seq": 4,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:17:44.312418+00:00",
+  "ended_at_utc": "2026-11-26T18:18:06.437672+00:00",
+  "request_sha256": "7a6953ef76d9e555089c82ea7799f507e6f030b9dd79e923b9534965b1be4547",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 33715,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24620,
+    "cached_tokens": 6784,
+    "completion_tokens": 852
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport ast, base64, json\\nfrom pathlib import Path\\narchive = Path('/tmp/hegel_continual_archive')\\nfor name in ('beta_w01_s00_solver.py', 'beta_w01_batch_03_solver.py'):\\n    src = (archive / name).read_text()\\n    wrappers = []\\n    while True:\\n        tree = ast.parse(src)\\n        payload = next((n.value.value for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '_SRC_B64' for t in n.targets) and isinstance(n.value, ast.Constant)), None)\\n        if payload is None:\\n            break\\n        wrappers.extend(ast.get_source_segment(src,n) for n in tree.body if isinstance(n,ast.FunctionDef))\\n        src = base64.b64decode(payload).decode()\\n    Path('/tmp/' + name.removesuffix('.py') + '_decoded.py').write_text(src)\\n    print('\\\\n---', name, '---')\\n    if wrappers:\\n        print('Wrapper entry points:')\\n        for f in wrappers: print(f[:600])\\n    for n in tree.body:\\n        if not isinstance(n, ast.FunctionDef): continue\\n        body = ast.get_source_segment(src,n)\\n        if 'build_1d' in n.name:\\n            print(body)\\n        else:\\n            print(n.name)\\n            for line in body.splitlines()[1:]:\\n                if any(s in line for s in ('terminal', 'mu_shifts', 'sensor_ij', 'S_tilde', 'r_y', 'nuisance_ridge', 'reshape', 'ravel', 'kron', 'eigh', 'cho_', 'svd')): print(line)\\nhist = json.loads((archive / 'archive_calibration_history.json').read_text())\\nprint('\\\\nCalibration history:',type(hist).__name__)\\nif isinstance(hist, dict):\\n    for k,v in hist.items(): print(k,type(v).__name__,len(v) if hasattr(v,'__len__') else v,str(v)[:250])\\nelse:\\n    print('entries',len(hist)); print('first entry',str(hist[0])[:650])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 axis-only reaction → H2 full vortex coupling; the additive reaction model misses 54.13% of the field norm, while the worst public bank's affine sweep residual is 2.31e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer terminal shift and nuisance profiling from the output shapes\",\n      \"rejected_reason\": \"Shape checks cannot detect a wrong terminal shift or distinguish a ridge residual operator from its square root.\"\n    }\n  ],\n  \"rationale\": \"The prior read showed encoded archive wrappers rather than the actual stencil. Decode them as text without executing them to recover the stencil, row ordering, terminal shift, and ridge convention. Current reference sweeps already identify all four public banks, so archive calibration is only a fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0d3f6b08004fa6169a6e45259a2a07be63de9e101ea88db2babcdb933bdda7f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23033.62,
+      "usage_known": true,
+      "prompt_tokens": 24620,
+      "cached_tokens": 6784,
+      "completion_tokens": 852
+    }
+  ]
+}

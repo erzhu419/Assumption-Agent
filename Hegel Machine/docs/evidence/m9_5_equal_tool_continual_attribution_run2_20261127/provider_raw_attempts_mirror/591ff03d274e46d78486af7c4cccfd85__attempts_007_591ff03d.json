@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "591ff03d274e46d78486af7c4cccfd85",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:29:48.779335+00:00",
+  "ended_at_utc": "2026-11-26T18:30:11.650744+00:00",
+  "request_sha256": "7f6bec39a0a489732c08705979fe8412792a331501ccf9b848571d42f1415022",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 39002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25211,
+    "cached_tokens": 6784,
+    "completion_tokens": 849
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = importlib.util.spec_from_file_location('solver', 'beta_w03_batch_05_solver.py')\\nm = importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nhistory = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\ncurrent = pickle.load(open('public_beta_w03_batch_05.pkl', 'rb'))[0]['study']\\nfor rec in history:\\n    banks = m._sweeps(rec)\\n    print(rec['episode_short_name'], 'counts', [len(x) for x,y in banks], 'sorted affine residuals', [np.round(np.sort(np.abs(y-np.polyval(m._fit_sweep(x,y,(1.,0.)),x))),7).tolist() for x,y in banks])\\nfor a,b in [(2,4),(4,2)]:\\n    train, test = m._sweeps(history[a]), m._sweeps(history[b])\\n    for wing in ((0,1),(2,3)):\\n        err = []\\n        for k in wing:\\n            x,y = test[k]\\n            ab = m._fit_sweep(*train[k], (1.,0.))\\n            err.append(np.round(np.quantile(np.abs(y-np.polyval(ab,x)),[.5,.8,1]),8).tolist() if x.size else [])\\n        print('held-out archive',a,'->',b,'wing',wing,'bank residual q50/q80/max',err)\\nx,y = m._sweeps(current['sensor_calibration_sweeps'])[0]\\nfor k in (2,4):\\n    ab = m._fit_sweep(*m._sweeps(history[k])[0], (1.,0.))\\n    print('current anchor deviations using archive',k,(y-np.polyval(ab,x)).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 newest matching calibration -> H2 transferable cross-episode calibration if supported by held-out wing measurements; current worst-bank profiled observation error is 5.83e-7 and KKT gap is 9.58e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification confounding, or unrelated operator families\",\n      \"rejected_reason\": \"This study has no relays or class labels, and the specified transport equation already closes to a relative residual of 3.26e-14 across all shifts and modes.\"\n    }\n  ],\n  \"rationale\": \"Both candidate archive episodes match the current bank-0 anchor, but only one is used to infer the three unmeasured banks. Cross-predicting their real sweeps by wing can expose drift or contamination that the bank-0 match cannot detect. If the episodes agree within sweep precision, keep the verified solver; if one fails on clean held-out measurements, revise the calibration fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "de05a296700ab4410b5cd1757171381ab0afaefaa65cc8fff3d0f0e1d8278b4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23897.97,
+      "usage_known": true,
+      "prompt_tokens": 25211,
+      "cached_tokens": 6784,
+      "completion_tokens": 849
+    }
+  ]
+}

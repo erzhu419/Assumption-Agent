@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5538ed9b6b2e4affabf611f9b73a1254",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:13:57.268239+00:00",
+  "ended_at_utc": "2026-11-26T18:14:21.597659+00:00",
+  "request_sha256": "bfd817d0f8563bb05209e51c8c12b4e2f622db271c243dc6f740cebf09f97968",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 51696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29111,
+    "cached_tokens": 6784,
+    "completion_tokens": 894
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pathlib, numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pathlib.Path('/tmp/hegel_continual_archive/archive_calibration_history.json'); h=json.loads(p.read_text()); print('archive container',type(h).__name__,len(h)); rows=h if isinstance(h,list) else list(h.values());\\nfor r in rows[-3:]:\\n print('record',type(r).__name__,[(k,type(v).__name__,len(v) if isinstance(v,(list,dict)) else str(v)[:60]) for k,v in r.items()] if isinstance(r,dict) else str(r)[:200]);\\n if isinstance(r,dict) and {'lab_id','cmd_stress','true_stress'} <= r.keys():\\n  print('archived maps',[m._consensus(*m._lab_checks(r,j),[1,0]) for j in range(4)])\\ncheck={'lab_id':np.array([],int),'cmd_stress':np.array([]),'true_stress':np.array([])}; print('actual empty-panel fallback',m._calibration(check));\\nimport tempfile\\nwith tempfile.TemporaryDirectory() as root:\\n p=pathlib.Path(root)/'history.json'; x=np.tile([-2.,-1.,0.,1.,2.],4); labs=np.repeat(np.arange(4),5); expected=np.array([[1.06,.02],[.97,-.04],[1.12,.05],[.91,-.06]]); y=expected[labs,0]*x+expected[labs,1]; p.write_text(json.dumps([{'lab_id':labs.tolist(),'cmd_stress':x.tolist(),'true_stress':y.tolist()}])); m._HISTORY=p\\n local={'lab_id':np.array([0,1,3]),'cmd_stress':np.array([1.,.5,1.]),'true_stress':np.array([1.082,.445,1.2])}; expected[0,1]+=.002\\n np.testing.assert_allclose(m._calibration(local),expected,atol=1e-10); print('non-nominal archive, absent lab, clean spot, and EMI spot: passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared drift → H2 lab offsets blended with onset-rate residuals; verified public worst-lab MAEs are 0.00573 for strain, 0.02779 for secant compliance, and 0.00557 for crossing time.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the previous near-nominal sparse check as proof of archive replay\",\n      \"rejected_reason\": \"An identity fallback could also pass that check; a non-nominal archive distinguishes replay from a default.\"\n    }\n  ],\n  \"rationale\": \"The final artifact already passed the isolated schema and predictive checks. Verify that sparse calibration actually reads the mounted archive and preserves a non-nominal gain while accepting a clean spot check and rejecting a contaminated one. If this fails, correct archive parsing or spot-check handling before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a919469e41c4fef800011ea9fb7038daec24030267ac962b9038a1b50631060e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25240.42,
+      "usage_known": true,
+      "prompt_tokens": 29111,
+      "cached_tokens": 6784,
+      "completion_tokens": 894
+    }
+  ]
+}

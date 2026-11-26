@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c947182d40f42a59ac37323a97bc302",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_05__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:32:48.182835+00:00",
+  "ended_at_utc": "2026-11-26T18:33:28.588356+00:00",
+  "request_sha256": "24ded5f7a9e5b95dd58e69b078fab1a0037a0ff9e5436d84cad7b500abb17df1",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 41992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26177,
+    "cached_tokens": 6784,
+    "completion_tokens": 1787
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nF=alpha_w04_batch_05_solver.py\\ncat > \\\"$F\\\" <<'PY'\\n\\\"\\\"\\\"Calibrate multi-wing coupon stress and fit a thresholded Prony law.\\\"\\\"\\\"\\nimport json\\nfrom pathlib import Path\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\n_HISTORY = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n\\n\\ndef _rows(panel, lab):\\n    x, y = (np.asarray(panel[k], dtype=float) for k in ('cmd_stress', 'true_stress'))\\n    keep = (np.asarray(panel['lab_id']) == lab) & np.isfinite(x) & np.isfinite(y)\\n    return x[keep], y[keep]\\n\\n\\ndef _line(x, y):\\n    return np.linalg.lstsq(np.column_stack((x, np.ones(len(x)))), y, rcond=None)[0]\\n\\n\\ndef _local_fit(x, y, prior):\\n    i, j = np.triu_indices(len(x), 1)\\n    span = x[j] - x[i]\\n    use = np.abs(span) >= 0.12\\n    slope = (y[j[use]] - y[i[use]]) / span[use]\\n    lines = np.column_stack((slope, y[i[use]] - slope * x[i[use]]))\\n    models = np.vstack((prior, lines[slope > 0]))\\n    err = np.abs(y - models[:, :1] * x - models[:, 1:])\\n    good = err <= 0.003\\n    count = good.sum(axis=1)\\n    loss = np.minimum((err / 0.003)**2, 1).sum(axis=1)\\n    best = np.lexsort((loss, -count))[0]\\n    return models[best], good[best]\\n\\n\\ndef _calibrate(panel):\\n    # Compare complete campaign regimes before borrowing parameters across labs.\\n    # Thus a sparse check on one wing selects the matching sweep for the other.\\n    identity = np.column_stack((np.ones(4), np.zeros(4)))\\n    history = json.loads(_HISTORY.read_text()) if _HISTORY.is_file() else []\\n    sweeps = []\\n    for old in reversed(history):\\n        sweep = []\\n        for lab in range(4):\\n            x, y = _rows(old, lab)\\n            _, inliers = _local_fit(x, y, identity[lab])\\n            if inliers.sum() < 3 or np.ptp(x[inliers]) < 0.8:\\n                break\\n            sweep.append(_line(x[inliers], y[inliers]))\\n        if len(sweep) == 4:\\n            sweeps.append(sweep)\\n    sweeps = np.asarray(sweeps + [identity])\\n    rows = [_rows(panel, lab) for lab in range(4)]\\n    error = np.concatenate([\\n        np.abs(y - sweeps[:, lab, :1] * x - sweeps[:, lab, 1:])\\n        for lab, (x, y) in enumerate(rows)\\n    ], axis=1)\\n    count = (error <= 0.003).sum(axis=1)\\n    loss = np.minimum((error / 0.003)**2, 1).sum(axis=1)\\n    prior = sweeps[np.lexsort((loss, -count))[0]].copy()\\n    for lab, (x, y) in enumerate(rows):\\n        _, inliers = _local_fit(x, y, prior[lab])\\n        n = inliers.sum()\\n        if n >= 3 and np.ptp(x[inliers]) >= 0.8:\\n            prior[lab] = _line(x[inliers], y[inliers])\\n        elif len(x) == 2 and n == 2 and np.ptp(x) >= 0.8:\\n            # Keep the archived fit if both checks agree; otherwise a coherent\\n            # pair with no matching archive is the only local affine estimate.\\n            err = np.abs(y - (prior[lab, 0] * x + prior[lab, 1]))\\n            if np.all(err > 0.003):\\n                prior[lab] = _line(x, y)\\n    return prior\\n\\n\\nPY\\nsed -n '/^def _align(/,$p' /tmp/hegel_continual_archive/alpha_w04_batch_03_solver.py | sed 's/solve_alpha_w04_batch_03/solve_alpha_w04_batch_05/' >> \\\"$F\\\"\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nsed -n '/^def _align(/,/^def _fit(/p' \\\"$F\\\"\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,alpha_w04_batch_05_solver as s\\nr=pickle.load(open('public_alpha_w04_batch_05.pkl','rb'))[0];d=r['dataset'];g=r['gt'];o=s.solve_alpha_w04_batch_05(d); a=s._calibrate(d['calibration_load_cells'])\\nprint('calibration abs error max',np.abs(a-np.c_[g['stress_gains'],g['stress_biases']]).max())\\nfor k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]: print(k,'fit',o[k],'truth',g[j])\\nfor part in ['train','test']:\\n z=d[part]; p,h=s._stress(z,a); print(part,'yield max',np.max(abs(p)),np.max(abs(h)), 'yield counts', np.sum(np.max(abs(p),axis=1)>d['yield_stress']),np.sum(abs(h)>d['yield_stress']))\\nz=d['test']; m=~np.isfinite(z['coupon_features_raw']).all(1)\\nfor i in range(4):\\n for label,sel in [('all',z['lab_id']==i),('missing',(z['lab_id']==i)&m)]:\\n  if sel.any(): print(i,label,'n',sel.sum(),'strain/rate RMSE',*[np.sqrt(np.mean((o[k][sel]-g[j][sel])**2)) for k,j in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Select a coherent archived calibration across both wings and fit the thresholded Prony law; held-out lab and missing-feature errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit each lab independently\",\n      \"rejected_reason\": \"Only Lab 0 has current checks; its agreement with an archived campaign identifies the calibration to use for the unchecked labs.\"\n    }\n  ],\n  \"rationale\": \"Implement the solver and check all five returned quantities against the public contract. Calibration error, yield activation, and held-out errors by lab and missingness will show whether any remaining problem belongs to calibration, constitutive fitting, or feature recovery.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "6414ae85e5d1220427009f638f746e6b7588bb347e0aa329fa1499ec07125996",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42356.52,
+      "usage_known": true,
+      "prompt_tokens": 26177,
+      "cached_tokens": 6784,
+      "completion_tokens": 1787
+    }
+  ]
+}

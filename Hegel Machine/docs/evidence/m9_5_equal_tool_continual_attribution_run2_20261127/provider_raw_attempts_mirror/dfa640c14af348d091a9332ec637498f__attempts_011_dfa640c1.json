@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dfa640c14af348d091a9332ec637498f",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:47:12.991610+00:00",
+  "ended_at_utc": "2026-11-26T18:47:43.354663+00:00",
+  "request_sha256": "dd9724f1a0493d1933163b50f00f6183c1769e4402a54e2b66ca73f614c40a76",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 71540,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36325,
+    "cached_tokens": 6784,
+    "completion_tokens": 1246
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/alpha07_profile.py /holdout_task/alpha_w02_batch_07_solver.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I /tmp/check_alpha07.py\\npython3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/alpha_w02_batch_07_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd0=pickle.load(open('/holdout_task/public_alpha_w02_batch_07.pkl','rb'))[0]['dataset']\\ndt,t,sy=(d0[k] for k in ('past_dt','eval_times','yield_stress'))\\ncal=m._calibrate(d0['calibration_load_cells'],sy)\\ntau=np.array([.53,4.6]); beta=np.array([.64,.55,.078,.14,-.13,.11,-.09,.063,-.021])\\nfor hold_active,history_active in [(False,False),(True,False),(False,True),(True,True)]:\\n d=copy.deepcopy(d0); tr,te=d['train'],d['test']; feat=m._features(tr,te)[:,1:]; n=len(tr['lab_id']); b=beta.copy(); b[7]*=hold_active; b[8]*=history_active\\n def forward(sp,x):\\n  g,o=cal[sp['lab_id']].T; p=g[:,None]*sp['past_stress_cmd']+o[:,None]; h=g*sp['stress_hold_cmd']+o\\n  p=(p*2.5 if history_active else np.clip(p,-.9*sy,.9*sy)); h=(h*2.5 if hold_active else np.clip(h,-.9*sy,.9*sy))\\n  sp['past_stress_cmd']=(p-o[:,None])/g[:,None]; sp['stress_hold_cmd']=(h-o)/g\\n  age=np.cumsum(dt[::-1])[::-1]; rate=np.zeros(len(h)); change=np.zeros((len(h),len(t)))\\n  for j,q in enumerate(tau):\\n   mem=p@(np.exp(-(age-dt)/q)-np.exp(-age/q)); a=b[j]*(h-mem)\\n   if j==0: a+=b[8]*h*(np.maximum(np.abs(p)-sy,0)**2@dt)\\n   change+=a[:,None]*(1-np.exp(-t/q)); rate+=a/q\\n  slope=b[2]+x@b[3:7]+b[7]*np.sign(h)*np.maximum(np.abs(h)-sy,0)**2\\n  return sp['strain_0'][:,None]+change+slope[:,None]*t,rate+slope\\n tr['strain_curves_obs'],tr['instant_rate_obs']=forward(tr,feat[:n]); expected,rate=forward(te,feat[n:]); te['instant_rate_obs']=rate.copy()\\n out=m.solve_alpha_w02_batch_07(d)\\n errors=[np.max(np.abs(out['estimated_taus']-tau)),np.max(np.abs(out['hereditary_weights']-b[:7])),np.max(np.abs(out['viscoplastic_weights']-b[7:])),np.max(np.abs(out['predicted_strain']-expected)),np.max(np.abs(out['initial_rate_pred']-rate))]\\n print('hold/history active',hold_active,history_active,'max errors tau/hereditary/plastic/curve/rate:',errors,flush=True)\\n assert max(errors)<5e-4\\n assert np.all(out['viscoplastic_weights'][~np.array([hold_active,history_active])]==0)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: joint relaxation and drift fitting → H2: profile coupon drift before recovering shared coefficients; slow-time relative error improved from 2.67% to 0.51%, and worst held-lab clean curve RMSE was essentially unchanged at 0.07848.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the unprojected baseline\",\n      \"rejected_reason\": \"It had nearly identical worst held-lab curve RMSE but a larger slow-time error and higher aggregate public curve and onset-rate errors.\"\n    }\n  ],\n  \"rationale\": \"Promote the profiled fit and verify the exact deliverable in an isolated Python process. The public coupons are all below yield, so independently generate curves and onset rates with each plastic term active alone and with both active; this detects a missing, swapped, or incorrectly gated term that the public case cannot expose.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "02db0c81073f972e8c87ec66737fbd2d20027c23a426a8a5db510b836017a767",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31390.85,
+      "usage_known": true,
+      "prompt_tokens": 36325,
+      "cached_tokens": 6784,
+      "completion_tokens": 1246
+    }
+  ]
+}

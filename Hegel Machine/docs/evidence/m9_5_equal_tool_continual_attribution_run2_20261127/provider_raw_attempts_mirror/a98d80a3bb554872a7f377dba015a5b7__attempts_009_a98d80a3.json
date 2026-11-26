@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a98d80a3bb554872a7f377dba015a5b7",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_batch_07__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:52:33.914363+00:00",
+  "ended_at_utc": "2026-11-26T18:52:57.769333+00:00",
+  "request_sha256": "b48b638a2e57920371136f5d1d944ed410f679a1eaa7beae378ae02760f09b4a",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 48882,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28784,
+    "cached_tokens": 11136,
+    "completion_tokens": 881
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '125,205p' alpha_w02_batch_07_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, json\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_w02_batch_07_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('public_alpha_w02_batch_07.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; n=len(tr['lab_id']); f=s._features(tr,te); c=s._calibrate(d['calibration_load_cells']); y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; labs=tr['lab_id']; strata=tr['stratum']; h=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))[4]; alt=c.copy()\\nfor i in (2,3):\\n m=np.asarray(h['lab_id'])==i; alt[i]=np.polyfit(np.asarray(h['cmd_stress'])[m],np.asarray(h['true_stress'])[m],1)\\nfor name,cal in [('reconciled',c),('archive-only Wing B',alt)]:\\n x=s._inputs(tr,cal,dt,d['yield_stress'],f[:n]); z=s._inputs(te,cal,dt,d['yield_stress'],f[n:]); tau,w=s._fit(x,dt,t,y); pred=s._design(z,dt,t,np.log(tau))@w\\n if name=='reconciled': base=pred\\n print(name,'max prediction shift',np.max(abs(pred-base)),'max physical stress',max(np.max(abs(v)) for v in (*x[:2],*z[:2])),'taus',tau)\\n if name!='reconciled': continue\\n for lab in range(4):\\n  m=labs==lab; tau,w=s._fit(tuple(v[~m] for v in x),dt,t,y[~m]); err=s._design(tuple(v[m] for v in x),dt,t,np.log(tau))@w-y[m]\\n  for q in np.unique(strata[m]):\\n   e=err[strata[m]==q]; print('held-out lab/stratum',lab,q,'n',len(e),'max horizon absolute signed median',round(np.max(abs(np.median(e[:,:-1],axis=0))),5),'onset median AE',round(np.median(abs(e[:,-1])),5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived calibration replay → H2 wing-specific calibration and a shared Prony law; worst held-out lab/horizon strain MAE is 0.2466 against noisy observations, and host-probe strain MAE is 0.040418.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Search for rational, relay, or HJB terms\",\"rejected_reason\":\"The specified constitutive law has neither a relay state nor a stochastic control operator; an independent forward calculation already verified the exact hereditary and plastic basis terms.\"}],\"rationale\":\"Two remaining checks can change the solver: a consequential prediction shift under independently supported Wing B calibration would warrant revisiting the calibration, and coherent held-out residuals within lab–stratum cells would warrant testing an alignment correction. Classification balanced accuracy does not apply to the continuous strain and onset-rate outcomes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "524d1808200ae3a91fef5d9116db9d54816a21f375c119febdcb3c06f85f98ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24859.2,
+      "usage_known": true,
+      "prompt_tokens": 28784,
+      "cached_tokens": 11136,
+      "completion_tokens": 881
+    }
+  ]
+}

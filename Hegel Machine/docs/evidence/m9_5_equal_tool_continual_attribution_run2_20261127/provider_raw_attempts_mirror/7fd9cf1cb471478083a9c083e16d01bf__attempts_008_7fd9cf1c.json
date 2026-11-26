@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7fd9cf1cb471478083a9c083e16d01bf",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_08__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:52:39.487193+00:00",
+  "ended_at_utc": "2026-11-26T18:53:09.148584+00:00",
+  "request_sha256": "dd8c0f1f8cdb2d39e30a5237d691e1d46771d540a75d1e6751b1f7d056d9efe4",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 41859,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26147,
+    "cached_tokens": 6784,
+    "completion_tokens": 1193
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_w02_batch_08_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nns = {}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d =')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nwith open('public_beta_w02_batch_08.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nfor i, item in enumerate(cases):\\n    s, gt = item['study'], item['gt']\\n    V = s['V_reaction_2d']\\n    additive = V.mean(axis=1, keepdims=True) + V.mean(axis=0, keepdims=True) - V.mean()\\n    cross = np.linalg.norm(V - additive) / np.linalg.norm(V)\\n    print(f'case {i}: nonseparable reaction fraction={cross:.6g}')\\n    errors = {}\\n    for name, st in [('full', s), ('additive reaction', dict(s, V_reaction_2d=additive)), ('unit dispersion', dict(s, kappa_x=s['kappa_x']/1.45, kappa_y=s['kappa_y']/1.45))]:\\n        design, _ = m._forward(st)\\n        S, r = m._profile(st, design, m._calibrate(st))\\n        d = (S - gt['S_tilde']).reshape(len(s['mu_shifts']), -1)\\n        ref = gt['S_tilde'].reshape(d.shape)\\n        errors[name] = np.max(np.linalg.norm(d, axis=1) / np.linalg.norm(ref, axis=1))\\n        print(f'  {name}: worst-shift relative design error={errors[name]:.3e}')\\n        if name == 'full':\\n            err = r - gt['r_y']\\n            banks = np.asarray(s['row_bank_id'])\\n            rms = [np.sqrt(np.mean(err[banks == b]**2)) for b in range(4)]\\n            print('  profiled observation RMS bank 0–3:', ' '.join(f'{e:.3e}' for e in rms))\\n            assert max(rms) < 1e-5\\n    assert errors['full'] < 1e-10\\n    assert errors['additive reaction'] > errors['full'] and errors['unit dispersion'] > errors['full']\\n    out = m.solve_beta_w02_batch_08(s)\\n    cert = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n    print('  independent KKT at default tolerance:', cert)\\n    assert cert['valid']\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive-reaction or unenhanced-dispersion replay -> H2 full 2D enhanced transport with bankwise calibration; previous stress tests gave worst field relative error 1.03e-6 and KKT gap 1.02e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification confounding, stochastic drift, or relay modes\",\n      \"rejected_reason\": \"The study specifies a steady linear transport inverse problem, with neither class labels nor a stochastic or relay state.\"\n    }\n  ],\n  \"rationale\": \"Compare each relevant transport simplification against the public reference by shift: a mismatch in the full model would reopen stencil or indexing work. A bankwise residual failure would instead reopen calibration. Verify the unchanged artifact in isolated Python using the certificate verifier's default tolerance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "4ca1a337d5ad70702ab832ebba8f162262dbd757203b45be4e7d5a73d276ebd7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30664.86,
+      "usage_known": true,
+      "prompt_tokens": 26147,
+      "cached_tokens": 6784,
+      "completion_tokens": 1193
+    }
+  ]
+}

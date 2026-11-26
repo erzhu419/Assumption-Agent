@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a5fd119f1a64f578902dec2cd077caa",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w03__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w03_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:24:58.767418+00:00",
+  "ended_at_utc": "2026-11-26T18:25:32.370589+00:00",
+  "request_sha256": "08e416dc11fccb6b9f9502d85116da1171ed10ae1333cbb4eee83d01ee398dee",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 79068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37796,
+    "cached_tokens": 11136,
+    "completion_tokens": 1397
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w03_batch_04_solver.py')\\ns = p.read_text()\\na = s.index('    priors = {}\\\\n', s.index('def _archive_calibration'))\\nb = s.index('\\\\n\\\\ndef _prep(', a)\\ns = s[:a] + '''    priors = {}\\n    for lab in checks:\\n        if fits[lab] is not None:\\n            continue\\n        peer = lab ^ 1\\n        x, y = checks[lab]\\n        candidates = []\\n        for sweep in sweeps:\\n            if lab not in sweep:\\n                continue\\n            line = sweep[lab]\\n            residual = np.abs(y - (line[0]*x + line[1]))\\n            support = np.count_nonzero(residual <= .002)\\n            peer_error = disagreement(peer, sweep[peer]) if peer in sweep else .02\\n            candidates.append((line, support, peer_error, disagreement(lab, line)))\\n        # Two matching checks can identify a local regime. A lone matching\\n        # check cannot overrule a clean, independently fitted companion lab.\\n        local_support = max(v[1] for v in candidates)\\n        if local_support >= 2:\\n            pool = [v for v in candidates if v[1] == local_support]\\n            chosen = min(pool, key=lambda v: (v[2], v[3]))\\n        else:\\n            peer_best = min(v[2] for v in candidates)\\n            if fits[peer] is not None and peer_best <= .002:\\n                pool = [v for v in candidates if v[2] <= peer_best + .001]\\n                chosen = min(pool, key=lambda v: (-v[1], v[3], v[2]))\\n            else:\\n                local_best = min(v[3] for v in candidates)\\n                pool = [v for v in candidates if v[3] <= local_best + .001]\\n                chosen = min(pool, key=lambda v: (-v[1], v[2], v[3]))\\n        priors[lab] = chosen[0], fits[peer] is not None and chosen[2] <= .002\\n    return priors\\n\\n\\ndef _sparse_line(x, y, prior):\\n    (gain, bias), corroborated = prior\\n    delta = y - (gain*x + bias)\\n    close = np.abs(delta) <= .002\\n    if close.sum() >= 2 and np.ptp(x[close]) >= .5:\\n        return _line(x[close], y[close])\\n    if close.any():\\n        return gain, bias + np.median(delta[close])\\n    if not corroborated and len(x) >= 2 and np.ptp(x) >= .5:\\n        fit = _line(x, y)\\n        if np.max(np.abs(y - (fit[0]*x + fit[1]))) <= .002:\\n            return fit\\n    return gain, bias\\n''' + s[b:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I /tmp/creep04_stress_cal.py\\npython3 -I /tmp/creep04_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local-first archive selection → H2 require independent corroboration before a lone spot can change regimes; the previous candidate reached 0.860 worst stress deviation at commands ±3 when sparse checks included one EMI spike.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Local residual ranking reliably identifies the archived calibration regime when only one or two load-cell checks are available.\",\n    \"empirical_witness\": \"On replayed public load-cell checks, one EMI spike caused stress deviations above 0.005 in 2 of 80 one-spot cases and 1 of 604 two-spot cases, with a maximum of 0.860 at commands ±3.\",\n    \"causal_blanket_diagnosis\": \"An interference spike can make the wrong archived line look locally better, even when the companion lab independently identifies the correct regime.\",\n    \"sublated_pivot\": \"Keep supported current fits and multi-spot local agreement; when local evidence reduces to one spot, prioritize a corroborating companion-lab fit and only refit using checks consistent with the selected line.\",\n    \"risk_kind\": \"sparse calibration confounded by EMI\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Extend the constitutive basis with interaction or rational stress terms\",\n      \"rejected_reason\": \"Neither extension improved the worst held-out complete-feature strain median; lab-by-stratum signed residual medians also showed no consistent offset.\"\n    }\n  ],\n  \"rationale\": \"Re-run the combined sparse-plus-EMI replay to see whether a contaminated spot can still override independent calibration evidence. Compare against the clean sparse replays so the fix does not trade EMI resistance for a regression on valid checks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "d7c6b72d91bd3f07add98acf2a389c5c51e39b5fa0b1623b0c9369aa89ca8d1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34612.5,
+      "usage_known": true,
+      "prompt_tokens": 37796,
+      "cached_tokens": 11136,
+      "completion_tokens": 1397
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b156762d14b74b8b8850c1f2c0c6a1ff",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:36:16.057512+00:00",
+  "ended_at_utc": "2026-11-26T18:36:59.307223+00:00",
+  "request_sha256": "ab406d97ef9aa2db7549b196b30157aba9e203f50d0a1a2435743d265922162f",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44739,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27346,
+    "cached_tokens": 6784,
+    "completion_tokens": 1813
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\nfrom scipy.optimize import minimize\\n\\ndef load(name):\\n    spec = importlib.util.spec_from_file_location(name, name + '.py')\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('beta_w04_batch_06_solver')\\nv = load('validate_public_schema')\\narchive = json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nworst_cal = 0.\\nfor e in archive:\\n    b, x, y = (np.asarray(e[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    if min(np.bincount(b, minlength=4)) < 2:\\n        continue\\n    name = e['episode_short_name']\\n    profiles = np.stack([np.array([np.polyfit(np.asarray(f['ref_signal'])[q == bank], np.asarray(f['raw_readout'])[q == bank], 1) for bank in range(4)]) for f in archive if f['episode_short_name'] != name and min(np.bincount(q := np.asarray(f['bank_id']), minlength=4)) >= 2])\\n    err = np.abs(profiles[:, b, 0] * x + profiles[:, b, 1] - y)\\n    pick = np.argmin(err[:, b == 0].max(axis=1))\\n    worst_cal = max(worst_cal, *(err[pick, b == bank].max() for bank in range(4)))\\nassert worst_cal < 5e-6, worst_cal\\n\\nworst_design = worst_field = worst_gap = worst_opt = 0.\\nfor entry in pickle.load(open('public_beta_w04_batch_06.pkl','rb')):\\n    s = entry['study']\\n    nx,ny = s['nx'],s['ny']\\n    ax,by = [m._build_1d(s['L'+a],s['n'+a],s['kappa_'+a],s['vel_'+a],s['robin_'+a],s['reaction_'+a]) for a in ('x','y')]\\n    op = kron(ax,eye(ny),format='csc') + kron(eye(nx),by,format='csc') + diags(s['V_reaction_2d'].ravel(),format='csc')\\n    rhs = s['source_modes'].reshape(-1,nx*ny).T\\n    i,j = s['sensor_ij'].T\\n    reference = []\\n    for shift in s['mu_shifts']:\\n        mode = splu(op + shift*eye(nx*ny,format='csc')).solve(rhs).reshape(nx,ny,-1)\\n        reference.append(mode[i,j])\\n    reference = np.vstack(reference)\\n    design,_ = m._forward(s)\\n    banks = s['row_bank_id']\\n    shift_ids = np.repeat(np.arange(len(s['mu_shifts'])),len(i))\\n    sweep = s['sensor_calibration_sweeps']\\n    gain, offset = m._ARCHIVE_PROFILES[1].T\\n    y = (s['y_obs_raw'] - offset[banks]) / gain[banks]\\n    out = m.solve_beta_w04_batch_06(s)\\n    w, field = out['weights'], out['terminal_field']\\n    field_ref = mode @ w\\n    worst_field = max(worst_field,np.linalg.norm(field-field_ref)/np.linalg.norm(field_ref))\\n    z = s['Z_nuisance']\\n    u, sig, _ = np.linalg.svd(z, full_matrices=False)\\n    def profile(a):\\n        return a - u @ ((sig**2/(sig**2+s['nuisance_ridge']))[:,None]*(u.T@a))\\n    data = profile(np.column_stack((reference,y)))\\n    S,r = data[:,:-1],data[:,-1]\\n    cap, budget, ridge = s['u_box'],s['total_budget'],s['source_ridge']\\n    cert = v.verify_box_simplex_kkt_certificate(S,r,ridge,cap,budget,out['kkt_certificate'])\\n    assert cert['valid'], cert\\n    assert np.array_equal(w,out['kkt_certificate']['weights'])\\n    worst_gap = max(worst_gap,cert['gap'])\\n    for k in range(len(s['mu_shifts'])):\\n        for wing in range(2):\\n            cut = (shift_ids == k) & (banks//2 == wing)\\n            if cut.any():\\n                worst_design = max(worst_design,np.linalg.norm((design-reference)[cut])/np.linalg.norm(reference[cut]))\\n    for wing in range(2):\\n        keep = banks//2 != wing\\n        z0 = z\\n        z = z[keep]\\n        u, sig, _ = np.linalg.svd(z, full_matrices=False)\\n        d = profile(np.column_stack((reference[keep],y[keep])))\\n        z = z0\\n        a,b = d[:,:-1],d[:,-1]\\n        H,c = a.T@a + ridge*np.eye(w.size),-a.T@b\\n        ws,_ = m._box_simplex(H,c,cap,budget)\\n        fun = lambda x: .5*np.linalg.norm(a@x-b)**2 + .5*ridge*(x@x)\\n        opt = minimize(fun,np.full(w.size,budget/w.size),jac=lambda x:H@x+c,bounds=[(0,cap)]*w.size,constraints=[{'type':'eq','fun':lambda x:x.sum()-budget,'jac':lambda x:np.ones_like(x)}],method='SLSQP',options={'ftol':1e-12})\\n        assert opt.success,opt.message\\n        worst_opt=max(worst_opt,abs(fun(ws)-opt.fun))\\nassert worst_design < 1e-10 and worst_field < 1e-10 and worst_opt < 1e-8\\nprint(json.dumps(dict(worst_archived_bank_heldout_abs_error=worst_cal,worst_shift_wing_design_rel_l2=worst_design,terminal_rel_l2=worst_field,kkt_gap=worst_gap,worst_heldout_wing_objective_delta=worst_opt)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Nominal separable transport plus the matched four-bank calibration → verify by wing and shift; the independent public probe reports zero relative field and weight error and zero KKT gap.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the aggregate public probe alone\",\n      \"rejected_reason\": \"It does not report errors by wing and shift or test whether a bank-0-only match transfers to unchecked banks in a held-out historical campaign.\"\n    }\n  ],\n  \"rationale\": \"Test the fitted calibration on held-out historical campaigns and compare the forward model by wing and shift against a direct full-grid solve. A calibration failure would require revisiting profile transfer; a transport or optimization mismatch would isolate the affected component before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a3cc86f1d97985254b3a36045e778f251e691ce6e33696f583c0d0bbdab13c51",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44194.9,
+      "usage_known": true,
+      "prompt_tokens": 27346,
+      "cached_tokens": 6784,
+      "completion_tokens": 1813
+    }
+  ]
+}

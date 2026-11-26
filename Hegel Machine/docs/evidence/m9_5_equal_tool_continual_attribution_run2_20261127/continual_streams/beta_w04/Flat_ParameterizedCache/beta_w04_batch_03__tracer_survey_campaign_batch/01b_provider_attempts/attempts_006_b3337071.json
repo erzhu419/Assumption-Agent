@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b333707152a14562826824be2faedfae",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:20:12.096773+00:00",
+  "ended_at_utc": "2026-11-26T18:20:30.791300+00:00",
+  "request_sha256": "db14200fbf3dd84e97ce79eaf601104abb3ff4623254c7ae2df2884475c3177d",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 40534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26552,
+    "cached_tokens": 6784,
+    "completion_tokens": 651
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json, runpy, numpy as np\\nfrom pathlib import Path\\nroot=Path('/tmp/hegel_continual_archive')\\na=runpy.run_path(str(root/'beta_w04_s00_solver.py'))\\nfor ep in json.loads((root/'archive_calibration_history.json').read_text()):\\n    x,y,b=(np.asarray(ep[k]) for k in ('ref_signal','raw_readout','bank_id'))\\n    for bank in range(4):\\n        xx, yy=x[b==bank], y[b==bank]\\n        gain,off=a['_fit_bank'](xx,yy)\\n        print(ep['episode_short_name'],bank,len(xx),round(float(np.ptp(xx)),5) if xx.size else 0, 'gain/offset',np.round([gain,off],8),'median/max residual',np.round([np.median(abs(yy-gain*xx-off)),np.max(abs(yy-gain*xx-off))],8) if xx.size else '-')\\nsource=(root/'beta_w04_s00_solver.py').read_text()\\nPath('beta_w04_batch_03_solver.py').write_text(source.replace('def solve_beta_w04_s00(', 'def solve_beta_w04_batch_03('))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current bank-specific sweeps -> H2 separable FVM and ridge-profiled box-simplex fit; public worst-bank response error is 7.75e-8 and terminal-field max error is 4.78e-10.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool archived and current sweeps\",\n      \"rejected_reason\": \"Current sweeps identify all four banks and already match the public response; pooling could import offsets from a different calibration regime.\"\n    }\n  ],\n  \"rationale\": \"Save the empirically matched baseline and run the official certificate check in an isolated process. Summarize historical calibration by episode and bank to determine whether it offers a defensible fallback for sparse sweeps or would import stale gains.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "279d32a67ae4e7de89fb3902f4b6ee9e013a26c1ad3a061bf08b6bb94c55635e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19683.73,
+      "usage_known": true,
+      "prompt_tokens": 26552,
+      "cached_tokens": 6784,
+      "completion_tokens": 651
+    }
+  ]
+}

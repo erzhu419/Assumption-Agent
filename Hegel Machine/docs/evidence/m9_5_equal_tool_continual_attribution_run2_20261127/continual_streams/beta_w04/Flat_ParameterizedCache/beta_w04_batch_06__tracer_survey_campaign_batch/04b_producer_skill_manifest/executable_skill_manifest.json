@@ -1,0 +1,174 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_w04_batch_06_3fab5a6ea885",
+    "source_hash": "3fab5a6ea885f10696e6b933ac838522b7f2ce48fcc910d45cd8cff5630cb5a1",
+    "parent_ids": [],
+    "source_episode_id": "beta_w04_batch_06__tracer_survey_campaign_batch",
+    "task_id": "beta_w04_batch_06__tracer_survey_campaign_batch",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_tracer_w04_06.py",
+        "archived_relpath": "producers/tmp__audit_tracer_w04_06.py",
+        "bytes": 2744,
+        "sha256": "71ac49f1ecddca1565b70459a733959807532ad2a95acadb54798d8187cff7e9"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_w04_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_w04_batch_01_solver.py",
+        "bytes": 8136,
+        "sha256": "508f6a091b6e1de54cc8b4d53396ed0d6add59601aa89b02c179a6bcc638603c"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_w04_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_w04_batch_02_solver.py",
+        "bytes": 9473,
+        "sha256": "66e35758e67ab003892edfad6510cda7fa66e3a8071c3cec5268a6f3d4418501"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_w04_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_w04_batch_03_solver.py",
+        "bytes": 6325,
+        "sha256": "f73a0275044bc350fc96138732db07f9cb2bc714cffbf76b73d37ff5f936b035"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_w04_batch_04_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_w04_batch_04_solver.py",
+        "bytes": 8097,
+        "sha256": "d84e9145ea340fa225813b02ac9c06c16531a1c1f9f8d7e17df471247b327067"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_w04_batch_05_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_w04_batch_05_solver.py",
+        "bytes": 11846,
+        "sha256": "1c0202be277fdcde1d616e685f41d3c36bec953541f60e00717ffbdf327be38c"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_w04_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_w04_s00_solver.py",
+        "bytes": 6320,
+        "sha256": "307f889ee385a565908bb16df5465a3a28a8dfc8270987cd0dda3eff56892bea"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -lh /tmp/hegel_continual_archive && python3 - <<'PY'\nimport pickle\nwith open('public_beta_w04_batch_06.pkl','rb') as f: s=pickle.load(f)\nfor k,v in s.items():\n    print(k, type(v).__name__, getattr(v,'shape',None), repr(v)[:300])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling reference-panel alignment robust IRLS' 2>&1 | head -50",
+      "cd /holdout_task && tail -56 validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_w04_batch_06.pkl','rb') as f: studies=pickle.load(f)\nprint('studies',len(studies))\nfor s in studies:\n for k,v in s.items():\n  print(k,type(v).__name__,v.shape if hasattr(v,'shape') else repr(v)[:380])\n print('sweeps:',s['sensor_calibration_sweeps'])\nPY\nsed -n '1,240p' /tmp/hegel_continual_archive/beta_w04_batch_04_solver.py\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | head -30",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\n\ndef show(v, name='', d=0):\n    print('  '*d + f'{name}: {type(v).__name__} {getattr(v,\"shape\", \"\")} ' + (repr(v)[:120] if not isinstance(v,(dict,list,tuple)) and not hasattr(v,'shape') else ''))\n    if d>=3: return\n    if isinstance(v,dict):\n        for k,x in v.items(): show(x,k,d+1)\n    elif isinstance(v,(list,tuple)):\n        print('  '*d + f'length={len(v)}')\n        for i,x in enumerate(v[:2]): show(x,str(i),d+1)\nwith open('public_beta_w04_batch_06.pkl','rb') as f: show(pickle.load(f))\nPY\nprintf '\\n--- validator entry point ---\\n'; tail ",
+      "cd /holdout_task && sed -n '1,46p' /tmp/hegel_continual_archive/beta_w04_batch_04_solver.py && grep -nE 'def |terminal|reaction_' /tmp/hegel_continual_archive/beta_w04_batch_05_solver.py && python3 - <<'PY'\nimport json,pickle,numpy as np\np=pickle.load(open('public_beta_w04_batch_06.pkl','rb'))[0];s=p['study'];h=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\nfor name, e in [('current',s['sensor_calibration_sweeps'])]+[(str(i), e) for i,e in enumerate(h)]:\n b,x,y=(np.asarray(e[k]) for k in ('bank_id','ref_signal','raw_readout'))\n print(name, 'counts',np.bincount",
+      "cd /holdout_task && cat > beta_w04_batch_06_solver.py <<'PY'\n\"\"\"Nominal tracer transport and calibrated, nuisance-profiled inversion.\"\"\"\nimport json\nfrom pathlib import Path\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\n_HISTORY = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\n\n\ndef _bank_sweeps(sweeps):\n    bank, x, y = (np.asarray(sweeps[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\n    return [(x[bank == b], y[bank == b]) for b in range(4)]\n\n\ndef _fit_bank(x, y):\n    \"\"\"Fit an affine line, rejecting isola",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_06_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\np = pickle.load(open('public_beta_w04_batch_06.pkl', 'rb'))[0]\ns, gt = p['study'], p['gt']\nS, r = gt['S_tilde'], gt['r_y']\nridge = s['source_ridge']\nworst = dict(gap=0., stationarity=0., budget=0., weight_rel=0., field_rel=0.)\nfor label, idx, delta in [('public', None, 0.), ('first spot spike', 0, 0.6), ('second spot spike', 1, -0",
+      "cd /holdout_task && cat > /tmp/audit_tracer_w04_06.py <<'PY'\nimport importlib.util\nimport json\nimport pickle\nimport tempfile\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\ndef load(name):\n    spec = importlib.util.spec_from_file_location(name, root / (name + '.py'))\n    module = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(module)\n    return module\n\nm = load('beta_w04_batch_06_solver')\nv = load('validate_public_schema')\nwith (root / 'public_beta_w04_batch_06.pkl').open('rb') as f:\n    p = pickle.load(f)[0]\ns, gt = p['study'], p['gt']\nhistory = js",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/audit_tracer_w04_06.py')\ns = p.read_text()\nold = \"v = load('validate_public_schema')\"\nassert old in s\np.write_text(s.replace(old, '''# Load the certificate verifier without running the validator's CLI.\nimport ast\nfrom types import SimpleNamespace\npath = root / 'validate_public_schema.py'\ntree = ast.parse(path.read_text())\ntree.body = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom)) or (isinstance(n, ast.FunctionDef) and n.name == 'verify_box_simplex_kkt_certificate')]\nns = {}\nexec(compile(tree, str(path), 'exec",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_06_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\np = pickle.load(open('public_beta_w04_batch_06.pkl', 'rb'))[0]\ns, gt = p['study'], p['gt']\nZ = s['Z_nuisance']\nlam = s['nuisance_ridge']\n# Undo the full-data ridge residual operator, then refit nuisance inside each fold.\nD = np.column_stack((gt['S_tilde'], gt['r_y']))\nD = D + Z @ (Z.T @ D) / lam\nsensors = s['sensor_ij']\nwors"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__beta_w04_batch_05_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/beta_w04_batch_05_solver.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_w04_batch_06_solver.py",
+        "filename": "beta_w04_batch_06_solver.py",
+        "bytes": 7515,
+        "sha256": "94eda3c3407995c296218b404acd73d048667234c7731ec13f3b9ffd9b03c13c",
+        "content_addressed_ref": "content_addressed_blobs/94eda3c3407995c296218b404acd73d048667234c7731ec13f3b9ffd9b03c13c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_w04_batch_06_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_build_1d",
+      "_fit_bank",
+      "_forward",
+      "_profile",
+      "_box_simplex",
+      "_calibrate",
+      "solve_beta_w04_s00",
+      "solve_beta_w04_batch_01"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3fab5a6ea885f10696e6b933ac838522b7f2ce48fcc910d45cd8cff5630cb5a1",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_06_solver.py')\nm = importlib.util.module_from_spec",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "3fab5a6ea885f10696e6b933ac838522b7f2ce48fcc910d45cd8cff5630cb5a1",
+        "expected_candidate_sha256": "3fab5a6ea885f10696e6b933ac838522b7f2ce48fcc910d45cd8cff5630cb5a1",
+        "computed_candidate_sha256": "3fab5a6ea885f10696e6b933ac838522b7f2ce48fcc910d45cd8cff5630cb5a1",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_w04_batch_06_solver.py",
+            "bytes": 7515
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_3fab5a6e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_build_1d",
+        "code": "def _build_1d(L, n, kappa, vel, robin, diag_add):\n    from scipy.sparse import diags\n    h = L / n\n    k = np.asarray(kappa, dtype=float)\n    p = np.maximum(vel, 0) / h\n    m = np.maximum(-np.asarray(vel), 0) / h\n    q = 2 * k[:-1] * k[1:] / (k[:-1] + k[1:]) / h ** 2\n    diagonal = p + m + diag_add\n    diagonal[:-1] += q\n    diagonal[1:] += q\n    edge = np.array([0, n - 1])\n    np.add.at(diagonal, edge, robin * k[edge] / (h * (robin * h / 2 + k[edge])))\n    return diags((-q - p[1:], diagonal, -q - m[:-1]), (-1, 0, 1), format='csc')"
+      },
+      {
+        "name": "_fit_bank",
+        "code": "def _fit_bank(x, y):\n    if not x.size:\n        return (1.0, 0.0)\n    a, b = np.triu_indices(x.size, 1)\n    dx = x[b] - x[a]\n    distinct = np.abs(dx) > 1e-12 * max(1.0, np.max(np.abs(x)))\n    if not distinct.any():\n        return (1.0, float(np.median(y - x)))\n    keep = np.ones(x.size, dtype=bool)\n    if x.size >= 4:\n        slopes = (y[b[distinct]] - y[a[distinct]]) / dx[distinct]\n        slopes = slopes[slopes > 0]\n        if slopes.size:\n            diffs = y - slopes[:, None] * x\n            centers = np.median(diffs, axis=1)\n            err = np.abs(diffs - centers[:, None])\n            best = np.argmin(np.median(err, axis=1))\n            scale = max(1.4826 * np.median(err[best]), 1e-12 * max(1.0, np.max(np.abs(y))))\n            keep = err[best] <= 4.5 * scale\n            if np.ptp(x[keep]) <= 1e-12:\n                keep[:] = True\n    x, y = (x[keep], y[keep])\n    xc = x - x.mean()\n    gain = float(xc @ (y - y.mean()) / (xc @ xc))\n    if gain <= 0:\n        return (1.0, float(np.median(y - x)))\n    return (gain, float(y.mean() - gain * x.mean()))"
+      },
+      {
+        "name": "_forward",
+        "code": "def _forward(study):\n    from scipy.sparse import eye\n    from scipy.sparse import kron\n    from scipy.sparse.linalg import splu\n    nx, ny = (study['nx'], study['ny'])\n    v = np.asarray(study['V_reaction_2d'], dtype=float)\n    ax = _build_1d(study['Lx'], nx, study['kappa_x'], study['vel_x'], study['robin_x'], v.mean(axis=1) + np.asarray(study['reaction_x']))\n    by = _build_1d(study['Ly'], ny, study['kappa_y'], study['vel_y'], study['robin_y'], v.mean(axis=0) - v.mean() + np.asarray(study['reaction_y']))\n    op = (kron(ax, eye(ny)) + kron(eye(nx), by)).tocsc()\n    identity = eye(nx * ny, format='csc')\n    modes = np.asarray(study['source_modes'], dtype=float)\n    rhs = modes.reshape(len(modes), -1).T\n    i, j = np.asarray(study['sensor_ij'], dtype=int).T\n    sensor_rows = []\n    for mu in study['mu_shifts']:\n        field = splu(op + mu * identity).solve(rhs).reshape(nx, ny, len(modes))\n        sensor_rows.append(field[i, j])\n    return (np.concatenate(sensor_rows), field)"
+      },
+      {
+        "name": "_profile",
+        "code": "def _profile(z, data, ridge):\n    if ridge == 0:\n        coef = np.linalg.lstsq(z, data, rcond=None)[0]\n    else:\n        coef = np.linalg.solve(z.T @ z + ridge * np.eye(z.shape[1]), z.T @ data)\n    return data - z @ coef"
+      },
+      {
+        "name": "_box_simplex",
+        "code": "def _box_simplex(H, c, cap, budget):\n    n = len(c)\n    if budget == 0:\n        return (np.zeros(n), float(np.min(c)))\n    if budget == n * cap:\n        w = np.full(n, cap)\n        return (w, float(np.max(H @ w + c)))\n    w = np.full(n, budget / n)\n    status = np.zeros(n, dtype=int)\n    for _ in range(100 * n):\n        g = H @ w + c\n        free = np.flatnonzero(status == 0)\n        if not free.size:\n            lo = np.where(status < 0, g, np.inf).argmin()\n            hi = np.where(status > 0, g, -np.inf).argmax()\n            if g[lo] >= g[hi] - 1e-12:\n                return (w, float((g[lo] + g[hi]) / 2))\n            status[[lo, hi]] = 0\n            continue\n        block = H[np.ix_(free, free)]\n        one = np.ones(len(free))\n        dg, de = np.linalg.solve(block, np.column_stack((g[free], one))).T\n        nu = dg.sum() / de.sum()\n        step = nu * de - dg\n        alpha = np.full(len(free), np.inf)\n        np.divide(cap - w[free], step, out=alpha, where=step > 1e-14)\n        np.divide(-w[free], step, out=alpha, where=step < -1e-14)\n        nearest = int(alpha.argmin())\n        if alpha[nearest] < 1.0:\n            w[free] += max(0.0, alpha[nearest]) * step\n            hit = free[nearest]\n            status[hit] = 1 if step[nearest] > 0 else -1\n            w[hit] = cap if status[hit] > 0 else 0.0\n            continue\n        w[free] += step\n        g = H @ w + c\n        violation = status * (g - nu)\n        release = int(violation.argmax())\n        if violation[release] <= 1e-12:\n            return (np.clip(w, 0.0, cap), float(nu))\n        status[release] = 0\n    raise RuntimeError('Box-simplex active-set solver did not converge')"
+      },
+      {
+        "name": "_calibrate",
+        "code": "def _calibrate(study):\n    sweeps = study['sensor_calibration_sweeps']\n    banks = np.asarray(sweeps['bank_id'])\n    ref = np.asarray(sweeps['ref_signal'], dtype=float)\n    raw = np.asarray(sweeps['raw_readout'], dtype=float)\n    gain, offset = np.array([_fit_bank(ref[banks == b], raw[banks == b]) for b in range(4)]).T\n    rows = np.asarray(study['row_bank_id'], dtype=int)\n    return (np.asarray(study['y_obs_raw'], dtype=float) - offset[rows]) / gain[rows]"
+      },
+      {
+        "name": "solve_beta_w04_s00",
+        "code": "def solve_beta_w04_s00(study: dict) -> dict:\n    raw_design, terminal_modes = _forward(study)\n    y = _calibrate(study)\n    z = np.asarray(study['Z_nuisance'], dtype=float)\n    profiled = _profile(z, np.column_stack((raw_design, y)), float(study['nuisance_ridge']))\n    S, r = (profiled[:, :-1], profiled[:, -1])\n    ridge = float(study['source_ridge'])\n    cap, budget = (float(study['u_box']), float(study['total_budget']))\n    H = S.T @ S + ridge * np.eye(S.shape[1])\n    w, nu = _box_simplex(H, -(S.T @ r), cap, budget)\n    residual = S @ w - r\n    g = S.T @ residual + ridge * w\n    primal = float(0.5 * (residual @ residual + ridge * (w @ w)))\n    lower = primal - g @ w + nu * budget + cap * np.minimum(g - nu, 0.0).sum()\n    return {'weights': w, 'terminal_field': terminal_modes @ w, 'kkt_certificate': {'weights': w.copy(), 'nu_sum': nu, 'lam_lower': np.maximum(g - nu, 0.0), 'lam_upper': np.maximum(nu - g, 0.0), 'primal_objective': primal, 'dual_lower_bound': float(lower)}}"
+      },
+      {
+        "name": "solve_beta_w04_batch_01",
+        "code": "def solve_beta_w04_batch_01(study: dict) -> dict:\n    design, terminal_modes = _forward(study)\n    y = _calibrate(study)\n    z = np.asarray(study['Z_nuisance'], dtype=float)\n    data = _profile(z, np.column_stack((design, y)), float(study['nuisance_ridge']))\n    S, r = (data[:, :-1], data[:, -1])\n    ridge = float(study['source_ridge'])\n    cap = float(study['u_box'])\n    H = S.T @ S + ridge * np.eye(S.shape[1])\n    c = -(S.T @ r)\n    weights, certificates = ([], [])\n    for total in study['budget_grid']:\n        budget = float(total)\n        w, nu = _box_simplex(H, c, cap, budget)\n        residual = S @ w - r\n        g = S.T @ residual + ridge * w\n        primal = float(0.5 * (residual @ residual + ridge * (w @ w)))\n        lower = np.maximum(g - nu, 0.0)\n        upper = np.maximum(nu - g, 0.0)\n        bound = primal + nu * (budget - w.sum()) - lower @ w - upper @ (cap - w)\n        weights.append(w)\n        certificates.append({'weights': w.copy(), 'nu_sum': nu, 'lam_lower': lower, 'lam_upper': upper, 'primal_objective': primal, 'dual_lower_bound': float(bound)})\n    return {'weights_by_budget': np.stack(weights), 'terminal_field_mid_budget': terminal_modes @ weights[1], 'kkt_certificates': certificates}"
+      }
+    ]
+  }
+}

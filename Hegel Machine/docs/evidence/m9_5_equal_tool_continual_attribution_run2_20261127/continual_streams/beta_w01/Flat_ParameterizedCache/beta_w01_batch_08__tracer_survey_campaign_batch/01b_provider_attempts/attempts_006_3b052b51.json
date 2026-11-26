@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3b052b514bea496cacd3707c0a49eabe",
+  "call_seq": 6,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_08__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:51:27.095455+00:00",
+  "ended_at_utc": "2026-11-26T18:51:48.864051+00:00",
+  "request_sha256": "d25364b240bdb513f191f6481b75876fce1bb171d56112fd438c74b1dedad064",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 44898,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27750,
+    "cached_tokens": 6784,
+    "completion_tokens": 836
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'beta_w01_batch_08_solver.py')\\nmod=importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nwith open(root+'public_beta_w01_batch_08.pkl','rb') as f:\\n    study=pickle.load(f)[0]['study']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history=json.load(f)\\nlatest=history[-1]\\nwing_b=np.asarray(latest['bank_id']) >= 2\\n# Restore the actual noisy Wing B sweep to the public study. Its surviving\\n# points agree with the archived calibration, so adding it should not move the solution.\\nnoisy={**study,'sensor_calibration_sweeps':{k:np.r_[v,np.asarray(latest[k])[wing_b]] for k,v in study['sensor_calibration_sweeps'].items()}}\\nbase=mod.solve_beta_w01_batch_08(study)\\nstress=mod.solve_beta_w01_batch_08(noisy)\\nrows=study['row_bank_id']\\ndy=mod._calibrated_observations(noisy)-mod._calibrated_observations(study)\\nbank_max=[float(np.max(np.abs(dy[rows==b]))) for b in range(4)]\\ndw=float(np.max(np.abs(stress['weights']-base['weights'])))\\ndf=float(np.linalg.norm(stress['terminal_field']-base['terminal_field'])/np.linalg.norm(base['terminal_field']))\\nprint(json.dumps({'measured_emi_max_observation_change_by_bank':bank_max,'max_weight_change':dw,'relative_terminal_field_change':df}))\\nassert max(bank_max)<1e-7 and dw<1e-7 and df<1e-7\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 latest-sweep affine fits -> H2 clean archive anchors with full 2D dispersion; public worst-bank profiled error is 5.88e-8 and independently verified KKT gap is 6.9e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case verifies missing-sweep fallback but does not exercise rejection of a contaminated in-batch sweep. Inject the actual archived Wing B measurements to test that branch; a material change would require revising the calibration filter before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "81262972f99239b6bd5e5aae4dc0bda23c405ca52fbfa09adaf28060a4ed39ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22795.01,
+      "usage_known": true,
+      "prompt_tokens": 27750,
+      "cached_tokens": 6784,
+      "completion_tokens": 836
+    }
+  ]
+}

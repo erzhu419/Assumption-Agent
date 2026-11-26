@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "168b464303ff4afab6745097d7c76183",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:22:02.073083+00:00",
+  "ended_at_utc": "2026-11-26T18:22:28.713239+00:00",
+  "request_sha256": "8606875a71eb0b12fe417ac02ab1fb3e84c2f9acd70568b06ed80a87df3b0a6d",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 43130,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25763,
+    "cached_tokens": 6784,
+    "completion_tokens": 990
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_w04_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nhistory = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nwith open('public_beta_w04_batch_03.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nepisodes = [(e['episode_short_name'], e) for e in history] + [('batch_03', study['sensor_calibration_sweeps'])]\\nfor idx, (name, e) in enumerate(episodes):\\n    x,y,b = (np.asarray(e[k]) for k in ('ref_signal','raw_readout','bank_id'))\\n    stats = np.zeros((4,4))\\n    for k in range(4):\\n        xx, yy = x[b==k], y[b==k]\\n        order = np.argsort(xx)\\n        extremes = order[[0,-1]]\\n        check = order[1:-1]\\n        g2, a2 = m._fit_bank(xx[extremes], yy[extremes])\\n        stats[k,0] = np.max(abs(g2*xx[check]+a2-yy[check]))\\n        for j in range(len(xx)):\\n            held = np.arange(len(xx)) != j\\n            g1,a1 = m._fit_bank(xx[j:j+1], yy[j:j+1])\\n            stats[k,1] = max(stats[k,1], np.max(abs(g1*xx[held]+a1-yy[held])))\\n        if idx:\\n            _, prev = episodes[idx-1]\\n            xp,yp,bp = (np.asarray(prev[field]) for field in ('ref_signal','raw_readout','bank_id'))\\n            gp,ap = m._fit_bank(xp[bp==k],yp[bp==k])\\n            stats[k,2] = np.max(abs(gp*xx+ap-yy))\\n            stats[k,3] = np.max(abs(gp*(xx[:,None]-xx)+(yy-yy[:,None])))\\n    print(name, 'worst bank residuals [two-point fit, one-point fit, prior batch line, prior slope reanchored on one point]', stats.max(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 current bank-specific affine calibration -> H2 separable transport with ridge-profiled nuisance; the worst public stress slice had a KKT gap of 8.81e-8 against a 1e-6 tolerance.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the public leave-one-sweep-out audit\",\n      \"rejected_reason\": \"It already passed on both wings and does not test whether historical gains transfer across batch changes.\"\n    }\n  ],\n  \"rationale\": \"Use measured historical sweeps and held-out references to test whether transferring the prior slope actually improves sparse calibration. If transfer fails across regime changes, do not use it as a blanket fallback. The separability and nuisance-profile checks already passed; this study has no class labels or relay modes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "eb446baaa8bb5ce5acb2d739e97aee092558c6e100c7d72a51639a5b909a8679",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26591.83,
+      "usage_known": true,
+      "prompt_tokens": 25763,
+      "cached_tokens": 6784,
+      "completion_tokens": 990
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "781ab47df3f34836bfbe340a01959da5",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:13:25.365100+00:00",
+  "ended_at_utc": "2026-11-26T18:14:01.305334+00:00",
+  "request_sha256": "08fe8ba79ac5dd9774bcd4b1b418936c63cadb85055fe4e93af165d9df05a31c",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 61434,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34354,
+    "cached_tokens": 11136,
+    "completion_tokens": 1431
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w04_batch_01_solver.py')\\ns = p.read_text()\\na, b = s.index('    taus, theta = _fit(', s.index('def _fit_split')), s.index('\\\\n\\\\ndef _crossing')\\ns = s[:a] + '''    hist, hold = _stress(train, affine)\\n    init = train['initial_memory_states']\\n    rate = train['instant_rate_obs']\\n    increments = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    taus, theta = _fit(dt, times, hist[complete], hold[complete], x[complete],\\n                       init[complete], increments[complete], rate[complete])\\n    # Learn the residual affine drift in each lab from complete coupons.\\n    # A median across the longer horizons limits the influence of bad curve samples.\\n    train_basis, train_onset = _design(taus, dt, times, hist, hold, x, init)\\n    late = times >= 1.\\n    relaxation = train_basis[:, late, :2] @ theta[:2]\\n    drift_obs = np.median((increments[:, late] - relaxation) / times[late], axis=1)\\n    drift_prior = train_onset[:, 2:] @ theta[2:]\\n\\n    hist_test, hold_test = _stress(test, affine)\\n    basis, onset = _design(taus, dt, times, hist_test, hold_test, xt,\\n                           test['initial_memory_states'])\\n    drift_test = onset[:, 2:] @ theta[2:]\\n    adjust = np.zeros(len(hold_test))\\n    for lab in np.unique(train['lab_id'][complete]):\\n        use = complete & (train['lab_id'] == lab)\\n        center = np.median(drift_prior[use])\\n        x_lab = drift_prior[use] - center\\n        residual = drift_obs[use] - drift_prior[use]\\n        scale = max(0.003, 1.4826 * np.median(np.abs(residual - np.median(residual))))\\n        offset, slope = least_squares(\\n            lambda par: (residual - par[0] - par[1] * x_lab) / scale,\\n            [0., 0.], loss='soft_l1').x\\n        rows = test['lab_id'] == lab\\n        adjust[rows] = offset + slope * (drift_test[rows] - center)\\n\\n    # Missing features only affect drift. Subtract relaxation from the\\n    # independently observed onset to recover that coupon's drift instead.\\n    rate_fit = onset @ theta\\n    missing = ~np.isfinite(test['coupon_features_raw']).all(axis=1)\\n    adjust[missing] = (test['instant_rate_obs'] - rate_fit)[missing]\\n    strain = test['strain_0'][:, None] + basis @ theta + adjust[:, None] * times\\n    return taus, strain, hold_test, rate_fit + adjust\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nsed -n '1,/^def _align/p' alpha_w04_batch_01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_w04_batch_01_solver.py')\\ns=importlib.util.module_from_spec(spec);spec.loader.exec_module(s)\\nwith open('public_alpha_w04_batch_01.pkl','rb') as f: a=pickle.load(f)[0]\\nd,g=a['dataset'],a['gt']; t=d['test']; o=s.solve_alpha_w04_batch_01(d)\\nprint('taus',o['estimated_taus'],'relative error',o['estimated_taus']/g['taus']-1)\\nmiss=np.isnan(t['coupon_features_raw']).any(axis=1); labs=t['lab_id']; cross=g['te_cross']<d['eval_times'][-1]; near=abs(g['te_hold_true'])<.5\\nfor key, gt in [('predicted_strain','te_clean'),('secant_compliance','te_secant'),('hazard_crossing_times','te_cross')]:\\n e=o[key]-g[gt]; rm=lambda u: np.sqrt(np.mean(u*u)); print(key,{k:round(rm(e[m]),5) for k,m in [('all',labs>=0),('missing',miss),('complete',~miss),('wingA',labs<2),('wingB',labs>=2),('crossed',cross),('censored',~cross),('near-zero hold',near)]},'worst lab',round(max(rm(e[labs==i]) for i in range(4)),5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: promote robust lab drift calibration on complete coupons and measured onset on incomplete coupons; the challenger reaches worst-lab public strain, secant, and hazard RMSE of 0.00902, 0.03813, and 0.01169.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Blend onset into predictions for complete coupons\",\n      \"rejected_reason\": \"Once lab drift is calibrated, blending increases public errors and held-out coupon errors.\"\n    }\n  ],\n  \"rationale\": \"Promote the challenger supported by held-out coupons and public reference metrics. Verify the exact artifact in an isolated process and check whether the gains survive the missing-feature, low-stress, and censoring slices; inspect the calibration code to design a targeted sparse-panel stress test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "03e4ef11f62b84b6c0cefb4cd9ad662c12c1bd25ff493d9bb72e9add5d3c8bff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36840.46,
+      "usage_known": true,
+      "prompt_tokens": 34354,
+      "cached_tokens": 11136,
+      "completion_tokens": 1431
+    }
+  ]
+}

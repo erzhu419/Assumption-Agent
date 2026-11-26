@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50c70eecdcd840ce94f54a9972d6bbd2",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:19:45.504507+00:00",
+  "ended_at_utc": "2026-11-26T18:20:24.714030+00:00",
+  "request_sha256": "d665c449bb74d2ce71549f74c6a46090556823f5885cf0e307e32189e37ff0e9",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 48821,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29151,
+    "cached_tokens": 6784,
+    "completion_tokens": 1641
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_w01_batch_04_solver.py')\\ns = p.read_text()\\nold = '    # Apply the square root of I - Z (Z.T Z + ridge I)^-1 Z.T.\\\\n    q, singular, _ = np.linalg.svd(z, full_matrices=False)\\\\n    if ridge > 0:\\\\n        factor = 1 - np.sqrt(ridge / (singular**2 + ridge))'\\nnew = '    # The certified objective uses the ridge residual map on both inputs.\\\\n    q, singular, _ = np.linalg.svd(z, full_matrices=False)\\\\n    if ridge > 0:\\\\n        factor = singular**2 / (singular**2 + ridge)'\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w01_batch_04_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nverify = {}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d =',1)[0], verify)\\ncheck = verify['verify_box_simplex_kkt_certificate']\\nfor item in pickle.load(open('public_beta_w01_batch_04.pkl','rb')):\\n    s, gt = item['study'], item['gt']\\n    base = mod.solve_beta_w01_batch_04(s)\\n    werr = np.max(np.abs(base['weights'] - gt['w_opt']))\\n    ferr = np.linalg.norm(base['terminal_field'] - gt['terminal_field_A']) / np.linalg.norm(gt['terminal_field_A'])\\n    print('public weight max error', werr, 'terminal field relative error', ferr)\\n    assert werr < 1e-5 and ferr < 1e-5\\n    worst_gap = 0.\\n    sweep = s['sensor_calibration_sweeps']\\n    for b in range(4):\\n        ix = np.flatnonzero(sweep['bank_id'] == b)\\n        # Add a high-leverage EMI spike at either end of the measured reference span.\\n        for j, spike in ((ix[np.argmin(sweep['ref_signal'][ix])], 1.), (ix[np.argmax(sweep['ref_signal'][ix])], -1.)):\\n            raw = sweep['raw_readout'].copy()\\n            raw[j] += spike\\n            out = mod.solve_beta_w01_batch_04(dict(s, sensor_calibration_sweeps=dict(sweep, raw_readout=raw)))\\n            r = check(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'], gap_tol=2e-4)\\n            assert r['valid'], (b, j, r)\\n            worst_gap = max(worst_gap, r['gap'])\\n    print('worst EMI slice certificate gap', worst_gap)\\n    m = len(base['weights'])\\n    for budget in (0., s['u_box'], m*s['u_box']):\\n        w, c = mod._box_simplex(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], budget)\\n        r = check(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], budget, c)\\n        assert r['valid'], (budget, r)\\n    print('box budget stress passed')\\n    hist = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\n    fits = []\\n    for entry in hist:\\n        b, x, y = mod._sweep_columns(entry)\\n        fits.append((entry['episode_short_name'], [None if (f := mod._fit_affine(x[b == j], y[b == j])) is None else f.round(5).tolist() for j in range(4)]))\\n    print('historical bank fits', fits)\\n    for b in range(4):\\n        keep = sweep['bank_id'] != b\\n        keep[np.flatnonzero(~keep)[0]] = True\\n        out = mod.solve_beta_w01_batch_04(dict(s, sensor_calibration_sweeps={k: v[keep] for k,v in sweep.items()}))\\n        r = check(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'], gap_tol=2e-4)\\n        print('single-spot bank', b, 'valid', r['valid'], 'reason', r['reason'], 'weight max error', np.max(np.abs(out['weights'] - gt['w_opt'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 square-root ridge profile → H2 direct ridge residual map; the probe reduces worst-bank observation error from 9.94e-2 to 9.73e-9 and matches the reference design to 1.41e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The certified inverse problem uses the square root of the ridge residual map.\",\n    \"empirical_witness\": \"The square-root map produced a 0.1951 primal-objective mismatch; the direct map matched the reference design to 1.41e-16 and the objective to 2.28e-11 in the public probe.\",\n    \"causal_blanket_diagnosis\": \"The mismatch lies in the nuisance span; the terminal field at reference weights already agrees to 4.47e-15 relative error.\",\n    \"sublated_pivot\": \"Apply the direct ridge residual map to both the observation vector and the design while preserving the coupled finite-volume stencil.\",\n    \"risk_kind\": \"wrong nuisance operator convention\",\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the PDE or bank calibration\",\n      \"rejected_reason\": \"The reference-weight terminal field and residual outside the nuisance span already agree at numerical precision and sweep-noise scale, respectively.\"\n    }\n  ],\n  \"rationale\": \"Promote the residual map supported by the public measurements, then verify the exact artifact in isolation. EMI tests check whether the robust fit rejects high-leverage spikes; single-spot tests reveal whether historical calibration transfers across batches or needs a different fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bb3b011c25c27606239cb6b589181a0ba0a1f80278745bd2d038695392b30df9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40130.0,
+      "usage_known": true,
+      "prompt_tokens": 29151,
+      "cached_tokens": 6784,
+      "completion_tokens": 1641
+    }
+  ]
+}

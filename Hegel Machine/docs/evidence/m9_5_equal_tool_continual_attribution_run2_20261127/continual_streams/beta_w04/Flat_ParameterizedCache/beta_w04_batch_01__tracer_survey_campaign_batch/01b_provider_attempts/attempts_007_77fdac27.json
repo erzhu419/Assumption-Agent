@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77fdac271f8b498ca2b8e4a4e536a646",
+  "call_seq": 7,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:11:25.451176+00:00",
+  "ended_at_utc": "2026-11-26T18:12:00.288288+00:00",
+  "request_sha256": "63e58f54adad99fcea1391b0d5e4e21b2a2f2d48ce73251db2a378e98d2294dc",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 47069,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28257,
+    "cached_tokens": 6784,
+    "completion_tokens": 1450
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nprior = Path('/tmp/hegel_continual_archive/beta_w04_s00_solver.py').read_text()\\nhead, rest = prior.split('def _calibrate(study):\\\\n', 1)\\n_, body = rest.split('def _forward(study):\\\\n', 1)\\nbody = body.split('def solve_beta_w04_s00', 1)[0]\\nhead = head.replace('import numpy as np', 'import json\\\\nfrom pathlib import Path\\\\n\\\\nimport numpy as np')\\ncalibration = '''_CALIBRATION_HISTORY = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n\\n\\ndef _bank_history(bank):\\n    try:\\n        with _CALIBRATION_HISTORY.open() as stream:\\n            history = json.load(stream)\\n    except FileNotFoundError:\\n        return 1.0, 0.0\\n    # Use the most recent sweep that identifies both calibration parameters.\\n    for sweep in reversed(history):\\n        keep = np.asarray(sweep['bank_id']) == bank\\n        x = np.asarray(sweep['ref_signal'], dtype=float)[keep]\\n        y = np.asarray(sweep['raw_readout'], dtype=float)[keep]\\n        if x.size >= 2 and np.ptp(x) > 1e-12:\\n            return _fit_bank(x, y)\\n    return 1.0, 0.0\\n\\n\\ndef _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    banks = np.asarray(sweeps['bank_id'])\\n    ref = np.asarray(sweeps['ref_signal'], dtype=float)\\n    raw = np.asarray(sweeps['raw_readout'], dtype=float)\\n    gains, offsets = np.empty(4), np.empty(4)\\n    for b in range(4):\\n        keep = banks == b\\n        x, y = ref[keep], raw[keep]\\n        if x.size >= 2 and np.ptp(x) > 1e-12:\\n            gains[b], offsets[b] = _fit_bank(x, y)\\n        else:\\n            gain, offset = _bank_history(b)\\n            gains[b] = gain\\n            offsets[b] = np.median(y - gain * x) if x.size else offset\\n    rows = np.asarray(study['row_bank_id'], dtype=int)\\n    return (np.asarray(study['y_obs_raw'], dtype=float) - offsets[rows]) / gains[rows]\\n\\n\\n'''\\nsolve = '''def solve_beta_w04_batch_01(study: dict) -> dict:\\n    design, terminal_modes = _forward(study)\\n    y = _calibrate(study)\\n    z = np.asarray(study['Z_nuisance'], dtype=float)\\n    data = _profile(z, np.column_stack((design, y)), float(study['nuisance_ridge']))\\n    S, r = data[:, :-1], data[:, -1]\\n    ridge = float(study['source_ridge'])\\n    cap = float(study['u_box'])\\n    H = S.T @ S + ridge * np.eye(S.shape[1])\\n    c = -(S.T @ r)\\n    weights, certificates = [], []\\n    for total in study['budget_grid']:\\n        budget = float(total)\\n        w, nu = _box_simplex(H, c, cap, budget)\\n        residual = S @ w - r\\n        g = S.T @ residual + ridge * w\\n        primal = float(0.5 * (residual @ residual + ridge * (w @ w)))\\n        lower = np.maximum(g - nu, 0.0)\\n        upper = np.maximum(nu - g, 0.0)\\n        bound = primal + nu * (budget - w.sum()) - lower @ w - upper @ (cap - w)\\n        weights.append(w)\\n        certificates.append({'weights': w.copy(), 'nu_sum': nu,\\n                             'lam_lower': lower, 'lam_upper': upper,\\n                             'primal_objective': primal, 'dual_lower_bound': float(bound)})\\n    return {'weights_by_budget': np.stack(weights),\\n            'terminal_field_mid_budget': terminal_modes @ weights[1],\\n            'kkt_certificates': certificates}\\n'''\\nPath('beta_w04_batch_01_solver.py').write_text(head + calibration + 'def _forward(study):\\\\n' + body + solve)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reaction field alone → H2 additive axis baselines plus residual ridge profiling; the worst public design discrepancy falls from 1.49e-3 to 8.36e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool archived and current sweeps for every bank\",\n      \"rejected_reason\": \"Pooling could bias a current gain or offset that the in-batch sweep already identifies.\"\n    }\n  ],\n  \"rationale\": \"Build the solver using the reaction assembly confirmed by the public targets. Use history when a bank cannot identify its current gain, then check that all three returned certificates pass the independent validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b344a070fb5dc3acae6759e93a0aa8d32d3444391b443eccffa92345decd1143",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35741.08,
+      "usage_known": true,
+      "prompt_tokens": 28257,
+      "cached_tokens": 6784,
+      "completion_tokens": 1450
+    }
+  ]
+}

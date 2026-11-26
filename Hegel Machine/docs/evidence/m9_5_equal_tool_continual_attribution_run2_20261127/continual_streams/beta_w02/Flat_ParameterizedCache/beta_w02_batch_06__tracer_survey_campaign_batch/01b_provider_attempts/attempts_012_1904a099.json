@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1904a0997d874f25b7c76575e03d25be",
+  "call_seq": 12,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w02__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w02_batch_06__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:28:06.003539+00:00",
+  "ended_at_utc": "2026-11-26T18:28:46.682207+00:00",
+  "request_sha256": "5873a143978b96ab107cbf0b66101fc020097ae7c1f4c3b51e8b80635e7af244",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 56594,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30954,
+    "cached_tokens": 6784,
+    "completion_tokens": 1730
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncp beta_w02_batch_06_solver.py /tmp/tracer_batch06_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_w02_batch_06_solver.py')\\ns = p.read_text()\\na = s.index('# Stable per-bank affine fits')\\nb = s.index('\\\\n\\\\ndef _calibrate', a)\\ns = s[:a] + '''# The two complete post-change sweeps identify the same four-decimal\\n# coefficients. The later bank-0 spot checks confirm the stored precision.\\n_ARCHIVED_CALIBRATION = np.array([\\n    (1.2579, 0.0962), (0.7030, -0.1042),\\n    (1.2605, 0.1152), (0.8060, -0.1199),\\n], dtype=np.float32).astype(float)''' + s[b:]\\na = \\\"        x, y = ref[take], raw[take]\\\\n\\\"\\nassert s.count(a) == 1\\ns = s.replace(a, a + '''        if not x.size:\\n            continue\\n        # Archived signals and readouts are rounded to six decimal places.\\n        # Do not refit a stable bank to that rounding noise or an isolated spike.\\n        rounding = 5.1e-7 * (1.0 + abs(gain[bank]))\\n        agrees = np.count_nonzero(np.abs(y - gain[bank] * x - offset[bank]) <= rounding)\\n        if agrees and (agrees > x.size / 2 or x.size == 2):\\n            continue\\n''')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\ncat > /tmp/tracer_batch06_stress.py <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', p/'beta_w02_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nv = {}\\nexec((p/'validate_public_schema.py').read_text().split('\\\\n_d = ')[0], v)\\nwith (p/'public_beta_w02_batch_06.pkl').open('rb') as f:\\n    case = pickle.load(f)[0]\\ns, gt = case['study'], case['gt']\\narchive = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nsweeps = [('public', s['sensor_calibration_sweeps'])]\\nfor e in archive:\\n    tag = e['episode_short_name'][-2:]\\n    if tag not in ('03', '04', '05'):\\n        continue\\n    b, x, y = (np.asarray(e[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    def add(label, mask, yy):\\n        sweeps.append((tag + '_' + label, dict(bank_id=b[mask], ref_signal=x[mask], raw_readout=yy[mask])))\\n    add('full', b >= 0, y)\\n    for j in np.unique(b):\\n        add(f'omit{j}', b != j, y)\\n        yy = y.copy()\\n        ids = np.flatnonzero(b == j)\\n        yy[ids[len(ids)//2]] += 2.0\\n        add(f'emi{j}', b >= 0, yy)\\nworst = np.zeros(3)\\nfor label, sweep in sweeps:\\n    out = m.solve_beta_w02_batch_06({**s, 'sensor_calibration_sweeps': sweep})\\n    cert = v['verify_box_simplex_kkt_certificate'](gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n    err = (cert['gap'], np.max(np.abs(out['weights']-gt['w_opt'])), np.linalg.norm(out['terminal_field']-gt['terminal_field_A'])/np.linalg.norm(gt['terminal_field_A']))\\n    print(label, cert['reason'], *(f'{x:.3g}' for x in err))\\n    assert cert['valid'] and err[1] < 1e-5 and err[2] < 1e-5\\n    worst = np.maximum(worst, err)\\nprint('worst gap, weight max error, field relative error:', worst, 'slices:', len(sweeps))\\n# A coherent change in both affine coefficients must still be taken from the sweep.\\ne = next(e for e in archive if e['episode_short_name'].endswith('_04'))\\nb, x = (np.asarray(e[k]) for k in ('bank_id','ref_signal'))\\nrb = s['row_bank_id']\\ntruth = m._calibrate(s)\\ncoef = m._ARCHIVED_CALIBRATION + np.array([[.01,-.02],[-.02,.01],[.03,.02],[-.01,-.03]])\\nsweep = dict(bank_id=b,ref_signal=x,raw_readout=coef[b,0]*x+coef[b,1])\\nactual = m._calibrate({**s,'sensor_calibration_sweeps':sweep,'y_obs_raw':truth*coef[rb,0]+coef[rb,1]})\\nprint('coherent drift inversion max error:', np.max(np.abs(actual-truth)))\\nassert np.max(np.abs(actual-truth)) < 1e-12\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/tracer_batch06_stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 refit every usable sweep -> H2 retain the archived affine fit when current readings agree within rounding precision; the rounded fallback alone reduced the public KKT gap from 3.95e-7 to 1.26e-8 but still failed the batch-03 bank-1 withholding slice.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Round only the fallback coefficients\",\"rejected_reason\":\"The batch-03 bank-1 withholding slice still failed because the other banks were refit to rounded sweep readings.\"}],\"rationale\":\"Use the documented archive precision to distinguish rounding noise from a measurable calibration change. Verify the revised artifact against both complete archived sweeps, sparse spot checks, per-bank withholding and EMI, and confirm that a coherent gain and offset change still triggers a fresh fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2d10eeafe2d428a15bbc7144760bb69e928e3b4d1a2808a514bd4c51b92871cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42596.42,
+      "usage_known": true,
+      "prompt_tokens": 30954,
+      "cached_tokens": 6784,
+      "completion_tokens": 1730
+    }
+  ]
+}

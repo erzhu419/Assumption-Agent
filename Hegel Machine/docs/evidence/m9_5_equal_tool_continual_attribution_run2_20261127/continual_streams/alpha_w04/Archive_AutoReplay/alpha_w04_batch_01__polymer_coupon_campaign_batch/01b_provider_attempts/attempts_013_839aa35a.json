@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "839aa35a5ad8444eb91e4e3b94069071",
+  "call_seq": 13,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:15:05.205900+00:00",
+  "ended_at_utc": "2026-11-26T18:15:38.006147+00:00",
+  "request_sha256": "5a5484411d5f50b0df057b7a3e491a7a602fecb2181c584d64ca4549c56d5b8f",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 79974,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38603,
+    "cached_tokens": 13696,
+    "completion_tokens": 1354
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\npath='/holdout_task/alpha_w04_batch_01_solver.py'\\ns=importlib.util.spec_from_file_location('solver',path); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nw=pickle.load(open('/holdout_task/public_alpha_w04_batch_01.pkl','rb'))[0]; d=w['dataset']; a,b=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; c=d['calibration_load_cells']; p=m.solve_alpha_w04_batch_01(d); tau=p['estimated_taus']; x,xt=m._align(a,b); cc=m._calibrate(c)\\nfor name,split,aligned in [('train',a,x),('test',b,xt)]:\\n h,hold=m._stress(split,cc); state=split['initial_memory_states'].copy()\\n for j,step in enumerate(dt): state += (h[:,j,None]-state)*(-np.expm1(-step/tau))\\n v,u=m._design(tau,dt,t,h,hold,aligned,split['initial_memory_states']); e=np.max(abs(u[:,:2]-(hold[:,None]-state)/tau)); print('recurrence direct agreement',name,e); assert e<1e-12\\nfor k,g in [('predicted_strain','te_clean'),('secant_compliance','te_secant'),('hazard_crossing_times','te_cross')]:\\n e=p[k]-w['gt'][g]; print(k,'lab RMSE',[round(np.sqrt(np.mean(e[b['lab_id']==i]**2)),6) for i in range(4)])\\nh,hold=m._stress(a,cc); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; z=a['initial_memory_states']; lab=a['lab_id']; ok=np.isfinite(a['coupon_features_raw']).all(1); wing=lab//2\\npairs=[(i,j) for i in range(4) for j in range(i+1,4)]; triples=[(0,1,2),(0,1,3),(0,2,3),(1,2,3)]\\nZ=np.column_stack([x[:,i]*x[:,j] for i,j in pairs]+[x[:,i]**2 for i in range(4)]+[x[:,i]*x[:,j]*x[:,k] for i,j,k in triples]+[(x[:,i]+sign*x[:,j])/(1+.25*(x[:,i]-sign*x[:,j])**2) for i,j in pairs for sign in (-1,1)])\\nF=np.column_stack((np.ones(len(x)),x)); err={k:np.full(len(x),np.nan) for k in ('shared','bounded_nonlinear','wing_centered')}\\nfor l in range(4):\\n tr=(lab!=l)&ok; te=(lab==l)&ok\\n ta,be=m._fit(dt,t,h[tr],hold[tr],x[tr],y[tr],r[tr],z[tr]); v,u=m._design(ta,dt,t,h,hold,x,z); rel=v[:,:,:2]@be[:2]; rate=r-u[:,:2]@be[:2]; f=F@be[2:]; terminal=np.median((y[:,5:]-rel[:,5:])/t[5:],axis=1); residual=np.clip(terminal-f,-.045,.045)\\n zz=Z-F@np.linalg.lstsq(F[tr],Z[tr],rcond=None)[0]; zz/=np.maximum(np.std(zz[tr],axis=0),.01); offset=zz@np.linalg.solve(zz[tr].T@zz[tr]+50*np.eye(zz.shape[1]),zz[tr].T@residual[tr]); wc=np.array([np.median(residual[tr&(wing==i)]) for i in range(2)])[wing]\\n for name,adj in [('shared',0),('bounded_nonlinear',offset),('wing_centered',wc)]:\\n  ff=f+adj; drift=ff+.5*np.clip(rate-ff,-.035,.035); err[name][te]=(rel[te,-1]+drift[te]*t[-1]-y[te,-1])\\nfor name,e in err.items(): print('leave-one-lab-out terminal median abs',name,[round(np.median(abs(e[(lab==i)&ok])),6) for i in range(4)])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear feature drift with bounded onset correction → H2 nonlinear or wing-centered corrections only if they improve held-out labs; the current worst-lab public compliance RMSE is 0.06243.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, PDE drift, or balanced accuracy\",\"rejected_reason\":\"The dataset contains continuous creep trajectories and no relay, PDE, or classification target. Lab and wing residuals are the relevant nuisance slices.\"}],\"rationale\":\"Compare both memory modes against direct stepwise propagation to catch sign or initialization errors. Test pairwise, three-way, rational and wing-specific drift corrections using training-only fits within each leave-one-lab-out fold; retain the simpler model unless a correction improves the worst lab.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "771b107bc662e2436207b558c19847d59ba2d4321f9d86c8f84167a9c742056b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33710.96,
+      "usage_known": true,
+      "prompt_tokens": 38603,
+      "cached_tokens": 13696,
+      "completion_tokens": 1354
+    }
+  ]
+}

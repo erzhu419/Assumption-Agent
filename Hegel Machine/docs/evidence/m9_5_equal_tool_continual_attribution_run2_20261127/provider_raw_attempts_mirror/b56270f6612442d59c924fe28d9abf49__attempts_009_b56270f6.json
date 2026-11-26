@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b56270f6612442d59c924fe28d9abf49",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Full_Mechanism_Graph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:12:55.117025+00:00",
+  "ended_at_utc": "2026-11-26T18:13:35.640350+00:00",
+  "request_sha256": "d0fb7c7c4ae6764ff2ea08f227e152ef8bd1061d35a58ca4fe5318e15a4014b5",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 48841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28247,
+    "cached_tokens": 11136,
+    "completion_tokens": 1734
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_w01_batch_01_solver.py')\\ns = p.read_text().replace('import numpy as np', 'import json\\\\nfrom pathlib import Path\\\\n\\\\nimport numpy as np', 1)\\na, b = s.index('def _calibrated_observations('), s.index('def _profile(')\\ns = s[:a] + '''def _historical_bank_fits():\\n    path = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n    fits = [(1., 0.)] * 4\\n    if path.is_file():\\n        for sweep in json.loads(path.read_text()):\\n            banks = np.asarray(sweep['bank_id'])\\n            ref = np.asarray(sweep['ref_signal'], dtype=float)\\n            raw = np.asarray(sweep['raw_readout'], dtype=float)\\n            for bank in range(4):\\n                use = (banks == bank) & np.isfinite(ref) & np.isfinite(raw)\\n                if use.any() and np.ptp(ref[use]) > 1e-10:\\n                    fits[bank] = _fit_bank(ref[use], raw[use], fits[bank])\\n    return fits\\n\\n\\ndef _calibrated_observations(study, design, nuisance):\\n    sweeps = study['sensor_calibration_sweeps']\\n    banks = np.asarray(sweeps['bank_id'])\\n    ref = np.asarray(sweeps['ref_signal'], dtype=float)\\n    raw = np.asarray(sweeps['raw_readout'], dtype=float)\\n    rows = np.asarray(study['row_bank_id'], dtype=int).ravel()\\n    observed = np.asarray(study['y_obs_raw'], dtype=float).ravel()\\n    y = observed.copy()\\n    sparse = []\\n    priors = None\\n    for bank in range(4):\\n        use = (banks == bank) & np.isfinite(ref) & np.isfinite(raw)\\n        x, r = ref[use], raw[use]\\n        take = rows == bank\\n        if len(x) >= 2 and np.ptp(x) > 1e-10:\\n            gain, offset = _fit_bank(x, r)\\n        else:\\n            if priors is None:\\n                priors = _historical_bank_fits()\\n            gain, offset = priors[bank]\\n            if take.any() and len(x):\\n                xb, rb = float(np.median(x)), float(np.median(r))\\n                # A compatible spot verifies continuity but does not identify a new slope.\\n                if abs(rb - (gain * xb + offset)) > 2e-6:\\n                    sparse.append((take, xb, rb, gain))\\n        y[take] = (observed[take] - offset) / gain\\n    if not sparse:\\n        return y\\n\\n    # For disagreeing spots, remove the shared source and nuisance subspace\\n    # before deciding whether the archived calibration needs to change.\\n    physics = np.column_stack((design, nuisance))\\n    q, singular, _ = np.linalg.svd(physics, full_matrices=False)\\n    q = q[:, singular > np.finfo(float).eps * max(physics.shape) * singular[0]]\\n\\n    def project(values):\\n        return values - q @ (q.T @ values)\\n\\n    base = y.copy()\\n    delta = np.zeros((len(y), len(sparse)))\\n    for j, (take, xb, rb, gain) in enumerate(sparse):\\n        base[take] = xb + (observed[take] - rb) / gain\\n        delta[take, j] = observed[take] - rb\\n    unchanged_residual = project(y)\\n    anchored_residual = project(base)\\n    projected_delta = project(delta)\\n    correction, _, rank, _ = np.linalg.lstsq(projected_delta, -anchored_residual, rcond=None)\\n    # Require improvement beyond what a single extra coefficient would fit from noise.\\n    dof = max(1, len(y) - q.shape[1] - rank)\\n    corrected_residual = anchored_residual + projected_delta @ correction\\n    loss = corrected_residual @ corrected_residual\\n    threshold = 9 * loss / dof\\n    if rank == len(sparse) and np.all(correction + [1 / row[3] for row in sparse] > 0):\\n        if min(unchanged_residual @ unchanged_residual, anchored_residual @ anchored_residual) - loss > threshold * rank:\\n            return base + delta @ correction\\n    if unchanged_residual @ unchanged_residual - anchored_residual @ anchored_residual > threshold * len(sparse):\\n        return base\\n    return y\\n\\n\\n''' + s[b:]\\ns = s.replace(\\\"    # The sparse-calibration routine uses one nominal source budget.\\\\n    campaign = dict(study, total_budget=float(budgets[1]))\\\\n    design, terminal = _responses(campaign)\\\", \\\"    design, terminal = _responses(study)\\\").replace('_calibrated_observations(campaign, design, nuisance)', '_calibrated_observations(study, design, nuisance)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sequential wing extrapolation → H2 archive-first sparse calibration with joint fitting only for discrepant spots; the previous candidate’s worst unchanged sparse-wing KKT gap was 5.41e-3.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit new gains whenever sweeps are sparse\",\n      \"rejected_reason\": \"The public joint fits absorbed observation noise into the gains even when the true calibration was unchanged.\"\n    }\n  ],\n  \"rationale\": \"Historical sweeps support near-identity calibration on both wings. Retain it when spot checks agree, and require evidence from the observations before changing it when a spot disagrees. The isolated validator checks for regressions on the public campaign; wing jackknifes are still needed to verify the sparse path.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5425ffcd71c41853e45f03a8ed27ec7c496f0b36f58ad4005d87df4484779093",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41436.04,
+      "usage_known": true,
+      "prompt_tokens": 28247,
+      "cached_tokens": 11136,
+      "completion_tokens": 1734
+    }
+  ]
+}

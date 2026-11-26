@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d17781d9d9e4986841244bd5e90f09e",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:14:02.553288+00:00",
+  "ended_at_utc": "2026-11-26T18:14:30.879708+00:00",
+  "request_sha256": "87b256e2c1d56f918b530c6e0a495d7b4479c28ce5226886b9cc1f35b6183376",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 54907,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29534,
+    "cached_tokens": 11136,
+    "completion_tokens": 1126
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_beta_sparse_pair.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'beta_w01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nsolve = m.solve_beta_w01_batch_01\\nfull_responses = m._responses\\nhistory = json.loads(m._HISTORY.read_text())\\nfor case in pickle.load(open(root+'public_beta_w01_batch_01.pkl', 'rb')):\\n    s, gt = case['study'], case['gt']\\n    c = s['sensor_calibration_sweeps']\\n    row = s['row_bank_id']\\n    responses = full_responses(s)\\n    m._responses = lambda _: responses\\n    for b in range(4):\\n        idx = np.flatnonzero(c['bank_id'] == b)\\n        idx = idx[np.argsort(c['ref_signal'][idx])]\\n        hg, ho = m._historical_calibration(history, b)\\n        x, y = c['ref_signal'][idx], c['raw_readout'][idx]\\n        mismatch = np.abs(np.diff(y-hg*x))\\n        worst = np.zeros(3)\\n        for i in range(len(idx)-1):\\n            # Apply the historical gain with an offset measured in this batch.\\n            offset = np.mean((y-hg*x)[i:i+2])\\n            raw = s['y_obs_raw'].copy()\\n            raw[row == b] = (raw[row == b]-offset)/hg\\n            clean = c['bank_id'] != b\\n            sweep = {k: v.copy() for k, v in c.items()}\\n            sweep['raw_readout'][~clean] = sweep['ref_signal'][~clean]\\n            out = solve(dict(s, y_obs_raw=raw, sensor_calibration_sweeps=sweep))\\n            u = gt['terminal_field_mid_budget']\\n            worst = np.maximum(worst, [np.max(abs(out['weights_by_budget']-gt['weights_by_budget'])), np.linalg.norm(out['terminal_field_mid_budget']-u)/np.linalg.norm(u), max(abs(p['primal_objective']-q['primal_objective']) for p,q in zip(out['kkt_certificates'],gt['certs_by_budget']))])\\n        print('bank', b, 'archived gain/offset', (hg,ho), 'minimum pair span', np.min(np.diff(x)), 'max pair residual difference', mismatch.max(), 'fallback max weight abs / field rel / objective abs', worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_beta_sparse_pair.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted two-point calibration → H2 use archived gain when the pair is consistent with it and estimate the offset from current data; the worst current pair yields 4.46e-6 absolute weight error, 6.44e-6 relative field error, and 1.12e-6 absolute objective error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always reuse the historical gain for two-point sweeps\",\n      \"rejected_reason\": \"A pair with a resolvable change in slope should override history rather than conceal real gain drift.\"\n    }\n  ],\n  \"rationale\": \"Compare historical-gain calibration with the failed two-point fit on the same real pairs. Measure the difference between the two residuals under historical gain to see whether a consistency rule can reduce noise amplification without suppressing detectable gain drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d509584ac7290c40181bcbf9f0003e66bd6b3b9a8c3d8001ff19e7dc99a47026",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29233.89,
+      "usage_known": true,
+      "prompt_tokens": 29534,
+      "cached_tokens": 11136,
+      "completion_tokens": 1126
+    }
+  ]
+}

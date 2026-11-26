@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "387a8f5682024620861a130fcee1b842",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w01__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w01_batch_06__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:41:42.012715+00:00",
+  "ended_at_utc": "2026-11-26T18:42:07.123123+00:00",
+  "request_sha256": "c12ce0dd30e84a1a133e0c6bf52c1631a0088b694185b6139d006d0746f94624",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 39897,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25803,
+    "cached_tokens": 6784,
+    "completion_tokens": 969
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && sed 's/solve_alpha_w01_batch_05/solve_alpha_w01_batch_06/' /tmp/hegel_continual_archive/alpha_w01_batch_05_solver.py > alpha_w01_batch_06_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/polymer06_eval.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_w01_batch_06_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nr=pickle.load(open(p+'public_alpha_w01_batch_06.pkl','rb'))[0];d=r['dataset'];gt=r['gt'];tr=d['train'];te=d['test'];t=d['eval_times'];dt=d['past_dt'];ys=d['yield_stress']\\nrmse=lambda e: np.sqrt(np.mean(np.asarray(e)**2))\\no=m.solve_alpha_w01_batch_06(d);maps=m._load_cells(d['calibration_load_cells']);print('map difference',maps-np.column_stack((gt['stress_gains'],gt['stress_biases'])))\\nfor a,b in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]: print(a,np.round(o[a],7),np.round(gt[b],7))\\nfor name,block,target,rate in [('public test',te,gt['te_clean'],gt['te_true_rate0'])]:\\n ec=o['predicted_strain']-target;er=o['initial_rate_pred']-rate;eo=block['instant_rate_obs']-rate\\n for l in range(4):\\n  for cross in (0,1):\\n   for missing in (0,1):\\n    sel=(block['lab_id']==l)&(np.asarray(gt['te_cross'])==cross)&(np.isnan(block['coupon_features_raw']).any(1)==missing)\\n    if sel.any(): print(name,l,cross,missing,sel.sum(),*(round(v,6) for v in (rmse(ec[sel]),rmse(er[sel]),rmse(eo[sel]))))\\nfor lab in range(4):\\n val=tr['lab_id']==lab\\n take=lambda mask:{k:v[mask] for k,v in tr.items()}\\n q=m.solve_alpha_w01_batch_06({**d,'train':take(~val),'test':take(val)})\\n ev=q['predicted_strain']-tr['strain_curves_obs'][val];rv=q['initial_rate_pred']-tr['instant_rate_obs'][val]; inp=m._inputs(take(val),np.zeros((val.sum(),4)),maps,dt,ys);cross=(inp[-2]!=0)|(inp[-1]!=0)\\n for c in (False,True):\\n  sel=cross==c\\n  print('LOLO',lab,int(c),sum(sel),*(round(v,6) for v in (rmse(ev[sel]),rmse(rv[sel]),rmse(ev[sel,0]),rmse(ev[sel,-1]))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/polymer06_eval.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: archive-anchored replay → validate the shared thresholded law and onset correction by held-out lab and yield regime; slice errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add the test-only residual plastic state\",\"rejected_reason\":\"It is zero on the public case, unavailable in training, and not part of the constitutive contract.\"}],\"rationale\":\"Use the archived implementation as a baseline because its basis already matches the documented equations. Compare recovered parameters and held-out errors to distinguish calibration failure from missing-feature or onset-rate failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f23a7068599efb860830e0a0e35b2a65796a0ac0f3df01f58fc5c0f69171bf21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26097.74,
+      "usage_known": true,
+      "prompt_tokens": 25803,
+      "cached_tokens": 6784,
+      "completion_tokens": 969
+    }
+  ]
+}

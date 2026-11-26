@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3dee78621aaf43b0b6a05ae5b4eb5733",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__alpha_w04__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_batch_08__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:54:39.549766+00:00",
+  "ended_at_utc": "2026-11-26T18:55:10.963103+00:00",
+  "request_sha256": "430f72c79d54acc7e989c6edd2cbf8e94e763f991ea56c6e266e0ae5f2f3cd75",
+  "system_prompt_chars": 5302,
+  "stdin_payload_chars": 60020,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31527,
+    "cached_tokens": 11136,
+    "completion_tokens": 1264
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\ncat > /tmp/w04_b08_cross_wing_witness.py <<'PY'\\nimport importlib.util\\nimport json\\nfrom pathlib import Path\\nimport pickle\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nname = 'alpha_w04_batch_08_solver.py'\\ndef load(path, label):\\n    spec = importlib.util.spec_from_file_location(label, path)\\n    m = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(m)\\n    return m\\n\\ndef rmse(x):\\n    return float(np.sqrt(np.mean(x**2)))\\n\\ndef subset(state, mask):\\n    return state[:2] + tuple(v[mask] for v in state[2:])\\n\\nbase = load(next(Path('/tmp/.hegel_candidate_archive/v01_9ab5ef51').rglob(name)), 'baseline')\\ncand = load(root / name, 'candidate')\\nwith (root / 'public_alpha_w04_batch_08.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\nt, dt, sy = (d[k] for k in ('eval_times', 'past_dt', 'yield_stress'))\\npanel = d['calibration_load_cells']\\nold, new = base._calibrate(panel), cand._calibrate(panel)\\nx, xt = cand._align(tr, te)\\nst = cand._prepare(dt, *cand._stress(tr, new), x, sy)\\nst0 = cand._prepare(dt, *cand._stress(tr, old), x, sy)\\nlab = tr['lab_id']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nyielded = (st[-1] != 0) | (st[-2] != 0)\\ntrain = complete & (lab != 1)\\nval = complete & (lab == 1) & yielded\\nte_val = (te['lab_id'] == 1) & np.isfinite(te['coupon_features_raw']).all(axis=1)\\ntaus, w = cand._fit(t, subset(st, train), y[train], r[train])\\nmetrics = {}\\nfor tag, affine, state in [('baseline', old, st0), ('candidate', new, st)]:\\n    a, b = cand._design(taus, t, subset(state, val))\\n    tst = cand._prepare(dt, *cand._stress(te, affine), xt, sy)\\n    _, onset = cand._design(taus, t, subset(tst, te_val))\\n    metrics[tag] = {'yielded_curve_rmse': rmse(a @ w - y[val]), 'yielded_onset_rmse': rmse(b @ w - r[val]), 'test_onset_rmse': rmse(onset @ w - te['instant_rate_obs'][te_val])}\\nprint(json.dumps({'nogood_id': 'ng_t06', 'risk_kind': 'cross-wing calibration transfer', 'held_out_lab': 1, 'yielded_coupon_count': int(val.sum()), 'test_onset_coupon_count': int(te_val.sum()), 'same_fitted_constitutive_parameters': True, 'metrics': metrics}), flush=True)\\nassert all(metrics['candidate'][k] < metrics['baseline'][k] for k in metrics['baseline']), metrics\\nassert np.array_equal(new[2:], old[2:]), (old[2:], new[2:])\\ncmd, obs = cand._rows(panel, 0)\\nspot_max = float(np.max(abs(new[0,0]*cmd + new[0,1] - obs)))\\nprint(json.dumps({'wing_b_calibration_unchanged': True, 'lab_0_max_spot_residual': spot_max, 'lab_0_consensus_cutoff': 0.003}))\\nassert spot_max < 0.003, spot_max\\nPY\\npython3 -I /tmp/w04_b08_cross_wing_witness.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: transfer one complete campaign → H2: preserve the spot-matched Wing A sweep and reliable historical Wing B sweeps; worst complete-case held-out lab/yield RMSE is 0.294 for curves and 0.0148 for onset rates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The host has accepted the schema but still marks the scientific witness pending. Isolate calibration on the exact yielded lab-1 slice using identical coupons and fixed constitutive parameters, and independently check observed test onset rates. If the improvement does not survive those controls, revisit the archive selection; if it does, the existing artifact needs no edit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7edc8f8495167a412209c2f924e2591a09523386b23eafa6ac771278ca5683dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32434.87,
+      "usage_known": true,
+      "prompt_tokens": 31527,
+      "cached_tokens": 11136,
+      "completion_tokens": 1264
+    }
+  ]
+}

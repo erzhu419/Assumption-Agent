@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "625c0878c7214d7ea5a6a5663e73863d",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w03__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w03_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:14:12.397583+00:00",
+  "ended_at_utc": "2026-11-26T18:14:34.331173+00:00",
+  "request_sha256": "fbf440849f344e4fca1380c8df57c08330840ddf0b096561de0bd3e0f8c86f28",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 53021,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29554,
+    "cached_tokens": 11136,
+    "completion_tokens": 779
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p+'beta_w03_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(p+'public_beta_w03_batch_03.pkl', 'rb') as f:\\n    q = pickle.load(f)[0]\\ns, g = q['study'], q['gt']\\nc = s['sensor_calibration_sweeps']; banks = c['bank_id']; x = c['ref_signal']; rows = s['row_bank_id']\\na = np.array([.86, 1.18, .93, 1.08]); d = np.array([.06, -.09, .04, -.03])\\nfor wing in range(2):\\n    raw = a[banks]*x+d[banks]\\n    for b in (2*wing, 2*wing+1):\\n        idx = np.flatnonzero(banks == b); idx = idx[np.argsort(x[idx])]\\n        raw[idx[[0,-1]]] += [.5,-.7]\\n    t = dict(s, sensor_calibration_sweeps=dict(c, raw_readout=raw), y_obs_raw=a[rows]*s['y_obs_raw']+d[rows])\\n    err = np.max(np.abs(m._calibrate(t)-s['y_obs_raw']))\\n    r = m.solve_beta_w03_batch_03(t)\\n    werr = np.max(np.abs(r['weights_by_budget']-g['weights_by_budget']),axis=1)\\n    ferr = np.max(np.abs(r['terminal_field_mid_budget']-g['terminal_field_mid_budget']))\\n    print(f'EMI wing {wing}: max inversion error {err:.3e}; budget weight max errors {werr}; max terminal error {ferr:.3e}', flush=True)\\n    assert err < 1e-10 and np.max(werr) < 1e-6 and ferr < 1e-7\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (reaction grid alone) -> H2 (grid plus axis terms and robust bank calibration); worst public KKT gap is 3.01e-8 and worst sparse-sweep inversion error is 8.88e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous receipt showed schema success but no EMI measurements. This standalone test isolates the remaining failure mode: if high-leverage spikes corrupt a wing's calibration, revise the bank fit without changing the verified transport and budget logic.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "aa0d7f6621ced75dc600850fc476278d3df5d4fc191c96b019c4eb641ff3f69a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21887.3,
+      "usage_known": true,
+      "prompt_tokens": 29554,
+      "cached_tokens": 11136,
+      "completion_tokens": 779
+    }
+  ]
+}

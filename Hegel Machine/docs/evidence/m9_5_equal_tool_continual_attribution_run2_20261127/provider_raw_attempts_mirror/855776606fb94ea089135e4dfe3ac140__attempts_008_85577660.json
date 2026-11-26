@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "855776606fb94ea089135e4dfe3ac140",
+  "call_seq": 8,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w04__Archive_AutoReplay__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w04_batch_08__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:45:49.741732+00:00",
+  "ended_at_utc": "2026-11-26T18:46:21.971119+00:00",
+  "request_sha256": "9574263cfa946f61b7c204010660dae24ebc4fe85a88b3a45e9f40e6c8249d77",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 47104,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27703,
+    "cached_tokens": 6784,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('solver', 'beta_w04_batch_08_solver.py')\\nv = load('validator', 'validate_public_schema.py')\\nfor case in pickle.load(open('public_beta_w04_batch_08.pkl', 'rb')):\\n    s, gt = case['study'], case['gt']\\n    d, _ = m._forward(s)\\n    z, bank, raw = (s[k] for k in ('Z_nuisance', 'row_bank_id', 'y_obs_raw'))\\n    cap, budget, ridge = (s[k] for k in ('u_box', 'total_budget', 'source_ridge'))\\n    p = m._profile(z, d, s['nuisance_ridge'])\\n    print('full C-order profiled design max error:', np.max(np.abs(p - gt['S_tilde'])))\\n    assert np.max(np.abs(p - gt['S_tilde'])) < 1e-12\\n    profiles = np.array([np.vstack((a,b)) for a,b in itertools.product(*m._WING_PROFILES)])\\n    responses = ((raw[:,None] - profiles[:,bank,1].T) / profiles[:,bank,0].T)\\n    centered = responses - d.mean(axis=1)[:,None] * budget\\n    yr = gt['r_y'] + z @ (z.T @ gt['r_y']) / s['nuisance_ridge']\\n    sweeps = s['sensor_calibration_sweeps']\\n    for b in range(4):\\n        test = bank == b\\n        fit = np.linalg.lstsq(z[~test], centered[~test], rcond=None)[0]\\n        err = centered - z @ fit\\n        rms = np.sqrt(np.mean(err**2, axis=0))\\n        train = np.sqrt(np.mean(err[~test]**2, axis=0))\\n        selected = np.argmin(train)\\n        print('held-bank', b, 'training selection', selected, 'runner-up train RMSE margin', np.sort(train)[1]-train[selected], 'held-bank RMSE', np.sqrt(np.mean(err[test, selected]**2)), 'pooled RMSE', rms[selected], 'held-bank calibration max error', np.max(np.abs(responses[test, selected]-yr[test])))\\n    n = len(sweeps['bank_id'])\\n    for mask_bits in itertools.product((False, True), repeat=n):\\n        mask = np.asarray(mask_bits, dtype=bool)\\n        ss = dict(s, sensor_calibration_sweeps={k: a[mask] for k,a in sweeps.items()})\\n        out = m.solve_beta_w04_batch_08(ss)\\n        cert = v.verify_box_simplex_kkt_certificate(gt['S_tilde'], gt['r_y'], ridge, cap, budget, out['kkt_certificate'])\\n        field = np.linalg.norm(out['terminal_field']-gt['terminal_field_A'])/np.linalg.norm(gt['terminal_field_A'])\\n        weights = np.linalg.norm(out['weights']-gt['w_opt'])/np.linalg.norm(gt['w_opt'])\\n        print('checks retained', mask_bits, 'independent KKT', cert, 'field rel L2', field, 'weights rel L2', weights)\\n        assert cert['valid']\\n        assert field < 1e-5 and weights < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: wing-specific calibration replaces joint replay; the current artifact has a verified KKT gap of 2.644e-7 and a worst-bank calibration error of 1.39e-6 under spot-check withholding.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification metrics, relay modes, or unrelated drift operators\",\n      \"rejected_reason\": \"This study is a continuous reaction-transport inverse problem with no class labels or relay states. The relevant structural checks are the full coupled stencil, bank-holdout nuisance consistency, and certificate validity under sparse calibration.\"\n    }\n  ],\n  \"rationale\": \"A bank-holdout test can detect a pooled nuisance fit that selects the wrong calibration for an unseen bank; if it does, inspect the profile selection margin by wing. Independent certificate checks under every observed spot-check omission test whether small calibration errors threaten feasibility or optimality. No artifact edit is warranted unless these checks expose a failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a88f6de947aa8b68f0204dd21369f320187723c3e6fa1342916c26afdd205c32",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33197.07,
+      "usage_known": true,
+      "prompt_tokens": 27703,
+      "cached_tokens": 6784,
+      "completion_tokens": 1267
+    }
+  ]
+}

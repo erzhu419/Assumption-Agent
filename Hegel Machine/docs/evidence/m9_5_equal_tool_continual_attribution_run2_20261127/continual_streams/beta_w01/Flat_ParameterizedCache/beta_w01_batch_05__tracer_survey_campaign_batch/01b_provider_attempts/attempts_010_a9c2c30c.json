@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a9c2c30c446848f4ad8b106f83bbee45",
+  "call_seq": 10,
+  "stage_subdir": "m9_5_equal_tool_20261126T175750Z__beta_w01__Flat_ParameterizedCache__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_w01_batch_05__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T18:31:13.335973+00:00",
+  "ended_at_utc": "2026-11-26T18:31:42.615507+00:00",
+  "request_sha256": "b84d43f2fa07a1c5790aee53179c415cc0d0722707ba5199b6878297d74a803b",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 45437,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26722,
+    "cached_tokens": 6784,
+    "completion_tokens": 1137
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\nimport json\\nimport pickle\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nhistory = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\n\\ndef bank_points(sweep, bank):\\n    mask = np.asarray(sweep['bank_id']) == bank\\n    x = np.asarray(sweep['ref_signal'])[mask]\\n    y = np.asarray(sweep['raw_readout'])[mask]\\n    return np.column_stack((x, np.ones(x.size))), y\\n\\ndef bank_fit(sweep, bank):\\n    a, y = bank_points(sweep, bank)\\n    if len(y) < 2 or np.ptp(a[:, 0]) < 0.1:\\n        return None\\n    i, j = np.triu_indices(len(y), 1)\\n    dx = a[j, 0] - a[i, 0]\\n    good = np.abs(dx) > 0.1\\n    slope = np.median((y[j[good]] - y[i[good]]) / dx[good])\\n    intercept = np.median(y - slope * a[:, 0])\\n    err = np.abs(y - a @ [slope, intercept])\\n    keep = err <= max(1e-5, 5*np.median(err))\\n    return np.linalg.lstsq(a[keep], y[keep], rcond=None)[0]\\n\\narchive = [(e['episode_short_name'], e, [bank_fit(e, b) for b in range(4)]) for e in history]\\npublic = pickle.loads((root/'public_beta_w01_batch_05.pkl').read_bytes())\\nfor case in public:\\n    live = bank_fit(case['study']['sensor_calibration_sweeps'], 0)\\n    matches = [name for name, _, fit in archive if fit[0] is not None and np.max(np.abs(fit[0]-live)) <= 1e-5]\\n    print('live anchor', live, 'matching archive episodes', matches)\\n\\nfor name, held, fit in archive:\\n    if fit[0] is None:\\n        continue\\n    out = []\\n    for b in (1, 2, 3):\\n        a, y = bank_points(held, b)\\n        others = [f[b] for n, _, f in archive if n != name and f[0] is not None and f[b] is not None and np.max(np.abs(f[0]-fit[0])) <= 1e-5]\\n        if not others or fit[b] is None:\\n            out.append(None)\\n            continue\\n        predicted = np.median(others, axis=0)\\n        row_error = np.abs(y-a@predicted)\\n        out.append({'bank': b, 'train_episodes': len(others), 'affine_max_delta': float(np.max(np.abs(predicted-fit[b]))), 'median_raw_error': float(np.median(row_error)), 'max_raw_error': float(np.max(row_error))})\\n    print('held-out episode', name, out)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived diffusivity carryover → H2 nominal separable transport with regime-matched calibration; worst measured shift-by-bank forward error is 7.57e-14, while historical calibration transfer is not yet measured out of episode.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the direct transport and KKT checks\",\n      \"rejected_reason\": \"The isolated audit already verified those checks on the current artifact. Transfer to unswept banks is the distinct assumption not covered by that audit.\"\n    }\n  ],\n  \"rationale\": \"Hold out each historical episode, use only its bank-0 calibration to identify matching training episodes, and test the other three banks against their actual sweeps. Systematic errors among matching episodes would invalidate bank 0 as a sufficient calibration anchor; isolated raw errors with stable affine fits would instead point to sweep outliers.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b05b5b67f0c3f252a792ab6169da012a64015b13dc34d998c7afc305849c8f8c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30218.51,
+      "usage_known": true,
+      "prompt_tokens": 26722,
+      "cached_tokens": 6784,
+      "completion_tokens": 1137
+    }
+  ]
+}
